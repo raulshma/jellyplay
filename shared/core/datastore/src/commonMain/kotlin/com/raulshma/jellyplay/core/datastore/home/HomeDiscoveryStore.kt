@@ -9,11 +9,12 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
@@ -28,7 +29,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -115,7 +115,8 @@ class HomeDiscoveryStore constructor(
      * Decode-or-default read for the read-modify-write setters: a missing key
      * OR an undecodable value (shape drift after a model change) yields
      * [fallback], so a corrupt entry can't wedge the write path — the same
-     * tolerance the read projection's `cachedJson` applies, in-edition.
+     * tolerance the read projection's [PreferenceCodec.cachedJson] applies,
+     * in-edition.
      */
     private inline fun <reified T> decodeOrDefault(
         prefs: Preferences,
@@ -134,6 +135,26 @@ class HomeDiscoveryStore constructor(
         val HOME_HERO_ENABLED = booleanPreferencesKey("home_hero_enabled")
         val HOME_BACKDROP_ENABLED = booleanPreferencesKey("home_backdrop_enabled")
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
+        /**
+         * Schema version of [HOME_ENABLED_SECTION_TYPES], stamped by every
+         * write of that set. A persisted set read at an older version is
+         * unioned with the sections shipped in each intervening version (see
+         * [HomeDiscoveryStore]`.UserReader.readEnabledHomeSectionTypes`) —
+         * newly-shipped sections default to visible instead of staying
+         * invisible to every user whose set predates them, while a user who
+         * then disables the section keeps that choice.
+         */
+        val HOME_ENABLED_SECTION_TYPES_VERSION = intPreferencesKey("home_enabled_section_types_version")
+        const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 1
+        /**
+         * The version at which [HomeSectionType.CONTINUE_READING] shipped —
+         * a persisted set stamped older than this unions it in on read (see
+         * [HomeDiscoveryStore]`.UserReader.readEnabledHomeSectionTypes`).
+         * Distinct from [HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION] on
+         * purpose: a future section bump advances the latter and adds a new
+         * shipped-at entry, never editing this one.
+         */
+        const val CONTINUE_READING_SHIPPED_AT_VERSION = 1
         val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
         val HOME_LIBRARY_SECTION_OVERRIDES = stringPreferencesKey("home_library_section_overrides")
         /** Legacy all-or-nothing "hide library from home" key — kept only to migrate. */
@@ -198,7 +219,8 @@ class HomeDiscoveryStore constructor(
         Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH, Keys.HIDE_TOP_HEADER_ON_SCROLL,
     )
 
-    private val intLegacyKeys: List<Preferences.Key<Int>> = listOf(Keys.NEXT_UP_MAX_DAYS)
+    private val intLegacyKeys: List<Preferences.Key<Int>> =
+        listOf(Keys.NEXT_UP_MAX_DAYS, Keys.HOME_ENABLED_SECTION_TYPES_VERSION)
 
     private val stringLegacyKeys: List<Preferences.Key<String>> = listOf(
         Keys.HOME_MODE, Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
@@ -304,8 +326,7 @@ class HomeDiscoveryStore constructor(
     // Read projection
     // ------------------------------------------------------------------
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
+    private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
 
     val homeDiscovery: StateFlow<HomeDiscoverySlice> = combine(
         identityStore.activeUserId,
@@ -362,6 +383,7 @@ class HomeDiscoveryStore constructor(
         private val homeHeroEnabledKey = userBooleanKey(userId, Keys.HOME_HERO_ENABLED)
         private val homeBackdropEnabledKey = userBooleanKey(userId, Keys.HOME_BACKDROP_ENABLED)
         private val enabledSectionTypesKey = userStringKey(userId, Keys.HOME_ENABLED_SECTION_TYPES)
+        private val enabledSectionTypesVersionKey = userIntKey(userId, Keys.HOME_ENABLED_SECTION_TYPES_VERSION)
         private val sectionOrderKey = userStringKey(userId, Keys.HOME_SECTION_ORDER)
         private val librarySectionOverridesKey = userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)
         private val pinnedSectionsKey = userStringKey(userId, Keys.PINNED_HOME_SECTIONS)
@@ -429,19 +451,59 @@ class HomeDiscoveryStore constructor(
         private fun readContinueWatchingClickBehavior(prefs: Preferences): ContinueWatchingClickBehavior =
             prefs[continueWatchingClickBehaviorKey].toEnumOrNull() ?: ContinueWatchingClickBehavior.DETAILS
 
-        private fun readEnabledHomeSectionTypes(prefs: Preferences): Set<HomeSectionType> = cachedJson(
-            raw = prefs[enabledSectionTypesKey],
-            cache = cachedEnabledHomeSectionTypes,
-            default = HomeSectionType.CONFIGURABLE.toSet(),
-            parse = { raw ->
-                json.decodeFromString<Set<String>>(raw)
-                    .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                    .toSet()
-            },
-            cacheRef = { cachedEnabledHomeSectionTypes = it },
+        /**
+         * Sections the versioned set shipped after versioning began, each
+         * keyed by the schema version it shipped at — the union source
+         * [readEnabledHomeSectionTypes] folds in for every set persisted
+         * before that version. A future section appends its
+         * `(shipped-at, section)` entry here and bumps
+         * [Keys.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION]; existing entries
+         * are never edited.
+         */
+        private val sectionsShippedByVersion: List<Pair<Int, HomeSectionType>> = listOf(
+            // v1: reading-experience 2.0's Continue Reading row
+            Keys.CONTINUE_READING_SHIPPED_AT_VERSION to HomeSectionType.CONTINUE_READING,
         )
 
-        private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = cachedJson(
+        /**
+         * The persisted set is decoded verbatim, then unioned with every
+         * section shipped AFTER the version stamp the set was written at
+         * ([Keys.HOME_ENABLED_SECTION_TYPES_VERSION], absent = predates the
+         * versioning itself): a set persisted before a section existed cannot
+         * contain it, and reading it verbatim would keep the new section
+         * invisible to exactly the users who ever touched section config. The
+         * one-shot shape matters — every write of the set stamps the current
+         * version, so absence from a CURRENT set is the user's disabled
+         * choice, not a not-yet-shipped section, and stays respected.
+         */
+        private fun readEnabledHomeSectionTypes(prefs: Preferences): Set<HomeSectionType> {
+            val raw = prefs[enabledSectionTypesKey]
+            // The union folds in the version stamp, so the parse cache keys on
+            // BOTH: a pre-version read caches raw → raw∪{CONTINUE_READING},
+            // and the CR disable that follows rewrites the SAME encoded set
+            // (the write's read-modify-write drops exactly the unioned
+            // member) under the new stamp. Keyed on raw alone, that write
+            // would serve the stale unioned value until process restart.
+            val version = prefs[enabledSectionTypesVersionKey] ?: 0
+            return PreferenceCodec.cachedJson(
+                raw = raw,
+                cacheKey = "v$version:$raw",
+                cache = cachedEnabledHomeSectionTypes,
+                default = HomeSectionType.CONFIGURABLE.toSet(),
+                parse = { encoded ->
+                    val persisted = json.decodeFromString<Set<String>>(encoded)
+                        .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
+                        .toSet()
+                    persisted + sectionsShippedByVersion
+                        .filter { (shippedAt, _) -> version < shippedAt }
+                        .map { (_, section) -> section }
+                },
+                cacheRef = { cachedEnabledHomeSectionTypes = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
+        }
+
+        private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = PreferenceCodec.cachedJson(
             raw = prefs[sectionOrderKey],
             cache = cachedHomeSectionOrder,
             default = HomeSectionType.CONFIGURABLE,
@@ -453,14 +515,38 @@ class HomeDiscoveryStore constructor(
                 } catch (_: Exception) {
                     json.decodeFromString<Set<String>>(raw).toList()
                 }
-                val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                buildList {
-                    addAll(mapped)
-                    addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
-                }
+                insertMissingAtDefaultPositions(
+                    parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } },
+                )
             },
             cacheRef = { cachedHomeSectionOrder = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
         )
+
+        /**
+         * Inserts the configurable sections absent from a persisted order at
+         * their DEFAULT-ORDER position instead of the tail: a newly shipped
+         * section (Continue Reading at slot 2) joins its default
+         * neighbourhood for every user whose persisted order predates it —
+         * the order twin of the enabled-set version union, no stamp needed
+         * because absence itself is the signal. The persisted relative order
+         * is never disturbed: each missing section slots after the LAST
+         * present section whose default index precedes it (non-configurable
+         * strays do not constrain), or leads the list when none does.
+         */
+        private fun insertMissingAtDefaultPositions(persisted: List<HomeSectionType>): List<HomeSectionType> {
+            if (persisted.isEmpty()) return HomeSectionType.CONFIGURABLE
+            val defaultIndex = HomeSectionType.CONFIGURABLE.withIndex().associate { (index, type) -> type to index }
+            var result = persisted
+            for (section in HomeSectionType.CONFIGURABLE.filterNot { it in persisted }) {
+                val sectionDefaultIndex = defaultIndex.getValue(section)
+                val insertAt = 1 + result.indexOfLast { present ->
+                    defaultIndex[present]?.let { it < sectionDefaultIndex } == true
+                }
+                result = result.subList(0, insertAt) + section + result.subList(insertAt, result.size)
+            }
+            return result
+        }
 
         /**
          * Reads the per-library section overrides from the active user's
@@ -469,74 +555,65 @@ class HomeDiscoveryStore constructor(
          * and inside [ensureNamespacedMigration]; this read just decodes the
          * typed override map.
          */
-        private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> = cachedJson(
-            raw = prefs[librarySectionOverridesKey],
-            cache = cachedLibraryHomeSectionOverrides,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, Set<HomeSectionType>>>(it) },
-            cacheRef = { cachedLibraryHomeSectionOverrides = it },
-        )
+        private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[librarySectionOverridesKey],
+                cache = cachedLibraryHomeSectionOverrides,
+                default = emptyMap(),
+                parse = { json.decodeFromString<Map<String, Set<HomeSectionType>>>(it) },
+                cacheRef = { cachedLibraryHomeSectionOverrides = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> = cachedJson(
-            raw = prefs[pinnedSectionsKey],
-            cache = cachedPinnedHomeSections,
-            default = emptyList(),
-            parse = { json.decodeFromString<List<PinnedHomeSection>>(it) },
-            cacheRef = { cachedPinnedHomeSections = it },
-        )
+        private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[pinnedSectionsKey],
+                cache = cachedPinnedHomeSections,
+                default = emptyList(),
+                parse = { json.decodeFromString<List<PinnedHomeSection>>(it) },
+                cacheRef = { cachedPinnedHomeSections = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> = cachedJson(
-            raw = prefs[layoutPresetsKey],
-            cache = cachedHomeLayoutPresets,
-            default = emptyList(),
-            parse = { json.decodeFromString<List<HomeLayoutPreset>>(it) },
-            cacheRef = { cachedHomeLayoutPresets = it },
-        )
+        private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[layoutPresetsKey],
+                cache = cachedHomeLayoutPresets,
+                default = emptyList(),
+                parse = { json.decodeFromString<List<HomeLayoutPreset>>(it) },
+                cacheRef = { cachedHomeLayoutPresets = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> = cachedJson(
-            raw = prefs[nextUpExcludedSeriesIdsKey],
-            cache = cachedNextUpExcludedSeriesIds,
-            default = emptySet(),
-            parse = { json.decodeFromString<Set<String>>(it) },
-            cacheRef = { cachedNextUpExcludedSeriesIds = it },
-        )
+        private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[nextUpExcludedSeriesIdsKey],
+                cache = cachedNextUpExcludedSeriesIds,
+                default = emptySet(),
+                parse = { json.decodeFromString<Set<String>>(it) },
+                cacheRef = { cachedNextUpExcludedSeriesIds = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readHiddenCwItemIds(prefs: Preferences): Set<String> = cachedJson(
-            raw = prefs[hiddenCwItemIdsKey],
-            cache = cachedHiddenCwItemIds,
-            default = emptySet(),
-            parse = { json.decodeFromString<Set<String>>(it) },
-            cacheRef = { cachedHiddenCwItemIds = it },
-        )
+        private fun readHiddenCwItemIds(prefs: Preferences): Set<String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[hiddenCwItemIdsKey],
+                cache = cachedHiddenCwItemIds,
+                default = emptySet(),
+                parse = { json.decodeFromString<Set<String>>(it) },
+                cacheRef = { cachedHiddenCwItemIds = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> = cachedJson(
-            raw = prefs[lastViewedSeasonBySeriesKey],
-            cache = cachedLastViewedSeasonBySeries,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, String>>(it) },
-            cacheRef = { cachedLastViewedSeasonBySeries = it },
-        )
-    }
-
-    /**
-     * Shared cached JSON decode for the simple map/set readers. Returns the
-     * cached value when [raw] is unchanged; otherwise decodes via [parse]
-     * (falling back to [default] on null or decode failure), publishes the new
-     * [ParsedCache] through [cacheRef], and returns the value. Collapses the
-     * per-key "compare-raw → try/decode → update-cache" boilerplate that the
-     * JSON list/map readers would otherwise each repeat verbatim.
-     */
-    private fun <T : Any> cachedJson(
-        raw: String?,
-        cache: ParsedCache<T>,
-        default: T,
-        parse: (String) -> T,
-        cacheRef: (ParsedCache<T>) -> Unit,
-    ): T {
-        if (raw == cache.raw) return cache.value
-        val value = try { raw?.let(parse) ?: default } catch (_: Exception) { default }
-        cacheRef(ParsedCache(raw, value))
-        return value
+        private fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[lastViewedSeasonBySeriesKey],
+                cache = cachedLastViewedSeasonBySeries,
+                default = emptyMap(),
+                parse = { json.decodeFromString<Map<String, String>>(it) },
+                cacheRef = { cachedLastViewedSeasonBySeries = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
     }
 
     // ------------------------------------------------------------------
@@ -570,9 +647,22 @@ class HomeDiscoveryStore constructor(
         prefs[userBooleanKey(userId, Keys.HOME_BACKDROP_ENABLED)] = enabled
     }
 
-    suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = editForUser { prefs, userId ->
+    /**
+     * The ONE in-edit write of the persisted enabled-section set: encodes
+     * [types] and stamps [Keys.HOME_ENABLED_SECTION_TYPES_VERSION] with the
+     * current version in the same breath. The stamp is what makes the read
+     * side's version-union one-shot, so no write path may encode the set
+     * without it — this fold exists so a future writer cannot forget.
+     */
+    private fun writeEnabledHomeSectionTypes(prefs: MutablePreferences, userId: String, types: Set<HomeSectionType>) {
         prefs[userStringKey(userId, Keys.HOME_ENABLED_SECTION_TYPES)] =
             json.encodeToString(types.map { t -> t.name }.toSet())
+        prefs[userIntKey(userId, Keys.HOME_ENABLED_SECTION_TYPES_VERSION)] =
+            Keys.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION
+    }
+
+    suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = editForUser { prefs, userId ->
+        writeEnabledHomeSectionTypes(prefs, userId, types)
     }
 
     suspend fun setHomeSectionOrder(order: List<HomeSectionType>) = editForUser { prefs, userId ->
@@ -608,8 +698,7 @@ class HomeDiscoveryStore constructor(
      */
     suspend fun setSectionVisible(type: HomeSectionType, visible: Boolean) = editForUser { prefs, userId ->
         val updated = read(prefs).toSectionPrefs().withSectionVisible(type, visible)
-        prefs[userStringKey(userId, Keys.HOME_ENABLED_SECTION_TYPES)] =
-            json.encodeToString(updated.query.enabledSections.map { t -> t.name }.toSet())
+        writeEnabledHomeSectionTypes(prefs, userId, updated.query.enabledSections)
     }
 
     suspend fun moveSection(type: HomeSectionType, up: Boolean) = editForUser { prefs, userId ->
@@ -821,49 +910,6 @@ class HomeDiscoveryStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the home keys owned by this store
-     * from a decoded [UserPreferences] into the CURRENT active user's
-     * namespace — backups carry canonical (user-portable) values and are
-     * applied on behalf of whoever restores them. The legacy model's home
-     * fields are name- and type-identical to [HomeDiscoverySlice]'s, so this
-     * maps onto the slice and delegates to [restore] — ONE shared key/encoding
-     * list, so adding a home pref means adding it to the slice (and [restore])
-     * only. `lastViewedSeasonBySeries` has no legacy counterpart and restores
-     * as empty. The legacy `home_hidden_library_section_ids` key is not
-     * written back — it exists only as a migration source. Pre-login the
-     * restore is skipped along with every other write ([editForUser]).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        restore(
-            HomeDiscoverySlice(
-                homeMode = userPreferences.homeMode,
-                homeHeroEnabled = userPreferences.homeHeroEnabled,
-                homeBackdropEnabled = userPreferences.homeBackdropEnabled,
-                enabledHomeSectionTypes = userPreferences.enabledHomeSectionTypes,
-                homeSectionOrder = userPreferences.homeSectionOrder,
-                libraryHomeSectionOverrides = userPreferences.libraryHomeSectionOverrides,
-                pinnedHomeSections = userPreferences.pinnedHomeSections,
-                homeLayoutPresets = userPreferences.homeLayoutPresets,
-                continueWatchingClickBehavior = userPreferences.continueWatchingClickBehavior,
-                showUnwatchedBadge = userPreferences.showUnwatchedBadge,
-                hideWatchedItems = userPreferences.hideWatchedItems,
-                showWatchedCheckmark = userPreferences.showWatchedCheckmark,
-                showExternalRatings = userPreferences.showExternalRatings,
-                mergeContinueWatchingAndNextUp = userPreferences.mergeContinueWatchingAndNextUp,
-                nextUpMaxDays = userPreferences.nextUpMaxDays,
-                nextUpRewatching = userPreferences.nextUpRewatching,
-                nextUpExcludedSeriesIds = userPreferences.nextUpExcludedSeriesIds,
-                hiddenCwItemIds = userPreferences.hiddenCwItemIds,
-                showClockOnHome = userPreferences.showClockOnHome,
-                showSettingsInHomeSearch = userPreferences.showSettingsInHomeSearch,
-                hideTopHeaderOnScroll = userPreferences.hideTopHeaderOnScroll,
-            )
-        )
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore — into the CURRENT active user's namespace — using the same
      * encoding as [restorePreferences] (section types and order encoded as
@@ -874,7 +920,7 @@ class HomeDiscoveryStore constructor(
             it[userStringKey(userId, Keys.HOME_MODE)] = slice.homeMode.name
             it[userBooleanKey(userId, Keys.HOME_HERO_ENABLED)] = slice.homeHeroEnabled
             it[userBooleanKey(userId, Keys.HOME_BACKDROP_ENABLED)] = slice.homeBackdropEnabled
-            it[userStringKey(userId, Keys.HOME_ENABLED_SECTION_TYPES)] = json.encodeToString(slice.enabledHomeSectionTypes.map { section -> section.name }.toSet())
+            writeEnabledHomeSectionTypes(it, userId, slice.enabledHomeSectionTypes)
             it[userStringKey(userId, Keys.HOME_SECTION_ORDER)] = json.encodeToString(slice.homeSectionOrder.map { section -> section.name })
             it[userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)] = json.encodeToString(slice.libraryHomeSectionOverrides)
             it[userStringKey(userId, Keys.PINNED_HOME_SECTIONS)] = json.encodeToString(slice.pinnedHomeSections)

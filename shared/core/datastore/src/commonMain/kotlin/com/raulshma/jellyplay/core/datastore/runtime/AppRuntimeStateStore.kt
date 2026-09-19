@@ -5,18 +5,18 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -43,7 +43,10 @@ class AppRuntimeStateStore constructor(
     private val externalScope: CoroutineScope,
 ) {
     private val scope = externalScope
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
+    // Raw read arm for the point flows below; same degrade-to-defaults policy
+    // as the [state] chassis (this store previously had NO corrupt-read arm —
+    // a failed read propagated into the eager collector uncaught).
+    private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
     private val json get() = PreferenceCodec.json
 
     private var cachedFavoriteChannels: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
@@ -61,18 +64,16 @@ class AppRuntimeStateStore constructor(
      * Combined snapshot of every runtime-state field. Consumers that react to
      * any of them (e.g. backup/export) collect this single flow.
      */
-    val state: StateFlow<AppRuntimeState> = sharedPrefs
-        .map { prefs ->
-            AppRuntimeState(
-                favoriteChannels = readFavoriteChannels(prefs),
-                liveTvLastChannelId = prefs[Keys.LIVE_TV_LAST_CHANNEL_ID],
-                watchLaterPlaylistId = prefs[Keys.WATCH_LATER_PLAYLIST_ID],
-                onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
-                recentDlnaDevices = readRecentDlnaDevices(prefs),
-            )
-        }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, AppRuntimeState())
+    val state: StateFlow<AppRuntimeState> =
+        dataStore.sliceStateFlow(scope, seed = AppRuntimeState(), read = ::readState)
+
+    private fun readState(prefs: Preferences): AppRuntimeState = AppRuntimeState(
+        favoriteChannels = readFavoriteChannels(prefs),
+        liveTvLastChannelId = prefs[Keys.LIVE_TV_LAST_CHANNEL_ID],
+        watchLaterPlaylistId = prefs[Keys.WATCH_LATER_PLAYLIST_ID],
+        onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
+        recentDlnaDevices = readRecentDlnaDevices(prefs),
+    )
 
     /**
      * Last-watched live-TV channel id, used by the live player (shared `feature/player-live`) to reopen
@@ -178,39 +179,28 @@ class AppRuntimeStateStore constructor(
         }
     }
 
-    /**
-     * Legacy v0/v1 backup-import path: projects the matching fields off a
-     * decoded `UserPreferences` aggregate. Retained until v2 backups
-     * supersede the legacy single-aggregate format; removed once v1 import
-     * is dropped.
-     */
-    internal suspend fun restorePreferences(userPreferences: UserPreferences) {
-        dataStore.edit { prefs ->
-            prefs[Keys.ONBOARDING_COMPLETED] = userPreferences.onboardingCompleted
-            userPreferences.watchLaterPlaylistId?.let { prefs[Keys.WATCH_LATER_PLAYLIST_ID] = it }
-            prefs[Keys.FAVORITE_CHANNELS] = json.encodeToString(userPreferences.favoriteChannels)
-        }
-    }
+    // MemoizeNull (this store's pre-promotion policy at every site): a null
+    // raw is a cacheable input — the decoded value depends only on the raw
+    // string, so a memoised default is safe to serve.
+    private fun readFavoriteChannels(prefs: Preferences): Set<String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.FAVORITE_CHANNELS],
+            cache = cachedFavoriteChannels,
+            default = emptySet(),
+            parse = { json.decodeFromString<Set<String>>(it) },
+            cacheRef = { cachedFavoriteChannels = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readFavoriteChannels(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.FAVORITE_CHANNELS]
-        if (raw == cachedFavoriteChannels.raw) return cachedFavoriteChannels.value
-        val value = raw?.let {
-            try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { null }
-        } ?: emptySet()
-        cachedFavoriteChannels = ParsedCache(raw, value)
-        return value
-    }
-
-    private fun readRecentDlnaDevices(prefs: Preferences): List<DlnaDeviceRef> {
-        val raw = prefs[Keys.RECENT_DLNA_DEVICES]
-        if (raw == cachedRecentDlnaDevices.raw) return cachedRecentDlnaDevices.value
-        val value = raw?.let {
-            try { json.decodeFromString<List<DlnaDeviceRef>>(it) } catch (_: Exception) { null }
-        } ?: emptyList()
-        cachedRecentDlnaDevices = ParsedCache(raw, value)
-        return value
-    }
+    private fun readRecentDlnaDevices(prefs: Preferences): List<DlnaDeviceRef> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.RECENT_DLNA_DEVICES],
+            cache = cachedRecentDlnaDevices,
+            default = emptyList(),
+            parse = { json.decodeFromString<List<DlnaDeviceRef>>(it) },
+            cacheRef = { cachedRecentDlnaDevices = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 }
 
 /**

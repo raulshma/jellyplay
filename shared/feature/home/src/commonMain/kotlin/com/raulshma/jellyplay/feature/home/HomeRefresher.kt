@@ -4,10 +4,11 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -42,8 +43,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.datetime.toKotlinLocalDate
-import java.time.ZoneOffset
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.plus
 
 /**
  * Deep module: the Home screen's entire refresh policy behind one small
@@ -93,7 +94,7 @@ import java.time.ZoneOffset
 internal class HomeRefresher(
     /** The VM's scope: refresh jobs must die with the VM. */
     private val scope: CoroutineScope,
-    private val timeSource: TimeSource,
+    private val clock: HomeClock,
     private val mediaRepository: MediaRepository,
     private val seerrRepository: SeerrRepository,
     private val arrRepository: ArrRepository,
@@ -102,6 +103,16 @@ internal class HomeRefresher(
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
     private val librarySyncHook: LibrarySyncHook,
+    /**
+     * Local TOC cache backing the Continue Reading row's progress bars: a
+     * paged book's real page count lives only here (the server item carries
+     * ticks, never the page count), so the fractions decode exactly instead
+     * of falling back to the percent reading. Best-effort — a miss or a throw
+     * degrades that card to the percent fallback. Defaults to the neutral
+     * no-op (tests, no-DB platforms); production wiring (factory + Koin)
+     * passes the Room-backed single.
+     */
+    private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     /** Offline gate consulted inside the fetch (plus the loop's skip check), and the source of the offline-mode mirror below. */
     private val offlineModeManager: OfflineModeManager,
     /**
@@ -247,11 +258,11 @@ internal class HomeRefresher(
                 // Failed/offline attempts still count as fresh: the loop and
                 // the onStart staleness check must not hammer the network
                 // every tick while offline.
-                lastRefreshTime = timeSource.nowEpochMillis()
+                lastRefreshTime = clock.nowEpochMillis()
                 return
             }
 
-            lastRefreshTime = timeSource.nowEpochMillis()
+            lastRefreshTime = clock.nowEpochMillis()
             val sectionPrefs = sectionPrefsProvider()
 
             // Stale-while-revalidate: on a cold open (sections still empty),
@@ -319,7 +330,19 @@ internal class HomeRefresher(
                             mergeContinueWatchingAndNextUp = sectionPrefs.mergeContinueWatchingAndNextUp,
                         )
 
-                        _state.update { it.copy(sections = finalSections) }
+                        // Continue Reading progress bars: books carry no
+                        // runTimeTicks, so the video fraction math cannot serve
+                        // the row — the shared TOC-cache decode (also the
+                        // offline gate's) resolves exact page fractions where
+                        // the cache knows the count, percent fallback otherwise.
+                        // Local Room reads, ≤20 rows, best-effort per item.
+                        // Decoded from the section that is about to be written
+                        // and BEFORE the sections write so sections and
+                        // fractions land as ONE emission — a two-step write
+                        // painted paged-book cards on the percent fallback
+                        // until the second update arrived.
+                        val bookFractions = decodeBookProgressFractionsFor(finalSections)
+                        _state.update { it.copy(sections = finalSections, bookProgressFractions = bookFractions) }
 
                         val continueWatching = finalSections
                             .find { it.type == HomeSectionType.CONTINUE_WATCHING }
@@ -432,7 +455,7 @@ internal class HomeRefresher(
         when (trigger) {
             RefreshTrigger.Manual -> startForcedRefresh {
                 _state.update {
-                    it.copy(isLoading = true, sections = emptyList(), discoverSections = emptyMap(), error = null)
+                    it.withContentDropped(error = null, isLoading = true)
                 }
                 invalidateDiscoverCache()
             }
@@ -459,7 +482,9 @@ internal class HomeRefresher(
                 // dropped — it must not outlive the identity that raced.
                 lastFetchRacedPendingSync = false
                 identityEpoch++
-                _state.update { it.copy(sections = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
+                _state.update {
+                    it.withContentDropped(error = null, isLoading = true)
+                }
             }
             RefreshTrigger.DiscoverEnabled -> fetchDiscover()
             RefreshTrigger.GoingOnline -> {
@@ -529,16 +554,20 @@ internal class HomeRefresher(
         discoverJob?.cancel()
         val sectionPrefs = sectionPrefsProvider()
         val cachedSections = orderedCachedSections(sectionPrefs)
+        // Same single-emission pairing as the fetch write: the SWR paint and
+        // its fractions land together, so the painted CR row never flashes
+        // the percent fallback ahead of the revalidating fetch.
+        val cachedFractions = if (cachedSections != null) decodeBookProgressFractionsFor(cachedSections) else emptyMap()
         _state.update {
             if (cachedSections != null) {
-                it.copy(
+                it.withContentDropped(
                     sections = cachedSections,
-                    discoverSections = emptyMap(),
+                    bookProgressFractions = cachedFractions,
                     error = null,
                     isLoading = false,
                 )
             } else {
-                it.copy(sections = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true)
+                it.withContentDropped(error = null, isLoading = true)
             }
         }
         fetchOnce()
@@ -557,13 +586,7 @@ internal class HomeRefresher(
         // The raced-sync bypass is void: the pre-sync sections it described
         // are exactly the ones dropped here.
         lastFetchRacedPendingSync = false
-        _state.update {
-            it.copy(
-                sections = emptyList(),
-                discoverSections = emptyMap(),
-                recentlyGrabbed = emptyList(),
-            )
-        }
+        _state.update { it.withContentDropped(dropRecentlyGrabbed = true) }
     }
 
     /**
@@ -614,7 +637,7 @@ internal class HomeRefresher(
         isAppInForeground = true
         replaceRefreshJob {
             offlineModeManager.checkNetworkAndAutoDetect()
-            val now = timeSource.nowEpochMillis()
+            val now = clock.nowEpochMillis()
             if (now - lastRefreshTime >= HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS) {
                 fetchOnce()
             }
@@ -821,7 +844,7 @@ internal class HomeRefresher(
      */
     private fun refreshAfterUserDataChange() {
         pendingUserDataRefresh = true
-        val sinceLastRefresh = timeSource.nowEpochMillis() - lastRefreshTime
+        val sinceLastRefresh = clock.nowEpochMillis() - lastRefreshTime
         if (!lastFetchRacedPendingSync &&
             sinceLastRefresh < HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS
         ) {
@@ -936,7 +959,7 @@ internal class HomeRefresher(
             // churn and the lastRefreshTime bookkeeping.
             if (offlineModeManager.isOffline) continue
 
-            val now = timeSource.nowEpochMillis()
+            val now = clock.nowEpochMillis()
             if (now - lastRefreshTime < HomeFreshness.MIN_REFRESH_INTERVAL_MS) continue
 
             // fetchOnce owns the single lastRefreshTime clock and stamps it on
@@ -964,6 +987,18 @@ internal class HomeRefresher(
             }
 
     /**
+     * Decodes the Continue Reading progress fractions for the sections about
+     * to be painted — the shared step of the fetch write and the user-switch
+     * SWR paint, so a painted CR row renders exact fractions immediately
+     * instead of the percent fallback until the fetch's own emission lands.
+     */
+    private suspend fun decodeBookProgressFractionsFor(sections: List<HomeSection>): Map<String, Float> {
+        val continueReading = sections.find { it.type == HomeSectionType.CONTINUE_READING }
+            ?: return emptyMap()
+        return bookTocCacheRepository.decodeBookProgressFractions(continueReading.items)
+    }
+
+    /**
      * Refreshes the *arr calendar window and pushes the merged list into
      * [HomeRefreshState.recentlyGrabbed] as [SeerrSearchItem]s (reusing the
      * TMDB card model so no new card UI is needed). Window is now → +30
@@ -972,13 +1007,12 @@ internal class HomeRefresher(
      * errors.
      */
     private suspend fun fetchRecentlyGrabbed() {
-        val now = timeSource.today(ZoneOffset.systemDefault())
-        val end = now.plusDays(30)
-        // ArrRepository takes kotlinx.datetime.LocalDate now; the
-        // home pipeline keeps java.time (TimeSource seam) and converts at the
-        // boundary.
-        arrRepository.refreshCalendar(now.toKotlinLocalDate(), end.toKotlinLocalDate())
-        val items = arrRepository.calendar(now.toKotlinLocalDate(), end.toKotlinLocalDate()).first()
+        val now = clock.today()
+        val end = now.plus(30, DateTimeUnit.DAY)
+        // ArrRepository takes kotlinx.datetime.LocalDate — the refresher's
+        // HomeClock seam now speaks kotlinx LocalDate natively.
+        arrRepository.refreshCalendar(now, end)
+        val items = arrRepository.calendar(now, end).first()
         _state.update { it.copy(recentlyGrabbed = items.map { it.toSeerrSearchItem() }) }
     }
 
@@ -990,10 +1024,10 @@ internal class HomeRefresher(
         // out up to 5 Seerr round-trips per minute (periodic refresh + per
         // pref change). A user-initiated refresh (swipe-to-refresh) bypasses
         // this gate via [invalidateDiscoverCache].
-        val now = timeSource.nowEpochMillis()
+        val now = clock.nowEpochMillis()
         if (!discoverCache.shouldFetch(now)) return
 
-        val today = timeSource.today(ZoneOffset.systemDefault()).toString()
+        val today = clock.today().toString()
 
         // coroutineScope, not the outer VM scope: the Seerr fan-out must be a
         // child of the calling refresh job (or the tracked fetchDiscover job),
@@ -1028,7 +1062,7 @@ internal class HomeRefresher(
             sections
         }
 
-        discoverCache.markFetched(timeSource.nowEpochMillis())
+        discoverCache.markFetched(clock.nowEpochMillis())
         _state.update { it.copy(discoverSections = newSections) }
     }
 }
@@ -1072,6 +1106,14 @@ internal enum class RefreshTrigger {
 @Immutable
 internal data class HomeRefreshState(
     val sections: List<HomeSection> = emptyList(),
+    /**
+     * Continue Reading progress bars, keyed by item id — decoded from the
+     * book ticks encodings (see [com.raulshma.jellyplay.core.model.bookProgressFraction])
+     * with exact page fractions where the TOC cache knows the page count.
+     * Cleared wherever the sections that own the ids are cleared; a missing id
+     * renders the percent fallback in the card.
+     */
+    val bookProgressFractions: Map<String, Float> = emptyMap(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
@@ -1100,3 +1142,28 @@ internal data class HomeRefreshState(
     val fetchFailed: Boolean
         get() = error != null
 }
+
+/**
+ * The shared content-drop fold: the sections, the discover rows, and the
+ * Continue Reading fractions clear TOGETHER — the fractions key into the
+ * dropped sections' item ids, so a site clearing the sections can never
+ * leave them behind. Call sites state only what differs: the painted
+ * sections (empty on a clear, the SWR snapshot on user switch) and their
+ * decoded fractions (empty by default — cleared with the sections; the SWR
+ * repaint paints its own), the error/spinner resets, and whether the *arr
+ * row rides the drop.
+ */
+private fun HomeRefreshState.withContentDropped(
+    sections: List<HomeSection> = emptyList(),
+    bookProgressFractions: Map<String, Float> = emptyMap(),
+    error: String? = this.error,
+    isLoading: Boolean = this.isLoading,
+    dropRecentlyGrabbed: Boolean = false,
+): HomeRefreshState = copy(
+    sections = sections,
+    discoverSections = emptyMap(),
+    bookProgressFractions = bookProgressFractions,
+    error = error,
+    isLoading = isLoading,
+    recentlyGrabbed = if (dropRecentlyGrabbed) emptyList() else this.recentlyGrabbed,
+)

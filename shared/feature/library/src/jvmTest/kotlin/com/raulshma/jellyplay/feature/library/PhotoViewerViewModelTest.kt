@@ -98,12 +98,12 @@ class PhotoViewerViewModelTest {
         val vm = createViewModel()
         loadViewerInAlbum(vm)
 
-        assertEquals(photo2, vm.photo.value)
-        assertEquals(photo2, vm.photoDetail.value?.item)
-        assertEquals(listOf(photo1, photo2, photo3), vm.siblings.value)
-        assertEquals(1, vm.currentIndex.value)
-        assertFalse(vm.isLoading.value)
-        assertNull(vm.error.value)
+        assertEquals(photo2, vm.state.value.photo)
+        assertEquals(photo2, vm.state.value.photoDetail?.item)
+        assertEquals(listOf(photo1, photo2, photo3), vm.state.value.siblings)
+        assertEquals(1, vm.state.value.currentIndex)
+        assertFalse(vm.state.value.isLoading)
+        assertNull(vm.state.value.error)
     }
 
     @Test
@@ -129,9 +129,9 @@ class PhotoViewerViewModelTest {
         vm.load(itemId = "p2", parentId = null)
         advanceUntilIdle()
 
-        assertEquals(photo2, vm.photo.value)
-        assertEquals(listOf(photo2), vm.siblings.value)
-        assertEquals(0, vm.currentIndex.value)
+        assertEquals(photo2, vm.state.value.photo)
+        assertEquals(listOf(photo2), vm.state.value.siblings)
+        assertEquals(0, vm.state.value.currentIndex)
     }
 
     @Test
@@ -143,9 +143,9 @@ class PhotoViewerViewModelTest {
         vm.load(itemId = "broken", parentId = "album-1")
         advanceUntilIdle()
 
-        assertEquals("server exploded", vm.error.value)
-        assertNull(vm.photo.value)
-        assertFalse(vm.isLoading.value)
+        assertEquals("server exploded", vm.state.value.error)
+        assertNull(vm.state.value.photo)
+        assertFalse(vm.state.value.isLoading)
     }
 
     @Test
@@ -156,7 +156,7 @@ class PhotoViewerViewModelTest {
         vm.load(itemId = "broken", parentId = null)
         advanceUntilIdle()
 
-        assertEquals("Failed to load photo", vm.error.value)
+        assertEquals("Failed to load photo", vm.state.value.error)
     }
 
     // ── navigation ──────────────────────────────────────────────────────────
@@ -169,8 +169,8 @@ class PhotoViewerViewModelTest {
         vm.navigateTo(2)
         advanceUntilIdle()
 
-        assertEquals(2, vm.currentIndex.value)
-        assertEquals(photo3, vm.photo.value)
+        assertEquals(2, vm.state.value.currentIndex)
+        assertEquals(photo3, vm.state.value.photo)
         coVerify { mediaRepository.getMediaDetail("p3") }
     }
 
@@ -184,8 +184,8 @@ class PhotoViewerViewModelTest {
         advanceUntilIdle()
 
         // Still on photo2 (index 1), no detail re-fetch for an out-of-range id.
-        assertEquals(1, vm.currentIndex.value)
-        assertEquals(photo2, vm.photo.value)
+        assertEquals(1, vm.state.value.currentIndex)
+        assertEquals(photo2, vm.state.value.photo)
         coVerify(exactly = 0) { mediaRepository.getMediaDetail("p1") }
     }
 
@@ -218,16 +218,16 @@ class PhotoViewerViewModelTest {
         assertTrue(vm.isSlideshowActive.value)
 
         testScheduler.runCurrent() // start the loop; parked on the first delay
-        assertEquals(1, vm.currentIndex.value)
+        assertEquals(1, vm.state.value.currentIndex)
 
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
-        assertEquals(2, vm.currentIndex.value)
+        assertEquals(2, vm.state.value.currentIndex)
 
         // Past the last sibling the slideshow wraps back to the first photo.
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
-        assertEquals(0, vm.currentIndex.value)
+        assertEquals(0, vm.state.value.currentIndex)
 
         vm.stopSlideshow()
     }
@@ -242,11 +242,11 @@ class PhotoViewerViewModelTest {
         vm.stopSlideshow()
         assertFalse(vm.isSlideshowActive.value)
 
-        val indexAfterStop = vm.currentIndex.value
+        val indexAfterStop = vm.state.value.currentIndex
         testScheduler.advanceTimeBy(60_000)
         testScheduler.runCurrent()
         // No further ticks after the cancel — the index never moves again.
-        assertEquals(indexAfterStop, vm.currentIndex.value)
+        assertEquals(indexAfterStop, vm.state.value.currentIndex)
     }
 
     @Test
@@ -262,7 +262,7 @@ class PhotoViewerViewModelTest {
         // 1s is not enough for the default 5s tick but fires the 1s one.
         testScheduler.advanceTimeBy(1_000)
         testScheduler.runCurrent()
-        assertEquals(2, vm.currentIndex.value)
+        assertEquals(2, vm.state.value.currentIndex)
 
         vm.stopSlideshow()
     }

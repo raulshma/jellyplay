@@ -25,6 +25,15 @@ kotlin {
         androidResources {
             enable = true
         }
+        // cutover: the legacy :core:ui module's Robolectric suites
+        // moved here — withHostTest creates the androidUnitTest variant bound
+        // to the Kotlin test tree (AGP-9 KMP library plugin). The two flags
+        // are the legacy module's testOptions carried over verbatim: resource
+        // lookups (TranscodeReasonsTest) and unstubbed-Context tolerance.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
@@ -36,7 +45,7 @@ kotlin {
         }
     }
 
-    // Web UI target (spike w-10C): paging 3.5.0 / lifecycle 2.11 / tabler /
+    // Web UI target: paging 3.5.0 / lifecycle 2.11 / tabler /
     // coil 3.4.0 ship readable wasm klibs; nav3-ui and mikepenz need the
     // substitutions/scopes configured below. Shares commonMain with android+jvm.
     wasmJs {
@@ -74,6 +83,10 @@ kotlin {
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
+            // DateLabels.kt's public seam shapes take/return kotlinx-datetime
+            // civil-date types — `api` so every feature façade consuming the
+            // seam compiles against them without redeclaring the artifact.
+            api(libs.kotlinx.datetime)
             // DeferredFetchCoordinator wraps fetch invocations in
             // runCatchingRethrowingCancellation — the repo's one
             // cancellation-safety seam (zero-dependency leaf, no cycle).
@@ -126,6 +139,34 @@ kotlin {
         getByName("androidMain").dependencies {
             // Dominant-color extraction keeps the original Palette pipeline.
             implementation(libs.palette.ktx)
+            // cutover moves from the legacy :core:ui module:
+            // BiometricAuthHelper (BiometricPrompt + Keystore cipher pipeline).
+            implementation(libs.biometric.ktx)
+        }
+    }
+}
+
+// The legacy :core:ui Robolectric suites moved here wholesale at the
+// cutover (robolectric.properties pins sdk=35 — Robolectric 4.16 emulates at
+// most 36 while the merged manifest targets 37). AGP 9.4's withHostTest names
+// the lane's source set androidHostTest (src/androidHostTest/kotlin) and
+// materializes it only in afterEvaluate, so the dependency wiring rides a
+// configureEach — an eager lookup would run before the source set exists.
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+            implementation(libs.androidx.test.core)
+            // UserMessageBusTest pins the one-shot Channel semantics.
+            implementation(libs.coroutines.test)
+            // Compose UI tests under Robolectric (focus-behavior + sheet/scrim
+            // regression suites, incl. the two former androidTest files which
+            // were compile-gated only in the legacy module).
+            implementation(project.dependencies.platform(libs.compose.bom))
+            implementation(libs.compose.ui.test)
+            implementation(libs.compose.ui.test.manifest)
         }
     }
 }
@@ -136,7 +177,7 @@ kotlin {
 // fork of the same release line — same package, ABI-stable surface; the
 // fork's 1.1.1 already covers this repo on desktop (see apps/desktop).
 // Scoped to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (spike w-10C S1/R2).
+// google's published variants exactly as before.
 configurations.configureEach {
     if (name.lowercase().contains("wasmjs")) {
         resolutionStrategy.dependencySubstitution {
@@ -157,3 +198,4 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.core.ui.generated.r
 // core strings (core_delete/core_cancel, ...) directly, which requires the
 // generated Res object + accessors to be public (internal by default).
 composeResources.publicResClass = true
+

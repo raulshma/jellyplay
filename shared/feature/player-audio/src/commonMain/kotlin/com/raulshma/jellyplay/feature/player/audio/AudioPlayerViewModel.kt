@@ -4,8 +4,11 @@ import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
+import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -32,10 +35,14 @@ import kotlinx.coroutines.flow.update
  * Koin-owned (conveyor move from `:feature:player:audio` — the
  * HiltViewModel/@Inject annotations were stripped; see di/PlayerAudioKoin
  * Module.kt). The former concrete [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager]
- * ctor dep is split across the two shared playback contracts
- * ([AudioQueueManager], [AudioEffectsManager] — the legacy Hilt single
- * implements both) plus the module-local [AudioPlayerEngine] /
- * [AudioPlayerCast] seams over the Hilt-owned Android impls.
+ * ctor dep is split across the shared playback contracts
+ * ([AudioQueueManager], [AudioEffectsManager], [AudioPlayerEngine] — the
+ * legacy manager implements all three; the engine contract lives in core/data
+ * beside them) plus the module-local [AudioPlayerCast] seam. The track
+ * download flip is the shared core:data [TrackDownloadActions] (Koin-bound
+ * in di/PlayerAudioKoinModule.kt) — the former inline construction with its
+ * own DownloadIntake/MediaRepository pair folded away when the resolve→start
+ * leg moved into DownloadIntake.flipTrack.
  */
 class AudioPlayerViewModel(
     private val queueManager: AudioQueueManager,
@@ -48,9 +55,9 @@ class AudioPlayerViewModel(
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
     private val playlistRepository: com.raulshma.jellyplay.core.data.repository.PlaylistRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
-    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
-    private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
-    private val sleepTimerManager: SleepTimerManager,
+    private val downloads: TrackDownloadStatusWindow,
+    private val trackDownloadActions: TrackDownloadActions,
+    private val sleepTimerManager: AudioSleepTimerManager,
 ) : JellyPlayViewModel() {
 
     /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
@@ -75,13 +82,13 @@ class AudioPlayerViewModel(
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
 
     /**
-     * Sleep-timer countdown, sourced directly from SleepTimerManager. Kept OUT
+     * Sleep-timer countdown, sourced directly from the AudioSleepTimerManager. Kept OUT
      * of [uiState] (mirroring [currentPosition]) so a 5 s tick — or the 100 ms
      * fade-out burst — does not copy the whole [AudioPlayerUiState] and
      * re-invalidate the screen root. Collected only by the leaf composables
      * that render the countdown (top-bar label, AudioSleepTimerSheet).
      */
-    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.remainingMs
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.sleepTimerRemainingMs
 
     /**
      * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
@@ -102,15 +109,15 @@ class AudioPlayerViewModel(
 
     /** Mirrors [AudioEffectsState.dialogueBoostStrength] for callers that read it directly. */
     val dialogueBoostStrength: EffectStrength
-        get() = _uiState.value.effects.dialogueBoostStrength
+        get() = effects.state.value.dialogueBoostStrength
 
     /** Mirrors [AudioEffectsState.nightModeStrength] for callers that read it directly. */
     val nightModeStrength: EffectStrength
-        get() = _uiState.value.effects.nightModeStrength
+        get() = effects.state.value.nightModeStrength
 
     /** Mirrors [AudioEffectsState.bassBoostStrength] for callers that read it directly. */
     val bassBoostStrength: EffectStrength
-        get() = _uiState.value.effects.bassBoostStrength
+        get() = effects.state.value.bassBoostStrength
 
     val hasKaraokeLyrics: Boolean
         get() = _uiState.value.lyrics.hasKaraokeLyrics
@@ -126,7 +133,52 @@ class AudioPlayerViewModel(
     var karaokeMode by composeState(false)
         private set
 
+    // ── Controller slices (the VideoEffectsController / SleepTimerController
+    //    player-video pattern, applied to the audio player) ──────────────────
+    // The effects setters' apply→persist choreography and the sleep-timer
+    // workflow live in the two controllers below; the VM funs are one-line
+    // delegates. Each controller owns its state slice as its own StateFlow
+    // (the SettingsProjector-style uiState seams are gone); the VM re-exposes
+    // the slices the screen collects and keeps only real orchestration.
+
+    /** Owns the effects setters' apply→mirror→persist choreography + play() seeding. */
+    internal val effects = AudioEffectsController(
+        scope = scope,
+        effectsManager = effectsManager,
+        engine = engine,
+        audioStore = audioStore,
+        audioEffectsStore = audioEffectsStore,
+    )
+
+    /** The audio-effects slice — re-exposed from [AudioEffectsController.state]. */
+    val effectsState: StateFlow<AudioEffectsState>
+        get() = effects.state
+
+    /** Owns the sleep-timer starts/cancel/expiry + store writes + slice updates. */
+    internal val sleepTimer = AudioSleepTimerController(
+        scope = scope,
+        sleepTimerManager = sleepTimerManager,
+        audioStore = audioStore,
+        engine = engine,
+        updateState = { transform -> _uiState.update { it.copy(sleepTimer = transform(it.sleepTimer)) } },
+    )
+
+    /**
+     * Owns the add-to-playlist picker lifecycle (open guard, editable-playlist
+     * fetch, add choreography, success/failure message) as its own
+     * StateFlow snapshot — the five uiState fields it used to hand-sync are
+     * gone from [AudioPlayerUiState].
+     */
+    internal val playlistPicker = PlaylistPickerStateHolder(
+        scope = scope,
+        playlistRepository = playlistRepository,
+        currentItemId = { currentPlayingItemId },
+    )
+
     private var downloadJob: Job? = null
+
+    /** At most one favorite-state fetch in flight (the favorite collector below). */
+    private var favoriteJob: Job? = null
 
     private val _currentDownloadItem = stateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
     val currentDownloadItem: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?> = _currentDownloadItem.flow
@@ -137,9 +189,13 @@ class AudioPlayerViewModel(
                 downloadJob?.cancel()
                 if (itemId != null) {
                     downloadJob = launch {
-                        downloadRepository.getDownloadByMediaItemIdFlow(itemId).collect { download ->
-                            _currentDownloadItem.set(download)
-                        }
+                        // The single-id window read (the former seam's
+                        // trackStatus): rows → the one row, null when none.
+                        downloads.downloadsFor(listOf(itemId))
+                            .map { rows -> rows.firstOrNull() }
+                            .collect { download ->
+                                _currentDownloadItem.set(download)
+                            }
                     }
                 } else {
                     _currentDownloadItem.set(null)
@@ -211,9 +267,19 @@ class AudioPlayerViewModel(
         }
         launch {
             queueManager.currentPlayingItemId.collect { itemId ->
+                favoriteJob?.cancel()
                 if (itemId != null) {
-                    mediaRepository.getMediaDetail(itemId)
-                        .onSuccess { d -> _uiState.update { it.copy(isFavorite = d.item.isFavorite) } }
+                    // One fetch in flight, launched off the collect body so a
+                    // burst of skips coalesces; itemId is captured per fetch and
+                    // the write is dropped if another track took over meanwhile.
+                    favoriteJob = launch {
+                        mediaRepository.getMediaDetail(itemId)
+                            .onSuccess { d ->
+                                if (queueManager.currentPlayingItemId.value == itemId) {
+                                    _uiState.update { it.copy(isFavorite = d.item.isFavorite) }
+                                }
+                            }
+                    }
                 } else {
                     _uiState.update { it.copy(isFavorite = false) }
                 }
@@ -243,74 +309,18 @@ class AudioPlayerViewModel(
                 _uiState.update { it.copy(lyrics = it.lyrics.copy(lyricsOffsetMs = value)) }
             }
         }
+        // The effects-slice mirror collectors died with the uiState effects
+        // field — [AudioEffectsController] mirrors the manager flows into its
+        // own state slice now (see its init). Only the crossfade field (a
+        // uiState resident, not an effects-slice field) keeps its collector.
         launch {
-            combine(
-                effectsManager.nightModeEnabled,
-                effectsManager.dialogueBoostEnabled,
-                effectsManager.equalizerEnabled,
-                effectsManager.equalizerSettings,
-                effectsManager.equalizerPreset,
-            ) { night, dialogue, eqEn, eqSet, eqPre ->
-                _uiState.update {
-                    it.copy(
-                        effects = it.effects.copy(
-                            nightModeEnabled = night,
-                            dialogueBoostEnabled = dialogue,
-                            equalizerEnabled = eqEn,
-                            equalizerSettings = eqSet,
-                            equalizerPreset = eqPre,
-                        ),
-                    )
-                }
-            }.collect {}
+            engine.crossfadeDurationMs.collect { cross ->
+                _uiState.update { it.copy(crossfadeDurationMs = cross) }
+            }
         }
         launch {
             combine(
-                effectsManager.bassBoostEnabled,
-                effectsManager.virtualizerEnabled,
-                effectsManager.virtualizerStrength,
-                effectsManager.reverbPresetState,
-            ) { bass, virtEn, virtStr, rev ->
-                _uiState.update {
-                    it.copy(
-                        effects = it.effects.copy(
-                            bassBoostEnabled = bass,
-                            virtualizerEnabled = virtEn,
-                            virtualizerStrength = virtStr,
-                            reverbPreset = rev,
-                        ),
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                effectsManager.lrBalance,
-                effectsManager.pitchSemitones,
-                effectsManager.autoEqByGenre,
-            ) { lr, pitch, autoEq ->
-                _uiState.update {
-                    it.copy(effects = it.effects.copy(lrBalance = lr, pitchSemitones = pitch, autoEqByGenre = autoEq))
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                engine.crossfadeDurationMs,
-                effectsManager.replayGainMode,
-                effectsManager.replayGainPreAmpDb,
-            ) { cross, rg, pre ->
-                _uiState.update {
-                    it.copy(
-                        crossfadeDurationMs = cross,
-                        effects = it.effects.copy(normalizationMode = rg, preAmpDb = pre),
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                sleepTimerManager.isActive,
+                sleepTimerManager.isSleepTimerActive,
                 sleepTimerManager.isEndOfEpisodeMode,
             ) { active, endOfEpisode ->
                 _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(active = active, endOfEpisode = endOfEpisode)) }
@@ -327,36 +337,17 @@ class AudioPlayerViewModel(
         engine.play(itemId)
 
         launch {
-            val (audio, effects) = combine(audioStore.audio, audioEffectsStore.audioEffects) { a, e -> a to e }.first()
+            val (audio, fx) = combine(audioStore.audio, audioEffectsStore.audioEffects) { a, e -> a to e }.first()
             if (audio.audioDefaultSpeed != 1.0f) {
                 engine.changePlaybackSpeed(audio.audioDefaultSpeed)
             }
             nightModeVolume = audio.audioNightModeVolume
             nightModeGain = audio.audioNightModeGain
             skipPreviousThresholdMs = audio.audioSkipPreviousThresholdMs
-            effectsManager.setNightModeParams(audio.audioNightModeVolume, audio.audioNightModeGain)
             engine.setSkipPreviousThreshold(audio.audioSkipPreviousThresholdMs)
-            effectsManager.setDialogueBoostStrength(effects.dialogueBoostStrength)
-            effectsManager.setNightModeStrength(effects.nightModeStrength)
-            engine.setCrossfadeDurationMs(audio.audioCrossfadeDurationMs)
-            engine.setGaplessEnabled(audio.audioGaplessEnabled)
-            effectsManager.setReplayGainMode(audio.audioNormalizationMode)
-            effectsManager.setReplayGainPreAmpDb(audio.replayGainPreAmpDb)
-            effectsManager.setBassBoostStrength(effects.bassBoostStrength)
-            effectsManager.setVirtualizerStrength(effects.virtualizerStrength)
-            effectsManager.setLrBalance(effects.lrBalance)
-            effectsManager.setPitchSemitones(effects.pitchSemitones)
-            effectsManager.setAutoEqByGenre(effects.autoEqByGenre)
-            // Strength fields are not flow-exposed by the manager; seed them into uiState from prefs.
-            _uiState.update {
-                it.copy(
-                    effects = it.effects.copy(
-                        dialogueBoostStrength = effects.dialogueBoostStrength,
-                        nightModeStrength = effects.nightModeStrength,
-                        bassBoostStrength = effects.bassBoostStrength,
-                    ),
-                )
-            }
+            // The prefs→effects field list lives in ONE place: the controller's
+            // seeding entry (apply-only — the values came FROM the stores).
+            effects.seedForPlayback(audio, fx)
         }
 
         fetchBlurHash(itemId)
@@ -454,142 +445,44 @@ class AudioPlayerViewModel(
         queueManager.playFromQueue(index)
     }
 
-    fun toggleDialogueBoost() {
-        effectsManager.toggleDialogueBoost()
-        launch {
-            audioEffectsStore.setDialogueBoostEnabled(_uiState.value.effects.dialogueBoostEnabled)
-        }
-    }
+    // Effects setters: one-line delegates — the apply→mirror→persist
+    // choreography lives on [effects] (AudioEffectsController).
 
-    fun setDialogueBoostStrength(strength: EffectStrength) {
-        effectsManager.setDialogueBoostStrength(strength)
-        _uiState.update {
-            it.copy(effects = it.effects.copy(dialogueBoostStrength = strength))
-        }
-        launch {
-            audioEffectsStore.setDialogueBoostStrength(strength)
-        }
-    }
+    fun toggleDialogueBoost() = effects.toggleDialogueBoost()
 
-    fun toggleNightMode() {
-        effectsManager.toggleNightMode()
-        launch {
-            audioEffectsStore.setNightModeEnabled(_uiState.value.effects.nightModeEnabled)
-        }
-    }
+    fun setDialogueBoostStrength(strength: EffectStrength) = effects.setDialogueBoostStrength(strength)
 
-    fun setNightModeStrength(strength: EffectStrength) {
-        effectsManager.setNightModeStrength(strength)
-        _uiState.update {
-            it.copy(effects = it.effects.copy(nightModeStrength = strength))
-        }
-        launch {
-            audioEffectsStore.setNightModeStrength(strength)
-        }
-    }
+    fun toggleNightMode() = effects.toggleNightMode()
 
-    fun setReplayGainMode(mode: AudioNormalizationMode) {
-        effectsManager.setReplayGainMode(mode)
-        launch {
-            audioStore.setAudioNormalizationMode(mode)
-        }
-    }
+    fun setNightModeStrength(strength: EffectStrength) = effects.setNightModeStrength(strength)
 
-    fun setReplayGainPreAmpDb(db: Float) {
-        effectsManager.setReplayGainPreAmpDb(db)
-        launch {
-            audioStore.setReplayGainPreAmpDb(db)
-        }
-    }
+    fun setReplayGainMode(mode: AudioNormalizationMode) = effects.setReplayGainMode(mode)
 
-    fun toggleEqualizer() {
-        effectsManager.toggleEqualizer()
-        launch {
-            audioEffectsStore.setEqualizerEnabled(_uiState.value.effects.equalizerEnabled)
-        }
-    }
+    fun setReplayGainPreAmpDb(db: Float) = effects.setReplayGainPreAmpDb(db)
 
-    fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
-        effectsManager.setEqualizerBand(bandIndex, levelDb)
-        launch {
-            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
-        }
-    }
+    fun toggleEqualizer() = effects.toggleEqualizer()
 
-    fun resetEqualizer() {
-        effectsManager.resetEqualizer()
-        launch {
-            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
-            audioEffectsStore.setEqualizerPreset(_uiState.value.effects.equalizerPreset)
-        }
-    }
+    fun setEqualizerBand(bandIndex: Int, levelDb: Int) = effects.setEqualizerBand(bandIndex, levelDb)
 
-    fun applyEqualizerPreset(preset: EqualizerPreset) {
-        effectsManager.setEqualizerPreset(preset)
-        launch {
-            audioEffectsStore.setEqualizerPreset(preset)
-            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
-        }
-    }
+    fun resetEqualizer() = effects.resetEqualizer()
 
-    fun toggleBassBoost() {
-        effectsManager.toggleBassBoost()
-        launch {
-            audioEffectsStore.setBassBoostEnabled(_uiState.value.effects.bassBoostEnabled)
-        }
-    }
+    fun setEqualizerPreset(preset: EqualizerPreset) = effects.setEqualizerPreset(preset)
 
-    fun setBassBoostStrength(strength: EffectStrength) {
-        effectsManager.setBassBoostStrength(strength)
-        _uiState.update {
-            it.copy(effects = it.effects.copy(bassBoostStrength = strength))
-        }
-        launch {
-            audioEffectsStore.setBassBoostStrength(strength)
-        }
-    }
+    fun toggleBassBoost() = effects.toggleBassBoost()
 
-    fun toggleVirtualizer() {
-        effectsManager.toggleVirtualizer()
-        launch {
-            audioEffectsStore.setVirtualizerEnabled(_uiState.value.effects.virtualizerEnabled)
-        }
-    }
+    fun setBassBoostStrength(strength: EffectStrength) = effects.setBassBoostStrength(strength)
 
-    fun applyVirtualizerStrength(strength: Int) {
-        effectsManager.setVirtualizerStrength(strength)
-        launch {
-            audioEffectsStore.setVirtualizerStrength(strength)
-        }
-    }
+    fun toggleVirtualizer() = effects.toggleVirtualizer()
 
-    fun applyReverbPreset(preset: ReverbPreset) {
-        effectsManager.setReverbPreset(preset)
-        launch {
-            audioEffectsStore.setReverbPreset(preset)
-        }
-    }
+    fun setVirtualizerStrength(strength: Int) = effects.setVirtualizerStrength(strength)
 
-    fun applyLrBalance(balance: Float) {
-        effectsManager.setLrBalance(balance)
-        launch {
-            audioEffectsStore.setLrBalance(balance)
-        }
-    }
+    fun setReverbPreset(preset: ReverbPreset) = effects.setReverbPreset(preset)
 
-    fun applyPitchSemitones(semitones: Float) {
-        effectsManager.setPitchSemitones(semitones)
-        launch {
-            audioEffectsStore.setPitchSemitones(semitones)
-        }
-    }
+    fun setLrBalance(balance: Float) = effects.setLrBalance(balance)
 
-    fun applyAutoEqByGenre(enabled: Boolean) {
-        effectsManager.setAutoEqByGenre(enabled)
-        launch {
-            audioEffectsStore.setAutoEqByGenre(enabled)
-        }
-    }
+    fun setPitchSemitones(semitones: Float) = effects.setPitchSemitones(semitones)
+
+    fun setAutoEqByGenre(enabled: Boolean) = effects.setAutoEqByGenre(enabled)
 
     fun getImageUrl(itemId: String): String =
         engine.getImageUrl(itemId)
@@ -621,67 +514,22 @@ class AudioPlayerViewModel(
         engine.setLyricsOffset(offsetMs)
     }
 
-    fun updateCrossfadeDuration(ms: Long) {
-        engine.setCrossfadeDurationMs(ms)
-        launch {
-            audioStore.setAudioCrossfadeDurationMs(ms)
-        }
-    }
+    fun updateCrossfadeDuration(ms: Long) = effects.updateCrossfadeDuration(ms)
 
-    fun updateGaplessPlayback(enabled: Boolean) {
-        engine.setGaplessEnabled(enabled)
-        launch {
-            audioStore.setAudioGaplessEnabled(enabled)
-        }
-    }
+    fun updateGaplessPlayback(enabled: Boolean) = effects.updateGaplessPlayback(enabled)
 
-    fun startSleepTimer(durationMs: Long) {
-        launch {
-            audioStore.setSleepTimerDurationMs(durationMs)
-            audioStore.setSleepTimerEndOfEpisode(false)
-        }
-        sleepTimerManager.setOnTimerExpired {
-            // Explicit pause rather than togglePlayPause(): if the user paused
-            // manually after arming the timer, the toggle would otherwise RESUME
-            // playback — the opposite of the timer's intent.
-            engine.pause()
-        }
-        sleepTimerManager.start(durationMs)
-        _uiState.update {
-            it.copy(
-                sleepTimer = it.sleepTimer.copy(
-                    active = true,
-                    endOfEpisode = false,
-                    lastUsedDurationMs = durationMs,
-                ),
-            )
-        }
-    }
+    // Sleep timer: delegates onto [sleepTimer] (AudioSleepTimerController),
+    // which owns the store writes, the expiry callback (explicit pause, in ONE
+    // place), and the synchronous uiState slice updates. The flow collectors in
+    // init keep mirroring manager/prefs state into the same slice.
 
-    fun startSleepTimerEndOfEpisode() {
-        launch {
-            audioStore.setSleepTimerEndOfEpisode(true)
-        }
-        sleepTimerManager.setOnTimerExpired {
-            // Explicit pause rather than togglePlayPause(): see startSleepTimer.
-            engine.pause()
-        }
-        sleepTimerManager.startEndOfEpisode()
-        _uiState.update {
-            it.copy(sleepTimer = it.sleepTimer.copy(active = true, endOfEpisode = true))
-        }
-    }
+    fun startSleepTimer(durationMs: Long) = sleepTimer.startSleepTimer(durationMs)
 
-    fun cancelSleepTimer() {
-        sleepTimerManager.cancel()
-        _uiState.update {
-            it.copy(sleepTimer = it.sleepTimer.copy(active = false, endOfEpisode = false))
-        }
-    }
+    fun startSleepTimerEndOfEpisode() = sleepTimer.startSleepTimerEndOfEpisode()
 
-    fun triggerSleepTimerEndOfEpisode() {
-        sleepTimerManager.triggerEndOfEpisode()
-    }
+    fun cancelSleepTimer() = sleepTimer.cancelSleepTimer()
+
+    fun triggerSleepTimerEndOfEpisode() = sleepTimer.triggerSleepTimerEndOfEpisode()
 
     fun stopPlayback() {
         engine.stopAndRelease()
@@ -703,58 +551,18 @@ class AudioPlayerViewModel(
         get() = queueManager.currentPlayingItemId.value
 
     // ── Add to playlist ─────────────────────────────────────────────────────
+    // One-line forwards: the picker lifecycle (open guard, editable-playlist
+    // fetch, add choreography, success/failure message) lives on
+    // [playlistPicker] (PlaylistPickerStateHolder); its state is read off
+    // playlistPicker.state, not this VM's uiState.
 
     /** Opens the playlist picker and loads the user's editable playlists. */
-    fun openPlaylistPicker() {
-        if (currentPlayingItemId == null) return
-        _uiState.update { it.copy(showPlaylistPicker = true, isLoadingPlaylists = true) }
-        launch {
-            playlistRepository.getPlaylists(limit = 100)
-                .onSuccess { all ->
-                    val editable = all.filter { it.canEdit }
-                    _uiState.update {
-                        it.copy(playlists = editable, isLoadingPlaylists = false)
-                    }
-                }
-                .onFailure {
-                    _uiState.update { it.copy(isLoadingPlaylists = false) }
-                }
-        }
-    }
+    fun openPlaylistPicker() = playlistPicker.open()
 
-    fun dismissPlaylistPicker() {
-        if (!_uiState.value.isAddingToPlaylist) {
-            _uiState.update { it.copy(showPlaylistPicker = false, playlists = emptyList(), playlistMessage = null) }
-        }
-    }
+    fun dismissPlaylistPicker() = playlistPicker.dismiss()
 
-    /** Adds the current track to [playlist]; clears the message after a beat. */
-    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) {
-        val itemId = currentPlayingItemId ?: return
-        _uiState.update { it.copy(isAddingToPlaylist = true) }
-        launch {
-            playlistRepository.addItemsToPlaylist(playlist.id, listOf(itemId))
-                .onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isAddingToPlaylist = false,
-                            showPlaylistPicker = false,
-                            playlists = emptyList(),
-                            playlistMessage = playlist.name,
-                        )
-                    }
-                }
-                .onFailure { err ->
-                    _uiState.update {
-                        it.copy(isAddingToPlaylist = false, playlistMessage = err.message)
-                    }
-                }
-        }
-    }
-
-    fun clearPlaylistMessage() {
-        _uiState.update { it.copy(playlistMessage = null) }
-    }
+    /** Adds the current track to [playlist]; success posts its name as the message. */
+    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) = playlistPicker.addTo(playlist)
 
     fun setKaraokeModeEnabled(enabled: Boolean) {
         karaokeMode = enabled
@@ -772,23 +580,27 @@ class AudioPlayerViewModel(
 
     private fun keySentinel(id: String) = "§null§$id"
 
+    /** Whether this platform carries a download pipeline; gates the track CTA. */
+    val isDownloadSupported: Boolean get() = downloads.isSupported
+
+    // ── Track download flip ────────────────────────────────────────────────
+    // The shared core:data TrackDownloadActions choreography (id → intake
+    // flipTrack → resolve detail → start) arrives via Koin like the other
+    // collaborators — the former hand-rolled inline construction (with its
+    // DownloadIntake + MediaRepository pair) is gone: the resolve→start leg
+    // exists once, in DownloadIntake.flipTrack. The REMOVE half stays HERE:
+    // a COMPLETED download flips the CTA to remove only after the screen's
+    // confirm dialog — the module must not swallow that policy.
+
     fun downloadCurrentTrack() {
         val itemId = currentPlayingItemId ?: return
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
             launch {
-                downloadRepository.deleteDownload(existing.id)
+                downloads.remove(existing.id)
             }
             return
         }
-        launch {
-            try {
-                val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return@launch
-                // Intake seam owns the full artifact bundle (local poster/backdrop,
-                // offline metadata row); previously this path wrote only the
-                // remote image URLs, so offline cards fell back to blurHash.
-                downloadIntake.start(detail)
-            } catch (_: Exception) {}
-        }
+        trackDownloadActions.flip(itemId)
     }
 }

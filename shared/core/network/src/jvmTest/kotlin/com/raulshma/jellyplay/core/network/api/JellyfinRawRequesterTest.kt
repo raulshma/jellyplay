@@ -25,7 +25,7 @@ import kotlin.test.assertNull
  *     — including after a failover to an alternate, the drift the pre-fold
  *     Plugin/MediaInfo URLs had (they built from the primary address and
  *     relied on the failover interceptor to rescue them);
- *  2. every member attaches the current user's `X-Emby-Token` header and the
+ *  2. every member attaches the current user's `Authorization` (MediaBrowser) header and the
  *     caller's path verbatim;
  *  3. non-2xx maps to `Exception("<failureMessage>: <code>")` for the
  *     throwing members and to null for [JellyfinRawRequester.getBodyText];
@@ -81,7 +81,7 @@ class JellyfinRawRequesterTest {
         assertEquals(1, names.size)
         val request = recorded()
         assertEquals("/Plugins", request.path)
-        assertEquals("token-123", request.getHeader("X-Emby-Token"))
+        assertEquals("MediaBrowser Token=\"token-123\"", request.getHeader("Authorization"))
     }
 
     @Test
@@ -108,7 +108,7 @@ class JellyfinRawRequesterTest {
         val request = recorded()
         assertEquals("POST", request.method)
         assertEquals("/Repositories", request.path)
-        assertEquals("token-123", request.getHeader("X-Emby-Token"))
+        assertEquals("MediaBrowser Token=\"token-123\"", request.getHeader("Authorization"))
         assertEquals("[]", request.body.readUtf8())
     }
 

@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
+import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
@@ -66,9 +66,9 @@ data class ForceResyncCandidate(
 )
 
 class DownloadsViewModel(
-    private val downloadRepository: DownloadRepository,
+    private val queue: DownloadQueue,
     private val offlineRepository: OfflineRepository,
-    private val syncManager: OfflineSyncManager,
+    private val resync: OfflineResync,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(DownloadsUiState())
@@ -76,11 +76,9 @@ class DownloadsViewModel(
 
     /**
      * One-shot delete feedback, screen-forward seam replacing the legacy
-     * UserMessageBus ctor dep (the bus + UiText live in the Android-only
-     * :core:ui shim and are not visible from commonMain). Same one-shot
-     * semantics as the bus: buffered, single collector, never replayed —
-     * [DownloadsScreen] resolves the resource text and forwards through the
-     * DownloadsMessenger actual.
+     * UserMessageBus ctor dep. Same one-shot semantics as the bus: buffered,
+     * single collector, never replayed — [DownloadsScreen] resolves the
+     * resource text and posts it to the shared UserMessageBus.
      */
     private val messageChannel = Channel<DownloadsUserMessage>(Channel.BUFFERED)
     val messages: Flow<DownloadsUserMessage> = messageChannel.receiveAsFlow()
@@ -95,7 +93,7 @@ class DownloadsViewModel(
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Live batch resync progress (per-item phase + aggregate counts). */
-    val resyncProgress: StateFlow<ResyncBatchProgress> = syncManager.batchProgress
+    val resyncProgress: StateFlow<ResyncBatchProgress> = resync.batchProgress
 
     /** True while a batch freshness check is running. */
     private val _checking = MutableStateFlow(false)
@@ -127,7 +125,7 @@ class DownloadsViewModel(
      * list).
      */
     val progressById: StateFlow<Map<String, DownloadProgress>> =
-        downloadRepository.getActiveDownloadProgress()
+        queue.activeDownloadProgress()
             .combine(structuralItems) { live, items -> live to items }
             .scan(emptyMap<String, DownloadProgress>()) { retained, (live, structural) ->
                 val stillDownloading = structural
@@ -164,10 +162,10 @@ class DownloadsViewModel(
             // does — bytes/speed arrive through [progressById] — so a second
             // projection drops the per-tick fields and only list-structure
             // changes (ids in order, per-item status) re-emit uiState.
-            downloadRepository.getAllDownloads()
+            queue.allDownloads()
                 .catch { e ->
                     _uiState.update {
-                        it.copy(error = e.localizedMessage ?: "Failed to load downloads", isLoading = false)
+                        it.copy(error = e.message ?: "Failed to load downloads", isLoading = false)
                     }
                 }
                 .distinctUntilChanged { old, new -> sameListStructure(old, new) }
@@ -193,7 +191,12 @@ class DownloadsViewModel(
      */
     private fun sameListStructure(old: List<DownloadItem>, new: List<DownloadItem>): Boolean {
         if (old.size != new.size) return false
-        return old.zip(new).all { (o, n) -> o.id == n.id && o.status == n.status }
+        for (i in old.indices) {
+            val o = old[i]
+            val n = new[i]
+            if (o.id != n.id || o.status != n.status) return false
+        }
+        return true
     }
 
     /**
@@ -211,44 +214,47 @@ class DownloadsViewModel(
         launch {
             bulkMap(targets) { item ->
                 when (action) {
-                    DownloadBulkAction.PAUSE -> downloadRepository.pauseDownload(item.id)
+                    DownloadBulkAction.PAUSE -> queue.pause(item.id)
                     DownloadBulkAction.RESUME -> {
-                        downloadRepository.resumeDownload(item.id)
-                        downloadRepository.enqueueDownload(item.id)
+                        queue.resume(item.id)
+                        queue.enqueue(item.id)
                     }
-                    DownloadBulkAction.CANCEL -> downloadRepository.cancelDownload(item.id)
+                    DownloadBulkAction.CANCEL -> queue.cancel(item.id)
                     DownloadBulkAction.RETRY_FAILED -> {
-                        downloadRepository.retryDownload(item.id)
-                        downloadRepository.enqueueDownload(item.id)
+                        queue.retry(item.id)
+                        queue.enqueue(item.id)
                     }
-                    DownloadBulkAction.DELETE -> downloadRepository.deleteDownload(item.id)
+                    DownloadBulkAction.DELETE -> queue.delete(item.id)
                 }
             }
             if (action == DownloadBulkAction.DELETE) {
                 if (scope == DownloadActionScope.Selected) clearSelection()
-                messageChannel.trySend(DownloadsUserMessage.Deleted)
+                // Only claim success where deletions are real — the wasm
+                // queue seam is a no-op, and a fabricated "Deleted" toast
+                // would lie.
+                if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
             }
         }
     }
 
     fun deleteDownload(item: DownloadItem) {
         launch {
-            downloadRepository.deleteDownload(item.id)
-            messageChannel.trySend(DownloadsUserMessage.Deleted)
+            queue.delete(item.id)
+            if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
         }
     }
 
     fun moveToFront(item: DownloadItem) {
         launch {
             val maxPriority = _uiState.value.downloads.maxOfOrNull { it.priority } ?: 0
-            downloadRepository.setDownloadPriority(item.id, maxPriority + 1)
+            queue.setPriority(item.id, maxPriority + 1)
         }
     }
 
     fun lowerPriority(item: DownloadItem) {
         launch {
             val minPriority = _uiState.value.downloads.minOfOrNull { it.priority } ?: 0
-            downloadRepository.setDownloadPriority(item.id, minPriority - 1)
+            queue.setPriority(item.id, minPriority - 1)
         }
     }
 
@@ -299,7 +305,7 @@ class DownloadsViewModel(
             _checking.value = true
             try {
                 val ids = offlineRepository.getDownloadedItemIds()
-                syncManager.checkForUpdatesBatch(ids)
+                resync.checkForUpdatesBatch(ids)
             } finally {
                 _checking.value = false
             }
@@ -311,7 +317,7 @@ class DownloadsViewModel(
      * [resyncProgress]; the item's update flag clears once its baseline refreshes.
      */
     fun resyncOne(itemId: String) {
-        syncManager.resyncBatch(listOf(itemId))
+        resync.resyncBatch(listOf(itemId))
     }
 
     /**
@@ -323,18 +329,18 @@ class DownloadsViewModel(
     fun resyncAll() {
         launch {
             val flagged = offlineRepository.getItemsWithUpdates().first()
-            if (flagged.isNotEmpty()) syncManager.resyncBatch(flagged.map { it.id })
+            if (flagged.isNotEmpty()) resync.resyncBatch(flagged.map { it.id })
         }
     }
 
     /** Resyncs an explicit set of item ids (used by the sheet's per-item action). */
     fun resyncAll(itemIds: List<String>) {
-        if (itemIds.isNotEmpty()) syncManager.resyncBatch(itemIds)
+        if (itemIds.isNotEmpty()) resync.resyncBatch(itemIds)
     }
 
     /** Clears batch progress once the resync sheet is dismissed. */
     fun clearResyncProgress() {
-        syncManager.clearBatchProgress()
+        resync.clearBatchProgress()
     }
 
     /**
@@ -345,7 +351,7 @@ class DownloadsViewModel(
      */
     fun forceResync(itemIds: List<String>, options: ResyncOptions) {
         if (itemIds.isEmpty() || options.isEmpty) return
-        syncManager.resyncBatch(itemIds, options)
+        resync.resyncBatch(itemIds, options)
     }
 
     /**
@@ -375,7 +381,7 @@ class DownloadsViewModel(
      * list.
      */
     suspend fun forceResyncCandidates(): List<ForceResyncCandidate> =
-        downloadRepository.getAllDownloadsSnapshot()
+        queue.allDownloadsSnapshot()
             .filter { it.status in forceResyncEligibleStatuses }
             .distinctBy { it.mediaItemId }
             .map {

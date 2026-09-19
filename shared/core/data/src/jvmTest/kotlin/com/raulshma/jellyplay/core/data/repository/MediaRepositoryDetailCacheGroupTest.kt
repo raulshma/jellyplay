@@ -81,6 +81,9 @@ class MediaRepositoryDetailCacheGroupTest {
             SystemTimeSource(),
             homeSession,
             sessionCacheRegistry,
+            // Facade split: the group under test now lives on the shared
+            // internals holder (construction-only ctor re-point).
+            MediaRepositoryInternals(apiClient, homeSession),
         )
     }
 

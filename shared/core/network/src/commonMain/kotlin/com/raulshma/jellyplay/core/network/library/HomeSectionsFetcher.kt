@@ -40,6 +40,7 @@ import kotlinx.coroutines.sync.Semaphore
  */
 internal interface HomeSectionSources {
     suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>>
+    suspend fun getContinueReading(limit: Int): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>>
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
     suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>>
@@ -63,9 +64,9 @@ internal interface HomeSectionSources {
  * chain.
  *
  * Schedule (verbatim from the JVM impl it replaces):
- *  - Continue Watching / Next Up / folders / pinned launch concurrently;
- *    a disabled section makes ZERO port calls (resolved locally as
- *    `Result.success(emptyList())`); folders are gated on
+ *  - Continue Watching / Continue Reading / Next Up / folders / pinned launch
+ *    concurrently; a disabled section makes ZERO port calls (resolved locally
+ *    as `Result.success(emptyList())`); folders are gated on
  *    LATEST_MEDIA || RECENTLY_ADDED; pinned sections are fetched ALWAYS,
  *    regardless of [HomeSectionQuery.enabledSections].
  *  - The recommendations chain launches only AFTER Continue Watching and
@@ -135,6 +136,10 @@ internal class HomeSectionsFetcher(
             if (HomeSectionType.CONTINUE_WATCHING in enabledSections) sources.getContinueWatching(limit = 20)
             else Result.success(emptyList())
         }
+        val continueReadingDeferred = async {
+            if (HomeSectionType.CONTINUE_READING in enabledSections) sources.getContinueReading(limit = 20)
+            else Result.success(emptyList())
+        }
         val nextUpDeferred = async {
             if (HomeSectionType.NEXT_UP in enabledSections) sources.getNextUp(
                 limit = 20,
@@ -156,6 +161,7 @@ internal class HomeSectionsFetcher(
         val pinnedDeferred = async { fetchPinnedSections(query.pinnedSections) }
 
         val continueWatchingResult = continueWatchingDeferred.await()
+        val continueReadingResult = continueReadingDeferred.await()
         val nextUpResult = nextUpDeferred.await()
         val foldersResult = foldersDeferred.await()
 
@@ -206,6 +212,7 @@ internal class HomeSectionsFetcher(
             HomeSectionsAssemblyInputs(
                 query = query,
                 continueWatchingResult = continueWatchingResult,
+                continueReadingResult = continueReadingResult,
                 nextUpResult = nextUpResult,
                 foldersResult = foldersResult,
                 latestPerFolder = latestPerFolder,

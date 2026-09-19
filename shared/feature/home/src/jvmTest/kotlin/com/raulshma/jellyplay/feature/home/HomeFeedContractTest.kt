@@ -57,6 +57,7 @@ class HomeFeedContractTest {
             homeMode = HomeMode.VIDEO,
             titles = OfflineHomeSectionTitles(
                 continueWatching = "Continue Watching",
+                continueReading = "Continue Reading",
                 nextUp = "Next Up",
                 recentlyDownloaded = "Downloaded",
                 movies = "Movies",

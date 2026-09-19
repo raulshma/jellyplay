@@ -48,6 +48,8 @@
     <string name="core_media_album">Album</string>
     <string name="core_media_artist">Artiste</string>
     <string name="core_media_music_video">Vidéo musicale</string>
+    <string name="core_media_book">Livre</string>
+
     <string name="core_media_collection">Collection</string>
     <string name="core_media_photo">Photo</string>
     <string name="core_media_photo_album">Album photo</string>
@@ -64,6 +66,8 @@
     <string name="core_media_album_plural">Albums</string>
     <string name="core_media_artist_plural">Artistes</string>
     <string name="core_media_music_video_plural">Vidéos musicales</string>
+    <string name="core_media_book_plural">Livres</string>
+
     <string name="core_media_collection_plural">Collections</string>
     <string name="core_media_photo_plural">Photos</string>
     <string name="core_media_photo_album_plural">Albums photo</string>
@@ -113,6 +117,7 @@
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Supprimer</string>
     <string name="core_ui_play">Lire</string>
+    <string name="core_ui_read">Lire</string>
     <string name="core_ui_backspace">Suppression</string>
     <string name="core_ui_request">Demander</string>
     <string name="core_ui_watched">Vu</string>
@@ -245,4 +250,6 @@
     <string name="core_remove_download_title">Supprimer le téléchargement ?</string>
     <string name="core_remove_download_message">Ceci supprime la copie téléchargée de « %1$s » de cet appareil. La copie sur le serveur n’est pas affectée.</string>
     <string name="core_remove_download_confirm">Supprimer</string>
+    <string name="core_ui_read_more">Lire plus</string>
+    <string name="core_ui_show_less">Afficher moins</string>
 </resources>

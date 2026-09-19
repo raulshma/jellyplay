@@ -366,7 +366,11 @@ class RadarrApiClientTest {
         assertFalse(authError.isRetryable)
         assertTrue(authError.isAccessDenied)
 
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("boom"))
+        // 500 is retryable and retry now lives in the request funnel, so the
+        // budget burns out before the typed failure surfaces.
+        repeat(com.raulshma.jellyplay.core.network.api.HttpExecutor.MAX_RETRIES + 1) {
+            mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("boom"))
+        }
         val serverError = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "bad")
         assertTrue(serverError.isFailure)
         val serverApiError = serverError.exceptionOrNull()!! as ApiException

@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.feature.editor
 
+import com.raulshma.jellyplay.core.model.MediaStream
+
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -93,28 +94,16 @@ class EditorViewModelImageAndSaveGapsTest {
             editorRepository,
             authRepository,
             subtitleProviderRepository,
-            // No-op streaming subtitle store — image/save tests never exercise
+            // No-op subtitle store seam — image/save tests never exercise
             // the durable subtitle path (mirrors the metadata suite's fake).
-            object : StreamingSubtitleStore {
-                override suspend fun save(
-                    itemId: String,
-                    provider: SubtitleProviderKind,
-                    providerSubtitleId: String,
-                    fileName: String,
-                    language: String?,
-                    codec: String?,
-                    isForced: Boolean,
-                    isHearingImpaired: Boolean,
-                    bytes: ByteArray,
-                ): SavedSubtitle = SavedSubtitle(
-                    provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
-                )
-                override suspend fun loadAll(itemId: String): List<SavedSubtitle> = emptyList()
-                override suspend fun fileFor(itemId: String, saved: SavedSubtitle): java.io.File =
-                    java.io.File(saved.fileRelativePath)
-                override suspend fun delete(itemId: String, saved: SavedSubtitle) = Unit
-                override suspend fun markServerStreamIndex(itemId: String, saved: SavedSubtitle, index: Int) = Unit
-                override suspend fun clear(itemId: String) = Unit
+            object : EditorSubtitleStore {
+                override suspend fun save(save: ProviderSubtitleSave) = Unit
+                override suspend fun attributeUploaded(
+                    save: ProviderSubtitleSave,
+                    streamsAfterUpload: List<MediaStream>,
+                    preUploadExternalIndices: Set<Int>,
+                ) = Unit
+                override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) = Unit
             },
         )
     }
@@ -128,10 +117,10 @@ class EditorViewModelImageAndSaveGapsTest {
 
     @Test
     fun `uploadImageFromUrl downloads remotely and reloads the image infos`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.uploadImageFromUrl("https://remote/art.jpg", "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImageFromUrl("https://remote/art.jpg", "Primary"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.downloadRemoteImage(itemId, "Primary", "https://remote/art.jpg") }
@@ -144,13 +133,13 @@ class EditorViewModelImageAndSaveGapsTest {
 
     @Test
     fun `uploadImageFromUrl failure surfaces the error without a reload`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         coEvery {
             editorRepository.downloadRemoteImage(any(), any(), any())
         } returns Result.failure(RuntimeException("remote 404"))
 
-        viewModel.uploadImageFromUrl("https://remote/art.jpg", "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImageFromUrl("https://remote/art.jpg", "Primary"))
         advanceUntilIdle()
 
         assertEquals("remote 404", viewModel.uiState.value.error)
@@ -161,12 +150,12 @@ class EditorViewModelImageAndSaveGapsTest {
 
     @Test
     fun `uploadImage failure surfaces the error and skips the reload`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         coEvery { editorRepository.setItemImage(any(), any(), any()) } returns
             Result.failure(RuntimeException("quota exceeded"))
 
-        viewModel.uploadImage(ByteArray(4), "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImage(ByteArray(4), "Primary"))
         advanceUntilIdle()
 
         assertEquals("quota exceeded", viewModel.uiState.value.error)
@@ -177,9 +166,9 @@ class EditorViewModelImageAndSaveGapsTest {
 
     @Test
     fun `image actions without a loaded item never reach the repository`() = runTest {
-        viewModel.uploadImage(ByteArray(4), "Primary")
-        viewModel.uploadImageFromUrl("https://remote/art.jpg", "Primary")
-        viewModel.deleteImage("Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImage(ByteArray(4), "Primary"))
+        viewModel.onEvent(EditorUiEvent.UploadImageFromUrl("https://remote/art.jpg", "Primary"))
+        viewModel.onEvent(EditorUiEvent.DeleteImage("Primary"))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { editorRepository.setItemImage(any(), any(), any()) }
@@ -195,7 +184,7 @@ class EditorViewModelImageAndSaveGapsTest {
         // SUSPECTED BUG PIN — see the class KDoc: the itemId guard returns
         // AFTER isSaving was raised, and nothing resets it. The repository is
         // correctly never called; the stuck spinner flag is the bug.
-        viewModel.saveMetadata()
+        viewModel.onEvent(EditorUiEvent.SaveMetadata)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { editorRepository.updateItem(any(), any()) }

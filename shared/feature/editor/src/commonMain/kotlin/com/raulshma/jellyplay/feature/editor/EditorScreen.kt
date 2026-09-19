@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -69,7 +70,7 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun EditorScreen(
+internal fun EditorScreen(
     itemId: String,
     onBack: () -> Unit,
     viewModel: EditorViewModel = koinViewModel(),
@@ -77,7 +78,7 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(itemId) {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
     }
 
     // Unsaved-changes guard: when the editor is dirty, intercept system back
@@ -104,7 +105,7 @@ fun EditorScreen(
                 ConfirmAction(
                     text = stringResource(Res.string.editor_save),
                     tone = ConfirmTone.PRIMARY,
-                    onClick = { viewModel.saveMetadata() },
+                    onClick = { viewModel.onEvent(EditorUiEvent.SaveMetadata) },
                 )
             } else {
                 null
@@ -131,7 +132,7 @@ fun EditorScreen(
         actions = {
             val saveFocusState = rememberTvFocusState()
             FilledTonalButton(
-                onClick = { viewModel.saveMetadata() },
+                onClick = { viewModel.onEvent(EditorUiEvent.SaveMetadata) },
                 enabled = uiState.isAdmin && uiState.isDirty && !uiState.isSaving,
                 modifier = Modifier
                     .padding(end = 8.dp)
@@ -173,7 +174,7 @@ fun EditorScreen(
             uiState.error?.let { errorMessage ->
                 EditorErrorBanner(
                     message = errorMessage,
-                    onDismiss = { viewModel.clearError() },
+                    onDismiss = { viewModel.onEvent(EditorUiEvent.ClearError) },
                 )
             }
 
@@ -191,12 +192,16 @@ fun EditorScreen(
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                     text = { Text(stringResource(Res.string.editor_tab_images)) },
                     icon = { Icon(Tabler.Outline.Photo, contentDescription = null) },
+                    // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+                    modifier = Modifier.harnessClickTarget("editor-tab-images"),
                 )
                 Tab(
                     selected = pagerState.currentPage == 2,
                     onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                     text = { Text(stringResource(Res.string.editor_tab_subtitles)) },
                     icon = { Icon(Tabler.Outline.Subtitles, contentDescription = null) },
+                    // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+                    modifier = Modifier.harnessClickTarget("editor-tab-subtitles"),
                 )
             }
 

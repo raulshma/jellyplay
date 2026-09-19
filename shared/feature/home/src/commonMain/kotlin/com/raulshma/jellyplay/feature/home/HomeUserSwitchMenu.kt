@@ -33,7 +33,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.library.buildUserImageUrl
+import com.raulshma.jellyplay.core.model.buildUserImageUrl
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 /** Decode cap for the tiny avatar circle (20–28 dp; 96 px covers ~3.4x density). */

@@ -1,10 +1,11 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
+import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -16,6 +17,7 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import io.mockk.coVerify
 import io.mockk.every
@@ -49,9 +51,9 @@ class AudioPlayerViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
-    private lateinit var downloadRepository: DownloadRepository
-    private lateinit var downloadIntake: DownloadIntake
-    private lateinit var sleepTimerManager: SleepTimerManager
+    private lateinit var downloads: TrackDownloadStatusWindow
+    private lateinit var trackDownloadActions: TrackDownloadActions
+    private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
 
     private lateinit var viewModel: AudioPlayerViewModel
@@ -68,14 +70,17 @@ class AudioPlayerViewModelTest {
         mediaRepository = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
-        downloadRepository = mockk(relaxed = true)
-        downloadIntake = mockk(relaxed = true)
-        sleepTimerManager = mockk(relaxed = true)
+        downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
+        trackDownloadActions = mockk(relaxed = true)
+        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
 
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
         every { audioEffectsStore.audioEffects } returns MutableStateFlow(AudioEffectsSlice())
+        // The effects flows the AudioEffectsController persist legs read
+        // synchronously — see stubAudioEffectsReadSurface.
+        stubAudioEffectsReadSurface(effectsManager)
 
         viewModel = AudioPlayerViewModel(
             queueManager = queueManager,
@@ -87,8 +92,8 @@ class AudioPlayerViewModelTest {
             mediaRepository = mediaRepository,
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
-            downloadRepository = downloadRepository,
-            downloadIntake = downloadIntake,
+            downloads = downloads,
+            trackDownloadActions = trackDownloadActions,
             sleepTimerManager = sleepTimerManager,
             cast = cast,
         )
@@ -199,14 +204,14 @@ class AudioPlayerViewModelTest {
     @Test
     fun setDialogueBoostStrength_updatesStateAndDelegates() {
         viewModel.setDialogueBoostStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.effects.dialogueBoostStrength)
+        assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.dialogueBoostStrength)
         verify { effectsManager.setDialogueBoostStrength(EffectStrength.HIGH) }
     }
 
     @Test
     fun setNightModeStrength_updatesStateAndDelegates() {
         viewModel.setNightModeStrength(EffectStrength.LOW)
-        assertEquals(EffectStrength.LOW, viewModel.uiState.value.effects.nightModeStrength)
+        assertEquals(EffectStrength.LOW, viewModel.effectsState.value.nightModeStrength)
         verify { effectsManager.setNightModeStrength(EffectStrength.LOW) }
     }
 
@@ -297,7 +302,7 @@ class AudioPlayerViewModelTest {
     @Test
     fun setBassBoostStrength_updatesStateDelegatesAndPersists() {
         viewModel.setBassBoostStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.effects.bassBoostStrength)
+        assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.bassBoostStrength)
         verify { effectsManager.setBassBoostStrength(EffectStrength.HIGH) }
         coVerify { audioEffectsStore.setBassBoostStrength(EffectStrength.HIGH) }
     }
@@ -317,43 +322,43 @@ class AudioPlayerViewModelTest {
     }
 
     @Test
-    fun applyVirtualizerStrength_delegatesAndPersists() {
-        viewModel.applyVirtualizerStrength(800)
+    fun setVirtualizerStrength_delegatesAndPersists() {
+        viewModel.setVirtualizerStrength(800)
         verify { effectsManager.setVirtualizerStrength(800) }
         coVerify { audioEffectsStore.setVirtualizerStrength(800) }
     }
 
     @Test
-    fun applyReverbPreset_delegatesAndPersists() {
-        viewModel.applyReverbPreset(ReverbPreset.LARGE_HALL)
+    fun setReverbPreset_delegatesAndPersists() {
+        viewModel.setReverbPreset(ReverbPreset.LARGE_HALL)
         verify { effectsManager.setReverbPreset(ReverbPreset.LARGE_HALL) }
         coVerify { audioEffectsStore.setReverbPreset(ReverbPreset.LARGE_HALL) }
     }
 
     @Test
-    fun applyLrBalance_delegatesAndPersists() {
-        viewModel.applyLrBalance(-0.5f)
+    fun setLrBalance_delegatesAndPersists() {
+        viewModel.setLrBalance(-0.5f)
         verify { effectsManager.setLrBalance(-0.5f) }
         coVerify { audioEffectsStore.setLrBalance(-0.5f) }
     }
 
     @Test
-    fun applyPitchSemitones_delegatesAndPersists() {
-        viewModel.applyPitchSemitones(2f)
+    fun setPitchSemitones_delegatesAndPersists() {
+        viewModel.setPitchSemitones(2f)
         verify { effectsManager.setPitchSemitones(2f) }
         coVerify { audioEffectsStore.setPitchSemitones(2f) }
     }
 
     @Test
-    fun applyAutoEqByGenre_delegatesAndPersists() {
-        viewModel.applyAutoEqByGenre(true)
+    fun setAutoEqByGenre_delegatesAndPersists() {
+        viewModel.setAutoEqByGenre(true)
         verify { effectsManager.setAutoEqByGenre(true) }
         coVerify { audioEffectsStore.setAutoEqByGenre(true) }
     }
 
     @Test
-    fun applyEqualizerPreset_delegatesAndPersists() {
-        viewModel.applyEqualizerPreset(EqualizerPreset.ROCK)
+    fun setEqualizerPreset_delegatesAndPersists() {
+        viewModel.setEqualizerPreset(EqualizerPreset.ROCK)
         verify { effectsManager.setEqualizerPreset(EqualizerPreset.ROCK) }
         coVerify { audioEffectsStore.setEqualizerPreset(EqualizerPreset.ROCK) }
     }
@@ -384,7 +389,7 @@ class AudioPlayerViewModelTest {
             assertEquals(15 * 60 * 1000L, lastUsedDurationMs)
         }
         verify { sleepTimerManager.setOnTimerExpired(any()) }
-        verify { sleepTimerManager.start(15 * 60 * 1000L) }
+        verify { sleepTimerManager.startSleepTimer(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerDurationMs(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerEndOfEpisode(false) }
     }
@@ -398,7 +403,7 @@ class AudioPlayerViewModelTest {
             assertTrue(endOfEpisode)
         }
         verify { sleepTimerManager.setOnTimerExpired(any()) }
-        verify { sleepTimerManager.startEndOfEpisode() }
+        verify { sleepTimerManager.startEndOfEpisodeTimer() }
         coVerify { audioStore.setSleepTimerEndOfEpisode(true) }
     }
 
@@ -411,7 +416,7 @@ class AudioPlayerViewModelTest {
             assertFalse(active)
             assertFalse(endOfEpisode)
         }
-        verify { sleepTimerManager.cancel() }
+        verify { sleepTimerManager.cancelSleepTimer() }
     }
 
     @Test
@@ -520,15 +525,16 @@ class AudioPlayerViewModelTest {
             assertEquals(1.0f, speed)
             assertFalse(isPlaying)
             assertEquals(0L, duration)
-            with(effects) {
-                assertEquals(EffectStrength.MODERATE, dialogueBoostStrength)
-                assertEquals(EffectStrength.MODERATE, nightModeStrength)
-                assertEquals(EffectStrength.MODERATE, bassBoostStrength)
-                assertEquals(500, virtualizerStrength)
-                assertEquals(ReverbPreset.NONE, reverbPreset)
-                assertEquals(AudioNormalizationMode.NONE, normalizationMode)
-                assertEquals(EqualizerPreset.FLAT, equalizerPreset)
-            }
+        }
+        // The effects slice is controller-owned state, re-exposed by the VM.
+        with(viewModel.effectsState.value) {
+            assertEquals(EffectStrength.MODERATE, dialogueBoostStrength)
+            assertEquals(EffectStrength.MODERATE, nightModeStrength)
+            assertEquals(EffectStrength.MODERATE, bassBoostStrength)
+            assertEquals(500, virtualizerStrength)
+            assertEquals(ReverbPreset.NONE, reverbPreset)
+            assertEquals(AudioNormalizationMode.NONE, normalizationMode)
+            assertEquals(EqualizerPreset.FLAT, equalizerPreset)
         }
     }
 

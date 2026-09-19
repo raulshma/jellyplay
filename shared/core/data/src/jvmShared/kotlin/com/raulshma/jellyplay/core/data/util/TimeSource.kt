@@ -13,10 +13,18 @@ import java.time.ZoneId
  * `:shared:core:model` ([wallNowMillis] / [monotonicNowMillis]). There is no
  * test fake here — fakes live next to the tests that need them
  * (`feature/.../src/test`).
+ *
+ * split: the epoch-millis slice was promoted to the commonMain
+ * [EpochMillisSource] seam (the promoted commonMain repository impls take
+ * that type — java.time cannot cross into commonMain), so this interface
+ * extends it. Every existing [TimeSource] fake across the repo therefore
+ * satisfies [EpochMillisSource] unchanged, and the `today(zone)` java.time
+ * surface stays available to the JVM-only consumers (feature/home's
+ * commonMain, NewsletterTriggerManager, StatisticsMath, ...).
  */
-interface TimeSource {
+interface TimeSource : EpochMillisSource {
     /** Current wall-clock time in epoch milliseconds. */
-    fun nowEpochMillis(): Long
+    override fun nowEpochMillis(): Long
 
     /** Today's date in the given [zone]. */
     fun today(zone: ZoneId): LocalDate

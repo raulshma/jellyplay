@@ -18,12 +18,14 @@ val SESSION_SCOPED_QUERY_PARAMS: Set<String> =
 /**
  * Query parameters that are safe to strip from byte-cache keys: the bytes
  * behind the URL are identical with or without them. Currently just the
- * auth token — token rotation must not invalidate cached bytes. Anything
- * else is either content-bearing (resume offsets) or session-scoped
+ * auth token — token rotation must not invalidate cached bytes. Both token
+ * spellings: `ApiKey` (what the app's URL builders emit) and the legacy
+ * lowercase `api_key` alias pre-12 servers bake into URLs they hand back.
+ * Anything else is either content-bearing (resume offsets) or session-scoped
  * ([SESSION_SCOPED_QUERY_PARAMS], which must be rejected via
  * [isSessionKeyedUrl], never stripped).
  */
-val STRIP_SAFE_QUERY_PARAMS: Set<String> = setOf("api_key")
+val STRIP_SAFE_QUERY_PARAMS: Set<String> = setOf("ApiKey", "api_key")
 
 /** True if [url] carries any [SESSION_SCOPED_QUERY_PARAMS] entry. */
 fun isSessionKeyedUrl(url: String): Boolean =

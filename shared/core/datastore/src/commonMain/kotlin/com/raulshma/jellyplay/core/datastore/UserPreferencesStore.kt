@@ -5,7 +5,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -55,7 +54,6 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.NotificationPreferences
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -66,15 +64,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.settings.mergeWith
@@ -137,9 +127,6 @@ class UserPreferencesStore constructor(
     private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
 ) {
     private val scope = externalScope
-
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emit(emptyPreferences()) }
 
     /**
      * Keys the facade itself owns — runtime / per-account / one-time state that
@@ -224,45 +211,6 @@ class UserPreferencesStore constructor(
 
     private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean =
         PreferenceCodec.readBool(prefs, key, name, default)
-
-    suspend fun restorePreferences(prefs: UserPreferences, restoreSecuritySensitive: Boolean = true) {
-        playbackStore.restorePreferences(prefs)
-        appearanceStore.restorePreferences(prefs)
-        videoPlayerStore.restorePreferences(prefs)
-        downloadsStore.restorePreferences(prefs)
-        engineStore.restorePreferences(prefs)
-        homeDiscoveryStore.restorePreferences(prefs)
-        audioStore.restorePreferences(prefs)
-        audioEffectsStore.restorePreferences(prefs)
-        audioCacheStore.restorePreferences(prefs)
-        libraryStore.restorePreferences(prefs)
-        navigationStore.restorePreferences(prefs)
-        networkOfflineStore.restorePreferences(prefs)
-        notificationStore.restorePreferences(prefs)
-        screensaverStore.restorePreferences(prefs)
-        // SecurityStore is the only store with security-sensitive keys. The
-        // remote-control switch restores unconditionally; the lock config only
-        // when the caller explicitly opts in via restoreSecuritySensitive.
-        securityStore.restorePreferences(prefs)
-        if (restoreSecuritySensitive) {
-            securityStore.restoreSecuritySensitive(prefs)
-        }
-        subtitleLanguageStore.restorePreferences(prefs)
-        syncPlayCastStore.restorePreferences(prefs)
-        experimentalStore.restorePreferences(prefs)
-
-        engineStore.restorePerItemMaps(
-            mediaStreamSelections = prefs.mediaStreamSelections,
-            videoEffectsByItem = prefs.videoEffectsByItem,
-        )
-
-        val json = ENCODE_DEFAULTS_JSON
-        dataStore.edit { settings ->
-            settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
-            prefs.watchLaterPlaylistId?.let { settings[Keys.WATCH_LATER_PLAYLIST_ID] = it }
-            settings[Keys.FAVORITE_CHANNELS] = json.encodeToString(prefs.favoriteChannels)
-        }
-    }
 
     // ----------------------------------------------------------------------
     // Backup v2 — per-slice export / import (no aggregate round-trip)

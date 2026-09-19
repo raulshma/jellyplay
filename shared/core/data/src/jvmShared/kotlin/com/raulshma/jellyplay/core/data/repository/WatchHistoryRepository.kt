@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.concurrency.SingleFlight
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import java.util.concurrent.atomic.AtomicLong
 
 data class DailyWatchActivity(
     val date: String,
@@ -47,6 +49,30 @@ class WatchHistoryRepositoryImpl constructor(
     private val _playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.UNKNOWN)
     override val playbackReportingStatus: StateFlow<PlaybackReportingStatus> = _playbackReportingStatus.asStateFlow()
 
+    /**
+     * Memoizes the played-items scan per `(year, filter)`: the paged network
+     * scan behind [getPlayedItems] serves both the heatmap grid (through
+     * [getDailyActivity]'s fallback) and every day-tap detail sheet (through
+     * [getItemsForDay]'s fallback), so each tap on a day re-scanned the whole
+     * year page by page. Concurrent callers for one key share a single
+     * in-flight fetch through [playedItemsFlight] — the shared
+     * [SingleFlight] core, with this memo's rules expressed as its seams:
+     * the generation is a private epoch (no identity key — the memo is
+     * single-user by construction), and an empty result votes
+     * `mayStore = false` so a failed scan can't pin an empty day. Entries
+     * live until the next [refreshPlaybackReportingStatus], so a day tap is
+     * exactly as stale as the grid load it belongs to.
+     */
+    private data class PlayedItemsKey(val year: Int, val filter: HeatmapFilter)
+
+    /**
+     * Guarded by [playedItemsFlight]'s mutex: read (locked re-check) and
+     * written (generation-vetoed store) only inside [SingleFlight]'s
+     * sections, cleared inside its [SingleFlight.invalidateAll].
+     */
+    private val playedItemsCache = mutableMapOf<PlayedItemsKey, List<MediaItem>>()
+    private val playedItemsFlight = SingleFlight<PlayedItemsKey, List<MediaItem>>(epoch = AtomicLong(0L))
+
     override suspend fun getMinimumActivityDate(): String? {
         val user = apiClient.currentUser.first() ?: return null
         return try {
@@ -65,6 +91,13 @@ class WatchHistoryRepositoryImpl constructor(
     }
 
     override suspend fun refreshPlaybackReportingStatus() {
+        // A new refresh window begins: drop the played-items memo so the grid
+        // and day taps re-scan. The epoch bump + clear run as one
+        // [SingleFlight.invalidateAll] section, so a flight that started
+        // before this point still returns its result to its callers but
+        // stores nothing — its write is either generation-vetoed or wiped by
+        // the clear.
+        playedItemsFlight.invalidateAll { playedItemsCache.clear() }
         _playbackReportingStatus.value = apiClient.checkPlaybackReportingPlugin()
             .getOrDefault(PlaybackReportingStatus.UNAVAILABLE)
     }
@@ -171,6 +204,26 @@ class WatchHistoryRepositoryImpl constructor(
     }
 
     override suspend fun getPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem> {
+        val key = PlayedItemsKey(year, filter)
+        return playedItemsFlight.getOrFetch(
+            key = { key },
+            // No fastRead: a plain map has no lock-free read, so the memo's
+            // first read is the core's locked re-check.
+            readCached = { playedItemsCache[it] },
+            fetch = {
+                // A failed page surfaces as an empty result, and an empty
+                // result votes mayStore = false (never cached, so a failed
+                // scan can't pin an empty day — a genuinely empty year just
+                // re-scans per tap, the pre-memo behavior). The generation
+                // veto on top (a refresh landing mid-flight) is the core's.
+                val items = fetchPlayedItems(key.year, key.filter)
+                items to items.isNotEmpty()
+            },
+            store = { k, items -> playedItemsCache[k] = items },
+        )
+    }
+
+    private suspend fun fetchPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem> {
         val user = apiClient.currentUser.first() ?: return emptyList()
         val types = filter.itemTypes
         val allItems = mutableListOf<MediaItem>()

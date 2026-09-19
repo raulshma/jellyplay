@@ -5,16 +5,16 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.model.Genre
-import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryBrowserReducer
 import com.raulshma.jellyplay.core.model.LibraryBrowserState
@@ -61,10 +61,10 @@ private data class PagedQueryKey(
     val refreshTrigger: Int,
 )
 
-class LibraryViewModel(
+internal class LibraryViewModel(
     private val mediaRepository: MediaRepository,
     private val offlineRepository: OfflineRepository,
-    private val mediaDownloadActions: MediaDownloadActions,
+    private val quickDownloadActions: QuickDownloadActions,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
     private val userDataMutator: UserDataMutator,
@@ -106,10 +106,21 @@ class LibraryViewModel(
      * of it is downloaded). Re-exposes the shared quick-action delegate's
      * Eagerly-started flow — one collector serves every host surface.
      */
-    val downloadedIds = mediaDownloadActions.downloadedIds
+    // Whether this platform has a download pipeline — screens gate the
+    // download CTA on it (hidden rather than Failed-toasting on web).
+    val downloadSupported = quickDownloadActions.isSupported
 
-    private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
-    val photoFolderChildUrls = _photoFolderChildUrls.flow
+    val downloadedIds = quickDownloadActions.downloadedIds
+
+    /**
+     * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]) —
+     * adopted from the home feature's store instead of this class's former
+     * cap-less inline map, so the cache is now bounded (oldest-first eviction
+     * beyond the store's cap) exactly like home's.
+     */
+    private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
+
+    val photoFolderChildUrls = photoFolderChildUrlsStore.childUrls
 
     /**
      * Whether the reset-all confirmation dialog is currently visible. Mirrors
@@ -145,18 +156,61 @@ class LibraryViewModel(
      * card whose urls changed.
      */
     fun photoFolderChildUrlsFor(itemId: String): kotlinx.coroutines.flow.Flow<List<String>> =
-        _photoFolderChildUrls.flow
+        photoFolderChildUrlsStore.childUrls
             .map { it[itemId].orEmpty() }
             .distinctUntilChanged()
 
     /**
-     * Marks the item played/unplayed. Intentionally silent (the mutator's
-     * default): the paged grid is left untouched so the user keeps their scroll
-     * position — the badge updates on the next natural data refresh.
+     * The single command funnel (the HomeViewModel `onEvent` precedent): every
+     * user intent arrives as a [LibraryUiEvent] and is routed once. Pure
+     * forwarding events write their holder/state directly in the `when`;
+     * intents with VM-side logic keep a private handler. There is no
+     * per-action command method to keep in sync with the screen.
      */
-    fun markItemPlayed(item: MediaItem, played: Boolean) {
-        launch {
-            userDataMutator.setPlayed(item.id, played)
+    fun onEvent(event: LibraryUiEvent) {
+        when (event) {
+            is LibraryUiEvent.Refresh -> refresh()
+            is LibraryUiEvent.ConfigureSection -> configureSection(event.ctx)
+            is LibraryUiEvent.ClearSectionMode -> clearSectionMode()
+            is LibraryUiEvent.SelectFolder -> selectFolder(event.folder)
+            is LibraryUiEvent.UpdateFilters -> updateFilters(event.filters)
+            is LibraryUiEvent.SetViewMode -> setViewMode(event.mode)
+            is LibraryUiEvent.SetPosterSize ->
+                _browserState.set(LibraryBrowserReducer.setPosterSize(_browserState.value, event.size))
+            is LibraryUiEvent.PersistPosterSize ->
+                launch { libraryStore.setLibraryPosterSize(_browserState.value.posterSize) }
+            is LibraryUiEvent.SetGroupBy -> {
+                _browserState.set(LibraryBrowserReducer.setGroupBy(_browserState.value, event.groupBy))
+                launch { libraryStore.setLibraryGroupBy(event.groupBy) }
+            }
+            is LibraryUiEvent.ToggleFilters -> _showFilters.set(!_showFilters.value)
+            is LibraryUiEvent.ShuffleLibrary ->
+                // Shuffle is a transient action: apply RANDOM sort in-memory
+                // only so we don't overwrite the folder's saved default sort
+                // order. On the next visit the user's chosen sort is restored.
+                _browserState.set(
+                    _browserState.value.copy(
+                        filters = _browserState.value.filters.withSortBy(SortOption.RANDOM),
+                    ),
+                )
+            is LibraryUiEvent.ClearFilters ->
+                _browserState.set(
+                    LibraryBrowserReducer.updateFilters(
+                        _browserState.value,
+                        _browserState.value.filters.cleared(),
+                    ),
+                )
+            is LibraryUiEvent.ResetClicked -> onResetClick()
+            is LibraryUiEvent.ConfirmResetAll -> confirmResetAll(event.dontShowAgain)
+            is LibraryUiEvent.DismissResetDialog -> _resetDialogVisible.set(false)
+            is LibraryUiEvent.MarkItemPlayed -> launch {
+                // Intentionally silent (the mutator's default): the paged grid
+                // is left untouched so the user keeps their scroll position.
+                userDataMutator.setPlayed(event.item.id, event.played)
+            }
+            is LibraryUiEvent.DownloadItem -> downloadItem(event)
+            is LibraryUiEvent.RemoveItemDownload -> quickDownloadActions.removeDownload(event.item)
+            is LibraryUiEvent.PrefetchPhotoFolderChildUrls -> photoFolderChildUrlsStore.prefetch(event.items)
         }
     }
 
@@ -164,34 +218,25 @@ class LibraryViewModel(
      * Long-press Download from a browse card. Single-stream items
      * (movie/episode/music track) start inline at the default quality; series
      * route to the detail screen with the download sheet pre-presented via
-     * [onOpenDetail] (their flow needs the user's season/episode selection),
-     * and other non-inline types (season, album, ...) open the detail screen
-     * plainly. Failures surface on the message bus.
+     * the event's `onOpenDetail` (their flow needs the user's season/episode
+     * selection), and other non-inline types (season, album, ...) open the
+     * detail screen plainly. Failures surface on the message bus.
      */
-    fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit) {
+    private fun downloadItem(event: LibraryUiEvent.DownloadItem) {
         launch {
-            when (val result = mediaDownloadActions.download(item)) {
+            when (val result = quickDownloadActions.download(event.item)) {
                 DownloadRequestResult.Started ->
                     userMessageBus.info(
                         UiText.Resource(Res.string.data_download_started)
                     )
-                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId, true)
-                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.SeriesSelectionRequired -> event.onOpenDetail(result.seriesId, true)
+                is DownloadRequestResult.NeedsDetailScreen -> event.onOpenDetail(result.itemId, false)
                 is DownloadRequestResult.Failed ->
                     userMessageBus.error(
                         UiText.Resource(Res.string.data_download_start_failed)
                     )
             }
         }
-    }
-
-    /**
-     * Long-press Remove download — deletes the local download (artifacts +
-     * offline rows) via the shared routing: a series card removes the whole
-     * series download, anything else the single item. Never touches the server.
-     */
-    fun removeItemDownload(item: MediaItem) {
-        mediaDownloadActions.removeDownload(item)
     }
 
     private val _refreshTrigger = stateFlow(0)
@@ -286,7 +331,7 @@ class LibraryViewModel(
      * pre-applies the section's sort / media-type filter, hides the folder chips
      * (the section is already scoped), and skips the folder fetch.
      */
-    fun configureSection(ctx: LibrarySectionContext) {
+    private fun configureSection(ctx: LibrarySectionContext) {
         if (_browserState.value.sectionContext == ctx) return
         userTouchedViewMode = false
         _browserState.set(LibraryBrowserReducer.configureSection(_browserState.value, ctx))
@@ -299,7 +344,7 @@ class LibraryViewModel(
      * note on [browserState]). Idempotent: a no-op when not in section mode,
      * so repeated recompositions are safe.
      */
-    fun clearSectionMode() {
+    private fun clearSectionMode() {
         userTouchedViewMode = false
         _browserState.set(LibraryBrowserReducer.clearSectionMode(_browserState.value))
     }
@@ -362,7 +407,7 @@ class LibraryViewModel(
         }
     }
 
-    fun setViewMode(mode: LibraryViewMode) {
+    private fun setViewMode(mode: LibraryViewMode) {
         userTouchedViewMode = true
         _browserState.set(LibraryBrowserReducer.setViewMode(_browserState.value, mode))
         launch {
@@ -374,19 +419,6 @@ class LibraryViewModel(
                 libraryStore.setLibraryViewMode(state.folder!!.id, mode.name)
             }
         }
-    }
-
-    fun setPosterSize(size: Float) {
-        _browserState.set(LibraryBrowserReducer.setPosterSize(_browserState.value, size))
-    }
-
-    fun persistPosterSize() {
-        launch { libraryStore.setLibraryPosterSize(_browserState.value.posterSize) }
-    }
-
-    fun setGroupBy(groupBy: GroupBy) {
-        _browserState.set(LibraryBrowserReducer.setGroupBy(_browserState.value, groupBy))
-        launch { libraryStore.setLibraryGroupBy(groupBy) }
     }
 
     private fun loadFolders(force: Boolean = false) {
@@ -427,7 +459,7 @@ class LibraryViewModel(
         }
     }
 
-    fun selectFolder(folder: LibraryFolder?) {
+    private fun selectFolder(folder: LibraryFolder?) {
         userTouchedViewMode = false
         val prefs = libraryStore.library.value
         // Decode saved filters/sort for the folder (or fall back to defaults).
@@ -464,7 +496,7 @@ class LibraryViewModel(
         )
     }
 
-    fun updateFilters(newFilters: LibraryFilters) {
+    private fun updateFilters(newFilters: LibraryFilters) {
         _browserState.set(LibraryBrowserReducer.updateFilters(_browserState.value, newFilters))
         // Skip persistence for a synthetic section folder: its id is a section
         // parentId and persisting there would leak section state into the user's
@@ -479,30 +511,12 @@ class LibraryViewModel(
         }
     }
 
-    fun toggleShowFilters() {
-        _showFilters.set(!_showFilters.value)
-    }
-
-    fun shuffleLibrary() {
-        // Shuffle is a transient action: apply RANDOM sort in-memory only so we
-        // don't overwrite the folder's saved default sort order (which is what
-        // a regular filter change via updateFilters persists). On the next visit
-        // the user's chosen sort (e.g. Recently Added) is restored as expected.
-        _browserState.set(_browserState.value.copy(filters = _browserState.value.filters.withSortBy(SortOption.RANDOM)))
-    }
-
-    fun clearFilters() {
-        _browserState.set(
-            LibraryBrowserReducer.updateFilters(_browserState.value, _browserState.value.filters.cleared())
-        )
-    }
-
     /**
      * Entry point for the top-bar Reset pill. Shows the confirmation dialog while
      * the user hasn't opted out; otherwise resets immediately so the pill stays a
      * one-tap action for users who dismissed the confirmation.
      */
-    fun onResetClick() {
+    private fun onResetClick() {
         if (_confirmResetEnabled.value) {
             _resetDialogVisible.set(true)
         } else {
@@ -510,16 +524,11 @@ class LibraryViewModel(
         }
     }
 
-    /** Dismisses the reset confirmation without resetting anything. */
-    fun dismissResetDialog() {
-        _resetDialogVisible.set(false)
-    }
-
     /**
      * Confirmed reset-all. Optionally persists "don't show again" so future
      * reset taps skip the dialog and reset immediately.
      */
-    fun confirmResetAll(dontShowAgain: Boolean) {
+    private fun confirmResetAll(dontShowAgain: Boolean) {
         _resetDialogVisible.set(false)
         if (dontShowAgain) {
             launch {
@@ -544,7 +553,7 @@ class LibraryViewModel(
      * state) gates per-folder persistence — the section's parentId must never be
      * written as a real library's saved filters.
      */
-    fun resetToDefault() {
+    private fun resetToDefault() {
         userTouchedViewMode = false
         val globalDefault = libraryStore.library.value.libraryViewMode
         val result = LibraryBrowserReducer.resetToDefault(_browserState.value, globalDefault)
@@ -559,7 +568,7 @@ class LibraryViewModel(
         }
     }
 
-    fun refresh() {
+    private fun refresh() {
         launch {
             // Manual refresh bypasses the caches for the queries this screen
             // shows (folders + genres); tags are an uncached passthrough.
@@ -578,14 +587,4 @@ class LibraryViewModel(
 
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
-
-    fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
-        launch {
-            val current = _photoFolderChildUrls.value
-            val results = photoFolderPrefetcher.prefetch(items, alreadyFetched = current.keys)
-            if (results.isNotEmpty()) {
-                _photoFolderChildUrls.set(_photoFolderChildUrls.value + results)
-            }
-        }
-    }
 }

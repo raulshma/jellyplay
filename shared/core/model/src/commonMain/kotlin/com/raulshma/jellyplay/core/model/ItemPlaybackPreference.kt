@@ -45,7 +45,7 @@ data class RememberedTrack(
  * global `preferredAudioLanguage` / `preferredSubtitleLanguage`.
  *
  * The [dialogueBoostStrength] field extends the per-item model to audio effects
- *: a `null` value means "no per-item rule" (resolve to the
+ * a `null` value means "no per-item rule" (resolve to the
  * effective default of [EffectStrength.NONE] — dialogue boost does NOT carry
  * across items unless explicitly pinned per-item or per-series). A non-null
  * value pins the effect for this item/series.

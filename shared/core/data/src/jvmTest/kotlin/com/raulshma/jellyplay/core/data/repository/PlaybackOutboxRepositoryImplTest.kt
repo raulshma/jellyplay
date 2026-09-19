@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
@@ -363,6 +363,47 @@ class PlaybackOutboxRepositoryImplTest {
 
         assertEquals(PlayMethod.DIRECT_PLAY, entry.playMethod)
         assertEquals(PlaybackOutboxEventType.PROGRESS, entry.eventType)
+    }
+
+    // ── BOOK_PROGRESS: reader page-position channel ───────────────────
+
+    @Test
+    fun `enqueueBookProgress coalesces multiple reports for same item into one`() = runTest {
+        repository.enqueueBookProgress("book-1", 10_000L)
+        repository.enqueueBookProgress("book-1", 20_000L)
+        repository.enqueueBookProgress("book-1", 30_000L)
+
+        val pending = repository.drain()
+
+        assertEquals(1, pending.size)
+        assertEquals(30_000L, pending[0].positionTicks)
+        assertEquals(PlaybackOutboxEventType.BOOK_PROGRESS, pending[0].eventType)
+        assertEquals(1, repository.count())
+    }
+
+    @Test
+    fun `enqueueBookProgress keeps separate entries for different items`() = runTest {
+        repository.enqueueBookProgress("book-1", 10_000L)
+        repository.enqueueBookProgress("book-2", 20_000L)
+
+        val pending = repository.drain()
+
+        assertEquals(2, pending.size)
+    }
+
+    @Test
+    fun `enqueueBookProgress does not coalesce with PROGRESS for the same item`() = runTest {
+        repository.enqueueProgress("item-1", "s1", 100L, false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueueBookProgress("item-1", 30_000L)
+
+        val pending = repository.drain()
+
+        // The two channels are independent — a book has no playback session,
+        // so a PROGRESS row must never swallow a page position (or vice versa).
+        assertEquals(2, pending.size)
+        val byType = pending.associateBy { it.eventType }
+        assertEquals(PlaybackOutboxEventType.PROGRESS, byType[PlaybackOutboxEventType.PROGRESS]?.eventType)
+        assertEquals(30_000L, byType[PlaybackOutboxEventType.BOOK_PROGRESS]?.positionTicks)
     }
 
     /**

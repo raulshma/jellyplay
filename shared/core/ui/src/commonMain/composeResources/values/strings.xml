@@ -47,6 +47,9 @@
     <string name="core_media_album">Album</string>
     <string name="core_media_artist">Artist</string>
     <string name="core_media_music_video">Music Video</string>
+    <string name="core_media_book">Book</string>
+    <string name="core_media_folder">Folder</string>
+
     <string name="core_media_collection">Collection</string>
     <string name="core_media_photo">Photo</string>
     <string name="core_media_photo_album">Photo Album</string>
@@ -63,6 +66,9 @@
     <string name="core_media_album_plural">Albums</string>
     <string name="core_media_artist_plural">Artists</string>
     <string name="core_media_music_video_plural">Music Videos</string>
+    <string name="core_media_book_plural">Books</string>
+    <string name="core_media_folder_plural">Folders</string>
+
     <string name="core_media_collection_plural">Collections</string>
     <string name="core_media_photo_plural">Photos</string>
     <string name="core_media_photo_album_plural">Photo Albums</string>
@@ -123,6 +129,7 @@
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Remove</string>
     <string name="core_ui_play">Play</string>
+    <string name="core_ui_read">Read</string>
     <string name="core_ui_backspace">Backspace</string>
     <string name="core_ui_request">Request</string>
     <string name="core_ui_watched">Watched</string>
@@ -265,4 +272,6 @@
     <string name="core_remove_download_title">Delete download?</string>
     <string name="core_remove_download_message">This deletes the downloaded copy of “%1$s” from this device. The server copy is not affected.</string>
     <string name="core_remove_download_confirm">Delete</string>
+    <string name="core_ui_read_more">Read more</string>
+    <string name="core_ui_show_less">Show less</string>
 </resources>

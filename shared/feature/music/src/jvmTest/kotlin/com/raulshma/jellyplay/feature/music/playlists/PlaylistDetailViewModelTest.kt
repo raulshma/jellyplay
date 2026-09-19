@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -42,7 +42,7 @@ class PlaylistDetailViewModelTest {
 
     private val mediaRepository: MediaRepository = mockk()
     private val playlistRepository: PlaylistRepository = mockk()
-    private val audioQueueFacade: AudioQueueFacade = mockk()
+    private val audioQueueFacade: MusicQueuePlayer = mockk()
 
     private lateinit var viewModel: PlaylistDetailViewModel
 
@@ -55,7 +55,7 @@ class PlaylistDetailViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        coEvery { audioQueueFacade.playPlaylist(any(), any()) } returns AudioQueueOutcome.Started(emptyList(), 0)
+        coEvery { audioQueueFacade.playPlaylist(any(), any()) } returns MusicQueueOutcome.Started(emptyList(), 0)
         coEvery { audioQueueFacade.enqueuePlaylistItem(any()) } just Runs
         viewModel = PlaylistDetailViewModel(
             mediaRepository = mediaRepository,

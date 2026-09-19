@@ -74,6 +74,9 @@ data class BaseItemDtoWire(
     @SerialName("PlaylistItemId") val playlistItemId: String? = null,
     @SerialName("CollectionType") val collectionType: String? = null,
     @SerialName("Trickplay") val trickplay: Map<String, Map<String, TrickplayInfoDtoWire>>? = null,
+    // Detail-shaped (list queries never project it): books have no
+    // MediaSources, so Path is the only carrier of their file format.
+    @SerialName("Path") val path: String? = null,
 )
 
 /** Wire subset of the SDK `UserItemDataDto` the item mapper reads. */

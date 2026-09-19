@@ -15,7 +15,7 @@ import okhttp3.Request
 import java.io.File
 
 /**
- * AppUpdate split (Wave xB): moved from the legacy `:core:data` shim (Hilt
+ * AppUpdate split: moved from the legacy `:core:data` shim (Hilt
  * @Singleton @Inject, ctor `@ApplicationContext Context`) to :shared:core:data
  * jvmShared as a plain Koin-constructed class. The Context became ctor seams
  * supplied by the platform Koin modules (androidDataModule /

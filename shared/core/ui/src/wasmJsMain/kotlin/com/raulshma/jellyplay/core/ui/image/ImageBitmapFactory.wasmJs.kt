@@ -14,7 +14,14 @@ import org.jetbrains.skia.ImageInfo
  * through Compose's browser build, so blurhash rasters render for real
  * instead of degrading.
  */
-internal actual fun argbPixelsToImageBitmap(pixels: IntArray, width: Int, height: Int): ImageBitmap {
+/**
+ * Honest degradation: no browser decode until a caller needs one — the only
+ * consumer (the book reader's comic pager) is jvmShared and unreachable on
+ * wasm; callers treat null as "failed page" and keep their placeholder.
+ */
+actual fun decodeImageBytes(bytes: ByteArray, maxEdgePx: Int): ImageBitmap? = null
+
+actual fun argbPixelsToImageBitmap(pixels: IntArray, width: Int, height: Int): ImageBitmap {
     val rgba = ByteArray(width * height * 4)
     var o = 0
     for (i in pixels.indices) {

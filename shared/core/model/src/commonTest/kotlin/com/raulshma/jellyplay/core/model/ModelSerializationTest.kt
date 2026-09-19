@@ -94,11 +94,16 @@ class ModelSerializationTest {
     @Test
     fun `media type enum values`() {
         val types = MediaType.entries
-        assertEquals(15, types.size)
+        assertEquals(17, types.size)
         assertEquals(MediaType.MOVIE, types[0])
         assertEquals(MediaType.SERIES, types[1])
         assertEquals(MediaType.SEASON, types[2])
         assertEquals(MediaType.EPISODE, types[3])
+        // FOLDER sits between BOOK and UNKNOWN; stable name for persisted
+        // media-type strings (downloads/widgets deserialize by enum name).
+        assertEquals(MediaType.BOOK, types[14])
+        assertEquals(MediaType.FOLDER, types[15])
+        assertEquals(MediaType.UNKNOWN, types[16])
     }
 
     @Test

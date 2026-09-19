@@ -1,10 +1,11 @@
 package com.raulshma.jellyplay.core.database.di
 
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.DesktopTokenCipher
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.database.migration.ContainerProbe
 import com.raulshma.jellyplay.core.database.migration.allMigrations
 import java.io.File
 import okio.Path
@@ -26,7 +27,12 @@ fun desktopDatabaseModule(dbPath: Path): Module {
 
         single {
             Room.databaseBuilder<JellyPlayDatabase>(dbPath.toString())
-                .addMigrations(*allMigrations(get<TokenCipher>()).toTypedArray())
+                // ContainerProbe (Migration53To54's download-container
+                // backfill) resolves lazily from :shared:core:data's
+                // dataJvmModule — the closest Koin module to both the
+                // sniffer and java.io, since this module can see neither
+                // (core:data is downstream of core:database).
+                .addMigrations(*allMigrations(get<TokenCipher>(), get<ContainerProbe>()).toTypedArray())
                 // dropAllTables=true matches the Android no-arg overload's
                 // behavior (the KMP builder makes the flag explicit).
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)

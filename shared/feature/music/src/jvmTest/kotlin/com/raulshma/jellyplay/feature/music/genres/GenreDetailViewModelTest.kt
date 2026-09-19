@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.feature.music.genres
 
+import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.ItemKindFilter
@@ -44,7 +44,7 @@ class GenreDetailViewModelTest {
 
     private val mediaRepository: MediaRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
-    private val audioQueueFacade: AudioQueueFacade = mockk()
+    private val audioQueueFacade: MusicQueuePlayer = mockk()
 
     @BeforeTest
     fun setUp() {
@@ -116,7 +116,7 @@ class GenreDetailViewModelTest {
         val viewModel = createViewModel()
         val track = MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO)
         coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), -1)
+            MusicQueueOutcome.Started(emptyList(), -1)
 
         viewModel.addToQueue(track)
         advanceUntilIdle()
@@ -134,7 +134,7 @@ class GenreDetailViewModelTest {
             MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO),
         )
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), 0)
+            MusicQueueOutcome.Started(emptyList(), 0)
 
         viewModel.playAll(tracks, startIndex = 2)
         advanceUntilIdle()

@@ -10,8 +10,8 @@ import org.jetbrains.compose.resources.stringResource
  * Composable labels for generic core:ui strings whose generated Res accessors
  * are module-internal (shared/feature:library pattern, same story as the
  * media-type names below: display strings resolve at the UI layer while the
- * `@StringRes Int` halves stay in the legacy :core:ui shim until every
- * consumer has migrated off resource ids).
+ * former `@StringRes Int` halves (the legacy :core:ui *NamesRes tables) died
+ * with the cutover once every consumer was on this vocabulary).
  */
 
 /** Localized "Cancel" (confirm-dialog dismiss label). */

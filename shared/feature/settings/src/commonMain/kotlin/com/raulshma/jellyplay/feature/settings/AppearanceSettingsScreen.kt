@@ -18,7 +18,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onSizeChanged
@@ -42,7 +41,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -219,6 +218,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
+import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
 
@@ -296,17 +298,7 @@ fun AppearanceSettingsScreen(
         appearanceAdjustForAdvanced(showAdvanced),
     )
 
-    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
-    // target item is actually composed — items in off-screen groups (later sections) are otherwise
-    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
-    // performed by the highlighted item itself via CenterBringIntoViewSpec.
-    LaunchedEffect(scrollIndex) {
-        if (scrollIndex >= 0) {
-            try {
-                scrollState.animateScrollToItem(scrollIndex)
-            } catch (_: Exception) {}
-        }
-    }
+    HighlightScrollEffect(scrollState, scrollIndex)
 
     var showResetDialog by remember { mutableStateOf(false) }
     var showBlueLightStrengthSheet by remember { mutableStateOf(false) }
@@ -333,11 +325,7 @@ fun AppearanceSettingsScreen(
             }
         },
     ) { innerPadding ->
-        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
-        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -388,7 +376,10 @@ fun AppearanceSettingsScreen(
                         ThemeMode.LIGHT -> false
                         ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
                         ThemeMode.SCHEDULED -> {
-                            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                            // kotlinx wall-clock read replaces the
+                            // JVM-only java.util.Calendar (same hour-of-day
+                            // semantics in the system zone).
+                            val hour = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour
                             val start = preferences.scheduledThemeStartHour
                             val end = preferences.scheduledThemeEndHour
                             if (start <= end) hour in start until end else hour >= start || hour < end
@@ -708,23 +699,23 @@ fun AppearanceSettingsScreen(
                                 val xDaysFormat = stringResource(Res.string.settings_x_days)
                                 val dayLabels = mapOf(
                                     0 to unlimitedLabel,
-                                    7 to xDaysFormat.format(7),
-                                    14 to xDaysFormat.format(14),
-                                    30 to xDaysFormat.format(30),
-                                    60 to xDaysFormat.format(60),
-                                    90 to xDaysFormat.format(90),
+                                    7 to formatIntPattern(xDaysFormat, 7),
+                                    14 to formatIntPattern(xDaysFormat, 14),
+                                    30 to formatIntPattern(xDaysFormat, 30),
+                                    60 to formatIntPattern(xDaysFormat, 60),
+                                    90 to formatIntPattern(xDaysFormat, 90),
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.CalendarTime,
                                     title = nextUpTitle,
                                     subtitle = stringResource(Res.string.settings_next_up_time_window_subtitle),
-                                    trailingText = dayLabels[preferences.nextUpMaxDays] ?: xDaysFormat.format(preferences.nextUpMaxDays),
+                                    trailingText = dayLabels[preferences.nextUpMaxDays] ?: formatIntPattern(xDaysFormat, preferences.nextUpMaxDays),
                                     highlighted = highlightSettingId == "next_up_max_days",
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = nextUpTitle,
                                             items = listOf(0, 7, 14, 30, 60, 90),
-                                            label = { dayLabels[it] ?: xDaysFormat.format(it) },
+                                            label = { dayLabels[it] ?: formatIntPattern(xDaysFormat, it) },
                                             isSelected = { it == preferences.nextUpMaxDays },
                                             onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpMaxDays(it) } },
                                         )
@@ -910,9 +901,9 @@ fun AppearanceSettingsScreen(
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceLibrary.itemIdSet,
                 ) {
                     // The declared library rows plus the confirm-library-reset
-                    // action row (a screen-local row with no search entry).
-                    val cardTotal = SettingsScreenGroups.appearanceLibrary.items.size + 1
-                    var cardIdx = 0
+                    // action row (a screen-local row with no search entry) —
+                    // the admission total beside SettingsScreenGroups.
+                    SettingsItemList(total = appearanceLibraryScreenRowTotal()) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Folder,
@@ -920,7 +911,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_unwatched_badge_subtitle),
                         checked = preferences.showUnwatchedBadge,
                         highlighted = highlightSettingId == "show_unwatched_badge",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowUnwatchedBadge(it) } },
                     )
 
@@ -930,7 +920,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_watched_checkmark_subtitle),
                         checked = preferences.showWatchedCheckmark,
                         highlighted = highlightSettingId == "show_watched_checkmark",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowWatchedCheckmark(it) } },
                     )
 
@@ -940,7 +929,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_hide_watched_items_subtitle),
                         checked = preferences.hideWatchedItems,
                         highlighted = highlightSettingId == "hide_watched_items",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideWatchedItems(it) } },
                     )
 
@@ -950,7 +938,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_hide_episode_thumbnails_subtitle),
                         checked = preferences.hideEpisodeThumbnails,
                         highlighted = highlightSettingId == "hide_episode_thumbnails",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setHideEpisodeThumbnails(it) } },
                     )
 
@@ -960,7 +947,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_compact_episode_list_subtitle),
                         checked = preferences.compactEpisodeList,
                         highlighted = highlightSettingId == "compact_episode_list",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setCompactEpisodeList(it) } },
                     )
 
@@ -970,7 +956,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_confirm_library_reset_subtitle),
                         checked = preferences.confirmLibraryReset,
                         highlighted = highlightSettingId == "confirm_library_reset",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setConfirmLibraryReset(it) } },
                     )
 
@@ -980,7 +965,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_skip_special_episodes_subtitle),
                         checked = preferences.skipSpecials,
                         highlighted = highlightSettingId == "skip_specials",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setSkipSpecials(it) } },
                     )
 
@@ -990,7 +974,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_haptic_feedback_subtitle),
                         checked = preferences.hapticsEnabled,
                         highlighted = highlightSettingId == "haptics_enabled",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.appearance.setHapticsEnabled(it) } },
                     )
 
@@ -1000,7 +983,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_share_media_subtitle),
                         checked = preferences.showShareMediaOption,
                         highlighted = highlightSettingId == "show_share_media",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.experimental.setShowShareMediaOption(it) } },
                     )
 
@@ -1010,7 +992,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_hide_search_history_subtitle),
                         checked = preferences.hideSearchHistory,
                         highlighted = highlightSettingId == "hide_search_history",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.experimental.setHideSearchHistory(it) } },
                     )
 
@@ -1020,9 +1001,9 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_external_ratings_subtitle),
                         checked = preferences.showExternalRatings,
                         highlighted = highlightSettingId == "show_external_ratings",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },
                     )
+                    }
                 }
             }
 
@@ -1203,14 +1184,18 @@ fun AppearanceSettingsScreen(
                                     onCheckedChange = { viewModel.edit { scope -> scope.notification.setNewsletterEnabled(it) } }
                     )
 
+                    // The persisted newsletterDayOfWeek values are the legacy
+                    // java.util.Calendar day numbers (SUNDAY=1 … SATURDAY=7) —
+                    // the literals preserve that wire format now that the JVM
+                    // type is gone.
                     val daysOfWeek = listOf(
-                        java.util.Calendar.MONDAY to stringResource(Res.string.settings_day_monday),
-                        java.util.Calendar.TUESDAY to stringResource(Res.string.settings_day_tuesday),
-                        java.util.Calendar.WEDNESDAY to stringResource(Res.string.settings_day_wednesday),
-                        java.util.Calendar.THURSDAY to stringResource(Res.string.settings_day_thursday),
-                        java.util.Calendar.FRIDAY to stringResource(Res.string.settings_day_friday),
-                        java.util.Calendar.SATURDAY to stringResource(Res.string.settings_day_saturday),
-                        java.util.Calendar.SUNDAY to stringResource(Res.string.settings_day_sunday),
+                        CALENDAR_MONDAY to stringResource(Res.string.settings_day_monday),
+                        CALENDAR_TUESDAY to stringResource(Res.string.settings_day_tuesday),
+                        CALENDAR_WEDNESDAY to stringResource(Res.string.settings_day_wednesday),
+                        CALENDAR_THURSDAY to stringResource(Res.string.settings_day_thursday),
+                        CALENDAR_FRIDAY to stringResource(Res.string.settings_day_friday),
+                        CALENDAR_SATURDAY to stringResource(Res.string.settings_day_saturday),
+                        CALENDAR_SUNDAY to stringResource(Res.string.settings_day_sunday),
                     )
                     val dayLabel = daysOfWeek.find { it.first == preferences.newsletterDayOfWeek }?.second ?: stringResource(Res.string.settings_day_saturday)
 
@@ -1303,3 +1288,13 @@ fun AppearanceSettingsScreen(
         onDismiss = { activePicker = null },
     )
 }
+
+// Legacy java.util.Calendar day-of-week numbers (the persisted
+// `newsletterDayOfWeek` vocabulary): SUNDAY=1, MONDAY=2 … SATURDAY=7.
+private const val CALENDAR_SUNDAY = 1
+private const val CALENDAR_MONDAY = 2
+private const val CALENDAR_TUESDAY = 3
+private const val CALENDAR_WEDNESDAY = 4
+private const val CALENDAR_THURSDAY = 5
+private const val CALENDAR_FRIDAY = 6
+private const val CALENDAR_SATURDAY = 7

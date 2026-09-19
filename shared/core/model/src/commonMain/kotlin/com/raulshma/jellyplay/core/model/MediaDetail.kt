@@ -34,6 +34,14 @@ data class MediaDetail(
     val providerIds: Map<String, String> = emptyMap(),
     val studios: List<StudioInfo> = emptyList(),
     val tagItems: List<TagInfo> = emptyList(),
+    /** Server filesystem path (wire `Path`). Books have no MediaSources —
+     *  this is the only place their file format is knowable. */
+    val path: String? = null,
+    /** Reading/playback progress from UserData, denested so surfaces holding
+     *  only the detail don't reach through [item]. 0 = no position. Books
+     *  store page-based progress as `pageIndex × 10,000` ticks. */
+    val playbackPositionTicks: Long = 0L,
+    val isPlayed: Boolean = false,
 )
 
 @Immutable

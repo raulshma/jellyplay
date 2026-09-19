@@ -1,11 +1,9 @@
 package com.raulshma.jellyplay.core.network.seerr
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.*
-import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.api.JsonRequestClient
-import com.raulshma.jellyplay.core.network.api.fromSeerrNetwork
-import com.raulshma.jellyplay.core.network.api.parseJsonRequest
+import com.raulshma.jellyplay.core.network.api.HttpExecutor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,7 +23,7 @@ import javax.inject.Singleton
 
 @Singleton
 class SeerrApiClientImpl @Inject constructor(
-    private val okHttpClient: OkHttpClient,
+    okHttpClient: OkHttpClient,
 ) : SeerrApiClient {
 
     private val json = lenientJson
@@ -42,51 +40,25 @@ class SeerrApiClientImpl @Inject constructor(
         }
     }
 
-    private suspend fun executeRequest(request: Request): Result<String> {
-        return try {
-            withContext(Dispatchers.IO) {
-                okHttpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string() ?: return@withContext Result.failure<String>(
-                        ApiException.fromSeerrHttp(response.code, "Empty response body (HTTP ${response.code})")
-                    )
-                    if (!response.isSuccessful) {
-                        val errorMsg = parseErrorMessage(response.code, body)
-                        return@withContext Result.failure(ApiException.fromSeerrHttp(response.code, errorMsg))
-                    }
-                    Result.success(body)
-                }
-            }
-        } catch (e: Exception) {
-            // CancellationException is captured by runCatching upstream; preserve it for
-            // structured-concurrency correctness by rethrowing here.
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Result.failure(ApiException.fromSeerrNetwork(e, formatNetworkError(e)))
-        }
-    }
-
-    private suspend fun executeRequestWithCookie(request: Request): Result<Pair<String, String?>> {
-        return try {
-            withContext(Dispatchers.IO) {
-                okHttpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string()
-                        ?: return@withContext Result.failure<Pair<String, String?>>(
-                            ApiException.fromSeerrHttp(response.code, "Empty response body (HTTP ${response.code})")
-                        )
-                    if (!response.isSuccessful) {
-                        val errorMsg = parseErrorMessage(response.code, body)
-                        return@withContext Result.failure<Pair<String, String?>>(ApiException.fromSeerrHttp(response.code, errorMsg))
-                    }
-                    val cookieHeader = response.headers("Set-Cookie").joinToString("; ") {
-                        it.substringBefore(";")
-                    }
-                    Result.success(body to cookieHeader.ifBlank { null })
-                }
-            }
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Result.failure(ApiException.fromSeerrNetwork(e, formatNetworkError(e)))
-        }
-    }
+    /**
+     * The shared OkHttp execute chassis (the Arr sibling rides the same
+     * executor). Seerr's texts stay this client's own: a message-field
+     * `parseErrorMessage`, the generic-"server" failure ladder, and no
+     * Retry-After capture (the historical `fromSeerrHttp` shape, which drops
+     * the header). Retry rides the chassis (`retryHttpCalls`), replacing the
+     * deleted `ResilientSeerrApiClient` DI wrapper — every funnel below
+     * (parse/text/cookie) is a single HTTP call per attempt, so per-call
+     * retry is equivalent to the wrapper's per-method retry.
+     */
+    private val http = HttpExecutor(
+        okHttpClient = okHttpClient,
+        json = json,
+        options = HttpExecutor.Options(
+            parseErrorMessage = ::parseErrorMessage,
+            formatNetworkError = ::formatNetworkError,
+            retryHttpCalls = true,
+        ),
+    )
 
     private fun parseErrorMessage(code: Int, body: String): String {
         return try {
@@ -108,22 +80,9 @@ class SeerrApiClientImpl @Inject constructor(
         }
     }
 
-    /** Bundled [parseJsonRequest] dependencies; see [parseRequest]. */
-    private val jsonRequestClient = JsonRequestClient(
-        okHttpClient = okHttpClient,
-        json = json,
-        parseErrorMessage = ::parseErrorMessage,
-        formatNetworkError = ::formatNetworkError,
-    )
-
-    /**
-     * Stream-decoding request execution; see [parseJsonRequest]. The shared
-     * helper's `fromHttp`/`fromNetwork` are what [ApiException.fromSeerrHttp] /
-     * [ApiException.fromSeerrNetwork] delegate to, so failure shapes are
-     * unchanged.
-     */
+    /** Stream-decoding request execution; see [HttpExecutor.parseJson]. */
     private suspend inline fun <reified T> parseRequest(request: Request): Result<T> =
-        parseJsonRequest(jsonRequestClient, request)
+        http.parseJson(request)
 
     private suspend inline fun <reified T> getAndParse(
         baseUrl: String,
@@ -191,7 +150,7 @@ class SeerrApiClientImpl @Inject constructor(
             .url(buildUrl(baseUrl, "/auth/jellyfin"))
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
-        executeRequestWithCookie(request).mapCatching { (_, cookie) ->
+        http.executeForCookie(request).mapCatching { (_, cookie) ->
             cookie ?: throw Exception("No session cookie received from server")
         }
     }
@@ -206,7 +165,7 @@ class SeerrApiClientImpl @Inject constructor(
             .url(buildUrl(baseUrl, "/auth/local"))
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
-        executeRequestWithCookie(request).mapCatching { (_, cookie) ->
+        http.executeForCookie(request).mapCatching { (_, cookie) ->
             cookie ?: throw Exception("No session cookie received from server")
         }
     }
@@ -284,11 +243,20 @@ class SeerrApiClientImpl @Inject constructor(
     override suspend fun getServiceSonarrServers(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrServiceServer>> =
         getAndParse(baseUrl, credentials, "/service/sonarr")
 
-    override suspend fun getServiceRadarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRadarrServiceDetail> =
-        getAndParse(baseUrl, credentials, "/service/radarr/$id")
-
-    override suspend fun getServiceSonarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrSonarrServiceDetail> =
-        getAndParse(baseUrl, credentials, "/service/sonarr/$id")
+    override suspend fun getServiceDetail(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+        kind: ArrServiceKind,
+    ): Result<SeerrServiceDetail> =
+        // The two endpoints differ only in path; each kind decodes to its own
+        // concrete payload (Result.map upcasts the subtype to the sealed parent).
+        when (kind) {
+            ArrServiceKind.RADARR ->
+                getAndParse<SeerrRadarrServiceDetail>(baseUrl, credentials, "/service/radarr/$id")
+            ArrServiceKind.SONARR ->
+                getAndParse<SeerrSonarrServiceDetail>(baseUrl, credentials, "/service/sonarr/$id")
+        }.map { it }
 
     override suspend fun getTrending(baseUrl: String, credentials: SeerrCredentials, page: Int): Result<SeerrSearchResponse> =
         getAndParse(baseUrl, credentials, "/discover/trending?page=$page")
@@ -380,7 +348,7 @@ class SeerrApiClientImpl @Inject constructor(
             .withAuth(credentials)
             .delete()
             .build()
-        return executeRequest(request).map { }
+        return http.executeForText(request).map { }
     }
 
     override suspend fun deleteMedia(
@@ -395,14 +363,14 @@ class SeerrApiClientImpl @Inject constructor(
                 .withAuth(credentials)
                 .delete()
                 .build()
-            executeRequest(fileRequest)
+            http.executeForText(fileRequest)
         }
         val request = Request.Builder()
             .url(buildUrl(baseUrl, "/media/$mediaId"))
             .withAuth(credentials)
             .delete()
             .build()
-        return executeRequest(request).map { }
+        return http.executeForText(request).map { }
     }
 
     override suspend fun editRequest(

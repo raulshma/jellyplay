@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_play
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_read
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -132,6 +134,8 @@ fun PlayButtonWithProgress(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     buttonSize: Dp = 36.dp,
+    icon: ImageVector = Tabler.Outline.PlayerPlay,
+    contentDescription: String = stringResource(Res.string.core_ui_play),
 ) {
     val focusInteraction = rememberJellyFocusableInteraction(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
@@ -243,8 +247,8 @@ fun PlayButtonWithProgress(
         }
 
         Icon(
-            Tabler.Outline.PlayerPlay,
-            contentDescription = stringResource(Res.string.core_ui_play),
+            icon,
+            contentDescription = contentDescription,
             modifier = Modifier.size(buttonSize * 0.55f),
             tint = MaterialTheme.colorScheme.onSurface,
         )
@@ -270,11 +274,23 @@ fun PosterCard(
     clipToShape: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
     gradientBrush: Brush? = null,
+    /**
+     * Reading-progress override for BOOK footer labels: rows that decoded the
+     * item's fraction against the TOC cache's page count (Continue Reading)
+     * pass it here so the "% complete" label agrees with the card's progress
+     * bar. Null (default) falls back to the item's own percent decode
+     * ([bookProgressFraction]) — exact for EPUB percent ticks, approximate
+     * for paged books.
+     */
+    bookProgressFractionOverride: Float? = null,
 ) {
     val isTv = LocalJellyPlayUi.current.isTv
     val cardPrefs = LocalCardDisplayPreferences.current
     val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
     val playButtonSize = if (isTv) 44.dp else 36.dp
+    // Books get a reading affordance instead of the play triangle — the tap
+    // still opens the reader, the glyph just shouldn't claim "play".
+    val isBook = item.mediaType == MediaType.BOOK
 
     // For episode cards in Latest Media rows, show the series name as the title
     // (the episode title alone doesn't identify the show); the season/episode
@@ -351,6 +367,8 @@ fun PosterCard(
         onPlayClick = onPlayClick,
         playButtonDominantColor = dominantColor,
         playButtonSize = playButtonSize,
+        playIcon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
+        playIconContentDescription = stringResource(if (isBook) Res.string.core_ui_read else Res.string.core_ui_play),
         sharedElementKey = sharedElementKey,
         scrimBrush = gradientBrush,
         previewFactory = previewFactory,
@@ -451,7 +469,14 @@ fun PosterCard(
                     )
                 }
                 val isSeries = item.mediaType == MediaType.SERIES
-                val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
+                // Books never render runtime/time-left meta: RunTimeTicks is
+                // absent or meaningless for them, and their position ticks
+                // encode reading progress (page index or percent), not time —
+                // the video runtime math on that data produced bogus "0m left"
+                // labels. A book in progress shows "% complete" from the
+                // BookProgressPolicy decode instead; an unstarted book shows
+                // nothing at all.
+                val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries && !isBook
                 val hasWatchProgress =
                     item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
                 val remainingTime =
@@ -462,20 +487,35 @@ fun PosterCard(
                     }
                 val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
                     if (hasValidDuration && !hasWatchProgress) {
-                        formatDurationFromTicks(item.runTimeTicks!!)
+                        formatRuntimeLabelFromTicks(item.runTimeTicks)
                     } else null
                 }
+                val bookPercent =
+                    remember(isBook, item.isPlayed, bookProgressFractionOverride, item.playbackPositionTicks) {
+                        bookFooterPercent(item, bookProgressFractionOverride)
+                    }
 
                 val timeText = remainingTime ?: totalTime
-                if (timeText != null) {
+                if (bookPercent != null) {
                     Text(
                         text = "•",
-                        style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                        style = footerStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "$bookPercent% complete",
+                        style = footerStyle,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else if (timeText != null) {
+                    Text(
+                        text = "•",
+                        style = footerStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         text = if (remainingTime != null) "$timeText left" else timeText,
-                        style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                        style = footerStyle,
                         color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

@@ -6,28 +6,20 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
-import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadStates
-import com.raulshma.jellyplay.core.data.repository.applyTo
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.OfflineMode
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -53,8 +45,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    pause/cancel call the seam; the runner notices the stop flag at its next
  *    buffer read and marks the row PAUSED — the WorkManager-cancel equivalent),
  *  - resumes interrupted downloads on start and on the Offline/Local → Online
- *    reconnect edge (the [com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener]
- *    semantics), and
+ *    reconnect edge ([ReconnectTrigger] — the same shared going-online edge
+ *    detector the Android [DownloadReconnectListener] runs, watching the
+ *    network status AND the app-level offline mode), and
  *  - re-kicks retryable outcomes after the shared
  *    [DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS] backoff (WorkManager's
  *    exponential retry equivalent, capped at 5 h like WorkManager).
@@ -99,7 +92,43 @@ class DesktopDownloadManager(
     private val retryAttempts = ConcurrentHashMap<String, Int>()
     private val retryJobs = ConcurrentHashMap<String, Job>()
     private var loopJob: Job? = null
-    private var reconnectJob: Job? = null
+
+    /**
+     * The reconnect edge (Offline/Local → Online on the network status OR the
+     * app-level offline mode toggling back online) — the shared
+     * [ReconnectTrigger] that the Android [DownloadReconnectListener] runs,
+     * instead of the hand-rolled `combine(...)` watcher this manager used to
+     * carry (its private `isReady` was character-for-character the trigger's).
+     */
+    private val reconnectTrigger = ReconnectTrigger(
+        networkMonitor = networkMonitor,
+        offlineModeManager = offlineModeManager,
+        scope = scope,
+        tag = TAG,
+        onReady = {
+            runCatchingRethrowingCancellation { downloadRepository.value.resumeInterruptedDownloads() }
+                .onFailure { Log.w(TAG, "Reconnect resume of interrupted downloads failed", it) }
+        },
+    )
+
+    /**
+     * The shared transfer choreography (preamble + post-Prepare tail) —
+     * extracted to [DownloadTransferGate], which Android's DownloadWorker runs
+     * identically. The dummy-notification/stop-flag lambdas are passed at the
+     * runTransfer call site in [processRow], and the tail (HEAD probe, resume
+     * vs fresh dispatch, failure classification) runs INSIDE the gate's permit
+     * via [DownloadTransferGate.execute]; the limiter `configure` re-size and
+     * the QUEUED write stay in [processRow] (see the gate's divergence list).
+     */
+    private val transferGate = DownloadTransferGate(
+        dao = downloadDao,
+        userDao = userDao,
+        serverIdentityStore = serverIdentityStore,
+        downloadsStore = downloadsStore,
+        tokenCipher = tokenCipher,
+        concurrencyLimiter = concurrencyLimiter,
+        transferClient = transferClient,
+    )
 
     // ── DownloadEnqueueCoordinator (the repository's enqueue/cancel seam) ───
 
@@ -135,61 +164,32 @@ class DesktopDownloadManager(
             // eligibility rules; safe no-op when nothing qualifies).
             runCatchingRethrowingCancellation { downloadRepository.value.resumeInterruptedDownloads() }
                 .onFailure { Log.w(TAG, "Startup resume of interrupted downloads failed", it) }
-            downloadDao.getPendingDownloads()
-                .map { rows -> rows.filter { it.status == DownloadStatus.PENDING.name } }
-                .collect { pending ->
-                    pending.forEach { kick(it.id) }
+            downloadDao.getPendingDownloadIds()
+                .distinctUntilChanged()
+                .collect { pendingIds ->
+                    pendingIds.forEach { kick(it) }
                 }
         }
-        reconnectJob = scope.launch { watchReconnect() }
+        reconnectTrigger.start()
     }
 
     /** Cancels the loops and in-flight transfers (process shutdown / tests). */
     fun stop() {
         loopJob?.cancel()
         loopJob = null
-        reconnectJob?.cancel()
-        reconnectJob = null
+        reconnectTrigger.stop()
         activeTransfers.values.forEach { it.stopped.set(true) }
     }
-
-    /**
-     * Offline/Local → Online edge detection over both the network status and
-     * the app-level offline mode (the legacy DownloadReconnectListener /
-     * ReconnectTrigger semantics: a manual offline-mode toggle back online must
-     * also fire). On the edge, eligible interrupted downloads are resumed by
-     * the repository, which re-enqueues through this coordinator.
-     */
-    private suspend fun watchReconnect() {
-        var wasReady = isReady(
-            networkMonitor.networkStatus.value,
-            offlineModeManager.offlineMode.value,
-        )
-        combine(
-            networkMonitor.networkStatus,
-            offlineModeManager.offlineMode,
-        ) { networkStatus, offlineMode -> isReady(networkStatus, offlineMode) }
-            .collect { ready ->
-                if (ready && !wasReady) {
-                    runCatchingRethrowingCancellation { downloadRepository.value.resumeInterruptedDownloads() }
-                        .onFailure { Log.w(TAG, "Reconnect resume of interrupted downloads failed", it) }
-                }
-                wasReady = ready
-            }
-    }
-
-    private fun isReady(networkStatus: NetworkStatus, offlineMode: OfflineMode): Boolean =
-        networkStatus == NetworkStatus.Online && offlineMode == OfflineMode.ONLINE
 
     // ── transfer orchestration (mirrors DownloadWorker.doWork) ──────────────
 
     private fun kick(downloadId: String) {
-        // Reserve the slot atomically BEFORE launching: the pending-rows
-        // observer re-emits on every download-table change (each 2 s progress
-        // tick of any other row) and re-kicks every still-PENDING row, so a
-        // concurrent kick must see the reservation even before processRow
-        // performs its first DB read. putIfAbsent is the ExistingWorkPolicy
-        // .KEEP equivalent — only one transfer per row, ever.
+        // Reserve the slot atomically BEFORE launching: the pending-ids
+        // observer re-kicks every still-PENDING row whenever the PENDING id
+        // set changes (a row entering or leaving it), so a concurrent kick
+        // must see the reservation even before processRow performs its first
+        // DB read. putIfAbsent is the ExistingWorkPolicy.KEEP equivalent —
+        // only one transfer per row, ever.
         val handle = TransferHandle()
         if (activeTransfers.putIfAbsent(downloadId, handle) != null) return
         scope.launch { processRow(downloadId, handle) }
@@ -228,93 +228,28 @@ class DesktopDownloadManager(
             // can show a distinct indicator instead of a stalled DOWNLOADING row.
             downloadDao.updateProgress(downloadId, existingBytes, DownloadStatus.QUEUED.name)
 
-            val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
-            val accessToken = activeUserId?.let { uid ->
-                // Tokens are stored encrypted in Room. Decrypt before use as a Bearer-style
-                // `X-Emby-Token` header value.
-                tokenCipher.decrypt(userDao.getUserById(uid)?.accessToken)
-            }
-
-            val numConnections = downloadsStore.downloads.value.downloadConnections.coerceIn(1, 8)
-
-            // Gate the actual transfer on a shared concurrency slot so at most
-            // `maxConcurrentDownloads` run at once; the rest block here.
-            concurrencyLimiter.withPermit {
-                // Re-check status now that a slot is ours: the user may have
-                // paused or cancelled while the row was QUEUED.
-                val statusAfterQueue = downloadDao.getStatus(downloadId)
-                if (DownloadStates.isInactive(statusAfterQueue)) {
-                    return@withPermit
-                }
-                downloadDao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
-                try {
-                    val runner = DownloadTransferRunner(
-                        dao = downloadDao,
-                        client = transferClient,
-                        isStopped = { handle.stopped.get() },
-                        updateForeground = { _, _, _, _, _, _ -> /* no foreground surface on desktop */ },
-                        dismissForeground = { /* no foreground surface on desktop */ },
-                    )
-                    val outcome: TransferOutcome
-                    if (existingBytes > 0L) {
-                        // Resume: re-probe the authoritative size so the
-                        // integrity check in the runner can catch a truncated
-                        // stream (same rationale as the Android worker).
-                        val probedSize = runner.probeContentSize(entity.downloadUrl, accessToken)
-                        outcome = runner.transfer(
-                            entity = entity,
-                            existingBytes = existingBytes,
-                            notificationId = notificationId,
-                            accessToken = accessToken,
-                            probedTotalSize = probedSize,
-                        )
-                    } else {
-                        val totalSize = runner.probeContentSize(entity.downloadUrl, accessToken)
-                        outcome = if (totalSize > DownloadTransferRunner.MIN_MULTI_SIZE && numConnections > 1) {
-                            MultiConnectionDownloadStrategy.execute(
-                                downloadClient = transferClient, // same seam as the single-connection path
-                                dao = downloadDao,
-                                downloadId = downloadId,
-                                entity = entity,
-                                totalSize = totalSize,
-                                numConnections = numConnections,
-                                notificationId = notificationId,
-                                accessToken = accessToken,
-                                notifications = DesktopTransferNotifications,
-                            )
-                        } else {
-                            runner.transfer(
-                                entity = entity,
-                                existingBytes = 0L,
-                                notificationId = notificationId,
-                                accessToken = accessToken,
-                                probedTotalSize = totalSize,
-                            )
-                        }
-                    }
-                    if (outcome == TransferOutcome.Retry) {
-                        scheduleRetry(downloadId)
-                    } else if (outcome == TransferOutcome.Success) {
-                        retryAttempts.remove(downloadId)
-                    }
-                } catch (e: CancellationException) {
-                    // Structured-concurrency control signal, not a download
-                    // failure — must propagate (same rule as the worker).
-                    throw e
-                } catch (e: Throwable) {
-                    // Single home for the failure-classification rule:
-                    // DownloadFailurePolicy. Pre-body failures (HEAD probe,
-                    // request build) wrote nothing this run.
-                    val row = downloadDao.getDownloadById(downloadId)
-                    val status = row?.status ?: DownloadStatus.PENDING.name
-                    val outcome = DownloadFailurePolicy.decide(
-                        error = e,
-                        madeProgress = false,
-                        currentStatus = status,
-                        isResumablePartial = true, // single-connection strategy for the outer path
-                    )
-                    outcome.applyTo(downloadDao, downloadId, File(entity.downloadPath), existingBytes)
-                    if (outcome.shouldRetry) scheduleRetry(downloadId)
+            transferGate.runTransfer(
+                downloadId = downloadId,
+                existingBytes = existingBytes,
+                isStopped = { handle.stopped.get() },
+                updateForeground = { _, _, _, _, _, _ -> /* no foreground surface on desktop */ },
+                dismissForeground = { /* no foreground surface on desktop */ },
+                onInactive = { },
+            ) { preparation ->
+                val outcome = transferGate.execute(
+                    preparation = preparation,
+                    entity = entity,
+                    existingBytes = existingBytes,
+                    notificationId = notificationId,
+                    notifications = DesktopTransferNotifications,
+                )
+                // Desktop's outcome mapping (its WorkManager-equivalent half):
+                // re-kick Retry rows after the shared backoff; a Success clears
+                // the auto-retry attempt budget.
+                if (outcome == TransferOutcome.Retry) {
+                    scheduleRetry(downloadId)
+                } else if (outcome == TransferOutcome.Success) {
+                    retryAttempts.remove(downloadId)
                 }
             }
         } finally {
@@ -352,7 +287,8 @@ class DesktopDownloadManager(
 }
 
 /**
- * Desktop no-op for the multi-connection strategy's notification seam —
+ * Desktop no-op for the notification seam the gate's [DownloadTransferGate.execute]
+ * (start-of-transfer summary refresh) and the multi-connection strategy drive —
  * desktop has no shade/foreground surface; progress is visible through the DB
  * -backed UI flows the runner already updates.
  */

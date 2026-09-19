@@ -42,6 +42,15 @@ interface LibraryApiClient {
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
     suspend fun getContinueWatching(limit: Int = 20): Result<List<MediaItem>>
+
+    /**
+     * The books half of the resume query (`/UserItems/Resume` narrowed to
+     * `IncludeItemTypes=Book`): in-progress books for the home Continue
+     * Reading section. The client-side [readingResumableOnly] filter applies
+     * the same played-row rule as [getContinueWatching]. Empty when nothing is
+     * mid-read — a legitimately empty row, not a failure.
+     */
+    suspend fun getContinueReading(limit: Int = 20): Result<List<MediaItem>>
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
 
     suspend fun getMediaItems(

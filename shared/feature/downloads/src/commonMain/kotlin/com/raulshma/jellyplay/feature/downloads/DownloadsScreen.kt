@@ -82,12 +82,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -163,6 +165,8 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_st
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_queued
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_waiting
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_storage_used
+import com.raulshma.jellyplay.feature.downloads.sheets.DownloadsResyncSheet
+import com.raulshma.jellyplay.feature.downloads.sheets.ForceResyncSheet
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -195,23 +199,36 @@ fun DownloadsScreen(
     val resyncProgress by viewModel.resyncProgress.collectAsStateWithLifecycle()
 
     // One-shot delete feedback (screen-forward seam): resolve the texts here,
-    // forward each emitted message through the messenger actual.
-    val messenger = rememberDownloadsMessenger()
+    // post each emitted message through the app-wide UserMessageBus.
+    val bus = LocalUserMessageBus.current
     val deletedText = stringResource(Res.string.downloads_deleted_message)
-    LaunchedEffect(messenger) {
+    LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
-                DownloadsUserMessage.Deleted -> messenger?.info(deletedText)
-                is DownloadsUserMessage.Raw -> messenger?.error(message.text)
+                DownloadsUserMessage.Deleted -> bus.info(deletedText)
+                is DownloadsUserMessage.Raw -> bus.error(message.text)
             }
         }
     }
 
-    // Pending delete confirmation. Deleting a completed download removes the
+    // Pending delete confirmations. Deleting a completed download removes the
     // file from disk, so we confirm first — matching the unified
-    // MediaDetailScreen delete confirmations.
-    var pendingDelete by remember { mutableStateOf<DownloadItem?>(null) }
-    var pendingBulkDelete by remember { mutableStateOf(false) }
+    // MediaDetailScreen delete confirmations. Two separate machines
+    // ([PendingConfirmation]): single-item and bulk selection.
+    /**
+     * Pending single-item delete. Settle arm: [PendingConfirmation.clear] in
+     * the confirm handler (previously the confirm write never cleared —
+     * declared delta). The deletes are fire-and-forget VM calls, so the
+     * machine settles synchronously and the guard's in-flight arm is
+     * unreachable here (dismiss/confirm pass `inFlight = false`).
+     */
+    var pendingDelete by remember { mutableStateOf(PendingConfirmation<DownloadItem>()) }
+    /**
+     * Pending bulk delete of the current selection. Settle arm:
+     * [PendingConfirmation.clear] in the confirm handler (previously never
+     * cleared — declared delta). Same synchronous settle as [pendingDelete].
+     */
+    var pendingBulkDelete by remember { mutableStateOf(PendingConfirmation<Unit>()) }
     var showResyncSheet by remember { mutableStateOf(false) }
     var showForceResyncSheet by remember { mutableStateOf(false) }
 
@@ -460,7 +477,7 @@ fun DownloadsScreen(
                             onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
                             onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
                             onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
-                            onDelete = { pendingDelete = download },
+                            onDelete = { pendingDelete = pendingDelete.hold(download) },
                             onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
                             onMoveToFront = { viewModel.moveToFront(download) },
                             onLowerPriority = { viewModel.lowerPriority(download) },
@@ -481,7 +498,7 @@ fun DownloadsScreen(
                         onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
                         onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
                         onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
-                        onBulkDelete = { pendingBulkDelete = true },
+                        onBulkDelete = { pendingBulkDelete = pendingBulkDelete.hold(Unit) },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
@@ -500,7 +517,7 @@ fun DownloadsScreen(
         }
     }
 
-    pendingDelete?.let { item ->
+    pendingDelete.item?.let { item ->
         ConfirmDialog(
             title = stringResource(Res.string.downloads_delete_download_title),
             message = stringResource(Res.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)),
@@ -508,12 +525,18 @@ fun DownloadsScreen(
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
-            onConfirm = { viewModel.deleteDownload(item) },
-            onDismiss = { pendingDelete = null },
+            onConfirm = {
+                val target = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                viewModel.deleteDownload(target)
+                // Settle: clear the machine (was never cleared on confirm
+                // before the migration).
+                pendingDelete = pendingDelete.clear()
+            },
+            onDismiss = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
         )
     }
 
-    if (pendingBulkDelete) {
+    if (pendingBulkDelete.isPending) {
         val count = selectedIds.size
         val freedBytes = selectedItems.sumOf { it.totalSizeBytes }
         ConfirmDialog(
@@ -524,8 +547,14 @@ fun DownloadsScreen(
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
-            onConfirm = { viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected) },
-            onDismiss = { pendingBulkDelete = false },
+            onConfirm = {
+                pendingBulkDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
+                // Settle: clear the machine (was never cleared on confirm
+                // before the migration).
+                pendingBulkDelete = pendingBulkDelete.clear()
+            },
+            onDismiss = { pendingBulkDelete = pendingBulkDelete.dismiss(inFlight = false) },
         )
     }
 
@@ -667,6 +696,7 @@ private fun DownloadItemRow(
                             com.raulshma.jellyplay.core.model.MediaType.AUDIO,
                             com.raulshma.jellyplay.core.model.MediaType.MUSIC,
                             com.raulshma.jellyplay.core.model.MediaType.ALBUM -> Tabler.Outline.Music
+                            com.raulshma.jellyplay.core.model.MediaType.BOOK -> Tabler.Outline.Book
                             else -> Tabler.Outline.Movie
                         },
                         contentDescription = null,
@@ -1040,535 +1070,6 @@ private fun SelectionHintRow() {
             )
             Text(
                 stringResource(Res.string.downloads_selection_hint),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * Bottom sheet listing every download flagged for an update, with a per-item
- * resync action and a batch "sync all". Renders live progress from the sync
- * manager: each row shows its current phase (pending/working/done/error) and an
- * aggregate progress line runs while the batch is active.
- *
- * "Force resync" lives in the bottom action row beside Close so the resync icon
- * stays the single freshness hub while still offering the granular,
- * user-directed flow via progressive disclosure.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DownloadsResyncSheet(
-    updateRows: List<com.raulshma.jellyplay.core.model.OfflineSyncUpdate>,
-    checking: Boolean,
-    progress: com.raulshma.jellyplay.core.model.ResyncBatchProgress,
-    onResyncAll: (List<String>) -> Unit,
-    onResyncOne: (String) -> Unit,
-    onForceResync: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    TvSafeSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Header: just the title + icon. The "Force resync" action moved to
-            // the bottom action row beside Close so the two terminal controls
-            // live together (matches the force-resync sheet's footer).
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Tabler.Outline.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text(
-                    stringResource(Res.string.downloads_resync_batch_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            when {
-                checking -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    JellyPlayCircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        stringResource(Res.string.downloads_resync_batch_checking),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                updateRows.isEmpty() -> Text(
-                    stringResource(Res.string.downloads_resync_batch_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                else -> {
-                    if (progress.active) {
-                        val done = progress.completed
-                        Text(
-                            stringResource(Res.string.downloads_resync_progress, done, progress.total),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 360.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        itemsIndexed(updateRows, key = { _, row -> row.id }) { _, row ->
-                            val itemProgress = progress.items[row.id]
-                            ResyncSheetRow(
-                                update = row,
-                                phase = itemProgress?.phase,
-                                onResync = { onResyncOne(row.id) },
-                            )
-                        }
-                    }
-                    androidx.compose.material3.Button(
-                        onClick = { onResyncAll(updateRows.map { it.id }) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !progress.active,
-                    ) {
-                        Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(Res.string.downloads_resync_resync_all))
-                    }
-                }
-            }
-            // Bottom action row: Force resync (progressive disclosure of the
-            // granular flow) sits beside Close so the two terminal controls
-            // share a row.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                androidx.compose.material3.TextButton(
-                    onClick = onForceResync,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(Tabler.Outline.RefreshAlert, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(Res.string.downloads_force_resync_action))
-                }
-                androidx.compose.material3.TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(Res.string.downloads_close))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ResyncSheetRow(
-    update: com.raulshma.jellyplay.core.model.OfflineSyncUpdate,
-    phase: com.raulshma.jellyplay.core.model.ResyncPhase?,
-    onResync: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        when (phase) {
-            com.raulshma.jellyplay.core.model.ResyncPhase.WORKING ->
-                JellyPlayCircularProgressIndicator(modifier = Modifier.size(18.dp))
-            com.raulshma.jellyplay.core.model.ResyncPhase.DONE ->
-                Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            com.raulshma.jellyplay.core.model.ResyncPhase.ERROR ->
-                Icon(Tabler.Outline.AlertTriangle, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-            else ->
-                Icon(Tabler.Outline.AlertCircle, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(18.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                update.name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            // Episode context line (SXXEXX · series) so episodes are identifiable
-            // in the flat sheet list — same shape and styling as the downloads
-            // list row (bold tag + plain series), via the shared helper.
-            episodeContextLine(
-                mediaType = update.mediaType,
-                seriesName = update.seriesName,
-                seasonNumber = update.seasonNumber,
-                episodeNumber = update.episodeNumber,
-            )?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (update.mediaFileChanged) {
-                Text(
-                    stringResource(Res.string.downloads_resync_media_changed),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-        if (phase == null || phase == com.raulshma.jellyplay.core.model.ResyncPhase.PENDING ||
-            phase == com.raulshma.jellyplay.core.model.ResyncPhase.ERROR
-        ) {
-            androidx.compose.material3.TextButton(onClick = onResync) {
-                Text(stringResource(Res.string.downloads_resync_action))
-            }
-        }
-    }
-}
-
-/**
- * Force-resync sheet: a user-directed resync over an explicit set of downloaded
- * items, refreshing only the selected data categories (metadata / poster /
- * backdrop). Two phases — a picker (items + data checkboxes) and a progress
- * state that reuses [ResyncBatchProgress] from the sync manager, matching the
- * regular resync sheet's progress granularity.
- *
- * Entry is via the resync sheet's header action, so the resync icon remains the
- * single freshness hub. Mirrors the unified detail tree's
- * `DeleteDownloadedEpisodesSheet` multi-select pattern (tri-state select-all
- * header + per-item checkboxes) for consistency.
- *
- * Three phases, derived from live [progress] + the local [started] latch:
- *  - **picker** (default): editable items + data checkboxes;
- *  - **running**: read-only aggregate progress while [ResyncBatchProgress.active];
- *  - **done**: terminal view once a sync this sheet started has finished.
- * The `started` latch is keyed on [ResyncBatchProgress] so that reopening the
- * sheet while a background batch is still running (after a mid-batch dismiss)
- * surfaces running progress rather than a fresh editable picker.
- *
- * @param candidates downloaded items available for selection, with episode context.
- * @param progress live batch progress, shared with the regular resync flow.
- * @param onSync invoked with the selected item ids and data options.
- * @param onDismiss closes the sheet and clears batch progress.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ForceResyncSheet(
-    candidates: List<ForceResyncCandidate>,
-    progress: com.raulshma.jellyplay.core.model.ResyncBatchProgress,
-    onSync: (itemIds: List<String>, options: com.raulshma.jellyplay.core.model.ResyncOptions) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    // Selection lives in the sheet so it resets on each open. Defaulting data
-    // to all-on matches the historical resync behaviour; items start empty so
-    // the user must opt in (an accidental full-library resync is costly).
-    var selectedIds by remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
-    var selectedOptions by remember {
-        androidx.compose.runtime.mutableStateOf(com.raulshma.jellyplay.core.model.ResyncOptions.ALL)
-    }
-    // Latch: sticky once a sync has been kicked off (or is still running from a
-    // prior mid-batch dismiss). Derived purely from live progress so an
-    // orphaned background batch latches this sheet straight into the running/
-    // done phase on reopen instead of offering an editable picker.
-    val started = progress.active || progress.completed > 0
-    // Phase precedence: a still-active batch (this sheet or orphaned) shows
-    // running progress; once it finishes the sheet holds a terminal done view
-    // until dismissed, so the editable picker never returns with a stale
-    // selection that could be re-fired accidentally.
-    val showRunning = progress.active
-    val showDone = started && !progress.active
-
-    TvSafeSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Tabler.Outline.RefreshAlert, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text(
-                    stringResource(Res.string.downloads_force_resync_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            if (showRunning) {
-                // Running phase: mirror the regular resync sheet's aggregate line.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    JellyPlayCircularProgressIndicator(modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        stringResource(Res.string.downloads_force_resync_in_progress, progress.completed, progress.total),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else if (showDone) {
-                // Terminal phase: a sync this sheet started has finished. Holds
-                // a read-only summary until dismissed so the editable picker —
-                // and its prior selection — never returns to be re-fired.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Tabler.Outline.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        stringResource(Res.string.downloads_force_resync_done, progress.completed, progress.total),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                // Picker phase: the whole content scrolls so long item lists
-                // (and the data section beneath them) stay reachable on small
-                // screens. The header above and the footer below are pinned.
-                // heightIn caps the scroll viewport regardless of the sheet's
-                // height constraints (a ModalBottomSheet content column isn't
-                // guaranteed to bound a weighted child), matching the regular
-                // resync sheet's capped list.
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 460.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        stringResource(Res.string.downloads_force_resync_description),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    if (candidates.isEmpty()) {
-                        Text(
-                            stringResource(Res.string.downloads_force_resync_empty),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        // ── Items section ──────────────────────────────────────
-                        Text(
-                            stringResource(Res.string.downloads_force_resync_items_header),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        val triState = when {
-                            selectedIds.isEmpty() -> ToggleableState.Off
-                            selectedIds.size == candidates.size -> ToggleableState.On
-                            else -> ToggleableState.Indeterminate
-                        }
-                        val selectAllFocusState = rememberTvFocusState(focusedScale = 1.01f)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(selectAllFocusState.focusModifier)
-                                .tvFocusIndicator(selectAllFocusState, ShapeCache.smooth12)
-                                .clickable {
-                                    selectedIds = if (triState == ToggleableState.On) emptySet()
-                                    else candidates.map { it.id }.toSet()
-                                },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TriStateCheckbox(state = triState, onClick = null)
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                stringResource(Res.string.downloads_action_select_all),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 360.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            itemsIndexed(candidates, key = { _, candidate -> candidate.id }) { _, candidate ->
-                                ForceResyncItemRow(
-                                    candidate = candidate,
-                                    checked = candidate.id in selectedIds,
-                                    onToggle = {
-                                        selectedIds = if (candidate.id in selectedIds) selectedIds - candidate.id
-                                        else selectedIds + candidate.id
-                                    },
-                                )
-                            }
-                        }
-
-                        // ── Data section ───────────────────────────────────────
-                        Text(
-                            stringResource(Res.string.downloads_force_resync_data_header),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        ResyncCategory.entries.forEach { category ->
-                            val (labelRes, descRes) = category.stringRes()
-                            ForceResyncDataRow(
-                                label = stringResource(labelRes),
-                                description = stringResource(descRes),
-                                checked = category in selectedOptions,
-                                onToggle = {
-                                    selectedOptions =
-                                        if (category in selectedOptions) selectedOptions - category
-                                        else selectedOptions + category
-                                },
-                            )
-                        }
-                        if (selectedOptions.isEmpty) {
-                            Text(
-                                stringResource(Res.string.downloads_force_resync_no_data),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Footer: Close always renders (all phases — a running/done batch
-            // still needs a way out, and closing mid-batch leaves progress to
-            // complete in the background, matching the regular resync sheet).
-            // In the picker phase the primary Sync action sits beside it so the
-            // two terminal controls share a row.
-            val canSync = !showRunning && !showDone && selectedIds.isNotEmpty() && !selectedOptions.isEmpty
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                androidx.compose.material3.TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(Res.string.downloads_close))
-                }
-                androidx.compose.material3.Button(
-                    onClick = { onSync(selectedIds.toList(), selectedOptions) },
-                    modifier = Modifier.weight(1f),
-                    enabled = canSync,
-                ) {
-                    Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(Res.string.downloads_force_resync_summary, selectedIds.size))
-                }
-            }
-        }
-    }
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun ForceResyncItemRow(
-    candidate: ForceResyncCandidate,
-    checked: Boolean,
-    onToggle: () -> Unit,
-) {
-    val focusState = rememberTvFocusState(focusedScale = 1.01f)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, ShapeCache.smooth12)
-            .clickable { onToggle() }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(checked = checked, onCheckedChange = { onToggle() })
-        Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                candidate.name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            // Episode context (SXXEXX · series) so episodes are identifiable in
-            // the picker — same shape and styling as the downloads list row.
-            episodeContextLine(
-                mediaType = candidate.mediaType,
-                seriesName = candidate.seriesName,
-                seasonNumber = candidate.seasonNumber,
-                episodeNumber = candidate.episodeNumber,
-            )?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-/** Label + description strings for one resync data-category row, exhaustive
- *  so a new [ResyncCategory] fails compilation until it gets copy. */
-private fun ResyncCategory.stringRes(): Pair<org.jetbrains.compose.resources.StringResource, org.jetbrains.compose.resources.StringResource> = when (this) {
-    ResyncCategory.METADATA ->
-        Res.string.downloads_force_resync_data_metadata to Res.string.downloads_force_resync_data_metadata_desc
-    ResyncCategory.CHAPTERS ->
-        Res.string.downloads_force_resync_data_chapters to Res.string.downloads_force_resync_data_chapters_desc
-    ResyncCategory.POSTER ->
-        Res.string.downloads_force_resync_data_poster to Res.string.downloads_force_resync_data_poster_desc
-    ResyncCategory.BACKDROP ->
-        Res.string.downloads_force_resync_data_backdrop to Res.string.downloads_force_resync_data_backdrop_desc
-    ResyncCategory.SUBTITLES ->
-        Res.string.downloads_force_resync_data_subtitles to Res.string.downloads_force_resync_data_subtitles_desc
-    ResyncCategory.TRICKPLAY ->
-        Res.string.downloads_force_resync_data_trickplay to Res.string.downloads_force_resync_data_trickplay_desc
-    ResyncCategory.SEGMENTS ->
-        Res.string.downloads_force_resync_data_segments to Res.string.downloads_force_resync_data_segments_desc
-}
-
-@Composable
-private fun ForceResyncDataRow(
-    label: String,
-    description: String,
-    checked: Boolean,
-    onToggle: () -> Unit,
-) {
-    val focusState = rememberTvFocusState(focusedScale = 1.01f)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, ShapeCache.smooth12)
-            .clickable { onToggle() }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(checked = checked, onCheckedChange = { onToggle() })
-        Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                description,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

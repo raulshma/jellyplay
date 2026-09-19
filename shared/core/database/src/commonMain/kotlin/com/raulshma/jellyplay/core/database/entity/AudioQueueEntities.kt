@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 @Entity(
     tableName = "audio_queue",
@@ -25,7 +26,7 @@ data class AudioQueueEntity(
     val durationMs: Long = 0L,
     val normalizationGain: Float? = null,
     @ColumnInfo(defaultValue = "0")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = wallNowMillis(),
 )
 
 @Entity(tableName = "audio_queue_state")
@@ -44,5 +45,5 @@ data class AudioQueueStateEntity(
     @ColumnInfo(defaultValue = "1.0")
     val playbackSpeed: Float = 1.0f,
     @ColumnInfo(defaultValue = "0")
-    val updatedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = wallNowMillis(),
 )

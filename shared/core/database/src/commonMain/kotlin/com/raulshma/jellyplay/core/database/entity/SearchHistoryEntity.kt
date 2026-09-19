@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 @Entity(
     tableName = "search_history",
@@ -19,5 +20,5 @@ data class SearchHistoryEntity(
     val query: String,
     val userId: String,
     @ColumnInfo(defaultValue = "0")
-    val searchedAt: Long = System.currentTimeMillis(),
+    val searchedAt: Long = wallNowMillis(),
 )

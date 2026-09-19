@@ -29,7 +29,7 @@ import androidx.compose.runtime.remember
  *             onNavigate(Route.SeerrDetail(item.id, item.mediaType))
  *         }
  *     },
- * )
+ *)
  * ```
  */
 @Stable

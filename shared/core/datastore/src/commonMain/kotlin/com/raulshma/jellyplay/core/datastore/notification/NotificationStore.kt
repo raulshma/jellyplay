@@ -4,13 +4,14 @@ import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
@@ -18,13 +19,7 @@ import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -91,9 +86,6 @@ class NotificationStore constructor(
         val NEWSLETTER_SECTION_ORDER = stringPreferencesKey("newsletter_section_order")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
     // JSON memoisation — decode is skipped when the raw key is unchanged.
     private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> =
         ParsedCache(null, emptyMap())
@@ -102,10 +94,8 @@ class NotificationStore constructor(
     private var cachedNewsletterSectionOrder: ParsedCache<List<NewsletterSectionType>> =
         ParsedCache(null, NewsletterSectionType.DEFAULT_ORDER)
 
-    val notification: StateFlow<NotificationSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, NotificationSlice())
+    val notification: StateFlow<NotificationSlice> =
+        dataStore.sliceStateFlow(scope, seed = NotificationSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): NotificationSlice = NotificationSlice(
         notificationPreferences = NotificationPreferences(
@@ -130,41 +120,38 @@ class NotificationStore constructor(
     private fun readCheckFrequency(prefs: Preferences): CheckFrequency =
         prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY].toEnumOrNull() ?: CheckFrequency.EVERY_6_HOURS
 
-    private fun readNotificationLibraryConfigs(prefs: Preferences): Map<String, LibraryNotificationConfig> {
-        val raw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]
-        return if (raw != cachedNotificationLibraryConfigs.raw) {
-            try {
-                raw?.let { json.decodeFromString<Map<String, LibraryNotificationConfig>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedNotificationLibraryConfigs = ParsedCache(raw, it) }
-        } else {
-            cachedNotificationLibraryConfigs.value
-        }
-    }
+    // MemoizeNull (this store's pre-promotion policy at every site): a null
+    // raw is a cacheable input — the decoded value depends only on the raw
+    // string, so a memoised default is safe to serve.
+    private fun readNotificationLibraryConfigs(prefs: Preferences): Map<String, LibraryNotificationConfig> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS],
+            cache = cachedNotificationLibraryConfigs,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, LibraryNotificationConfig>>(it) },
+            cacheRef = { cachedNotificationLibraryConfigs = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readEnabledNewsletterSections(prefs: Preferences): Set<NewsletterSectionType> {
-        val raw = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS]
-        return if (raw != cachedEnabledNewsletterSections.raw) {
-            try {
-                raw?.let { json.decodeFromString<Set<NewsletterSectionType>>(it) } ?: NewsletterSectionType.entries.toSet()
-            } catch (_: Exception) { NewsletterSectionType.entries.toSet() }
-                .also { cachedEnabledNewsletterSections = ParsedCache(raw, it) }
-        } else {
-            cachedEnabledNewsletterSections.value
-        }
-    }
+    private fun readEnabledNewsletterSections(prefs: Preferences): Set<NewsletterSectionType> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS],
+            cache = cachedEnabledNewsletterSections,
+            default = NewsletterSectionType.entries.toSet(),
+            parse = { json.decodeFromString<Set<NewsletterSectionType>>(it) },
+            cacheRef = { cachedEnabledNewsletterSections = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readNewsletterSectionOrder(prefs: Preferences): List<NewsletterSectionType> {
-        val raw = prefs[Keys.NEWSLETTER_SECTION_ORDER]
-        return if (raw != cachedNewsletterSectionOrder.raw) {
-            try {
-                raw?.let { json.decodeFromString<List<NewsletterSectionType>>(it) } ?: NewsletterSectionType.DEFAULT_ORDER
-            } catch (_: Exception) { NewsletterSectionType.DEFAULT_ORDER }
-                .also { cachedNewsletterSectionOrder = ParsedCache(raw, it) }
-        } else {
-            cachedNewsletterSectionOrder.value
-        }
-    }
+    private fun readNewsletterSectionOrder(prefs: Preferences): List<NewsletterSectionType> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.NEWSLETTER_SECTION_ORDER],
+            cache = cachedNewsletterSectionOrder,
+            default = NewsletterSectionType.DEFAULT_ORDER,
+            parse = { json.decodeFromString<List<NewsletterSectionType>>(it) },
+            cacheRef = { cachedNewsletterSectionOrder = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
     // ------------------------------------------------------------------
     // Setters
@@ -230,23 +217,18 @@ class NotificationStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Draws from
-     * both `PreferenceResetCategory.NOTIFICATIONS` and
-     * `PreferenceResetCategory.NEWSLETTER`. `NEWSLETTER_LAST_VIEWED_MS` is
-     * deliberately omitted — it is one-time viewed-state, not a user setting.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. Draws from both
+     * `PreferenceResetCategory.NOTIFICATIONS` and
+     * `PreferenceResetCategory.NEWSLETTER`. [Keys.NEWSLETTER_LAST_VIEWED_MS]
+     * is excluded by appearing in no category list — it is one-time
+     * viewed-state, not a user setting.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        // NOTIFICATIONS
-        Keys.NOTIFICATIONS_ENABLED, Keys.NOTIFICATIONS_CHECK_FREQUENCY,
-        Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
-        Keys.NOTIFICATIONS_QUIET_HOURS_START, Keys.NOTIFICATIONS_QUIET_HOURS_END,
-        Keys.NOTIFICATIONS_SOUND_ENABLED, Keys.NOTIFICATIONS_VIBRATE_ENABLED,
-        Keys.NOTIFICATIONS_LIGHTS_ENABLED, Keys.NOTIFICATIONS_MAX_PER_CHECK,
-        Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
-        // NEWSLETTER (minus NEWSLETTER_LAST_VIEWED_MS — one-time state)
-        Keys.NEWSLETTER_ENABLED, Keys.NEWSLETTER_DAY_OF_WEEK,
-        Keys.ENABLED_NEWSLETTER_SECTIONS, Keys.NEWSLETTER_SECTION_ORDER,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -274,38 +256,6 @@ class NotificationStore constructor(
             Keys.NEWSLETTER_SECTION_ORDER,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the notification + newsletter keys
-     * owned by this store from a decoded [UserPreferences]. The facade calls
-     * this (and every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly. Unlike [resetKeysFor], the
-     * one-time `NEWSLETTER_LAST_VIEWED_MS` view-state IS written back, matching
-     * the legacy restore.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            val np = userPreferences.notificationPreferences
-            it[Keys.NOTIFICATIONS_ENABLED] = np.enabled
-            it[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = np.checkFrequency.name
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = np.quietHoursEnabled
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_START] = np.quietHoursStart
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_END] = np.quietHoursEnd
-            it[Keys.NOTIFICATIONS_SOUND_ENABLED] = np.soundEnabled
-            it[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = np.vibrateEnabled
-            it[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = np.lightsEnabled
-            it[Keys.NOTIFICATIONS_MAX_PER_CHECK] = np.maxPerCheck
-            it[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(np.libraryConfigs)
-            it[Keys.NEWSLETTER_ENABLED] = userPreferences.newsletterEnabled
-            it[Keys.NEWSLETTER_DAY_OF_WEEK] = userPreferences.newsletterDayOfWeek
-            it[Keys.NEWSLETTER_LAST_VIEWED_MS] = userPreferences.newsletterLastViewedMs
-            it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(userPreferences.enabledNewsletterSections)
-            it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(userPreferences.newsletterSectionOrder)
-        }
     }
 
     /**

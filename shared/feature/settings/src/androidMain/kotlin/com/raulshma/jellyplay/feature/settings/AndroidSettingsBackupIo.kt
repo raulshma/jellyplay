@@ -7,25 +7,32 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.InputStream
-import java.io.OutputStream
 
 /**
- * Android actual of the [SettingsBackupIo] seam: SAF contentResolver streams
- * plus the concurrent internal/external cache-dir walk, moved verbatim from
- * the pre-migration SettingsViewModel bodies.
+ * Android actual of the [SettingsBackupIo] seam: SAF contentResolver IO plus
+ * the concurrent internal/external cache-dir walk, moved verbatim from the
+ * pre-migration SettingsViewModel bodies. The web seam narrowing (raw
+ * streams → text-level payload) moved the former caller-side
+ * `stream.writer().use { it.write(json) }` / `stream.reader().readText()`
+ * bodies here — same stream openers, same UTF-8 writer/reader chain, so the
+ * bytes on disk and the failure mapping are unchanged.
  */
 internal class AndroidSettingsBackupIo(
     private val context: Context,
 ) : SettingsBackupIo {
 
-    override suspend fun openExportSink(uri: String): OutputStream? =
+    override suspend fun writeExportPayload(uri: String, payload: String): Boolean =
         withContext(Dispatchers.IO) {
-            context.contentResolver.openOutputStream(Uri.parse(uri))
+            context.contentResolver.openOutputStream(Uri.parse(uri))?.use { stream ->
+                stream.writer().use { it.write(payload) }
+            } != null
         }
 
-    override suspend fun openImportSource(uri: String): InputStream? =
+    override suspend fun readImportPayload(uri: String): String? =
         withContext(Dispatchers.IO) {
-            context.contentResolver.openInputStream(Uri.parse(uri))
+            context.contentResolver.openInputStream(Uri.parse(uri))?.use { stream: InputStream ->
+                stream.reader().readText()
+            }
         }
 
     override suspend fun estimateCacheSizeBytes(): Long = withContext(Dispatchers.IO) {

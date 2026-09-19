@@ -5,23 +5,18 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -55,9 +50,6 @@ class ScreensaverStore constructor(
         val DREAM_SHOW_TITLE = booleanPreferencesKey("dream_show_title")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
     /**
      * Memoised decode of the JSON-encoded dream image categories, keyed on the
      * raw string so the decode is skipped when the underlying key has not
@@ -66,10 +58,8 @@ class ScreensaverStore constructor(
     private var cachedDreamImageCategories: ParsedCache<Set<DreamImageCategory>> =
         ParsedCache(null, DEFAULT_DREAM_IMAGE_CATEGORIES)
 
-    val screensaver: StateFlow<ScreensaverSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, ScreensaverSlice())
+    val screensaver: StateFlow<ScreensaverSlice> =
+        dataStore.sliceStateFlow(scope, seed = ScreensaverSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): ScreensaverSlice = ScreensaverSlice(
         dreamImageCategories = readDreamImageCategories(prefs),
@@ -79,17 +69,18 @@ class ScreensaverStore constructor(
         dreamShowTitle = PreferenceCodec.readBool(prefs, Keys.DREAM_SHOW_TITLE, "dream_show_title", true),
     )
 
-    private fun readDreamImageCategories(prefs: Preferences): Set<DreamImageCategory> {
-        val raw = prefs[Keys.DREAM_IMAGE_CATEGORIES]
-        return if (raw != cachedDreamImageCategories.raw) {
-            try {
-                raw?.let { json.decodeFromString<Set<DreamImageCategory>>(it) } ?: DEFAULT_DREAM_IMAGE_CATEGORIES
-            } catch (_: Exception) { DEFAULT_DREAM_IMAGE_CATEGORIES }
-                .also { cachedDreamImageCategories = ParsedCache(raw, it) }
-        } else {
-            cachedDreamImageCategories.value
-        }
-    }
+    // MemoizeNull (this store's pre-promotion policy): a null raw is a
+    // cacheable input — the decoded value depends only on the raw string, so
+    // a memoised default is safe to serve.
+    private fun readDreamImageCategories(prefs: Preferences): Set<DreamImageCategory> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.DREAM_IMAGE_CATEGORIES],
+            cache = cachedDreamImageCategories,
+            default = DEFAULT_DREAM_IMAGE_CATEGORIES,
+            parse = { json.decodeFromString<Set<DreamImageCategory>>(it) },
+            cacheRef = { cachedDreamImageCategories = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
     private fun readDreamTransitionStyle(prefs: Preferences): DreamTransitionStyle =
         prefs[Keys.DREAM_TRANSITION_STYLE].toEnumOrNull() ?: DreamTransitionStyle.CROSSFADE
@@ -118,13 +109,15 @@ class ScreensaverStore constructor(
         dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.DREAM_IMAGE_CATEGORIES,
-        Keys.DREAM_TRANSITION_STYLE,
-        Keys.DREAM_KEN_BURNS_ENABLED,
-        Keys.DREAM_SHOW_TITLE,
-        Keys.DREAM_SLIDESHOW_INTERVAL_MS,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: every key owned here sits in the single
@@ -139,24 +132,6 @@ class ScreensaverStore constructor(
             Keys.DREAM_SLIDESHOW_INTERVAL_MS,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the dream keys owned by this store
-     * from a decoded [UserPreferences]. The JSON image-category set is written
-     * with this store's own [json] codec (same shape `setDreamImageCategories`
-     * uses).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(userPreferences.dreamImageCategories)
-            it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = userPreferences.dreamSlideshowIntervalMs
-            it[Keys.DREAM_KEN_BURNS_ENABLED] = userPreferences.dreamKenBurnsEnabled
-            it[Keys.DREAM_TRANSITION_STYLE] = userPreferences.dreamTransitionStyle.name
-            it[Keys.DREAM_SHOW_TITLE] = userPreferences.dreamShowTitle
-        }
     }
 
     /**

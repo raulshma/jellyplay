@@ -7,8 +7,6 @@ import com.raulshma.jellyplay.core.model.SyncPlayQueueUpdateData
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import org.json.JSONObject
-import java.time.Instant
-import java.time.OffsetDateTime
 
 sealed class SyncPlayEvent {
     data class PlaybackCommand(val cmd: SyncPlayPlaybackCommand) : SyncPlayEvent()
@@ -188,18 +186,18 @@ class SyncPlayEventHandler constructor() {
         return ticks.optLong("Value", 0L)
     }
 
+    /**
+     * Parses the first parseable timestamp among [keys] via
+     * [TimeSyncManager.parseIsoTimestamp]. Blank or unparseable values fall
+     * through to the next key; when none parse, degrades to 0 so a bad stamp
+     * never fails the event (the fallback divergence documented on the shared
+     * parse).
+     */
     fun parseTimestamp(json: JSONObject, keys: List<String>): Long {
         for (key in keys) {
             val iso = json.optString(key, "")
             if (iso.isBlank()) continue
-            try {
-                return Instant.parse(iso).toEpochMilli()
-            } catch (_: Exception) {
-                try {
-                    return OffsetDateTime.parse(iso).toInstant().toEpochMilli()
-                } catch (_: Exception) {
-                }
-            }
+            TimeSyncManager.parseIsoTimestamp(iso)?.let { return it }
         }
         return 0L
     }

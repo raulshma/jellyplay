@@ -6,7 +6,7 @@ import androidx.compose.runtime.snapshotFlow
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -62,8 +62,7 @@ class UpcomingCalendarViewModel(
      * to [refresh] reads via `.value`; mirrors the rationale in
      * `RequestsViewModel.directArrEnabled` / `ArrQueueViewModel`.
      */
-    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.experimental
-        .map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.directArrEnabled()
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     /** Exposed so the screen can render the feature-disabled state. */
@@ -167,13 +166,17 @@ class UpcomingCalendarViewModel(
             return
         }
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            val month = _state.value.visibleMonth
-            arrRepository.refreshCalendar(
-                month.onDay(1),
-                month.lastDay,
+            CalendarLoad.load(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+                fetch = {
+                    val month = _state.value.visibleMonth
+                    arrRepository.refreshCalendar(month.onDay(1), month.lastDay)
+                },
+                // The success arm is deliberately empty (see CalendarLoad):
+                // items land through the month collector, not this payload.
+                onSuccess = { },
+                onFailure = { _state.value = _state.value.copy(error = it.message) },
             )
-                .onFailure { _state.value = _state.value.copy(error = it.message) }
             _state.value = _state.value.copy(isLoading = false)
         }
     }

@@ -27,12 +27,33 @@ kotlin {
         }
     }
 
-    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
-    // and its ViewModels bind core:data seams (AdminRepository) that resolve
-    // only from the android+jvm DI graph (impl jvmShared; the web stack
-    // registers no binding). The missing target also keeps java.*
-    // (SimpleDateFormat/Date/TimeUnit in the admin VMs) legal in commonMain,
-    // which a wasm target forbids.
+    // web breadth: target-only (the insights precedent). The whole
+    // Kotlin surface (screens, ViewModels, components, navigation, Koin
+    // module) moved to the jvmShared source set — commonMain keeps only
+    // composeResources — because every ViewModel binds core:data's
+    // jvmShared AdminRepository/AdminStatisticsRepository. The
+    // promote-or-gate verdict is GATE: the repositories are
+    // orchestrator-owned (core:data; the impls are OkHttp/network-backed,
+    // the statistics one Room-backed, with no wasm client), so it may
+    // not change core:data, and a wasm stub seam would fake an empty admin
+    // dashboard/empty user list — fake server data, the exact thing the
+    // insights review rejected ("a fake empty heatmap"). The web graph
+    // therefore compiles an (intentionally) empty commonMain — the
+    // orchestrator has nothing to route on web until the repository promotion lands
+    // the admin repositories (interfaces + impls) — while the
+    // android/desktop graphs keep everything, byte-identical. Promotion
+    // scope for that future pass: AdminRepository + AdminStatisticsRepository
+    // interfaces and impls (OkHttp api surface + Room statistics queries)
+    // plus the java.text renderers' locale split (SimpleDateFormat
+    // audit/statistics stamps; localized on JVM, fixed-English on wasm).
+    // The karma/Chrome browser run stays off like core:ui/core:network.
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -42,6 +63,17 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // The whole admin surface is jvmShared (see the target-only comment):
+        // it binds core:data's jvmShared admin repositories and keeps the
+        // java.text/java.util renderers, both of which a wasm target
+        // forbids in commonMain. androidMain (WebView quartet, StatisticsExport/
+        // AdminMessenger actuals) and jvmMain (desktop actuals) sit on top of
+        // it exactly as they sat on commonMain.
+        val jvmShared = create("jvmShared")
+        jvmShared.dependsOn(getByName("commonMain"))
+        getByName("androidMain") { dependsOn(jvmShared) }
+        getByName("jvmMain") { dependsOn(jvmShared) }
+
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
@@ -88,10 +120,9 @@ kotlin {
         // Second documented shared→legacy edge (library/livetv/settings
         // precedent): PluginConfigScreen's message bus and the WebView quartet
         // stay Android-only in this source set; the quartet also needs OkHttp
-        // (same-origin WebView request interception) which rides in through
-        // the legacy :core:ui classpath edge.
+        // (same-origin WebView request interception), declared explicitly
+        // below.
         getByName("androidMain").dependencies {
-            implementation(project(":core:ui"))
             // WebView quartet: interceptAuthedRequest re-issues same-origin
             // GETs through the plugin WebView session's OkHttpClient.
             implementation(libs.okhttp)
@@ -105,3 +136,21 @@ kotlin {
 // generated accessors land in `...feature.admin.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.admin.generated.resources"
+
+// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
+// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
+// this module fails dependency resolution unless it points at JetBrains'
+// fork of the same release line — same package, ABI-stable surface. Scoped
+// to wasmJs-named configurations so android/jvm graphs keep resolving
+// google's published variants exactly as before (the
+// identical block lives in shared/core/ui, shared/feature/requests and the
+// other web modules).
+configurations.configureEach {
+    if (name.lowercase().contains("wasmjs")) {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("androidx.navigation3:navigation3-ui"))
+                .using(module(libs.jb.navigation3.ui.get().toString()))
+                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+        }
+    }
+}

@@ -2,11 +2,12 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.concurrency.mapConcurrent
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
+import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
@@ -15,15 +16,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.sync.Semaphore
 
-private const val PHOTO_FOLDER_PREFETCH_CONCURRENCY = 4
-
-class FavoritesViewModel(
+internal class FavoritesViewModel(
     private val mediaRepository: MediaRepository,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
-    private val mediaDownloadActions: MediaDownloadActions,
+    private val quickDownloadActions: QuickDownloadActions,
+    photoFolderPrefetcher: PhotoFolderPrefetcher,
 ) : JellyPlayViewModel() {
 
     private val _mediaTypeFilter = stateFlow<MediaType?>(null)
@@ -51,8 +50,16 @@ class FavoritesViewModel(
         trigger = _refreshTrigger,
     )
 
-    private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
-    val photoFolderChildUrls = _photoFolderChildUrls.flow
+    /**
+     * The photo-folder child-URL cache — the shared [PhotoFolderChildUrlsStore]
+     * adopted from the home feature, replacing this class's former hand-rolled
+     * `Semaphore(4).mapConcurrent` fan-out over the repository. Same contract
+     * (photo folders only, already-fetched skip, merge) plus the bounded
+     * oldest-first eviction the inline copy lacked.
+     */
+    private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
+
+    val photoFolderChildUrls = photoFolderChildUrlsStore.childUrls
 
     fun setMediaTypeFilter(type: MediaType?) {
         _mediaTypeFilter.set(type)
@@ -72,8 +79,12 @@ class FavoritesViewModel(
         }
     }
 
-    /** Ids whose quick actions flip to "Remove download" — see [MediaDownloadActions.downloadedIds]. */
-    val downloadedIds = mediaDownloadActions.downloadedIds
+    /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
+    // Whether this platform has a download pipeline — screens gate the
+    // download CTA on it (hidden rather than Failed-toasting on web).
+    val downloadSupported = quickDownloadActions.isSupported
+
+    val downloadedIds = quickDownloadActions.downloadedIds
 
     /**
      * Long-press Download from a favorites card (#147): inline start for
@@ -82,23 +93,15 @@ class FavoritesViewModel(
      * sheet (unlike the library grid).
      */
     fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
-        launch { mediaDownloadActions.downloadAndReport(item, onOpenDetail) }
+        launch { quickDownloadActions.downloadAndReport(item, onOpenDetail) }
     }
 
     /** Long-press Remove download — deletes the local copy only. */
     fun removeItemDownload(item: MediaItem) {
-        mediaDownloadActions.removeDownload(item)
+        quickDownloadActions.removeDownload(item)
     }
 
     fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {
-        launch {
-            val current = _photoFolderChildUrls.value
-            val toFetch = items.filter { it.mediaType == MediaType.PHOTO_FOLDER && it.id !in current }
-            if (toFetch.isEmpty()) return@launch
-            val results = Semaphore(PHOTO_FOLDER_PREFETCH_CONCURRENCY).mapConcurrent(toFetch) { folder ->
-                folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id)
-            }
-            _photoFolderChildUrls.set(_photoFolderChildUrls.value + results)
-        }
+        photoFolderChildUrlsStore.prefetch(items)
     }
 }

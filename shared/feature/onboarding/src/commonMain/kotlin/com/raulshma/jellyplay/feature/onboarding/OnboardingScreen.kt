@@ -243,19 +243,7 @@ fun OnboardingScreen(
                             val seerrPrefs by viewModel.seerrPreferences.collectAsStateWithLifecycle()
                             SeerrStep(
                                 seerrPreferences = seerrPrefs,
-                                onSetServerUrl = viewModel::setSeerrServerUrl,
-                                onSetApiKey = viewModel::setSeerrApiKey,
-                                onSetAuthMethod = viewModel::setSeerrAuthMethod,
-                                onSetUsername = viewModel::setSeerrUsername,
-                                onSetEmail = viewModel::setSeerrEmail,
-                                onSetPassword = viewModel::setSeerrPassword,
-                                onSetEnabled = viewModel::setSeerrEnabled,
-                                onSetSearchEnabled = viewModel::setSeerrSearchEnabled,
-                                onSetRecommendationsEnabled = viewModel::setSeerrRecommendationsEnabled,
-                                onSetDiscoverEnabled = viewModel::setSeerrDiscoverEnabled,
-                                onSetStreamingRegion = viewModel::setSeerrStreamingRegion,
-                                onSetDiscoverRegion = viewModel::setSeerrDiscoverRegion,
-                                onDisconnect = viewModel::seerrDisconnect,
+                                actions = viewModel.seerrEditActions,
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }

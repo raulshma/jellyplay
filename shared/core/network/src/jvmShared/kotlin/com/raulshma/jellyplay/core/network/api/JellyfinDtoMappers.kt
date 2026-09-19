@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.LogFile
+import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -49,8 +50,8 @@ import java.time.format.DateTimeFormatter
 // (toScheduledTaskInfo / toActivityLogEntry + their private helpers) stay in
 // the legacy Android shim (core/network/src/main/.../api/WsDtoMappers.kt):
 // their consumers — the realtime channels — inject the Hilt-qualified
-// @ApplicationScope CoroutineScope whose annotation lives in the legacy
-// :core:datastore shim, so the channels (and thus the org.json mappers)
+// @ApplicationScope CoroutineScope whose annotation lives in
+// core:datastore shim, so the channels (and thus the org.json mappers)
 // could not move into this module.
 
 internal fun BaseItemDto.toMediaItem() = MediaItem(
@@ -95,6 +96,71 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
 )
 
 /**
+ * Maps a detail-projection [BaseItemDto] onto the domain [MediaDetail] —
+ * formerly the ~60-line inline body of `LibraryApiClientImpl.getMediaDetail`
+ * (the wasm twin's copy already lived in commonMain
+ * `LibraryWireMappers.toMediaDetail`; this is the SDK-typed jvmShared twin,
+ * same file as [toMediaItem]). `relatedItems` stays empty: similar items are
+ * fetched separately (getSimilarItems) and merged by the caller.
+ */
+internal fun BaseItemDto.toMediaDetail() = MediaDetail(
+    item = toMediaItem(),
+    sortName = forcedSortName,
+    customRating = customRating,
+    criticRating = criticRating?.toFloat(),
+    taglines = taglines ?: emptyList(),
+    productionLocations = productionLocations ?: emptyList(),
+    lockData = lockData ?: false,
+    lockedFields = lockedFields?.map { it.toString() } ?: emptyList(),
+    status = status?.toString(),
+    airDays = airDays?.map { it.toString() } ?: emptyList(),
+    airTime = airTime,
+    displayOrder = displayOrder,
+    preferredMetadataLanguage = preferredMetadataLanguage,
+    preferredMetadataCountryCode = preferredMetadataCountryCode,
+    dateCreated = dateCreated?.toString(),
+    people = (people?.map { person ->
+        PersonInfo(
+            id = person.id.toString(),
+            name = person.name ?: "",
+            role = person.role,
+            type = person.type?.serialName ?: "",
+            primaryImageTag = person.primaryImageTag,
+        )
+    } ?: emptyList()).distinctBy { it.id },
+    relatedItems = emptyList(),
+    chapters = chapters?.map { chapter ->
+        ChapterInfo(
+            name = chapter.name ?: "",
+            startPositionTicks = chapter.startPositionTicks ?: 0L,
+            imageDateModified = chapter.imageDateModified?.toString(),
+            imageTag = chapter.imageTag,
+        )
+    } ?: emptyList(),
+    mediaSources = mediaSources?.map { source ->
+        source.toMediaSource(
+            trickplayInfo = trickplay
+                ?.get(source.id.toString())
+                ?.values
+                ?.maxByOrNull { it.width ?: 0 }
+                ?.toTrickplayInfo(),
+        )
+    } ?: emptyList(),
+    externalUrls = externalUrls?.map { url ->
+        com.raulshma.jellyplay.core.model.ExternalUrl(
+            name = url.name ?: "",
+            url = url.url ?: "",
+        )
+    } ?: emptyList(),
+    providerIds = providerIds?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap() ?: emptyMap(),
+    // Books have no MediaSources — path is their only format carrier;
+    // progress is denested from UserData for detail-only surfaces.
+    path = path,
+    playbackPositionTicks = userData?.playbackPositionTicks ?: 0L,
+    isPlayed = userData?.played == true,
+)
+
+/**
  * The standard tail of every library listing call: map the DTOs to
  * [MediaItem]s, then parental-rate them through the commonMain policy
  * ([filterByParentalRating] over the caller-supplied max, e.g.
@@ -119,6 +185,12 @@ internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.BOX_SET -> MediaType.COLLECTION
     BaseItemKind.PHOTO -> MediaType.PHOTO
     BaseItemKind.PHOTO_ALBUM -> MediaType.PHOTO_FOLDER
+    BaseItemKind.BOOK -> MediaType.BOOK
+    // Container folders inside a library (books-library volume folders etc.);
+    // the server has no book-specific folder kind — they serialize as "Folder".
+    BaseItemKind.FOLDER -> MediaType.FOLDER
+    // Audiobooks are audio files — they ride the audio player.
+    BaseItemKind.AUDIO_BOOK -> MediaType.AUDIO
     BaseItemKind.LIVE_TV_CHANNEL, BaseItemKind.TV_CHANNEL -> MediaType.CHANNEL
     BaseItemKind.LIVE_TV_PROGRAM, BaseItemKind.TV_PROGRAM -> MediaType.LIVE_TV
     else -> MediaType.UNKNOWN
@@ -136,6 +208,8 @@ internal fun MediaType.toBaseItemKind(): BaseItemKind? = when (this) {
     MediaType.COLLECTION -> BaseItemKind.BOX_SET
     MediaType.PHOTO -> BaseItemKind.PHOTO
     MediaType.PHOTO_FOLDER -> BaseItemKind.PHOTO_ALBUM
+    MediaType.BOOK -> BaseItemKind.BOOK
+    MediaType.FOLDER -> BaseItemKind.FOLDER
     MediaType.CHANNEL -> BaseItemKind.LIVE_TV_CHANNEL
     MediaType.LIVE_TV -> BaseItemKind.LIVE_TV_PROGRAM
     MediaType.MUSIC -> BaseItemKind.AUDIO

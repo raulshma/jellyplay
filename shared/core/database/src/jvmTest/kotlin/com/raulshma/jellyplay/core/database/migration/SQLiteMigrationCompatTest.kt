@@ -9,6 +9,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 /**
  * Exercises the Room-KMP migration compat shims in [SQLiteMigrationCompat] —
@@ -45,7 +46,7 @@ class SQLiteMigrationCompatTest {
     }
 
     @Test
-    fun `execSQL without bind args prepares and steps the statement`() {
+    fun `execSQL without bind args prepares and steps the statement`() = runTest {
         connection.execSQL("CREATE TABLE t (id TEXT PRIMARY KEY NOT NULL, flag INTEGER NOT NULL)")
         connection.execSQL("INSERT INTO t (id, flag) VALUES ('a', 1)")
 
@@ -57,7 +58,7 @@ class SQLiteMigrationCompatTest {
     }
 
     @Test
-    fun `execSQL with bind args maps every supported argument type`() {
+    fun `execSQL with bind args maps every supported argument type`() = runTest {
         connection.execSQL(
             """
             CREATE TABLE t (
@@ -121,7 +122,7 @@ class SQLiteMigrationCompatTest {
     }
 
     @Test
-    fun `execSQL with bind args updates an existing row`() {
+    fun `execSQL with bind args updates an existing row`() = runTest {
         connection.execSQL("CREATE TABLE t (id TEXT PRIMARY KEY NOT NULL, value INTEGER NOT NULL)")
         connection.execSQL("INSERT INTO t (id, value) VALUES ('row', 1)")
 
@@ -134,7 +135,7 @@ class SQLiteMigrationCompatTest {
     }
 
     @Test
-    fun `execSQL with a null-only bind stores SQL NULL`() {
+    fun `execSQL with a null-only bind stores SQL NULL`() = runTest {
         connection.execSQL("CREATE TABLE t (id INTEGER PRIMARY KEY NOT NULL, v TEXT)")
         connection.execSQL("INSERT INTO t (id, v) VALUES (?, ?)", arrayOf<Any?>(1, null))
 

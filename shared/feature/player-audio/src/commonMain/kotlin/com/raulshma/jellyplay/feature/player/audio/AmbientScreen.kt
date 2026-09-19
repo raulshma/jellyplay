@@ -1,10 +1,5 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +33,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,6 +45,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
+import com.raulshma.jellyplay.core.ui.components.LaunchBlobDrift
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.components.rememberBlobStops
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -61,6 +60,7 @@ import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_con
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_controls_pause
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_controls_play
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_controls_previous
+import kotlin.math.PI
 
 @Composable
 fun AmbientScreen(
@@ -228,35 +228,30 @@ private fun AmbientScreenContent(
 private fun AmbientBackground(colors: List<Color>) {
     val reducedMotion = LocalReducedMotion.current
     val blobCount = 4
-    val animatables = remember(blobCount) {
-        List(blobCount) { Animatable(initialValue = 0f) }
+    val blobProgress = remember(blobCount) {
+        List(blobCount) { mutableFloatStateOf(0f) }
     }
 
     // Resolve the blob palette + per-blob 3-stop gradient stops ONCE (keyed on
     // the palette). Shared with AmbientColorBackdrop via rememberBlobStops so
-    // the palette → stops projection isn't duplicated. Center/radius still
-    // vary per frame.
+    // the palette → stops projection isn't duplicated.
     val blobStops = rememberBlobStops(colors, blobCount)
 
-    // Four concurrent infinite animations driving a full-screen Canvas redraw.
-    // This is the most expensive decorative surface in the app and it stays
-    // visible for the whole listening session. In performance mode freeze the
-    // blobs (LaunchedEffect bodies are skipped, values stay 0f).
-    if (!reducedMotion) {
-        animatables.forEachIndexed { index, animatable ->
-            LaunchedEffect(index) {
-                animatable.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = 10000 + index * 3000,
-                            easing = LinearEasing,
-                        ),
-                        repeatMode = RepeatMode.Reverse,
-                    ),
-                )
-            }
+    // Each brush is built ONCE at a nominal radius of 1 and drawn through a
+    // translate+scale transform; a uniformly scaled radial gradient is
+    // mathematically identical to one built at the frame's radius.
+    val blobBrushes = remember(blobStops) {
+        blobStops.map { stops ->
+            Brush.radialGradient(colors = stops, center = Offset.Zero, radius = 1f)
         }
+    }
+
+    // The blobs drift on a shared ~30 Hz-gated frame clock (see
+    // core/ui's LaunchBlobDrift) instead of per-blob Animatables. In
+    // performance/reduced-motion mode the effect body is skipped and the
+    // values stay 0f, freezing the blobs.
+    if (!reducedMotion) {
+        LaunchBlobDrift(blobProgress)
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -265,21 +260,17 @@ private fun AmbientBackground(colors: List<Color>) {
         val width = size.width
         val height = size.height
 
-        blobStops.forEachIndexed { index, stops ->
-            val progress = animatables[index].value
-            val x = width * (0.2f + 0.6f * kotlin.math.sin(progress * 2 * Math.PI + index).toFloat())
-            val y = height * (0.2f + 0.6f * kotlin.math.cos(progress * 2 * Math.PI + index * 1.5f).toFloat())
-            val radius = (width.coerceAtMost(height) * 0.4f) * (0.8f + 0.2f * kotlin.math.sin(progress * Math.PI).toFloat())
+        blobBrushes.forEachIndexed { index, brush ->
+            val progress = blobProgress[index].floatValue
+            val x = width * (0.2f + 0.6f * kotlin.math.sin(progress * 2 * PI + index).toFloat())
+            val y = height * (0.2f + 0.6f * kotlin.math.cos(progress * 2 * PI + index * 1.5f).toFloat())
+            val radius = (width.coerceAtMost(height) * 0.4f) * (0.8f + 0.2f * kotlin.math.sin(progress * PI).toFloat())
 
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = stops,
-                    center = Offset(x, y),
-                    radius = radius,
-                ),
-                radius = radius,
-                center = Offset(x, y),
-            )
+            translate(x, y) {
+                scale(radius, radius, pivot = Offset.Zero) {
+                    drawCircle(brush = brush, radius = 1f, center = Offset.Zero)
+                }
+            }
         }
     }
 }

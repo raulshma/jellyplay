@@ -1,19 +1,19 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.receiveAsFlow
 
 class PlaylistDetailViewModel(
     private val mediaRepository: MediaRepository,
     private val playlistRepository: PlaylistRepository,
-    private val audioQueueFacade: AudioQueueFacade,
+    private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
 
     private val _items = composeState<List<PlaylistItem>>(emptyList())
@@ -86,19 +86,21 @@ class PlaylistDetailViewModel(
         // re-add by the underlying media id (the entry id is gone server-side).
         _items.value = _items.value.filterNot { it.playlistItemId == entryId }
         launch {
-            _isMutating.value = true
-            _error.value = null
-            playlistRepository.removeItemsFromPlaylist(currentId, listOf(entryId))
-                .onFailure { _error.value = it.message ?: "Failed to remove from playlist" }
-                .onSuccess {
+            runPlaylistMutation(
+                guard = _isMutating,
+                errorState = _error,
+                errorOf = { it.message ?: "Failed to remove from playlist" },
+                failurePolicy = PlaylistMutationFailurePolicy.KeepOptimistic,
+                onSuccess = {
                     _undoActions.trySend(
                         UndoableAction(
                             message = "Removed \"${item.name}\" from playlist",
                             onUndo = { restoreToPlaylist(item) },
                         ),
                     )
-                }
-            _isMutating.value = false
+                },
+                command = { playlistRepository.removeItemsFromPlaylist(currentId, listOf(entryId)) },
+            )
         }
     }
 
@@ -108,12 +110,17 @@ class PlaylistDetailViewModel(
         val currentId = playlistId
         if (currentId.isEmpty()) return
         launch {
-            _isMutating.value = true
-            _error.value = null
-            playlistRepository.addItemsToPlaylist(currentId, listOf(item.id))
-                .onSuccess { load(currentId, playlistName) }
-                .onFailure { _error.value = it.message ?: "Failed to restore to playlist" }
-            _isMutating.value = false
+            runPlaylistMutation(
+                guard = _isMutating,
+                errorState = _error,
+                errorOf = { it.message ?: "Failed to restore to playlist" },
+                // Nothing new was applied optimistically here, but the list may
+                // still reflect an earlier optimistic drop — a failed restore
+                // leaves that local state standing rather than reloading.
+                failurePolicy = PlaylistMutationFailurePolicy.KeepOptimistic,
+                onSuccess = { load(currentId, playlistName) },
+                command = { playlistRepository.addItemsToPlaylist(currentId, listOf(item.id)) },
+            )
         }
     }
 
@@ -141,15 +148,14 @@ class PlaylistDetailViewModel(
         }
         _items.value = reordered
         launch {
-            _isMutating.value = true
-            _error.value = null
-            playlistRepository.movePlaylistItem(currentId, entryId, newIndex)
-                .onFailure {
-                    _error.value = it.message ?: "Failed to reorder playlist"
-                    // Roll back to the server's authoritative order.
-                    load(currentId, playlistName)
-                }
-            _isMutating.value = false
+            runPlaylistMutation(
+                guard = _isMutating,
+                errorState = _error,
+                errorOf = { it.message ?: "Failed to reorder playlist" },
+                // Roll back to the server's authoritative order.
+                failurePolicy = PlaylistMutationFailurePolicy.Reload { load(currentId, playlistName) },
+                command = { playlistRepository.movePlaylistItem(currentId, entryId, newIndex) },
+            )
         }
     }
 }

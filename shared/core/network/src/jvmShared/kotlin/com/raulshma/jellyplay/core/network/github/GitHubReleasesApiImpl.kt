@@ -3,9 +3,10 @@ package com.raulshma.jellyplay.core.network.github
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.api.emptyResponseBodyError
+import com.raulshma.jellyplay.core.network.api.HttpExecutor
 import com.raulshma.jellyplay.core.network.api.fromNetwork
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.decodeFromStream
@@ -36,6 +37,22 @@ class GitHubReleasesApiImpl @Inject constructor(
 ) : GitHubReleasesApi {
 
     private val json = SeerrApiClientImpl.lenientJson
+
+    /**
+     * The shared OkHttp execute chassis, shaped with GitHub's texts. No retry
+     * (GitHub never had a `Resilient*` wrapper — the DI graph binds this impl
+     * directly); Retry-After capture is new with the chassis fold so
+     * `RetryPolicy` would honor the server's advice on the HTTP-failure arm.
+     */
+    private val http = HttpExecutor(
+        okHttpClient = okHttpClient,
+        options = HttpExecutor.Options(
+            parseErrorMessage = { code, _ -> "GitHub request failed: $code" },
+            formatNetworkError = { e -> e.message ?: "GitHub request failed" },
+            captureRetryAfter = true,
+            emptyBodyText = "Empty response from GitHub",
+        ),
+    )
 
     // GitHub's REST API serializes fields in snake_case (tag_name, html_url,
     // browser_download_url). kotlinx.serialization is case-sensitive and does
@@ -77,21 +94,9 @@ class GitHubReleasesApiImpl @Inject constructor(
 
         return try {
             withContext(Dispatchers.IO) {
-                okHttpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext Result.failure(
-                            ApiException.fromHttp(
-                                httpCode = response.code,
-                                message = "GitHub request failed: ${response.code}",
-                            )
-                        )
-                    }
+                http.execute(request) { response ->
                     val stream = response.body?.byteStream()
-                    if (stream == null) {
-                        return@withContext Result.failure<AppUpdateInfo>(
-                            emptyResponseBodyError("GitHub")
-                        )
-                    }
+                        ?: throw http.emptyBodyNetworkError()
                     // Stream-decode: release notes can be large and previously
                     // paid double (buffered String + decoded objects).
                     val release = json.decodeFromStream<GitHubRelease>(stream)
@@ -104,21 +109,23 @@ class GitHubReleasesApiImpl @Inject constructor(
                         supportedAbis,
                     )
 
-                    Result.success(
-                        AppUpdateInfo(
-                            latestVersion = tag,
-                            htmlUrl = release.htmlUrl.orEmpty(),
-                            releaseNotes = release.body.orEmpty(),
-                            isUpdateAvailable = isUpdateAvailable,
-                            downloadAssetUrl = chosen?.browserDownloadUrl,
-                            downloadAssetName = chosen?.name,
-                            releaseSize = chosen?.size ?: 0L,
-                        )
+                    AppUpdateInfo(
+                        latestVersion = tag,
+                        htmlUrl = release.htmlUrl.orEmpty(),
+                        releaseNotes = release.body.orEmpty(),
+                        isUpdateAvailable = isUpdateAvailable,
+                        downloadAssetUrl = chosen?.browserDownloadUrl,
+                        downloadAssetName = chosen?.name,
+                        releaseSize = chosen?.size ?: 0L,
                     )
                 }
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
+            }.let { Result.success(it) }
+        } catch (e: CancellationException) {
             throw e
+        } catch (e: ApiException) {
+            // Already classified by the chassis (HTTP status with Retry-After,
+            // or the empty-body arm) — pass through, never re-classify.
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(ApiException.fromNetwork(e, e.message ?: "GitHub request failed"))
         }

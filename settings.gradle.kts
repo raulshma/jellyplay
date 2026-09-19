@@ -20,8 +20,11 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
-        // KGP tool-distribution governance (wave 13C — the settings-level
-        // decision the wave-12D lanes deferred, see the wasmJsNodeTest notes
+        // KCEF (the desktop EPUB host) resolves jogamp gluegen/jogl through
+        // JogAmp's own repository — not mirrored on Maven Central.
+        maven { url = uri("https://jogamp.org/deployment/maven") }
+        // KGP tool-distribution governance — the settings-level
+        // decision the lanes deferred, see the wasmJsNodeTest notes
         // in shared/core/{model,ui}/build.gradle.kts): Kotlin's
         // kotlinWasmNodeJsSetup / kotlinWasmYarnSetup / kotlinWasmBinaryenSetup
         // tasks DOWNLOAD their tool archives through an ivy repository they
@@ -78,10 +81,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "JellyPlay"
 include(":app")
-include(":core:data")
-include(":core:ui")
-include(":core:notification")
-include(":core:testing")
 
 
 
@@ -103,7 +102,7 @@ include(":shared:core:data")
 include(":shared:core:ui")
 include(":shared:core:player-contract")
 
-// Feature conveyor (plan §Phase V3): one shared feature module per migration
+// Feature conveyor: one shared feature module per migration
 // PR, same shape as the shared core stack above.
 include(":shared:feature:search")
 include(":shared:feature:library")
@@ -150,12 +149,13 @@ include(":shared:feature:shell")
 
 include(":shared:feature:auth")
 include(":shared:feature:player-audio")
+include(":shared:feature:player-book")
 
 
-// Desktop shell (plan §Phase V1b)
+// Desktop shell
 include(":apps:desktop")
 
-// Web shell (plan §Phase W): wasmJs/browser app over the shared datastore
+// Web shell: wasmJs/browser app over the shared datastore
 // DI stack, with the W.1 Ktor API transport and W.4 Coil3 image engine
 // landed (three routes live: Requests, Upcoming Calendar, Seerr Detail).
 include(":apps:web")

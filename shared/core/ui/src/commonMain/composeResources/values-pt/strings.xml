@@ -48,6 +48,8 @@
     <string name="core_media_album">Álbum</string>
     <string name="core_media_artist">Artista</string>
     <string name="core_media_music_video">Videoclipe</string>
+    <string name="core_media_book">Livro</string>
+
     <string name="core_media_collection">Coleção</string>
     <string name="core_media_photo">Fotografia</string>
     <string name="core_media_photo_album">Álbum de fotos</string>
@@ -64,6 +66,8 @@
     <string name="core_media_album_plural">Álbuns</string>
     <string name="core_media_artist_plural">Artistas</string>
     <string name="core_media_music_video_plural">Videoclipes</string>
+    <string name="core_media_book_plural">Livros</string>
+
     <string name="core_media_collection_plural">Coleções</string>
     <string name="core_media_photo_plural">Fotografias</string>
     <string name="core_media_photo_album_plural">Álbuns de fotos</string>
@@ -245,4 +249,6 @@
     <string name="core_remove_download_title">Excluir download?</string>
     <string name="core_remove_download_message">Isso exclui a cópia baixada de “%1$s” deste dispositivo. A cópia no servidor não é afetada.</string>
     <string name="core_remove_download_confirm">Excluir</string>
+    <string name="core_ui_read_more">Ler mais</string>
+    <string name="core_ui_show_less">Mostrar menos</string>
 </resources>

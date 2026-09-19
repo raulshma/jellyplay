@@ -617,6 +617,19 @@ data class SeerrServiceTag(
     val label: String = "",
 )
 
+/**
+ * The sealed parent of the two `/service/{radarr,sonarr}/{id}` detail
+ * payloads: the fields mirror exactly (the endpoints differ only in path),
+ * with [SeerrSonarrServiceDetail] the sole divergence — its extra
+ * `languageProfiles` (a Sonarr-only concept). Lets the kind-paired
+ * Radarr/Sonarr repository + client members fold into one
+ * kind-parameterized member returning `Result<SeerrServiceDetail>`.
+ *
+ * Not `@Serializable` itself: each implementation keeps its own serializer
+ * (the wire shape is decoded per concrete endpoint, never polymorphically).
+ */
+sealed interface SeerrServiceDetail
+
 @Immutable
 @Serializable
 data class SeerrRadarrServiceDetail(
@@ -637,7 +650,7 @@ data class SeerrRadarrServiceDetail(
     val tags: List<SeerrServiceTag> = emptyList(),
     /** Nested server object from /service/ endpoint with default settings. */
     val server: SeerrServiceServerDefaults? = null,
-)
+) : SeerrServiceDetail
 
 @Immutable
 @Serializable
@@ -660,7 +673,7 @@ data class SeerrSonarrServiceDetail(
     /** Nested server object from /service/ endpoint with default settings. */
     val server: SeerrServiceServerDefaults? = null,
     val languageProfiles: List<SeerrServiceLanguageProfile> = emptyList(),
-)
+) : SeerrServiceDetail
 
 @Immutable
 @Serializable

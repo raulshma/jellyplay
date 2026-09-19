@@ -19,11 +19,11 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import kotlinx.coroutines.flow.Flow
 
 /**
- *: the web shell's [MediaRepository] binding — deliberately NARROW.
+ * the web shell's [MediaRepository] binding — deliberately NARROW.
  *
  * WHY NARROW: the production [com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl]
  * is Room-backed (offline caches, user-data writes, paging) and Room has no
- * wasm build — the whole MediaDetail cluster stays off web this wave. The ONE
+ * wasm build — the whole MediaDetail cluster stays off web for now. The ONE
  * member the web shell actually needs is [findItemByProviderId], the Seerr
  * detail screen's cross-link that resolves a TMDB/TVDB/IMDB id to a Jellyfin
  * item id; it is a pure network passthrough (JVM impl ~line 557 →

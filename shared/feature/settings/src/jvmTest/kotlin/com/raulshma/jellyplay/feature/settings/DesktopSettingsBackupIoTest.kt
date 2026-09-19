@@ -41,18 +41,18 @@ class DesktopSettingsBackupIoTest {
     }
 
     @Test
-    fun `export sink writes and import source reads back the same bytes`() = runTest {
+    fun `export payload writes and import payload reads back the same text`() = runTest {
         val io = DesktopSettingsBackupIo(httpCacheRoot = unusedRoot())
         val dir = createTempDirectory("jp-settings-io").toFile()
         val target = File(dir, "jellyplay-settings.json")
         val payload = """{"schemaVersion":2,"slices":{},"extras":{}}"""
 
-        io.openExportSink(target.toURI().toString())!!.use { sink ->
-            sink.write(payload.toByteArray())
-        }
-        val readBack = io.openImportSource(target.toURI().toString())!!.use { it.readBytes() }
+        // The seam narrowing moved the stream bodies INSIDE the actual —
+        // the round-trip now asserts on the payload text itself.
+        assertEquals(true, io.writeExportPayload(target.toURI().toString(), payload))
+        val readBack = io.readImportPayload(target.toURI().toString())
 
-        assertEquals(payload, readBack.decodeToString())
+        assertEquals(payload, readBack)
     }
 
     @Test
@@ -63,7 +63,7 @@ class DesktopSettingsBackupIoTest {
         // turns this into "Import failed: …" — same shape as Android's
         // unopenable contentResolver stream.
         assertFailsWith<IllegalArgumentException> {
-            io.openImportSource("content://com.android.providers.downloads.documents/42")
+            io.readImportPayload("content://com.android.providers.downloads.documents/42")
         }
     }
 

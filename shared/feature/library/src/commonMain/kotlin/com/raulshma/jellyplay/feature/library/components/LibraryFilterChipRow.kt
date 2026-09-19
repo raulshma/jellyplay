@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.filterableMediaTypes
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_all_filters
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_downloaded
@@ -241,7 +242,7 @@ fun MediaTypeFilterSheet(
 ) {
     MultiSelectFilterSheet(
         title = stringResource(Res.string.library_media_type),
-        options = MediaType.entries.filter { it != MediaType.UNKNOWN },
+        options = filterableMediaTypes,
         selected = current,
         label = { it.mediaTypeDisplayNamePlural() },
         onToggle = onToggle,

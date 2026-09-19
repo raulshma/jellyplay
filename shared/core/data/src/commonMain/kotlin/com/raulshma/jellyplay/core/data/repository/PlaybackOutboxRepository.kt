@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.Flow
  * unwatched) that could not reach the server. Unlike START/PROGRESS/STOP these
  * carry no session payload — only the target state — and are coalesced to one
  * row per item (latest intent wins).
+ *
+ * BOOK_PROGRESS is the reader's page-position report (no session, no pause
+ * state — books have no playback session). Coalesced per item like PROGRESS.
  */
 enum class PlaybackOutboxEventType {
     START,
@@ -20,6 +23,7 @@ enum class PlaybackOutboxEventType {
     UNPLAYED,
     FAVORITE,
     UNFAVORITE,
+    BOOK_PROGRESS,
 }
 
 /**
@@ -78,6 +82,14 @@ interface PlaybackOutboxRepository {
         sessionId: String,
         positionTicks: Long,
     )
+
+    /**
+     * Stages a reader page-position report for a book ([positionTicks] =
+     * pageIndex × 10,000). Coalesced per item exactly like PROGRESS — only the
+     * latest page matters — but kept in its own channel: a book never has a
+     * playback session, so a STOP can never supersede it.
+     */
+    suspend fun enqueueBookProgress(itemId: String, positionTicks: Long)
 
     /**
      * Stages a user-driven played-state flip (mark as watched / unwatched) for

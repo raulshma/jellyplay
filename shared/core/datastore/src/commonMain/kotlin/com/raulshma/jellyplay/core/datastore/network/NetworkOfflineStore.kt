@@ -5,24 +5,18 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -61,13 +55,8 @@ class NetworkOfflineStore constructor(
         val SELF_SIGNED_TRUST_HOSTS = stringSetPreferencesKey("self_signed_trust_hosts")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val networkOffline: StateFlow<NetworkOfflineSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, NetworkOfflineSlice())
+    val networkOffline: StateFlow<NetworkOfflineSlice> =
+        dataStore.sliceStateFlow(scope, seed = NetworkOfflineSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): NetworkOfflineSlice = NetworkOfflineSlice(
         manualOfflineEnabled = PreferenceCodec.readBool(prefs, Keys.MANUAL_OFFLINE_ENABLED, "manual_offline_enabled", false),
@@ -164,22 +153,20 @@ class NetworkOfflineStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. This is the
-     * network/offline subset of the legacy `DOWNLOADS_NETWORK` reset category —
-     * the download keys now belong to
-     * [com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore].
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. This is the network/offline subset of the
+     * legacy `DOWNLOADS_NETWORK` reset category — the download keys now belong
+     * to [com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore].
+     * [Keys.SELF_SIGNED_TRUST_HOSTS] is included: trust grants are
+     * security-relevant, so every reset lane that touches the network domain
+     * clears them (fail closed — a wiped grant simply re-prompts on the next
+     * TLS failure).
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.MAX_CACHE_SIZE_MB, Keys.AUTO_DELETE_CACHE,
-        Keys.MANUAL_OFFLINE_ENABLED, Keys.AUTO_OFFLINE_ENABLED,
-        Keys.MANUAL_BANDWIDTH_CAP, Keys.METERED_NETWORK_BEHAVIOR,
-        Keys.ADAPTIVE_BITRATE_ENABLED, Keys.DATA_SAVER_ENABLED,
-        Keys.VERBOSE_NETWORK_LOGGING, Keys.NETWORK_TIMEOUT_PRESET,
-        // Trust grants are security-relevant: every reset lane that touches
-        // the network domain clears them (fail closed — a wiped grant simply
-        // re-prompts on the next TLS failure).
-        Keys.SELF_SIGNED_TRUST_HOSTS,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -201,30 +188,6 @@ class NetworkOfflineStore constructor(
             Keys.SELF_SIGNED_TRUST_HOSTS,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the network/offline keys owned by
-     * this store from a decoded [UserPreferences]. The facade calls this (and
-     * every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.MAX_CACHE_SIZE_MB] = userPreferences.maxCacheSizeMb
-            it[Keys.AUTO_DELETE_CACHE] = userPreferences.autoDeleteCache
-            it[Keys.MANUAL_OFFLINE_ENABLED] = userPreferences.manualOfflineEnabled
-            it[Keys.AUTO_OFFLINE_ENABLED] = userPreferences.autoOfflineEnabled
-            it[Keys.MANUAL_BANDWIDTH_CAP] = userPreferences.manualBandwidthCap
-            it[Keys.METERED_NETWORK_BEHAVIOR] = userPreferences.meteredNetworkBehavior.name
-            it[Keys.ADAPTIVE_BITRATE_ENABLED] = userPreferences.adaptiveBitrateEnabled
-            it[Keys.DATA_SAVER_ENABLED] = userPreferences.dataSaverEnabled
-            it[Keys.VERBOSE_NETWORK_LOGGING] = userPreferences.verboseNetworkLogging
-            it[Keys.NETWORK_TIMEOUT_PRESET] = userPreferences.networkTimeoutPreset.name
-        }
     }
 
     /**

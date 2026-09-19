@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.feature.onboarding.SeerrEditActions
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.Res
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_seerr_api_key
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_seerr_api_key_placeholder
@@ -89,19 +90,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun SeerrStep(
     seerrPreferences: SeerrPreferences,
-    onSetServerUrl: (String) -> Unit,
-    onSetApiKey: (String) -> Unit,
-    onSetAuthMethod: (SeerrAuthMethod) -> Unit,
-    onSetUsername: (String) -> Unit,
-    onSetEmail: (String) -> Unit,
-    onSetPassword: (String) -> Unit,
-    onSetEnabled: (Boolean) -> Unit,
-    onSetSearchEnabled: (Boolean) -> Unit,
-    onSetRecommendationsEnabled: (Boolean) -> Unit,
-    onSetDiscoverEnabled: (Boolean) -> Unit,
-    onSetStreamingRegion: (String) -> Unit,
-    onSetDiscoverRegion: (String) -> Unit,
-    onDisconnect: () -> Unit,
+    actions: SeerrEditActions,
     modifier: Modifier = Modifier,
 ) {
     var serverUrl by remember(seerrPreferences.serverUrl) { mutableStateOf(seerrPreferences.serverUrl) }
@@ -137,7 +126,7 @@ fun SeerrStep(
                 value = serverUrl,
                 onValueChange = {
                     serverUrl = it
-                    onSetServerUrl(it.trim())
+                    actions.setServerUrl(it.trim())
                 },
                 label = { Text(stringResource(Res.string.onboarding_seerr_server_url)) },
                 placeholder = { Text(stringResource(Res.string.onboarding_seerr_server_url_placeholder)) },
@@ -155,7 +144,7 @@ fun SeerrStep(
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
                     onClick = {
                         authMethod = SeerrAuthMethod.API_KEY
-                        onSetAuthMethod(SeerrAuthMethod.API_KEY)
+                        actions.setAuthMethod(SeerrAuthMethod.API_KEY)
                     },
                     selected = authMethod == SeerrAuthMethod.API_KEY,
                     icon = {},
@@ -166,7 +155,7 @@ fun SeerrStep(
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
                     onClick = {
                         authMethod = SeerrAuthMethod.JELLYFIN
-                        onSetAuthMethod(SeerrAuthMethod.JELLYFIN)
+                        actions.setAuthMethod(SeerrAuthMethod.JELLYFIN)
                     },
                     selected = authMethod == SeerrAuthMethod.JELLYFIN,
                     icon = {},
@@ -177,7 +166,7 @@ fun SeerrStep(
                     shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                     onClick = {
                         authMethod = SeerrAuthMethod.LOCAL
-                        onSetAuthMethod(SeerrAuthMethod.LOCAL)
+                        actions.setAuthMethod(SeerrAuthMethod.LOCAL)
                     },
                     selected = authMethod == SeerrAuthMethod.LOCAL,
                     icon = {},
@@ -194,7 +183,7 @@ fun SeerrStep(
                         value = apiKey,
                         onValueChange = {
                             apiKey = it
-                            onSetApiKey(it.trim())
+                            actions.setApiKey(it.trim())
                         },
                         label = { Text(stringResource(Res.string.onboarding_seerr_api_key)) },
                         placeholder = { Text(stringResource(Res.string.onboarding_seerr_api_key_placeholder)) },
@@ -208,7 +197,7 @@ fun SeerrStep(
                         value = username,
                         onValueChange = {
                             username = it
-                            onSetUsername(it.trim())
+                            actions.setUsername(it.trim())
                         },
                         label = { Text(stringResource(Res.string.onboarding_seerr_username)) },
                         placeholder = { Text(stringResource(Res.string.onboarding_seerr_username_placeholder)) },
@@ -223,7 +212,7 @@ fun SeerrStep(
                         value = password,
                         onValueChange = {
                             password = it
-                            onSetPassword(it)
+                            actions.setPassword(it)
                         },
                         label = { Text(stringResource(Res.string.onboarding_seerr_password)) },
                         placeholder = { Text(stringResource(Res.string.onboarding_seerr_password_placeholder_jellyfin)) },
@@ -237,7 +226,7 @@ fun SeerrStep(
                         value = email,
                         onValueChange = {
                             email = it
-                            onSetEmail(it.trim())
+                            actions.setEmail(it.trim())
                         },
                         label = { Text(stringResource(Res.string.onboarding_seerr_email)) },
                         placeholder = { Text(stringResource(Res.string.onboarding_seerr_email_placeholder)) },
@@ -251,7 +240,7 @@ fun SeerrStep(
                         value = password,
                         onValueChange = {
                             password = it
-                            onSetPassword(it)
+                            actions.setPassword(it)
                         },
                         label = { Text(stringResource(Res.string.onboarding_seerr_password)) },
                         placeholder = { Text(stringResource(Res.string.onboarding_seerr_password_placeholder_seerr)) },
@@ -284,7 +273,7 @@ fun SeerrStep(
                     Spacer(Modifier.weight(1f))
                     OutlinedButton(
                         onClick = {
-                            onDisconnect()
+                            actions.disconnect()
                             serverUrl = ""
                             apiKey = ""
                             username = ""
@@ -318,7 +307,7 @@ fun SeerrStep(
                     title = stringResource(Res.string.onboarding_seerr_enable_integration),
                     subtitle = stringResource(Res.string.onboarding_seerr_master_switch),
                     checked = seerrPreferences.enabled,
-                    onCheckedChange = onSetEnabled,
+                    onCheckedChange = actions::setEnabled,
                 )
 
                 AnimatedVisibility(
@@ -331,19 +320,19 @@ fun SeerrStep(
                             title = stringResource(Res.string.onboarding_seerr_search_integration),
                             subtitle = stringResource(Res.string.onboarding_seerr_search_subtitle),
                             checked = seerrPreferences.searchEnabled,
-                            onCheckedChange = onSetSearchEnabled,
+                            onCheckedChange = actions::setSearchEnabled,
                         )
                         OnboardingToggleRow(
                             title = stringResource(Res.string.onboarding_seerr_recommendations),
                             subtitle = stringResource(Res.string.onboarding_seerr_recommendations_subtitle),
                             checked = seerrPreferences.recommendationsEnabled,
-                            onCheckedChange = onSetRecommendationsEnabled,
+                            onCheckedChange = actions::setRecommendationsEnabled,
                         )
                         OnboardingToggleRow(
                             title = stringResource(Res.string.onboarding_seerr_discover),
                             subtitle = stringResource(Res.string.onboarding_seerr_discover_subtitle),
                             checked = seerrPreferences.discoverEnabled,
-                            onCheckedChange = onSetDiscoverEnabled,
+                            onCheckedChange = actions::setDiscoverEnabled,
                         )
                     }
                 }
@@ -365,14 +354,14 @@ fun SeerrStep(
                         label = stringResource(Res.string.onboarding_seerr_streaming_region),
                         selected = seerrPreferences.streamingRegion,
                         options = SeerrRegions,
-                        onSelect = onSetStreamingRegion,
+                        onSelect = actions::setStreamingRegion,
                         modifier = Modifier.weight(1f),
                     )
                     RegionChip(
                         label = stringResource(Res.string.onboarding_seerr_discover),
                         selected = seerrPreferences.discoverRegion,
                         options = SeerrRegions,
-                        onSelect = onSetDiscoverRegion,
+                        onSelect = actions::setDiscoverRegion,
                         modifier = Modifier.weight(1f),
                     )
                 }

@@ -109,16 +109,9 @@ import org.koin.compose.viewmodel.koinViewModel
 
 // ─── Filter Model ──────────────────────────────────────────────────────────
 
-private sealed interface ShortcutFilter {
-    val key: String
-
-    data object All : ShortcutFilter {
-        override val key: String = "all"
-    }
-    data class Category(val category: ShortcutCategory) : ShortcutFilter {
-        override val key: String get() = category.name
-    }
-}
+// The filter model itself ([ShortcutFilter]) lives in ShortcutListPolicy.kt
+// beside this screen — the display fold needs it Compose-free. Only the
+// rendering extensions (label/icon) stay here.
 
 @Composable
 private fun ShortcutFilter.label(): String = when (this) {
@@ -200,38 +193,14 @@ fun ShortcutsScreen(
     }
 
     val filteredItemsByQuery = remember(labels, searchQuery) {
-        if (searchQuery.isBlank()) null
-        // Guard: while the label map hasn't resolved yet a restored non-blank
-        // query (rememberSaveable survives process restore) would match zero
-        // labels and flash a false "No results" state — treat it as unfiltered
-        // until the produceState block above lands its first value.
-        else if (labels.isEmpty()) null
-        else {
-            val q = searchQuery.trim().lowercase()
-            allItems.filter { item ->
-                val (title, desc) = labels[item] ?: ("" to "")
-                title.lowercase().contains(q) || desc.lowercase().contains(q)
-            }
-        }
+        // Null = unfiltered: blank query, OR the label map hasn't resolved
+        // yet (a restored non-blank query would match zero labels and flash
+        // a false "No results" — see ShortcutListPolicy.filteredByQuery).
+        ShortcutListPolicy.filteredByQuery(allItems, labels, searchQuery)
     }
 
     val displayedCategories = remember(state.categories, activeFilter, filteredItemsByQuery) {
-        if (filteredItemsByQuery != null) {
-            // When search is active, group filtered items by category
-            filteredItemsByQuery
-                .filter { item ->
-                    when (val f = activeFilter) {
-                        ShortcutFilter.All -> true
-                        is ShortcutFilter.Category -> item.category == f.category
-                    }
-                }
-                .groupBy { it.category }
-        } else {
-            when (val f = activeFilter) {
-                ShortcutFilter.All -> state.categories
-                is ShortcutFilter.Category -> state.categories.filterKeys { it == f.category }
-            }
-        }
+        ShortcutListPolicy.displayedCategories(state.categories, activeFilter, filteredItemsByQuery)
     }
 
     JellyPlayBackHandler(enabled = isSearchActive || searchQuery.isNotEmpty() || activeFilter != ShortcutFilter.All) {
@@ -318,12 +287,12 @@ fun ShortcutsScreen(
             }
 
             // Empty State
-            if (displayedCategories.isEmpty() || displayedCategories.values.all { it.isEmpty() }) {
+            if (ShortcutListPolicy.isListEmpty(displayedCategories)) {
                 item(key = "empty_state") {
-                    if (searchQuery.isNotBlank()) {
-                        ScreenEmptyState(
+                    when (val emptyState = ShortcutListPolicy.emptyStateFor(searchQuery)) {
+                        is ShortcutListPolicy.ShortcutEmptyState.NoResults -> ScreenEmptyState(
                             icon = Tabler.Outline.Search,
-                            title = stringResource(Res.string.shortcuts_search_no_results, searchQuery),
+                            title = stringResource(Res.string.shortcuts_search_no_results, emptyState.query),
                             description = stringResource(Res.string.shortcuts_empty_description),
                             actionLabel = stringResource(Res.string.shortcuts_search_clear),
                             onAction = { searchQuery = "" },
@@ -331,8 +300,8 @@ fun ShortcutsScreen(
                                 .fillMaxWidth()
                                 .height(320.dp),
                         )
-                    } else {
-                        ScreenEmptyState(
+
+                        ShortcutListPolicy.ShortcutEmptyState.NoShortcuts -> ScreenEmptyState(
                             icon = Tabler.Outline.Apps,
                             title = stringResource(Res.string.shortcuts_empty_title),
                             description = stringResource(Res.string.shortcuts_empty_description),

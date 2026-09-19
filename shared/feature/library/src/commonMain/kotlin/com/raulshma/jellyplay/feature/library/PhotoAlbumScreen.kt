@@ -171,7 +171,7 @@ fun PhotoAlbumScreen(
                     photos.loadState.refresh is LoadState.Error -> {
                         ErrorScreen(
                             message = (photos.loadState.refresh as LoadState.Error)
-                                .error.localizedMessage
+                                .error.message
                                 ?: stringResource(Res.string.library_failed_to_load_photos),
                             onRetry = { photos.refresh() },
                         )
@@ -229,7 +229,7 @@ fun PhotoAlbumScreen(
                     }
                     is LoadState.Error -> {
                         Text(
-                            text = appendState.error.localizedMessage
+                            text = appendState.error.message
                                 ?: stringResource(Res.string.library_failed_to_load_more),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,

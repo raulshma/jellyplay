@@ -51,11 +51,16 @@ internal sealed interface HomeSurface {
      * offline feed) plus the winning render source carried WHOLE — the
      * screen's hero, banner and quick-action facts are `is Offline` /
      * `== Explicit` / `== Implicit` reads of this one value, so a new
-     * offline flavour adds no field here.
+     * offline flavour adds no field here. [bookProgressFractions] is the
+     * same fold for the CR progress bars: whichever map belongs to the
+     * carried feed (the refresher's online decodes for an online feed, the
+     * gate's offline decodes for an offline one — FallbackPending included,
+     * its feed is offline), so no render site re-derives the pick.
      */
     data class Content(
         val feed: HomeFeed,
         val renderSource: HomeRenderSource,
+        val bookProgressFractions: Map<String, Float>,
     ) : HomeSurface
 }
 
@@ -78,8 +83,8 @@ internal fun homeSurface(
     state.homeMode == HomeMode.MUSIC &&
         state.renderSource != HomeRenderSource.Offline.Explicit -> HomeSurface.Music
 
-    else -> HomeSurface.Content(
-        feed = when (state.renderSource) {
+    else -> {
+        val feed = when (state.renderSource) {
             HomeRenderSource.Online -> HomeFeed.Online(
                 sections = state.sections,
                 isLoading = state.isLoading,
@@ -88,7 +93,19 @@ internal fun homeSurface(
             )
             HomeRenderSource.FallbackPending -> HomeFeed.Offline(offlineContent, isLoading = true)
             is HomeRenderSource.Offline -> HomeFeed.Offline(offlineContent)
-        },
-        renderSource = state.renderSource,
-    )
+        }
+        HomeSurface.Content(
+            feed = feed,
+            renderSource = state.renderSource,
+            // The fractions map keyed on the feed, not the mode: the
+            // FallbackPending window renders the offline feed, so it reads
+            // the gate's decodes even while the offline-mode mirror still
+            // says ONLINE.
+            bookProgressFractions = if (feed is HomeFeed.Offline) {
+                state.offlineBookProgressFractions
+            } else {
+                state.bookProgressFractions
+            },
+        )
+    }
 }

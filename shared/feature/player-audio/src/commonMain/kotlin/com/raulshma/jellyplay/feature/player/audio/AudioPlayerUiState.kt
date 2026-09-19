@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.player.audio
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
-import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -16,8 +15,12 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
  * Single source of truth for the audio player screen, following the project's
  * `StateFlow<UiState>` convention. Cohesive low-frequency fields are grouped into
  * nested [Immutable] blocks so related concerns update atomically and can be passed
- * whole to the composables/sheets that own them (e.g. [effects] feeds [AudioEffectsState]
- * straight to the effects sheet, decoupling it from the ViewModel).
+ * whole to the composables/sheets that own them (e.g. [LyricsState] feeds the
+ * lyrics sheets, decoupling them from the ViewModel).
+ *
+ * The audio-effects slice deliberately does NOT live here: [AudioEffectsState]
+ * is owned by [AudioEffectsController]'s `EffectsCommandCore` and re-exposed by
+ * the ViewModel as `effectsState` (the `SubtitlePreviewController` precedent).
  *
  * The high-frequency [AudioPlayerViewModel.currentPosition] is intentionally kept
  * *outside* this object so the 250ms playback tick triggers a narrow recomposition
@@ -38,18 +41,22 @@ data class AudioPlayerUiState(
     val playbackError: String? = null,
     val isLoading: Boolean = false,
     val crossfadeDurationMs: Long = 0L,
-    val effects: AudioEffectsState = AudioEffectsState(),
     val lyrics: LyricsState = LyricsState(),
     val sleepTimer: SleepTimerState = SleepTimerState(),
     val queue: QueueState = QueueState(),
-    // "Add to playlist" picker.
-    val showPlaylistPicker: Boolean = false,
-    val playlists: List<Playlist> = emptyList(),
-    val isLoadingPlaylists: Boolean = false,
-    val isAddingToPlaylist: Boolean = false,
-    val playlistMessage: String? = null,
+    // The "Add to playlist" picker lives on the ViewModel's
+    // [PlaylistPickerStateHolder] (its own StateFlow snapshot), not here.
 )
 
+/**
+ * The audio-effects slice owned by [AudioEffectsController] (via its
+ * `EffectsCommandCore`): the equalizer family, the boost/night-mode/virtualizer
+ * toggles and strengths, reverb, L/R balance, pitch, auto-EQ, and the
+ * replay-gain pair. The flow-backed fields mirror the manager's flows; the
+ * flow-less strength fields mirror through the command legs and playback
+ * seeding. Kept module-local and [Immutable] so the effects sheet receives it
+ * whole.
+ */
 @Immutable
 data class AudioEffectsState(
     val equalizerEnabled: Boolean = false,

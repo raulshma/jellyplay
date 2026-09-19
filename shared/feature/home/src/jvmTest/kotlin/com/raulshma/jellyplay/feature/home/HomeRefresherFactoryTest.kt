@@ -3,10 +3,10 @@ package com.raulshma.jellyplay.feature.home
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import kotlin.test.Test
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -107,7 +107,7 @@ class HomeRefresherFactoryTest {
 
     private fun TestScope.createRefresher(): HomeRefresher {
         val factory = HomeRefresherFactory(
-            timeSource = fakeTimeSource,
+            clock = fakeTimeSource,
             mediaRepository = mediaRepository,
             seerrRepository = seerrRepository,
             arrRepository = arrRepository,
@@ -116,6 +116,7 @@ class HomeRefresherFactoryTest {
             continueWatchingBroadcaster = continueWatchingBroadcaster,
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
+            bookTocCacheRepository = NoopBookTocCacheRepository(),
         )
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         refresherScope = scope
@@ -171,9 +172,10 @@ class HomeRefresherFactoryTest {
         assertEquals(OfflineMode.ONLINE, refresher.state.value.offlineMode)
     }
 
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+    // HomeClock seam fake: the epoch-millis read drives the
+        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
+        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
         override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.of(2026, 1, 1)
+        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
     }
 }

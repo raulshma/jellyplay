@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
@@ -12,7 +11,7 @@ import kotlinx.coroutines.withContext
 class AboutViewModel(
     private val appMetaProvider: AppMetaProvider,
     private val logCollector: LogCollector,
-    private val adminRepository: AdminRepository,
+    private val serverAdminActions: ServerAdminActions,
     private val authRepository: AuthRepository,
     private val experimentalStore: ExperimentalStore,
 ) : JellyPlayViewModel() {
@@ -67,7 +66,7 @@ class AboutViewModel(
             try {
                 val server = authRepository.currentServer.first()
                 serverAddress = server?.address
-                val systemInfo = adminRepository.getSystemInfo().getOrNull()
+                val systemInfo = if (serverAdminActions.isSupported) serverAdminActions.getSystemInfo().getOrNull() else null
                 serverName = systemInfo?.serverName
                 serverVersion = systemInfo?.version
             } catch (_: Exception) {
@@ -81,7 +80,7 @@ class AboutViewModel(
         launch {
             isCollectingLogs = true
             try {
-                val uri = withContext(Dispatchers.IO) {
+                val uri = withContext(settingsIoDispatcher) {
                     logCollector.collectLogs(appVersion, buildType, serverAddress)
                 }
                 onResult(uri)

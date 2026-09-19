@@ -76,6 +76,7 @@
     <string name="downloads_filter_all">All</string>
     <string name="downloads_filter_videos">Videos</string>
     <string name="downloads_filter_music">Music</string>
+    <string name="downloads_filter_books">Books</string>
 
     <!-- Offline download resync -->
     <string name="downloads_resync">Resync</string>

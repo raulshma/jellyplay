@@ -97,9 +97,22 @@ open class WasmApiSupport(
         )
     }
 
-    /** `X-Emby-Token` auth — the raw-token style the JVM OkHttp hand-built requests use. */
-    protected fun HttpRequestBuilder.attachEmbyToken(accessToken: String) {
-        header("X-Emby-Token", accessToken)
+    /**
+     * Authenticated GET returning the raw body text; null on ANY failure
+     * (intro/credit timestamps, remote-subtitle search, the
+     * playback-reporting availability probe) — failure is "no data", never an
+     * error. The wasm twin of the JVM requester's `getBodyText`; same
+     * `Authorization` header as every other member (the legacy
+     * `X-Emby-Token` this used to send is gated behind
+     * `EnableLegacyAuthorization` on Jellyfin 12 servers and 401'd there).
+     */
+    protected suspend fun getBodyText(url: String, accessToken: String): String? = try {
+        val response: HttpResponse = httpClient.get(url) { attachAuthorization(accessToken) }
+        if (response.status.isSuccess()) response.bodyAsText() else null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
     }
 
     /**
@@ -170,21 +183,6 @@ open class WasmApiSupport(
     protected suspend fun getBytes(url: String, accessToken: String?): ByteArray? = try {
         val response: HttpResponse = httpClient.get(url) { attachAuthorization(accessToken) }
         if (response.status.isSuccess()) response.bodyAsBytes() else null
-    } catch (e: CancellationException) {
-        throw e
-    } catch (_: Exception) {
-        null
-    }
-
-    /**
-     * Authenticated GET (`X-Emby-Token` style) whose BODY TEXT is needed;
-     * null on non-2xx or transport failure. The JVM hand-built OkHttp calls
-     * (intro/credit timestamps, remote-subtitle search) treat failure as
-     * "no data", never as an error.
-     */
-    protected suspend fun getBodyTextWithEmbyToken(url: String, accessToken: String): String? = try {
-        val response: HttpResponse = httpClient.get(url) { attachEmbyToken(accessToken) }
-        if (response.status.isSuccess()) response.bodyAsText() else null
     } catch (e: CancellationException) {
         throw e
     } catch (_: Exception) {

@@ -46,6 +46,17 @@ kotlin {
                 implementation(libs.jb.compose.ui)
                 implementation(libs.jb.compose.foundation)
                 implementation(libs.jb.compose.material3)
+                // (WebSeerr probe re-home): the compose-resources RUNTIME is
+                // needed directly — the pane resolves the settings module's
+                // localized probe fallback texts at render time through the
+                // public ConnectionProbe.FallbackText.resource() +
+                // stringResource, and the runtime reaches this module's
+                // compile classpath only as a transitive implementation dep
+                // of the JB distribution otherwise (same leak shape as the
+                // ktor-client-js edge below). The settings module's generated
+                // Res object stays internal, so no generated-resource import
+                // crosses the module boundary — only the runtime.
+                implementation(libs.jb.compose.resources)
 
                 //  stack: model (shared value types),
                 // designsystem (JellyPlayTheme), ui (shared
@@ -55,16 +66,20 @@ kotlin {
                 // (networkWasmModule — .1 chunk 3: AtomicSessionState
                 // + WasmClientIdentity + the three Ktor wasm clients +
                 // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
-                // Deliberately absent: paging-compose (spike w-10C §1 proves
+                // Deliberately absent: paging-compose (§1 proves
                 // its 3.5.0 wasm klibs exist, but no consuming web module
-                // needs LazyPagingItems yet) and database (no Room on wasm
-                // v1 — core:data's wasm slice is the Room-free repository
-                // layer, wired below).
+                // needs LazyPagingItems yet). the database target joined: web gets
+                // the real Room database (OPFS-backed via the vendored
+                // webworker/ npm package riding this module's wasmJsMain) and
+                // Main.kt registers webDatabaseModule alongside the rest of
+                // the DI stack — nothing on web consumes the DAOs yet; the
+                // edge exists so the wiring compiles and ships.
                 implementation(project(":shared:core:model"))
                 implementation(project(":shared:core:designsystem"))
                 implementation(project(":shared:core:ui"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
+                implementation(project(":shared:core:database"))
                 // dataWasmModule (the requests repo slice —
                 // SeerrRepository/ArrRepository over the wasm clients) is
                 // imported into Main.kt's startKoin, hence the direct edge.
@@ -87,7 +102,43 @@ kotlin {
                 // detailsModule + webDetailsPlatformModule (the narrow
                 // MediaRepository for the SeerrDetail cross-link).
                 implementation(project(":shared:feature:details"))
-                // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
+                // the third and fourth shared feature screens —
+                // WebAppRoot's `entry<Route.ArrQueue>` (arrqueueModule; the
+                // ArrRepository binding already lives in dataWasmModule) and
+                // `entry<Route.Onboarding>` (onboardingModule; datastore
+                // stores resolve from datastoreCommonModule/webDatastoreModule).
+                // shortcuts + auth also gained wasmJs targets but stay
+                // unrouted/unregistered on web for now (the auth feature's
+                // screens duplicate what the landing pane covers; the
+                // shortcuts grid's targets are mostly non-wasm; the web
+                // landing drives sign-in through the shared AuthRepository
+                // — dataWasmModule's WasmAuthRepository — not the feature).
+                implementation(project(":shared:feature:arrqueue"))
+                implementation(project(":shared:feature:onboarding"))
+                // the settings feature's first web-routed slice —
+                // WebAppRoot's entry<Route.ArrSettings> composes the shared
+                // ArrSettingsScreen and Main.kt registers settingsModule (the
+                // ArrSettingsViewModel closure — ArrRepository/ArrPreferences
+                // Store/ArrSecureCredentialsStore — resolves from
+                // dataWasmModule + datastoreCommonModule/webDatastoreModule).
+                // The settings ROOT (Route.Settings) stays unrouted on web:
+                // the wasm AuthRepository binding exists (dataWasmModule's
+                // WasmAuthRepository — the session-seam port), but the
+                // settings-root VM closure needs more than the repository
+                // (SettingsBackupIo/AppMetaProvider/LogCollector have no
+                // wasm actuals), so every settings-root/MediaRepository-backed
+                // VM def settingsModule registers stays latent exactly like
+                // detailsModule's MediaDetail cluster. player-audio also
+                // gained a wasmJs target but gets NO edge here (nothing
+                // on web consumes it): all four playback/cast ctor seams of
+                // AudioPlayerViewModel (AudioQueueManager/AudioEffectsManager/
+                // AudioPlayerEngine/AudioPlayerCast) lack wasm bindings — the
+                // only impls are the Android media3 graph and the desktop
+                // mpv app-layer manager — so a web route would need a real
+                // wasm audio engine first (shortcuts/auth precedent:
+                // target-only stays undepended-on).
+                implementation(project(":shared:feature:settings"))
+                // (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
                 // web video engine implements. The engine class is landed and
                 // browser-verified through the WebDiagnostics harness; the
@@ -177,7 +228,7 @@ kotlin {
 }
 
 // google's androidx.navigation3:navigation3-ui ships NO web targets at all
-// (android AAR + jvm/linux stubs only — spike w-10C §1), so every wasmJs
+// (android AAR + jvm/linux stubs only — §1), so every wasmJs
 // configuration of this module — including ones that only pull
 // :shared:core:ui and its transitive google -ui leaf — fails dependency
 // resolution unless it points at JetBrains' fork of the same release line:
@@ -185,12 +236,36 @@ kotlin {
 // The fork's POM depends on google's runtime artifact, so only -ui is
 // swapped. Graph-wide shape mirrored from apps/desktop/build.gradle.kts
 // (its configurations.all block); :shared:core:ui keeps the same swap scoped
-// to its own wasmJs-named configurations (spike w-10C S1/R2).
+// to its own wasmJs-named configurations.
 configurations.all {
     resolutionStrategy.dependencySubstitution {
         substitute(module("androidx.navigation3:navigation3-ui"))
             .using(module(libs.jb.navigation3.ui.get().toString()))
             .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+    }
+}
+
+// (settings on web): aboutlibraries-core 15.0.4's wasm klib is a Kotlin
+// 2.4.0 build (ABI 2.4.0) that this repo's 2.3.21 compiler cannot load, and
+// it drags kotlin-stdlib-wasm-js:2.4.0 in whose rejection blanks the whole
+// stdlib during the whole-program klib link ("Built-in class kotlin.Any is
+// not found" — caught by wasmJsBrowserDistribution's productionExecutable
+// link; the development compile lane only WARNS on the ABI mismatch, so CI's
+// :apps:web:compileKotlinWasmJs stayed green through it). shared/feature/
+// settings already forces 14.2.1 on its own wasmJs configurations (same
+// rationale, verbatim), but a resolutionStrategy force does NOT travel
+// through project-variant metadata — apps/web resolves the consumption graph
+// itself, so the force is duplicated consumer-side (exactly the shape of the
+// navigation3-ui substitution above, which core/ui also carries its own copy
+// of). 14.2.1's wasm klib is a Kotlin 2.3.20 build (ABI 2.3.0, consumable);
+// the Library/License entity API the Licenses path reads is unchanged
+// between the two lines. Scoped to wasmJs-named configurations so any future
+// non-wasm configuration keeps the repo-wide 15.0.4 pin.
+configurations.configureEach {
+    if (name.lowercase().contains("wasmjs")) {
+        resolutionStrategy {
+            force("com.mikepenz:aboutlibraries-core:14.2.1")
+        }
     }
 }
 

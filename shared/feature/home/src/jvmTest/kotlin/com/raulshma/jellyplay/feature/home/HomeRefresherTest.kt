@@ -2,15 +2,18 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCache
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import com.raulshma.jellyplay.core.model.BookFormat
+import com.raulshma.jellyplay.core.model.BookTocEntry
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -34,6 +37,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -117,6 +121,20 @@ class HomeRefresherTest {
     private var directArrEnabled = false
 
     /**
+     * Fake TOC cache behind the CR fraction decode: returns a fixed page
+     * count for the ids it knows (default none — the decode's percent
+     * fallback / skip paths need no rows).
+     */
+    private var tocPageCounts: Map<String, Int> = emptyMap()
+    private val bookTocCacheRepository = object : BookTocCacheRepository {
+        override fun observeToc(itemId: String): Flow<BookTocCache?> = flowOf(null)
+        override suspend fun getToc(itemId: String): BookTocCache? =
+            tocPageCounts[itemId]?.let { BookTocCache(itemId, BookFormat.PDF, pageCount = it, entries = emptyList(), updatedAt = 0L) }
+        override suspend fun putToc(itemId: String, format: BookFormat, pageCount: Int, entries: List<BookTocEntry>) = Unit
+        override suspend fun deleteToc(itemId: String) = Unit
+    }
+
+    /**
      * Fake for the refresher's `awaitOutboxDrained` seam: counts invocations
      * and (while [drainGate] is set) parks, so GoingOnline tests can observe
      * the handshake mid-flight — loader up, fetch not yet started.
@@ -162,7 +180,7 @@ class HomeRefresherTest {
         refresherScope = scope
         return HomeRefresher(
             scope = scope,
-            timeSource = fakeTimeSource,
+            clock = fakeTimeSource,
             mediaRepository = mediaRepository,
             seerrRepository = seerrRepository,
             arrRepository = arrRepository,
@@ -193,6 +211,7 @@ class HomeRefresherTest {
             discoverEnabledProvider = { false },
             directArrEnabledProvider = { directArrEnabled },
             androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
+            bookTocCacheRepository = bookTocCacheRepository,
         ).also { refresher = it }
     }
 
@@ -803,8 +822,20 @@ class HomeRefresherTest {
 
     @Test
     fun userSwitched_paintsCachedSnapshotWhileReplacementFetchRuns() = runTest {
+        // A cached CR row with a TOC-known page count: the SWR paint must
+        // carry its decoded fractions alongside the sections (one emission),
+        // not percent-fallback bars until the fetch lands.
+        tocPageCounts = mapOf("book1" to 200)
         coEvery { mediaRepository.getCachedHomeSections(any()) } returns HomeSectionsResult(
-            sections = listOf(section(HomeSectionType.LATEST_MEDIA, items = listOf(item("cached1")))),
+            sections = listOf(
+                section(HomeSectionType.LATEST_MEDIA, items = listOf(item("cached1"))),
+                section(
+                    HomeSectionType.CONTINUE_READING,
+                    items = listOf(
+                        item("book1").copy(mediaType = MediaType.BOOK, playbackPositionTicks = 50_000L),
+                    ),
+                ),
+            ),
         )
         val fetchGate = CompletableDeferred<Unit>()
         coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers {
@@ -820,8 +851,10 @@ class HomeRefresherTest {
         // Stale-while-revalidate paint: the persisted snapshot is on screen
         // with NO full-screen loader while the network fetch is still parked.
         assertFalse(refresher.state.value.isLoading)
-        assertEquals(listOf("cached1"), refresher.state.value.sections.single().items.map { it.id })
+        assertEquals(listOf("cached1"), refresher.state.value.sections.first { it.type == HomeSectionType.LATEST_MEDIA }.items.map { it.id })
         assertNull(refresher.state.value.error)
+        // 50k ticks = page 5 of 200 → (5+1)/200 — the exact TOC fraction.
+        assertEquals(mapOf("book1" to 0.03f), refresher.state.value.bookProgressFractions)
 
         fetchGate.complete(Unit)
         runCurrent()
@@ -893,9 +926,10 @@ class HomeRefresherTest {
      * periodic-refresh and TTL gates stay on one side of their thresholds;
      * tests move [nowMs] to deliberately cross one.
      */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+    // HomeClock seam fake: the epoch-millis read drives the
+        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
+        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
         override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
     }
 }

@@ -512,6 +512,23 @@ internal val PlaybackSettingsSearchItems = listOf(
 )
 
 /**
+ * The player group's per-id declared row admissions — the single gate both
+ * `playbackPlayerScreenRowTotal` and PlaybackSettingsScreen's emission `if`s
+ * read: the capability rows drop where the platform cannot back them, the
+ * two TV rows ride the TV form factor alone (they are declared `isAdvanced`
+ * yet the count has always admitted them on `isTv` only — the shipped
+ * semantics, preserved verbatim).
+ */
+internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> = mapOf(
+    "seek_duration" to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    "orientation" to RowAdmission.Platform(RowAdmissionCapability.ScreenOrientation),
+    "gestures" to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    "gesture_indicator_side" to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    "android_tv_watch_next" to RowAdmission.Tv,
+    "tv_zoom_mode" to RowAdmission.Tv,
+)
+
+/**
  * Settings-search items for the "Advanced Video" group of PlaybackSettingsScreen
  * (dialogue boost, decoder, passthrough, refresh rate, streaming quality, live
  * stream option, audio delay). Split out of [PlaybackSettingsSearchItems] along
@@ -599,6 +616,15 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         icon = Tabler.Outline.DeviceTv,
         isAdvanced = true
     )
+)
+
+/**
+ * The advanced-video group's per-id declared row admissions — the strength
+ * row only renders while its parent toggle is on (`playbackAdvancedVideo-
+ * ScreenRowTotal` and both screens' emission `if`s read this one gate).
+ */
+internal val PlaybackAdvancedVideoRowAdmissions: Map<String, RowAdmission> = mapOf(
+    "dialogue_boost_strength" to RowAdmission.WhenOn("dialogue_boost"),
 )
 
 /**

@@ -58,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndica
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -119,14 +120,14 @@ fun ServerManagementScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
 
     var expandedServerId by remember { mutableStateOf<String?>(null) }
     var showAddAddressFor by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(viewModel.addressOperationMessage) {
         viewModel.addressOperationMessage?.let { msg ->
-            messenger?.info(msg)
+            bus.info(msg)
             viewModel.clearAddressOperationMessage()
         }
     }

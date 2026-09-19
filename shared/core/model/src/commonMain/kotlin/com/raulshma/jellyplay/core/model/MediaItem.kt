@@ -20,8 +20,22 @@ enum class MediaType {
     PHOTO_FOLDER,
     LIVE_TV,
     CHANNEL,
+    BOOK,
+    // Generic wire "Folder" — a container folder inside a library (e.g. a
+    // series/volume folder in a books library; the server has no BookFolder
+    // kind, plain folders serialize as "Folder"). Not playable itself: item
+    // clicks drill into its children (resolveItemDestination).
+    FOLDER,
     UNKNOWN,
 }
+
+/**
+ * The content types offered as media-type filter chips. FOLDER is a
+ * container, not a content type, and UNKNOWN names nothing — neither is ever
+ * offered as a filter (library chips, library sheet, search sheet).
+ */
+val filterableMediaTypes: List<MediaType> =
+    MediaType.entries.filter { it != MediaType.UNKNOWN && it != MediaType.FOLDER }
 
 val MediaType.isAudioType: Boolean
     get() = this == MediaType.AUDIO || this == MediaType.MUSIC || this == MediaType.ALBUM || this == MediaType.ARTIST

@@ -26,7 +26,7 @@ class SubtitleFileNamesTest {
 
     @Test
     fun `safe release name passes through unchanged`() {
-        // A-Za-z0-9 . _ - are the whitelist; a typical scene-style release
+        // A-Za-z0-9. _ - are the whitelist; a typical scene-style release
         // already lives inside it.
         assertEquals(
             "Movie.2023.1080p.BluRay.x264-GRP.srt",

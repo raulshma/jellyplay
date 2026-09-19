@@ -294,4 +294,35 @@ class AuthApiClientImplTest {
         assertTrue(result.isFailure)
         io.mockk.coVerify(exactly = 3) { probeRouter.probe(any()) }
     }
+
+    @Test
+    fun `connectToServer persists the resolved address of a legacy emby address`() = runTest {
+        // Jellyfin 12 removed the /emby route prefix; the router's probe
+        // retries the bare address and reports it back. The adopted server
+        // must carry the RESOLVED address so the next connect and session
+        // restore probe the working address directly.
+        val probeRouter = mockk<ServerAddressRouter>(relaxed = true)
+        every { probeRouter.activeAddress } returns MutableStateFlow(null)
+        coEvery { probeRouter.probe("https://legacy.example.com/emby") } returns AddressProbeResult(
+            reachable = true,
+            serverId = "server-3",
+            serverName = "Legacy",
+            resolvedAddress = "https://legacy.example.com",
+        )
+        val probeEngine = JellyfinApiEngine(
+            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
+            deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
+            addressRouter = probeRouter,
+        )
+        val client = AuthApiClientImpl(
+            engine = probeEngine,
+            addressRouter = probeRouter,
+        )
+
+        val result = client.connectToServer("legacy.example.com/emby")
+
+        assertEquals("https://legacy.example.com", result.getOrNull()?.address)
+        assertEquals("https://legacy.example.com", probeEngine.currentServer.value?.address)
+    }
 }

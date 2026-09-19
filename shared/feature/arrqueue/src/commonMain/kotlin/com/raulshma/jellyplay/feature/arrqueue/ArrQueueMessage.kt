@@ -5,10 +5,10 @@ import org.jetbrains.compose.resources.StringResource
 
 /**
  * One-shot action feedback emitted by [ArrQueueViewModel] and rendered by
- * [ArrQueueScreen] through the ArrQueueMessenger seam — the commonMain-safe
- * replacement for the legacy `context.getString(...)` values the ViewModel
- * used to post through the Android-only UserMessageBus (LiveTvUserMessage
- * screen-forward pattern, livetv conveyor).
+ * [ArrQueueScreen], which posts the resolved text to the shared UserMessageBus
+ * — the commonMain-safe replacement for the legacy `context.getString(...)`
+ * values the ViewModel used to post through the Android-only UserMessageBus
+ * (LiveTvUserMessage screen-forward pattern, livetv conveyor).
  *
  * This seal EXTENDS the prior message seals (livetv / newsletter / admin /
  * settings were args-free `data object` + `Raw` shapes): the *arr acks carry

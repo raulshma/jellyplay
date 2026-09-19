@@ -6,22 +6,21 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
+import com.raulshma.jellyplay.core.datastore.spec.Knob
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -90,16 +89,13 @@ class ExperimentalStore constructor(
         val UPDATE_DISMISS_PERIOD = stringPreferencesKey("update_dismiss_period")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
+    private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
 
     private var cachedEnabledExperimentalFeatures: ParsedCache<Set<ExperimentalFeature>> =
         ParsedCache(null, emptySet())
 
-    val experimental: StateFlow<ExperimentalSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, ExperimentalSlice())
+    val experimental: StateFlow<ExperimentalSlice> =
+        dataStore.sliceStateFlow(scope, seed = ExperimentalSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): ExperimentalSlice = ExperimentalSlice(
         enabledExperimentalFeatures = readEnabledExperimentalFeatures(prefs),
@@ -114,29 +110,49 @@ class ExperimentalStore constructor(
         updateDismissPeriod = UpdateDismissPeriod.fromName(prefs[Keys.UPDATE_DISMISS_PERIOD]),
     )
 
-    private fun readEnabledExperimentalFeatures(prefs: Preferences): Set<ExperimentalFeature> {
-        val raw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES]
-        return if (raw != cachedEnabledExperimentalFeatures.raw) {
-            try {
-                raw?.let {
-                    json.decodeFromString<Set<String>>(it)
-                        .mapNotNull { name -> ExperimentalFeature.entries.find { e -> e.name == name } }
-                        .toSet()
-                } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedEnabledExperimentalFeatures = ParsedCache(raw, it) }
-        } else {
-            cachedEnabledExperimentalFeatures.value
-        }
-    }
+    // MemoizeNull (this store's pre-promotion policy): a null raw is a
+    // cacheable input — the decoded value depends only on the raw string, so
+    // a memoised default is safe to serve.
+    private fun readEnabledExperimentalFeatures(prefs: Preferences): Set<ExperimentalFeature> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES],
+            cache = cachedEnabledExperimentalFeatures,
+            default = emptySet(),
+            parse = {
+                json.decodeFromString<Set<String>>(it)
+                    .mapNotNull { name -> ExperimentalFeature.entries.find { e -> e.name == name } }
+                    .toSet()
+            },
+            cacheRef = { cachedEnabledExperimentalFeatures = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
     // ------------------------------------------------------------------
     // Setters
     // ------------------------------------------------------------------
 
+    /** The one encoder for the persisted feature-set JSON (setter + restore + knob write share it). */
+    private fun encodeExperimentalFeatures(features: Set<ExperimentalFeature>): String =
+        json.encodeToString(features.map { feature -> feature.name }.toSet())
+
     suspend fun setEnabledExperimentalFeatures(features: Set<ExperimentalFeature>) {
         dataStore.edit {
-            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(features.map { f -> f.name }.toSet())
+            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = encodeExperimentalFeatures(features)
+        }
+    }
+
+    /**
+     * Per-feature toggle write — the store's own persistence, not a second
+     * write path: ONE atomic read-modify-write of the same JSON set key
+     * [setEnabledExperimentalFeatures] encodes, so concurrent toggles of
+     * different features cannot clobber each other. Backs the per-feature
+     * knobs exposed below.
+     */
+    suspend fun setExperimentalFeatureEnabled(feature: ExperimentalFeature, enabled: Boolean) {
+        dataStore.edit { prefs ->
+            val current = readEnabledExperimentalFeatures(prefs)
+            val updated = if (enabled) current + feature else current - feature
+            prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES] = encodeExperimentalFeatures(updated)
         }
     }
 
@@ -196,16 +212,65 @@ class ExperimentalStore constructor(
         dataStore.edit { it[Keys.UPDATE_DISMISS_PERIOD] = period.name }
     }
 
-    /**
-     * Keys owned by this store, for factory-reset participation. Matches
-     * `PreferenceResetCategory.EXPERIMENTAL`
-     * ({ENABLED_EXPERIMENTAL_FEATURES, SHOW_ADVANCED_SETTINGS}). The
-     * dismissed-update keys are deliberately omitted — they are one-time state.
-     */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.ENABLED_EXPERIMENTAL_FEATURES,
-        Keys.SHOW_ADVANCED_SETTINGS,
+    // ------------------------------------------------------------------
+    // Typed knob access (Stage A spec machinery)
+    // ------------------------------------------------------------------
+
+    // Each knob binds a spec from [ExperimentalPreferenceSpecs] to THIS
+    // store's existing machinery: the read rides [sharedPrefs] and the write
+    // IS the store's setter above — no persistence semantics are duplicated
+    // or bypassed. The slice projection and the setters remain the source of
+    // truth; knobs are the typed access built on top of them.
+
+    /** The knob for one opt-in feature toggle (see [setExperimentalFeatureEnabled]). */
+    fun featureKnob(feature: ExperimentalFeature): Knob<Boolean> = Knob.of(
+        spec = ExperimentalPreferenceSpecs.featureSpec(feature),
+        prefs = sharedPrefs,
+        read = { prefs -> feature in readEnabledExperimentalFeatures(prefs) },
+        write = { enabled -> setExperimentalFeatureEnabled(feature, enabled) },
     )
+
+    val selfUpdateCheckEnabled: Knob<Boolean> =
+        Knob.of(ExperimentalPreferenceSpecs.SELF_UPDATE_CHECK_ENABLED, sharedPrefs, ::setSelfUpdateCheckEnabled)
+
+    val selfUpdateDownloadEnabled: Knob<Boolean> =
+        Knob.of(ExperimentalPreferenceSpecs.SELF_UPDATE_DOWNLOAD_ENABLED, sharedPrefs, ::setSelfUpdateDownloadEnabled)
+
+    val appLanguage: Knob<String?> =
+        Knob.of(ExperimentalPreferenceSpecs.APP_LANGUAGE, sharedPrefs, ::setAppLanguage)
+
+    val showShareMediaOption: Knob<Boolean> =
+        Knob.of(ExperimentalPreferenceSpecs.SHOW_SHARE_MEDIA_OPTION, sharedPrefs, ::setShowShareMediaOption)
+
+    val hideSearchHistory: Knob<Boolean> =
+        Knob.of(ExperimentalPreferenceSpecs.HIDE_SEARCH_HISTORY, sharedPrefs, ::setHideSearchHistory)
+
+    val preferAudioDescription: Knob<Boolean> =
+        Knob.of(ExperimentalPreferenceSpecs.PREFER_AUDIO_DESCRIPTION, sharedPrefs, ::setPreferAudioDescription)
+
+    val updateDismissPeriod: Knob<UpdateDismissPeriod> = Knob.of(
+        spec = ExperimentalPreferenceSpecs.UPDATE_DISMISS_PERIOD,
+        prefs = sharedPrefs,
+        read = { prefs -> UpdateDismissPeriod.fromName(prefs[Keys.UPDATE_DISMISS_PERIOD]) },
+        write = ::setUpdateDismissPeriod,
+    )
+
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * keeps this list from drifting: the hand-written predecessor had already
+     * lost the five `MISC_APP` keys ([Keys.SELF_UPDATE_CHECK_ENABLED],
+     * [Keys.SELF_UPDATE_DOWNLOAD_ENABLED], [Keys.UPDATE_DISMISS_PERIOD],
+     * [Keys.SHOW_SHARE_MEDIA_OPTION], [Keys.HIDE_SEARCH_HISTORY]).
+     * The dismissed-update keys ([Keys.DISMISSED_UPDATE_VERSION] /
+     * [Keys.DISMISSED_UPDATE_AT_MS]) remain deliberately excluded — they are
+     * one-time state ([Keys.APP_LANGUAGE] and
+     * [Keys.PREFER_AUDIO_DESCRIPTION] reset under `MISC_APP` via
+     * SubtitleLanguageStore's category list).
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: only the two reset-eligible keys owned here
@@ -230,30 +295,6 @@ class ExperimentalStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the keys owned by this store from a
-     * decoded [UserPreferences]. The experimental-feature set is written with
-     * this store's own [json] codec (name-string set, same shape
-     * `setEnabledExperimentalFeatures` uses). One-time state
-     * ([Keys.DISMISSED_UPDATE_VERSION] / [Keys.DISMISSED_UPDATE_AT_MS]) is not
-     * written back.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(userPreferences.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
-            it[Keys.SELF_UPDATE_CHECK_ENABLED] = userPreferences.selfUpdateCheckEnabled
-            it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = userPreferences.selfUpdateDownloadEnabled
-            it[Keys.UPDATE_DISMISS_PERIOD] = userPreferences.updateDismissPeriod.name
-            userPreferences.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
-            it[Keys.SHOW_SHARE_MEDIA_OPTION] = userPreferences.showShareMediaOption
-            it[Keys.HIDE_SEARCH_HISTORY] = userPreferences.hideSearchHistory
-            it[Keys.PREFER_AUDIO_DESCRIPTION] = userPreferences.preferAudioDescription
-            it[Keys.SHOW_ADVANCED_SETTINGS] = userPreferences.showAdvancedSettings
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (experimental
      * features as a name-string set via [json], appLanguage nullable). Unlike
@@ -264,7 +305,7 @@ class ExperimentalStore constructor(
      */
     suspend fun restore(slice: ExperimentalSlice) {
         dataStore.edit { it ->
-            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(slice.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
+            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = encodeExperimentalFeatures(slice.enabledExperimentalFeatures)
             it[Keys.SELF_UPDATE_CHECK_ENABLED] = slice.selfUpdateCheckEnabled
             it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = slice.selfUpdateDownloadEnabled
             it[Keys.UPDATE_DISMISS_PERIOD] = slice.updateDismissPeriod.name
@@ -300,3 +341,21 @@ data class ExperimentalSlice(
     val dismissedUpdateAtMs: Long = 0L,
     val updateDismissPeriod: UpdateDismissPeriod = UpdateDismissPeriod.DEFAULT,
 )
+
+/**
+ * The canonical `Direct *arr Integration` flag projection: a boolean flow that
+ * emits whether [ExperimentalFeature.DIRECT_ARR_INTEGRATION] is enabled.
+ * Shared by every *arr-gated feature site (requests / arr-queue / calendar /
+ * details) instead of a hand-copied `experimental.map { ... }` per site.
+ * Callers decide their own sharing (`stateIn`, `combine` input, ...).
+ */
+fun ExperimentalStore.directArrEnabled(): Flow<Boolean> =
+    experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+
+/**
+ * Slice-level read of the same flag, for sites that already hold an
+ * [ExperimentalSlice] (e.g. a multi-store combine collector) and must not
+ * re-collect the store flow just to test one bit.
+ */
+fun ExperimentalSlice.directArrEnabled(): Boolean =
+    enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION)

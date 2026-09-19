@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -31,7 +30,7 @@ import kotlin.test.assertTrue
  * Boundary invariants of [SyncPlayViewModel.loadGroups] NOT pinned by
  * [SyncPlayViewModelTest]:
  *
- * 1. Reloading groups while inside a group PRESERVES [SyncPlayUiState.currentGroup]
+ * 1. Reloading groups while inside a group PRESERVES [SyncPlayGroupsUiState.currentGroup]
  *    (the `if (state.isInGroup) state.currentGroup else null` guard) — a
  *    background poll must not blank the group header mid-session.
  * 2. Reloading while NOT in a group clears any stale currentGroup.
@@ -46,22 +45,22 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: SyncPlayRepository
-    private lateinit var syncPlayManager: SyncPlayManager
+    private lateinit var syncPlaySession: SyncPlaySession
     private lateinit var syncPlayCastStore: SyncPlayCastStore
-    private lateinit var eventsFlow: MutableSharedFlow<com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent>
+    private lateinit var eventsFlow: MutableSharedFlow<SyncPlaySessionEvent>
     private lateinit var castPrefs: MutableStateFlow<SyncPlayCastSlice>
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
-        syncPlayManager = mockk()
+        syncPlaySession = mockk()
         syncPlayCastStore = mockk()
         eventsFlow = MutableSharedFlow(extraBufferCapacity = 64)
         castPrefs = MutableStateFlow(SyncPlayCastSlice())
-        every { syncPlayManager.events } returns eventsFlow
-        every { syncPlayManager.activeGroupId } returns null
-        every { syncPlayManager.lastReconnectMs } returns 0L
+        every { syncPlaySession.events } returns eventsFlow
+        every { syncPlaySession.activeGroupId } returns null
+        every { syncPlaySession.lastReconnectMs } returns 0L
         every { syncPlayCastStore.syncPlayCast } returns castPrefs
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
     }
@@ -73,7 +72,7 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
 
     private fun newViewModel() = SyncPlayViewModel(
         syncPlayRepository = mediaRepository,
-        syncPlayManager = syncPlayManager,
+        syncPlaySession = syncPlaySession,
         syncPlayCastStore = syncPlayCastStore,
     )
 
@@ -82,8 +81,8 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
 
     @Test
     fun reloading_groups_while_in_a_group_keeps_currentGroup() = runTest(mainDispatcher) {
-        every { syncPlayManager.activeGroupId } returns "g1"
-        coEvery { syncPlayManager.joinGroup("g1") } returns Result.success(Unit)
+        every { syncPlaySession.activeGroupId } returns "g1"
+        coEvery { syncPlaySession.joinGroup("g1") } returns Result.success(Unit)
         coEvery { mediaRepository.getSyncPlayInfo("g1") } returns Result.success(
             SyncPlayGroupInfo(groupId = "g1", groupName = "Party"),
         )
@@ -107,7 +106,7 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
     fun reloading_groups_while_not_in_a_group_clears_stale_currentGroup() = runTest(mainDispatcher) {
         // Seed a stale group (simulating a leftover header after an ejection
         // that bypassed state resets) and reload.
-        every { syncPlayManager.activeGroupId } returns null
+        every { syncPlaySession.activeGroupId } returns null
         val viewModel = newViewModel()
         advanceUntilIdle()
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group("g1")))
@@ -126,7 +125,7 @@ class SyncPlayViewModelLoadGroupsBoundaryTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
         assertFalse(viewModel.uiState.value.isInGroup)
     }
 }

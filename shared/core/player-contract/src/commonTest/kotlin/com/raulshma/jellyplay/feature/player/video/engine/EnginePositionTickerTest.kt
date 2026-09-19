@@ -39,12 +39,15 @@ class EnginePositionTickerTest {
         var playing: Boolean = true
         val tickTimes = mutableListOf<Long>()
 
+        var ready: Boolean = true
+
         fun ticker(scope: TestScope): EnginePositionTicker = EnginePositionTicker(
             scope = scope,
             pollingIntervalMs = interval,
             isPlayingFlow = playingFlow,
             isCurrentlyPlaying = { playing },
             onActive = { tickTimes.add(scheduler.currentTime) },
+            isReady = { ready },
         )
 
         fun pause() {
@@ -112,9 +115,10 @@ class EnginePositionTickerTest {
         harness.pause() // pause BEFORE construction so the seeded state is paused
         val job = harness.ticker(this).launch()
 
-        // Several full paused re-check cycles (recheck timeout + delay each) — not a
-        // single tick may fire while the play state never changes.
-        harness.scheduler.advanceTimeBy((POSITION_PAUSED_RECHECK_MS + 500L) * 3 + 500L)
+        // Several full paused re-check cycles (each is just the bounded wait —
+        // the interval delay is skipped while paused). Not a single tick may
+        // fire while the play state never changes.
+        harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS * 3 + 500L)
         harness.scheduler.runCurrent()
         assertEquals(emptyList(), harness.tickTimes)
 
@@ -124,21 +128,26 @@ class EnginePositionTickerTest {
     @Test
     fun playToPauseEdge_emitsExactlyOneFinalTickWhilePaused() = runTest {
         val harness = Harness(this)
-        // Constructed while playing (seeds lastPlayingState = true), paused before launch.
-        val ticker = harness.ticker(this)
-        harness.pause()
-        val job = ticker.launch()
+        val job = harness.ticker(this).launch()
 
-        // First paused re-check: 2500ms bounded wait, then the interval delay, then the
-        // edge (playing -> paused) fires the final-position tick at 3000ms...
+        // One playing tick first...
+        harness.scheduler.advanceTimeBy(500L)
+        harness.scheduler.runCurrent()
+        assertEquals(listOf(500L), harness.tickTimes)
+
+        // ...then pause. The in-flight iteration was already past the playing
+        // gate, so its interval delay completes and the play->pause edge fires
+        // the final-position tick at 1000ms.
+        harness.pause()
         harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS + 500L)
         harness.scheduler.runCurrent()
-        assertEquals(listOf(POSITION_PAUSED_RECHECK_MS + 500L), harness.tickTimes)
+        assertEquals(listOf(500L, 1000L), harness.tickTimes)
 
-        // ...and subsequent paused cycles see no state change, so no more ticks.
-        harness.scheduler.advanceTimeBy((POSITION_PAUSED_RECHECK_MS + 500L) * 2)
+        // Subsequent paused cycles are pure bounded re-checks (the interval
+        // delay is skipped while paused) with no state change — no more ticks.
+        harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS * 2)
         harness.scheduler.runCurrent()
-        assertEquals(listOf(POSITION_PAUSED_RECHECK_MS + 500L), harness.tickTimes)
+        assertEquals(listOf(500L, 1000L), harness.tickTimes)
 
         job.cancel()
     }
@@ -149,9 +158,10 @@ class EnginePositionTickerTest {
         harness.pause() // paused from the start, so no pause-edge tick will fire
         val job = harness.ticker(this).launch()
 
-        // Settle into the paused rhythm: bounded re-check (timeout at 2500) followed by
-        // the interval delay ends iteration 1 at t=3000 with no tick (no edge, seeded
-        // paused); iteration 2 is then suspended in its re-check wait.
+        // Settle into the paused rhythm: each paused iteration is just the
+        // bounded re-check (timeout at 2500 — the interval delay is skipped
+        // while paused), so iteration 1 ends at t=2500 and t=3000 sits inside
+        // iteration 2's re-check wait, with no tick (no edge, seeded paused).
         harness.scheduler.advanceTimeBy(3000)
         harness.scheduler.runCurrent()
         assertEquals(emptyList(), harness.tickTimes)
@@ -218,5 +228,39 @@ class EnginePositionTickerTest {
         harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS * 4)
         harness.scheduler.runCurrent()
         assertEquals(listOf(500L), harness.tickTimes, "cancelled ticker must never tick again")
+    }
+    @Test
+    fun notReadyConsumer_backsOffExponentially_andResumesAtPollRateOnceReady() = runTest {
+        val harness = Harness(this)
+        harness.pause() // readiness is the gate under test; keep playback stopped
+        harness.ready = false
+        val job = harness.ticker(this).launch()
+
+        // Backoff ladder from the 250ms floor: waits at 250, 500, 1000 (doubling,
+        // capped at the paused re-check band). Not one tick may fire while
+        // nothing is ready — the audio manager's player-less stretch used to
+        // wake its hand-rolled loop at the poll rate here.
+        harness.scheduler.advanceTimeBy(POSITION_NOT_READY_MIN_WAIT_MS * 7)
+        harness.scheduler.runCurrent()
+        assertEquals(emptyList(), harness.tickTimes)
+
+        // Becoming ready resets the backoff; since playback is paused, the
+        // bounded paused-wait takes over — still no work, and the loop is alive.
+        harness.ready = true
+        harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS * 2)
+        harness.scheduler.runCurrent()
+        assertEquals(emptyList(), harness.tickTimes)
+
+        harness.resume()
+        val resumedAt = harness.scheduler.currentTime
+        harness.scheduler.advanceTimeBy(500L)
+        harness.scheduler.runCurrent()
+        assertEquals(
+            listOf(resumedAt + 500L),
+            harness.tickTimes,
+            "first ready tick lands one interval after resume",
+        )
+
+        job.cancel()
     }
 }

@@ -64,7 +64,7 @@ private fun sonarrUnclassifiedFailureMessage(e: Throwable): String =
 
 /**
  * The wasmJs [SonarrApiClient] — a hand-rolled Ktor replacement for the
- * jvmShared `SonarrApiClientImpl` + `ResilientSonarrApiClient` pair (OkHttp).
+ * jvmShared `SonarrApiClientImpl` (OkHttp; retry in-funnel via `HttpExecutor`).
  * The `/api/v3` paths, query params (`includeSeries`/`includeEpisode`, the
  * wanted `airDateUtc` sort key, the queue-delete option trio), request
  * bodies, the 2-step manualimport flow, the `{ records }` envelope
@@ -75,9 +75,9 @@ private fun sonarrUnclassifiedFailureMessage(e: Throwable): String =
  * DTOs — field-for-field transcriptions of the JVM impl's private nested
  * DTOs.
  *
- * Retry lives HERE (`apiResultWithRetry`, max 4 =
- * `ResilientSonarrApiClient.MAX_RETRIES`) instead of in a DI-level Resilient
- * wrapper. See [ArrSeerrApiSupport] for the full wasm delta list (transport
+ * Retry lives HERE (`apiResultWithRetry`, max 4 = jvmShared
+ * `HttpExecutor.MAX_RETRIES`) — in-funnel on both platforms since the
+ * wrapper deletion. See [ArrSeerrApiSupport] for the full wasm delta list (transport
  * taxonomy collapse, Retry-After honoring, decode-failure wrapping).
  */
 class KtorWasmSonarrApiClient(

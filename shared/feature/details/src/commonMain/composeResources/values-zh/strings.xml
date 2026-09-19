@@ -26,6 +26,9 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">播放</string>
     <string name="detail_play_resume">继续播放</string>
+    <string name="detail_read">阅读</string>
+    <string name="detail_continue_page">继续阅读 — 第 %1$d 页</string>
+    <string name="detail_continue_percent">继续阅读 — %1$d%</string>
     <string name="detail_play_finding_episode">正在查找剧集</string>
     <string name="detail_play_no_episodes_available">没有可用的剧集</string>
     <string name="detail_play_no_episodes">没有剧集</string>
@@ -408,4 +411,22 @@
     <string name="detail_file_category_trickplay">快进预览</string>
     <string name="detail_file_category_segment">分段</string>
     <string name="detail_file_category_image">图片</string>
+    <!-- ── 图书详情（阅读向内容） ── -->
+    <string name="detail_section_contents">目录</string>
+    <string name="detail_book_format_comic">漫画</string>
+    <string name="detail_book_finished_badge">已读完</string>
+    <string name="detail_book_page_progress">第 %1$d 页，共 %2$d 页</string>
+    <string name="detail_book_percent_progress">已读 %1$d%</string>
+    <string name="detail_book_contents_page">第 %1$d 页</string>
+    <plurals name="detail_book_contents_show_all">
+        <item quantity="other">显示全部 %1$d 项</item>
+    </plurals>
+    <string name="detail_cd_mark_as_finished">标记为已读完</string>
+    <string name="detail_cd_mark_as_unfinished">标记为未读完</string>
+    <plurals name="detail_book_bookmarks">
+        <item quantity="other">%1$d 个书签</item>
+    </plurals>
+    <plurals name="detail_book_highlights">
+        <item quantity="other">%1$d 条标注</item>
+    </plurals>
 </resources>

@@ -1,10 +1,11 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
+import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -33,6 +34,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -54,12 +57,18 @@ import kotlin.test.assertTrue
  *  2. the cast happy path (fling the current track at the live position,
  *     pause the local engine);
  *  3. the add-to-playlist picker lifecycle (editable filter, failure, the
- *     dismiss guard while a add is in flight);
+ *     dismiss guard while a add is in flight) — read off the
+ *     [PlaylistPickerStateHolder] snapshot the VM forwards to;
  *  4. `downloadCurrentTrack`'s three-way routing (completed → re-download via
- *     delete, not-completed → detail + intake, no item → no-op) and the
- *     current-download mirror;
+ *     delete, not-completed → the Koin-injected TrackDownloadActions flip,
+ *     no item → no-op) and the current-download mirror. The flip's
+ *     resolve→start choreography lives in core:data (DownloadIntake.flipTrack,
+ *     pinned there) — the VM only routes;
  *  5. the blurHash LRU cache (one detail fetch per item, including the
- *     negative-result sentinel) and the sleep-timer expiry pause contract.
+ *     negative-result sentinel) and the sleep-timer expiry pause contract;
+ *  6. effects persistence sourcing: a toggle persists the value computed from
+ *     the manager's StateFlow (AudioEffectsController), NOT the lagging
+ *     uiState mirror — the hazard the controller extraction fixed.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioPlayerViewModelGapsTest {
@@ -75,9 +84,9 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
-    private lateinit var downloadRepository: DownloadRepository
-    private lateinit var downloadIntake: DownloadIntake
-    private lateinit var sleepTimerManager: SleepTimerManager
+    private lateinit var downloads: TrackDownloadStatusWindow
+    private lateinit var trackDownloadActions: TrackDownloadActions
+    private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
 
     private lateinit var viewModel: AudioPlayerViewModel
@@ -123,14 +132,17 @@ class AudioPlayerViewModelGapsTest {
         mediaRepository = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
-        downloadRepository = mockk(relaxed = true)
-        downloadIntake = mockk(relaxed = true)
-        sleepTimerManager = mockk(relaxed = true)
+        downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
+        trackDownloadActions = mockk(relaxed = true)
+        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
 
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
         every { audioEffectsStore.audioEffects } returns MutableStateFlow(AudioEffectsSlice())
+        // The effects flows the AudioEffectsController persist legs read
+        // synchronously — see stubAudioEffectsReadSurface.
+        stubAudioEffectsReadSurface(effectsManager)
         every { effectsManager.replayGainMode } returns MutableStateFlow(com.raulshma.jellyplay.core.model.AudioNormalizationMode.NONE)
         every { effectsManager.replayGainPreAmpDb } returns MutableStateFlow(0.0f)
         every { queueManager.currentPlayingItemId } returns currentItemIdFlow
@@ -158,9 +170,19 @@ class AudioPlayerViewModelGapsTest {
         every { engine.getImageUrl(any()) } returns "https://srv/Items/x/Images/Primary"
         every { engine.undoLastQueueOperation() } returns false
         every {
-            downloadRepository.getDownloadByMediaItemIdFlow(any())
+            downloads.downloadsFor(any())
         } answers {
-            downloadFlows.getOrPut(firstArg()) { MutableStateFlow(null) }
+            // Per-id state flows behind the window's single IN-query read, so
+            // per-item state changes propagate to the fake like a live Room
+            // invalidation would through getDownloadsByMediaItemIdsFlow.
+            val ids = firstArg<List<String>>()
+            if (ids.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    ids.map { downloadFlows.getOrPut(it) { MutableStateFlow(null) } },
+                ) { rows -> rows.filterNotNull() }
+            }
         }
 
         viewModel = AudioPlayerViewModel(
@@ -173,8 +195,8 @@ class AudioPlayerViewModelGapsTest {
             mediaRepository = mediaRepository,
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
-            downloadRepository = downloadRepository,
-            downloadIntake = downloadIntake,
+            downloads = downloads,
+            trackDownloadActions = trackDownloadActions,
             sleepTimerManager = sleepTimerManager,
             cast = cast,
         )
@@ -315,9 +337,10 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.openPlaylistPicker()
 
-        assertTrue(viewModel.uiState.value.showPlaylistPicker)
-        assertFalse(viewModel.uiState.value.isLoadingPlaylists)
-        assertEquals(listOf(editable), viewModel.uiState.value.playlists)
+        val picker = viewModel.playlistPicker.state.value
+        assertTrue(picker.visible)
+        assertFalse(picker.loading)
+        assertEquals(listOf(editable), picker.playlists)
     }
 
     @Test
@@ -326,7 +349,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.openPlaylistPicker()
 
-        assertFalse(viewModel.uiState.value.showPlaylistPicker)
+        assertFalse(viewModel.playlistPicker.state.value.visible)
         coVerify(exactly = 0) { playlistRepository.getPlaylists(any()) }
     }
 
@@ -337,9 +360,10 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.openPlaylistPicker()
 
-        assertTrue(viewModel.uiState.value.showPlaylistPicker, "the picker still opens on failure")
-        assertFalse(viewModel.uiState.value.isLoadingPlaylists)
-        assertTrue(viewModel.uiState.value.playlists.isEmpty())
+        val picker = viewModel.playlistPicker.state.value
+        assertTrue(picker.visible, "the picker still opens on failure")
+        assertFalse(picker.loading)
+        assertTrue(picker.playlists.isEmpty())
     }
 
     @Test
@@ -350,11 +374,11 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.addToPlaylist(playlist)
 
-        with(viewModel.uiState.value) {
-            assertFalse(isAddingToPlaylist)
-            assertFalse(showPlaylistPicker)
+        with(viewModel.playlistPicker.state.value) {
+            assertFalse(adding)
+            assertFalse(visible)
             assertTrue(playlists.isEmpty())
-            assertEquals("Road Trip", playlistMessage)
+            assertEquals("Road Trip", message)
         }
     }
 
@@ -369,9 +393,10 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.addToPlaylist(playlist)
 
-        assertFalse(viewModel.uiState.value.isAddingToPlaylist)
-        assertTrue(viewModel.uiState.value.showPlaylistPicker, "a failed add leaves the picker open")
-        assertEquals("server rejected", viewModel.uiState.value.playlistMessage)
+        val picker = viewModel.playlistPicker.state.value
+        assertFalse(picker.adding)
+        assertTrue(picker.visible, "a failed add leaves the picker open")
+        assertEquals("server rejected", picker.message)
     }
 
     @Test
@@ -388,28 +413,30 @@ class AudioPlayerViewModelGapsTest {
 
         // The add is in flight: a scrim tap must not close the picker.
         viewModel.dismissPlaylistPicker()
-        assertTrue(viewModel.uiState.value.showPlaylistPicker)
+        assertTrue(viewModel.playlistPicker.state.value.visible)
 
         gate.complete(Unit)
         // The completed add closes the picker itself; a post-add dismiss is a
         // harmless no-op reset.
-        assertFalse(viewModel.uiState.value.showPlaylistPicker)
+        assertFalse(viewModel.playlistPicker.state.value.visible)
         viewModel.dismissPlaylistPicker()
-        assertFalse(viewModel.uiState.value.showPlaylistPicker)
-        assertTrue(viewModel.uiState.value.playlists.isEmpty())
-        assertNull(viewModel.uiState.value.playlistMessage)
+        with(viewModel.playlistPicker.state.value) {
+            assertFalse(visible)
+            assertTrue(playlists.isEmpty())
+            assertNull(message)
+        }
     }
 
     @Test
-    fun clearPlaylistMessage_clearsOnlyTheMessage() {
+    fun clearMessage_clearsOnlyTheMessage() {
         currentItemIdFlow.value = "track-1"
         coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
         viewModel.addToPlaylist(Playlist(id = "p1", name = "Road Trip"))
-        assertEquals("Road Trip", viewModel.uiState.value.playlistMessage)
+        assertEquals("Road Trip", viewModel.playlistPicker.state.value.message)
 
-        viewModel.clearPlaylistMessage()
+        viewModel.playlistPicker.clearMessage()
 
-        assertNull(viewModel.uiState.value.playlistMessage)
+        assertNull(viewModel.playlistPicker.state.value.message)
     }
 
     // ── 4. downloadCurrentTrack routing + current-download mirror ────────────
@@ -421,33 +448,19 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.downloadCurrentTrack()
 
-        coVerify(exactly = 1) { downloadRepository.deleteDownload("dl-1") }
-        coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 1) { downloads.remove("dl-1") }
+        coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
     @Test
-    fun downloadCurrentTrack_notCompleted_startsIntakeWithTheFetchedDetail() {
+    fun downloadCurrentTrack_notCompleted_delegatesToTrackDownloadActions() {
         currentItemIdFlow.value = "track-1"
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.DOWNLOADING))
-        coEvery { mediaRepository.getMediaDetail("track-1", any()) } returns Result.success(detail("track-1"))
-        coEvery { downloadIntake.start(any(), any(), any()) } returns
-            com.raulshma.jellyplay.core.data.util.DownloadResult(downloadItem = null, error = null)
 
         viewModel.downloadCurrentTrack()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
-        coVerify(exactly = 1) { downloadIntake.start(detail("track-1")) }
-    }
-
-    @Test
-    fun downloadCurrentTrack_detailFailure_startsNothing() {
-        currentItemIdFlow.value = "track-1"
-        coEvery { mediaRepository.getMediaDetail("track-1", any()) } returns
-            Result.failure(RuntimeException("offline"))
-
-        viewModel.downloadCurrentTrack()
-
-        coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 0) { downloads.remove(any()) }
+        coVerify(exactly = 1) { trackDownloadActions.flip("track-1") }
     }
 
     @Test
@@ -456,8 +469,8 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.downloadCurrentTrack()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
-        coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 0) { downloads.remove(any()) }
+        coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
     @Test
@@ -520,6 +533,28 @@ class AudioPlayerViewModelGapsTest {
 
         verify(exactly = 1) { engine.pause() }
         verify(exactly = 0) { engine.togglePlayPause() }
+    }
+
+    // ── 6. Effects persistence sources the manager, not the state mirror ──
+
+    @Test
+    fun toggleNightMode_persistsTheManagerComputedValue_evenWhenTheMirrorHasNotCaughtUp() {
+        val nightMode = MutableStateFlow(false)
+        // Swap the flow instance AFTER the controller's collectors subscribed
+        // (they captured the stubbed one at construction): the mirror keeps
+        // collecting a flow that never flips — dispatch lag, deterministic.
+        every { effectsManager.nightModeEnabled } returns nightMode
+        every { effectsManager.toggleNightMode() } answers { nightMode.value = !nightMode.value }
+
+        viewModel.toggleNightMode()
+
+        // The manager flipped synchronously inside the setter and no mirror
+        // collector has re-emitted: persisting the mirror would write `false`
+        // and silently undo the toggle (the pre-controller behaviour, correct
+        // only by dispatch-order luck).
+        assertTrue(nightMode.value)
+        assertFalse(viewModel.effectsState.value.nightModeEnabled)
+        coVerify(exactly = 1) { audioEffectsStore.setNightModeEnabled(true) }
     }
 
     @Test

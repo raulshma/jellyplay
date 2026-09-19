@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.KNOWN_IMAGE_TYPES
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -14,7 +15,6 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.UtcTimeResponse
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
-import com.raulshma.jellyplay.core.network.library.KNOWN_IMAGE_TYPES
 import com.raulshma.jellyplay.core.network.library.toMediaSource
 import com.raulshma.jellyplay.core.network.playback.MediaSegmentQueryResultDtoWire
 import com.raulshma.jellyplay.core.network.playback.PlaybackInfoRequestDtoWire
@@ -134,6 +134,22 @@ class KtorWasmPlaybackApiClient(
             ),
         )
     }
+
+    override suspend fun reportBookProgress(itemId: String, positionTicks: Long): Result<Unit> =
+        apiResultWithRetry {
+            // Books never open a playback session; the session-less book
+            // endpoint takes the position as a query parameter (mirror of the
+            // JVM impl's raw postStatusOnly call).
+            val server = requireConnectedServer()
+            val userId = requireCurrentUser().id
+            postStatusOnly(
+                url = apiUrl(
+                    server.address,
+                    "/Users/$userId/PlayingItems/$itemId/Progress?positionTicks=$positionTicks",
+                ),
+                accessToken = currentToken(),
+            )
+        }
 
     // ── Stream / subtitle URL builders (pure; ported verbatim) ─────────────
 
@@ -266,7 +282,7 @@ class KtorWasmPlaybackApiClient(
         apiResultWithRetry {
             val server = requireConnectedServer()
             val user = requireCurrentUser()
-            val body = getBodyTextWithEmbyToken(
+            val body = getBodyText(
                 url = apiUrl(server.address, "/Items/$itemId/RemoteSearch/Subtitles"),
                 accessToken = user.accessToken,
             ) ?: return@apiResultWithRetry emptyList<RemoteSubtitleInfo>()
@@ -288,7 +304,7 @@ class KtorWasmPlaybackApiClient(
         apiResultWithRetry {
             val server = requireConnectedServer()
             val user = requireCurrentUser()
-            val body = getBodyTextWithEmbyToken(
+            val body = getBodyText(
                 url = apiUrl(server.address, "/Items/$itemId/IntroSkipTimestamps"),
                 accessToken = user.accessToken,
             ) ?: return@apiResultWithRetry IntroTimestamps(itemId)
@@ -299,7 +315,7 @@ class KtorWasmPlaybackApiClient(
         apiResultWithRetry {
             val server = requireConnectedServer()
             val user = requireCurrentUser()
-            val body = getBodyTextWithEmbyToken(
+            val body = getBodyText(
                 url = apiUrl(server.address, "/Items/$itemId/CreditTimestamps"),
                 accessToken = user.accessToken,
             ) ?: return@apiResultWithRetry CreditTimestamps(itemId)

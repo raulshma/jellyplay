@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.tracks
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -34,7 +34,7 @@ class TracksViewModelTest {
 
     private val mediaRepository: MediaRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
-    private val audioQueueFacade: AudioQueueFacade = mockk()
+    private val audioQueueFacade: MusicQueuePlayer = mockk()
 
     private lateinit var viewModel: TracksViewModel
 
@@ -63,7 +63,7 @@ class TracksViewModelTest {
     fun playAll_delegatesWithMusicMaxWidthAndStartIndex() = runTest(mainDispatcher) {
         coEvery {
             audioQueueFacade.playTracks(any(), any(), any(), any(), any())
-        } returns AudioQueueOutcome.Started(emptyList(), 0)
+        } returns MusicQueueOutcome.Started(emptyList(), 0)
 
         viewModel.playAll(tracks, startIndex = 3)
         advanceUntilIdle()
@@ -76,7 +76,7 @@ class TracksViewModelTest {
     @Test
     fun addToQueue_delegatesSingleTrackWithMusicMaxWidth() = runTest(mainDispatcher) {
         coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), -1)
+            MusicQueueOutcome.Started(emptyList(), -1)
 
         viewModel.addToQueue(tracks.first())
         advanceUntilIdle()

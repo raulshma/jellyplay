@@ -26,7 +26,7 @@ kotlin {
 
     // wasmJs target added MediaEngine's supertypes
     // (PlayerLifecycleCallbacks, RemotePlayableEngine) previously lived in
-    // :shared:core:data — which has no wasm build (Room) — and blocked this
+    // shared:core:data — which has no wasm build (Room) — and blocked this
     // module from shipping wasm. They now live here verbatim (SAME packages,
     // zero consumer import churn) so HtmlVideoEngine gets a wasm-visible
     // contract. Dependency edge flipped: core:data now depends

@@ -54,8 +54,12 @@ data class EpisodeCatalogueSnapshot(
     /** Episodes for [seasonId], or empty if that season hasn't been fetched. */
     fun seasonEpisodes(seasonId: String): List<MediaItem> = episodesBySeason[seasonId].orEmpty()
 
-    /** Every episode id in playback order — the playlist-expansion shape. */
-    val allEpisodeIds: List<String> get() = sortedEpisodes.map { it.id }
+    /**
+     * Every episode id in playback order — the playlist-expansion shape.
+     * Derived once per instance (a `copy` re-runs the initializer, so
+     * [withSeasonEpisodes]' rebuilt [sortedEpisodes] stays consistent).
+     */
+    val allEpisodeIds: List<String> = sortedEpisodes.map { it.id }
 
     /**
      * Returns a copy with [episodes] installed for [seasonId], recomputing the

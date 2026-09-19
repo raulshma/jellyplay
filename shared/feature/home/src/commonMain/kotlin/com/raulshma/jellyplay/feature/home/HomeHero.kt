@@ -74,6 +74,7 @@ import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
+import com.raulshma.jellyplay.core.ui.components.formatRuntimeLabelFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
@@ -283,7 +284,7 @@ fun HeroHeader(
     // per-item string derivations so they aren't rebuilt per frame.
     val yearText = remember(item.id, item.year) { item.year?.toString() }
     val runtimeText = remember(item.id, item.runTimeTicks) {
-        item.runTimeTicks?.let { "${it / 600_000_000}m" }
+        formatRuntimeLabelFromTicks(item.runTimeTicks)
     }
     val ratingText = remember(item.id, item.communityRating) {
         item.communityRating?.let { formatFixed(it.toDouble(), 1) }

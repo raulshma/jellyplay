@@ -60,6 +60,11 @@
     <string name="music_tracks_count">%1$d titres</string>
     <string name="music_one_track">1 titre</string>
     <string name="music_playlist_tracks_count">%1$d titres</string>
+    <string name="music_playlist_read_only">Cette liste est en lecture seule</string>
+    <string name="music_playlist_not_deletable">Cette liste ne peut pas être supprimée</string>
+    <string name="music_playlist_create_failed">Échec de la création de la liste</string>
+    <string name="music_playlist_update_failed">Échec de la mise à jour de la liste</string>
+    <string name="music_playlist_delete_failed">Échec de la suppression de la liste</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">Écrans du lecteur</string>

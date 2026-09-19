@@ -17,10 +17,21 @@ kotlin {
         }
     }
 
-    // No wasmJs target: the two consumers are exactly the shells the web app
-    // does not use (apps/web wires its own section graph), and the graph's
-    // reach includes feature modules whose ViewModels bind only the
-    // android+jvm DI graph (music precedent).
+    // web breadth: the commonMain surface (AdminRefreshGate /
+    // OnboardingGate / ShellSessionController / UserMessageHost — the four
+    // policy/state files, java-free) now carries a wasmJs target. Scope is
+    // honest: the 21-feature aggregator (appSections + the per-feature
+    // Section builders) stays in jvmShared — it is the consuming shells'
+    // graph, and apps/web wires its own WebAppRoot section graph, so wasmJs
+    // compiles the commonMain policy surface only. The browser test task
+    // stays off like core:ui/core:network/music — jvmTest pins semantics.
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -57,6 +68,7 @@ kotlin {
             implementation(project(":shared:feature:details"))
             implementation(project(":shared:feature:editor"))
             implementation(project(":shared:feature:player-audio"))
+            implementation(project(":shared:feature:player-book"))
             implementation(project(":shared:feature:downloads"))
             implementation(project(":shared:feature:auth"))
             implementation(project(":shared:feature:settings"))
@@ -70,6 +82,11 @@ kotlin {
             implementation(project(":shared:feature:arrqueue"))
             implementation(project(":shared:feature:calendar"))
             implementation(project(":shared:feature:shortcuts"))
+            // The 22nd feature: player-live's Koin module rides the shared
+            // registration list (SharedFeatureModules) beside its section
+            // peers — the desktop bridge-probed video-player alternative
+            // lives there.
+            implementation(project(":shared:feature:player-live"))
             // The musicContent lambda invokes the @Composable MusicHomeScreen.
             implementation(libs.jb.compose.runtime)
             implementation(libs.jb.compose.ui)
@@ -93,6 +110,13 @@ kotlin {
             // The session controller's arbitration/collect tests (runTest +
             // fake clock, the core-data jvmTest pattern).
             implementation(libs.coroutines.test)
+        }
+        // SharedFeatureModules (jvmShared) collects every feature Koin
+        // module as a Module value — the features' own koin edges are
+        // implementation-scoped and invisible cross-project, so the
+        // aggregator declares the type it collects.
+        getByName("jvmShared").dependencies {
+            implementation(libs.koin.core)
         }
     }
 }

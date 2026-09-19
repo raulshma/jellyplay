@@ -10,7 +10,7 @@ private const val TMDB_API_KEY = "1f54bd990f1cd6ca033b09cc0412a4d5" // Community
 
 /**
  * The wasmJs [TmdbApiClient] — a hand-rolled Ktor replacement for the
- * jvmShared `TmdbApiClientImpl` + `ResilientTmdbApiClient` pair (OkHttp).
+ * jvmShared `TmdbApiClientImpl` (OkHttp; retry in-funnel via `HttpExecutor`).
  * Same fixed community API key, same `GET /3/{movie|tv}/{id}/{endpoint}?api_key=…`
  * URLs, same YouTube-only watch-URL synthesis, and the same error texts:
  * `TMDB request failed: {code}` (HTTP, body ignored — the JVM never reads
@@ -26,7 +26,8 @@ private const val TMDB_API_KEY = "1f54bd990f1cd6ca033b09cc0412a4d5" // Community
  * [ArrSeerrApiSupport.timeoutFailureMessage] is null here. The JVM's
  * null-body branch (`emptyResponseBodyError("TMDB")`) is unreachable on both
  * platforms (empty bodies arrive as `""` and fail decoding → the parse-error
- * text). Retry lives HERE (max 4 = `ResilientTmdbApiClient.MAX_RETRIES`).
+ * text). Retry lives HERE (max 4 = jvmShared `HttpExecutor.MAX_RETRIES`) —
+ * in-funnel on both platforms since the wrapper deletion.
  */
 class KtorWasmTmdbApiClient(
     httpClient: HttpClient,

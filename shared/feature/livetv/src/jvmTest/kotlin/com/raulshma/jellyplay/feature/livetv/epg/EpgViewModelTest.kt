@@ -22,11 +22,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import java.time.Duration
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -86,7 +86,7 @@ class EpgViewModelTest {
     private val fakeTimeSource = FakeTimeSource(BOOT_NOW_MS)
 
     /** The VM's view of the fake clock, for fixture math relative to "now". */
-    private val fakeNow: Instant get() = Instant.ofEpochMilli(fakeTimeSource.nowMs)
+    private val fakeNow: Instant get() = Instant.fromEpochMilliseconds(fakeTimeSource.nowMs)
 
     @BeforeTest
     fun setUp() {
@@ -146,7 +146,7 @@ class EpgViewModelTest {
         id: String,
         name: String = "Program $id",
         start: Instant = fakeNow,
-        end: Instant = fakeNow.plusSeconds(1_800),
+        end: Instant = fakeNow.plus(1_800.seconds),
     ) = LiveTvProgram(
         id = id,
         name = name,
@@ -175,16 +175,16 @@ class EpgViewModelTest {
         val start = Instant.parse(starts.last())
         val end = Instant.parse(ends.last())
         // The injected clock makes the window exact: 2h back from the fixed now…
-        assertEquals(fakeNow.minus(2, ChronoUnit.HOURS), start)
+        assertEquals(fakeNow.minus(2.hours), start)
         // …over the jellyfin-web 24h guide span.
-        assertEquals(fakeNow.plus(22, ChronoUnit.HOURS), end)
-        assertEquals(Duration.ofHours(24), Duration.between(start, end))
+        assertEquals(fakeNow.plus(22.hours), end)
+        assertEquals(24.hours, end - start)
     }
 
     @Test
     fun loadGuide_success_populates_channels_programs_and_the_grid_snapshot() = vmTest {
         val channel = LiveTvChannel(id = "chan-1", name = "CNN")
-        val airing = program(id = "p1", start = fakeNow.minusSeconds(600), end = fakeNow.plusSeconds(1_200))
+        val airing = program(id = "p1", start = fakeNow.minus(600.seconds), end = fakeNow.plus(1_200.seconds))
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
             Result.success(EpgGuide(channels = listOf(channel), programs = listOf(airing)))
 

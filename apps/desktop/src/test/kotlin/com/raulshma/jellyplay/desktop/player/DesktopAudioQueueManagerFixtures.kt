@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.data.playback.AudioTrackResolver
+import com.raulshma.jellyplay.core.data.playback.ResolvedAudioTrack
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -8,9 +10,7 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.AudioQueueDao
 import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsResult
@@ -31,9 +31,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Hand-rolled collaborators for the desktop audio queue tests (this module's
- * test source set carries no mocking library). Internal top-level so both the
- * semantics suite and the real-engine suite share them.
+ * Hand-rolled collaborators for the two APP-LEVEL audio queue suites (the
+ * focus composition suite + the real-mpv engine suite). The canonical
+ * fixture set moved to core:data jvmTest together with the semantics
+ * suite and the relocated manager (test source sets do not propagate
+ * across modules), so this is the deliberately-duplicated app-side copy —
+ * same fakes, same bodies, kept in sync by review.
+ *
+ * Internal top-level so both suites share them (FakeMediaEngine lives in
+ * its own file beside this one).
  */
 
 /** Scriptable per-item resolution; mirrors what [DesktopAudioSourceResolver] returns. */
@@ -88,6 +94,12 @@ internal class FakePlaybackRepository : PlaybackRepository {
     }
 
     override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean = true
+    override suspend fun reportBookProgress(
+        itemId: String,
+        positionTicks: Long,
+        final: Boolean,
+    ): Result<Unit> = Result.success(Unit)
+    override fun getBookDownloadUrl(itemId: String): String = ""
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?) = "img://$itemId"
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?) = ""
     override fun getBackdropUrl(itemId: String, maxWidth: Int) = ""
@@ -117,12 +129,6 @@ internal class FakePlaybackRepository : PlaybackRepository {
     override fun getServerUrl(): String? = null
     override fun getAccessToken(): String? = null
     override fun buildSubtitleDeliveryUrl(itemId: String, mediaSourceId: String, index: Int, codec: String?) = ""
-
-    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> =
-        Result.failure(IllegalStateException())
-
-    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> =
-        Result.failure(IllegalStateException())
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> = emptyList()
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =

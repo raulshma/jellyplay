@@ -9,12 +9,18 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.RetryPolicy
+import com.raulshma.jellyplay.core.network.failover.ProbeOutcome
+import com.raulshma.jellyplay.core.network.failover.probeResolvedAddress
+import com.raulshma.jellyplay.core.network.failover.selectPreferredAddress
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
+import com.raulshma.jellyplay.core.network.auth.AuthSessionCore
 import com.raulshma.jellyplay.core.network.auth.AuthenticateByNameRequestDto
 import com.raulshma.jellyplay.core.network.auth.AuthenticationResultDto
+import com.raulshma.jellyplay.core.network.auth.NoOpAuthSessionSideEffects
 import com.raulshma.jellyplay.core.network.auth.PublicSystemInfoDto
 import com.raulshma.jellyplay.core.network.auth.QuickConnectAuthRequestDto
 import com.raulshma.jellyplay.core.network.auth.QuickConnectResultDto
+import com.raulshma.jellyplay.core.network.auth.RawLoginOutcome
 import com.raulshma.jellyplay.core.network.auth.defaultClientCapabilities
 import com.raulshma.jellyplay.core.network.auth.toServerInfo
 import com.raulshma.jellyplay.core.network.auth.toUserInfo
@@ -25,11 +31,9 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 
 /**
  *  chunk 1: the wasmJs [AuthApiClient] — a hand-rolled Ktor
@@ -42,11 +46,11 @@ import kotlinx.coroutines.withContext
  *  - ONE atomic [ActiveSession] publish per critical section (login /
  *    switchUser / disconnect); a missing side collapses to null. Never a
  *    synthetic `(newServer, oldUser)` intermediate.
- *  - The capture/adopt/try/publish/restore spine of `atomicLogin`: pre-auth
- *    adopt only when signed out, the round-trip runs unlocked, success
- *    republishes atomically, failure restores the captured session only if
- *    nothing newer published in between (under [authMutex], inside
- *    NonCancellable).
+ *  - The capture/adopt/try/publish/restore spine of the login paths is the
+ *    shared commonMain [AuthSessionCore] (single home of the invariant
+ *    KDoc), injected with this client's [authMutex] + session state and
+ *    the inert side-effects port below — the declared no-client-to-swap
+ *    divergence.
  *
  * Since chunk 2 the request plumbing (URL join, Authorization header, JSON
  * helpers, error mapping, apiResult/apiResultWithRetry) lives in the shared
@@ -58,9 +62,11 @@ import kotlinx.coroutines.withContext
  *
  * wasm v1 deltas vs the JVM impl (all documented, none affect JVM):
  *  - No failover router: `getServerUrl` returns the server's primary address;
- *    `selectReachableAddress` probes primary then alternates sequentially and
- *    falls back to the primary when nothing answers (the router's concurrent
- *    probe/failover machinery is OkHttp-bound jvmShared code).
+ *    `selectReachableAddress` runs the SAME primary-then-alternates-keep-
+ *    primary decision as the JVM router through the commonMain FailoverPolicy
+ *    core, but probes strictly sequentially (the router's primary-alone-first
+ *    + concurrent alternate fan-out is an OkHttp-bound jvmShared transport —
+ *    a declared divergence; see FailoverPolicy.kt for the full list).
  *  - No API-client object to swap on auth transitions — requests derive the
  *    base URL + token from the session state per call, so `setUser`'s
  *    build-client-before-publish ordering collapses to publish-inside-lock.
@@ -93,6 +99,21 @@ class KtorWasmAuthApiClient(
 
     private val authMutex = Mutex()
 
+    /**
+     * The shared commonMain spine (capture/adopt/try/publish/restore,
+     * connect-adopt, setServer, disconnect) over THIS client's [authMutex]
+     * and the shared session state — same lock, so setUser's
+     * publish-in-lock still excludes against every folded path. No
+     * side-effects port: wasm derives base URL + token per request from the
+     * session state (the declared divergence in the class KDoc), so there
+     * is no client object to swap on auth transitions.
+     */
+    private val sessionCore = AuthSessionCore(
+        mutex = authMutex,
+        state = sessionState,
+        sideEffects = NoOpAuthSessionSideEffects,
+    )
+
     override val currentServer: Flow<ServerInfo?> get() = sessionState.currentServer
     override val currentUser: Flow<UserInfo?> get() = sessionState.currentUser
     override val session: Flow<ActiveSession?> get() = sessionState.session
@@ -100,51 +121,60 @@ class KtorWasmAuthApiClient(
     // ── Probe / discovery ─────────────────────────────────────────────────
 
     /**
-     * Outcome of a reachability probe against one address, mirroring
-     * `ServerAddressRouter.AddressProbeResult` (minus the latency the JVM
-     * router tracks for its own scoring). Any HTTP response — including a
-     * non-2xx — means reachable; only transport failures mean unreachable.
+     * The Ktor transport of ONE reachability probe, producing the common
+     * failover core's [ProbeOutcome] (the latency the JVM router tracks is a
+     * declared JVM divergence — nothing on wasm scores it). Any HTTP response
+     * — including a non-2xx — means reachable; only transport failures mean
+     * unreachable. Cancellation is NOT classified: caller cancellation must
+     * keep propagating through the retry path (transport-side contract — the
+     * decision core never catches).
      */
-    private data class ProbeResult(
-        val reachable: Boolean,
-        val serverId: String? = null,
-        val serverName: String? = null,
-        val error: Exception? = null,
-    )
-
-    private suspend fun probeHttp(address: String): ProbeResult = try {
+    private suspend fun probeHttp(address: String): ProbeOutcome = try {
         val response: HttpResponse = probeHttpClient.get("$address/System/Info/Public")
         val bodyText = if (response.status.isSuccess()) response.bodyAsText() else null
-        val dto = bodyText?.let {
-            runCatching { wireJson.decodeFromString<PublicSystemInfoDto>(it) }.getOrNull()
-        }
-        ProbeResult(reachable = true, serverId = dto?.id, serverName = dto?.serverName)
+        val dto = bodyText?.let { decodePublicInfo(it) }
+        ProbeOutcome(reachable = true, serverId = dto?.id, serverName = dto?.serverName)
     } catch (e: CancellationException) {
-        // Caller cancellation must keep propagating through the retry path —
-        // never classified as an unreachable endpoint.
         throw e
     } catch (e: Exception) {
-        ProbeResult(reachable = false, error = e)
+        ProbeOutcome(reachable = false, error = e)
     }
 
     /**
-     * Probes exactly [address]. Semantics mirror
+     * Pure JSON decode guard — non-suspend on purpose (the ratchet keeps bare
+     * runCatching out of suspend bodies): an unparseable public-info body
+     * degrades to a reachable-without-identity outcome, same as the JVM probe.
+     */
+    private fun decodePublicInfo(bodyText: String): PublicSystemInfoDto? =
+        runCatching { wireJson.decodeFromString<PublicSystemInfoDto>(bodyText) }.getOrNull()
+
+    /**
+     * Probes exactly [address] through the common
+     * [probeResolvedAddress][com.raulshma.jellyplay.core.network.failover.probeResolvedAddress]
+     * ladder — the identical normalize → probe → legacy `/emby`/`/mediabrowser`
+     * strip-retry-once → adopt-the-stripped-address-only-on-a-real-identity
+     * table the JVM router's `probe` runs (formerly a prose-mirrored private
+     * ladder here; the mirror is the shared core now). Semantics mirror
      * `AuthApiClientImpl.probeServerInfo`: unreachable → throw the transport
      * error (retryable via the wasm classifier; a synthetic retryable
      * ApiException when there is no cause), reachable → [ServerInfo] with the
-     * public id/name or their fallbacks.
+     * public id/name or their fallbacks, persisted in the RESOLVED address
+     * form when the probe had to strip a legacy prefix.
      */
     private suspend fun probeServerInfo(address: String): ServerInfo {
-        val probe = probeHttp(address)
+        val probe = probeResolvedAddress(address, ::probeHttp)
         if (!probe.reachable) {
             throw probe.error ?: ApiException(
                 isRetryable = true,
                 message = "Server at $address is unreachable",
             )
         }
-        return PublicSystemInfoDto(id = probe.serverId, serverName = probe.serverName)
-            .toServerInfo(address = address, fallbackServerId = randomUuidV4())
+        return infoFrom(probe, probe.resolvedAddress ?: address)
     }
+
+    private fun infoFrom(probe: ProbeOutcome, address: String): ServerInfo =
+        PublicSystemInfoDto(id = probe.serverId, serverName = probe.serverName)
+            .toServerInfo(address = address, fallbackServerId = randomUuidV4())
 
     override suspend fun connectToServer(address: String): Result<ServerInfo> {
         val normalizedAddress = normalizeServerAddress(address)
@@ -158,7 +188,7 @@ class KtorWasmAuthApiClient(
                     // user (verbatim reason: this path is reachable while
                     // authenticated; a single-sided updateServer would publish
                     // a synthetic (newServer, oldUser) ActiveSession).
-                    authMutex.withLock { sessionState.updateSession(info, null) }
+                    sessionCore.adoptServer(info)
                     info
                 } catch (e: Exception) {
                     NetworkLog.e("JellyfinApi", "connectToServer failed for $normalizedAddress", e)
@@ -176,19 +206,18 @@ class KtorWasmAuthApiClient(
     override suspend fun selectReachableAddress(): String? {
         val server = sessionState.currentServer.value ?: return null
         if (server.alternateAddresses.isEmpty()) return server.address
-        // Mirror the router's selection order: prefer the (healthy common
-        // case) primary; only when it is down try the alternates; keep the
-        // primary when nothing answers. Sequential on wasm — no probe fan-out.
-        // The primary is normalized like the alternates — a stored address
+        // The common primary-then-alternates selection (prefer the healthy
+        // primary; keep the primary when nothing answers) — shared with the
+        // JVM router. Sequential probing on wasm is the declared divergence;
+        // the primary is normalized like the alternates — a stored address
         // with a trailing '/' or missing scheme must not fail fetch and
         // wrongly skip to the alternates.
         val normalizedPrimary = normalizeServerAddress(server.address)
-        if (probeHttp(normalizedPrimary).reachable) return normalizedPrimary
-        for (alternate in server.alternateAddresses) {
-            val normalized = normalizeServerAddress(alternate)
-            if (probeHttp(normalized).reachable) return normalized
-        }
-        return normalizedPrimary
+        return selectPreferredAddress(
+            primary = normalizedPrimary,
+            alternates = server.alternateAddresses.map(::normalizeServerAddress),
+            probe = ::probeHttp,
+        )
     }
 
     // ── Login / session management ────────────────────────────────────────
@@ -208,17 +237,32 @@ class KtorWasmAuthApiClient(
         username: String,
         password: String,
     ): Result<UserInfo> = apiResultWithRetry {
-        atomicLogin(serverInfo, fallbackName = username) {
-            postForJson<AuthenticationResultDto>(
+        // The spine (capture/adopt/round-trip/publish/restore) is
+        // [AuthSessionCore.atomicLogin]'s; this lambda is the wasm wire leg —
+        // the Ktor round-trip plus the wire-DTO → model mapping. The user
+        // maps only when the token survived, matching the pre-fold order
+        // (token validated first, then the user).
+        sessionCore.atomicLogin(serverInfo) {
+            val authResult = postForJson<AuthenticationResultDto>(
                 url = apiUrl(serverInfo.address, "/Users/AuthenticateByName"),
                 accessToken = null,
                 bodyText = encodeBody(AuthenticateByNameRequestDto(username = username, pw = password)),
+            )
+            RawLoginOutcome(
+                accessToken = authResult.accessToken,
+                userInfo = authResult.accessToken?.let { token ->
+                    authResult.user?.toUserInfo(
+                        serverAddress = serverInfo.address,
+                        accessToken = token,
+                        fallbackName = username,
+                    )
+                },
             )
         }
     }
 
     override suspend fun setServer(serverInfo: ServerInfo) {
-        authMutex.withLock { sessionState.updateServer(serverInfo) }
+        sessionCore.setServer(serverInfo)
     }
 
     override suspend fun setUser(userInfo: UserInfo) {
@@ -234,82 +278,10 @@ class KtorWasmAuthApiClient(
 
     override suspend fun disconnect() {
         // One atomic publish of the cleared pair; everything stays inside the
-        // lock for the same ordering reasons as the JVM path.
-        authMutex.withLock { sessionState.updateSession(null, null) }
-    }
-
-    /**
-     * Shared capture/adopt/try/publish/restore spine for both login paths,
-     * mirroring `AuthApiClientImpl.atomicLogin` minus the SDK client swap
-     * (none exists here). See the class KDoc for the invariant each step
-     * protects; the comments there apply verbatim.
-     */
-    private suspend fun atomicLogin(
-        serverInfo: ServerInfo,
-        fallbackName: String,
-        authenticate: suspend () -> AuthenticationResultDto,
-    ): UserInfo {
-        val previousSession = authMutex.withLock {
-            val session = sessionState.session.value
-            if (session == null) {
-                // Signed-out path: point currentServer at the target server;
-                // identity stays null → no transition fires, nothing to wipe.
-                sessionState.updateSession(serverInfo, null)
-            }
-            session
-        }
-        return try {
-            val authResult = authenticate()
-            val accessTokenValue = authResult.accessToken ?: throw Exception("No access token")
-            val userDto = authResult.user ?: throw Exception("Authentication failed")
-            val userInfo = userDto.toUserInfo(
-                serverAddress = serverInfo.address,
-                accessToken = accessTokenValue,
-                fallbackName = fallbackName,
-            )
-            publishAuthenticatedSession(serverInfo, userInfo)
-            userInfo
-        } catch (t: Throwable) {
-            restoreSession(previousSession)
-            throw t
-        }
-    }
-
-    /**
-     * Single atomic publish of the authenticated (server, user) pair — one
-     * critical-section step, mirroring
-     * `AuthApiClientImpl.publishAuthenticatedSession` (minus the API-client
-     * re-point, which has no wasm equivalent).
-     */
-    private suspend fun publishAuthenticatedSession(
-        serverInfo: ServerInfo,
-        userInfo: UserInfo,
-    ) {
-        authMutex.withLock {
-            sessionState.updateSession(
-                serverInfo.copy(
-                    userId = userInfo.id,
-                    accessToken = userInfo.accessToken,
-                    isConnected = true,
-                ),
-                userInfo,
-            )
-        }
-    }
-
-    /**
-     * Puts a captured pre-auth session back after a failed login attempt —
-     * same contract as `AuthApiClientImpl.restoreSession`: runs under
-     * NonCancellable, and only when the session still equals the captured
-     * value (checked under the mutex) so a concurrent publish wins.
-     */
-    private suspend fun restoreSession(previousSession: ActiveSession?) {
-        withContext(NonCancellable) {
-            authMutex.withLock {
-                if (sessionState.session.value != previousSession) return@withLock
-                sessionState.updateSession(previousSession?.server, previousSession?.user)
-            }
-        }
+        // lock for the same ordering reasons as the JVM path (the shared
+        // [AuthSessionCore] — here with an inert side-effects port, so the
+        // whole critical section is the session write alone).
+        sessionCore.disconnect()
     }
 
     // ── Quick Connect ─────────────────────────────────────────────────────
@@ -351,11 +323,23 @@ class KtorWasmAuthApiClient(
         serverInfo: ServerInfo,
         secret: String,
     ): Result<UserInfo> = apiResultWithRetry {
-        atomicLogin(serverInfo, fallbackName = "") {
-            postForJson<AuthenticationResultDto>(
+        // Same shape as authenticateUser above: the shared spine, with the
+        // Quick Connect round-trip + mapping as the wasm wire leg.
+        sessionCore.atomicLogin(serverInfo) {
+            val authResult = postForJson<AuthenticationResultDto>(
                 url = apiUrl(serverInfo.address, "/Users/AuthenticateWithQuickConnect"),
                 accessToken = null,
                 bodyText = encodeBody(QuickConnectAuthRequestDto(secret = secret)),
+            )
+            RawLoginOutcome(
+                accessToken = authResult.accessToken,
+                userInfo = authResult.accessToken?.let { token ->
+                    authResult.user?.toUserInfo(
+                        serverAddress = serverInfo.address,
+                        accessToken = token,
+                        fallbackName = "",
+                    )
+                },
             )
         }
     }

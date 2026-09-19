@@ -32,10 +32,12 @@ if (enableCoverage.get()) {
     pluginManager.apply("org.jetbrains.kotlinx.kover")
 }
 
-// Kover instrumentation is meaningless for the macrobenchmark producer, the
-// docs site, and the shared test-fixtures module. Single source for both the
-// plugin gate above and the aggregation wiring below.
-val koverExcludedModules = setOf("website", "baselineprofile", "testing")
+// Kover instrumentation is meaningless for the macrobenchmark producer.
+// Single source for both the plugin gate above and the aggregation wiring
+// below. (The former "website" and "testing" entries died with those
+// modules — the legacy-cutover dissolved :core:testing and the docs site
+// is no longer a Gradle module.)
+val koverExcludedModules = setOf("baselineprofile")
 
 subprojects {
     if (enableCoverage.get() && name !in koverExcludedModules) {
@@ -146,7 +148,7 @@ if (enableCoverage.get()) {
     }
 }
 
-// KGP wasm tool-download repo suppression (wave 13C) — the second half of the
+// KGP wasm tool-download repo suppression — the second half of the
 // settings.gradle.kts node/yarn/binaryen governance note. KGP 2.3.21's setup
 // tasks add their ivy download repository to the PROJECT at task-graph time,
 // which FAIL_ON_PROJECT_REPOS must keep rejecting; per the documented EnvSpec

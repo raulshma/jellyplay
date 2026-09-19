@@ -7,6 +7,47 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 
 /**
+ * The start-a-download value object — the inputs the former 15-positional-
+ * parameter `startDownload` signature declared THREE times (the writer
+ * interface, the impl's override + internal forwarding twin, and the delegate
+ * call site unpacking its request into named args). Building it is the
+ * caller's ONE decision point; consumers read fields.
+ *
+ * **Series linkage is non-null only for episodes:** [seriesId]/[seasonId]/
+ * [seriesName]/[seasonName]/[episodeNumber]/[seasonNumber] propagate the
+ * parent series/season of an episode download so the row is linked to its
+ * series — without the link, `deleteOfflineSeries` (WHERE seriesId =
+ * :seriesId) finds no rows and orphans episode files + download rows behind
+ * a deleted series. The single episode-context guard lives in
+ * [com.raulshma.jellyplay.core.data.util.DownloadDelegate]'s builder; the
+ * writer consumes the fields verbatim and must not re-guard.
+ */
+data class DownloadStartRequest(
+    val mediaItemId: String,
+    val name: String,
+    val mediaType: String,
+    val mediaSourceId: String?,
+    val downloadUrl: String,
+    val imageUrl: String?,
+    val imageBlurHash: String? = null,
+    val seriesId: String? = null,
+    val seasonId: String? = null,
+    val seriesName: String? = null,
+    val seasonName: String? = null,
+    val episodeNumber: Int? = null,
+    val seasonNumber: Int? = null,
+    val container: String? = null,
+    /**
+     * Pre-fetched `SUM(downloadedBytes)` across the download table, used to
+     * skip the per-call budget query when the caller has already evaluated
+     * the cap (notably `DownloadRepositoryImpl.downloadSeries`, which
+     * enqueues many episodes in a batch where no bytes are actually
+     * transferred yet). `null` (default) queries the DAO normally.
+     */
+    val precomputedCurrentBytes: Long? = null,
+)
+
+/**
  * The offline-artifact-write surface of a download: start the transfer, enqueue
  * the worker, and persist every sibling artifact (offline metadata row, local
  * images, trickplay, subtitles, intro/outro segments) that makes a download
@@ -32,30 +73,7 @@ import com.raulshma.jellyplay.core.model.TrickplayInfo
  */
 interface OfflineDownloadWriter {
 
-    suspend fun startDownload(
-        mediaItemId: String,
-        name: String,
-        mediaType: String,
-        mediaSourceId: String?,
-        downloadUrl: String,
-        imageUrl: String?,
-        imageBlurHash: String? = null,
-        seriesId: String? = null,
-        seasonId: String? = null,
-        seriesName: String? = null,
-        seasonName: String? = null,
-        episodeNumber: Int? = null,
-        seasonNumber: Int? = null,
-        container: String? = null,
-        /**
-         * Pre-fetched `SUM(downloadedBytes)` across the download table, used to
-         * skip the per-call budget query when the caller has already evaluated
-         * the cap (notably `DownloadRepositoryImpl.downloadSeries`, which
-         * enqueues many episodes in a batch where no bytes are actually
-         * transferred yet). `null` (default) queries the DAO normally.
-         */
-        precomputedCurrentBytes: Long? = null,
-    ): Result<DownloadItem>
+    suspend fun startDownload(request: DownloadStartRequest): Result<DownloadItem>
 
     suspend fun saveOfflineMediaItem(
         item: MediaItem,

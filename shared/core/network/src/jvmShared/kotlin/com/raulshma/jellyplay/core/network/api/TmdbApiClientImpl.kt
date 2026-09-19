@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
+import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,7 @@ internal fun parseTmdbReviews(json: Json, text: String): List<TmdbReview> =
 
 @Singleton
 class TmdbApiClientImpl @Inject constructor(
-    private val okHttpClient: OkHttpClient,
+    okHttpClient: OkHttpClient,
 ) : TmdbApiClient {
 
     private val json = SeerrApiClientImpl.lenientJson
@@ -47,6 +48,25 @@ class TmdbApiClientImpl @Inject constructor(
         val site: String? = null,
     )
 
+    /**
+     * The shared OkHttp execute chassis. TMDB's declared deltas ride the
+     * Options: a body-ignoring HTTP-failure text, its own network/parse
+     * texts, the IOException-backed "Empty response from TMDB" arm, and
+     * Retry-After capture (new with the chassis fold — TMDB rate-limits, and
+     * [RetryPolicy] now floors its backoff at the server's advice). Retry
+     * rides [tmdbFetch] itself at [HttpExecutor.MAX_RETRIES], replacing the
+     * deleted `ResilientTmdbApiClient` DI wrapper.
+     */
+    private val http = HttpExecutor(
+        okHttpClient = okHttpClient,
+        options = HttpExecutor.Options(
+            parseErrorMessage = { code, _ -> "TMDB request failed: $code" },
+            formatNetworkError = { e -> "TMDB network error: ${e.message ?: ""}" },
+            captureRetryAfter = true,
+            emptyBodyText = "Empty response from TMDB",
+        ),
+    )
+
     override suspend fun getVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> =
         tmdbFetch(tmdbId, mediaType, "videos") { text ->
             json.decodeFromString<TmdbVideosResponse>(text).results.map {
@@ -65,9 +85,14 @@ class TmdbApiClientImpl @Inject constructor(
         tmdbFetch(tmdbId, mediaType, "reviews") { parseTmdbReviews(json, it) }
 
     /**
-     * Shared GET `/3/{movie|tv}/{id}/{endpoint}` plumbing: builds the URL,
-     * executes on IO, and maps HTTP/network/parse failures onto [ApiException].
-     * Decode failures inside [parse] surface as the parse-error [ApiException].
+     * Shared GET `/3/{movie|tv}/{id}/{endpoint}` plumbing: builds the URL and
+     * runs ONE retry-wrapped execution on the [HttpExecutor] chassis — the
+     * body text via [HttpExecutor.executeForBodyText] (HTTP-status failures
+     * throw the Options-shaped [ApiException], an absent body the
+     * "Empty response from TMDB" arm), then [parse] maps it. Transport
+     * failures map onto [ApiException] fromNetwork; parse failures surface
+     * as the non-retryable "TMDB parse error" instead of throwing
+     * SerializationException raw.
      */
     private suspend fun <T> tmdbFetch(
         tmdbId: Int,
@@ -82,36 +107,28 @@ class TmdbApiClientImpl @Inject constructor(
             .get()
             .build()
 
-        return try {
-            withContext(Dispatchers.IO) {
-                okHttpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext Result.failure(
-                            ApiException.fromHttp(
-                                httpCode = response.code,
-                                message = "TMDB request failed: ${response.code}",
-                            )
-                        )
-                    }
-                    val text = response.body?.string()
-                    if (text == null) {
-                        return@withContext Result.failure<T>(emptyResponseBodyError("TMDB"))
-                    }
+        return RetryPolicy.executeWithRetry(maxRetries = HttpExecutor.MAX_RETRIES) {
+            try {
+                withContext(Dispatchers.IO) {
+                    val text = http.executeForBodyText(request)
                     Result.success(parse(text))
                 }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: IOException) {
-            Result.failure(ApiException.fromNetwork(e, "TMDB network error: ${e.message ?: ""}"))
-        } catch (e: Exception) {
-            Result.failure(
-                ApiException(
-                    isRetryable = false,
-                    message = "TMDB parse error: ${e.message ?: ""}",
-                    cause = e,
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                // Already classified by the chassis (HTTP status / empty body).
+                Result.failure(e)
+            } catch (e: IOException) {
+                Result.failure(ApiException.fromNetwork(e, "TMDB network error: ${e.message ?: ""}"))
+            } catch (e: Exception) {
+                Result.failure(
+                    ApiException(
+                        isRetryable = false,
+                        message = "TMDB parse error: ${e.message ?: ""}",
+                        cause = e,
+                    ),
                 )
-            )
+            }
         }
     }
 }

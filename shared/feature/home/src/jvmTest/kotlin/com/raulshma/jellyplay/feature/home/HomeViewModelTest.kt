@@ -2,10 +2,12 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -14,7 +16,6 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
-import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchPreviewState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
@@ -23,7 +24,6 @@ import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
@@ -107,8 +107,9 @@ import androidx.lifecycle.viewModelScope
  * `while(true)` loop's `delay` doesn't drive virtual time unbounded. The
  * concern-owned extractions from this VM each have their own JVM suite —
  * [HomeRefresherTest] (refresh policy), `ScrollPositionStoreTest`,
- * `PhotoFolderChildUrlsStoreTest`, `HomeSearchStateHolderTest`,
- * `SeriesDeleteStateHolderTest` (all in this package) and
+ * `HomeSearchStateHolderTest`,
+ * `SeriesDeleteStateHolderTest` (all in this package),
+ * `PhotoFolderChildUrlsStoreTest` and
  * `SyncStatusStateHolderTest` in :core:data — so this suite keeps only
  * VM-level UiState/collector policy and the pass-through seams.
  */
@@ -125,13 +126,13 @@ class HomeViewModelTest {
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
-    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var seriesDownloads: SeriesEpisodeDownloads
     private lateinit var downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake
-    private lateinit var mediaDownloadActions: com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+    private lateinit var quickDownloadActions: QuickDownloadActions
     private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.message.UserMessageBus
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlineModeManager: OfflineModeManager
-    private lateinit var newsletterTriggerManager: NewsletterTriggerManager
+    private lateinit var newsletterTriggerManager: HomeNewsletterGate
     private lateinit var homeDiscoveryStore: HomeDiscoveryStore
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var experimentalStore: ExperimentalStore
@@ -244,11 +245,11 @@ class HomeViewModelTest {
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
-        downloadRepository = mockk(relaxed = true)
+        seriesDownloads = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
+        quickDownloadActions = mockk(relaxed = true)
         // The VM's downloadedIds delegates to this flow at construction.
-        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
         userMessageBus = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
@@ -286,9 +287,6 @@ class HomeViewModelTest {
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
         every { offlineModeManager.goingOnline } returns goingOnlineFlow
-        every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
-        every { downloadRepository.observeCompletedDownloadedIds() } returns flowOf(emptySet())
-        every { downloadRepository.observeDownloadedIdsIncludingSeries() } returns flowOf(emptySet())
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
         coEvery { mediaRepository.getOfflineHomeLayout() } returns null
@@ -307,9 +305,9 @@ class HomeViewModelTest {
         mediaRepository = mediaRepository,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
-        downloadRepository = downloadRepository,
+        seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
-        mediaDownloadActions = mediaDownloadActions,
+        quickDownloadActions = quickDownloadActions,
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
@@ -327,7 +325,7 @@ class HomeViewModelTest {
         userMessageBus = userMessageBus,
         settingsSearchProvider = fakeSettingsSearchProvider,
         homeRefresherFactory = HomeRefresherFactory(
-            timeSource = fakeTimeSource,
+            clock = fakeTimeSource,
             mediaRepository = mediaRepository,
             seerrRepository = seerrRepository,
             arrRepository = arrRepository,
@@ -336,11 +334,14 @@ class HomeViewModelTest {
             continueWatchingBroadcaster = continueWatchingBroadcaster,
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
+            bookTocCacheRepository = NoopBookTocCacheRepository(),
         ),
-        syncStatusStateHolderFactory = SyncStatusStateHolderFactory(
-            playbackOutboxRepository = playbackOutboxRepository,
-            playbackSyncScheduler = playbackSyncScheduler,
-            offlineFirstItemResolver = offlineFirstItemResolver,
+        syncStatusStateHolderFactory = JvmHomeSyncStatusFactory(
+            SyncStatusStateHolderFactory(
+                playbackOutboxRepository = playbackOutboxRepository,
+                playbackSyncScheduler = playbackSyncScheduler,
+                offlineFirstItemResolver = offlineFirstItemResolver,
+            ),
         ),
     )
 
@@ -937,10 +938,11 @@ class HomeViewModelTest {
      * periodic-refresh and TTL gates stay on one side of their thresholds;
      * tests move [nowMs] to deliberately cross one.
      */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+    // HomeClock seam fake: the epoch-millis read drives the
+        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
+        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
         override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
     }
 
     /**

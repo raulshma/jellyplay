@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.editor
 
+import com.raulshma.jellyplay.core.model.MediaStream
+
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -62,31 +64,16 @@ class EditorViewModelUploadTest {
             editorRepository,
             authRepository,
             subtitleProviderRepository,
-            // No-op streaming subtitle store — upload tests don't exercise the
+            // No-op subtitle store seam — upload tests don't exercise the
             // durable subtitle path. Mirrors the player's TestStreamingSubtitleStore.
-            object : com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore {
-                override suspend fun save(
-                    itemId: String,
-                    provider: com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind,
-                    providerSubtitleId: String,
-                    fileName: String,
-                    language: String?,
-                    codec: String?,
-                    isForced: Boolean,
-                    isHearingImpaired: Boolean,
-                    bytes: ByteArray,
-                ) = com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle(
-                    provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
-                )
-                override suspend fun loadAll(itemId: String) = emptyList<com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle>()
-                override suspend fun fileFor(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = java.io.File(saved.fileRelativePath)
-                override suspend fun delete(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = Unit
-                override suspend fun markServerStreamIndex(
-                    itemId: String,
-                    saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle,
-                    index: Int,
+            object : EditorSubtitleStore {
+                override suspend fun save(save: ProviderSubtitleSave) = Unit
+                override suspend fun attributeUploaded(
+                    save: ProviderSubtitleSave,
+                    streamsAfterUpload: List<MediaStream>,
+                    preUploadExternalIndices: Set<Int>,
                 ) = Unit
-                override suspend fun clear(itemId: String) = Unit
+                override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) = Unit
             },
         )
     }
@@ -111,12 +98,12 @@ class EditorViewModelUploadTest {
             readBytes = { bytes },
         )
 
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
         // Should complete without throwing (the prior NotImplementedError crash)
         // and surface no error after a successful upload.
-        viewModel.uploadImageFromFile(picked, "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImageFromFile(picked, "Primary"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.setItemImage(itemId, "Primary", bytes) }
@@ -135,10 +122,10 @@ class EditorViewModelUploadTest {
             readBytes = { throw java.io.IOException("Cannot open input stream for selected image") },
         )
 
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.uploadImageFromFile(picked, "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImageFromFile(picked, "Primary"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -153,10 +140,10 @@ class EditorViewModelUploadTest {
     fun `uploadImage from bytes does not surface an error on success`() = runTest {
         // Exercises the existing ByteArray-based image upload and the fixed
         // failure handler (previously a no-op that copied error onto itself).
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.uploadImage(byteArrayOf(1, 2, 3), "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImage(byteArrayOf(1, 2, 3), "Primary"))
         advanceUntilIdle()
 
         // No error should be present after a successful upload.

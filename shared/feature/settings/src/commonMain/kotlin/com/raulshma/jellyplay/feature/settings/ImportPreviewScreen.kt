@@ -36,12 +36,14 @@ import com.composables.icons.tabler.outline.AlertTriangle
 import com.composables.icons.tabler.outline.Database
 import com.composables.icons.tabler.outline.InfoCircle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -62,7 +64,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_impo
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_error
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_import_all
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_import_category
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_legacy_warning
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_loading
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_security_option
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_summary_card
@@ -82,14 +83,26 @@ fun ImportPreviewScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
 
     val current = viewModel.currentPrefs
     val incoming = viewModel.incomingPrefs
     val currentExtras = viewModel.currentExtras
     val incomingExtras = viewModel.incomingExtras
 
-    var pendingAction by remember { mutableStateOf<PendingImportAction?>(null) }
+    /**
+     * Pending import confirmation ([PendingConfirmation]). Settle arms per
+     * action: Category/Extras clear synchronously at confirm (as before;
+     * their import callbacks carry no dialog writes); the All arm KEEPS the
+     * pending — the dialog renders loading from [actionInFlight] while the
+     * import runs and settles via the importEvent LaunchedEffect on every
+     * terminal outcome, success and failure alike (success also pops the
+     * screen there). The dismiss/confirm guard RULE is the machine's; the
+     * in-flight FACT is the screen-local [actionInFlight].
+     */
+    var pendingAction by remember { mutableStateOf(PendingConfirmation<PendingImportAction>()) }
+    /** True between a confirm tap and its import settling — the [PendingConfirmation] dismiss/confirm guard. */
+    var actionInFlight by remember { mutableStateOf(false) }
     var restoreSecuritySensitive by remember { mutableStateOf(false) }
 
     LaunchedEffect(uri) {
@@ -111,8 +124,15 @@ fun ImportPreviewScreen(
                 is ImportPreviewViewModel.ImportEvent.ExtrasImported -> "App state imported"
                 is ImportPreviewViewModel.ImportEvent.Failed -> "Import failed: ${event.message}"
             }
-            messenger?.info(msg)
+            bus.info(msg)
             viewModel.clearImportEvent()
+            // Terminal import event: settle the All arm's in-flight flag —
+            // the sole reset path (the VM's onDone callback only fires on
+            // success, so without this a Failed import would leave the
+            // dialog loading forever). Success pops below; failure leaves
+            // the dialog dismissible/retryable. Category/Extras already
+            // cleared at confirm, so this is a no-op for them.
+            actionInFlight = false
             if (event is ImportPreviewViewModel.ImportEvent.AllImported) onBack()
         }
     }
@@ -212,22 +232,14 @@ fun ImportPreviewScreen(
                     titleRes = Res.string.settings_import_preview_title,
                     summaryRes = Res.string.settings_import_preview_summary_card,
                     primaryLabelRes = Res.string.settings_import_preview_import_all,
-                    onPrimary = { pendingAction = PendingImportAction.All },
+                    onPrimary = { pendingAction = pendingAction.hold(PendingImportAction.All) },
                     primaryEnabled = totalChanged > 0,
                     isErrorContainer = false,
                 )
             }
 
             // Warnings
-            if (viewModel.isLegacy) {
-                item(key = "legacy_warn") {
-                    WarningCard(
-                        icon = Tabler.Outline.InfoCircle,
-                        text = stringResource(Res.string.settings_import_preview_legacy_warning),
-                    )
-                }
-            }
-            if (viewModel.versionMismatch && !viewModel.isLegacy) {
+            if (viewModel.versionMismatch) {
                 item(key = "version_warn") {
                     WarningCard(
                         icon = Tabler.Outline.AlertTriangle,
@@ -275,7 +287,7 @@ fun ImportPreviewScreen(
                         changedCount = diff.changed.size,
                         totalInCategory = diff.total,
                         fields = diff.changed,
-                        onAction = { pendingAction = PendingImportAction.Category(diff.view.category) },
+                        onAction = { pendingAction = pendingAction.hold(PendingImportAction.Category(diff.view.category)) },
                         actionLabelRes = Res.string.settings_import_preview_import_category,
                         isErrorAction = false,
                     )
@@ -290,7 +302,7 @@ fun ImportPreviewScreen(
                     changedCount = extrasChanged.size,
                     totalInCategory = extrasFields.size,
                     fields = extrasChanged,
-                    onAction = { pendingAction = PendingImportAction.Extras },
+                    onAction = { pendingAction = pendingAction.hold(PendingImportAction.Extras) },
                     actionLabelRes = Res.string.settings_import_preview_import_category,
                     isErrorAction = false,
                 )
@@ -298,7 +310,7 @@ fun ImportPreviewScreen(
         }
     }
 
-    pendingAction?.let { action ->
+    pendingAction.item?.let { action ->
         val (titleRes, messageRes) = when (action) {
             is PendingImportAction.All -> Res.string.settings_import_preview_confirm_all_title to Res.string.settings_import_preview_confirm_all_message
             is PendingImportAction.Category -> Res.string.settings_import_preview_confirm_category_title to Res.string.settings_import_preview_confirm_category_message
@@ -308,19 +320,40 @@ fun ImportPreviewScreen(
             title = stringResource(titleRes),
             message = stringResource(messageRes),
             confirmText = stringResource(Res.string.settings_import_preview_confirm),
+            // The All arm holds the dialog open while its import runs; the
+            // confirm button renders that as loading. Category/Extras clear
+            // synchronously at confirm, so this never renders for them.
+            confirmLoading = actionInFlight,
             onConfirm = {
-                when (action) {
-                    is PendingImportAction.All -> viewModel.importAll(restoreSecuritySensitive) { /* pop handled via status effect */ }
-                    is PendingImportAction.Category -> viewModel.importCategory(action.category, restoreSecuritySensitive) { pendingAction = null }
-                    is PendingImportAction.Extras -> viewModel.importExtras { pendingAction = null }
-                }
-                if (action is PendingImportAction.All) {
-                    // Keep pendingAction to show loading; will pop on success via LaunchedEffect
-                } else {
-                    pendingAction = null
+                val confirmed = pendingAction.confirm(actionInFlight) ?: return@ConfirmDialog
+                when (confirmed) {
+                    is PendingImportAction.All -> {
+                        // All arm KEEPS the pending: in-flight refuses the
+                        // trailing dismiss so the dialog shows loading, and it
+                        // settles/pops via the importEvent LaunchedEffect —
+                        // the sole reset path, firing on every terminal
+                        // outcome (the VM's onDone only fires on success, so
+                        // it carries no dialog writes).
+                        actionInFlight = true
+                        viewModel.importAll(restoreSecuritySensitive) {}
+                    }
+                    is PendingImportAction.Category -> {
+                        // The Category import's completion callback carries no
+                        // dialog writes: this arm settled synchronously below,
+                        // and a late callback write could clobber a NEW dialog
+                        // staged before the import finished.
+                        viewModel.importCategory(confirmed.category, restoreSecuritySensitive) {}
+                        // Settle: clear at confirm — the dialog pops now.
+                        pendingAction = pendingAction.clear()
+                    }
+                    is PendingImportAction.Extras -> {
+                        // Same as Category: no dialog writes in the callback.
+                        viewModel.importExtras {}
+                        pendingAction = pendingAction.clear()
+                    }
                 }
             },
-            onDismiss = { pendingAction = null },
+            onDismiss = { pendingAction = pendingAction.dismiss(actionInFlight) },
             dismissText = stringResource(Res.string.settings_cancel),
         )
     }

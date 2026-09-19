@@ -41,8 +41,10 @@ fun rememberHighlightScrollIndex(
 
 /**
  * Scrolls [scrollState] to the index produced by [rememberHighlightScrollIndex],
- * swallowing the cancellation that `animateScrollToItem` throws if the scroll
- * is interrupted (e.g. by a second deep-link arriving mid-animation).
+ * ignoring a plain scroll failure but rethrowing the cancellation that
+ * `animateScrollToItem` throws if the scroll is interrupted (e.g. by a second
+ * deep-link arriving mid-animation) — swallowing it would cancel the wrong
+ * coroutine's clean shutdown.
  */
 @Composable
 fun HighlightScrollEffect(scrollState: LazyListState, scrollIndex: Int) {

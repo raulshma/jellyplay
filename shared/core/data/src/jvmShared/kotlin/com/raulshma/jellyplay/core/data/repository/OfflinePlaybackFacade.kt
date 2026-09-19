@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.MediaSegment
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
-// :core:data shim (same package/name); `@Singleton` / `@Inject` stripped
+// core:data shim (same package/name); `@Singleton` / `@Inject` stripped
 // (one framework per type — Koin's dataJvmModule constructs this single; the
 // legacy DataModule bridges the remaining Hilt injectors — notably
 // PlaybackSourceResolverImpl, whose ctor takes this facade — via koin().get()).

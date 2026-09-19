@@ -12,7 +12,7 @@ import java.io.File
  * The single owner of the download-vs-stream fork. See [PlaybackSourceResolver]
  * for the module contract and the disk-staleness / fallback semantics.
  *
- * Moved from the legacy `:core:data` shim (playback-flips wave): the sole
+ * Moved from the legacy `:core:data` shim (playback flips): the sole
  * Android coupling (`android.net.Uri.fromFile`) became `File.toURI()`, so the
  * impl is platform-free and Koin-owned ([dataJvmModule][com.raulshma.jellyplay.core.data.di.dataJvmModule]
  * constructs it; the legacy DataModule bridges Hilt injectors to the single).

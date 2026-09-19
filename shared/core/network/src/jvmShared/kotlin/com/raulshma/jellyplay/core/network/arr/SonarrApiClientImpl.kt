@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueMessage
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.api.parseUnitRequest
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -81,7 +80,7 @@ class SonarrApiClientImpl @Inject constructor(
     ): Result<Unit> {
         val url = support.buildUrl(baseUrl, "/queue/$id").newBuilder().withDeleteOptions(options).build()
         val request = Request.Builder().url(url).withApiKey(apiKey).delete().build()
-        return parseUnitRequest(support.jsonRequestClient, request)
+        return support.parseUnit(request)
     }
 
     override suspend fun deleteQueueItems(
@@ -98,7 +97,7 @@ class SonarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .delete(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(support.jsonRequestClient, request)
+        return support.parseUnit(request)
     }
 
     override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
@@ -127,7 +126,7 @@ class SonarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .post(rowList.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(support.jsonRequestClient, postRequest)
+        return support.parseUnit(postRequest)
     }
 
     override suspend fun getCalendar(
@@ -193,7 +192,7 @@ class SonarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .delete(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(support.jsonRequestClient, request)
+        return support.parseUnit(request)
     }
 
     override suspend fun getWanted(
@@ -344,7 +343,7 @@ class SonarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .put(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(support.jsonRequestClient, request)
+        return support.parseUnit(request)
     }
 
     override suspend fun getSeriesInfo(baseUrl: String, apiKey: String, tvdbId: Int): Result<SonarrSeriesInfo?> {
@@ -389,7 +388,7 @@ class SonarrApiClientImpl @Inject constructor(
             .withApiKey(apiKey)
             .get()
             .build()
-        return parseUnitRequest(support.jsonRequestClient, request)
+        return support.parseUnit(request)
     }
 
     // ── Sonarr v3 DTOs (private; mapped to core/model types) ───────────────

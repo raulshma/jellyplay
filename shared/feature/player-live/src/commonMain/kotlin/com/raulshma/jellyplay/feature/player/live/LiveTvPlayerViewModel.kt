@@ -34,6 +34,9 @@ import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerAudio
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerEngine
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 import com.raulshma.jellyplay.feature.player.live.engine.TranscodeReasonsRenderer
+import com.raulshma.jellyplay.feature.livetv.components.RecordAction
+import com.raulshma.jellyplay.feature.livetv.components.RecordActions
+import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -49,8 +52,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.format.DateTimeFormatter
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 private const val TAG = "LiveTvPlayerViewModel"
 
@@ -336,72 +340,47 @@ class LiveTvPlayerViewModel(
     }
 
     // ── In-player recording ──
-    // Mirrors ChannelDetailViewModel: each action schedules/cancels a timer on
-    // the currently-airing program then re-fetches the program window so the
-    // Record ↔ Cancel sheet state follows the server, emitting a one-shot
-    // message on [messages] (the legacy UserMessageBus posts). No-op without
-    // a current program.
+    // The shared [RecordActions] choreography (livetv conveyor's ONE record
+    // flow), adapted to this screen's feedback surface exactly as
+    // ChannelDetailViewModel does it: one-shot messages on [messageChannel]
+    // (Resource success/canceled, Raw failure with the legacy fallback
+    // literals) and a re-fetch of the current channel's program window after
+    // every successful action so the Record ↔ Cancel sheet state follows the
+    // server. The funnels below stay no-op without a current program (and,
+    // for cancels, without the matching timer id — [RecordActions] guards).
+
+    private val recordActions = RecordActions(liveTvRepository, viewModelScope) { outcome ->
+        when (outcome) {
+            is RecordOutcome.Success -> {
+                messageChannel.trySend(outcome.request.action.successMessage())
+                viewModelScope.launch { refreshProgramsForCurrentChannel() }
+            }
+            is RecordOutcome.Error ->
+                messageChannel.trySend(
+                    LivePlayerMessage.Raw(outcome.message ?: outcome.request.action.failureFallback())
+                )
+            is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
+        }
+    }
 
     /** Schedules a single-episode timer for the current program. */
     fun recordCurrentProgramOnce() {
-        val program = _state.value.currentProgram ?: return
-        viewModelScope.launch {
-            liveTvRepository.createTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_success))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        _state.value.currentProgram?.let(recordActions::recordOnce)
     }
 
     /** Schedules a series timer rooted at the current program. */
     fun recordCurrentProgramSeries() {
-        val program = _state.value.currentProgram ?: return
-        viewModelScope.launch {
-            liveTvRepository.createSeriesTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_success))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        _state.value.currentProgram?.let(recordActions::recordSeries)
     }
 
     /** Cancels the single timer on the current program (if one is set). */
     fun cancelCurrentProgramTimer() {
-        val program = _state.value.currentProgram ?: return
-        val timerId = program.timerId ?: return
-        viewModelScope.launch {
-            liveTvRepository.cancelTimer(timerId)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_canceled))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        _state.value.currentProgram?.let { recordActions.cancelTimer(it) }
     }
 
     /** Cancels the series timer on the current program (if one is set). */
     fun cancelCurrentProgramSeries() {
-        val program = _state.value.currentProgram ?: return
-        val seriesTimerId = program.seriesTimerId ?: return
-        viewModelScope.launch {
-            liveTvRepository.cancelSeriesTimer(seriesTimerId)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_canceled))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        _state.value.currentProgram?.let { recordActions.cancelSeries(it) }
     }
 
     /**
@@ -543,17 +522,13 @@ class LiveTvPlayerViewModel(
             liveStreamOption = option,
         )
         if (resolved != null) {
-            // When the user asked for Direct Stream but the server still
-            // resolved a transcode, it's because the server's live-source
-            // probe failed (TranscodeReasons=DirectPlayError) even though
-            // the tuner is opened and readable. The tuner session is live,
-            // so ignore the server's verdict and build a direct-stream URL
-            // ourselves from the liveStreamId; if the player genuinely can't
-            // decode it, the existing onPlayerError -> transcode fallback
-            // catches that. AUTO/TRANSCODE accept whatever the server picks.
-            if (option == LiveStreamOption.DIRECT_STREAM &&
-                resolved.playMethod == PlayMethod.TRANSCODE
-            ) {
+            // DIRECT_STREAM probe-override policy (LiveStreamResolution,
+            // pinned by LiveStreamResolutionTest): when the user asked for
+            // Direct Stream but the server resolved a transcode, the
+            // live-source probe failed even though the tuner session is
+            // live — ignore the verdict and fall to the liveStreamId ladder
+            // below; AUTO/TRANSCODE options accept the server's pick.
+            if (shouldIgnoreServerTranscodeVerdict(option, resolved.playMethod)) {
                 Log.w(
                     TAG,
                     "Server resolved transcode for ${channel.name} despite " +
@@ -601,60 +576,38 @@ class LiveTvPlayerViewModel(
                 "requiresOpening=${source.requiresOpening}"
         )
 
-        val liveId = source.liveStreamId
-        val url = when {
-            source.supportsDirectStream || source.supportsDirectPlay ->
+        // Pure capability ladder + play-method fold (LiveStreamResolution,
+        // pinned by LiveStreamResolutionTest); this VM keeps only the repo
+        // URL call (injected as the builder) and the logging.
+        val resolution = resolveLiveStreamResolution(
+            source = source,
+            buildStreamUrl = { mediaSourceId, liveStreamId ->
                 playbackRepository.getStreamUrl(
                     itemId = channel.id,
-                    mediaSourceId = source.id,
+                    mediaSourceId = mediaSourceId,
                     startTimeTicks = 0L,
-                    liveStreamId = liveId,
+                    liveStreamId = liveStreamId,
                 )
-            source.supportsTranscoding && !source.transcodeUrl.isNullOrBlank() ->
-                playbackRepository.getStreamUrl(
-                    itemId = channel.id,
-                    mediaSourceId = source.id,
-                    startTimeTicks = 0L,
-                    liveStreamId = liveId,
-                )
-            // Live tuner sessions opened via autoOpenLiveStream=true can be
-            // read by hitting /Videos/{id}/stream?LiveStreamId=… even when
-            // the server's playability decision returned all-false flags
-            // (observed with some M3U/HLS-only tuners under FORCE_DIRECT_PLAY
-            // or when the device profile doesn't claim HLS support). The
-            // tuner is already open server-side, so the URL is valid.
-            !liveId.isNullOrBlank() -> {
-                Log.w(TAG, "All playability flags false for ${channel.name}; attempting direct stream via liveStreamId")
-                playbackRepository.getStreamUrl(
-                    itemId = channel.id,
-                    mediaSourceId = source.id,
-                    startTimeTicks = 0L,
-                    liveStreamId = liveId,
-                )
-            }
-            else -> {
+            },
+        )
+        val stream = when (resolution) {
+            is LiveStreamResolution.Resolved -> resolution
+            LiveStreamResolution.NoPlayableMethod -> {
                 Log.e(TAG, "No playable method offered for ${channel.name}")
                 return null
             }
         }
-        if (url.isBlank()) {
+        if (stream.via == LiveStreamResolution.Via.LIVE_STREAM_ID) {
+            Log.w(TAG, "All playability flags false for ${channel.name}; attempting direct stream via liveStreamId")
+        }
+        if (stream.url.isBlank()) {
             Log.e(TAG, "Resolved URL is blank for ${channel.name}")
             return null
         }
-
-        // The URL built above is always a direct `/Videos/{id}/stream` URL
-        // (via getStreamUrl), never a transcoding master.m3u8 — even when the
-        // server's flags say transcoding is the only option. So the play
-        // method reflects the URL we built, not the server's verdict; this
-        // also keeps the onPlayerError -> transcode fallback eligible.
-        val playMethod = when {
-            source.supportsDirectPlay -> PlayMethod.DIRECT_PLAY
-            else -> PlayMethod.DIRECT_STREAM
-        }
         return ResolvedPlayback(
             mediaSourceId = source.id,
-            streamUrl = url,
-            playMethod = playMethod,
+            streamUrl = stream.url,
+            playMethod = stream.playMethod,
             playSessionId = info.playSessionId,
             maxStreamingBitrate = null,
             container = source.container,
@@ -834,29 +787,39 @@ class LiveTvPlayerViewModel(
     }
 
     private suspend fun loadPrograms(channelId: String) {
-        val now = Instant.now()
-        val end = now.plusSeconds(PROGRAM_LOOKAHEAD_HOURS * 3600)
-        val fmt = DateTimeFormatter.ISO_INSTANT
+        val now = Clock.System.now()
+        val end = now + PROGRAM_LOOKAHEAD_HOURS.hours
         val programs = liveTvRepository.getLiveTvPrograms(
             channelId = channelId,
-            startDateUtc = fmt.format(now),
-            endDateUtc = fmt.format(end),
+            // kotlin.time.Instant.toString() renders the same ISO-8601 UTC
+            // instant the former DateTimeFormatter.ISO_INSTANT produced
+            // (seconds always, fraction only when non-zero).
+            startDateUtc = now.toString(),
+            endDateUtc = end.toString(),
         ).getOrNull().orEmpty()
         val parsed = programs.map { p ->
             Triple(
                 p,
-                p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
-                p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                parseInstantOrNull(p.startDate),
+                parseInstantOrNull(p.endDate),
             )
         }
         val current = parsed.firstOrNull { (_, start, finish) ->
-            start != null && finish != null && !now.isBefore(start) && now.isBefore(finish)
+            start != null && finish != null && start <= now && now < finish
         }?.first
         val next = parsed.firstOrNull { (p, start, _) ->
-            start != null && start.isAfter(now) && p.id != current?.id
+            start != null && start > now && p.id != current?.id
         }?.first
         _state.value = _state.value.copy(currentProgram = current, nextProgram = next)
     }
+
+    /**
+     * Pure ISO-8601 parse guard — non-suspend on purpose (the ratchet keeps
+     * bare runCatching out of suspend bodies): an unparseable program instant
+     * degrades to null and that program can't be picked as current/next.
+     */
+    private fun parseInstantOrNull(raw: String?): Instant? =
+        raw?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
     fun togglePlayPause() {
         engine?.let { if (it.isPlaying.value) it.pause() else it.play() }
@@ -1043,3 +1006,18 @@ class LiveTvPlayerViewModel(
         PlayMethod.TRANSCODE -> LivePlayMethod.TRANSCODE
     }
 }
+
+/** Timer creations announce success; cancels announce cancellation. */
+private fun RecordAction.startsTimer(): Boolean =
+    this == RecordAction.RECORD_ONCE || this == RecordAction.RECORD_SERIES
+
+private fun RecordAction.successMessage(): LivePlayerMessage =
+    if (startsTimer()) {
+        LivePlayerMessage.Resource(Res.string.live_record_success)
+    } else {
+        LivePlayerMessage.Resource(Res.string.live_record_canceled)
+    }
+
+/** The failure fallback literals, kept byte-identical from the legacy inline arms. */
+private fun RecordAction.failureFallback(): String =
+    if (startsTimer()) "Failed to set recording" else "Failed to cancel recording"

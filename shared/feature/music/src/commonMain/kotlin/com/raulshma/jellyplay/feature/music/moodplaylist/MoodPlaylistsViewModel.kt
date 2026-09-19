@@ -1,24 +1,36 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MoodPlaylist
 import com.raulshma.jellyplay.core.model.MoodPlaylistSort
 import com.raulshma.jellyplay.core.model.MoodPlaylistsPreset
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.music.GeneratedPlaylistState
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import kotlinx.coroutines.flow.collectLatest
-import java.util.UUID
 
 class MoodPlaylistsViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioQueueFacade: AudioQueueFacade,
+    audioQueueFacade: MusicQueuePlayer,
     private val moodPlaylistRepository: MoodPlaylistRepository,
 ) : JellyPlayViewModel() {
+
+    /**
+     * The generate pipeline (loading/error/selection/items lifecycle), the
+     * `"custom-"` id convention + delete guard, clearGenerated and playAll
+     * live in the shared [GeneratedPlaylistState]; what stays here is the
+     * mood-kind adapters — the fetch (random 300-audio pull) and the client
+     * filter/exclusion/rating + sort + take pipeline — plus the
+     * repository-derived playlist/favorite state the holder doesn't own.
+     */
+    private val generated = GeneratedPlaylistState<MoodPlaylist>(scope, audioQueueFacade)
 
     private val _playlists = composeState<List<MoodPlaylist>>(MoodPlaylistsPreset.all)
     val playlists: List<MoodPlaylist> get() = _playlists.value
@@ -26,17 +38,13 @@ class MoodPlaylistsViewModel(
     private val _favoritePlaylistIds = composeState<Set<String>>(emptySet())
     val favoritePlaylistIds: Set<String> get() = _favoritePlaylistIds.value
 
-    private val _selectedPlaylist = composeState<MoodPlaylist?>(null)
-    val selectedPlaylist: MoodPlaylist? get() = _selectedPlaylist.value
+    val selectedPlaylist: MoodPlaylist? get() = generated.selectedPlaylist
 
-    private val _generatedItems = composeState<List<MediaItem>>(emptyList())
-    val generatedItems: List<MediaItem> get() = _generatedItems.value
+    val generatedItems: List<MediaItem> get() = generated.generatedItems
 
-    private val _isLoading = composeState(false)
-    val isLoading: Boolean get() = _isLoading.value
+    val isLoading: Boolean get() = generated.isLoading
 
-    private val _error = composeState<String?>(null)
-    val error: String? get() = _error.value
+    val error: String? get() = generated.error
 
     init {
         launch {
@@ -76,9 +84,9 @@ class MoodPlaylistsViewModel(
     ) {
         if (name.isBlank() || genreKeywords.isEmpty()) return
         launch {
-            _error.value = null
+            generated.clearError()
             val playlist = MoodPlaylist(
-                id = "custom-${UUID.randomUUID()}",
+                id = GeneratedPlaylistState.newCustomId(),
                 name = name.trim(),
                 emoji = emoji.ifBlank { "🎵" },
                 description = description.trim(),
@@ -94,7 +102,7 @@ class MoodPlaylistsViewModel(
     }
 
     fun deleteCustomPlaylist(playlist: MoodPlaylist) {
-        if (!playlist.id.startsWith("custom-")) return
+        if (!GeneratedPlaylistState.isCustomId(playlist.id)) return
         launch {
             moodPlaylistRepository.delete(playlist.id)
         }
@@ -111,44 +119,34 @@ class MoodPlaylistsViewModel(
     }
 
     fun generatePlaylist(playlist: MoodPlaylist) {
-        launch {
-            _isLoading.value = true
-            _error.value = null
-            _selectedPlaylist.value = playlist
-            mediaRepository.getMediaItems(
-                filters = com.raulshma.jellyplay.core.model.LibraryFilters(
-                    mediaTypes = listOf(MediaType.AUDIO),
-                    sortBy = com.raulshma.jellyplay.core.model.SortOption.RANDOM,
-                ),
-                limit = 300,
-            ).onSuccess { result ->
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    var items = result.items
-                    items = applyMoodFilter(items, playlist)
-                    items = applySort(items, playlist.sortBy)
-                    items.take(playlist.maxItems)
-                }.also { items ->
-                    _generatedItems.value = items
-                }
-            }.onFailure {
-                _error.value = it.message ?: "Failed to generate playlist"
-            }
-            _isLoading.value = false
-        }
+        generated.generate(
+            playlist = playlist,
+            fetch = {
+                mediaRepository.getMediaItems(
+                    filters = LibraryFilters(
+                        mediaTypes = listOf(MediaType.AUDIO),
+                        sortBy = SortOption.RANDOM,
+                    ),
+                    limit = 300,
+                )
+            },
+            process = { items ->
+                val filtered = applyMoodFilter(items, playlist)
+                val sorted = applySort(filtered, playlist.sortBy)
+                sorted.take(playlist.maxItems)
+            },
+        )
     }
 
     fun clearGenerated() {
-        _generatedItems.value = emptyList()
-        _selectedPlaylist.value = null
+        generated.clearGenerated()
     }
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
 
     fun playAll(startIndex: Int = 0) {
-        launch {
-            audioQueueFacade.playTracks(generatedItems, startIndex = startIndex)
-        }
+        generated.playAll(startIndex)
     }
 
     private fun applyMoodFilter(items: List<MediaItem>, playlist: MoodPlaylist): List<MediaItem> {

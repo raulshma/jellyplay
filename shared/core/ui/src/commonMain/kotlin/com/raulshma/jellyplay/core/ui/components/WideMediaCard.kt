@@ -35,6 +35,9 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
  * @param cardWidth fixed card width (the row computes this from adaptive info).
  * @param surfaceScrimBrush bottom scrim brush — hoisted and shared across every
  *  card in the row to avoid allocating a [Brush] per scrolling card.
+ * @param bookProgressFractionOverride TOC-accurate book fraction for the
+ *  footer's "% complete" label (the [PosterCard] parity param; admission and
+ *  percent math live in [bookFooterPercent]).
  */
 @Composable
 fun WideMediaCard(
@@ -47,6 +50,7 @@ fun WideMediaCard(
     surfaceScrimBrush: Brush,
     modifier: Modifier = Modifier,
     clipToShape: Boolean = false,
+    bookProgressFractionOverride: Float? = null,
 ) {
     val isTv = LocalTvMode.current
     val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl }, itemId = item.id)
@@ -112,7 +116,12 @@ fun WideMediaCard(
         },
         footer = {
             val isSeries = item.mediaType == MediaType.SERIES
-            val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
+            // Books never render runtime/time-left meta — their position ticks
+            // encode reading progress, not time, so the video runtime math
+            // produced bogus "0m left". A book in progress shows "% complete";
+            // an unstarted book shows nothing.
+            val isBook = item.mediaType == MediaType.BOOK
+            val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries && !isBook
             val hasWatchProgress = item.hasWatchProgress
             val remainingTime =
                 remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
@@ -122,9 +131,10 @@ fun WideMediaCard(
                 }
             val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
                 if (hasValidDuration && !hasWatchProgress) {
-                    formatDurationFromTicks(item.runTimeTicks!!)
+                    formatRuntimeLabelFromTicks(item.runTimeTicks)
                 } else null
             }
+            val bookPercent = bookFooterPercent(item, bookProgressFractionOverride)
 
             val timeText = remainingTime ?: totalTime
 
@@ -160,7 +170,20 @@ fun WideMediaCard(
                     )
                 }
 
-                if (timeText != null) {
+                if (bookPercent != null) {
+                    if (subtitleText.isNotEmpty() || item.year != null) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                    }
+                    Text(
+                        text = "$bookPercent% complete",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else if (timeText != null) {
                     if (subtitleText.isNotEmpty() || item.year != null) {
                         Text(
                             text = "•",

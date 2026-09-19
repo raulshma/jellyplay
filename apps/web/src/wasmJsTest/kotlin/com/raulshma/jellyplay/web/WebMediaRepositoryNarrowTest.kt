@@ -67,6 +67,10 @@ class WebMediaRepositoryNarrowTest {
         override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> = unused()
         override suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>> = unused()
         override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = unused()
+        // Pre-existing stale-fake fix (the interface gained getContinueReading
+        // with the Media repository split; the mechanical throw stub follows
+        // the file's own off-web-member idiom).
+        override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> = unused()
         override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = unused()
         override suspend fun getMediaItems(
             parentId: String?,

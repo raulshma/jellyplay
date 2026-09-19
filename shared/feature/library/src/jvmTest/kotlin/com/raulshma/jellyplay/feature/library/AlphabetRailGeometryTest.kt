@@ -1,14 +1,15 @@
 package com.raulshma.jellyplay.feature.library
 
+import com.raulshma.jellyplay.core.ui.components.FisheyeRailMath
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
- * Pins the alphabet rail's extracted geometry core (see [AlphabetRailGeometry]):
- * the gaussian fisheye lens edges, the pixel→letter mapping including the
- * `#`/misc bucket, and the rail-end + degenerate-row clamps. Pure math — no
- * Compose, no dispatcher.
+ * Pins the alphabet rail's geometry core ([AlphabetRailGeometry]) at its
+ * feature-specific arms: the rail-end + degenerate-row clamps, the
+ * pixel→letter mapping including the `#`/misc bucket, and the delegation to
+ * the shared lens. The gaussian fisheye math itself is pinned once in
+ * core:ui's `FisheyeRailMathTest`. Pure math — no Compose, no dispatcher.
  */
 class AlphabetRailGeometryTest {
 
@@ -17,28 +18,10 @@ class AlphabetRailGeometryTest {
     private val geometry = AlphabetRailGeometry(letters, rowPx = 10f)
 
     @Test
-    fun fisheye_is_flat_without_a_touch() {
-        letters.indices.forEach { index ->
-            assertEquals(1f, geometry.fisheyeScaleAt(index, touchIndex = null))
-        }
-    }
-
-    @Test
-    fun fisheye_peaks_at_the_touched_letter() {
-        assertEquals(2.5f, geometry.fisheyeScaleAt(index = 2, touchIndex = 2f))
-    }
-
-    @Test
-    fun fisheye_tapers_with_distance_and_never_dips_below_one() {
-        val near = geometry.fisheyeScaleAt(index = 1, touchIndex = 0f)
-        val mid = geometry.fisheyeScaleAt(index = 2, touchIndex = 0f)
-        val far = geometry.fisheyeScaleAt(index = 4, touchIndex = 0f)
-        assertTrue(near > mid)
-        assertTrue(mid > 1f)
-        // Gaussian tail four letters out is essentially flat again.
-        assertTrue(far > 1f && far < 1.02f)
-        // Fractional touch positions sit between the integer bell curves.
-        assertTrue(geometry.fisheyeScaleAt(index = 0, touchIndex = 0.4f) < 2.5f)
+    fun fisheye_delegates_to_the_shared_lens() {
+        assertEquals(FisheyeRailMath.fisheyeScaleAt(2, 2f), geometry.fisheyeScaleAt(2, 2f))
+        // No touch → no lens, through the adapter too.
+        assertEquals(1f, geometry.fisheyeScaleAt(1, touchIndex = null))
     }
 
     @Test

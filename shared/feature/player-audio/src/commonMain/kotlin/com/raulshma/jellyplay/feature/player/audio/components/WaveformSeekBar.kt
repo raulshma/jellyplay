@@ -55,7 +55,10 @@ private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
+    // Locale-free ASCII-digit rendering (the former java.util.Formatter used
+    // default-locale digits) — deliberate fixed-format degrade: a timecode
+    // with ar/hi/fa digit forms is undesirable in a scrubber.
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
 }
 
 @Composable
@@ -154,7 +157,9 @@ fun WaveformSeekBar(
                     val width = size.width
                     val height = size.height
                     val centerY = height / 2f
-                    val steps = (width / 2f).toInt().coerceAtLeast(100)
+                    // One sample per 4 px is plenty for the 6-period sine at
+                    // the 4 dp stroke width; each segment is rebuilt per frame.
+                    val steps = (width / 4f).toInt().coerceAtLeast(100)
                     val wavePath = Path()
 
                     onDrawBehind {

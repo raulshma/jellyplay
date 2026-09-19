@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.network.subtitle
 
 import com.raulshma.jellyplay.core.network.api.ApiException
+import com.raulshma.jellyplay.core.network.api.HttpExecutor
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.SerializationException
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,9 +25,12 @@ import kotlin.test.assertTrue
  * end-to-end: the `wrapNetwork` friendly ladder (UnknownHost / SocketTimeout /
  * the declared OpenSubtitles-only serialization reword / Wyzie's secret
  * redaction / the null-message generic), the ApiException passthrough and
- * CancellationException rethrow guards, and `execute`'s HTTP-status mapping
+ * CancellationException rethrow guards, `execute`'s HTTP-status mapping
  * (the "`<service> HTTP <code>`" message, Retry-After parsing, retryability,
- * and the response-body capture only Wyzie enables).
+ * and the response-body capture only Wyzie enables), and the retry funnel
+ * that lives in [execute] since the `ResilientSubtitleProvider` wrapper was
+ * folded away (success-after-failure, fail-fast on non-retryable, exhaustion
+ * at [HttpExecutor.MAX_RETRIES]).
  *
  * The providers pin their own wiring of these arms (see
  * [OpenSubtitlesSubtitleProviderTest] / [WyzieSubtitleProviderTest]); this
@@ -135,10 +140,14 @@ class SubtitleHttpTest {
     }
 
     @Test
-    fun `non-2xx maps to the service HTTP message with retry-after honored`() {
-        server.enqueue(
-            MockResponse().setResponseCode(429).setHeader("Retry-After", "30").setBody("rate limited"),
-        )
+    fun `non-2xx maps to the service HTTP message with retry-after honored`() = runTest {
+        // 429 is retryable, so the funnel burns its full budget (virtual-time
+        // backoff, floored at the server's Retry-After) before surfacing.
+        repeat(HttpExecutor.MAX_RETRIES + 1) {
+            server.enqueue(
+                MockResponse().setResponseCode(429).setHeader("Retry-After", "30").setBody("rate limited"),
+            )
+        }
 
         val ex = assertFailsWith<ApiException> {
             http.executeForString(request(), "TestService", plainOpts())
@@ -147,10 +156,11 @@ class SubtitleHttpTest {
         assertEquals(true, ex.isRetryable)
         assertEquals(429, ex.httpCode)
         assertEquals(30_000L, ex.retryAfterMs, "Retry-After: 30 seconds floors the backoff at 30s")
+        assertEquals(HttpExecutor.MAX_RETRIES + 1, server.requestCount)
     }
 
     @Test
-    fun `a plain 4xx maps to a non-retryable ApiException without a captured body by default`() {
+    fun `a plain 4xx maps to a non-retryable ApiException without a captured body by default`() = runTest {
         server.enqueue(MockResponse().setResponseCode(400).setBody("Bad Request"))
 
         val ex = assertFailsWith<ApiException> {
@@ -162,7 +172,7 @@ class SubtitleHttpTest {
     }
 
     @Test
-    fun `captureResponseBody attaches the raw error body for empty-match detection`() {
+    fun `captureResponseBody attaches the raw error body for empty-match detection`() = runTest {
         server.enqueue(MockResponse().setResponseCode(400).setBody("""{"message":"No subtitles found"}"""))
         val opts = SubtitleHttp.Options(logTag = "SubtitleHttpTest", captureResponseBody = true)
 
@@ -175,7 +185,7 @@ class SubtitleHttpTest {
     }
 
     @Test
-    fun `2xx returns the response body through executeForString`() {
+    fun `2xx returns the response body through executeForString`() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""[{"id":"w1"}]"""))
 
         val body = http.executeForString(request(), "TestService", plainOpts())
@@ -184,7 +194,7 @@ class SubtitleHttpTest {
     }
 
     @Test
-    fun `execute hands the 2xx response to the caller's parser`() {
+    fun `execute hands the 2xx response to the caller's parser`() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("raw bytes"))
 
         val length = http.execute(request(), "TestService", plainOpts()) { response ->
@@ -192,5 +202,40 @@ class SubtitleHttpTest {
         }
 
         assertEquals(9, length, "the onResponse lambda owns the body shape, not the chassis")
+    }
+
+    // ----- retry funnel (the ResilientSubtitleProvider replacement) -----
+
+    @Test
+    fun `retries a retryable 503 and the first success wins`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(503).setBody("down"))
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""[{"id":"w1"}]"""))
+
+        val body = http.executeForString(request(), "TestService", plainOpts())
+
+        assertEquals("""[{"id":"w1"}]""", body)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `does not retry a non-retryable 401`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(401).setBody("bad key"))
+
+        assertFailsWith<ApiException> {
+            http.executeForString(request(), "TestService", plainOpts())
+        }
+        assertEquals(1, server.requestCount, "401 must fail fast")
+    }
+
+    @Test
+    fun `gives up after MAX_RETRIES extra attempts on persistent failures`() = runTest {
+        repeat(HttpExecutor.MAX_RETRIES + 1) {
+            server.enqueue(MockResponse().setResponseCode(500).setBody("still down"))
+        }
+
+        assertFailsWith<ApiException> {
+            http.executeForString(request(), "TestService", plainOpts())
+        }
+        assertEquals(HttpExecutor.MAX_RETRIES + 1, server.requestCount)
     }
 }

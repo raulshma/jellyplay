@@ -43,8 +43,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import java.time.Instant
-import java.time.format.DateTimeFormatter
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -354,10 +354,10 @@ class LiveTvPlayerViewModelGapsTest {
 
     /** ISO instant ~1 h before now, for a program window that is airing. */
     private fun hourBeforeNow(): String =
-        DateTimeFormatter.ISO_INSTANT.format(Instant.now().minusSeconds(3_600))
+        (Clock.System.now() - 1.hours).toString()
 
     private fun hourAfterNow(): String =
-        DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3_600))
+        (Clock.System.now() + 1.hours).toString()
 
     private fun airingProgram(
         id: String = "prog-1",
@@ -468,6 +468,68 @@ class LiveTvPlayerViewModelGapsTest {
         scheduler.runCurrent()
 
         coVerify(exactly = 0) { liveTvRepo.cancelSeriesTimer(any()) }
+    }
+
+    // The shared RecordActions choreography (adapter pins, same shape as the
+    // sibling tab suites): the failure fallback literals the adapter owns and
+    // the refresh routing around them.
+
+    @Test
+    fun `recordCurrentProgramOnce failure without an exception message posts the set-recording fallback literal`() = runTest {
+        val vm = tuneWithProgram(airingProgram())
+        coEvery { liveTvRepo.createTimer("prog-1") } returns
+            Result.failure(RuntimeException(null as String?))
+
+        val messages = mutableListOf<LivePlayerMessage>()
+        backgroundCollectMessages(vm, messages)
+        vm.recordCurrentProgramOnce()
+        scheduler.runCurrent()
+
+        // Throwable.message == null must hit the adapter's fallback literal
+        // (kept byte-identical from the legacy inline arm).
+        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Raw("Failed to set recording")), messages)
+    }
+
+    @Test
+    fun `cancelCurrentProgramTimer failure without an exception message posts the cancel fallback literal`() = runTest {
+        val vm = tuneWithProgram(airingProgram(timerId = "timer-9"))
+        coEvery { liveTvRepo.cancelTimer("timer-9") } returns
+            Result.failure(RuntimeException(null as String?))
+
+        val messages = mutableListOf<LivePlayerMessage>()
+        backgroundCollectMessages(vm, messages)
+        vm.cancelCurrentProgramTimer()
+        scheduler.runCurrent()
+
+        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Raw("Failed to cancel recording")), messages)
+    }
+
+    @Test
+    fun `recordCurrentProgramOnce failure does not re-fetch the program window`() = runTest {
+        val vm = tuneWithProgram(airingProgram())
+        coEvery { liveTvRepo.createTimer("prog-1") } returns
+            Result.failure(RuntimeException("tuner busy"))
+
+        vm.recordCurrentProgramOnce()
+        scheduler.runCurrent()
+
+        // Only the tune's own load — the program window is re-read after a
+        // successful action only.
+        coVerify(exactly = 1) { liveTvRepo.getLiveTvPrograms(any(), any(), any()) }
+    }
+
+    @Test
+    fun `cancelCurrentProgramSeries success posts the cancel message and refreshes programs`() = runTest {
+        val vm = tuneWithProgram(airingProgram(seriesTimerId = "st-9"))
+        coEvery { liveTvRepo.cancelSeriesTimer("st-9") } returns Result.success(Unit)
+
+        val messages = mutableListOf<LivePlayerMessage>()
+        backgroundCollectMessages(vm, messages)
+        vm.cancelCurrentProgramSeries()
+        scheduler.runCurrent()
+
+        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_canceled)), messages)
+        coVerify(atLeast = 2) { liveTvRepo.getLiveTvPrograms(any(), any(), any()) }
     }
 
     private fun TestScope.backgroundCollectMessages(vm: LiveTvPlayerViewModel, into: MutableList<LivePlayerMessage>) {

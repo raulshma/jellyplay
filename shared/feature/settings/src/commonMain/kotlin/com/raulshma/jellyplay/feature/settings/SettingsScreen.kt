@@ -81,8 +81,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
-import com.raulshma.jellyplay.core.network.library.buildUserImageUrl
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.buildUserImageUrl
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -113,6 +113,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -816,11 +817,11 @@ fun SettingsScreen(
         backgroundColorState = backgroundColorState,
         topBarStyle = TopBarStyle.None,
     ) { paddingValues ->
-        val messenger = rememberSettingsMessenger()
+        val bus = LocalUserMessageBus.current
 
         LaunchedEffect(viewModel.messageSentEvent) {
             viewModel.messageSentEvent?.let { msg ->
-                messenger?.info(msg)
+                bus.info(msg)
                 viewModel.clearMessageEvent()
             }
         }
@@ -834,7 +835,7 @@ fun SettingsScreen(
             val click = settingsResultClickAction(item.id, item.route, item.isAdvanced, preferences.showAdvancedSettings)
             if (click.enableAdvanced) {
                 viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(true) }
-                messenger?.info(advancedEnabledMessage)
+                bus.info(advancedEnabledMessage)
             }
             click.pendingHighlightId?.let { lastClickedSettingId = it }
             when (val action = click.action) {

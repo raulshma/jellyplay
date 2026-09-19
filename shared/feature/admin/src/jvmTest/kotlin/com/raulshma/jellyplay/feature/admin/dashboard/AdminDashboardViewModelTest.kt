@@ -15,10 +15,12 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -55,6 +57,8 @@ class AdminDashboardViewModelTest {
         name = "Scan Media Library",
         state = TaskState.IDLE,
     )
+
+    private val session = SessionInfo(id = "s-1", userName = "Alice", deviceName = "Pixel")
 
     @BeforeTest
     fun setUp() {
@@ -303,6 +307,75 @@ class AdminDashboardViewModelTest {
         assertNotNull(viewModel.uiState.value.error)
         assertTrue(!viewModel.uiState.value.isRestarting)
     }
+
+    // ── stop-session dialog choreography (PendingConfirmation machine) ──
+
+    @Test
+    fun `stop session success clears the pending dialog and reloads the dashboard`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
+        coEvery { adminRepository.stopSession("s-1") } returns Result.success(Unit)
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        advanceUntilIdle()
+
+        viewModel.showStopSessionDialog(session)
+        assertEquals(session, viewModel.uiState.value.pendingStopSession.item)
+
+        viewModel.stopSession()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { adminRepository.stopSession("s-1") }
+        // Settle arm: the pending confirmation is cleared on success.
+        assertNull(viewModel.uiState.value.pendingStopSession.item)
+        assertTrue(!viewModel.uiState.value.isStoppingSession)
+        assertNull(viewModel.uiState.value.error)
+        // Initial load + the post-stop reload.
+        coVerify(atLeast = 2) { adminRepository.getDashboardSummary() }
+    }
+
+    @Test
+    fun `dismiss during an in-flight stop retains the pending session`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
+        // Park the stop request mid-flight so isStoppingSession stays raised.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { adminRepository.stopSession("s-1") } coAnswers { gate.await(); Result.success(Unit) }
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        advanceUntilIdle()
+
+        viewModel.showStopSessionDialog(session)
+        viewModel.stopSession()
+        runCurrent() // run the launch until it suspends on the gate
+        assertTrue(viewModel.uiState.value.isStoppingSession)
+
+        viewModel.dismissStopSessionDialog()
+
+        // The machine refuses a dismiss while in flight — the dialog stays open.
+        assertEquals(session, viewModel.uiState.value.pendingStopSession.item)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.pendingStopSession.item)
+    }
+
+    @Test
+    fun `stop session failure keeps the dialog open and surfaces the error`() = runTest(mainDispatcher) {
+        coEvery { adminRepository.getDashboardSummary() } returns Result.success(summary())
+        coEvery { adminRepository.stopSession("s-1") } returns Result.failure(RuntimeException("nope"))
+        val viewModel = AdminDashboardViewModel(adminRepository)
+        advanceUntilIdle()
+
+        viewModel.showStopSessionDialog(session)
+        viewModel.stopSession()
+        advanceUntilIdle()
+
+        // Settle arm: success-only — a failed stop keeps the pending session
+        // held so the dialog stays open over the surfaced error.
+        assertEquals(session, viewModel.uiState.value.pendingStopSession.item)
+        assertTrue(viewModel.uiState.value.error?.contains("Stop failed") == true)
+        assertTrue(!viewModel.uiState.value.isStoppingSession)
+        // A failed stop does not reload the dashboard (only the initial load).
+        coVerify(exactly = 1) { adminRepository.getDashboardSummary() }
+    }
+
     @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()

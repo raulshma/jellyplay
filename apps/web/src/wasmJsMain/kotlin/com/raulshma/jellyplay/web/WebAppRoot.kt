@@ -25,26 +25,29 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
-import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalWebBackDispatcher
 import com.raulshma.jellyplay.core.ui.components.WebBackDispatcher
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.arrqueue.ArrQueueScreen
 import com.raulshma.jellyplay.feature.calendar.UpcomingCalendarScreen
 import com.raulshma.jellyplay.feature.details.SeerrDetailScreen
+import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
 import com.raulshma.jellyplay.feature.requests.RequestsScreen
+import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.w3c.dom.events.Event
@@ -95,9 +98,10 @@ private data object WebSeerr : NavKey
  * Web nav root (slice 2 over the web-nav v1): NavDisplay from
  * the JB fork's navigation3-ui wasm klib over the shared core/ui primitives,
  * with the landing level grown from placeholder text into the real
- * connect/sign-in flow ([WebConnectFlow] driving [KtorWasmAuthApiClient]
- * through [WebConnectController] directly — there is no AuthRepository and no
- * core:data on wasm).
+ * connect/sign-in flow ([WebConnectFlow] driving the shared [AuthRepository]
+ * — `WasmAuthRepository` via dataWasmModule — through
+ * [WebConnectController]; the landing no longer drives the raw Ktor wasm
+ * auth client itself).
  *
  * Composition-local provisioning follows DesktopAppRoot's precedent:
  * [LocalNetworkStatus] maps `navigator.onLine` into [NetworkStatus] live via
@@ -143,8 +147,7 @@ private data object WebSeerr : NavKey
  */
 @Composable
 fun WebAppRoot(
-    sessionState: AtomicSessionState,
-    authApiClient: AuthApiClient,
+    authRepository: AuthRepository,
     userPrefs: DataStore<Preferences>,
     seerrPreferencesStore: SeerrPreferencesStore,
     seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
@@ -191,8 +194,8 @@ fun WebAppRoot(
     }
 
     val webBackDispatcher = remember { WebBackDispatcher() }
-    val connectController = remember(sessionState, authApiClient, userPrefs) {
-        WebConnectController(auth = authApiClient, userPrefs = userPrefs)
+    val connectController = remember(authRepository, userPrefs) {
+        WebConnectController(authRepository = authRepository, userPrefs = userPrefs)
     }
     // The Seerr credentials controller, built exactly like
     // [WebConnectController] — plain class, Koin-resolved deps passed in from
@@ -267,107 +270,75 @@ fun WebAppRoot(
         applyCommand(WebBackStackMirror.onEntryAdded(backStack.lastIndex))
     }
 
-    val entryProvider = remember(sessionState, authApiClient, userPrefs, seerrPreferencesStore, seerrSecureCredentialsStore, seerrRepository) {
+    val entryProvider = remember(authRepository, userPrefs, seerrPreferencesStore, seerrSecureCredentialsStore, seerrRepository) {
+        // ── THE PANE TABLE ────────────────────────────────────────────────
+        // The one list the shell's twin derivations walk (the web-local fold
+        // of the hand-mirror class the desktop ShellSectionRegistry killed;
+        // the shared appSections adoption stays a recorded deferral — NOT
+        // this). [buildWebPanes] declares one row per level this nav root can
+        // push AS A LANDING AFFORDANCE, in landing button order, and BOTH
+        // consumers derive from those rows:
+        //   - `entry<WebLanding>` projects each row through
+        //     [WebPane.toLandingAffordance] (the buttons), and
+        //   - [registerWebPanes] derives each row's entry registration,
+        //     threading the guarded pop path in as every pane's `onBack`.
+        // Adding a level = adding one row; button and registration cannot
+        // drift (WebPaneTableTest pins the derived set).
+        val webPanes = buildWebPanes(
+            seerrController = { seerrController },
+            addEntry = ::addEntry,
+        )
         entryProvider<NavKey> {
             entry<WebLanding> { _ ->
+                // The landing affordances DERIVE from [webPanes] — the rows
+                // ARE the optionality contract: every level this nav root can
+                // push appears as one button, in table order (e2e-verified by
+                // tools/e2e/web-verify.mjs via accessible name). The shared
+                // feature routes are pushed AS THEMSELVES, NOT as web-only
+                // mirror keys (see the route-keys KDoc); Requests renders the
+                // honest "Seerr not configured" error state until Seerr
+                // credentials exist (Main.kt's SEERR-ON-WEB HONESTY note),
+                // Calendar/ArrQueue render the honest feature-disabled panes
+                // (DIRECT_ARR_INTEGRATION boots off), and completing
+                // onboarding pops back here (no persisted first-run gate on
+                // web).
                 WebConnectFlow(
                     controller = connectController,
                     networkStatus = currentNetworkStatus,
-                    onOpenConnectionDetails = { addEntry(WebStatus) },
-                    onOpenDiagnostics = { addEntry(WebDiag) },
-                    // The shared feature route — pushed as itself,
-                    // NOT as a web-only mirror key (see the route-keys KDoc).
-                    onOpenRequests = { addEntry(Route.Requests) },
-                    // The second shared feature route, same shape.
-                    onOpenCalendar = { addEntry(Route.UpcomingCalendar) },
-                    // The Seerr credentials pane.
-                    onOpenSeerr = { addEntry(WebSeerr) },
+                    affordances = webPanes.map { it.toLandingAffordance(onOpen = ::addEntry) },
                 )
             }
-            entry<WebStatus> { _ ->
-                WebStatusPane(onBack = ::requestPop)
-            }
-            entry<WebDiag> { _ ->
-                WebDiagnosticsPane(
-                    onBack = ::requestPop,
-                    //  E2E surface: pushes the SeerrDetail screen for a
-                    // FIXED demo key (tmdb 550, "movie") so the headless lane
-                    // can drive the real shared screen without a Seerr server
-                    // (the requests list is empty in the fixture — nothing is
-                    // clickable there). See WebDiagnosticsPane's button KDoc.
-                    onOpenSeerrDetailDemo = { addEntry(Route.SeerrDetail(550, "movie")) },
-                )
-            }
-            entry<WebSeerr> { _ ->
-                WebSeerrPane(onBack = ::requestPop, controller = seerrController)
-            }
-            entry<Route.Requests> { _ ->
-                // The FIRST shared feature screen on web. The shell
-                // (Main.kt → ProvideWebShellViewModelOwners) provides the
-                // ViewModelStoreOwner/LifecycleOwner koinViewModel() needs, so
-                // the screen composes bare — there is deliberately no wrapper
-                // here; requests' own ProvidePlatformLocalsFallback is
-                // `internal` to that module (invisible from apps/web), which
-                // structurally keeps ONE provisioning truth at the shell.
-                //
-                // The SeerrDetail cut stub is gone —
-                // onNavigateToDetail now pushes the real shared route, exactly
-                // like requests' RequestsNavigation does on android/desktop
-                // (`navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))`).
-                // mediaType arrives verbatim from the Seerr wire model
-                // ("movie"/"tv"; RequestDetailBottomSheet forwards
-                // request.type) and SeerrDetailScreen compares
-                // case-insensitively, so the pass-through needs no mapping.
-                // Reachability in the fixture: only from a populated request
-                // list — impossible without a Seerr server — so the lane
-                // boots into the screen via the gated e2eRoute param instead
-                // (see parseE2eBootRoute in Main.kt).
-                //
-                // onBack rides the SAME guarded pop path as every other pane
-                // (requestPop: root-refusing list trim + history.back()).
-                RequestsScreen(
-                    onBack = ::requestPop,
-                    onNavigateToDetail = { tmdbId, mediaType ->
-                        addEntry(Route.SeerrDetail(tmdbId, mediaType))
-                    },
-                )
-            }
-            entry<Route.UpcomingCalendar> { _ ->
-                // The SECOND shared feature screen on web — the
-                // shared UpcomingCalendarScreen (koinViewModel() against
-                // calendarModule, registered in Main.kt this wave). The
-                // feature-disabled pane is the honest v1 state in the browser
-                // fixture: the DIRECT_ARR_INTEGRATION experimental flag boots
-                // off and no settings UI exists on web to flip it, so the E2E
-                // lane asserts the disabled pane (see web-verify.mjs).
-                //
-                // ARR-SETTINGS CUT (documented at the only site that could
-                // navigate there): onOpenArrSettings would push Route
-                // .ArrSettings — feature/settings has no wasmJs target
-                // (documented), so the callback is a NO-OP stub. Reachability
-                // of the stub: the Open-*arr-Settings button renders only in
-                // the disabled pane; until a settings target lands the button
-                // is inert on web. It becomes addEntry(Route.ArrSettings())
-                // when settings gains the web target.
-                //
-                // onItemClick is REAL since Route.SeerrDetail landed
-                // on web (coordinator merge): calendar rows forward
-                // (tmdbId, mediaType) verbatim, same pass-through the
-                // requests entry uses. Unreachable in the fixture (the flag
-                // is off), but no longer a dead click by construction.
-                //
-                // onBack rides the SAME guarded pop path as every other pane
-                // (requestPop: root-refusing list trim + history.back()).
-                UpcomingCalendarScreen(
-                    onBack = ::requestPop,
-                    onOpenArrSettings = {
-                        // No-op — settings has no wasm target (see the cut
-                        // note above); nothing navigates.
-                    },
-                    onItemClick = { tmdbId, mediaType ->
-                        addEntry(Route.SeerrDetail(tmdbId, mediaType))
-                    },
-                )
+            // One registration pass over the same rows; `onBack` is provided
+            // HERE, once — every table pane receives the guarded pop path
+            // (requestPop: dispatch-first, root-refusing list trim +
+            // history.back()) through its render closure instead of
+            // hand-writing `onBack = ::requestPop` per entry.
+            registerWebPanes(scope = this, panes = webPanes, onBack = ::requestPop)
+            entry<Route.ArrSettings> { _ ->
+                // The FIFTH shared feature screen on web — the direct
+                // *arr integration settings, the FIRST settings-family route
+                // with a fully wasm-resolvable dependency closure
+                // (ArrRepository + ArrPreferencesStore +
+                // ArrSecureCredentialsStore — see Main.kt's settingsModule
+                // note for everything that stays latent on web). Reachability
+                // matches desktop: the Open-*arr-Settings buttons in the
+                // calendar/arrqueue feature-disabled panes (both wired in the
+                // pane table), NOT a settings-root row — web has no settings
+                // root: the wasm AuthRepository binding EXISTS now
+                // (dataWasmModule's WasmAuthRepository), but the settings
+                // root's VM closure needs more than the repository
+                // (SettingsBackupIo/AppMetaProvider/LogCollector have no
+                // wasm actuals — see Main.kt's settingsModule note), so
+                // Route.Settings stays unrouted and this entry is reached
+                // by pushing the real key, not through any web-native
+                // mirror. Bare composition +
+                // shell-provided owners like every shared entry; onBack rides
+                // the SAME guarded pop path as every other pane (requestPop:
+                // root-refusing list trim + history.back()). The screen
+                // assumes the DIRECT_ARR_INTEGRATION gate ran at the caller —
+                // both caller panes render only while the flag is off, which
+                // is exactly the desktop affordance.
+                ArrSettingsScreen(onBack = ::requestPop)
             }
             entry<Route.SeerrDetail> { key ->
                 // The SECOND shared feature screen on web. Same bare
@@ -377,7 +348,7 @@ fun WebAppRoot(
                 // - onNavigate is a NO-OP STUB by platform rule: the screen's
                 //   cross-links target Route.MediaDetail (and friends), and
                 //   the MediaDetail cluster has NO wasmJs target — it is
-                //   jvmShared/off-web this wave (Room-blocked; see
+                //   jvmShared/off-web for now (Room-blocked; see
                 //   shared/feature/details/build.gradle.kts). Nothing on web
                 //   can render it, so the callback deliberately does nothing
                 //   rather than pushing an unroutable key. (No snackbar — the
@@ -418,6 +389,189 @@ fun WebAppRoot(
             entryProvider = entryProvider,
         )
     }
+}
+
+/**
+ * One row of the web shell's PANE TABLE — a level this nav root can push AS A
+ * LANDING AFFORDANCE. The row is the whole declaration: the landing button's
+ * [label] (load-bearing copy — tools/e2e/web-verify.mjs finds these buttons by
+ * accessible name), the [isOutlined] flag marking secondary tooling, the
+ * [key] pushed when the button opens the level, and the pane's [content]
+ * render closure (receives the resolved key and the shell's guarded pop path
+ * as `onBack`, provided once by [registerWebPanes]).
+ *
+ * Rows carry BOTH consumer halves of the former twin lists, so the
+ * landing-vs-entry lockstep is structural, not a discipline: the landing pane
+ * projects rows through [toLandingAffordance], and [registerWebPanes] derives
+ * the `entry` registrations from the same rows (WebPaneTableTest pins the
+ * derived set). Deliberately NOT rows: [WebLanding] itself (the root — it
+ * RENDERS the table as buttons) and Route.ArrSettings / Route.SeerrDetail
+ * (pushed programmatically from other panes, never landing buttons — their
+ * entries stay hand-written in [WebAppRoot]).
+ *
+ * @param K the concrete NavKey type of the pane; registration derives the
+ *   entry's KClass from [key] (`key::class`), so a data-object key registers
+ *   exactly like the former reified `entry<WebX>` blocks did.
+ */
+internal class WebPane<K : NavKey>(
+    val label: String,
+    val isOutlined: Boolean = false,
+    val key: K,
+    val content: @Composable (key: K, onBack: () -> Unit) -> Unit,
+)
+
+/**
+ * THE pane table — the single source the web shell's twin derivations walk
+ * (the web-local fold of the hand-mirror class the desktop
+ * ShellSectionRegistry killed; adopting the shared appSections machinery
+ * stays a recorded deferral and is NOT this). One row per level this nav root
+ * can push as a landing affordance, in landing button order:
+ *
+ *  - `entry<WebLanding>` projects each row through [WebPane.toLandingAffordance]
+ *    — the rows ARE the optionality contract ("every level this nav root can
+ *    push appears as one button"), e2e-verified via accessible name;
+ *  - [registerWebPanes] derives each row's entry registration and threads the
+ *    guarded pop path in as `onBack` once.
+ *
+ * Adding a level = adding one row here; button and registration cannot drift.
+ *
+ * [seerrController] is deferred to render time (the Seerr row's content
+ * closure dereferences it only when [WebSeerrPane] actually composes) so the
+ * registration test can build this table without a controller instance —
+ * pane content is never invoked outside composition.
+ */
+internal fun buildWebPanes(
+    seerrController: () -> WebSeerrController,
+    addEntry: (NavKey) -> Unit,
+): List<WebPane<*>> = listOf(
+    WebPane("Connection details", key = WebStatus) { _, onBack ->
+        WebStatusPane(onBack)
+    },
+    WebPane("Requests", key = Route.Requests) { _, onBack ->
+        // The FIRST shared feature screen on web — bare composition +
+        // shell-provided owners (Main.kt → ProvideWebShellViewModelOwners);
+        // requests' own ProvidePlatformLocalsFallback is `internal` to that
+        // module (invisible from apps/web), which structurally keeps ONE
+        // provisioning truth at the shell. onNavigateToDetail pushes the REAL
+        // shared route, exactly like requests' RequestsNavigation does on
+        // android/desktop; mediaType arrives verbatim from the Seerr wire
+        // model ("movie"/"tv"; RequestDetailBottomSheet forwards request.type)
+        // and SeerrDetailScreen compares case-insensitively, so the
+        // pass-through needs no mapping. Reachability of the detail push in
+        // the fixture: only from a populated request list — impossible
+        // without a Seerr server — so the lane boots into the screen via the
+        // gated e2eRoute param instead (see parseE2eBootRoute in Main.kt).
+        RequestsScreen(
+            onBack = onBack,
+            onNavigateToDetail = { tmdbId, mediaType -> addEntry(Route.SeerrDetail(tmdbId, mediaType)) },
+        )
+    },
+    WebPane("Calendar", key = Route.UpcomingCalendar) { _, onBack ->
+        // The SECOND shared feature screen on web. The feature-disabled pane
+        // is the honest v1 state in the browser fixture: the
+        // DIRECT_ARR_INTEGRATION experimental flag boots off and no web
+        // surface can flip it (the E2E lane asserts the disabled pane — see
+        // web-verify.mjs). ARR-SETTINGS, LIVE SINCE: onOpenArrSettings pushes
+        // the REAL shared route (feature/settings' wasmJs target landed; the
+        // screen resolves fully on web — see Main.kt's settingsModule note).
+        // onItemClick is REAL since Route.SeerrDetail landed on web:
+        // calendar rows forward (tmdbId, mediaType) verbatim, same
+        // pass-through the requests row uses. Unreachable in the fixture (the
+        // flag is off), but no longer a dead click by construction.
+        UpcomingCalendarScreen(
+            onBack = onBack,
+            onOpenArrSettings = { addEntry(Route.ArrSettings()) },
+            onItemClick = { tmdbId, mediaType -> addEntry(Route.SeerrDetail(tmdbId, mediaType)) },
+        )
+    },
+    // The Seerr credentials pane — the entry that makes the requests feature
+    // usable on web (API-key creds are the only browser-viable Seerr auth).
+    WebPane("Seerr", key = WebSeerr) { _, onBack ->
+        WebSeerrPane(onBack = onBack, controller = seerrController())
+    },
+    WebPane("Arr queue", key = Route.ArrQueue) { _, onBack ->
+        // The THIRD shared feature screen on web — bare composition +
+        // shell-provided owners like every shared row. onOpenArrSettings is
+        // LIVE since (the settings wasmJs target landed): it pushes the real
+        // Route.ArrSettings, same wiring as the calendar row — the button
+        // renders in the feature-disabled pane, matching desktop
+        // reachability.
+        ArrQueueScreen(
+            onBack = onBack,
+            onOpenArrSettings = { addEntry(Route.ArrSettings()) },
+        )
+    },
+    WebPane("Onboarding", key = Route.Onboarding) { _, onBack ->
+        // The FOURTH shared feature screen on web — the onboarding wizard.
+        // Web has NO persisted first-run gate (nothing boots into it; web
+        // sessions start at the landing), so the wizard is reachable only
+        // from the ConnectedCard button, and onComplete just POPS back to the
+        // landing — there is no "done" destination to push. The wizard's
+        // SeerrStep writes into the localStorage-backed Seerr credential
+        // store (webDatastoreModule), consistent with the web honesty
+        // carve-outs.
+        OnboardingScreen(onComplete = onBack)
+    },
+    // GATED E2E hook into WebDiagnosticsPane — outlined so it reads as
+    // secondary tooling next to the primary feature actions.
+    WebPane("Diagnostics", isOutlined = true, key = WebDiag) { _, onBack ->
+        // E2E surface: pushes the SeerrDetail screen for a FIXED demo key
+        // (tmdb 550, "movie") so the headless lane can drive the real shared
+        // screen without a Seerr server (the requests list is empty in the
+        // fixture — nothing is clickable there). See WebDiagnosticsPane's
+        // button KDoc.
+        WebDiagnosticsPane(
+            onBack = onBack,
+            onOpenSeerrDetailDemo = { addEntry(Route.SeerrDetail(550, "movie")) },
+        )
+    },
+)
+
+/**
+ * The landing half of the pane-table derivation: projects a row onto its
+ * landing button ([WebLandingAffordance]) — label + outline verbatim, and an
+ * `onOpen` that pushes the row's [WebPane.key] through [onOpen] (the shell's
+ * addEntry). The button vocabulary cannot drift from the registrations because
+ * both come from the same rows.
+ */
+internal fun WebPane<*>.toLandingAffordance(onOpen: (NavKey) -> Unit): WebLandingAffordance =
+    WebLandingAffordance(
+        label = label,
+        isOutlined = isOutlined,
+        onOpen = { onOpen(key) },
+    )
+
+/**
+ * The registration half of the pane-table derivation: registers every row
+ * into [scope], exactly where the former seven hand-written `entry<…>` blocks
+ * stood. Uses the scope's class-keyed [EntryProviderScope.addEntryProvider]
+ * overload — the non-reified form the reified `entry<WebX>` DSL delegates to —
+ * so resolution semantics (clazzProviders lookup keyed on `key::class`,
+ * default `contentKey = key.toString()`) are identical to the hand-written
+ * entries; no reflection.
+ *
+ * [onBack] is the shell's guarded pop path (requestPop), provided ONCE here
+ * and threaded into every row's render closure — no pane hand-writes it.
+ */
+internal fun registerWebPanes(
+    scope: EntryProviderScope<NavKey>,
+    panes: List<WebPane<*>>,
+    onBack: () -> Unit,
+) {
+    panes.forEach { pane -> registerWebPane(scope, pane, onBack) }
+}
+
+/** One row's registration ([registerWebPanes] per-row body; generic so the
+ *  key class and the render closure's key type stay aligned without casts). */
+private fun <K : NavKey> registerWebPane(
+    scope: EntryProviderScope<NavKey>,
+    pane: WebPane<K>,
+    onBack: () -> Unit,
+) {
+    scope.addEntryProvider(
+        clazz = pane.key::class,
+        content = { key: K -> pane.content(key, onBack) },
+    )
 }
 
 /** Read the current browser-reported connectivity at call time. */

@@ -5,23 +5,17 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -58,13 +52,8 @@ class SyncPlayCastStore constructor(
         val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val syncPlayCast: StateFlow<SyncPlayCastSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, SyncPlayCastSlice())
+    val syncPlayCast: StateFlow<SyncPlayCastSlice> =
+        dataStore.sliceStateFlow(scope, seed = SyncPlayCastSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): SyncPlayCastSlice = SyncPlayCastSlice(
         syncPlayJoinBehavior = readSyncPlayJoinBehavior(prefs),
@@ -127,17 +116,15 @@ class SyncPlayCastStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. This is the
-     * `SYNCPLAY_CASTING` reset category minus `LIVE_STREAM_OPTION` (owned by
-     * `PlaybackStore`).
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. This is the `SYNCPLAY_CASTING` reset category
+     * minus `LIVE_STREAM_OPTION` (owned by `PlaybackStore`).
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.SYNC_PLAY_JOIN_BEHAVIOR, Keys.SYNC_PLAY_TOLERANCE_MS,
-        Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
-        Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
-        Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
-        Keys.DVR_RECORDING_QUALITY,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -156,28 +143,6 @@ class SyncPlayCastStore constructor(
             Keys.DVR_RECORDING_QUALITY,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the SyncPlay + casting + DVR keys
-     * owned by this store from a decoded [UserPreferences], mirroring the
-     * facade's restore body exactly (including the nullable
-     * [Keys.PREFERRED_RENDERER] guard).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = userPreferences.syncPlayJoinBehavior.name
-            prefs[Keys.SYNC_PLAY_TOLERANCE_MS] = userPreferences.syncPlayToleranceMs
-            prefs[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = userPreferences.syncPlayAutoAcceptInvites
-            prefs[Keys.DEFAULT_CASTING_STRATEGY] = userPreferences.defaultCastingStrategy.name
-            prefs[Keys.BACKGROUND_CASTING_ENABLED] = userPreferences.backgroundCastingEnabled
-            userPreferences.preferredRenderer?.let { prefs[Keys.PREFERRED_RENDERER] = it }
-            prefs[Keys.DVR_PRE_PADDING_MINUTES] = userPreferences.dvrPrePaddingMinutes
-            prefs[Keys.DVR_POST_PADDING_MINUTES] = userPreferences.dvrPostPaddingMinutes
-            prefs[Keys.DVR_RECORDING_QUALITY] = userPreferences.dvrRecordingQuality
-        }
     }
 
     /**

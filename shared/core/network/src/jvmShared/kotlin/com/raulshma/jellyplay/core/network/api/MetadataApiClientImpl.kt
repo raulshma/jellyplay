@@ -32,6 +32,26 @@ class MetadataApiClientImpl @Inject constructor(
     /** The item-id guard every endpoint opens with: an unparseable UUID fails the call. */
     private fun requireItemUuid(itemId: String) = runCatching { itemId.toUUID() }.getOrThrow()
 
+    // Parse guards for the updateItem DTO builder. They live in non-suspend
+    // funs (BareRunCatchingRatchetTest: a bare runCatching inside a suspend
+    // body is flagged; these parses cannot throw CancellationException, so
+    // the extraction keeps the guard semantics without touching the seam).
+    private fun itemIdOrRandom(itemId: String) =
+        runCatching { itemId.toUUID() }.getOrNull() ?: java.util.UUID.randomUUID()
+
+    private fun baseItemKindOrMovie(type: String) =
+        runCatching { org.jellyfin.sdk.model.api.BaseItemKind.valueOf(toBaseItemKindName(type)) }
+            .getOrNull() ?: org.jellyfin.sdk.model.api.BaseItemKind.MOVIE
+
+    private fun parseDateTimeOrNull(raw: String?) =
+        raw?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() }
+
+    private fun dayOfWeekOrNull(dayName: String) =
+        runCatching { org.jellyfin.sdk.model.api.DayOfWeek.valueOf(dayName.uppercase()) }.getOrNull()
+
+    private fun metadataFieldOrNull(fieldName: String) =
+        runCatching { org.jellyfin.sdk.model.api.MetadataField.valueOf(fieldName) }.getOrNull()
+
     /** The image-type guard: an unknown wire name fails the call. */
     private fun requireImageType(imageType: String) = ImageType.fromNameOrNull(imageType)
         ?: throw IllegalArgumentException("Unknown image type: $imageType")
@@ -52,9 +72,9 @@ class MetadataApiClientImpl @Inject constructor(
     ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val dto = BaseItemDto(
-            id = runCatching { itemId.toUUID() }.getOrNull() ?: java.util.UUID.randomUUID(),
+            id = itemIdOrRandom(itemId),
             name = name,
-            type = runCatching { org.jellyfin.sdk.model.api.BaseItemKind.valueOf(toBaseItemKindName(type)) }.getOrNull() ?: org.jellyfin.sdk.model.api.BaseItemKind.MOVIE,
+            type = baseItemKindOrMovie(type),
             originalTitle = originalTitle,
             forcedSortName = sortName,
             overview = overview,
@@ -67,26 +87,26 @@ class MetadataApiClientImpl @Inject constructor(
             officialRating = officialRating,
             customRating = customRating,
             productionYear = productionYear,
-            premiereDate = premiereDate?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() },
-            endDate = endDate?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() },
+            premiereDate = parseDateTimeOrNull(premiereDate),
+            endDate = parseDateTimeOrNull(endDate),
             runTimeTicks = runtimeTicks,
             indexNumber = indexNumber,
             parentIndexNumber = parentIndexNumber,
             displayOrder = displayOrder,
             status = status,
             airDays = airDays.takeIf { it.isNotEmpty() }?.mapNotNull { dayName ->
-                runCatching { org.jellyfin.sdk.model.api.DayOfWeek.valueOf(dayName.uppercase()) }.getOrNull()
+                dayOfWeekOrNull(dayName)
             },
             airTime = airTime,
             people = people.takeIf { it.isNotEmpty() }?.map { it.toBaseItemPerson() },
             providerIds = providerIds.takeIf { it.isNotEmpty() },
             lockedFields = lockedFields.takeIf { it.isNotEmpty() }?.mapNotNull { fieldName ->
-                runCatching { org.jellyfin.sdk.model.api.MetadataField.valueOf(fieldName) }.getOrNull()
+                metadataFieldOrNull(fieldName)
             },
             preferredMetadataLanguage = preferredMetadataLanguage,
             preferredMetadataCountryCode = preferredMetadataCountryCode,
             productionLocations = productionLocations.takeIf { it.isNotEmpty() },
-            dateCreated = dateCreated?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() },
+            dateCreated = parseDateTimeOrNull(dateCreated),
             lockData = lockData,
         )
         api.itemUpdateApi.updateItem(itemId = requireItemUuid(itemId), data = dto)
@@ -160,8 +180,51 @@ class MetadataApiClientImpl @Inject constructor(
         api.imageApi.setItemImage(
             itemId = uuid,
             imageType = type,
-            data = imageBytes.toFileInfo(mediaType = "image/*"),
+            // Jellyfin 10.11 wire contract (both halves measured — the
+            // e2e flows lane + the bootstrap-jellyfin.sh fixture recipe):
+            //  1. SetItemImage base64-DECODES the request body
+            //     (FromBase64Transform inside ImageSaver) — a raw binary body
+            //     500s ("One of the identified items was in an invalid
+            //     format"). The subtitle upload's UploadSubtitleDto.data
+            //     carries base64 for the same reason.
+            //  2. The Content-Type must be a CONCRETE image mime — the
+            //     wildcard "image/*" (and application/octet-stream) 400s.
+            //     The bytes are sniffed by magic number so jpegs are not
+            //     mislabeled; unknown formats fall back to png (the editor's
+            //     pickers offer png/jpg/webp/gif/bmp and the server re-encodes
+            //     on save).
+            // Supported baseline: this is the 10.11+ contract only. The
+            // fixture recipe's raw-first/base64-fallback ladder for older
+            // servers is NOT attempted here — version-gating upload bodies
+            // would need server-version detection that doesn't exist yet;
+            // if a pre-base64 ImageSaver server must be supported, add the
+            // ladder at that point (measured behavior: 10.11 raw → 500).
+            data = java.util.Base64.getEncoder().encodeToString(imageBytes)
+                .toByteArray()
+                .toFileInfo(mediaType = sniffImageMediaType(imageBytes)),
         )
+    }
+
+    /**
+     * Magic-number sniff for the image upload wire mime (see the
+     * [setItemImage] contract note — a concrete type is REQUIRED).
+     * Internal for the table-driven jvmTest coverage of every branch.
+     */
+    internal fun sniffImageMediaType(bytes: ByteArray): String = when {
+        bytes.size >= 4 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
+            bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte() -> "image/png"
+        bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() &&
+            bytes[2] == 0xFF.toByte() -> "image/jpeg"
+        bytes.size >= 12 && bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
+            bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
+            // RIFF container alone would also match WAV/AVI — require the
+            // WEBP fourcc at bytes 8-11 before labeling it image/webp.
+            bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
+            bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte() -> "image/webp"
+        bytes.size >= 6 && bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() &&
+            bytes[2] == 0x46.toByte() -> "image/gif"
+        bytes.size >= 2 && bytes[0] == 0x42.toByte() && bytes[1] == 0x4D.toByte() -> "image/bmp"
+        else -> "image/png"
     }
 
     override suspend fun deleteItemImage(itemId: String, imageType: String, imageIndex: Int?): Result<Unit> = engine.apiResultWithRetry {

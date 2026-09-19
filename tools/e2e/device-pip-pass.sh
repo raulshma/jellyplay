@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Device pass: LIVE-TV/VIDEO PiP entry + exit on a physical phone (wave-19C
-# residual "PiP entry/exit needs-device-pass", closed by the wave-21 device
+# Device pass: LIVE-TV/VIDEO PiP entry + exit on a physical phone (
+# residual "PiP entry/exit needs-device-pass", closed by the device
 # round together with two launch-crash fixes it surfaced — see
 # docs/e2e/device-pip-pass.md for the full account and the recorded verdict:
 # ENTRY is device-verified, EXPAND/DISMISS steps 8-9 have NOT yet run on a
-# device — the wave-21 round was cut short there by directive, so this
+# device — the round was cut short there by directive, so this
 # script's later steps remain unexercised until the next run).
 #
 # Drives the REAL app on a REAL device over adb + uiautomator:
@@ -156,7 +156,7 @@ if $ADB shell dumpsys window 2>/dev/null | grep -q "isKeyguardShowing=true"; the
   echo "[device-pip] FATAL: secure keyguard up - cannot automate UI"; exit 1
 fi
 # Google autofill re-fills saved credentials over typed ones (measured on the
-# first wave-21 run: app POSTed username "test" while the field showed
+# first run: app POSTed username "test" while the field showed
 # "harness") - kill it for the session.
 $ADB shell "settings put secure selected_autofill_service null"
 
@@ -188,10 +188,11 @@ TOKEN="$(curl -sf -m 10 -X POST -H 'X-Emby-Authorization: MediaBrowser Client="e
   -H 'Content-Type: application/json' -d "{\"Username\":\"$USERNAME\",\"Pw\":\"$PASSWORD\"}" \
   "$SERVER/Users/AuthenticateByName" | grep -oi '"accesstoken":"[^"]*"' | head -1 | cut -d'"' -f4)"
 [ -n "$TOKEN" ] && pass "fixture auth (harness)" || { fail "fixture auth (harness)"; exit 1; }
-curl -sf -m 15 -X POST -H "X-Emby-Token: $TOKEN" "$SERVER/Library/Refresh" >/dev/null || true
+AUTH="Authorization: MediaBrowser Token=\"$TOKEN\""
+curl -sf -m 15 -X POST -H "$AUTH" "$SERVER/Library/Refresh" >/dev/null || true
 CLIP_ID=""
 for i in $(seq 1 30); do
-  CLIP_ID="$(curl -sf -m 10 -G -H "X-Emby-Token: $TOKEN" \
+  CLIP_ID="$(curl -sf -m 10 -G -H "$AUTH" \
     --data-urlencode "searchTerm=$CLIP_NAME" --data-urlencode "Recursive=true" \
     --data-urlencode "IncludeItemTypes=Movie" "$SERVER/Items" \
     | tr '{' '\n' | grep -F "\"Name\":\"$CLIP_NAME\"" \

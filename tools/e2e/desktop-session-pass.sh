@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tools/e2e/desktop-session-pass.sh — wave 13B real-server desktop session
+# tools/e2e/desktop-session-pass.sh — real-server desktop session
 # pass. Verifies IN-APP video playback against a real Jellyfin (the whole
 # shared pipeline: VideoPlayerScreen → VideoPlayerViewModel →
 # DesktopMpvPlayerEngineFactory → MpvDesktopEngine) plus the Esc-popup
-# ordering question wave 9 left open, inside the REAL windowed app.
+# ordering question left open, inside the REAL windowed app.
 #
 # What one run does:
 #   1. waits for the Jellyfin server (GET /System/Info/Public → 200);
@@ -74,13 +74,14 @@ USER_ID="$(grep -oE '"User":\{[^}]*"Id":"[0-9a-f-]+"' <<<"$auth_json" | grep -oE
 [[ -n "$TOKEN" ]] || { echo "AUTH RESPONSE: $auth_json" >&2; fail "no AccessToken in AuthenticateByName response"; }
 [[ -n "$USER_ID" ]] || fail "no User.Id in AuthenticateByName response"
 echo "   authenticated as $USERNAME ($USER_ID)."
+AUTH="Authorization: MediaBrowser Token=\"$TOKEN\""
 
 # ── 3. resolve the item id ─────────────────────────────────────────────────
 # URL-encode the search term (spaces → %20; the clip name is plain ASCII).
 SEARCH_ENC="${ITEM_NAME// /%20}"
 items_json="$(curl -s --max-time 15 \
     "$SERVER_URL/Items?searchTerm=$SEARCH_ENC&Recursive=true&IncludeItemTypes=Movie&Limit=5" \
-    -H "X-Emby-Token: $TOKEN")"
+    -H "$AUTH")"
 ITEM_ID="$(grep -oE '"Id":"[0-9a-f-]+"' <<<"$items_json" | head -1 | sed 's/.*:"//; s/"//')"
 ITEM_FOUND_NAME="$(grep -oE '"Name":"[^"]+"' <<<"$items_json" | head -1 | sed 's/.*:"//; s/"$//')"
 [[ -n "$ITEM_ID" ]] || { echo "ITEMS RESPONSE: $items_json" >&2; fail "no Movie item matched searchTerm='$ITEM_NAME'"; }
@@ -90,7 +91,7 @@ echo "   item: '$ITEM_FOUND_NAME' ($ITEM_ID)."
 # resume position (the 12 s clip would otherwise resume at/near its end on a
 # second run and the playback step could see ENDED instead of PLAYING).
 curl -s --max-time 10 -X DELETE "$SERVER_URL/Users/$USER_ID/PlayedItems/$ITEM_ID" \
-    -H "X-Emby-Token: $TOKEN" >/dev/null || true
+    -H "$AUTH" >/dev/null || true
 
 # ── 4. app image ───────────────────────────────────────────────────────────
 if [[ ! -f "$EXE" ]]; then
@@ -114,12 +115,12 @@ case "$MPV_MIXED" in *" "*) fail "tools/mpv path contains spaces ($MPV_MIXED).";
 # JVM splits JAVA_TOOL_OPTIONS on whitespace: a space-bearing credential or
 # item name would truncate this -D value (and every prop after it).
 case "$USERNAME$PASSWORD$ITEM_ID" in
-    *" "*) fail "USERNAME / E2E_PASSWORD / resolved item id must not contain spaces."; ;;
+    *" "*) fail "USERNAME / E2E_PASSWORD / resolved item id must not contain spaces.";;;
 esac
 
 LOG_OUT="$PROFILE_NIX/app.out"; LOG_ERR="$PROFILE_NIX/app.err"
 echo "== launching $APP_NAME (profile: $PROFILE_NIX)"
-# HARNESS_EXTRA_PROPS (optional, wave 14E): extra jellyplay.harness.* -D props
+# HARNESS_EXTRA_PROPS (optional,): extra jellyplay.harness.* -D props
 # for targeted experiments (e.g. -Djellyplay.harness.noWindowToFront=true, the
 # focus-thief experiment knob). Never set in CI - default run is unmodified.
 export JAVA_TOOL_OPTIONS="-Djellyplay.harness.enabled=true -Djellyplay.harness.serverUrl=$SERVER_URL -Djellyplay.harness.username=$USERNAME -Djellyplay.harness.password=$PASSWORD -Djellyplay.harness.itemId=$ITEM_ID -Djellyplay.harness.autoExitSeconds=$AUTO_EXIT_SECONDS -Djellyplay.harness.screenshotDir=$PROFILE_MIXED/harness-shots -Djellyplay.perf.dataDir=$PROFILE_MIXED/profile -Djna.library.path=$MPV_MIXED ${HARNESS_EXTRA_PROPS:-}"

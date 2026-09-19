@@ -21,7 +21,7 @@ import java.io.File
  * (catches a module mid-wiring before its settings include lands), each
  * mapped to its source root — the whole `src` tree for KMP modules,
  * `src/main` for legacy single-variant modules (app, the legacy core tree,
- * :baselineprofile, apps/desktop). The hand list this discovery replaced is
+ * baselineprofile, apps/desktop). The hand list this discovery replaced is
  * kept as [legacyHandMaintainedRoots]; a canary test pins that discovery
  * still covers all of its on-disk roots. (the guard has since gone
  * repo-complete; the formerly unguarded roots carried one live hazard —
@@ -29,7 +29,11 @@ import java.io.File
  * deliberate baseline entries below). Non-suspend
  * bodies (pure JSON/enum/number parses in mappers, framework glue) are
  * legitimate stdlib `runCatching` territory and simply don't count — the
- * heuristic only counts occurrences inside `suspend fun` bodies.
+     * heuristic only counts occurrences inside `suspend fun` bodies, and
+     * bodyless `suspend fun` declarations (interface members) are skipped,
+     * not grafted onto the next function's body — the grafting once
+     * swallowed a KDoc'd non-suspend site (MultiConnectionDownloadStrategy's
+     * deletePartialQuietly) and failed the ratchet at a stable 3 > 2.
  *
  * Known deliberate baseline entries (do not convert without a design note):
  * HomeDiscoveryStore.ensureNamespacedMigration (best-effort migration
@@ -52,7 +56,7 @@ import java.io.File
  */
 class BareRunCatchingRatchetTest {
 
-    private val maxBareRunCatchingInSuspendFuns = 22
+    private val maxBareRunCatchingInSuspendFuns = 2
 
     /**
      * The hand-maintained guard list this test used before root discovery, kept as
@@ -174,37 +178,57 @@ class BareRunCatchingRatchetTest {
         return roots.flatMap { it.walkTopDown().filter { f -> f.isFile && f.extension == "kt" } }
     }
 
-    /** Strips line/block comments and string/char literals so the scan reads code, not prose. */
-    private fun String.stripCommentsAndStrings(): String {
-        val out = StringBuilder(length)
+    /**
+     * Strips line/block comments and string/char literals so the scan reads
+     * code, not prose. Also returns, per kept character, its original line
+     * number — block-comment removal collapses lines, so positions in the
+     * stripped text alone would report skewed [Hit] lines.
+     */
+    private fun stripCommentsAndStrings(text: String): Pair<String, IntArray> {
+        val out = StringBuilder(text.length)
+        val lineOf = IntArray(text.length)
+        var line = 1
         var i = 0
         var inLine = false
         var inBlock = false
         var inString = false
         var inChar = false
-        while (i < length) {
-            val c = this[i]
-            val next = if (i + 1 < length) this[i + 1] else ' '
+        while (i < text.length) {
+            val c = text[i]
+            val next = if (i + 1 < text.length) text[i + 1] else ' '
             when {
-                inLine -> if (c == '\n') { inLine = false; out.append(c) }
-                inBlock -> if (c == '*' && next == '/') { inBlock = false; i++ }
-                inString -> when {
-                    c == '\\' -> i++
-                    c == '"' -> inString = false
+                inLine -> if (c == '\n') {
+                    inLine = false
+                    out.append(c)
+                    lineOf[out.length - 1] = line
+                    line++
                 }
-                inChar -> when {
-                    c == '\\' -> i++
-                    c == '\'' -> inChar = false
+                inBlock -> {
+                    if (c == '\n') line++
+                    if (c == '*' && next == '/') { inBlock = false; i++ }
+                }
+                inString -> {
+                    if (c == '\n') line++
+                    if (c == '\\') i++
+                    else if (c == '"') inString = false
+                }
+                inChar -> {
+                    if (c == '\\') i++
+                    else if (c == '\'') inChar = false
                 }
                 c == '/' && next == '/' -> { inLine = true; i++ }
                 c == '/' && next == '*' -> { inBlock = true; i++ }
-                c == '"' -> { inString = true; out.append(' ') }
-                c == '\'' -> { inChar = true; out.append(' ') }
-                else -> out.append(c)
+                c == '"' -> { inString = true; out.append(' '); lineOf[out.length - 1] = line }
+                c == '\'' -> { inChar = true; out.append(' '); lineOf[out.length - 1] = line }
+                else -> {
+                    out.append(c)
+                    lineOf[out.length - 1] = line
+                    if (c == '\n') line++
+                }
             }
             i++
         }
-        return out.toString()
+        return out.toString() to lineOf
     }
 
     data class Hit(val file: File, val line: Int)
@@ -212,7 +236,7 @@ class BareRunCatchingRatchetTest {
     /** Counts bare `runCatching` occurrences inside `suspend fun` bodies of [file]. */
     private fun suspendFunsBareRunCatching(file: File): List<Hit> {
         val text = runCatching { file.readText(Charsets.UTF_8) }.getOrDefault("")
-        val src = text.stripCommentsAndStrings()
+        val (src, lineOf) = stripCommentsAndStrings(text)
         val hits = mutableListOf<Hit>()
 
         // Matches plain stdlib runCatching (with or without an explicit type
@@ -221,6 +245,12 @@ class BareRunCatchingRatchetTest {
         var searchFrom = 0
         while (true) {
             val funRange = src.indexOf("suspend fun", searchFrom).let { if (it < 0) return hits else it }
+            // Bodyless declarations (interface/abstract members with no
+            // braces) must not graft the NEXT function's body onto this
+            // window — stop the body search at the next `fun` keyword, which
+            // a real body brace always precedes.
+            val nextDecl = Regex("""\bfun\b""").find(src, funRange + "suspend fun".length)
+                ?.range?.first ?: src.length
             // Find the function's opening brace (first '{' after the signature's
             // ')' — expression-bodied suspend funs have no body and are skipped
             // by scanning to the next "suspend fun" if no brace appears first).
@@ -228,7 +258,7 @@ class BareRunCatchingRatchetTest {
             var depthParen = 0
             var j = funRange
             var sawOpenParen = false
-            while (j < src.length) {
+            while (j < src.length && j < nextDecl) {
                 val ch = src[j]
                 if (ch == '(') { sawOpenParen = true; depthParen++ }
                 if (ch == ')') depthParen--
@@ -253,14 +283,13 @@ class BareRunCatchingRatchetTest {
             if (brace >= 0) {
                 val body = src.substring(brace, bodyEnd + 1)
                 pattern.findAll(body).forEach { m ->
-                    val line = src.substring(0, brace + m.range.first).count { it == '\n' } + 1
-                    hits += Hit(file, line)
+                    hits += Hit(file, lineOf[brace + m.range.first])
                 }
             }
             // Advance past this body entirely: nested suspend funs inside the
             // body are covered by the outer window, so scanning them again
-            // would double-count. Expression-bodied funs (no brace) jump to
-            // the next declaration.
+            // would double-count. Bodyless/expression-bodied funs (no brace)
+            // jump to the next declaration.
             searchFrom = if (brace >= 0) bodyEnd + 1 else maxOf(funRange + 1, nextFun)
         }
     }

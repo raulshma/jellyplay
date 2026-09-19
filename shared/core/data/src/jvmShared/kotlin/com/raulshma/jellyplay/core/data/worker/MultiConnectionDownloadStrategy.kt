@@ -207,16 +207,14 @@ object MultiConnectionDownloadStrategy {
                 // valid resumable prefix. Delete the partial and reset bytes
                 // to 0 so the next attempt starts fresh (a single-connection
                 // resume would otherwise append to a gapped file and corrupt it).
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete corrupt partial", it) }
+                deletePartialQuietly(file, "Failed to delete corrupt partial")
                 dao.updateProgressWithSpeed(downloadId, 0L, cancelStatus, 0L)
                 return TransferOutcome.Success
             }
 
             val finalBytes = totalDownloaded.get()
             if (totalSize > 0L && finalBytes < totalSize) {
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete incomplete partial", it) }
+                deletePartialQuietly(file, "Failed to delete incomplete partial")
                 dao.updateErrorMessage(downloadId, "Download incomplete")
                 dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
                 return TransferOutcome.Retry
@@ -251,6 +249,16 @@ object MultiConnectionDownloadStrategy {
         }
     }
 
+    /**
+     * Best-effort partial-file delete (a gapped multi-connection write is not
+     * resumable). Pure file IO — no suspension — so the bare runCatching lives
+     * in this non-suspend fun, keeping the suspend callers ratchet-clean.
+     */
+    private fun deletePartialQuietly(file: File, logMessage: String) {
+        runCatching { if (file.exists()) file.delete() }
+            .onFailure { Log.w("DownloadWorker", logMessage, it) }
+    }
+
     private fun failureMessage(e: Throwable): String = when (e) {
         is java.net.SocketTimeoutException -> "Network timed out"
         is java.net.UnknownHostException -> "Cannot reach server"
@@ -263,7 +271,7 @@ object MultiConnectionDownloadStrategy {
      * Transfers one `[start, end]` byte range into [file] at its scattered
      * offset. Rides the [DownloadTransferClient] seam: the adapter emits the
      * same headers this method used to hand-build (User-Agent JellyPlay/1.0.0,
-     * `Range: bytes=start-end`, `X-Emby-Token` when the token is non-blank), so
+     * `Range: bytes=start-end`, `Authorization` when the token is non-blank), so
      * only the response handling maps onto [TransferResponse]. Runs on
      * [Dispatchers.IO]; `execute` suspends instead of the old blocking
      * `Call.execute()` (cancellation-collapsible) and the per-buffer-read

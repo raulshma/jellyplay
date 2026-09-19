@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
-import com.raulshma.jellyplay.core.model.PluginConfigPage
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
-import okhttp3.OkHttpClient
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,9 +35,9 @@ import kotlin.test.assertTrue
  *     its own field (null / empty) while the summary still succeeds;
  *  3. `getUsersOverview` / `getUserEditorContext` count only ACTIVE admins
  *     (administrator AND not disabled) and degrade auxiliary fetches;
- *  4. `getPluginConfigPage` maps found/missing/error cases precisely;
- *  5. the realtime task streams + `pluginWebViewSession` + user image URL
- *     delegate to the engine/channel state.
+ *  4. the realtime task streams + user image URL delegate to the
+ *     engine/channel state. (The plugin family's compositions moved to
+ *     PluginAdminRepositoryImplTest at the facade split.)
  */
 class AdminRepositoryImplTest {
 
@@ -74,7 +72,6 @@ class AdminRepositoryImplTest {
         activityLogChannel = mockk()
         every { engine.currentServer } returns currentServer
         every { engine.currentUser } returns currentUser
-        every { engine.okHttpClient } returns OkHttpClient()
         every { realtimeTasks.tasks } returns flowOf(emptyList())
         every { realtimeTasks.scanLibraryTask } returns flowOf(null)
         every { realtimeTasks.lastPushAtMs } returns 0L
@@ -217,37 +214,6 @@ class AdminRepositoryImplTest {
     }
 
     @Test
-    fun `getPluginConfigPage fetches the html for a matching page`() = runTest {
-        coEvery { apiClient.getConfigurationPages() } returns Result.success(
-            listOf(
-                PluginConfigPage(name = "Other", pluginId = "other-plugin"),
-                PluginConfigPage(name = "Config", pluginId = "target-plugin"),
-            ),
-        )
-        coEvery { apiClient.getDashboardConfigurationPage("Config") } returns
-            Result.success("<html>body</html>")
-
-        val page = repository.getPluginConfigPage("target-plugin").getOrThrow()
-
-        assertEquals("Config", page!!.name)
-        assertEquals("<html>body</html>", page.html)
-    }
-
-    @Test
-    fun `getPluginConfigPage succeeds with null when no page matches`() = runTest {
-        coEvery { apiClient.getConfigurationPages() } returns Result.success(emptyList())
-
-        assertNull(repository.getPluginConfigPage("target-plugin").getOrThrow())
-    }
-
-    @Test
-    fun `getPluginConfigPage propagates the configuration-pages failure`() = runTest {
-        coEvery { apiClient.getConfigurationPages() } returns Result.failure(IllegalStateException("down"))
-
-        assertTrue(repository.getPluginConfigPage("x").isFailure)
-    }
-
-    @Test
     fun `scheduled task streams and freshness delegate to the realtime channel`() = runTest {
         val tasks = listOf(task("t1", key = "k", name = "n"))
         every { realtimeTasks.tasks } returns flowOf(tasks)
@@ -257,27 +223,6 @@ class AdminRepositoryImplTest {
         assertEquals(tasks, repository.scheduledTasks.firstOrNull())
         assertEquals(tasks.first(), repository.libraryScanTask.firstOrNull())
         assertEquals(42L, repository.scheduledTasksLastPushAtMs)
-    }
-
-    @Test
-    fun `pluginWebViewSession composes the engine session state`() {
-        val session = repository.pluginWebViewSession
-
-        assertEquals("https://server.example.com", session.serverAddress)
-        assertEquals("11111111-1111-4111-8111-111111111111", session.userId)
-        assertEquals("token-1", session.accessToken)
-    }
-
-    @Test
-    fun `pluginWebViewSession falls back to empty strings without a session`() {
-        currentServer.value = null
-        currentUser.value = null
-
-        val session = repository.pluginWebViewSession
-
-        assertEquals("", session.serverAddress)
-        assertEquals("", session.userId)
-        assertEquals("", session.accessToken)
     }
 
     @Test

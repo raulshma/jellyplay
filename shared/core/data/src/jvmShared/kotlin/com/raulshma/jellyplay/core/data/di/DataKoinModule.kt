@@ -2,8 +2,15 @@ package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
+import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.OfflineResync
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
+import com.raulshma.jellyplay.core.data.download.sniffContainerFile
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
@@ -38,6 +45,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
@@ -45,11 +53,13 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
+import com.raulshma.jellyplay.core.data.repository.NewsletterRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
@@ -57,6 +67,8 @@ import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -64,6 +76,11 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepositoryImpl
@@ -86,6 +103,7 @@ import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
@@ -110,8 +128,13 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
+import com.raulshma.jellyplay.core.database.migration.ContainerProbe
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MetadataApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.core.network.subtitle.SubtitleProvider
@@ -140,7 +163,7 @@ import org.koin.dsl.module
  * `OfflinePlaybackFacade` (see the definitions below). The legacy DataModule
  * constructs nothing from the cluster anymore (the whole legacy DataModule
  * left with the Hilt extinction); Koin builds the cluster natively. `PlaybackSourceResolver` left
- * that latent-on-desktop state with the playback-flips wave: its impl moved
+ * that latent-on-desktop state with the playback flips: its impl moved
  * here Uri-free (`File.toURI()` instead of `android.net.Uri.fromFile`), so
  * UnifiedMediaDetailProviderImpl's ctor dep resolves from this module on
  * BOTH platforms and MediaDetailProvider is live on desktop too. The app's
@@ -161,7 +184,7 @@ import org.koin.dsl.module
  *
  * `DefaultAudioQueueFacade` is the one playback-graph type NOT defined here:
  * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, so its
- * Koin single lives in the legacy core:data androidCoreDataModule (owned
+ * Koin single lives in this module's androidMain AndroidCoreDataKoinModule (
  * there since then; desktopPlayerModule binds the desktop twin).
  * `AudioLyricsManager` left that Android-only set when its sole dep (the
  * LyricsRepository view of MediaRepository) became the single below;
@@ -182,6 +205,17 @@ import org.koin.dsl.module
  * [androidDataModule] / [desktopDataModule].
  */
 val dataJvmModule: Module = module {
+    // ContainerProbe for Migration53To54 (the v53→v54 one-time backfill of
+    // legacy-NULL `downloads.container` rows): combines this module's
+    // `sniffContainerFile` java.io glue with the pure byte-level
+    // ContainerSniffer from commonMain. Registered HERE because
+    // shared:core:database can see neither java.io in commonMain nor this
+    // module (core:data is downstream — its repositories consume the
+    // database DAOs); its platform database modules resolve the probe via
+    // Koin get() when assembling the migration chain (TokenCipher seam,
+    // inverted).
+    single<ContainerProbe> { ContainerProbe(::sniffContainerFile) }
+
     // Relocated from the app composition root's appNetworkConfigModule (C4
     // part 2, DI-finalize): networkJvmModule's base OkHttpClient resolves
     // this via cross-module get() — same ctor wiring the app module had.
@@ -216,7 +250,7 @@ val dataJvmModule: Module = module {
 
     // ── Repository layer (C4 part 2, batch 2) ─────────────────────────────
     // DAOs resolve from :shared:core:database's databaseDaosModule, stores from
-    // :shared:core:datastore's modules, API clients from networkJvmModule.
+    // shared:core:datastore's modules, API clients from networkJvmModule.
     // Constructors are mirrored verbatim from the moved impls.
 
     single {
@@ -253,6 +287,18 @@ val dataJvmModule: Module = module {
     single { SeenMediaRepositoryImpl(get()) }
     single<SeenMediaRepository> { get<SeenMediaRepositoryImpl>() }
 
+    single {
+        ReaderAnnotationsRepositoryImpl(
+            bookmarkDao = get(),
+            annotationDao = get(),
+            timeSource = get(),
+        )
+    }
+    single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }
+
+    single { BookTocCacheRepositoryImpl(dao = get(), timeSource = get()) }
+    single<BookTocCacheRepository> { get<BookTocCacheRepositoryImpl>() }
+
     single { WatchHistoryRepositoryImpl(get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
@@ -282,10 +328,17 @@ val dataJvmModule: Module = module {
     // (AudioPlaybackManager + the media3 audio graph, owned by
     // androidCoreDataModule there) are deliberately NOT defined here:
     // DefaultAudioQueueFacade only. OfflineSyncManager, AudioLyricsManager and
-    // (playback-flips wave) PlaybackSourceResolverImpl all moved off that
+    // (playback flips) PlaybackSourceResolverImpl all moved off that
     // list as their ctor deps became Koin-resolvable.
 
     single<TimeSource> { SystemTimeSource() }
+
+    // the commonMain-promoted repository impls (SearchHistory /
+    // ItemPlaybackPreference / PlaybackOutbox / MoodPlaylist) take the
+    // commonMain EpochMillisSource clock seam — bind it to the SAME
+    // SystemTimeSource single above (one framework per clock; the fakes in
+    // jvmTest satisfy the seam through the TimeSource supertype).
+    single<EpochMillisSource> { get<TimeSource>() }
 
     single { HomeSession(get(), get(DatastoreQualifiers.applicationScope)) }
 
@@ -319,7 +372,7 @@ val dataJvmModule: Module = module {
 
     single { QueuePersistenceHelper(get()) }
 
-    // Playback-flips wave: SleepTimerManager moved from the legacy :core:data
+    // Playback flips: SleepTimerManager moved from the legacy :core:data
     // shim — SystemClock.elapsedRealtime became the TimeSource seam above
     // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
     // unchanged). The audio/live player VMs resolve this single through Koin
@@ -330,8 +383,8 @@ val dataJvmModule: Module = module {
     single { SleepTimerManager(get()) }
     single<AudioSleepTimerManager> { get<SleepTimerManager>() }
 
-    // Playback-flips wave: AdaptiveBitrateManager moved from the legacy
-    // :core:data shim — ConnectivityManager became the NetworkMonitor seam
+    // Playback flips: AdaptiveBitrateManager moved from the legacy
+    // core:data shim — ConnectivityManager became the NetworkMonitor seam
     // (null-network/metered parity documented on the class). Its consumers
     // (feature:details DownloadLifecycleActions, feature:player:video
     // PlayerCastController / PlaybackSession / PlayerSessionManager /
@@ -339,7 +392,7 @@ val dataJvmModule: Module = module {
     single { AdaptiveBitrateManager(get(), get(), get()) }
 
     // V3 livetv conveyor: the mini-player holder moved from the legacy
-    // :core:data shim (one framework per type — @Singleton/@Inject stripped at
+    // core:data shim (one framework per type — @Singleton/@Inject stripped at
     // the move). Consumers (app FloatingPlayerState, feature:player:video
     // VideoPlayerViewModel, livetv's ChannelsViewModel) resolve this single
     // directly from Koin; ChannelsViewModel resolves it
@@ -412,6 +465,19 @@ val dataJvmModule: Module = module {
     }
     single<PlayedStateSync> { get<PlayedStateSyncImpl>() }
 
+    // Facade split: the ONE shared-state holder for the media repository
+    // family — a Koin single ctor-injected into MediaRepositoryImpl AND
+    // PlaylistRepositoryImpl below, so the detail-cache cluster stays ONE
+    // instance across the split (a playlist edit self-invalidates through
+    // the same epoch-guarded group the media repo's detail reads go
+    // through). Scope rule on the holder: only what an extracted surface
+    // actually observes — today the detail cluster only.
+    single {
+        MediaRepositoryInternals(
+            apiClient = get(),
+            homeSession = get(),
+        )
+    }
     single {
         MediaRepositoryImpl(
             apiClient = get(),
@@ -422,6 +488,7 @@ val dataJvmModule: Module = module {
             timeSource = get(),
             homeSession = get(),
             sessionCacheRegistry = get(),
+            internals = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
@@ -432,14 +499,33 @@ val dataJvmModule: Module = module {
     // MediaRepositoryCacheInvalidation pattern): keeps the background sync
     // workers in legacy :core:data off the concrete MediaRepositoryImpl type.
     single<MediaCacheInvalidator> { get<MediaRepositoryImpl>() }
-    // Family-repository views (same single, narrow seam — same pattern as the
-    // MediaRepositoryCacheInvalidation binding above): MediaRepositoryImpl
-    // implements each family directly, and single-family consumers now inject
-    // the family type instead of the 86-member MediaRepository union.
-    single<LiveTvRepository> { get<MediaRepositoryImpl>() }
+    // Family-repository split: SyncPlay stays a VIEW of the media single by
+    // decision (its 11 members interleave with the user-data channel's
+    // invalidation choreography). LiveTv / Newsletter / Playlist moved to
+    // their own impls over the narrow API family clients (the
+    // PlaybackRepositoryImpl ctor precedent — the family singles compose the
+    // same impls the JellyfinApiClient union delegates to, so the wire
+    // behavior is unchanged); single-family consumers keep injecting the
+    // family type instead of the MediaRepository union.
     single<SyncPlayRepository> { get<MediaRepositoryImpl>() }
-    single<NewsletterRepository> { get<MediaRepositoryImpl>() }
-    single<PlaylistRepository> { get<MediaRepositoryImpl>() }
+    single {
+        LiveTvRepositoryImpl(
+            liveTvApiClient = get(),
+            // deleteRecording goes through the generic item delete — the
+            // one route this family uses that MediaInfoApiClient owns.
+            mediaInfoApiClient = get(),
+        )
+    }
+    single<LiveTvRepository> { get<LiveTvRepositoryImpl>() }
+    single { NewsletterRepositoryImpl(apiClient = get()) }
+    single<NewsletterRepository> { get<NewsletterRepositoryImpl>() }
+    single {
+        PlaylistRepositoryImpl(
+            libraryApiClient = get(),
+            internals = get(),
+        )
+    }
+    single<PlaylistRepository> { get<PlaylistRepositoryImpl>() }
     // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
     // since the extraction from MediaRepositoryImpl — no longer a view of the
     // media single.
@@ -479,8 +565,8 @@ val dataJvmModule: Module = module {
     }
     single<MediaSearchEngine> { get<MediaSearchEngineImpl>() }
 
-    // Playback-flips wave: PlaybackSourceResolverImpl moved from the legacy
-    // :core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
+    // Playback flips: PlaybackSourceResolverImpl moved from the legacy
+    // core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
     // note) — UnifiedMediaDetailProviderImpl's ctor dep below now resolves
     // from this module on BOTH platforms, and the app's HiltInterop reverse
     // single for the interface was deleted with the Hilt extinction.
@@ -523,7 +609,7 @@ val dataJvmModule: Module = module {
     }
     single<OfflineFirstItemResolver> { get<OfflineFirstItemResolverImpl>() }
 
-    // Concrete class (no interface). Playback-flips wave: its one former
+    // Concrete class (no interface). Playback flips: its one former
     // Hilt injector (PlaybackSourceResolverImpl) moved into this module too,
     // so construction AND consumption are all-Koin here.
     single { OfflinePlaybackFacade(get(), get()) }
@@ -640,6 +726,39 @@ val dataJvmModule: Module = module {
         )
     }
 
+    // The quick-download seam the library/favorites/studio/search hosts
+    // inject. Since the promoted-interface pass its JVM actual IS the
+    // MediaDownloadActions single (the class implements QuickDownloadActions
+    // directly — the DownloadIntake precedent, no verbatim-forward adapter).
+    // Web binds the honest no-op stub (WasmQuickDownloadActions) in
+    // dataWasmModule.
+    single<QuickDownloadActions> { get<MediaDownloadActions>() }
+
+    // ── download-actions seams (promoted core:data interfaces) ───────────
+    // The feature-facing download reads, all declared in core:data
+    // commonMain and implemented DIRECTLY by this module's engine singles
+    // (DownloadRepositoryImpl implements TrackDownloadStatusWindow +
+    // ActiveDownloadCount + SeriesEpisodeDownloads + DownloadQueue;
+    // OfflineSyncManager implements OfflineResync — the former jvmShared /
+    // feature:downloads verbatim-forward adapters are deleted). Web binds
+    // the honest no-op stubs in dataWasmModule — features never grow their
+    // own wall-crossing template.
+    //  - TrackDownloadStatusWindow: the audio player's and the album
+    //    screen's row window over the DownloadRepository single (its
+    //    downloadsFor IS the single getDownloadsByMediaItemIdsFlow IN-query
+    //    — the N per-id-flow divergence of the deleted adapter is reverted);
+    //  - ActiveDownloadCount: the music-home transfer badge;
+    //  - SeriesEpisodeDownloads: the home series-download sheet's
+    //    episode-id read;
+    //  - DownloadQueue: the downloads screen's queue reads and transfer
+    //    controls;
+    //  - OfflineResync: the downloads screen's check-for-updates / resync.
+    single<TrackDownloadStatusWindow> { get<DownloadRepositoryImpl>() }
+    single<ActiveDownloadCount> { get<DownloadRepositoryImpl>() }
+    single<SeriesEpisodeDownloads> { get<DownloadRepositoryImpl>() }
+    single<DownloadQueue> { get<DownloadRepositoryImpl>() }
+    single<OfflineResync> { get<OfflineSyncManager>() }
+
     single {
         SeerrRepositoryImpl(
             seerrApiClient = get(),
@@ -663,7 +782,13 @@ val dataJvmModule: Module = module {
 
     single {
         PlaybackRepositoryImpl(
-            apiClient = get(),
+            // Narrow family seams, not the JellyfinApiClient union: the impl
+            // only touches playback/library/auth/metadata, and the family
+            // singles below compose the same impls JellyfinApiClientImpl does.
+            playbackApiClient = get<PlaybackApiClient>(),
+            libraryApiClient = get<LibraryApiClient>(),
+            authApiClient = get<AuthApiClient>(),
+            metadataApiClient = get<MetadataApiClient>(),
             outbox = get(),
             offlineModeManager = get(),
             homeSession = get(),
@@ -714,6 +839,17 @@ val dataJvmModule: Module = module {
         )
     }
     single<AdminRepository> { get<AdminRepositoryImpl>() }
+    // Admin facade split (the LiveTvRepositoryImpl pattern): the plugin
+    // family's own single over the PluginApiClient family client + the
+    // engine (the WebView bridge session) — single-family plugin consumers
+    // inject this seam, not the admin union.
+    single {
+        PluginAdminRepositoryImpl(
+            pluginApiClient = get(),
+            engine = get(),
+        )
+    }
+    single<PluginAdminRepository> { get<PluginAdminRepositoryImpl>() }
 
     single {
         AdminStatisticsRepositoryImpl(

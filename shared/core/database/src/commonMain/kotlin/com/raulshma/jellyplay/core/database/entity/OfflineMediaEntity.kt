@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 /**
  * Identity + browsable metadata mirror for an offline item.
@@ -72,7 +73,7 @@ data class OfflineMediaEntity(
     val premiereDate: String? = null,
     val genres: String? = null,
     @ColumnInfo(defaultValue = "0")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = wallNowMillis(),
     // Rich metadata persisted at download time so offline detail screens can
     // show the same information as the online detail screen. All columns are
     // nullable so existing rows degrade gracefully until re-download.

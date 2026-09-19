@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.editor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MergedSubtitleSearch
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -147,11 +146,11 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `uploadSubtitle sends base64-encoded bytes and reloads editor data on success`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val bytes = byteArrayOf(1, 2, 3)
 
-        viewModel.uploadSubtitle(bytes, "sub.srt", "ger", isForced = true, isHearingImpaired = false)
+        viewModel.onEvent(EditorUiEvent.UploadSubtitle(bytes, "sub.srt", "ger", isForced = true, isHearingImpaired = false))
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
@@ -171,13 +170,13 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `uploadSubtitle failure surfaces error without reloading editor data`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         coEvery {
             editorRepository.uploadSubtitle(any(), any(), any(), any(), any(), any())
         } returns Result.failure(RuntimeException("upload boom"))
 
-        viewModel.uploadSubtitle(byteArrayOf(1), "sub.srt", "eng", isForced = false, isHearingImpaired = false)
+        viewModel.onEvent(EditorUiEvent.UploadSubtitle(byteArrayOf(1), "sub.srt", "eng", isForced = false, isHearingImpaired = false))
         advanceUntilIdle()
 
         assertEquals("upload boom", viewModel.uiState.value.error)
@@ -186,7 +185,7 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `uploadSubtitleFromFile reads the picked file's bytes and forwards them with the given file name`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val bytes = byteArrayOf(4, 5, 6)
         val picked = EditorPickedFile(
@@ -195,7 +194,7 @@ class EditorViewModelSubtitlesTest {
             readBytes = { bytes },
         )
 
-        viewModel.uploadSubtitleFromFile(picked, "given.srt", "fre", isForced = false, isHearingImpaired = true)
+        viewModel.onEvent(EditorUiEvent.UploadSubtitleFromFile(picked, "given.srt", "fre", isForced = false, isHearingImpaired = true))
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
@@ -213,10 +212,10 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `deleteSubtitle forwards the stream index and purges the local copy on success`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.deleteSubtitle(2)
+        viewModel.onEvent(EditorUiEvent.DeleteSubtitle(2))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.deleteSubtitle(itemId, 2) }
@@ -232,13 +231,13 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `deleteSubtitle failure surfaces error and skips the local purge`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         coEvery {
             editorRepository.deleteSubtitle(any(), any())
         } returns Result.failure(RuntimeException("delete boom"))
 
-        viewModel.deleteSubtitle(2)
+        viewModel.onEvent(EditorUiEvent.DeleteSubtitle(2))
         advanceUntilIdle()
 
         assertEquals("delete boom", viewModel.uiState.value.error)
@@ -248,14 +247,14 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `searchRemoteSubtitles stores server results on success`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val rows = listOf(
             RemoteSubtitleInfo(id = "remote-1", threeLetterISOLanguageName = "eng", name = "English SRT"),
         )
         coEvery { editorRepository.searchRemoteSubtitles(itemId, "eng") } returns Result.success(rows)
 
-        viewModel.searchRemoteSubtitles("eng")
+        viewModel.onEvent(EditorUiEvent.SearchRemoteSubtitles("eng"))
         advanceUntilIdle()
 
         assertEquals(rows, viewModel.uiState.value.remoteSubtitleResults)
@@ -264,13 +263,13 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `searchRemoteSubtitles failure surfaces error`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         coEvery {
             editorRepository.searchRemoteSubtitles(any(), any())
         } returns Result.failure(RuntimeException("search boom"))
 
-        viewModel.searchRemoteSubtitles("eng")
+        viewModel.onEvent(EditorUiEvent.SearchRemoteSubtitles("eng"))
         advanceUntilIdle()
 
         assertEquals("search boom", viewModel.uiState.value.error)
@@ -279,10 +278,10 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `downloadRemoteSubtitle success re-polls media detail for the new stream`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.downloadRemoteSubtitle("remote-1")
+        viewModel.onEvent(EditorUiEvent.DownloadRemoteSubtitle("remote-1"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.downloadRemoteSubtitle(itemId, "remote-1") }
@@ -292,13 +291,13 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `downloadRemoteSubtitle failure surfaces error`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         coEvery {
             editorRepository.downloadRemoteSubtitle(any(), any())
         } returns Result.failure(RuntimeException("download boom"))
 
-        viewModel.downloadRemoteSubtitle("remote-1")
+        viewModel.onEvent(EditorUiEvent.DownloadRemoteSubtitle("remote-1"))
         advanceUntilIdle()
 
         assertEquals("download boom", viewModel.uiState.value.error)
@@ -307,7 +306,7 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `loadConfiguredSubtitleProviders exposes the configured provider kinds`() = runTest {
-        viewModel.loadConfiguredSubtitleProviders()
+        viewModel.onEvent(EditorUiEvent.LoadConfiguredSubtitleProviders)
         advanceUntilIdle()
 
         assertEquals(
@@ -318,9 +317,9 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `searchAllSubtitleProviders fans out with the item query, streams partials, and toggles the searching flag`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
-        viewModel.loadConfiguredSubtitleProviders()
+        viewModel.onEvent(EditorUiEvent.LoadConfiguredSubtitleProviders)
         advanceUntilIdle()
 
         val jellyfinRow = searchResult(SubtitleProviderKind.JELLYFIN, "jf-row")
@@ -340,7 +339,7 @@ class EditorViewModelSubtitlesTest {
             final
         }
 
-        viewModel.searchAllSubtitleProviders("eng")
+        viewModel.onEvent(EditorUiEvent.SearchAllSubtitleProviders("eng"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -367,7 +366,7 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `searchAllSubtitleProviders without loaded media does not query providers`() = runTest {
-        viewModel.searchAllSubtitleProviders("eng")
+        viewModel.onEvent(EditorUiEvent.SearchAllSubtitleProviders("eng"))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { subtitleProviderRepository.searchAllStreaming(any(), any(), any(), any()) }
@@ -376,7 +375,7 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `downloadProviderSubtitle saves an external subtitle durably and uploads it to the server`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val bytes = byteArrayOf(1, 2, 3, 4)
         val file = SubtitleFile(bytes, fileName = "ext.srt", format = "srt", language = "eng")
@@ -387,7 +386,7 @@ class EditorViewModelSubtitlesTest {
             Result.success(file)
         }
 
-        viewModel.downloadProviderSubtitle(row)
+        viewModel.onEvent(EditorUiEvent.DownloadProviderSubtitle(row))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -412,7 +411,7 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `downloadProviderSubtitle reports device-only save when the server upload fails`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val file = SubtitleFile(byteArrayOf(9), fileName = "ext.srt", format = "srt", language = "eng")
         val row = searchResult(SubtitleProviderKind.WYZIE, "wz-2")
@@ -421,7 +420,7 @@ class EditorViewModelSubtitlesTest {
             editorRepository.uploadSubtitle(any(), any(), any(), any(), any(), any())
         } returns Result.failure(RuntimeException("server offline"))
 
-        viewModel.downloadProviderSubtitle(row)
+        viewModel.onEvent(EditorUiEvent.DownloadProviderSubtitle(row))
         advanceUntilIdle()
 
         // Best-effort upload: the durable local copy backs the subtitle, so the
@@ -434,14 +433,14 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `downloadProviderSubtitle surfaces provider download failures`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val row = searchResult(SubtitleProviderKind.OPENSUBTITLES, "os-1")
         coEvery {
             subtitleProviderRepository.downloadExternal(row)
         } returns Result.failure(IllegalStateException("provider down"))
 
-        viewModel.downloadProviderSubtitle(row)
+        viewModel.onEvent(EditorUiEvent.DownloadProviderSubtitle(row))
         advanceUntilIdle()
 
         assertEquals("provider down", viewModel.uiState.value.error)
@@ -452,7 +451,7 @@ class EditorViewModelSubtitlesTest {
 
     @Test
     fun `downloadProviderSubtitle routes Jellyfin rows through the server download path`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val row = SubtitleSearchResult(
             provider = SubtitleProviderKind.JELLYFIN,
@@ -462,7 +461,7 @@ class EditorViewModelSubtitlesTest {
             jellyfinInfo = RemoteSubtitleInfo(id = "jf-1"),
         )
 
-        viewModel.downloadProviderSubtitle(row)
+        viewModel.onEvent(EditorUiEvent.DownloadProviderSubtitle(row))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.downloadRemoteSubtitle(itemId, "jf-1") }
@@ -472,53 +471,29 @@ class EditorViewModelSubtitlesTest {
 }
 
 /**
- * No-op [StreamingSubtitleStore] that records the durable lifecycle calls the
+ * Recording [EditorSubtitleStore] that captures the durable lifecycle calls the
  * editor makes (save / purge on server delete / attribution after upload) so
- * the tests can assert on them.
+ * the tests can assert on them. The seam swap changed only the parameter
+ * shape: the save bundle arrives as one [ProviderSubtitleSave] instead of the
+ * StreamingSubtitleStore's flat arg list.
  */
-private class RecordingSubtitleStore : StreamingSubtitleStore {
+private class RecordingSubtitleStore : EditorSubtitleStore {
 
-    val savedSubtitles = mutableListOf<SavedSubtitle>()
+    val savedSubtitles = mutableListOf<ProviderSubtitleSave>()
     val attributedItemIds = mutableListOf<String>()
     /** (itemId, deleted stream index, captured deleted stream) per purge. */
     val purgedCopies = mutableListOf<Triple<String, Int, MediaStream?>>()
 
-    override suspend fun save(
-        itemId: String,
-        provider: SubtitleProviderKind,
-        providerSubtitleId: String,
-        fileName: String,
-        language: String?,
-        codec: String?,
-        isForced: Boolean,
-        isHearingImpaired: Boolean,
-        bytes: ByteArray,
-    ): SavedSubtitle {
-        val saved = SavedSubtitle(
-            provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
-        )
-        savedSubtitles.add(saved)
-        return saved
+    override suspend fun save(save: ProviderSubtitleSave) {
+        savedSubtitles.add(save)
     }
 
-    override suspend fun loadAll(itemId: String): List<SavedSubtitle> = emptyList()
-
-    override suspend fun fileFor(itemId: String, saved: SavedSubtitle): java.io.File =
-        java.io.File(saved.fileRelativePath)
-
-    override suspend fun delete(itemId: String, saved: SavedSubtitle) = Unit
-
-    override suspend fun markServerStreamIndex(itemId: String, saved: SavedSubtitle, index: Int) = Unit
-
-    override suspend fun clear(itemId: String) = Unit
-
-    override suspend fun attributeUploadedSubtitle(
-        itemId: String,
-        saved: SavedSubtitle,
+    override suspend fun attributeUploaded(
+        save: ProviderSubtitleSave,
         streamsAfterUpload: List<MediaStream>,
         preUploadExternalIndices: Set<Int>,
     ) {
-        attributedItemIds.add(itemId)
+        attributedItemIds.add(save.itemId)
     }
 
     override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) {

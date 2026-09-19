@@ -26,6 +26,9 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">再生</string>
     <string name="detail_play_resume">再開</string>
+    <string name="detail_read">読む</string>
+    <string name="detail_continue_page">続きから読む — %1$dページ</string>
+    <string name="detail_continue_percent">続きから読む — %1$d%</string>
     <string name="detail_play_finding_episode">エピソードを検索中</string>
     <string name="detail_play_no_episodes_available">視聴可能なエピソードはありません</string>
     <string name="detail_play_no_episodes">エピソードがありません</string>
@@ -408,4 +411,22 @@
     <string name="detail_file_category_trickplay">Trickplay</string>
     <string name="detail_file_category_segment">セグメント</string>
     <string name="detail_file_category_image">画像</string>
+    <!-- ── 本の詳細（読書向けボディ） ── -->
+    <string name="detail_section_contents">目次</string>
+    <string name="detail_book_format_comic">コミック</string>
+    <string name="detail_book_finished_badge">読了</string>
+    <string name="detail_book_page_progress">%2$dページ中%1$dページ</string>
+    <string name="detail_book_percent_progress">%1$d%読了</string>
+    <string name="detail_book_contents_page">%1$dページ</string>
+    <plurals name="detail_book_contents_show_all">
+        <item quantity="other">全%1$d件を表示</item>
+    </plurals>
+    <string name="detail_cd_mark_as_finished">読了にする</string>
+    <string name="detail_cd_mark_as_unfinished">読了を解除する</string>
+    <plurals name="detail_book_bookmarks">
+        <item quantity="other">しおり %1$d件</item>
+    </plurals>
+    <plurals name="detail_book_highlights">
+        <item quantity="other">ハイライト %1$d件</item>
+    </plurals>
 </resources>

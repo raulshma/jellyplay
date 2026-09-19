@@ -9,8 +9,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Runtime icon + tray-availability decisions out of [DesktopAppIcon] (wave
- * 12A): these two pure functions decide whether the window/tray render an
+ * Runtime icon + tray-availability decisions out of [DesktopAppIcon]:
+ * these two pure functions decide whether the window/tray render an
  * icon at all, and Main.kt skips the tray entirely when either half fails —
  * so a regression here must fail HERE, not as a silent icon-less boot.
  *

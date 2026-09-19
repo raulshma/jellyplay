@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
@@ -90,6 +91,12 @@ fun MediaDetailScreen(
     itemId: String,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, subtitleStreamIndex: Int?, audioStreamIndex: Int?) -> Unit,
     onAudioClick: (itemId: String) -> Unit,
+    /**
+     * Open the book reader for a BOOK item (details screen Read button).
+     * The jump pair is the one-shot "Contents" deep-link destination (EPUB
+     * href / 0-based PDF page) — nulls for plain Read/Continue.
+     */
+    onReadClick: (itemId: String, jumpHref: String?, jumpPage: Int?) -> Unit = { _, _, _ -> },
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
     onNavigateToSeries: (seriesId: String) -> Unit,
@@ -144,7 +151,15 @@ fun MediaDetailScreen(
     }
     // Memoized so the URL isn't rebuilt on every recomposition (e.g. on each
     // scroll-derived state change funnelling through ArtworkThemeWrapper).
-    val backdropUrl = remember(targetBackdropId) { viewModel.getBackdropUrl(targetBackdropId) }
+    // Books have no Backdrop image — the hero (and the cover-tinted theme)
+    // source the PRIMARY (cover) art instead.
+    val backdropUrl = remember(targetBackdropId, currentItem?.mediaType) {
+        if (currentItem?.mediaType == MediaType.BOOK) {
+            viewModel.getImageUrl(targetBackdropId)
+        } else {
+            viewModel.getBackdropUrl(targetBackdropId)
+        }
+    }
 
     val outerIsLightTheme = rememberIsLightTheme()
 
@@ -169,46 +184,63 @@ fun MediaDetailScreen(
     // ── Unified-provider action dialog state. Delete / resync /
     // re-download get the same TV/mobile focus, back, and snackbar handling as
     // the existing detail actions. ──
-    /** Pending delete of the current item's attached download (single item or episode). */
-    var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
+    /**
+     * Delete-confirm machines ([PendingConfirmation]). The deletes are
+     * fire-and-forget (the VM-owned `OfflineDeleteActions` launches on its own
+     * scope and returns immediately), so the machine settles SYNCHRONOUSLY at
+     * the confirm tap — `clear()` runs before the handler returns, which makes
+     * double-fire structurally impossible and leaves the machine's in-flight
+     * guard arm unreachable here (dismiss/confirm are called with
+     * `inFlight = false`). Settle arm: an explicit [PendingConfirmation.clear]
+     * at confirm — these dialogs previously never cleared (the pending item
+     * died with navigation).
+     */
+    var pendingDelete by remember { mutableStateOf(PendingConfirmation<PendingDelete>()) }
     /** Pending delete of a downloaded episode from the seasons section. */
-    var pendingDeleteEpisode by remember { mutableStateOf<PendingEpisodeDelete?>(null) }
+    var pendingDeleteEpisode by remember { mutableStateOf(PendingConfirmation<PendingEpisodeDelete>()) }
     /** Resync bottom-sheet visibility (banner tap). */
     var showResyncSheet by remember { mutableStateOf(false) }
     /** Full download-details bottom-sheet visibility (DownloadInfoCard tap). */
     var showDownloadDetailsSheet by remember { mutableStateOf(false) }
 
-    // Series/season mark-played cascades recurse into every episode and clear all
-    // resume positions, so they're gated behind a confirm
-    // Direction is tracked alongside so the dialog shows the right verb/message
-    // for a watched vs unwatched flip.
-    val markSeriesConfirm = rememberConfirmState()
-    var markSeriesToWatched by remember { mutableStateOf(true) }
-    val markSeasonConfirm = rememberConfirmState()
-    var markSeasonToWatched by remember { mutableStateOf(true) }
+    // Series/season mark-played cascades recurse into every episode and clear
+    // all resume positions, so they're gated behind a confirm. ONE machine:
+    // the shared [ConfirmState] holds the deferred call, and the ONE pending
+    // [MarkPlayedConfirmRequest] carries what the dialog must say (scope ×
+    // direction) — the former four hand-synced vars (series/season confirm ×
+    // their toWatched mirrors) folded into a single value.
+    val markPlayedConfirm = rememberConfirmState()
+    var markPlayedRequest by remember { mutableStateOf<MarkPlayedConfirmRequest?>(null) }
 
     // The four mark-played callbacks (item/season × watched/unwatched) fold
     // into one remembered dispatcher: [DetailPlayPolicies.dispatchMarkPlayedAction]
     // owns the confirm-vs-direct table over (mediaType × season action) and this
-    // lambda only routes to the matching confirm channel + ViewModel call.
+    // lambda only arms the single request value + ViewModel call.
     // mediaType is read fresh at invocation (not captured) so the gate always
     // sees the loaded item's type.
-    val dispatchMarkPlayedAction = remember(viewModel, markSeriesConfirm, markSeasonConfirm) {
+    val dispatchMarkPlayedAction = remember(viewModel, markPlayedConfirm) {
         { isSeasonAction: Boolean, toWatched: Boolean, seasonId: String? ->
-            val confirm: () -> Unit = {
-                if (isSeasonAction) {
-                    markSeasonToWatched = toWatched
-                    markSeasonConfirm.request {
-                        if (toWatched) viewModel.markSeasonPlayed(requireNotNull(seasonId))
-                        else viewModel.markSeasonUnplayed(requireNotNull(seasonId))
-                    }
+            val request = MarkPlayedConfirmRequest(
+                scope = if (isSeasonAction) {
+                    MarkPlayedConfirmRequest.Scope.Season(requireNotNull(seasonId))
                 } else {
-                    markSeriesToWatched = toWatched
-                    markSeriesConfirm.request {
-                        if (toWatched) viewModel.markPlayed()
-                        else viewModel.markUnplayed()
+                    MarkPlayedConfirmRequest.Scope.Item
+                },
+                toWatched = toWatched,
+                confirm = markPlayedConfirm,
+            )
+            val confirm: () -> Unit = {
+                markPlayedConfirm.request {
+                    when (val scope = request.scope) {
+                        MarkPlayedConfirmRequest.Scope.Item ->
+                            if (toWatched) viewModel.markPlayed()
+                            else viewModel.markUnplayed()
+                        is MarkPlayedConfirmRequest.Scope.Season ->
+                            if (toWatched) viewModel.markSeasonPlayed(scope.seasonId)
+                            else viewModel.markSeasonUnplayed(scope.seasonId)
                     }
                 }
+                markPlayedRequest = request
             }
             // Direct dispatch: reachable only for item-level marks on
             // movies/episodes (the season row of the gate always confirms, so
@@ -446,6 +478,7 @@ fun MediaDetailScreen(
                     resyncState = resyncState,
                     downloadedEpisodeIds = downloads.downloadedEpisodeIds,
                     downloadPicker = downloads.downloadPicker,
+                    book = uiState.book,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(
@@ -475,7 +508,7 @@ fun MediaDetailScreen(
                     )
                 }
 
-                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, itemId) {
+                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, onReadClick, itemId) {
                     PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
                             // Stream selection (local-origin subtitle index when offline)
@@ -522,6 +555,9 @@ fun MediaDetailScreen(
                             onPlayClick(extra.id, null, 0L, null, null)
                         },
                         onAudioClick = { onAudioClick(itemId) },
+                        onReadClick = { readItemId: String, jumpHref: String?, jumpPage: Int? ->
+                            onReadClick(readItemId, jumpHref, jumpPage)
+                        },
                         onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
                         onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
@@ -546,19 +582,23 @@ fun MediaDetailScreen(
                         onDeleteDownload = {
                             val target = detail?.item
                             val isEpisode = target?.mediaType == MediaType.EPISODE
-                            pendingDelete = PendingDelete(
-                                itemId = target?.id ?: itemId,
-                                name = target?.name ?: "",
-                                sizeBytes = uiState.detailContext?.download?.totalSizeBytes ?: 0L,
-                                isEpisode = isEpisode,
+                            pendingDelete = pendingDelete.hold(
+                                PendingDelete(
+                                    itemId = target?.id ?: itemId,
+                                    name = target?.name ?: "",
+                                    sizeBytes = uiState.detailContext?.download?.totalSizeBytes ?: 0L,
+                                    isEpisode = isEpisode,
+                                ),
                             )
                         },
                         onDeleteDownloadedEpisodes = { showDeleteEpisodesSheet = true },
                         onDeleteEpisode = { episodeId ->
                             val ep = uiState.episodes.values.flatten().firstOrNull { it.id == episodeId }
-                            pendingDeleteEpisode = PendingEpisodeDelete(
-                                episodeId = episodeId,
-                                name = ep?.name ?: "",
+                            pendingDeleteEpisode = pendingDeleteEpisode.hold(
+                                PendingEpisodeDelete(
+                                    episodeId = episodeId,
+                                    name = ep?.name ?: "",
+                                ),
                             )
                         },
                         onOpenResync = { showResyncSheet = true },
@@ -852,35 +892,30 @@ fun MediaDetailScreen(
                 .padding(bottom = 80.dp),
         )
 
-        // Series mark-played confirm : watched vs unwatched differ only in verb.
-        if (markSeriesConfirm.isVisible) {
+        // Mark-played confirm (series-wide or one season): watched vs
+        // unwatched and series vs season differ only in verb/message, both
+        // derived from the ONE pending request.
+        val request = markPlayedRequest
+        if (request != null && request.confirm.isVisible) {
+            val isSeason = request.scope is MarkPlayedConfirmRequest.Scope.Season
+            val toWatched = request.toWatched
             val title = stringResource(
-                if (markSeriesToWatched) Res.string.detail_mark_series_watched_confirm_title
-                else Res.string.detail_mark_series_unwatched_confirm_title,
+                when {
+                    isSeason && toWatched -> Res.string.detail_mark_season_watched_confirm_title
+                    isSeason -> Res.string.detail_mark_season_unwatched_confirm_title
+                    toWatched -> Res.string.detail_mark_series_watched_confirm_title
+                    else -> Res.string.detail_mark_series_unwatched_confirm_title
+                },
             )
             val message = stringResource(
-                if (markSeriesToWatched) Res.string.detail_mark_series_watched_confirm_message
-                else Res.string.detail_mark_series_unwatched_confirm_message,
+                when {
+                    isSeason && toWatched -> Res.string.detail_mark_season_watched_confirm_message
+                    isSeason -> Res.string.detail_mark_season_unwatched_confirm_message
+                    toWatched -> Res.string.detail_mark_series_watched_confirm_message
+                    else -> Res.string.detail_mark_series_unwatched_confirm_message
+                },
             )
-            markSeriesConfirm.ConfirmDialog(
-                title = title,
-                message = message,
-                confirmText = stringResource(CoreUiRes.string.core_confirm),
-                dismissText = stringResource(CoreUiRes.string.core_cancel),
-            )
-        }
-
-        // Season mark-played confirm.
-        if (markSeasonConfirm.isVisible) {
-            val title = stringResource(
-                if (markSeasonToWatched) Res.string.detail_mark_season_watched_confirm_title
-                else Res.string.detail_mark_season_unwatched_confirm_title,
-            )
-            val message = stringResource(
-                if (markSeasonToWatched) Res.string.detail_mark_season_watched_confirm_message
-                else Res.string.detail_mark_season_unwatched_confirm_message,
-            )
-            markSeasonConfirm.ConfirmDialog(
+            request.confirm.ConfirmDialog(
                 title = title,
                 message = message,
                 confirmText = stringResource(CoreUiRes.string.core_confirm),
@@ -928,7 +963,7 @@ fun MediaDetailScreen(
         // Single item: deletes the current item's attached download. Episode: a
         // downloaded episode from the seasons section. Both route through the
         // merged DetailViewModel offline-delete methods.
-        pendingDelete?.let { target ->
+        pendingDelete.item?.let { target ->
             ConfirmDialog(
                 title = stringResource(Res.string.detail_delete_download_title),
                 message = stringResource(
@@ -941,16 +976,18 @@ fun MediaDetailScreen(
                 icon = Tabler.Outline.Trash,
                 tone = ConfirmTone.DESTRUCTIVE,
                 onConfirm = {
-                    viewModel.offline.deleteOfflineItem(target.itemId)
+                    val item = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                    viewModel.offline.deleteOfflineItem(item.itemId)
+                    pendingDelete = pendingDelete.clear()
                     // A LOCAL origin has nothing left once its only download is
                     // removed — pop back instead of stranding the user on an
                     // empty detail (matches the series batch-delete behavior).
                     if (uiState.origin?.isLocal == true) onBack()
                 },
-                onDismiss = { pendingDelete = null },
+                onDismiss = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
             )
         }
-        pendingDeleteEpisode?.let { ep ->
+        pendingDeleteEpisode.item?.let { ep ->
             ConfirmDialog(
                 title = stringResource(Res.string.detail_delete_episode_title),
                 message = stringResource(Res.string.detail_delete_episode_message, ep.name),
@@ -958,8 +995,12 @@ fun MediaDetailScreen(
                 dismissText = stringResource(Res.string.detail_cancel),
                 icon = Tabler.Outline.Trash,
                 tone = ConfirmTone.DESTRUCTIVE,
-                onConfirm = { viewModel.offline.deleteOfflineEpisode(ep.episodeId) },
-                onDismiss = { pendingDeleteEpisode = null },
+                onConfirm = {
+                    val item = pendingDeleteEpisode.confirm(inFlight = false) ?: return@ConfirmDialog
+                    viewModel.offline.deleteOfflineEpisode(item.episodeId)
+                    pendingDeleteEpisode = pendingDeleteEpisode.clear()
+                },
+                onDismiss = { pendingDeleteEpisode = pendingDeleteEpisode.dismiss(inFlight = false) },
             )
         }
 
@@ -1027,3 +1068,24 @@ private data class PendingEpisodeDelete(
     val episodeId: String,
     val name: String,
 )
+
+/**
+ * ONE pending mark-played confirm: the [Scope] + direction pair the dialog's
+ * verb/message derive from, plus the shared [ConfirmState] holding the
+ * deferred ViewModel call. Replaces the two hand-synced confirm machines and
+ * their `toWatched` mirrors; [ConfirmState.isVisible] stays the dialog-open
+ * flag and settles on both dismiss and confirm, leaving a stale request value
+ * that is benign until the next request overwrites it (same semantics the
+ * `toWatched` mirrors had).
+ */
+private data class MarkPlayedConfirmRequest(
+    val scope: Scope,
+    val toWatched: Boolean,
+    val confirm: ConfirmState,
+) {
+    /** What the confirm addresses: the item itself (a series) or one season. */
+    sealed interface Scope {
+        data object Item : Scope
+        data class Season(val seasonId: String) : Scope
+    }
+}

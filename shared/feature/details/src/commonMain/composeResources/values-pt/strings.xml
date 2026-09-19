@@ -26,6 +26,9 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Reproduzir</string>
     <string name="detail_play_resume">Retomar</string>
+    <string name="detail_read">Ler</string>
+    <string name="detail_continue_page">Continuar — página %1$d</string>
+    <string name="detail_continue_percent">Continuar — %1$d%</string>
     <string name="detail_play_finding_episode">A procurar episódio</string>
     <string name="detail_play_no_episodes_available">Sem episódios disponíveis</string>
     <string name="detail_play_no_episodes">Sem episódios</string>
@@ -415,4 +418,25 @@
     <string name="detail_file_category_trickplay">Trickplay</string>
     <string name="detail_file_category_segment">Segmentos</string>
     <string name="detail_file_category_image">Imagens</string>
+    <!-- ── Detalhe do livro (corpo de leitura) ── -->
+    <string name="detail_section_contents">Índice</string>
+    <string name="detail_book_format_comic">Revista em quadrinhos</string>
+    <string name="detail_book_finished_badge">Concluído</string>
+    <string name="detail_book_page_progress">Página %1$d de %2$d</string>
+    <string name="detail_book_percent_progress">%1$d% lido</string>
+    <string name="detail_book_contents_page">p. %1$d</string>
+    <plurals name="detail_book_contents_show_all">
+        <item quantity="one">Mostrar as %1$d entradas</item>
+        <item quantity="other">Mostrar as %1$d entradas</item>
+    </plurals>
+    <string name="detail_cd_mark_as_finished">Marcar como concluído</string>
+    <string name="detail_cd_mark_as_unfinished">Marcar como não concluído</string>
+    <plurals name="detail_book_bookmarks">
+        <item quantity="one">%1$d marcador</item>
+        <item quantity="other">%1$d marcadores</item>
+    </plurals>
+    <plurals name="detail_book_highlights">
+        <item quantity="one">%1$d destaque</item>
+        <item quantity="other">%1$d destaques</item>
+    </plurals>
 </resources>

@@ -4,7 +4,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import com.raulshma.jellyplay.core.model.arr.ArrPreferences
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
@@ -12,7 +11,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -28,7 +26,8 @@ import kotlinx.coroutines.flow.stateIn
  * (manual server credentials ride along for read convenience).
  *
  * On any read/parse error, the flow degrades to defaults rather than throwing
- * — matching the [SeerrPreferencesStore] `.catch { emptyPreferences() }` pattern.
+ * — the module-wide `dataDegradingToDefaults` corrupt-read policy (see
+ * `SliceStateFlow.kt`).
  *
  * Note on the manual-server bridge: [ArrSecureCredentialsStore] is backed by
  * EncryptedSharedPreferences which is not observable (no Flow API), so
@@ -55,8 +54,7 @@ class ArrPreferencesStore constructor(
      */
     private val manualServersTick = MutableStateFlow(secureCredentialsStore.getManualServers())
 
-    val preferences: StateFlow<ArrPreferences> = dataStore.data
-        .catch { _ -> emit(emptyPreferences()) }
+    val preferences: StateFlow<ArrPreferences> = dataStore.dataDegradingToDefaults()
         .map { prefs ->
             SimpleArrPrefs(
                 useSeerrDiscovery = prefs[Keys.USE_SEERR_DISCOVERY] ?: true,

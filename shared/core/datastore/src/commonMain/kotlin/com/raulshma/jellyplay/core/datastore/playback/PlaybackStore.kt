@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -18,14 +19,8 @@ import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 
 /**
  * Deep module owning the **media-delivery** preference domain: which engine runs,
@@ -77,18 +72,13 @@ class PlaybackStore constructor(
         val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey("android_tv_watch_next_enabled")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
-
     /**
      * The media-delivery preference slice, derived directly from the raw
      * DataStore (not mapped through the whole-`UserPreferences` aggregate), so
      * a write to an unrelated preference does not re-derive these fields.
      */
-    val playback: StateFlow<PlaybackSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, PlaybackSlice())
+    val playback: StateFlow<PlaybackSlice> =
+        dataStore.sliceStateFlow(scope, seed = PlaybackSlice(), read = ::read)
 
     /**
      * Pure read of the media-delivery fields from a raw [Preferences] snapshot.
@@ -250,29 +240,14 @@ class PlaybackStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Aggregated by
-     * the facade's reset-coverage guard.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.PREFERRED_PLAYER,
-        Keys.STREAMING_QUALITY,
-        Keys.CELLULAR_STREAMING_QUALITY,
-        Keys.FORCE_DIRECT_PLAY,
-        Keys.PLAYBACK_MODE,
-        Keys.DECODER_MODE,
-        Keys.AUDIO_PASSTHROUGH,
-        Keys.FRAME_RATE_MATCHING,
-        Keys.REFRESH_RATE_MODE,
-        Keys.LIVE_STREAM_OPTION,
-        Keys.KEEP_SCREEN_ON_DURING_VIDEO,
-        Keys.PAUSE_ON_AUDIO_FOCUS_LOSS,
-        Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
-        Keys.AUTO_PLAY_COUNTDOWN_SEC,
-        Keys.BACKGROUND_VIDEO_AUDIO_ENABLED,
-        Keys.PGS_SUBTITLE_DIRECT_PLAY,
-        Keys.USER_DATA_SYNC_ENABLED,
-        Keys.ANDROID_TV_WATCH_NEXT_ENABLED,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -305,39 +280,6 @@ class PlaybackStore constructor(
             Keys.ANDROID_TV_WATCH_NEXT_ENABLED,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the media-delivery keys owned by
-     * this store from a decoded [UserPreferences]. The facade calls this (and
-     * every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly. The legacy
-     * `force_direct_play` boolean is not written back — [readPlaybackMode]
-     * migrates it from [PlaybackSlice.playbackMode],
-     * and the typed key takes precedence, so re-entering the enum is enough.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.PREFERRED_PLAYER] = userPreferences.preferredPlayer.name
-            it[Keys.STREAMING_QUALITY] = userPreferences.streamingQuality.name
-            it[Keys.CELLULAR_STREAMING_QUALITY] = userPreferences.cellularStreamingQuality.name
-            it[Keys.PLAYBACK_MODE] = userPreferences.playbackMode.name
-            it[Keys.DECODER_MODE] = userPreferences.decoderMode.name
-            it[Keys.AUDIO_PASSTHROUGH] = userPreferences.audioPassthrough
-            it[Keys.FRAME_RATE_MATCHING] = userPreferences.frameRateMatching
-            it[Keys.REFRESH_RATE_MODE] = userPreferences.refreshRateMode.name
-            it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = userPreferences.keepScreenOnDuringVideo
-            it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = userPreferences.pauseOnAudioFocusLoss
-            it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = userPreferences.duckOnTransientFocusLoss
-            it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = userPreferences.autoPlayCountdownSec
-            it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = userPreferences.backgroundVideoAudioEnabled
-            it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = userPreferences.pgsSubtitleDirectPlay
-            it[Keys.USER_DATA_SYNC_ENABLED] = userPreferences.userDataSyncEnabled
-            it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = userPreferences.androidTvWatchNextEnabled
-        }
     }
 
     /**

@@ -148,22 +148,45 @@ class SessionCoordinator(
                 }
             }
             launch {
-                // Re-post capabilities on every WebSocket (re)connect. The server
+                // Post capabilities on every WebSocket (re)connect. The server
                 // drops the session's WebSocketController (and thus
                 // SupportsRemoteControl) when the socket closes, so after a drop
                 // the device disappears from other clients' "Play On" lists until
                 // capabilities are re-armed. Gated on isAuthenticated so a stray
                 // connect during teardown doesn't fire a stale POST.
-                var lastConnected = realtimeConnection.isConnected.value
-                realtimeConnection.isConnected.collect { connected ->
-                    if (connected && !lastConnected && _isAuthenticated.value) {
-                        launch {
-                            runCatchingRethrowingCancellation { authRepository.postCapabilities() }
-                        }
-                    }
-                    lastConnected = connected
+                //
+                // The former hand-rolled `lastConnected` edge also fired on the
+                // FIRST connect (the collector starts before the auth fan-out
+                // above connects), and that first post is load-bearing — it is
+                // what arms capabilities once the server session truly exists.
+                // That first-connect arm is kept explicitly here: the
+                // immediate [postCapabilitiesIfAuthenticated] covers BOTH the
+                // first connect and an already-up socket at collector start
+                // (RestartableJob cancels the old collector but the socket
+                // survives — the re-post is an idempotent re-assert, and
+                // [RealtimeConnection.reconnects] carries no replay, so this
+                // immediate post is the only already-up arm); every
+                // subsequent drop+reopen rides [RealtimeConnection.reconnects].
+                if (!realtimeConnection.isConnected.value) {
+                    realtimeConnection.isConnected.first { it }
+                }
+                postCapabilitiesIfAuthenticated()
+                realtimeConnection.reconnects.collect {
+                    postCapabilitiesIfAuthenticated()
                 }
             }
+        }
+    }
+
+    /**
+     * Posts session capabilities on [this] scope, gated on the authenticated
+     * mirror — the shared body of the first-connect arm and every
+     * [RealtimeConnection.reconnects] re-arm in [start].
+     */
+    private fun CoroutineScope.postCapabilitiesIfAuthenticated() {
+        if (!_isAuthenticated.value) return
+        launch {
+            runCatchingRethrowingCancellation { authRepository.postCapabilities() }
         }
     }
 
@@ -225,6 +248,10 @@ class SessionCoordinator(
     }
 
     private companion object {
-        const val AUTH_CONFIRMATION_TIMEOUT_MS = 10_000L
+        // The mirror flip trails the restore by ~10 ms, so this exists purely
+        // to bound the corrupted-flow case — not to outlast a slow cold start.
+        // A pathological stall past 2.5 s trades one possible frame of auth
+        // flash for un-blocking the splash instead of pinning it for seconds.
+        const val AUTH_CONFIRMATION_TIMEOUT_MS = 2_500L
     }
 }

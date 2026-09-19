@@ -16,9 +16,9 @@ import kotlin.test.assertTrue
  * State-machine pin for [DesktopAudioEffectsManager] — the desktop twin of the
  * Android `AudioEffectsProcessor` (legacy `:core:data`). Two invariants:
  *
- *  1. Every setter flips its flow (the audio ViewModel persists
- *     `uiState.effects.<flag>` right after the call — a missed flip would let
- *     the store silently undo the toggle) AND folds through [snapshot][DesktopAudioEffectsManager.snapshotConfig]
+ *  1. Every setter flips its flow (the audio effects controller persists
+ *     the manager's `StateFlow.value` right after the apply leg — a missed
+ *     flip would let the store silently undo the toggle) AND folds through [snapshot][DesktopAudioEffectsManager.snapshotConfig]
  *     into the shared [com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig]
  *     that [DesktopAudioQueueManager] pushes onto the mpv `af` chain.
  *  2. The per-track ReplayGain computation mirrors

@@ -87,6 +87,26 @@ class DurationFormatterTest {
     }
 
     @Test
+    fun `formatRuntimeLabelFromTicks with null ticks`() {
+        assertNull(formatRuntimeLabelFromTicks(null))
+    }
+
+    @Test
+    fun `formatRuntimeLabelFromTicks hides sub-minute runtimes`() {
+        // Books and other non-playback items report a null, zero or tiny
+        // RunTimeTicks; all three must render as "no runtime", never "0m".
+        assertNull(formatRuntimeLabelFromTicks(0L))
+        assertNull(formatRuntimeLabelFromTicks(599_999_999L))
+    }
+
+    @Test
+    fun `formatRuntimeLabelFromTicks formats valid runtimes`() {
+        assertEquals("1m", formatRuntimeLabelFromTicks(600_000_000L))
+        assertEquals("1h 35m", formatRuntimeLabelFromTicks(95 * 60 * 10_000_000L))
+        assertEquals("2h 30m", formatRuntimeLabelFromTicks((2 * 3600 + 30 * 60) * 10_000_000L))
+    }
+
+    @Test
     fun `formatDurationMs with zero`() {
         assertEquals("0:00", formatDurationMs(0))
     }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,19 +56,21 @@ interface SeerrRepository {
 
     suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>>
 
-    suspend fun getRadarrServiceDetail(id: Int): Result<SeerrRadarrServiceDetail>
-
-    suspend fun getSonarrServiceDetail(id: Int): Result<SeerrSonarrServiceDetail>
-
     // ── /service/ endpoints (used by request modal) ──
 
     suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>>
 
     suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>>
 
-    suspend fun getServiceRadarrDetail(id: Int): Result<SeerrRadarrServiceDetail>
-
-    suspend fun getServiceSonarrDetail(id: Int): Result<SeerrSonarrServiceDetail>
+    /**
+     * One `/service/{radarr,sonarr}/{id}` detail fetch — the kind-paired
+     * `getServiceRadarrDetail`/`getServiceSonarrDetail` members folded onto
+     * [ArrServiceKind] (the two endpoints differ only in path, and the two
+     * payloads mirror field-for-field under the [SeerrServiceDetail] sealed
+     * parent). Callers narrow with `filterIsInstance` when a typed list is
+     * needed (see [com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate]).
+     */
+    suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail>
 
     fun isConnected(): Flow<Boolean>
 

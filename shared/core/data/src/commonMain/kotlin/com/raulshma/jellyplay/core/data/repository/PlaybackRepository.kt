@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -20,6 +18,24 @@ interface PlaybackRepository {
     suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit>
 
     suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit>
+
+    /**
+     * Reader page-position report for a book ([positionTicks] =
+     * pageIndex(0-based) × 10,000 — the encoding Jellyfin persists in
+     * `UserData.PlaybackPositionTicks` for page-based items). Follows the same
+     * stage-or-send choreography as the session telemetry above, but books
+     * never carry a session and the server never auto-marks a book played, so
+     * the position report is the whole sync surface. Always returns
+     * [Result.success]: the reader is fire-and-forget, and an undeliverable
+     * report is staged in the outbox (BOOK_PROGRESS, coalesced per item) for
+     * the reconnect drain.
+     *
+     * `final = true` marks the exit flush (reader closed, not a debounced
+     * page turn): the position is a session-end fact, so the impl mirrors the
+     * STOP choreography's cache purge + user-data announcement instead of the
+     * per-tick no-purge rule.
+     */
+    suspend fun reportBookProgress(itemId: String, positionTicks: Long, final: Boolean = false): Result<Unit>
 
     /**
      * Replays a single staged [entry] straight to the server, returning whether
@@ -106,6 +122,15 @@ interface PlaybackRepository {
 
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 
+    /**
+     * Direct-download URL for a book item (`/Items/{id}/Download` + ApiKey) —
+     * the transfer URL for the reader's offline download. Books have no
+     * [getStreamUrl] media source, so the download conveyor fetches the
+     * original container byte-for-byte. Empty string when no active session,
+     * mirroring the stream-URL sentinel.
+     */
+    fun getBookDownloadUrl(itemId: String): String
+
     fun getServerUrl(): String?
 
     fun getAccessToken(): String?
@@ -116,10 +141,6 @@ interface PlaybackRepository {
         index: Int,
         codec: String?,
     ): String
-
-    suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
-
-    suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps>
 
     /**
      * Server-reported reasons the current session is transcoding [itemId]

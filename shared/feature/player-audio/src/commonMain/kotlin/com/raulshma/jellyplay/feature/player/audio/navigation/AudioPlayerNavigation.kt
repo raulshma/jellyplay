@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.audio.navigation
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import com.raulshma.jellyplay.core.ui.components.currentNavAnimatedContentScope
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -14,7 +14,7 @@ fun EntryProviderScope<NavKey>.audioPlayerSection(
     navigator: Navigator,
 ) {
     entry<Route.AudioPlayer> { key ->
-        val animatedVisibilityScope = LocalNavAnimatedContentScope.current
+        val animatedVisibilityScope = currentNavAnimatedContentScope()
         CompositionLocalProvider(
             LocalAnimatedVisibilityScope provides animatedVisibilityScope
         ) {

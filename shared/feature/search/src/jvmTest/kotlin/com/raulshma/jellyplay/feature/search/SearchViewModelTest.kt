@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
@@ -74,7 +75,7 @@ class SearchViewModelTest {
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var searchFiltersStore: SearchFiltersStore
-    private val mediaDownloadActions: com.raulshma.jellyplay.core.data.download.MediaDownloadActions = mockk(relaxed = true)
+    private val quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions = mockk(relaxed = true)
 
     private lateinit var viewModel: SearchViewModel
 
@@ -108,7 +109,7 @@ class SearchViewModelTest {
             seerrRequestDelegate,
             mediaSearchEngine,
             offlineRepository,
-            searchFiltersStore, mediaDownloadActions,
+            searchFiltersStore, quickDownloadActions,
         )
     }
 
@@ -121,13 +122,13 @@ class SearchViewModelTest {
 
     @Test
     fun `toggleMediaType adds then removes a media type`() {
-        viewModel.toggleMediaType(MediaType.MOVIE)
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.MOVIE))
         assertEquals(listOf(MediaType.MOVIE), viewModel.filters.value.mediaTypes)
 
-        viewModel.toggleMediaType(MediaType.SERIES)
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.SERIES))
         assertEquals(listOf(MediaType.MOVIE, MediaType.SERIES), viewModel.filters.value.mediaTypes)
 
-        viewModel.toggleMediaType(MediaType.MOVIE) // remove
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.MOVIE)) // remove
         assertEquals(listOf(MediaType.SERIES), viewModel.filters.value.mediaTypes)
     }
 
@@ -141,17 +142,17 @@ class SearchViewModelTest {
             minRating = 4f,
         )
 
-        viewModel.updateFilters(filters)
+        viewModel.onEvent(SearchUiEvent.UpdateFilters(filters))
 
         assertEquals(filters, viewModel.filters.value)
     }
 
     @Test
     fun `clearFilters resets to an empty SearchFilters`() {
-        viewModel.toggleMediaType(MediaType.MOVIE)
-        viewModel.updateFilters(LibraryFilters(genres = listOf("Action")))
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.MOVIE))
+        viewModel.onEvent(SearchUiEvent.UpdateFilters(LibraryFilters(genres = listOf("Action"))))
 
-        viewModel.clearFilters()
+        viewModel.onEvent(SearchUiEvent.ClearFilters)
 
         assertEquals(LibraryFilters(), viewModel.filters.value)
     }
@@ -159,10 +160,23 @@ class SearchViewModelTest {
     @Test
     fun `toggleShowFilters flips visibility`() {
         assertFalse(viewModel.showFilters.value)
-        viewModel.toggleShowFilters()
+        viewModel.onEvent(SearchUiEvent.ToggleFilters)
         assertTrue(viewModel.showFilters.value)
-        viewModel.toggleShowFilters()
+        viewModel.onEvent(SearchUiEvent.ToggleFilters)
         assertFalse(viewModel.showFilters.value)
+    }
+
+    @Test
+    fun `onEvent funnel routes the pure-forwarding intents`() = runTest(mainDispatcher) {
+        viewModel.onEvent(SearchUiEvent.ToggleFilters)
+        assertTrue(viewModel.showFilters.value)
+
+        viewModel.onEvent(SearchUiEvent.Search("matrix"))
+        assertEquals("matrix", viewModel.query)
+
+        viewModel.onEvent(SearchUiEvent.SetSortBy(SortOption.RATING))
+        advanceUntilIdle()
+        assertEquals(SortOption.RATING, viewModel.filters.value.sortBy)
     }
 
     // ── Discovery suggestions ───────────────────────────────────────────
@@ -178,7 +192,7 @@ class SearchViewModelTest {
         // Recreate so the init-time suggestion load picks up the stub.
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
 
         // Warm the flow; the empty initial query triggers loadDiscoverySuggestions().
@@ -193,7 +207,7 @@ class SearchViewModelTest {
         backgroundScope.launch { viewModel.suggestions.collect { } }
         advanceUntilIdle()
 
-        viewModel.search("matrix")
+        viewModel.onEvent(SearchUiEvent.Search("matrix"))
         advanceUntilIdle()
 
         assertTrue(viewModel.suggestions.value.isEmpty())
@@ -201,10 +215,10 @@ class SearchViewModelTest {
 
     @Test
     fun `search empty query clears seerr results error and offline results`() = runTest(mainDispatcher) {
-        viewModel.search("matrix")
+        viewModel.onEvent(SearchUiEvent.Search("matrix"))
         advanceUntilIdle()
 
-        viewModel.search("")
+        viewModel.onEvent(SearchUiEvent.Search(""))
         advanceUntilIdle()
 
         assertTrue(viewModel.seerrResults.value.isEmpty())
@@ -221,7 +235,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
         advanceUntilIdle()
@@ -239,7 +253,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
         advanceUntilIdle()
@@ -255,7 +269,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.tags.collect { } }
         advanceUntilIdle()
@@ -272,7 +286,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrConnected.collect { } }
         advanceUntilIdle()
@@ -287,7 +301,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrSearchEnabled.collect { } }
         advanceUntilIdle()
@@ -309,7 +323,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         // searchSeerr()/searchOffline() are launched from the pagedResults
         // pipeline, so that flow must be collected for the search to run. The
@@ -319,7 +333,7 @@ class SearchViewModelTest {
         // would never see its debounce fire.
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("matrix")
+            viewModel.onEvent(SearchUiEvent.Search("matrix"))
             advanceUntilIdle()
 
             assertEquals(10, viewModel.seerrResults.value.size)
@@ -338,11 +352,11 @@ class SearchViewModelTest {
         coEvery { seerrRepository.search(any(), any()) } returns Result.failure(RuntimeException("500"))
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("matrix")
+            viewModel.onEvent(SearchUiEvent.Search("matrix"))
             advanceUntilIdle()
 
             assertTrue(viewModel.seerrSearchError.value)
@@ -357,11 +371,11 @@ class SearchViewModelTest {
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("matrix")
+            viewModel.onEvent(SearchUiEvent.Search("matrix"))
             advanceUntilIdle()
 
             coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
@@ -383,13 +397,13 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("matrix")
+            viewModel.onEvent(SearchUiEvent.Search("matrix"))
             advanceUntilIdle()
-            viewModel.retrySeerrSearch()
+            viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
             advanceUntilIdle()
 
             assertEquals(1, viewModel.seerrResults.value.size)
@@ -401,7 +415,7 @@ class SearchViewModelTest {
 
     @Test
     fun `retrySeerrSearch is a no-op for a blank query`() = runTest(mainDispatcher) {
-        viewModel.retrySeerrSearch()
+        viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
@@ -417,11 +431,11 @@ class SearchViewModelTest {
         coEvery { offlineRepository.searchOffline(any(), any()) } returns offline
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("offline")
+            viewModel.onEvent(SearchUiEvent.Search("offline"))
             advanceUntilIdle()
 
             assertEquals(offline, viewModel.offlineResults.value)
@@ -435,11 +449,11 @@ class SearchViewModelTest {
         coEvery { offlineRepository.searchOffline(any(), any()) } throws RuntimeException("db locked")
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("offline")
+            viewModel.onEvent(SearchUiEvent.Search("offline"))
             advanceUntilIdle()
 
             assertTrue(viewModel.offlineResults.value.isEmpty())
@@ -460,11 +474,11 @@ class SearchViewModelTest {
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("breaking")
+            viewModel.onEvent(SearchUiEvent.Search("breaking"))
             advanceUntilIdle()
             coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
 
@@ -490,11 +504,11 @@ class SearchViewModelTest {
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
-            viewModel.search("breaking")
+            viewModel.onEvent(SearchUiEvent.Search("breaking"))
             advanceUntilIdle()
 
             // Silent contract: no mid-scroll pager swap for on-screen events.
@@ -511,7 +525,7 @@ class SearchViewModelTest {
 
     @Test
     fun `deleteHistoryItem delegates to the search engine`() = runTest(mainDispatcher) {
-        viewModel.deleteHistoryItem(42L)
+        viewModel.onEvent(SearchUiEvent.DeleteSearchHistoryItem(42L))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaSearchEngine.deleteHistoryItem(42L) }
@@ -519,7 +533,7 @@ class SearchViewModelTest {
 
     @Test
     fun `clearHistory delegates to the search engine`() = runTest(mainDispatcher) {
-        viewModel.clearHistory()
+        viewModel.onEvent(SearchUiEvent.ClearSearchHistory)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaSearchEngine.clearHistory() }
@@ -534,7 +548,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.searchHistory.collect { } }
         advanceUntilIdle()
@@ -574,7 +588,7 @@ class SearchViewModelTest {
             )
         } returns Result.success(mockk(relaxed = true))
 
-        viewModel.requestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
+        viewModel.onEvent(SearchUiEvent.RequestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie")))
         advanceUntilIdle()
 
         assertEquals(true, viewModel.seerrSnapshot.value.requestResult?.success)
@@ -590,7 +604,7 @@ class SearchViewModelTest {
         } returns Result.failure(RuntimeException("denied"))
 
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
-        viewModel.requestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
+        viewModel.onEvent(SearchUiEvent.RequestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie")))
         advanceUntilIdle()
 
         val result = viewModel.seerrSnapshot.value.requestResult!!
@@ -607,11 +621,11 @@ class SearchViewModelTest {
             )
         } returns Result.success(mockk(relaxed = true))
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
-        viewModel.requestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie"))
+        viewModel.onEvent(SearchUiEvent.RequestSeerrMedia(SeerrSearchItem(id = 123, mediaType = "movie")))
         advanceUntilIdle()
         assertNotNull(viewModel.seerrSnapshot.value.requestResult)
 
-        viewModel.dismissSeerrRequestDialog()
+        viewModel.onEvent(SearchUiEvent.DismissSeerrRequestDialog)
         advanceUntilIdle()
 
         assertNull(viewModel.seerrSnapshot.value.requestResult)
@@ -627,7 +641,7 @@ class SearchViewModelTest {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
         coEvery { seerrRequestDelegate.fetchTvDetails(any()) } returns null
-        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 5, mediaType = "tv"))
+        viewModel.onEvent(SearchUiEvent.OpenSeerrRequestDialog(SeerrSearchItem(id = 5, mediaType = "tv")))
         advanceUntilIdle()
 
         assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
@@ -643,7 +657,7 @@ class SearchViewModelTest {
         )
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 6, mediaType = "movie"))
+        viewModel.onEvent(SearchUiEvent.OpenSeerrRequestDialog(SeerrSearchItem(id = 6, mediaType = "movie")))
         advanceUntilIdle()
 
         assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
@@ -659,7 +673,7 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv"))
+        viewModel.onEvent(SearchUiEvent.OpenSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv")))
         advanceUntilIdle()
 
         assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")), viewModel.seerrSnapshot.value.tvSeasons)
@@ -677,7 +691,7 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv"))
+        viewModel.onEvent(SearchUiEvent.OpenSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv")))
         advanceUntilIdle()
 
         assertEquals(true, viewModel.seerrSnapshot.value.tvIsAnime)
@@ -686,7 +700,7 @@ class SearchViewModelTest {
     @Test
     fun `prefetchSeerrDetails invokes onDone after prefetch`() = runTest(mainDispatcher) {
         var called = false
-        viewModel.prefetchSeerrDetails(123, "movie") { called = true }
+        viewModel.onEvent(SearchUiEvent.PrefetchSeerrDetails(123, "movie") { called = true })
         advanceUntilIdle()
 
         assertTrue(called)

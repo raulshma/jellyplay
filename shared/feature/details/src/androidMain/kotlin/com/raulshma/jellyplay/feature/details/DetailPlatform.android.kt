@@ -83,6 +83,9 @@ fun androidDetailsModule(context: Context): Module = module {
             themeMusicPlayer = get(),
             actionFactories = get(),
             mediaDownloadActions = get(),
+            bookTocCacheRepository = get(),
+            readerAnnotationsRepository = getOrNull(),
+            bookTocProber = getOrNull(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure

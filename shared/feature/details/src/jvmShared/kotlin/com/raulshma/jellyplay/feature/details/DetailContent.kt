@@ -207,14 +207,26 @@ internal fun DetailContent(
             }
         }
 
+        // Books ship no 16:9 backdrop — the portrait cover IS the hero art, so
+        // every book hero sources the PRIMARY (cover) art below. Large screens
+        // (tablet/TV/desktop) keep the blurred cover-mode hero plus the poster
+        // card; compact phones crop the cover sharp edge-to-edge and drop the
+        // poster card (DetailBodyPortrait) since the hero already shows it.
+        val isBook = item?.mediaType == MediaType.BOOK
+        val coverHero = when {
+            !isBook -> BookCoverHero.NONE
+            !isTv && !isExpanded -> BookCoverHero.SHARP
+            else -> BookCoverHero.BLURRED
+        }
         DetailBackdrop(
             targetBackdropId = targetBackdropId,
-            backdropBlurHash = item?.blurHashes?.backdrop,
-            getBackdropUrl = callbacks.artwork.getBackdropUrl,
+            backdropBlurHash = if (isBook) item?.blurHashes?.primary else item?.blurHashes?.backdrop,
+            getBackdropUrl = if (isBook) callbacks.artwork.getImageUrl else callbacks.artwork.getBackdropUrl,
             relatedVideos = state.relatedVideos,
             preferences = state.preferences,
             scrollState = scrollState,
-            localBackdropPath = state.assets.backdropPath,
+            localBackdropPath = if (isBook) state.assets.posterPath else state.assets.backdropPath,
+            coverHero = coverHero,
         )
 
         // Pull-to-refresh lets the user force a fresh fetch (invalidating the

@@ -11,10 +11,17 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -192,6 +199,79 @@ class PlayerSessionManagerTest {
         // write and the emission carry the same message (failLoad contract).
         assertEquals(1, messageBus.errors.size)
         assertEquals(messageBus.errors.single(), state.title)
+    }
+
+    // ── Reload paths: the isDirectPlayForced badge contract ───────────
+
+    /**
+     * Loads an online EXTERNAL session end to end so the session state carries
+     * the item/source the reload paths re-resolve against, while the EXTERNAL
+     * player type keeps every engine touchpoint out of the test (a reload's
+     * engine swap no-ops without a prior [PlaybackRequest]).
+     */
+    private suspend fun loadOnlineSession(
+        itemId: String = "item-movie",
+        sourceId: String = "ms-1",
+    ) {
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
+        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(
+            MediaDetail(
+                item = MediaItem(id = itemId, name = "Test Movie", mediaType = MediaType.MOVIE),
+                mediaSources = listOf(MediaSource(id = sourceId, name = "Test Source")),
+            ),
+        )
+        sessionManager.loadMedia(PlaybackSource.Online(itemId, sourceId), startPositionTicks = 0L)
+    }
+
+    private fun stubResolve(streamUrl: String, playSessionId: String) {
+        coEvery {
+            playbackRepository.resolvePlayback(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+            )
+        } returns ResolvedPlayback(
+            mediaSourceId = "ms-1",
+            streamUrl = streamUrl,
+            playMethod = PlayMethod.DIRECT_PLAY,
+            playSessionId = playSessionId,
+            maxStreamingBitrate = null,
+        )
+    }
+
+    @Test
+    fun reloadPlayback_reEvaluatesTheForcedBadge_fromTheRequestedMode() = runTest(testDispatcher) {
+        loadOnlineSession()
+        stubResolve(streamUrl = "https://stream/forced", playSessionId = "psid-forced")
+
+        sessionManager.reloadPlayback(PlaybackMode.FORCE_DIRECT_PLAY, StreamingQuality.AUTO, 5_000L)
+
+        assertTrue(sessionManager.sessionState.value.isDirectPlayForced)
+        assertEquals("psid-forced", sessionManager.sessionState.value.playSessionId)
+
+        // The badge is re-evaluated on every mode/quality reload — a plain
+        // AUTO reload clears it again.
+        stubResolve(streamUrl = "https://stream/auto", playSessionId = "psid-auto")
+        sessionManager.reloadPlayback(PlaybackMode.AUTO, StreamingQuality.AUTO, 6_000L)
+
+        assertFalse(sessionManager.sessionState.value.isDirectPlayForced)
+    }
+
+    @Test
+    fun reloadForStreamChange_preservesTheForcedBadge() = runTest(testDispatcher) {
+        loadOnlineSession()
+        stubResolve(streamUrl = "https://stream/forced", playSessionId = "psid-forced")
+
+        sessionManager.reloadPlayback(PlaybackMode.FORCE_DIRECT_PLAY, StreamingQuality.AUTO, 5_000L)
+        assertTrue(sessionManager.sessionState.value.isDirectPlayForced)
+
+        // The stream-index re-POST is orthogonal to the badge: it must neither
+        // clear nor re-derive it — the historical divergence, now the declared
+        // markForced=false branch of the shared reload ladder.
+        sessionManager.reloadForStreamChange(
+            MediaStreamSelection(audioStreamIndex = 1, subtitleStreamIndex = null),
+            6_000L,
+        )
+
+        assertTrue(sessionManager.sessionState.value.isDirectPlayForced)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

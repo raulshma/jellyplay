@@ -35,6 +35,7 @@ import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -278,6 +279,7 @@ private fun PlaybackOutboxEntry.eventTypeLabel(): String = when (eventType) {
     PlaybackOutboxEventType.UNPLAYED -> stringResource(Res.string.sync_event_unplayed)
     PlaybackOutboxEventType.FAVORITE -> stringResource(Res.string.sync_event_favorite)
     PlaybackOutboxEventType.UNFAVORITE -> stringResource(Res.string.sync_event_unfavorite)
+    PlaybackOutboxEventType.BOOK_PROGRESS -> stringResource(Res.string.sync_event_progress)
 }
 
 /**
@@ -286,7 +288,9 @@ private fun PlaybackOutboxEntry.eventTypeLabel(): String = when (eventType) {
  */
 private fun formatEntryDetail(entry: PlaybackOutboxEntry): String {
     val positionLabel = formatDurationMs(entry.positionTicks / 10_000)
-    val ageLabel = formatAge(System.currentTimeMillis() - entry.recordedAt)
+    // Wall-clock age — core:model's commonMain platform seam ( port
+    // of System.currentTimeMillis, identical read on JVM/desktop).
+    val ageLabel = formatAge(wallNowMillis() - entry.recordedAt)
     return "$positionLabel  ·  $ageLabel"
 }
 

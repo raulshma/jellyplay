@@ -67,6 +67,7 @@ import com.raulshma.jellyplay.core.ui.components.SheetTabRow
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -400,7 +401,7 @@ private fun HeroMediaCard(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         SpecPill(
-                            text = mediaTypeLabel(item.mediaType),
+                            text = item.mediaType.mediaTypeDisplayName(),
                             textColor = if (resolvedBackdropUrl.isNotBlank()) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant,
                             containerColor = if (resolvedBackdropUrl.isNotBlank()) Color.White.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         )
@@ -652,7 +653,7 @@ private fun MediaIdentitySection(item: MediaItem) {
         item.originalTitle?.takeIf { it.isNotBlank() && it != item.name }?.let { original ->
             InfoLine(label = stringResource(Res.string.detail_original_title), value = original)
         }
-        InfoLine(label = stringResource(Res.string.detail_media_type), value = mediaTypeLabel(item.mediaType))
+        InfoLine(label = stringResource(Res.string.detail_media_type), value = item.mediaType.mediaTypeDisplayName())
         item.year?.let { year ->
             InfoLine(label = stringResource(Res.string.detail_year), value = year.toString())
         }
@@ -962,26 +963,6 @@ private fun episodeContext(item: MediaItem): String? {
     val label = parts.joinToString(" · ")
     val series = item.seriesName?.takeIf { it.isNotBlank() }
     return listOfNotNull(label.takeIf { it.isNotBlank() }, series).joinToString(" · ").ifBlank { null }
-}
-
-/** Localized, human-readable label for a [MediaType]. */
-@Composable
-private fun mediaTypeLabel(type: MediaType): String = when (type) {
-    MediaType.MOVIE -> "Movie"
-    MediaType.SERIES -> "Series"
-    MediaType.SEASON -> "Season"
-    MediaType.EPISODE -> "Episode"
-    MediaType.MUSIC -> "Music"
-    MediaType.AUDIO -> "Audio"
-    MediaType.ALBUM -> "Album"
-    MediaType.ARTIST -> "Artist"
-    MediaType.MUSIC_VIDEO -> "Music video"
-    MediaType.COLLECTION -> "Collection"
-    MediaType.PHOTO -> "Photo"
-    MediaType.PHOTO_FOLDER -> "Photo folder"
-    MediaType.LIVE_TV -> "Live TV"
-    MediaType.CHANNEL -> "Channel"
-    MediaType.UNKNOWN -> "Unknown"
 }
 
 private fun formatDate(epochMillis: Long): String =

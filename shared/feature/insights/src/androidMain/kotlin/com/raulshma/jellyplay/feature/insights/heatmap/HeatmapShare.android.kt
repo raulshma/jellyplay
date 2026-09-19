@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -32,10 +33,11 @@ internal class AndroidHeatmapShare(
 
     override suspend fun shareHeatmapImage() {
         withContext(Dispatchers.IO) {
-            runCatching {
-                // Same runCatching-silent-swallow as the legacy body: a failed
-                // capture (or a layer never recorded — the share button only
-                // exists once the grid has drawn) does nothing, never crashes.
+            runCatchingRethrowingCancellation {
+                // Silent-swallow like the legacy body: a failed capture (or a
+                // layer never recorded — the share button only exists once the
+                // grid has drawn) does nothing, never crashes. Cancellation
+                // still propagates instead of masquerading as a failed share.
                 val bitmap = captureLayer.toImageBitmap().asAndroidBitmap()
                 shareHeatmapImage(context, bitmap)
             }

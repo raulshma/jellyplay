@@ -9,8 +9,10 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -19,13 +21,7 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -105,9 +101,6 @@ class VideoPlayerStore constructor(
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
-
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> =
         ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
 
@@ -116,10 +109,8 @@ class VideoPlayerStore constructor(
      * DataStore (not mapped through the whole-`UserPreferences` aggregate), so a
      * write to an unrelated preference does not re-derive these fields.
      */
-    val videoPlayer: StateFlow<VideoPlayerSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, VideoPlayerSlice())
+    val videoPlayer: StateFlow<VideoPlayerSlice> =
+        dataStore.sliceStateFlow(scope, seed = VideoPlayerSlice(), read = ::read)
 
     /**
      * Pure read of the in-player video fields from a raw [Preferences] snapshot.
@@ -158,19 +149,34 @@ class VideoPlayerStore constructor(
         showTimeRemaining = PreferenceCodec.readBool(prefs, Keys.SHOW_TIME_REMAINING, "show_time_remaining", false),
         tvZoomModePercent = PreferenceCodec.readFloat(prefs, Keys.TV_ZOOM_MODE_PERCENT, "tv_zoom_mode_percent", 0f),
         incognitoModeEnabled = PreferenceCodec.readBool(prefs, Keys.INCOGNITO_MODE_ENABLED, "incognito_mode_enabled", false),
-        segmentBehaviors = run {
-            val raw = prefs[Keys.SEGMENT_BEHAVIORS]
-            // Only memoise the JSON-blob decode. When the blob is absent the
-            // legacy-boolean fallback must still run (its result depends on the
-            // four SKIP_*/AUTO_* keys, not on `raw`), so don't short-circuit on
-            // a null raw — that would freeze the legacy migration out entirely.
-            if (raw != null && raw == cachedSegmentBehaviors.raw) {
-                cachedSegmentBehaviors.value
-            } else {
-                readSegmentBehaviors(prefs).also { cachedSegmentBehaviors = ParsedCache(raw, it) }
-            }
-        },
+        segmentBehaviors = readSegmentBehaviorsCached(prefs),
     )
+
+    /**
+     * Memoised segment-behaviour read over the `segment_behaviors` JSON blob.
+     *
+     * [CachedJsonNullPolicy.NoMemoOnNull] — this store's pre-promotion policy,
+     * preserved verbatim: only the JSON-blob decode is memoised. When the blob
+     * is absent the legacy-boolean fallback must still run on EVERY emission
+     * (its result depends on the four SKIP_* / AUTO_* keys, not on the raw
+     * string), so a null raw never short-circuits against the cache — that
+     * would freeze the legacy migration out entirely.
+     *
+     * The [PreferenceCodec.cachedJson] `parse`/`onNull` closures both route
+     * through [readSegmentBehaviors], whose null-raw leg IS the legacy
+     * fallback (and whose decode leg owns its own corrupt-blob tolerance, so
+     * the helper's fallback `default` is only a belt-and-braces guard).
+     */
+    private fun readSegmentBehaviorsCached(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.SEGMENT_BEHAVIORS],
+            cache = cachedSegmentBehaviors,
+            default = SegmentBehavior.DEFAULT_BEHAVIORS,
+            parse = { readSegmentBehaviors(prefs) },
+            onNull = { readSegmentBehaviors(prefs) },
+            cacheRef = { cachedSegmentBehaviors = it },
+            nullPolicy = CachedJsonNullPolicy.NoMemoOnNull,
+        )
 
     private fun readOrientation(prefs: Preferences): OrientationMode =
         prefs[Keys.VIDEO_DEFAULT_ORIENTATION].toEnumOrNull() ?: OrientationMode.SENSOR_LANDSCAPE
@@ -384,47 +390,14 @@ class VideoPlayerStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Aggregated by
-     * the facade's reset-coverage guard.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.VIDEO_SEEK_DURATION_MS,
-        Keys.VIDEO_CONTROLS_TIMEOUT_MS,
-        Keys.VIDEO_DEFAULT_ORIENTATION,
-        Keys.VIDEO_DEFAULT_ASPECT_RATIO,
-        Keys.VIDEO_GESTURES_ENABLED,
-        Keys.VIDEO_PASS_OUT_PROTECTION_HOURS,
-        Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
-        Keys.VIDEO_HOLD_SPEED_ENABLED,
-        Keys.VIDEO_HOLD_SPEED_MULTIPLIER,
-        Keys.VIDEO_DEFAULT_SPEED,
-        Keys.VIDEO_AUTOPLAY_NEXT,
-        Keys.TRAILER_AUTOPLAY,
-        Keys.CINEMA_MODE_ENABLED,
-        Keys.VIDEO_SWIPE_SEEK_MAX_MS,
-        Keys.VIDEO_REMEMBER_BRIGHTNESS,
-        Keys.VIDEO_BRIGHTNESS_LEVEL,
-        Keys.VIDEO_AUTO_SKIP_INTRO,
-        Keys.VIDEO_AUTO_SKIP_OUTRO,
-        Keys.VIDEO_REMEMBER_MUTED,
-        Keys.VIDEO_MUTED,
-        Keys.VIDEO_GESTURE_INDICATOR_SIDE,
-        Keys.TRICKPLAY_ENABLED,
-        Keys.TRICKPLAY_ON_SEEK_GESTURE,
-        Keys.VIDEO_EPISODE_BROWSER_ENABLED,
-        Keys.VIDEO_SHOW_PLAYBACK_METADATA,
-        Keys.VIDEO_PRELOAD_BUFFER_SIZE,
-        Keys.VIDEO_CACHE_SIZE_MB,
-        Keys.SHOW_CLOCK_IN_PLAYER,
-        Keys.SHOW_TIME_REMAINING,
-        Keys.TV_ZOOM_MODE_PERCENT,
-        Keys.INCOGNITO_MODE_ENABLED,
-        Keys.SEGMENT_BEHAVIORS,
-        Keys.SKIP_INTRO_ENABLED,
-        Keys.SKIP_OUTRO_ENABLED,
-        Keys.AUTO_SKIP_INTRO,
-        Keys.AUTO_SKIP_OUTRO,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -472,55 +445,6 @@ class VideoPlayerStore constructor(
             Keys.AUTO_SKIP_OUTRO,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the in-player video keys owned by
-     * this store from a decoded [UserPreferences], mirroring the facade's
-     * restore body exactly (segment behaviours re-encoded via the enum-keyed
-     * map; the four legacy booleans are not written back —
-     * [readSegmentBehaviors] migrates them from the JSON blob).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.VIDEO_SEEK_DURATION_MS] = userPreferences.videoSeekDurationMs
-            prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = userPreferences.videoControlsTimeoutMs
-            prefs[Keys.VIDEO_DEFAULT_ORIENTATION] = userPreferences.videoDefaultOrientation.name
-            prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = userPreferences.videoDefaultAspectRatio
-            prefs[Keys.VIDEO_GESTURES_ENABLED] = userPreferences.videoGesturesEnabled
-            prefs[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = userPreferences.videoPassOutProtectionHours
-            prefs[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = userPreferences.videoSkipBackOnResumeMs
-            prefs[Keys.VIDEO_HOLD_SPEED_ENABLED] = userPreferences.videoHoldSpeedEnabled
-            prefs[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = userPreferences.videoHoldSpeedMultiplier
-            prefs[Keys.VIDEO_DEFAULT_SPEED] = userPreferences.videoDefaultSpeed
-            prefs[Keys.VIDEO_AUTOPLAY_NEXT] = userPreferences.videoAutoplayNext
-            prefs[Keys.TRAILER_AUTOPLAY] = userPreferences.trailerAutoplay
-            prefs[Keys.CINEMA_MODE_ENABLED] = userPreferences.cinemaModeEnabled
-            prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = userPreferences.videoSwipeSeekMaxMs
-            prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS] = userPreferences.videoRememberBrightness
-            prefs[Keys.VIDEO_BRIGHTNESS_LEVEL] = userPreferences.videoBrightnessLevel
-            prefs[Keys.VIDEO_AUTO_SKIP_INTRO] = userPreferences.videoAutoSkipIntro
-            prefs[Keys.VIDEO_AUTO_SKIP_OUTRO] = userPreferences.videoAutoSkipOutro
-            prefs[Keys.VIDEO_REMEMBER_MUTED] = userPreferences.videoRememberMuted
-            prefs[Keys.VIDEO_MUTED] = userPreferences.videoMuted
-            prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = userPreferences.videoGestureIndicatorSide.name
-            prefs[Keys.TRICKPLAY_ENABLED] = userPreferences.trickplayEnabled
-            prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE] = userPreferences.trickplayOnSeekGesture
-            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<Map<MediaSegmentType, SegmentBehavior>>(),
-                userPreferences.segmentBehaviors,
-            )
-            prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = userPreferences.videoEpisodeBrowserEnabled
-            prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = userPreferences.videoShowPlaybackMetadata
-            prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = userPreferences.videoPreloadBufferSize.name
-            prefs[Keys.VIDEO_CACHE_SIZE_MB] = userPreferences.videoCacheSizeMb
-            prefs[Keys.SHOW_CLOCK_IN_PLAYER] = userPreferences.showClockInPlayer
-            prefs[Keys.SHOW_TIME_REMAINING] = userPreferences.showTimeRemaining
-            prefs[Keys.TV_ZOOM_MODE_PERCENT] = userPreferences.tvZoomModePercent
-            prefs[Keys.INCOGNITO_MODE_ENABLED] = userPreferences.incognitoModeEnabled
-        }
     }
 
     /**

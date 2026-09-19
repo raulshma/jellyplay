@@ -9,17 +9,15 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PinHasher
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 
@@ -61,13 +59,10 @@ class SecurityStore constructor(
         val REMOTE_CONTROL_ENABLED = booleanPreferencesKey("remote_control_enabled")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
+    private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
 
-    val security: StateFlow<SecuritySlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, SecuritySlice())
+    val security: StateFlow<SecuritySlice> =
+        dataStore.sliceStateFlow(scope, seed = SecuritySlice(), read = ::read)
 
     /**
      * The FIRST **persisted** slice — suspends until DataStore's initial read
@@ -212,15 +207,15 @@ class SecurityStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Aggregated by
-     * the facade's reset-coverage guard. (PIN rate-limit counters live in
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. (PIN rate-limit counters live in
      * `PinRateLimiter` and are excluded from category reset.)
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
-        Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
-        Keys.REMOTE_CONTROL_ENABLED,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -235,20 +230,6 @@ class SecurityStore constructor(
             Keys.REMOTE_CONTROL_ENABLED,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the non-security-sensitive key owned
-     * by this store (the remote-control switch) from a decoded [UserPreferences].
-     * The remote-control switch is independent of the lock config and restored
-     * unconditionally.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.REMOTE_CONTROL_ENABLED] = userPreferences.remoteControlEnabled
-        }
     }
 
     /**

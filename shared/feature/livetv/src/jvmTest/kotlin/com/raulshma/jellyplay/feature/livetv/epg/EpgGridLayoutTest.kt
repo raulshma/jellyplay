@@ -3,10 +3,11 @@ package com.raulshma.jellyplay.feature.livetv.epg
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.toInstant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -227,7 +228,7 @@ class EpgGridLayoutTest {
         // 14:00, 14:30, 15:00, 15:30 — exclusive of 16:00 end
         assertEquals(4, markers.size)
         assertEquals(start, markers.first())
-        assertEquals(start.plus(90, ChronoUnit.MINUTES), markers.last())
+        assertEquals(start.plus(90.minutes), markers.last())
     }
 
     @Test
@@ -275,7 +276,7 @@ class EpgGridLayoutTest {
         val instant = "2026-06-22T15:30:00".toInstantOrNull()
         assertNotNull(instant)
         assertEquals(
-            LocalDateTime.parse("2026-06-22T15:30:00").toInstant(ZoneOffset.UTC),
+            LocalDateTime.parse("2026-06-22T15:30:00").toInstant(UtcOffset.ZERO),
             instant,
         )
     }

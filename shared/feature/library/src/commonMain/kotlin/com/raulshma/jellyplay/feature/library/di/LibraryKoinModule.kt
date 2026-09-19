@@ -12,7 +12,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the library feature (docs/kmp-migration-plan.md
- * , second conveyor item after search). The HiltViewModel/@Inject
+ *,  second conveyor item after search). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor owner
  * (one framework per type). Ctor deps split three ways:
  *  - MediaRepository / UserDataMutator / PhotoFolderPrefetcher are still
@@ -28,13 +28,18 @@ import org.koin.dsl.module
  * LocalViewModelStoreOwner current at the call site (nav3 1.1.5 installs no
  * per-entry ViewModelStoreOwner, so that owner is the Activity — the exact
  * same extras source the Hilt factory consumed at HEAD).
+ *
+ * QuickDownloadActions is core:data's own wall-crossing seam (declared,
+ * implemented and bound there on both platforms — jvmShared adapter in
+ * dataJvmModule, no-op stub in dataWasmModule), so this module needs no
+ * platform fragment for it.
  */
 val libraryModule: Module = module {
     viewModel {
         LibraryViewModel(
             mediaRepository = get(),
             offlineRepository = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
             userDataMutator = get(),
@@ -48,7 +53,8 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
+            photoFolderPrefetcher = get(),
         )
     }
     viewModel {
@@ -63,7 +69,7 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
         )
     }
     viewModel {

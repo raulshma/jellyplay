@@ -49,7 +49,7 @@ class AndroidSubtitlePreviewRepository(
      * and parses it via [SubtitleParserHelper]. Returns null when the source
      * cannot be read or its format is not text-parseable.
      *
-     * @param headers optional auth headers (e.g. Jellyfin `X-Emby-Token`) needed
+     * @param headers optional auth headers (e.g. Jellyfin `Authorization`) needed
      *  for HTTP(s) sources served by the media server.
      */
     override suspend fun loadCues(source: SubtitleSource, headers: Map<String, String>): List<TimedCue>? =

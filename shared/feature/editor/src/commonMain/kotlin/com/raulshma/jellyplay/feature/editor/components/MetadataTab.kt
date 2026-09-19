@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
+import com.raulshma.jellyplay.feature.editor.EditorUiEvent
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -140,7 +141,7 @@ import com.raulshma.jellyplay.feature.editor.generated.resources.editor_status_u
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun MetadataTab(
+internal fun MetadataTab(
     viewModel: EditorViewModel,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -184,29 +185,25 @@ fun MetadataTab(
         ) {
             OutlinedTextField(
                 value = form.name,
-                onValueChange = { viewModel.updateField { s -> s.copy(name = it) } },
-                label = { Text(stringResource(Res.string.editor_field_title)) },
+                onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(name = it) }) },                label = { Text(stringResource(Res.string.editor_field_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = form.originalTitle,
-                onValueChange = { viewModel.updateField { s -> s.copy(originalTitle = it) } },
-                label = { Text(stringResource(Res.string.editor_field_original_title)) },
+                onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(originalTitle = it) }) },                label = { Text(stringResource(Res.string.editor_field_original_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = form.sortName,
-                onValueChange = { viewModel.updateField { s -> s.copy(sortName = it) } },
-                label = { Text(stringResource(Res.string.editor_field_sort_title)) },
+                onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(sortName = it) }) },                label = { Text(stringResource(Res.string.editor_field_sort_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = form.overview,
-                onValueChange = { viewModel.updateField { s -> s.copy(overview = it) } },
-                label = { Text(stringResource(Res.string.editor_field_overview)) },
+                onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(overview = it) }) },                label = { Text(stringResource(Res.string.editor_field_overview)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 4,
                 maxLines = 8,
@@ -214,8 +211,7 @@ fun MetadataTab(
             if (mediaType == MediaType.MOVIE || mediaType == MediaType.SERIES) {
                 OutlinedTextField(
                     value = form.tagline,
-                    onValueChange = { viewModel.updateField { s -> s.copy(tagline = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_tagline)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(tagline = it) }) },                    label = { Text(stringResource(Res.string.editor_field_tagline)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -226,8 +222,7 @@ fun MetadataTab(
             val communityInvalid = form.communityRating.isNotEmpty() && form.communityRating.toFloatOrNull() == null
             OutlinedTextField(
                 value = form.communityRating,
-                onValueChange = { viewModel.updateField { s -> s.copy(communityRating = it) } },
-                label = { Text(stringResource(Res.string.editor_field_community_rating)) },
+                onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(communityRating = it) }) },                label = { Text(stringResource(Res.string.editor_field_community_rating)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = communityInvalid,
@@ -238,8 +233,7 @@ fun MetadataTab(
                 val criticInvalid = form.criticRating.isNotEmpty() && form.criticRating.toFloatOrNull() == null
                 OutlinedTextField(
                     value = form.criticRating,
-                    onValueChange = { viewModel.updateField { s -> s.copy(criticRating = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_critic_rating)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(criticRating = it) }) },                    label = { Text(stringResource(Res.string.editor_field_critic_rating)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = criticInvalid,
@@ -256,8 +250,7 @@ fun MetadataTab(
             ) {
                 OutlinedTextField(
                     value = form.officialRating,
-                    onValueChange = { viewModel.updateField { s -> s.copy(officialRating = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_official_rating)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(officialRating = it) }) },                    label = { Text(stringResource(Res.string.editor_field_official_rating)) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = officialExpanded) },
@@ -270,8 +263,7 @@ fun MetadataTab(
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text(rating.name) },
                             onClick = {
-                                viewModel.updateField { s -> s.copy(officialRating = rating.name) }
-                                officialExpanded = false
+                                viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(officialRating = rating.name) }); officialExpanded = false
                             },
                         )
                     }
@@ -285,8 +277,7 @@ fun MetadataTab(
             ) {
                 OutlinedTextField(
                     value = form.customRating,
-                    onValueChange = { viewModel.updateField { s -> s.copy(customRating = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_custom_rating)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(customRating = it) }) },                    label = { Text(stringResource(Res.string.editor_field_custom_rating)) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customExpanded) },
@@ -299,8 +290,7 @@ fun MetadataTab(
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text(rating.name) },
                             onClick = {
-                                viewModel.updateField { s -> s.copy(customRating = rating.name) }
-                                customExpanded = false
+                                viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(customRating = rating.name) }); customExpanded = false
                             },
                         )
                     }
@@ -312,8 +302,7 @@ fun MetadataTab(
             val yearInvalid = form.productionYear.isNotEmpty() && form.productionYear.toIntOrNull() == null
             OutlinedTextField(
                 value = form.productionYear,
-                onValueChange = { viewModel.updateField { s -> s.copy(productionYear = it) } },
-                label = { Text(stringResource(Res.string.editor_field_production_year)) },
+                onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(productionYear = it) }) },                label = { Text(stringResource(Res.string.editor_field_production_year)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = yearInvalid,
@@ -322,8 +311,7 @@ fun MetadataTab(
             )
             OutlinedTextField(
                 value = form.premiereDate,
-                onValueChange = { viewModel.updateField { s -> s.copy(premiereDate = it) } },
-                label = { Text(stringResource(Res.string.editor_field_premiere_date)) },
+                onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(premiereDate = it) }) },                label = { Text(stringResource(Res.string.editor_field_premiere_date)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 placeholder = { Text(stringResource(Res.string.editor_date_format_hint)) },
@@ -331,8 +319,7 @@ fun MetadataTab(
             if (mediaType == MediaType.SERIES) {
                 OutlinedTextField(
                     value = form.endDate,
-                    onValueChange = { viewModel.updateField { s -> s.copy(endDate = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_end_date)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(endDate = it) }) },                    label = { Text(stringResource(Res.string.editor_field_end_date)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     placeholder = { Text(stringResource(Res.string.editor_date_format_hint)) },
@@ -340,8 +327,7 @@ fun MetadataTab(
                 val runtimeInvalid = form.runtimeMinutes.isNotEmpty() && form.runtimeMinutes.toIntOrNull() == null
                 OutlinedTextField(
                     value = form.runtimeMinutes,
-                    onValueChange = { viewModel.updateField { s -> s.copy(runtimeMinutes = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_runtime_minutes)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(runtimeMinutes = it) }) },                    label = { Text(stringResource(Res.string.editor_field_runtime_minutes)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = runtimeInvalid,
@@ -353,8 +339,7 @@ fun MetadataTab(
                 val indexInvalid = form.indexNumber.isNotEmpty() && form.indexNumber.toIntOrNull() == null
                 OutlinedTextField(
                     value = form.indexNumber,
-                    onValueChange = { viewModel.updateField { s -> s.copy(indexNumber = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_episode_number)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(indexNumber = it) }) },                    label = { Text(stringResource(Res.string.editor_field_episode_number)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = indexInvalid,
@@ -363,8 +348,7 @@ fun MetadataTab(
                 )
                 OutlinedTextField(
                     value = form.parentIndexNumber,
-                    onValueChange = { viewModel.updateField { s -> s.copy(parentIndexNumber = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_season_number)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(parentIndexNumber = it) }) },                    label = { Text(stringResource(Res.string.editor_field_season_number)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -394,8 +378,7 @@ fun MetadataTab(
                 ) {
                     OutlinedTextField(
                         value = form.status,
-                        onValueChange = { viewModel.updateField { s -> s.copy(status = it) } },
-                        label = { Text(stringResource(Res.string.editor_field_status)) },
+                        onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(status = it) }) },                        label = { Text(stringResource(Res.string.editor_field_status)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded) },
@@ -408,8 +391,7 @@ fun MetadataTab(
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text(stringResource(labelRes)) },
                                 onClick = {
-                                    viewModel.updateField { s -> s.copy(status = status) }
-                                    statusExpanded = false
+                                    viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(status = status) }); statusExpanded = false
                                 },
                             )
                         }
@@ -423,8 +405,7 @@ fun MetadataTab(
                 ) {
                     OutlinedTextField(
                         value = form.displayOrder,
-                        onValueChange = { viewModel.updateField { s -> s.copy(displayOrder = it) } },
-                        label = { Text(stringResource(Res.string.editor_field_display_order)) },
+                        onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(displayOrder = it) }) },                        label = { Text(stringResource(Res.string.editor_field_display_order)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = displayExpanded) },
@@ -437,8 +418,7 @@ fun MetadataTab(
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text(stringResource(labelRes)) },
                                 onClick = {
-                                    viewModel.updateField { s -> s.copy(displayOrder = order) }
-                                    displayExpanded = false
+                                    viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(displayOrder = order) }); displayExpanded = false
                                 },
                             )
                         }
@@ -447,8 +427,7 @@ fun MetadataTab(
 
                 OutlinedTextField(
                     value = form.airTime,
-                    onValueChange = { viewModel.updateField { s -> s.copy(airTime = it) } },
-                    label = { Text(stringResource(Res.string.editor_field_air_time)) },
+                    onValueChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(airTime = it) }) },                    label = { Text(stringResource(Res.string.editor_field_air_time)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -468,8 +447,7 @@ fun MetadataTab(
                                 } else {
                                     (form.airDays + day).sortedBy { dayKeys.indexOf(it) }
                                 }
-                                viewModel.updateField { s -> s.copy(airDays = newDays) }
-                            },
+                                viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(airDays = newDays) })                            },
                             label = { Text(stringResource(labelRes).take(3)) },
                         )
                     }
@@ -480,35 +458,28 @@ fun MetadataTab(
         SectionHeader(title = stringResource(Res.string.editor_section_genres)) {
             EditableChipGroup(
                 items = form.genres,
-                onAdd = { viewModel.updateField { s -> s.copy(genres = (s.genres + it).sortedBy { g -> g.lowercase() }) } },
-                onRemove = { viewModel.updateField { s -> s.copy(genres = s.genres - it) } },
-            )
+                onAdd = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(genres = (s.genres + it).sortedBy { g -> g.lowercase() }) }) },                onRemove = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(genres = s.genres - it) }) },            )
         }
 
         SectionHeader(title = stringResource(Res.string.editor_section_tags)) {
             EditableChipGroup(
                 items = form.tags,
-                onAdd = { viewModel.updateField { s -> s.copy(tags = (s.tags + it).sortedBy { t -> t.lowercase() }) } },
-                onRemove = { viewModel.updateField { s -> s.copy(tags = s.tags - it) } },
-            )
+                onAdd = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(tags = (s.tags + it).sortedBy { t -> t.lowercase() }) }) },                onRemove = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(tags = s.tags - it) }) },            )
         }
 
         SectionHeader(title = stringResource(Res.string.editor_section_studios)) {
             EditableChipGroup(
                 items = form.studios,
-                onAdd = { viewModel.updateField { s -> s.copy(studios = (s.studios + it).sortedBy { st -> st.lowercase() }) } },
-                onRemove = { viewModel.updateField { s -> s.copy(studios = s.studios - it) } },
-            )
+                onAdd = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(studios = (s.studios + it).sortedBy { st -> st.lowercase() }) }) },                onRemove = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(studios = s.studios - it) }) },            )
         }
 
         SectionHeader(title = stringResource(Res.string.editor_section_people)) {
             PeopleEditor(
                 people = form.people,
-                onAdd = { person -> viewModel.updateField { s -> s.copy(people = s.people + person) } },
-                onRemove = { person -> viewModel.updateField { s -> s.copy(people = s.people - person) } },
-                onUpdate = { old, new -> viewModel.updateField { s ->
+                onAdd = { person -> viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(people = s.people + person) }) },                onRemove = { person -> viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(people = s.people - person) }) },                onUpdate = { old, new -> viewModel.onEvent(EditorUiEvent.UpdateField { s ->
                     s.copy(people = s.people.map { if (it == old) new else it })
-                }},
+                })
+                },
             )
         }
 
@@ -520,12 +491,12 @@ fun MetadataTab(
                     OutlinedTextField(
                         value = currentValue,
                         onValueChange = { newValue ->
-                            viewModel.updateField { s ->
+                            viewModel.onEvent(EditorUiEvent.UpdateField { s ->
                                 s.copy(providerIds = s.providerIds.toMutableMap().apply {
                                     if (newValue.isBlank()) remove(extId.key)
                                     else put(extId.key, newValue)
                                 })
-                            }
+                            })
                         },
                         label = { Text(extId.name) },
                         modifier = Modifier.fillMaxWidth(),
@@ -543,8 +514,7 @@ fun MetadataTab(
                 Text(stringResource(Res.string.editor_lock_all_metadata), modifier = Modifier.weight(1f))
                 Switch(
                     checked = form.lockData,
-                    onCheckedChange = { viewModel.updateField { s -> s.copy(lockData = it) } },
-                )
+                    onCheckedChange = { viewModel.onEvent(EditorUiEvent.UpdateField { s -> s.copy(lockData = it) }) },                )
             }
 
             if (!form.lockData) {
@@ -569,7 +539,7 @@ fun MetadataTab(
                         Checkbox(
                             checked = key !in form.lockedFields,
                             onCheckedChange = { checked ->
-                                viewModel.updateField { s ->
+                                viewModel.onEvent(EditorUiEvent.UpdateField { s ->
                                     s.copy(
                                         lockedFields = if (checked) {
                                             s.lockedFields - key
@@ -577,12 +547,12 @@ fun MetadataTab(
                                             s.lockedFields + key
                                         }
                                     )
-                                }
+                                })
                             },
                         )
                         Text(stringResource(label), modifier = Modifier.focusIndicator().clickable {
                             val checked = key !in form.lockedFields
-                            viewModel.updateField { s ->
+                            viewModel.onEvent(EditorUiEvent.UpdateField { s ->
                                 s.copy(
                                     lockedFields = if (!checked) {
                                         s.lockedFields - key
@@ -590,7 +560,7 @@ fun MetadataTab(
                                         s.lockedFields + key
                                     }
                                 )
-                            }
+                            })
                         })
                     }
                 }
@@ -841,7 +811,7 @@ private fun PersonEditorDialog(
                 onClick = {
                     onConfirm(
                         com.raulshma.jellyplay.core.model.EditorPerson(
-                            id = person.id.ifBlank { java.util.UUID.randomUUID().toString() },
+                            id = person.id.ifBlank { @OptIn(kotlin.uuid.ExperimentalUuidApi::class) kotlin.uuid.Uuid.random().toString() },
                             name = name,
                             role = role.ifBlank { null },
                             type = type,

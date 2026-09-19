@@ -24,7 +24,7 @@ import kotlinx.coroutines.isActive
  * no connectivity callback, so the upstream re-probes the interface table
  * on a timer; the wiring mirrors [AndroidNetworkMonitor]
  * (distinctUntilChanged + stateIn over WhileSubscribed) with one
- * wave-xB-review lesson applied: the initial value is a SYNCHRONOUS seed
+ * earlier review lesson applied: the initial value is a SYNCHRONOUS seed
  * probe, not a hardcoded constant, so cold `.value` readers —
  * [com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl],
  * [com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager] — see

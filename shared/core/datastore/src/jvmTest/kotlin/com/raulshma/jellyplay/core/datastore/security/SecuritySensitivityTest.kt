@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.datastore.security
 
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -40,32 +39,6 @@ class SecuritySensitivityTest {
     }
 
     @Test
-    fun `UserPreferences with all defaults is not sensitive`() {
-        assertFalse(UserPreferences().hasSecuritySensitive())
-    }
-
-    @Test
-    fun `each UserPreferences field flips the predicate on its own`() {
-        val singleFieldFlips = listOf(
-            UserPreferences(pinLockEnabled = true),
-            UserPreferences(biometricLockEnabled = true),
-            UserPreferences(pinHash = "hash"),
-            UserPreferences(usePinForPlayerLock = true),
-        )
-
-        singleFieldFlips.forEach { prefs ->
-            assertTrue(prefs.hasSecuritySensitive(), "expected sensitive for pinLockEnabled=${prefs.pinLockEnabled}")
-        }
-    }
-
-    @Test
-    fun `UserPreferences other security fields do not flip the predicate`() {
-        // autoLockTimerMs is not part of the sensitivity contract — a backup
-        // that only changes it must not prompt the security-opt-in dialog.
-        assertFalse(UserPreferences(autoLockTimerMs = 60_000L).hasSecuritySensitive())
-    }
-
-    @Test
     fun `bare overload flips per argument`() {
         assertFalse(hasSecuritySensitive(pinLockEnabled = false, biometricLockEnabled = false, pinHash = null, usePinForPlayerLock = false))
         assertTrue(hasSecuritySensitive(pinLockEnabled = true, biometricLockEnabled = false, pinHash = null, usePinForPlayerLock = false))
@@ -89,16 +62,5 @@ class SecuritySensitivityTest {
         }
 
         assertEquals(expected, slices.map { it.hasSecuritySensitive() })
-        assertEquals(
-            expected,
-            slices.map {
-                UserPreferences(
-                    pinLockEnabled = it.pinLockEnabled,
-                    biometricLockEnabled = it.biometricLockEnabled,
-                    pinHash = it.pinHash,
-                    usePinForPlayerLock = it.usePinForPlayerLock,
-                ).hasSecuritySensitive()
-            },
-        )
     }
 }

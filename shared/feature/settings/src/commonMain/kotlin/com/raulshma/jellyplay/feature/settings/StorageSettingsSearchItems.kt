@@ -349,3 +349,15 @@ internal val StorageDownloadsSearchItems = listOf(
         icon = Tabler.Outline.Trash
     )
 )
+
+/**
+ * The downloads group's per-id declared row admissions — the three
+ * `download_schedule_*` window rows only render while their parent toggle is
+ * on (`storageDownloadsScreenRowTotal` and StorageSettingsScreen's emission
+ * `if` read this one gate).
+ */
+internal val StorageDownloadsRowAdmissions: Map<String, RowAdmission> = mapOf(
+    "download_schedule_start" to RowAdmission.WhenOn("download_schedule"),
+    "download_schedule_end" to RowAdmission.WhenOn("download_schedule"),
+    "download_schedule_wifi_only" to RowAdmission.WhenOn("download_schedule"),
+)

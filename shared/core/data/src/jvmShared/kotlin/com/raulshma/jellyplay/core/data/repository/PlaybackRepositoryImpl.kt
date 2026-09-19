@@ -3,14 +3,10 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
-import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
-import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
@@ -18,7 +14,13 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MetadataApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
+import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
+import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrl
+import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrlWithApiKey
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.async
@@ -26,7 +28,14 @@ import kotlinx.coroutines.coroutineScope
 import java.util.concurrent.atomic.AtomicLong
 
 class PlaybackRepositoryImpl(
-    private val apiClient: JellyfinApiClient,
+    /** Telemetry, URL builders, PlaybackInfo, segments, subtitle delivery, trickplay. */
+    private val playbackApiClient: PlaybackApiClient,
+    /** Image URLs + the played/favorite flips the outbox drain replays. */
+    private val libraryApiClient: LibraryApiClient,
+    /** Server URL + access token for the absolute-ize URL folds. */
+    private val authApiClient: AuthApiClient,
+    /** Remote-subtitle search/upload + the subtitle-cultures metadata read. */
+    private val metadataApiClient: MetadataApiClient,
     private val outbox: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
     /**
@@ -60,7 +69,7 @@ class PlaybackRepositoryImpl(
     // Single-flight dedup for the segments read (the MediaRepositoryImpl
     // detail-cache pattern): a player surface that opens the same item from
     // two entry points near-simultaneously previously fired two full
-    // getMediaSegments + intro/credit fallback waves, because TtlCache's
+    // getMediaSegments + intro/credit fallback batches, because TtlCache's
     // get-check-put is not atomic. The epoch is shared with
     // [invalidateSegmentsCache] so a per-item invalidation mid-flight also
     // vetoes the racing fetch's write-back.
@@ -90,7 +99,7 @@ class PlaybackRepositoryImpl(
                 startPositionTicks = info.startPositionTicks,
             )
         },
-        send = { apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod) },
+        send = { playbackApiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod) },
     )
 
     override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> = reportOrStage(
@@ -105,7 +114,7 @@ class PlaybackRepositoryImpl(
             )
         },
         send = {
-            apiClient.reportPlaybackProgress(
+            playbackApiClient.reportPlaybackProgress(
                 progress.itemId,
                 progress.sessionId,
                 progress.positionTicks,
@@ -128,7 +137,7 @@ class PlaybackRepositoryImpl(
         val result = reportOrStage(
             stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
             send = {
-                apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
+                playbackApiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
                     // A delivered STOP supersedes any pending START/PROGRESS/STOP for
                     // this item — the server now has the authoritative final position.
                     // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
@@ -178,6 +187,40 @@ class PlaybackRepositoryImpl(
         return result
     }
 
+    override suspend fun reportBookProgress(
+        itemId: String,
+        positionTicks: Long,
+        final: Boolean,
+    ): Result<Unit> {
+        // Same stage-or-send choreography as the session telemetry (see
+        // docs/playback-progress-sync.md decision matrix): online sends
+        // straight through, offline/failed enqueues a coalesced BOOK_PROGRESS
+        // row. The result is swallowed on purpose — the reader is
+        // fire-and-forget and the staged row guarantees eventual delivery.
+        // Debounced page turns skip the cache purge exactly like the video
+        // player's per-tick PROGRESS reports (purging per page would thrash);
+        // the exit flush carries `final` and mirrors the STOP choreography —
+        // pre-send purge, post-send purge, announcement — because the resume
+        // position is a session-end fact then.
+        if (!final) {
+            reportOrStage(
+                stage = { outbox.enqueueBookProgress(itemId, positionTicks) },
+                send = { playbackApiClient.reportBookProgress(itemId, positionTicks) },
+            )
+            return Result.success(Unit)
+        }
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        reportOrStage(
+            stage = { outbox.enqueueBookProgress(itemId, positionTicks) },
+            send = { playbackApiClient.reportBookProgress(itemId, positionTicks) },
+        )
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        if (!offlineModeManager.isOffline) {
+            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+        }
+        return Result.success(Unit)
+    }
+
     override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean =
         // Pure dispatch — no offline check, no enqueue. The worker owns the
         // drain loop (delete on success, retry/dead-letter on failure); this is
@@ -185,9 +228,9 @@ class PlaybackRepositoryImpl(
         // drain can't drift apart.
         when (entry.eventType) {
             PlaybackOutboxEventType.START ->
-                apiClient.reportPlaybackStart(entry.itemId, entry.sessionId, entry.playMethod).isSuccess
+                playbackApiClient.reportPlaybackStart(entry.itemId, entry.sessionId, entry.playMethod).isSuccess
             PlaybackOutboxEventType.PROGRESS ->
-                apiClient.reportPlaybackProgress(
+                playbackApiClient.reportPlaybackProgress(
                     entry.itemId,
                     entry.sessionId,
                     entry.positionTicks,
@@ -195,28 +238,30 @@ class PlaybackRepositoryImpl(
                     entry.playMethod,
                 ).isSuccess
             PlaybackOutboxEventType.STOP ->
-                apiClient.reportPlaybackStopped(entry.itemId, entry.sessionId, entry.positionTicks).isSuccess
+                playbackApiClient.reportPlaybackStopped(entry.itemId, entry.sessionId, entry.positionTicks).isSuccess
+            PlaybackOutboxEventType.BOOK_PROGRESS ->
+                playbackApiClient.reportBookProgress(entry.itemId, entry.positionTicks).isSuccess
             PlaybackOutboxEventType.PLAYED ->
-                apiClient.markPlayed(entry.itemId).isSuccess
+                libraryApiClient.markPlayed(entry.itemId).isSuccess
             PlaybackOutboxEventType.UNPLAYED ->
-                apiClient.markUnplayed(entry.itemId).isSuccess
+                libraryApiClient.markUnplayed(entry.itemId).isSuccess
             PlaybackOutboxEventType.FAVORITE ->
-                apiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
+                libraryApiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
             PlaybackOutboxEventType.UNFAVORITE ->
-                apiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
+                libraryApiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
         }
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
-        apiClient.getImageUrl(itemId, imageType, maxWidth)
+        libraryApiClient.getImageUrl(itemId, imageType, maxWidth)
 
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?): String =
-        apiClient.getImageUrl(itemId, imageType = "Chapter", maxWidth = maxWidth, imageIndex = imageIndex, tag = tag)
+        libraryApiClient.getImageUrl(itemId, imageType = "Chapter", maxWidth = maxWidth, imageIndex = imageIndex, tag = tag)
 
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
-        apiClient.getBackdropImageUrl(itemId, maxWidth)
+        libraryApiClient.getBackdropImageUrl(itemId, maxWidth)
 
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =
-        apiClient.getItemImageBytes(itemId, imageType, maxWidth)
+        playbackApiClient.getItemImageBytes(itemId, imageType, maxWidth)
 
     override fun getStreamUrl(
         itemId: String,
@@ -224,7 +269,7 @@ class PlaybackRepositoryImpl(
         startTimeTicks: Long,
         liveStreamId: String?,
     ): String =
-        apiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks, liveStreamId = liveStreamId)
+        playbackApiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks, liveStreamId = liveStreamId)
 
     override suspend fun fetchPlaybackInfo(
         itemId: String,
@@ -236,7 +281,7 @@ class PlaybackRepositoryImpl(
         mode: PlaybackMode,
         playerType: PlayerType,
         liveStreamOption: LiveStreamOption?,
-    ): Result<PlaybackInfoResult> = apiClient.fetchPlaybackInfo(
+    ): Result<PlaybackInfoResult> = playbackApiClient.fetchPlaybackInfo(
         itemId = itemId,
         mediaSourceId = mediaSourceId,
         startTimeTicks = startTimeTicks,
@@ -286,43 +331,24 @@ class PlaybackRepositoryImpl(
                 "liveStreamId=${source.liveStreamId != null}"
         )
 
-        // Live TV channels carry a server-issued liveStreamId; the stream URL
-        // must echo it back as `LiveStreamId` so the tuner opens a live
-        // session. Static direct-play (`/Videos/{id}/stream?static=true`) does
-        // not work for live sources, so route them through direct stream.
-        val isLiveStream = source.liveStreamId != null || source.requiresOpening
-
-        val (url, method) = when {
-            isLiveStream -> {
-                // The SDK does not surface a DirectStreamUrl; the client
-                // constructs `/Videos/{id}/stream` and appends LiveStreamId.
-                // Transcode is the fallback when direct stream is unsupported.
-                val liveId = source.liveStreamId
-                val base = if (source.supportsDirectStream || source.supportsDirectPlay) {
-                    getStreamUrl(itemId, source.id, startTimeTicks, liveStreamId = liveId)
-                } else {
-                    resolveTranscodeUrl(source.transcodeUrl)
-                }
-                val resolvedMethod = if (source.supportsDirectStream) PlayMethod.DIRECT_STREAM
-                    else if (source.supportsTranscoding) PlayMethod.TRANSCODE
-                    else PlayMethod.DIRECT_STREAM
-                base to resolvedMethod
-            }
-            source.supportsDirectPlay ->
-                getStreamUrl(itemId, source.id, startTimeTicks) to PlayMethod.DIRECT_PLAY
-            source.supportsDirectStream ->
-                resolveTranscodeUrl(source.transcodeUrl) to PlayMethod.DIRECT_STREAM
-            source.supportsTranscoding ->
-                resolveTranscodeUrl(source.transcodeUrl) to PlayMethod.TRANSCODE
-            // No playable method offered by the server for this source/mode.
-            else -> return null
+        // Pure decision (see selectPlaybackMethod for the ladder and its
+        // live-source reasoning): the facade keeps only the URL choreography
+        // each decision arm points at.
+        val selection = selectPlaybackMethod(source) ?: return null
+        val url = when (selection.urlSource) {
+            PlaybackUrlSource.LIVE_STREAM ->
+                getStreamUrl(itemId, source.id, startTimeTicks, liveStreamId = source.liveStreamId)
+            PlaybackUrlSource.STATIC_STREAM ->
+                getStreamUrl(itemId, source.id, startTimeTicks)
+            PlaybackUrlSource.TRANSCODE ->
+                resolveTranscodeUrl(source.transcodeUrl)
         }
         if (url.isBlank()) return null
 
         return ResolvedPlayback(
             mediaSourceId = source.id,
             streamUrl = url,
-            playMethod = method,
+            playMethod = selection.playMethod,
             playSessionId = result.playSessionId,
             maxStreamingBitrate = maxStreamingBitrateBits,
             container = source.container,
@@ -331,13 +357,17 @@ class PlaybackRepositoryImpl(
 
     private fun resolveTranscodeUrl(transcodeUrl: String?): String {
         if (transcodeUrl.isNullOrBlank()) return ""
-        val server = apiClient.getServerUrl() ?: return ""
-        val base = if (transcodeUrl.startsWith("http")) transcodeUrl else "$server$transcodeUrl"
-        val token = apiClient.getAccessToken()
-        if (token.isNullOrBlank()) return base
-        // Avoid duplicating an api_key query param if the server already
-        // embedded one in the transcoding URL.
-        return if ("api_key=" in base) base else "$base${if ('?' in base) "&" else "?"}api_key=$token"
+        val server = authApiClient.getServerUrl() ?: return ""
+        val token = authApiClient.getAccessToken()
+        if (token.isNullOrBlank()) {
+            // No session token: the fold's token-less half still owns the
+            // absolute-ize (trailing-slash trim) — the hand-joined copy this
+            // replaced produced `//path` for a trailing-slash server URL.
+            return resolveDeliveryUrl(server, transcodeUrl)
+        }
+        // The pre-baked-token guard (either spelling — pre-12 servers bake
+        // the legacy lowercase alias) lives in the shared delivery-URL fold.
+        return resolveDeliveryUrlWithApiKey(server, transcodeUrl, token)
     }
 
     override fun getStreamUrl(
@@ -347,7 +377,7 @@ class PlaybackRepositoryImpl(
         maxBitrate: Int?,
         useAudioEndpoint: Boolean,
         liveStreamId: String?,
-    ): String = apiClient.getStreamUrl(
+    ): String = playbackApiClient.getStreamUrl(
         itemId = itemId,
         mediaSourceId = mediaSourceId,
         startTimeTicks = startTimeTicks,
@@ -357,31 +387,35 @@ class PlaybackRepositoryImpl(
     )
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String =
-        apiClient.getSubtitleDeliveryUrl(deliveryUrl)
+        playbackApiClient.getSubtitleDeliveryUrl(deliveryUrl)
 
-    override fun getServerUrl(): String? = apiClient.getServerUrl()
+    override fun getBookDownloadUrl(itemId: String): String {
+        // Same pure-builder split as getStreamUrl: the shared
+        // buildBookDownloadUrl does the string shaping and both platform
+        // clients stay out of it. The session guard mirrors the URL builders'
+        // null-base/-key → "" sentinel.
+        val baseUrl = authApiClient.getServerUrl() ?: return ""
+        val apiKey = authApiClient.getAccessToken() ?: return ""
+        return buildBookDownloadUrl(baseUrl = baseUrl, apiKey = apiKey, itemId = itemId)
+    }
 
-    override fun getAccessToken(): String? = apiClient.getAccessToken()
+    override fun getServerUrl(): String? = authApiClient.getServerUrl()
+
+    override fun getAccessToken(): String? = authApiClient.getAccessToken()
 
     override fun buildSubtitleDeliveryUrl(
         itemId: String,
         mediaSourceId: String,
         index: Int,
         codec: String?,
-    ): String = apiClient.buildSubtitleDeliveryUrl(itemId, mediaSourceId, index, codec)
-
-    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> =
-        apiClient.getIntroTimestamps(itemId)
-
-    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> =
-        apiClient.getCreditTimestamps(itemId)
+    ): String = playbackApiClient.buildSubtitleDeliveryUrl(itemId, mediaSourceId, index, codec)
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> =
-        apiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
+        playbackApiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
         segmentsFetcher.getOrFetchStorable({ homeSession.cacheIdentity() }, itemId) {
-            val segmentsResult = apiClient.getMediaSegments(itemId)
+            val segmentsResult = playbackApiClient.getMediaSegments(itemId)
             val segments = segmentsResult.getOrDefault(emptyList())
             if (segments.isNotEmpty()) {
                 return@getOrFetchStorable Result.success(segments) to true
@@ -395,38 +429,14 @@ class PlaybackRepositoryImpl(
             val cacheFallback = segmentsResult.isSuccess
 
             coroutineScope {
-                val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
-                val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
+                val introDeferred = async { playbackApiClient.getIntroTimestamps(itemId).getOrNull() }
+                val creditDeferred = async { playbackApiClient.getCreditTimestamps(itemId).getOrNull() }
                 val introResult = introDeferred.await()
                 val creditResult = creditDeferred.await()
 
-                val fallbackSegments = mutableListOf<MediaSegment>()
-                introResult?.let { ts ->
-                    if (ts.hasIntro) {
-                        fallbackSegments.add(
-                            MediaSegment(
-                                id = "legacy-intro-${ts.itemId}",
-                                itemId = ts.itemId,
-                                type = MediaSegmentType.INTRO,
-                                startTicks = ts.introStartTicks,
-                                endTicks = ts.introEndTicks,
-                            )
-                        )
-                    }
-                }
-                creditResult?.let { ts ->
-                    if (ts.hasCredits) {
-                        fallbackSegments.add(
-                            MediaSegment(
-                                id = "legacy-outro-${ts.itemId}",
-                                itemId = ts.itemId,
-                                type = MediaSegmentType.OUTRO,
-                                startTicks = ts.creditStartTicks,
-                                endTicks = ts.creditEndTicks,
-                            )
-                        )
-                    }
-                }
+                // Pure mapping (see legacySegmentFallback): the facade only
+                // sequences the two legacy reads here.
+                val fallbackSegments = legacySegmentFallback(introResult, creditResult)
                 // Only cache on a successful (empty) segments call: the store
                 // flag vetoes exactly this flight's write-back when the
                 // segments API itself failed, leaving the cache untouched so
@@ -446,13 +456,13 @@ class PlaybackRepositoryImpl(
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =
-        apiClient.getRemoteSubtitles(itemId)
+        playbackApiClient.getRemoteSubtitles(itemId)
 
     override suspend fun downloadSubtitle(itemId: String, subtitleId: String): Result<Unit> =
-        apiClient.downloadRemoteSubtitle(itemId, subtitleId)
+        playbackApiClient.downloadRemoteSubtitle(itemId, subtitleId)
 
     override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> =
-        apiClient.searchRemoteSubtitles(itemId, language)
+        metadataApiClient.searchRemoteSubtitles(itemId, language)
 
     override suspend fun uploadSubtitle(
         itemId: String,
@@ -462,13 +472,13 @@ class PlaybackRepositoryImpl(
         isForced: Boolean,
         isHearingImpaired: Boolean,
     ): Result<Unit> =
-        apiClient.uploadSubtitle(itemId, data, fileName, language, isForced, isHearingImpaired)
+        metadataApiClient.uploadSubtitle(itemId, data, fileName, language, isForced, isHearingImpaired)
 
     override suspend fun getSubtitleCultures(itemId: String): Result<List<CultureInfo>> =
-        apiClient.getMetadataEditorInfo(itemId).map { it.cultures }
+        metadataApiClient.getMetadataEditorInfo(itemId).map { it.cultures }
 
     override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
-        apiClient.getTrickplayTileImage(itemId, width, index)
+        playbackApiClient.getTrickplayTileImage(itemId, width, index)
 
     companion object {
         private const val TAG = "PlaybackRepository"

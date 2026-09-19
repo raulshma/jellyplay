@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 @Entity(
     tableName = "media_audit_log",
@@ -44,5 +45,5 @@ data class ScanStateEntity(
     val itemsFound: Int = 0,
     val resultJson: String? = null,
     @ColumnInfo(defaultValue = "0")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = wallNowMillis(),
 )

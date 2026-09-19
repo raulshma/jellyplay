@@ -79,8 +79,8 @@ eventually. Reporters stay simple.
 ### The outbox
 
 `playback_outbox` table (Room, migrated via `MIGRATION_35_36`). Each row is one
-event: `START`, `PROGRESS`, `STOP`, `PLAYED`, `UNPLAYED`, `FAVORITE`, or
-`UNFAVORITE`. The first three carry the full playback payload (sessionId,
+event: `START`, `PROGRESS`, `STOP`, `PLAYED`, `UNPLAYED`, `FAVORITE`,
+`UNFAVORITE`, or `BOOK_PROGRESS`. The first three carry the full playback payload (sessionId,
 positionTicks, isPaused, playMethod, mediaSourceId); `PLAYED`/`UNPLAYED` carry
 only the target state (a user-driven watched flip); `FAVORITE`/`UNFAVORITE`
 carry only the target favorite state. All rows carry `recordedAt` (capture
@@ -94,6 +94,12 @@ time, for reconciliation) and `createdAt` (drain ordering).
   coalescence mutex: the STOP carries the final position, and a surviving
   mid-position PROGRESS could otherwise drain after a dead-lettered STOP and
   leave the server at a stale mid position.
+- `BOOK_PROGRESS` (book reading position) coalesces per item exactly like
+  `PROGRESS` — latest page wins. It carries only `positionTicks` (the
+  pageIndex × 10,000 encoding books persist in UserData; see
+  `docs/spikes/book-reading.md`). Replay posts
+  `POST /Users/{userId}/PlayingItems/{itemId}/Progress` — books carry no
+  playback session, so no START/STOP machinery surrounds it.
 - `PLAYED`/`UNPLAYED` use a deterministic id (`played_state:$itemId`) so a
   re-flip REPLACE-lands in place — latest user intent wins, never more than one
   row per item. They do not touch the START/PROGRESS/STOP rows: a final position

@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.toMediaItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -26,11 +28,17 @@ import kotlin.test.assertTrue
  *     played flip lands, per the #153 mirror semantics);
  *  4. downloaded SERIES rows are hierarchy echoes, never resume points;
  *  5. the user's hidden-CW list and the 20-item cap.
+ *
+ * The Continue Reading row shares every rule except the MinResumePct floor
+ * (rule 2): books carry no runtime, so their stored playedPercentage is 0.0
+ * until the played flag flips — the floor is skipped there, mirroring the
+ * online `readingResumableOnly` split.
  */
 class OfflineHomeSectionsContinueWatchingTest {
 
     private val titles = OfflineHomeSectionTitles(
         continueWatching = "Continue Watching",
+        continueReading = "Continue Reading",
         nextUp = "Next Up",
         recentlyDownloaded = "Recently Downloaded",
         movies = "Movies",
@@ -50,22 +58,29 @@ class OfflineHomeSectionsContinueWatchingTest {
         id: String,
         mediaType: MediaType = MediaType.MOVIE,
         positionTicks: Long? = 1_000_000L,
-        playedPercentage: Double = 50.0,
+        playedPercentage: Double? = null,
         isPlayed: Boolean = false,
         lastPlayedDate: String? = "2026-01-01T10:00:00Z",
-    ) = OfflineMediaItem(
-        id = id,
-        name = id,
-        mediaType = mediaType,
-        runTimeTicks = 60_000_000L,
-        downloadPath = "/downloads/$id/video.mkv",
-        downloadStatus = DownloadStatus.COMPLETED,
-        playbackPositionTicks = positionTicks,
-        playedPercentage = playedPercentage,
-        isPlayed = isPlayed,
-        lastPlayedDate = lastPlayedDate,
-        createdAt = 1_770_000_000_000L,
-    )
+    ): OfflineMediaItem {
+        // Realistic per-type storage shape: a BOOK row carries no runtime, so
+        // PlayedStateSync.computePlayedPercentage stores 0.0 until the played
+        // flag flips — faking a video-shaped 50% here masked the row's floor
+        // bug (the video MinResumePct analog dropped every real book).
+        val book = mediaType == MediaType.BOOK
+        return OfflineMediaItem(
+            id = id,
+            name = id,
+            mediaType = mediaType,
+            runTimeTicks = if (book) null else 60_000_000L,
+            downloadPath = "/downloads/$id/" + if (book) "book.epub" else "video.mkv",
+            downloadStatus = DownloadStatus.COMPLETED,
+            playbackPositionTicks = positionTicks,
+            playedPercentage = playedPercentage ?: if (book) 0.0 else 50.0,
+            isPlayed = isPlayed,
+            lastPlayedDate = lastPlayedDate,
+            createdAt = 1_770_000_000_000L,
+        )
+    }
 
     // ── The row keeps genuinely in-progress items ─────────────────────
 
@@ -169,6 +184,44 @@ class OfflineHomeSectionsContinueWatchingTest {
     }
 
     @Test
+    fun `downloaded books leave Continue Reading, not Continue Watching`() {
+        // The real offline book shape: runtime null → stored percentage 0.0,
+        // position = page/percent-encoded ticks. The video MinResumePct floor
+        // must NOT apply or the row can never populate.
+        val sections = buildOfflineHomeSections(
+            library = listOf(item("book", mediaType = MediaType.BOOK)),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = OfflineHomeSectionPrefs(),
+        )
+
+        assertTrue(
+            sections.none { it.type == HomeSectionType.CONTINUE_WATCHING },
+            "books must not pollute the video resume row",
+        )
+        val reading = sections.single { it.type == HomeSectionType.CONTINUE_READING }
+        assertEquals(listOf("book"), reading.items.map { it.id })
+        assertEquals("offline_continue_reading", reading.id)
+    }
+
+    @Test
+    fun `played book is dropped but a positionless book never enters Continue Reading`() {
+        val sections = buildOfflineHomeSections(
+            library = listOf(
+                item("finished-book", mediaType = MediaType.BOOK, isPlayed = true),
+                item("never-opened", mediaType = MediaType.BOOK, positionTicks = 0L),
+                item("mid-book", mediaType = MediaType.BOOK),
+            ),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = OfflineHomeSectionPrefs(),
+        )
+
+        val reading = sections.single { it.type == HomeSectionType.CONTINUE_READING }
+        assertEquals(listOf("mid-book"), reading.items.map { it.id })
+    }
+
+    @Test
     fun `user-hidden cw items are dropped`() {
         val row = buildOfflineHomeSections(
             library = listOf(item("visible"), item("hidden")),
@@ -213,5 +266,54 @@ class OfflineHomeSectionsContinueWatchingTest {
         )
 
         assertTrue(sections.none { it.type == HomeSectionType.CONTINUE_WATCHING })
+    }
+
+    @Test
+    fun `cached-layout mirror swaps in the locally derived continue reading books`() {
+        val snapshot = listOf(
+            HomeSection(
+                id = "continue_reading",
+                title = "Continue Reading",
+                type = HomeSectionType.CONTINUE_READING,
+                items = listOf(item("server-stale").copy(mediaType = MediaType.BOOK).toMediaItem()),
+            ),
+        )
+
+        val sections = buildOfflineHomeSections(
+            library = listOf(item("local-fresh", mediaType = MediaType.BOOK)),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = OfflineHomeSectionPrefs(),
+            cachedLayout = snapshot,
+        )
+
+        // Local progress beats the snapshot: the mirror renders the locally
+        // derived list under the section's type and localized title.
+        val reading = sections.single { it.type == HomeSectionType.CONTINUE_READING }
+        assertEquals(listOf("local-fresh"), reading.items.map { it.id })
+        assertEquals("Continue Reading", reading.title)
+        assertTrue(sections.none { it.items.any { item -> item.id == "server-stale" } })
+    }
+
+    @Test
+    fun `disabled continue reading pref drops the mirrored row`() {
+        val snapshot = listOf(
+            HomeSection(
+                id = "continue_reading",
+                title = "Continue Reading",
+                type = HomeSectionType.CONTINUE_READING,
+                items = listOf(item("book").copy(mediaType = MediaType.BOOK).toMediaItem()),
+            ),
+        )
+
+        val sections = buildOfflineHomeSections(
+            library = listOf(item("book", mediaType = MediaType.BOOK)),
+            episodes = emptyList(),
+            titles = titles,
+            prefs = OfflineHomeSectionPrefs(continueReadingEnabled = false),
+            cachedLayout = snapshot,
+        )
+
+        assertTrue(sections.none { it.type == HomeSectionType.CONTINUE_READING })
     }
 }

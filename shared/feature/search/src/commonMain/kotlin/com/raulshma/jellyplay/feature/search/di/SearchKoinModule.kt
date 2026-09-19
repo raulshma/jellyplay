@@ -7,13 +7,16 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the search feature (docs/kmp-migration-plan.md
- * , first conveyor item). The HiltViewModel/@Inject annotations were
+ *,  first conveyor item). The HiltViewModel/@Inject annotations were
  * stripped at the move — Koin is the single constructor owner (one framework
  * per type). The three ctor deps whose impls are still Hilt-owned in the
  * legacy data shim (MediaRepository, UserDataMutator, MediaSearchEngine,
  * pending the DownloadRepository flip) reach Koin through the app
  * composition root's Hilt interop module; the rest resolve from the C4
- * shared-module graph.
+ * shared-module graph. QuickDownloadActions is core:data's own wall-crossing
+ * seam (declared, implemented and bound there on both platforms — jvmShared
+ * adapter in dataJvmModule, no-op stub in dataWasmModule), so this module
+ * needs no platform fragment for it.
  */
 val searchModule: Module = module {
     viewModel {
@@ -26,7 +29,7 @@ val searchModule: Module = module {
             mediaSearchEngine = get(),
             offlineRepository = get(),
             searchFiltersStore = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
         )
     }
 }

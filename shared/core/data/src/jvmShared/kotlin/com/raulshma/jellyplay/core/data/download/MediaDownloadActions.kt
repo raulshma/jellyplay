@@ -42,6 +42,13 @@ interface DownloadOutcomeMessenger {
  * Koin-owned construction (jvmShared convention): no @Inject/@Singleton —
  * DataKoinModule wires the process scope and dependencies, mirroring the
  * other moved repositories.
+ *
+ * Since the promoted-interface pass this class IS the JVM
+ * [QuickDownloadActions]: it implements the commonMain interface directly
+ * (the DownloadIntake precedent — the surface crosses verbatim, so no
+ * verbatim-forward adapter is needed) and dataJvmModule binds the interface
+ * over this single. `isSupported` is constant `true` here: the class only
+ * exists where the JVM download engine does.
  */
 class MediaDownloadActions(
     scope: CoroutineScope,
@@ -49,14 +56,18 @@ class MediaDownloadActions(
     private val downloadIntake: DownloadIntake,
     offlineRepository: OfflineRepository,
     private val messenger: DownloadOutcomeMessenger,
-) {
+) : QuickDownloadActions {
+
+    /** The JVM download pipeline is always present — see the class KDoc. */
+    override val isSupported: Boolean = true
+
     /**
      * Ids whose quick actions flip to "Remove download". Sharing one
      * Eagerly-started flow across every host means one collector serves all
      * screens; the repository collapses equal id sets, so transfers don't
      * churn it.
      */
-    val downloadedIds: StateFlow<Set<String>> =
+    override val downloadedIds: StateFlow<Set<String>> =
         downloadRepository.observeDownloadedIdsIncludingSeries()
             .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
@@ -66,7 +77,7 @@ class MediaDownloadActions(
     )
 
     /** Long-press Download — see [DownloadIntake.startFromItem]. */
-    suspend fun download(item: MediaItem): DownloadRequestResult =
+    override suspend fun download(item: MediaItem): DownloadRequestResult =
         downloadIntake.startFromItem(item)
 
     /**
@@ -75,7 +86,7 @@ class MediaDownloadActions(
      * richer detail flows) route to [onOpenDetail]. Hosts with richer routing
      * (pre-opened series sheet, local message queue) call [download] instead.
      */
-    suspend fun downloadAndReport(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
+    override suspend fun downloadAndReport(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
         when (val result = download(item)) {
             DownloadRequestResult.Started -> messenger.downloadStarted()
             is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId)
@@ -88,7 +99,7 @@ class MediaDownloadActions(
      * Long-press Remove download — deletes the local download (artifacts +
      * offline rows) via the shared series-vs-item routing. Fire-and-forget.
      */
-    fun removeDownload(item: MediaItem) {
+    override fun removeDownload(item: MediaItem) {
         deleteActions.deleteDownload(item)
     }
 }

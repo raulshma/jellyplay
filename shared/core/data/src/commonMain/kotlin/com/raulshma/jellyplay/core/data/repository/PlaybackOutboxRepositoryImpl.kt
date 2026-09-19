@@ -1,0 +1,298 @@
+package com.raulshma.jellyplay.core.data.repository
+
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.data.util.ioDispatcher
+import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
+import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
+import com.raulshma.jellyplay.core.model.PlayMethod
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+
+/**
+ * promotion from jvmShared: the impl is DAO + clock + dispatcher only, so
+ * it crosses to commonMain with two mechanical substitutions — the clock edge
+ * narrowed to the common [EpochMillisSource] seam (JVM [TimeSource] fakes in
+ * jvmTest still satisfy it through the supertype), and `java.util.UUID`
+ * replaced by the stdlib multiplatform `kotlin.uuid.Uuid` (also a v4 string;
+ * identical shape on android/desktop, so persisted rows are unchanged).
+ */
+@OptIn(ExperimentalUuidApi::class)
+class PlaybackOutboxRepositoryImpl constructor(
+    private val dao: PlaybackOutboxDao,
+    /** Clock seam for the outbox rows' `recordedAt`/`createdAt` stamps. */
+    private val timeSource: EpochMillisSource,
+) : PlaybackOutboxRepository {
+
+    // Serialises the read-modify-write coalescence so concurrent PROGRESS
+    // reports from the reporter loop and a STOP from release do not interleave.
+    private val mutex = Mutex()
+
+    // Every caller already runs inside `withContext(ioDispatcher)`; wrapping a
+    // non-blocking wall-clock read in its own dispatcher handoff was a redundant
+    // reschedule on the playback-progress path (called every ~10s + on release).
+    private fun nowMillis(): Long = timeSource.nowEpochMillis()
+
+    override suspend fun enqueueStart(
+        itemId: String,
+        sessionId: String,
+        playMethod: PlayMethod,
+        startPositionTicks: Long?,
+    ) = withContext(ioDispatcher) {
+        val now = nowMillis()
+        dao.upsert(
+            PlaybackOutboxEntity(
+                id = Uuid.random().toString(),
+                itemId = itemId,
+                eventType = PlaybackOutboxEventType.START.name,
+                sessionId = sessionId,
+                positionTicks = startPositionTicks ?: 0L,
+                isPaused = false,
+                playMethod = playMethod.name,
+                mediaSourceId = null,
+                recordedAt = now,
+                createdAt = now,
+            )
+        )
+    }
+
+    override suspend fun enqueueProgress(
+        itemId: String,
+        sessionId: String,
+        positionTicks: Long,
+        isPaused: Boolean,
+        playMethod: PlayMethod,
+        mediaSourceId: String?,
+    ) = upsertCoalesced(
+        itemId = itemId,
+        eventType = PlaybackOutboxEventType.PROGRESS,
+        positionTicks = positionTicks,
+        sessionId = sessionId,
+        isPaused = isPaused,
+        playMethod = playMethod,
+        mediaSourceId = mediaSourceId,
+    )
+
+    override suspend fun enqueueBookProgress(itemId: String, positionTicks: Long) = upsertCoalesced(
+        itemId = itemId,
+        eventType = PlaybackOutboxEventType.BOOK_PROGRESS,
+        positionTicks = positionTicks,
+        // Books have no playback session; the session-shaped columns stay at
+        // their STOP-style placeholders.
+        sessionId = "",
+        isPaused = false,
+        playMethod = PlayMethod.DIRECT_PLAY,
+        mediaSourceId = null,
+    )
+
+    /**
+     * Coalesced telemetry upsert shared by the position channels (PROGRESS,
+     * BOOK_PROGRESS): a newer report supersedes the older one for this item —
+     * the existing row's id is reused so REPLACE lands in place, and
+     * createdAt is bumped so the entry keeps its drain ordering at the new
+     * capture time.
+     */
+    private suspend fun upsertCoalesced(
+        itemId: String,
+        eventType: PlaybackOutboxEventType,
+        positionTicks: Long,
+        sessionId: String,
+        isPaused: Boolean,
+        playMethod: PlayMethod,
+        mediaSourceId: String?,
+    ) = withContext(ioDispatcher) {
+        mutex.withLock {
+            val now = nowMillis()
+            val existing = dao.getForItemByType(itemId, eventType.name)
+            dao.upsert(
+                existing?.copy(
+                    sessionId = sessionId,
+                    positionTicks = positionTicks,
+                    isPaused = isPaused,
+                    playMethod = playMethod.name,
+                    mediaSourceId = mediaSourceId,
+                    recordedAt = now,
+                    createdAt = now,
+                ) ?: PlaybackOutboxEntity(
+                    id = Uuid.random().toString(),
+                    itemId = itemId,
+                    eventType = eventType.name,
+                    sessionId = sessionId,
+                    positionTicks = positionTicks,
+                    isPaused = isPaused,
+                    playMethod = playMethod.name,
+                    mediaSourceId = mediaSourceId,
+                    recordedAt = now,
+                    createdAt = now,
+                ),
+            )
+        }
+    }
+
+    override suspend fun enqueueStop(
+        itemId: String,
+        sessionId: String,
+        positionTicks: Long,
+    ) = withContext(ioDispatcher) {
+        mutex.withLock {
+            // A STOP carries the item's final position, so any pending
+            // PROGRESS for the same item is superseded. Previously the STOP
+            // always inserted a fresh row, so a mid-position PROGRESS could
+            // drain after the STOP and (if the STOP dead-letters while the
+            // PROGRESS succeeds) leave the server at a stale mid position.
+            // Deleting the superseded PROGRESS under the same mutex that
+            // serialises the PROGRESS read-modify-write guarantees no
+            // concurrent PROGRESS report can re-insert between this delete and
+            // the STOP insert. START is intentionally retained: a START then
+            // STOP pair is meaningful (the session lifecycle) and ordering is
+            // preserved by createdAt.
+            dao.deleteForItemByType(itemId, PlaybackOutboxEventType.PROGRESS.name)
+            val now = nowMillis()
+            dao.upsert(
+                PlaybackOutboxEntity(
+                    id = Uuid.random().toString(),
+                    itemId = itemId,
+                    eventType = PlaybackOutboxEventType.STOP.name,
+                    sessionId = sessionId,
+                    positionTicks = positionTicks,
+                    isPaused = false,
+                    // The Jellyfin PlaybackStopInfo payload does not carry a play
+                    // method, so the worker's STOP replay path ignores this field.
+                    // The entity column is non-null, so we stamp a placeholder—
+                    // it is never read back for STOP events.
+                    playMethod = PlayMethod.DIRECT_PLAY.name,
+                    mediaSourceId = null,
+                    recordedAt = now,
+                    createdAt = now,
+                )
+            )
+        }
+    }
+
+    override suspend fun enqueuePlayedState(itemId: String, isPlayed: Boolean) = withContext(ioDispatcher) {
+        // Deterministic id so a re-flip for the same item lands in place — the
+        // latest user intent wins and there is never more than one row per
+        // item for the played-state channel. `positionTicks`/`isPaused`/
+        // `playMethod` are unused for this event type but the entity requires
+        // them; defaults match STOP's shape.
+        val now = nowMillis()
+        dao.upsert(
+            PlaybackOutboxEntity(
+                id = playedStateId(itemId),
+                itemId = itemId,
+                eventType = if (isPlayed) PlaybackOutboxEventType.PLAYED.name else PlaybackOutboxEventType.UNPLAYED.name,
+                sessionId = "",
+                positionTicks = 0L,
+                isPaused = false,
+                playMethod = PlayMethod.DIRECT_PLAY.name,
+                mediaSourceId = null,
+                recordedAt = now,
+                // Preserve original createdAt on an overwrite so drain ordering
+                // keeps the first flip's position — only the target state
+                // changes, not the queue position. Fresh on first insert.
+                createdAt = dao.getById(playedStateId(itemId))?.createdAt ?: now,
+            )
+        )
+    }
+
+    override suspend fun enqueueFavoriteState(itemId: String, isFavorite: Boolean) = withContext(ioDispatcher) {
+        // Deterministic id so a re-flip for the same item lands in place — the
+        // latest user intent wins and there is never more than one row per
+        // item for the favorite-state channel. `positionTicks`/`isPaused`/
+        // `playMethod` are unused for this event type but the entity requires
+        // them; defaults match STOP's shape.
+        val now = nowMillis()
+        dao.upsert(
+            PlaybackOutboxEntity(
+                id = favoriteStateId(itemId),
+                itemId = itemId,
+                eventType = if (isFavorite) PlaybackOutboxEventType.FAVORITE.name else PlaybackOutboxEventType.UNFAVORITE.name,
+                sessionId = "",
+                positionTicks = 0L,
+                isPaused = false,
+                playMethod = PlayMethod.DIRECT_PLAY.name,
+                mediaSourceId = null,
+                recordedAt = now,
+                // Preserve original createdAt on an overwrite so drain ordering
+                // keeps the first flip's position — only the target state
+                // changes, not the queue position. Fresh on first insert.
+                createdAt = dao.getById(favoriteStateId(itemId))?.createdAt ?: now,
+            )
+        )
+    }
+
+    private companion object {
+        // Stable single-row ids for the user-intent channels: insert and
+        // overwrite lookup must agree, so both sites go through these.
+        fun playedStateId(itemId: String) = "played_state:$itemId"
+        fun favoriteStateId(itemId: String) = "favorite_state:$itemId"
+    }
+
+    override suspend fun drain(): List<PlaybackOutboxEntry> = withContext(ioDispatcher) {
+        dao.getAll().map { it.toDomain() }
+    }
+
+    override suspend fun hasUnsyncedPlayedIntent(itemId: String): Boolean = withContext(ioDispatcher) {
+        dao.hasUnsyncedIntent(itemId, PlaybackOutboxEventType.PLAYED.name)
+    }
+
+    override suspend fun hasUnsyncedUnplayedIntent(itemId: String): Boolean = withContext(ioDispatcher) {
+        dao.hasUnsyncedIntent(itemId, PlaybackOutboxEventType.UNPLAYED.name)
+    }
+
+    override suspend fun deletePlayedStateIntents(itemId: String) = withContext(ioDispatcher) {
+        dao.deleteByItemAndTypes(
+            itemId,
+            listOf(PlaybackOutboxEventType.PLAYED.name, PlaybackOutboxEventType.UNPLAYED.name),
+        )
+    }
+
+    override suspend fun delete(id: String) = withContext(ioDispatcher) {
+        dao.deleteById(id)
+    }
+
+    override suspend fun markDeadLetter(id: String) = withContext(ioDispatcher) {
+        dao.markDeadLetter(id)
+    }
+
+    override suspend fun deleteForItem(itemId: String) = withContext(ioDispatcher) {
+        dao.deleteForItem(itemId)
+    }
+
+    override suspend fun deletePlaybackTelemetryForItem(itemId: String) = withContext(ioDispatcher) {
+        dao.deletePlaybackTelemetryForItem(itemId)
+    }
+
+    override suspend fun count(): Int = withContext(ioDispatcher) { dao.count() }
+
+    override fun countFlow(): Flow<Int> = dao.countFlow()
+
+    override fun getAllFlow(): Flow<List<PlaybackOutboxEntry>> =
+        dao.getAllFlow().map { list -> list.map { it.toDomain() } }
+
+    // Parse the persisted enum columns through the repo-wide seam: a corrupt
+    // stored value degrades to the documented default instead of throwing —
+    // a throw here (from an unguarded valueOf) poisons drain()/getAllFlow()
+    // and stalls the whole outbox on one bad row. eventType has no neutral
+    // constant, so a corrupt one maps to START: the only replay path that
+    // sends no position and flips no watched/favorite state, letting the
+    // corrupt row be delivered + deleted instead of blocking the drain.
+    private fun PlaybackOutboxEntity.toDomain(): PlaybackOutboxEntry =
+        PlaybackOutboxEntry(
+            id = id,
+            itemId = itemId,
+            eventType = eventType.toEnumOrNull() ?: PlaybackOutboxEventType.START,
+            sessionId = sessionId,
+            positionTicks = positionTicks,
+            isPaused = isPaused,
+            playMethod = playMethod.toEnumOrNull() ?: PlayMethod.DIRECT_PLAY,
+            mediaSourceId = mediaSourceId,
+            recordedAt = recordedAt,
+            createdAt = createdAt,
+        )
+}

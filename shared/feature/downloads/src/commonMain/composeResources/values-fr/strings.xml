@@ -78,6 +78,7 @@
     <string name="downloads_filter_all">Tout</string>
     <string name="downloads_filter_videos">Vidéos</string>
     <string name="downloads_filter_music">Musique</string>
+    <string name="downloads_filter_books">Livres</string>
     <!-- Offline download resync -->
     <string name="downloads_resync">Synchroniser</string>
     <string name="downloads_resync_media_changed">Le fichier média a changé — re-téléchargement requis</string>

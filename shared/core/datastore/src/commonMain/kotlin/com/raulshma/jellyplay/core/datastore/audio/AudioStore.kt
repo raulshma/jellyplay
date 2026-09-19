@@ -5,25 +5,19 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -67,13 +61,8 @@ class AudioStore constructor(
         val SLEEP_TIMER_END_OF_EPISODE = booleanPreferencesKey("sleep_timer_end_of_episode")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val audio: StateFlow<AudioSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, AudioSlice())
+    val audio: StateFlow<AudioSlice> =
+        dataStore.sliceStateFlow(scope, seed = AudioSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): AudioSlice = AudioSlice(
         audioDefaultSpeed = PreferenceCodec.readFloat(prefs, Keys.AUDIO_DEFAULT_SPEED, "audio_default_speed", 1.0f),
@@ -183,14 +172,15 @@ class AudioStore constructor(
         dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_NIGHT_MODE_VOLUME, Keys.AUDIO_NIGHT_MODE_GAIN,
-        Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
-        Keys.AUDIO_NORMALIZATION_MODE, Keys.AUDIO_NORMALIZATION_ENABLED, Keys.REPLAYGAIN_PRE_AMP_DB,
-        Keys.CHANNEL_MIX_MODE, Keys.CHANNEL_MIX_ENABLED, Keys.AUDIO_GAPLESS_ENABLED,
-        Keys.AUDIO_CROSSFADE_DURATION_MS, Keys.AUDIO_DELAY_MS, Keys.AUDIO_LYRICS_VISIBLE,
-        Keys.AUDIO_VISUALIZER_ENABLED, Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -210,39 +200,6 @@ class AudioStore constructor(
             Keys.AUDIO_VISUALIZER_ENABLED, Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the audio-player keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly. [Keys.AUDIO_LYRICS_VISIBLE]
-     * is runtime reading-state that the projection reads from its stored slot,
-     * so it is not written back.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.AUDIO_DEFAULT_SPEED] = userPreferences.audioDefaultSpeed
-            it[Keys.AUDIO_NIGHT_MODE_VOLUME] = userPreferences.audioNightModeVolume
-            it[Keys.AUDIO_NIGHT_MODE_GAIN] = userPreferences.audioNightModeGain
-            it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = userPreferences.audioSkipPreviousThresholdMs
-            it[Keys.AUDIO_AUTOPLAY_NEXT] = userPreferences.audioAutoplayNext
-            it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = userPreferences.audioPreloadBufferSize.name
-            it[Keys.AUDIO_NORMALIZATION_MODE] = userPreferences.audioNormalizationMode.name
-            it[Keys.AUDIO_NORMALIZATION_ENABLED] = userPreferences.audioNormalizationEnabled
-            it[Keys.REPLAYGAIN_PRE_AMP_DB] = userPreferences.replayGainPreAmpDb
-            it[Keys.CHANNEL_MIX_MODE] = userPreferences.channelMixMode.name
-            it[Keys.CHANNEL_MIX_ENABLED] = userPreferences.channelMixEnabled
-            it[Keys.AUDIO_GAPLESS_ENABLED] = userPreferences.audioGaplessEnabled
-            it[Keys.AUDIO_CROSSFADE_DURATION_MS] = userPreferences.audioCrossfadeDurationMs
-            it[Keys.AUDIO_DELAY_MS] = userPreferences.audioDelayMs
-            it[Keys.AUDIO_VISUALIZER_ENABLED] = userPreferences.audioVisualizerEnabled
-            it[Keys.SLEEP_TIMER_DURATION_MS] = userPreferences.sleepTimerDurationMs
-            it[Keys.SLEEP_TIMER_END_OF_EPISODE] = userPreferences.sleepTimerEndOfEpisode
-        }
     }
 
     /**

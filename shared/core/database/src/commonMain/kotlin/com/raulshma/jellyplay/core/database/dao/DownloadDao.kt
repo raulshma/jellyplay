@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.core.database.dao
 
-import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Update
+import androidx.room3.Dao
+import androidx.room3.Delete
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
+import androidx.room3.Query
+import androidx.room3.Update
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -33,6 +33,10 @@ interface DownloadDao {
      */
     @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND mediaType IN ('MUSIC', 'AUDIO') ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
     suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadEntity>
+
+    /** One page of `COMPLETED` book downloads, newest first — the audio ([getCompletedAudioDownloads]) precedent scoped to the reader's shelf. */
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND mediaType = 'BOOK' ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
+    suspend fun getCompletedBookDownloads(limit: Int, offset: Int): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun getDownloadById(id: String): DownloadEntity?
@@ -284,8 +288,20 @@ interface DownloadDao {
     @Query("UPDATE downloads SET retryCount = 0 WHERE id = :id")
     suspend fun resetRetryCount(id: String)
 
-    @Query("SELECT * FROM downloads WHERE status IN ('PENDING', 'PAUSED') ORDER BY priority DESC, createdAt ASC")
-    fun getPendingDownloads(): Flow<List<DownloadEntity>>
+    /**
+     * Reactive ids of the rows the desktop downloads conveyor re-kicks: the
+     * pending query narrowed to the one column its only consumer reads, and to
+     * the `PENDING` rows it actually kicked (the former full-row
+     * `IN ('PENDING', 'PAUSED')` query had its `PAUSED` half filtered out in
+     * Kotlin — a paused row must never re-kick). The `priority DESC,
+     * createdAt ASC` order is kept so multi-row kick order is unchanged. Room
+     * invalidation is table-level, so every [updateProgressWithSpeed] tick
+     * re-ran the full 23-column read; same narrow-projection rationale as
+     * [getRecoveryRows] / [getActiveDownloadProgress]. Served by the `status`
+     * index.
+     */
+    @Query("SELECT id FROM downloads WHERE status = 'PENDING' ORDER BY priority DESC, createdAt ASC")
+    fun getPendingDownloadIds(): Flow<List<String>>
 
     @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedSeriesIds(): List<String>

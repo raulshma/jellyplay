@@ -91,6 +91,32 @@ class PhotoRoutingTest {
     }
 
     @Test
+    fun folder_drillsIntoLibrarySection_scopedToTheFolder() {
+        // Container folders inside a library (books-library volume folders) must
+        // never land on the media detail screen — its play ladder would offer
+        // Play on a non-streamable item. They open the folder's children as a
+        // library section, the folder's own id as the scope.
+        val destination = resolveItemDestination(
+            itemId = "vol-1",
+            mediaType = MediaType.FOLDER,
+            parentId = "books-lib",
+            itemName = "Berserk Vol. 1",
+        )
+
+        assertEquals(
+            Route.LibrarySection(title = "Berserk Vol. 1", parentId = "vol-1"),
+            destination,
+        )
+    }
+
+    @Test
+    fun librarySection_isDetailDestination() {
+        // The folder drill-in must participate in the detail back-stack class
+        // (pop returns to the parent grid), not the top-level chrome class.
+        assertTrue(Route.LibrarySection(title = "t", parentId = "p").isDetail)
+    }
+
+    @Test
     fun photoViewer_isFullScreenDestination() {
         // Contract the shell's layout-branch picker relies on: the photo viewer
         // renders in the bare full-screen layout, no top-level chrome.

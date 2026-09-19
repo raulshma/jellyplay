@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.feature.library
 
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import androidx.paging.LoadState
@@ -46,7 +47,7 @@ class FavoritesViewModelTest {
 
     private lateinit var mediaRepository: MediaRepository
     private lateinit var userDataMutator: UserDataMutator
-    private lateinit var mediaDownloadActions: MediaDownloadActions
+    private lateinit var quickDownloadActions: QuickDownloadActions
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: FavoritesViewModel
 
@@ -61,7 +62,7 @@ class FavoritesViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
+        quickDownloadActions = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         // BEFORE construction: the deferred refresher reads the flow in its
         // initializer — a stub after would hand it the relaxed default (a
@@ -71,7 +72,10 @@ class FavoritesViewModelTest {
             mediaRepository = mediaRepository,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
-            mediaDownloadActions = mediaDownloadActions,
+            quickDownloadActions = quickDownloadActions,
+            // Real prefetcher over the mocked repository: the photo-folder
+            // prefetch tests assert the repository seam, not the prefetcher.
+            photoFolderPrefetcher = PhotoFolderPrefetcher(mediaRepository),
         )
     }
 
@@ -100,7 +104,7 @@ class FavoritesViewModelTest {
         viewModel.downloadItem(item, onOpenDetail = { })
         advanceUntilIdle()
 
-        coVerify { mediaDownloadActions.downloadAndReport(item, any()) }
+        coVerify { quickDownloadActions.downloadAndReport(item, any()) }
     }
 
     @Test
@@ -110,7 +114,7 @@ class FavoritesViewModelTest {
         viewModel.removeItemDownload(item)
         advanceUntilIdle()
 
-        verify { mediaDownloadActions.removeDownload(item) }
+        verify { quickDownloadActions.removeDownload(item) }
     }
 
     // ── Media-type filter → paged query ──────────────────────────────────────

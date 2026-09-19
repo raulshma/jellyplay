@@ -117,6 +117,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.feature.search.components.SearchSortSheet
 import com.raulshma.jellyplay.feature.search.components.SearchStatusSheet
@@ -161,7 +162,7 @@ val LocalConsumeSearchQuery = staticCompositionLocalOf<() -> Unit> { {} }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SearchScreen(
+internal fun SearchScreen(
     onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
     onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = koinViewModel(),
@@ -170,7 +171,7 @@ fun SearchScreen(
     val consumeQuery = LocalConsumeSearchQuery.current
     androidx.compose.runtime.LaunchedEffect(pendingQuery) {
         pendingQuery?.let { query ->
-            viewModel.search(query)
+            viewModel.onEvent(SearchUiEvent.Search(query))
             consumeQuery()
         }
     }
@@ -239,8 +240,8 @@ fun SearchScreen(
     JellyPlayBackHandler(enabled = isSearchFocused || queryHasText || hasActiveFilters) {
         when {
             isSearchFocused -> focusManager.clearFocus()
-            queryHasText -> viewModel.search("")
-            hasActiveFilters -> viewModel.clearFilters()
+            queryHasText -> viewModel.onEvent(SearchUiEvent.Search(""))
+            hasActiveFilters -> viewModel.onEvent(SearchUiEvent.ClearFilters)
         }
     }
 
@@ -277,7 +278,7 @@ fun SearchScreen(
     // the slot to "Remove download".
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
-        includeDownload = true,
+        includeDownload = viewModel.downloadSupported,
         isDownloaded = remember(downloadedIds) {
             { item: MediaItem -> downloadedIds.contains(item.id) }
         },
@@ -285,15 +286,19 @@ fun SearchScreen(
             QuickActionAdapter(
                 onPlay = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
                 onOpenDetail = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
-                onMarkPlayed = viewModel::markItemPlayed,
+                onMarkPlayed = { item, played ->
+                    viewModel.onEvent(SearchUiEvent.MarkItemPlayed(item, played))
+                },
                 // Result ids always echo the originating item (DownloadIntake),
                 // so the captured metadata stays accurate.
                 onDownload = { item ->
-                    viewModel.downloadItem(item, onOpenDetail = { id ->
-                        onItemClick(id, item.mediaType, item.parentId, item.name)
-                    })
+                    viewModel.onEvent(
+                        SearchUiEvent.DownloadItem(item, onOpenDetail = { id ->
+                            onItemClick(id, item.mediaType, item.parentId, item.name)
+                        })
+                    )
                 },
-                onRemoveDownload = viewModel::removeItemDownload,
+                onRemoveDownload = { item -> viewModel.onEvent(SearchUiEvent.RemoveItemDownload(item)) },
             )
         },
     )
@@ -373,7 +378,7 @@ fun SearchScreen(
                         ) {
                             Box {
                                 ExpressiveToolbarIconButton(
-                                    onClick = { viewModel.toggleShowFilters() },
+                                    onClick = { viewModel.onEvent(SearchUiEvent.ToggleFilters) },
                                     icon = Tabler.Outline.Filter,
                                     contentDescription = stringResource(Res.string.search_action_filters),
                                     highlighted = hasActiveFilters,
@@ -450,15 +455,19 @@ fun SearchScreen(
                         filters.mediaTypes.forEach { mediaType ->
                             GlassDismissTag(
                                 label = mediaType.mediaTypeDisplayName(),
-                                onDismiss = { viewModel.toggleMediaType(mediaType) },
+                                onDismiss = {
+                                    viewModel.onEvent(SearchUiEvent.ToggleMediaType(mediaType))
+                                },
                             )
                         }
                         filters.genres.forEach { genre ->
                             GlassDismissTag(
                                 label = genre,
                                 onDismiss = {
-                                    viewModel.updateFilters(
-                                        filters.copy(genres = filters.genres - genre)
+                                    viewModel.onEvent(
+                                        SearchUiEvent.UpdateFilters(
+                                            filters.copy(genres = filters.genres - genre)
+                                        )
                                     )
                                 },
                             )
@@ -467,8 +476,10 @@ fun SearchScreen(
                             GlassDismissTag(
                                 label = year.toString(),
                                 onDismiss = {
-                                    viewModel.updateFilters(
-                                        filters.copy(years = filters.years - year)
+                                    viewModel.onEvent(
+                                        SearchUiEvent.UpdateFilters(
+                                            filters.copy(years = filters.years - year)
+                                        )
                                     )
                                 },
                             )
@@ -477,8 +488,10 @@ fun SearchScreen(
                             GlassDismissTag(
                                 label = tag,
                                 onDismiss = {
-                                    viewModel.updateFilters(
-                                        filters.copy(tags = filters.tags - tag)
+                                    viewModel.onEvent(
+                                        SearchUiEvent.UpdateFilters(
+                                            filters.copy(tags = filters.tags - tag)
+                                        )
                                     )
                                 },
                             )
@@ -487,14 +500,18 @@ fun SearchScreen(
                             GlassDismissTag(
                                 label = stringResource(Res.string.search_filter_rating_plus, filters.minRating),
                                 onDismiss = {
-                                    viewModel.updateFilters(filters.copy(minRating = 0f))
+                                    viewModel.onEvent(
+                                        SearchUiEvent.UpdateFilters(filters.copy(minRating = 0f))
+                                    )
                                 },
                             )
                         }
                         if (filters.playedStatus != PlayedStatus.ALL) {
                             GlassDismissTag(
                                 label = filters.playedStatus.playedStatusLabel(),
-                                onDismiss = { viewModel.setPlayedStatus(PlayedStatus.ALL) },
+                                onDismiss = {
+                                    viewModel.onEvent(SearchUiEvent.SetPlayedStatus(PlayedStatus.ALL))
+                                },
                             )
                         }
                         val clearAllFocusState = rememberTvFocusState()
@@ -503,7 +520,9 @@ fun SearchScreen(
                                 .then(clearAllFocusState.focusModifier)
                                 .tvFocusIndicator(clearAllFocusState, ShapeCache.smooth8)
                                 .clip(ShapeCache.smooth8)
-                                .clickable(role = androidx.compose.ui.semantics.Role.Button) { viewModel.clearFilters() }
+                                .clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                                    viewModel.onEvent(SearchUiEvent.ClearFilters)
+                                }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         ) {
                             Text(
@@ -603,10 +622,12 @@ fun SearchScreen(
                             val onClick = remember(seerrItem.id, seerrItem.mediaType, onNavigate) {
                                 {
                                     seerrLoadingState.startLoading(seerrItem.id)
-                                    viewModel.prefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
-                                        seerrLoadingState.stopLoading(seerrItem.id)
-                                        onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                                    }
+                                    viewModel.onEvent(
+                                        SearchUiEvent.PrefetchSeerrDetails(seerrItem.id, seerrItem.mediaType) {
+                                            seerrLoadingState.stopLoading(seerrItem.id)
+                                            onNavigate(Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
+                                        }
+                                    )
                                 }
                             }
                             // Keyed on the whole item, not just id: a refreshed
@@ -614,7 +635,7 @@ fun SearchScreen(
                             // and the request dialog must show that object.
                             // The open cascade itself is the holder's.
                             val onRequestClick = remember(seerrItem) {
-                                { viewModel.openSeerrRequestDialog(seerrItem) }
+                                { viewModel.onEvent(SearchUiEvent.OpenSeerrRequestDialog(seerrItem)) }
                             }
                             SeerrMediaCard(
                                 item = seerrItem,
@@ -661,7 +682,9 @@ fun SearchScreen(
                                 .clip(ShapeCache.smooth8)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                                 
-                                .clickable(role = androidx.compose.ui.semantics.Role.Button) { viewModel.retrySeerrSearch() }
+                                    .clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                                        viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
+                                    }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -682,10 +705,22 @@ fun SearchScreen(
                     }
                 }
 
-                // Library content (grid, empty state, or initial state)
+                // Library content (grid, empty state, or initial state). The
+                // WHICH-surface decision is folded once (SearchSurface.kt,
+                // the HomeSurface precedent); this `when` is exhaustive and
+                // renders only.
+                val surface = computeSearchSurface(
+                    itemCount = pagedResults.itemCount,
+                    queryHasText = queryHasText,
+                    isRefreshing = isRefreshing,
+                    refreshFailed = pagedResults.loadState.refresh is LoadState.Error,
+                    showSeerr = showSeerr,
+                    showSeerrError = showSeerrError,
+                    showOffline = showOffline,
+                )
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    when {
-                        pagedResults.itemCount == 0 && queryHasText && !isRefreshing && !showSeerr && !showSeerrError && !showOffline -> {
+                    when (surface) {
+                        SearchSurface.NoResults -> {
                             // Typo tolerance fallback: Jellyfin's media search is substring/prefix
                             // only, so a misspelled query ("Interstelar") returns nothing. With no
                             // easy way to push a fuzzy variant through the server query, surface
@@ -750,7 +785,7 @@ fun SearchScreen(
                                                     .tvFocusIndicator(suggestionFocusState, CircleShape)
                                                     .clip(CircleShape)
                                                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                                    .clickable { viewModel.search(suggestion) }
+                                                    .clickable { viewModel.onEvent(SearchUiEvent.Search(suggestion)) }
                                                     .padding(horizontal = 14.dp, vertical = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
@@ -768,7 +803,7 @@ fun SearchScreen(
                                 }
                             }
                         }
-                        !queryHasText && !showSeerr -> {
+                        SearchSurface.Initial -> {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -836,7 +871,9 @@ fun SearchScreen(
                                                     .then(historyRowFocusState.focusModifier)
                                                     .tvFocusIndicator(historyRowFocusState, MaterialTheme.shapes.small)
                                                     .clip(MaterialTheme.shapes.small)
-                                                    .clickable { viewModel.search(item.query) }
+                                                    .clickable {
+                                                        viewModel.onEvent(SearchUiEvent.Search(item.query))
+                                                    }
                                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -867,7 +904,11 @@ fun SearchScreen(
                                                         .then(deleteFocusState.focusModifier)
                                                         .tvFocusIndicator(deleteFocusState, CircleShape)
                                                         .clip(CircleShape)
-                                                        .clickable { viewModel.deleteHistoryItem(item.id) },
+                                                        .clickable {
+                                                            viewModel.onEvent(
+                                                                SearchUiEvent.DeleteSearchHistoryItem(item.id)
+                                                            )
+                                                        },
                                                 ) {
                                                     Icon(
                                                         Tabler.Outline.X,
@@ -889,21 +930,14 @@ fun SearchScreen(
                             }
                             } // close verticalScroll Column
                         }
-                        else -> {
+                        is SearchSurface.Content -> {
                             // ── Library grid ──
                             TvFocusableGrid(
                                 itemCount = pagedResults.itemCount,
-                                key = { index ->
-                                    if (index in 0 until pagedResults.itemCount) {
-                                        try {
-                                            pagedResults.peek(index)?.id ?: "search_item_placeholder_$index"
-                                        } catch (_: IndexOutOfBoundsException) {
-                                            "search_item_placeholder_$index"
-                                        }
-                                    } else {
-                                        "search_item_placeholder_$index"
-                                    }
-                                },
+                                // The shared bounds-safe paging key (Library's
+                                // grid precedent) instead of the hand-rolled
+                                // bounds-check + peek + try/catch ladder.
+                                key = pagedResults.safeItemKey { it.id },
                                 columns = GridCells.Adaptive(gridCellSize),
                                 contentPadding = gridPadding,
                                 horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -987,7 +1021,7 @@ fun SearchScreen(
                             if (pagedResults.loadState.append is LoadState.Error) {
                                 val appendError = pagedResults.loadState.append as LoadState.Error
                                 AppendErrorFooter(
-                                    message = appendError.error.localizedMessage
+                                    message = appendError.error.message
                                         ?: stringResource(Res.string.search_failed_to_load_more),
                                     onRetry = { pagedResults.retry() },
                                     modifier = Modifier
@@ -997,9 +1031,9 @@ fun SearchScreen(
                                 )
                             }
 
-                            // ── Refresh loading ──
-                            when (val refreshState = pagedResults.loadState.refresh) {
-                                is LoadState.Loading -> {
+                            // ── Refresh loading / error (the fold's phase) ──
+                            when (surface.refresh) {
+                                SearchSurface.RefreshPhase.LOADING -> {
                                     Box(
                                         modifier = Modifier.fillMaxSize(),
                                         contentAlignment = Alignment.Center,
@@ -1012,15 +1046,15 @@ fun SearchScreen(
                                         )
                                     }
                                 }
-                                is LoadState.Error -> {
+                                SearchSurface.RefreshPhase.ERROR -> {
                                     ErrorScreen(
-                                        message = refreshState.error.localizedMessage
+                                        message = (pagedResults.loadState.refresh as LoadState.Error).error.message
                                             ?: stringResource(Res.string.search_failed),
                                         onRetry = { pagedResults.refresh() },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
-                                is LoadState.NotLoading -> Unit
+                                SearchSurface.RefreshPhase.IDLE -> Unit
                             }
                         }
                     }
@@ -1041,9 +1075,13 @@ fun SearchScreen(
             item = item,
             snapshot = seerrSnapshot,
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
-                viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
+                viewModel.onEvent(
+                    SearchUiEvent.RequestSeerrMedia(
+                        item, seasons, serverId, profileId, rootFolder, tags,
+                    )
+                )
             },
-            onDismiss = { viewModel.dismissSeerrRequestDialog() },
+            onDismiss = { viewModel.onEvent(SearchUiEvent.DismissSeerrRequestDialog) },
         )
     }
 
@@ -1053,17 +1091,17 @@ fun SearchScreen(
             genres = genres,
             availableTags = tags,
             onApply = { newFilters ->
-                viewModel.updateFilters(newFilters)
-                viewModel.toggleShowFilters()
+                viewModel.onEvent(SearchUiEvent.UpdateFilters(newFilters))
+                viewModel.onEvent(SearchUiEvent.ToggleFilters)
             },
-            onDismiss = { viewModel.toggleShowFilters() },
+            onDismiss = { viewModel.onEvent(SearchUiEvent.ToggleFilters) },
         )
     }
 
     if (openSortSheet) {
         SearchSortSheet(
             current = filters.sortBy,
-            onApply = { viewModel.setSortBy(it) },
+            onApply = { viewModel.onEvent(SearchUiEvent.SetSortBy(it)) },
             onDismiss = { openSortSheet = false },
         )
     }
@@ -1071,7 +1109,7 @@ fun SearchScreen(
     if (openStatusSheet) {
         SearchStatusSheet(
             current = filters.playedStatus,
-            onApply = { viewModel.setPlayedStatus(it) },
+            onApply = { viewModel.onEvent(SearchUiEvent.SetPlayedStatus(it)) },
             onDismiss = { openStatusSheet = false },
         )
     }
@@ -1086,7 +1124,7 @@ fun SearchScreen(
             icon = Tabler.Outline.Trash,
             onConfirm = {
                 showClearHistoryDialog = false
-                viewModel.clearHistory()
+                viewModel.onEvent(SearchUiEvent.ClearSearchHistory)
             },
             onDismiss = { showClearHistoryDialog = false },
         )
@@ -1117,7 +1155,7 @@ private fun SearchInputBar(
     // recognition activity, hiding the mic affordance below.
     val voiceSearchLauncher = rememberVoiceSearchLauncher(
         prompt = stringResource(Res.string.search_voice_prompt),
-        onResult = { spokenText -> spokenText?.let(viewModel::search) },
+        onResult = { spokenText -> spokenText?.let { viewModel.onEvent(SearchUiEvent.Search(it)) } },
     )
     AnimatedVisibility(
         visible = true,
@@ -1130,7 +1168,7 @@ private fun SearchInputBar(
             inputField = {
                 SearchBarDefaults.InputField(
                     query = query,
-                    onQueryChange = { viewModel.search(it) },
+                    onQueryChange = { viewModel.onEvent(SearchUiEvent.Search(it)) },
                     onSearch = {
                         // The IME "Search"/"Done" action: clear focus so the
                         // soft keyboard dismisses. The debounced query already
@@ -1166,7 +1204,7 @@ private fun SearchInputBar(
                                     .size(48.dp)
                                     .clip(ShapeCache.smooth8)
                                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                                    .clickable { viewModel.search("") },
+                                    .clickable { viewModel.onEvent(SearchUiEvent.Search("")) },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -1228,7 +1266,7 @@ private fun SearchHistoryRecorder(
     LaunchedEffect(refreshLoadState, query) {
         val settled = refreshLoadState is LoadState.NotLoading && pagedResults.itemCount > 0
         if (settled && query.isNotBlank()) {
-            viewModel.onSearchResultsShown(query)
+            viewModel.onEvent(SearchUiEvent.SearchResultsShown(query))
         }
     }
 }

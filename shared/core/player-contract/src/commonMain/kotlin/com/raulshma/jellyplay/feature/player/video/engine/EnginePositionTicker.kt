@@ -21,6 +21,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 const val POSITION_PAUSED_RECHECK_MS = 2_500L
 
+/** First wait of the not-ready backoff (see [EnginePositionTicker.isReady]). */
+const val POSITION_NOT_READY_MIN_WAIT_MS = 250L
+
+/** Cap of the not-ready backoff — defaults to the paused re-check cadence. */
+const val POSITION_NOT_READY_MAX_WAIT_MS = POSITION_PAUSED_RECHECK_MS
+
 /**
  * Shared polling-ticker loop used by every [MediaEngine] implementation's
  * `positionFlow`.
@@ -57,7 +63,19 @@ class EnginePositionTicker(
     private val pollingIntervalMs: StateFlow<Long>,
     private val isPlayingFlow: StateFlow<Boolean>,
     private val isCurrentlyPlaying: () -> Boolean,
-    private val onActive: () -> Unit,
+    private val onActive: suspend () -> Unit,
+    /**
+     * Optional readiness gate for consumers whose underlying player is
+     * created lazily (the audio manager's ExoPlayer is null between
+     * sessions). When non-null and returning false, the loop backs off
+     * exponentially from [notReadyInitialWaitMs] to [notReadyMaxWaitMs]
+     * instead of waking at the poll rate; the first ready read resets the
+     * backoff. Null (the default) keeps the engine-shaped behaviour where a
+     * player always exists.
+     */
+    private val isReady: (() -> Boolean)? = null,
+    private val notReadyInitialWaitMs: Long = POSITION_NOT_READY_MIN_WAIT_MS,
+    private val notReadyMaxWaitMs: Long = POSITION_NOT_READY_MAX_WAIT_MS,
 ) {
     /**
      * The ticker's last observed play-state, seeded from the current state.
@@ -68,12 +86,27 @@ class EnginePositionTicker(
 
     /** Launches the ticker loop. Returns the [Job] for cancellation. */
     fun launch(): Job = scope.launch {
+        var notReadyWaitMs = notReadyInitialWaitMs
         while (isActive) {
+            if (isReady?.invoke() == false) {
+                // Not ready — back off exponentially so a player-less stretch
+                // doesn't wake the loop at the poll rate.
+                delay(notReadyWaitMs)
+                notReadyWaitMs = (notReadyWaitMs * 2).coerceAtMost(notReadyMaxWaitMs)
+                continue
+            }
+            notReadyWaitMs = notReadyInitialWaitMs
             if (!isCurrentlyPlaying()) {
                 // Bounded wait — see [POSITION_PAUSED_RECHECK_MS].
-                withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
+                val resumed = withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
                     isPlayingFlow.first { it }
                 }
+                // Timed out and still paused: loop straight back into the
+                // bounded wait instead of also paying the interval delay, so a
+                // paused session cycles at POSITION_PAUSED_RECHECK_MS and a
+                // resume isn't held off by a stale interval sleep. A
+                // flow-driven resume falls through to the playing path below.
+                if (resumed == null && !isCurrentlyPlaying()) continue
             }
             delay(pollingIntervalMs.value)
             val currentlyPlaying = isCurrentlyPlaying()

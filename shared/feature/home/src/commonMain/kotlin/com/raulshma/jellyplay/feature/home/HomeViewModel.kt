@@ -6,15 +6,16 @@ import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_started
@@ -24,16 +25,16 @@ import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
-import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
-import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
-import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
+import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.toSectionPrefs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
@@ -60,7 +61,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
-import java.time.LocalDate
 
 internal class HomeViewModel(
     private val episodeCatalogue: EpisodeCatalogue,
@@ -70,12 +70,18 @@ internal class HomeViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
-    private val downloadRepository: DownloadRepository,
+    private val seriesDownloads: SeriesEpisodeDownloads,
     private val downloadIntake: DownloadIntake,
-    private val mediaDownloadActions: MediaDownloadActions,
+    private val quickDownloadActions: QuickDownloadActions,
     private val offlineRepository: OfflineRepository,
+    /**
+     * Local TOC cache — passed straight through to [offlineHomeGate] for the
+     * offline Continue Reading row's page-exact progress bars (the online
+     * row's twin lives on the refresher via [homeRefresherFactory]).
+     */
+    private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     private val offlineModeManager: OfflineModeManager,
-    private val newsletterTriggerManager: NewsletterTriggerManager,
+    private val newsletterTriggerManager: HomeNewsletterGate,
     /** The four datastore stores bundled at construction — see [HomeStores]. */
     private val prefs: HomeStores,
     private val preferencesEditor: PreferencesEditor,
@@ -88,7 +94,7 @@ internal class HomeViewModel(
      * init; `authRepository.currentUser` is still collected separately below
      * purely as the uiState.currentUser mirror.
      */
-    private val homeSession: HomeSession,
+    private val homeSession: SessionIdentityProvider,
     private val userMessageBus: UserMessageBus,
     /**
      * The settings-search catalog, injected through the core/ui seam. The
@@ -104,7 +110,7 @@ internal class HomeViewModel(
      * widen THIS interface by one parameter, and the test harness with it).
      */
     private val homeRefresherFactory: HomeRefresherFactory,
-    private val syncStatusStateHolderFactory: SyncStatusStateHolderFactory,
+    private val syncStatusStateHolderFactory: HomeSyncStatusFactory,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(HomeUiState())
@@ -114,7 +120,7 @@ internal class HomeViewModel(
      * Ids whose quick actions must flip to "Remove download" — completed
      * downloads ∪ series ids (a series card flips once any episode of it is
      * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). Read
-     * from the shared [MediaDownloadActions.downloadedIds] flow (same union
+     * from the shared [QuickDownloadActions.downloadedIds] flow (same union
      * contract on [DownloadRepository.observeDownloadedIdsIncludingSeries])
      * that every quick-action host consumes — one eagerly-shared collector
      * serves all screens instead of a per-VM one. Collected unconditionally —
@@ -123,7 +129,7 @@ internal class HomeViewModel(
      * ONLINE home's action sheet needs this set too. The repository collapses
      * equal id sets, so transfers don't churn it.
      */
-    val downloadedIds: StateFlow<Set<String>> = mediaDownloadActions.downloadedIds
+    val downloadedIds: StateFlow<Set<String>> = quickDownloadActions.downloadedIds
 
     /**
      * The home screen's pending-sync surface — outbox badge count, sync
@@ -221,6 +227,7 @@ internal class HomeViewModel(
             runCatching { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
                 .getOrDefault(emptyList())
         },
+        bookTocCacheRepository = bookTocCacheRepository,
     )
 
     /**
@@ -309,7 +316,7 @@ internal class HomeViewModel(
     private val seriesDownloadStateHolder = SeriesDownloadStateHolder(
         scope = scope,
         episodeCatalogue = episodeCatalogue,
-        downloadRepository = downloadRepository,
+        seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
         userMessageBus = userMessageBus,
     )
@@ -425,7 +432,7 @@ internal class HomeViewModel(
                 hasSeenHomePreferences = true
                 sectionPrefs = newSectionPrefs
                 androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
-                directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures
+                directArrEnabled = prefs.experimental.directArrEnabled()
                 _uiState.update { it.copy(
                     homeMode = prefs.home.homeMode,
                     // The appearance quintet as one embedded slice (the
@@ -445,7 +452,7 @@ internal class HomeViewModel(
                     hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
-                    directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures,
+                    directArrEnabled = prefs.experimental.directArrEnabled(),
                     // The section-config sheet's mirrors, likewise one slice.
                     sectionConfig = SectionConfigState(
                         enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
@@ -454,6 +461,7 @@ internal class HomeViewModel(
                     ),
                     offlineSectionPrefs = OfflineHomeSectionPrefs(
                         continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
+                        continueReadingEnabled = HomeSectionType.CONTINUE_READING in prefs.home.enabledHomeSectionTypes,
                         nextUpEnabled = HomeSectionType.NEXT_UP in prefs.home.enabledHomeSectionTypes,
                         enabledSectionTypes = prefs.home.enabledHomeSectionTypes,
                         libraryOverrides = prefs.home.libraryHomeSectionOverrides,
@@ -498,6 +506,7 @@ internal class HomeViewModel(
                         offlineLibrary = offline.offlineLibrary,
                         offlineEpisodes = offline.offlineEpisodes,
                         offlineLayoutSections = offline.cachedLayout,
+                        offlineBookProgressFractions = offline.bookProgressFractions,
                     )
                 }
             }
@@ -571,6 +580,7 @@ internal class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         sections = refresh.sections,
+                        bookProgressFractions = refresh.bookProgressFractions,
                         isLoading = refresh.isLoading,
                         isRefreshing = refresh.isRefreshing,
                         error = refresh.error,
@@ -724,13 +734,13 @@ internal class HomeViewModel(
     /**
      * Deletes a downloaded item from the offline home's quick-action menu.
      * Delegates the series-vs-item routing to
-     * [MediaDownloadActions.removeDownload] (the shared plumbing every
+     * [QuickDownloadActions.removeDownload] (the shared plumbing every
      * quick-action host uses); the reactive [HomeUiState.offlineLibrary] flow
      * refreshes on its own once the row is gone, so no manual state update is
      * needed here.
      */
     private fun deleteOfflineMedia(item: MediaItem) {
-        mediaDownloadActions.removeDownload(item)
+        quickDownloadActions.removeDownload(item)
     }
 
     /**

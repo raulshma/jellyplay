@@ -5,11 +5,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
@@ -20,10 +20,8 @@ import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -89,13 +87,8 @@ class AppearanceStore constructor(
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val appearance: StateFlow<AppearanceSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, AppearanceSlice())
+    val appearance: StateFlow<AppearanceSlice> =
+        dataStore.sliceStateFlow(scope, seed = AppearanceSlice(), read = ::read)
 
     /**
      * Whether the settings screens expose their advanced sections. An
@@ -285,18 +278,17 @@ class AppearanceStore constructor(
         dataStore.edit { it[Keys.HAND_MODE] = mode.name }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
-        Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
-        Keys.REDUCE_MOTION_ENABLED, Keys.THEME_VARIANT,
-        Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
-        Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
-        Keys.VIVID_ACCENT, Keys.AURORA_ACCENT, Keys.SAKURA_ACCENT, Keys.VECTOR_POP_ACCENT,
-        Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
-        Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
-        Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
-        Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * keeps this list from drifting (the hand-written predecessor had already
+     * lost [Keys.HAPTICS_ENABLED], which resets under `MISC_APP`).
+     * [Keys.SHOW_ADVANCED_SETTINGS] is not in this store's category lists — it
+     * resets under `EXPERIMENTAL` via ExperimentalStore's list instead.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -321,35 +313,6 @@ class AppearanceStore constructor(
             Keys.HAPTICS_ENABLED,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the appearance keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly: the mutually-exclusive
-     * accent-theme toggles, font scale, date format, color-blind/hand mode and
-     * scheduled-theme keys are not written back (the projection reads them
-     * straight from their stored slots).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.DYNAMIC_THEMING] = userPreferences.dynamicTheming
-            it[Keys.THEME_MODE] = userPreferences.themeMode.name
-            it[Keys.CONTRAST_LEVEL] = userPreferences.contrastLevel.name
-            it[Keys.OLED_MODE] = userPreferences.oledMode
-            it[Keys.ACCENT_COLOR_SWATCH] = userPreferences.accentColorSwatch
-            it[Keys.COLOR_STYLE] = userPreferences.colorStyle.name
-            it[Keys.PERFORMANCE_MODE] = userPreferences.performanceMode
-            it[Keys.SHOW_ADVANCED_SETTINGS] = userPreferences.showAdvancedSettings
-            it[Keys.REDUCE_MOTION_ENABLED] = userPreferences.reduceMotionEnabled
-            it[Keys.BLUE_LIGHT_FILTER_ENABLED] = userPreferences.blueLightFilterEnabled
-            it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = userPreferences.blueLightFilterStrength
-            it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = userPreferences.backdropThemeMusicEnabled
-        }
     }
 
     /**

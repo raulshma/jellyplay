@@ -73,7 +73,7 @@ class PluginApiClientImplTest {
         assertEquals("Foo", plugins.single().name)
         val request = mockWebServer.takeRequest()
         assertEquals("/Plugins", request.path)
-        assertEquals("token-123", request.getHeader("X-Emby-Token"))
+        assertEquals("MediaBrowser Token=\"token-123\"", request.getHeader("Authorization"))
     }
 
     @Test

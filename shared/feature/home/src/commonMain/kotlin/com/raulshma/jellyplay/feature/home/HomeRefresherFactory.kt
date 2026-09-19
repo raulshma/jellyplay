@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -32,7 +32,7 @@ import kotlinx.coroutines.CoroutineScope
  * owns, not a pure refresher collaborator.
  */
 internal class HomeRefresherFactory constructor(
-    private val timeSource: TimeSource,
+    private val clock: HomeClock,
     private val mediaRepository: MediaRepository,
     private val seerrRepository: SeerrRepository,
     private val arrRepository: ArrRepository,
@@ -41,6 +41,8 @@ internal class HomeRefresherFactory constructor(
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
     private val librarySyncHook: LibrarySyncHook,
+    /** Local TOC cache — the Continue Reading row's page-count source. */
+    private val bookTocCacheRepository: BookTocCacheRepository,
 ) {
     fun create(
         scope: CoroutineScope,
@@ -53,7 +55,7 @@ internal class HomeRefresherFactory constructor(
         androidTvWatchNextEnabledProvider: () -> Boolean,
     ): HomeRefresher = HomeRefresher(
         scope = scope,
-        timeSource = timeSource,
+        clock = clock,
         mediaRepository = mediaRepository,
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
@@ -62,6 +64,7 @@ internal class HomeRefresherFactory constructor(
         continueWatchingBroadcaster = continueWatchingBroadcaster,
         tvWatchNextScheduler = tvWatchNextScheduler,
         librarySyncHook = librarySyncHook,
+        bookTocCacheRepository = bookTocCacheRepository,
         offlineModeManager = offlineModeManager,
         awaitOutboxDrained = awaitOutboxDrained,
         sectionPrefsProvider = sectionPrefsProvider,

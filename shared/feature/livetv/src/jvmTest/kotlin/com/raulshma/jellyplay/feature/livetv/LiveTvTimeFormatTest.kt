@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.feature.livetv
 
 import com.raulshma.jellyplay.core.model.LiveTvProgram
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.toInstant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -117,11 +119,11 @@ class LiveTvTimeFormatTest {
         // (channel detail) returned null for — the C10 declared fix rides on
         // this UTC fallback.
         assertEquals(
-            LocalDateTime.parse("2026-06-22T15:30:00").toInstant(ZoneOffset.UTC),
+            LocalDateTime.parse("2026-06-22T15:30:00").toInstant(UtcOffset.ZERO),
             "2026-06-22T15:30:00".toInstantOrNull(),
         )
         assertEquals(
-            LocalDateTime.parse("2026-01-01T00:05:00").toInstant(ZoneOffset.UTC),
+            LocalDateTime.parse("2026-01-01T00:05:00").toInstant(UtcOffset.ZERO),
             "2026-01-01T00:05:00".toInstantOrNull(),
         )
     }
@@ -136,22 +138,22 @@ class LiveTvTimeFormatTest {
 
     @Test
     fun isAiringAt_is_true_inside_the_half_open_window_and_false_past_or_future() {
-        val start = now.minusSeconds(600)
-        val end = now.plusSeconds(600)
+        val start = now.minus(600.seconds)
+        val end = now.plus(600.seconds)
         // airing
         assertTrue(isAiringAt(start = start, end = end, now = now))
         // past: now at/after end
         assertFalse(isAiringAt(start = start, end = end, now = end))
-        assertFalse(isAiringAt(start = start, end = end, now = end.plusSeconds(300)))
+        assertFalse(isAiringAt(start = start, end = end, now = end.plus(300.seconds)))
         // future: now strictly before start
-        assertFalse(isAiringAt(start = start, end = end, now = start.minusSeconds(300)))
+        assertFalse(isAiringAt(start = start, end = end, now = start.minus(300.seconds)))
     }
 
     @Test
     fun isAiringAt_window_is_start_inclusive_end_exclusive() {
-        val end = now.plusSeconds(600)
+        val end = now.plus(600.seconds)
         assertTrue(isAiringAt(start = now, end = end, now = now))
-        assertFalse(isAiringAt(start = now.minusSeconds(600), end = now, now = now))
+        assertFalse(isAiringAt(start = now.minus(600.seconds), end = now, now = now))
     }
 
     @Test
@@ -159,9 +161,9 @@ class LiveTvTimeFormatTest {
         // Missing/unparseable timestamp = lenient "no constraint on that side"
         // (the former ChannelDetailViewModel semantics).
         assertTrue(isAiringAt(start = null, end = null, now = now))
-        assertTrue(isAiringAt(start = null, end = now.plusSeconds(60), now = now))
-        assertTrue(isAiringAt(start = now.minusSeconds(60), end = null, now = now))
-        assertFalse(isAiringAt(start = now.plusSeconds(60), end = null, now = now))
+        assertTrue(isAiringAt(start = null, end = now.plus(60.seconds), now = now))
+        assertTrue(isAiringAt(start = now.minus(60.seconds), end = null, now = now))
+        assertFalse(isAiringAt(start = now.plus(60.seconds), end = null, now = now))
     }
 
     @Test
@@ -193,11 +195,11 @@ class LiveTvTimeFormatTest {
         val start = Instant.parse("2026-06-22T15:00:00Z")
         val end = Instant.parse("2026-06-22T16:00:00Z")
         // Before start → today's behavior: negative fraction clamped to 0f.
-        assertEquals(0f, liveProgressFraction(start = start, end = end, now = start.minusSeconds(300))!!)
+        assertEquals(0f, liveProgressFraction(start = start, end = end, now = start.minus(300.seconds))!!)
         // Mid-point → 0.5.
-        assertEquals(0.5f, liveProgressFraction(start = start, end = end, now = start.plusSeconds(1800))!!, 1e-6f)
+        assertEquals(0.5f, liveProgressFraction(start = start, end = end, now = start.plus(1800.seconds))!!, 1e-6f)
         // After end → clamped to 1f.
-        assertEquals(1f, liveProgressFraction(start = start, end = end, now = end.plusSeconds(300))!!)
+        assertEquals(1f, liveProgressFraction(start = start, end = end, now = end.plus(300.seconds))!!)
     }
 
     @Test
@@ -208,7 +210,7 @@ class LiveTvTimeFormatTest {
         // Zero / inverted span → null (today's behavior returned 0f).
         val start = Instant.parse("2026-06-22T15:00:00Z")
         assertNull(liveProgressFraction(start = start, end = start, now = now))
-        assertNull(liveProgressFraction(start = start, end = start.minusSeconds(60), now = now))
+        assertNull(liveProgressFraction(start = start, end = start.minus(60.seconds), now = now))
     }
 
     @Test

@@ -1,10 +1,15 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.hasPlaybackPosition
+import com.raulshma.jellyplay.core.model.toMediaItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -52,6 +57,15 @@ internal class OfflineHomeGate(
     offlineRepository: OfflineRepository,
     fetchFailed: Flow<Boolean>,
     homeLayoutProvider: suspend () -> List<HomeSection> = { emptyList() },
+    /**
+     * Local TOC cache backing the offline Continue Reading row's progress
+     * bars — the offline twin of the refresher's online decode: a paged
+     * book's page count lives only here, so without this lookup an offline
+     * book card falls back to the percent reading of page-encoded ticks (a
+     * visibly wrong bar). The cache is local Room, available offline.
+     * Best-effort per item; defaults to the neutral no-op (tests).
+     */
+    private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
 ) {
     private val _state = MutableStateFlow(OfflineHomeState())
     val state: StateFlow<OfflineHomeState> = _state.asStateFlow()
@@ -79,10 +93,28 @@ internal class OfflineHomeGate(
                         flowOf(gate to OfflineLibraryEmission())
                     }
                 }
+                // The repository flow re-emits on every download-progress
+                // write; identical (gate, items) pairs — Room re-emissions
+                // with nothing changed — are dropped here so the suspend
+                // TOC decode below only runs for a real list change.
+                .distinctUntilChanged()
                 .collect { (gate, emission) ->
+                    // Book progress decodes ride the library emission (the
+                    // TOC cache is local Room — readable offline, and the
+                    // offline ids ARE the server ids). Computed before the
+                    // state write so the update lands as one emission, and
+                    // only while the gate is actually collecting — a closed
+                    // gate emits empty items, and decoding them would be a
+                    // wasted repository round-trip on every online emission.
+                    val bookFractions = if (gate.isCollecting) {
+                        offlineBookProgressFractions(emission.items)
+                    } else {
+                        emptyMap()
+                    }
                     _state.update { state ->
                         state.copy(
                             offlineLibrary = emission.items,
+                            bookProgressFractions = bookFractions,
                             renderSource = computeHomeRenderSource(
                                 offlineMode = gate.mode,
                                 fetchFailed = gate.fetchFailed,
@@ -134,6 +166,21 @@ internal class OfflineHomeGate(
                 }
         }
     }
+
+    /**
+     * Continue Reading progress bars for the offline library's BOOK items,
+     * keyed by item id — the offline twin of the refresher's online decode,
+     * through the shared [decodeBookProgressFractions]: exact page fractions
+     * where the TOC cache knows the page count, percent fallback otherwise
+     * (EPUB percent ticks decode correctly there). Empty when the gate is
+     * closed (no offline books to decode).
+     */
+    private suspend fun offlineBookProgressFractions(items: List<OfflineMediaItem>): Map<String, Float> =
+        bookTocCacheRepository.decodeBookProgressFractions(
+            items
+                .filter { it.mediaType == MediaType.BOOK && it.hasPlaybackPosition }
+                .map { it.toMediaItem() },
+        )
 }
 
 /** The module's whole output: the render decision plus both offline lists and the cached layout. */
@@ -142,6 +189,13 @@ internal data class OfflineHomeState(
     val renderSource: HomeRenderSource = HomeRenderSource.Online,
     val offlineLibrary: List<OfflineMediaItem> = emptyList(),
     val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
+    /**
+     * Continue Reading progress bars keyed by item id, decoded from the local
+     * TOC cache (the collector inside [OfflineHomeGate]) — the offline twin of
+     * [com.raulshma.jellyplay.feature.home.HomeRefreshState.bookProgressFractions].
+     * A book card missing from the map falls back to the percent reading.
+     */
+    val bookProgressFractions: Map<String, Float> = emptyMap(),
     /**
      * The cached online home layout (issue #147): section types, titles,
      * per-library rows and order from the last successful online fetch. Empty

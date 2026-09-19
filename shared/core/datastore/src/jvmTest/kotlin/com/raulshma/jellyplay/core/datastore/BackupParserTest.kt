@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.core.datastore
 
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
-import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -12,23 +10,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Exercises the pure [BackupParser] version-sniffing: each backup shape must
- * select its sealed [BackupParser.Parsed] variant, the `hasSecuritySensitive`
- * flag must come from the security slice / legacy lock fields, and unknown or
- * malformed payloads must fail loudly rather than decode silently.
+ * Exercises the pure [BackupParser] version-sniffing: the v2 per-slice shape
+ * (and forward-compatible future versions) select their sealed
+ * [BackupParser.Parsed] variant, the `hasSecuritySensitive` flag must come
+ * from the security slice, and legacy (v0/v1), unknown or malformed payloads
+ * must fail loudly rather than decode silently (legacy imports sunset v0.11).
  */
 class BackupParserTest {
 
     private fun securitySliceJson(slice: SecuritySlice) =
         PreferencesJson.export.encodeToJsonElement(SecuritySlice.serializer(), slice)
 
-    // isLegacy/isFuture/schemaVersion are extensions declared inside the
-    // BackupParser object — resolve them in its receiver scope.
-    private fun isLegacy(p: BackupParser.Parsed) = with(BackupParser) { p.isLegacy() }
     private fun isFuture(p: BackupParser.Parsed) = with(BackupParser) { p.isFuture() }
     private fun schemaVersionOf(p: BackupParser.Parsed) = with(BackupParser) { p.schemaVersion() }
     private fun runtimeStateOf(p: BackupParser.Parsed) = with(BackupParser) { p.toAppRuntimeState() }
@@ -55,7 +50,6 @@ class BackupParserTest {
 
         val v2 = assertIs<BackupParser.Parsed.V2>(parsed)
         assertTrue(v2.hasSecuritySensitive)
-        assertFalse(isLegacy(parsed))
         assertFalse(isFuture(parsed))
         assertEquals(SettingsBackup.CURRENT_SCHEMA_VERSION, schemaVersionOf(parsed))
     }
@@ -99,68 +93,39 @@ class BackupParserTest {
     }
 
     // ------------------------------------------------------------------
-    // v1 — legacy enveloped aggregate
+    // Legacy v0/v1 — rejected at parse since the v0.11 sunset
     // ------------------------------------------------------------------
 
     @Test
-    fun `v1 aggregate backup parses to V1 with locked preferences flagged`() {
-        val legacy = LegacySettingsBackup(
-            preferences = UserPreferences(pinLockEnabled = true, pinHash = "hash"),
+    fun `v1 enveloped aggregate is rejected with a clear error`() {
+        val json = buildJsonObject {
+            put("schemaVersion", 1)
+            put("exportedAt", 0)
+            put("preferences", buildJsonObject { put("preferredPlayer", "MPV") })
+        }.toString()
+
+        val exception = assertFailsWith<IllegalArgumentException> { BackupParser.parse(json) }
+        assertTrue(
+            exception.message!!.contains("Unsupported backup schemaVersion=1"),
+            "unexpected message: ${exception.message}",
         )
-        val json = PreferencesJson.export.encodeToString(LegacySettingsBackup.serializer(), legacy)
-
-        val parsed = BackupParser.parse(json)
-
-        val v1 = assertIs<BackupParser.Parsed.V1>(parsed)
-        assertTrue(v1.hasSecuritySensitive)
-        assertTrue(isLegacy(parsed))
-        assertEquals(SettingsBackup.LEGACY_AGGREGATE_SCHEMA_VERSION, schemaVersionOf(parsed))
-        assertEquals(PlayerType.EXO_PLAYER, v1.preferences.preferredPlayer)
     }
 
     @Test
-    fun `v1 aggregate backup without lock config is not security sensitive`() {
-        val legacy = LegacySettingsBackup(preferences = UserPreferences(preferredPlayer = PlayerType.MPV))
-        val json = PreferencesJson.export.encodeToString(LegacySettingsBackup.serializer(), legacy)
+    fun `v0 bare aggregate (no envelope) is rejected`() {
+        val json = buildJsonObject { put("preferredPlayer", "MPV") }.toString()
 
-        val parsed = BackupParser.parse(json)
-
-        val v1 = assertIs<BackupParser.Parsed.V1>(parsed)
-        assertFalse(v1.hasSecuritySensitive)
-        assertEquals(PlayerType.MPV, v1.preferences.preferredPlayer)
-    }
-
-    // ------------------------------------------------------------------
-    // v0 — bare (un-enveloped) aggregate
-    // ------------------------------------------------------------------
-
-    @Test
-    fun `v0 bare backup parses to V0`() {
-        val json = PreferencesJson.export.encodeToString(
-            UserPreferences.serializer(),
-            UserPreferences(biometricLockEnabled = true),
-        )
-
-        val parsed = BackupParser.parse(json)
-
-        val v0 = assertIs<BackupParser.Parsed.V0>(parsed)
-        assertTrue(v0.hasSecuritySensitive)
-        assertTrue(isLegacy(parsed))
-        assertEquals(SettingsBackup.LEGACY_UNENVELOPED_SCHEMA_VERSION, schemaVersionOf(parsed))
+        assertFailsWith<IllegalArgumentException> { BackupParser.parse(json) }
     }
 
     @Test
-    fun `explicit schemaVersion zero decodes as v0`() {
+    fun `explicit schemaVersion zero is rejected`() {
         val json = buildJsonObject {
             put("schemaVersion", 0)
             put("preferredPlayer", "MPV")
         }.toString()
 
-        val parsed = BackupParser.parse(json)
-
-        val v0 = assertIs<BackupParser.Parsed.V0>(parsed)
-        assertFalse(v0.hasSecuritySensitive)
-        assertEquals(PlayerType.MPV, v0.preferences.preferredPlayer)
+        assertFailsWith<IllegalArgumentException> { BackupParser.parse(json) }
     }
 
     // ------------------------------------------------------------------
@@ -183,7 +148,6 @@ class BackupParserTest {
         val future = assertIs<BackupParser.Parsed.Future>(parsed)
         assertTrue(future.hasSecuritySensitive)
         assertTrue(isFuture(parsed))
-        assertFalse(isLegacy(parsed))
         assertEquals(SettingsBackup.CURRENT_SCHEMA_VERSION + 97, schemaVersionOf(parsed))
         val runtime = runtimeStateOf(parsed)
         assertTrue(runtime.onboardingCompleted)
@@ -215,21 +179,24 @@ class BackupParserTest {
         }.toString()
 
         val exception = assertFailsWith<IllegalArgumentException> { BackupParser.parse(json) }
-        assertEquals("Unknown backup schemaVersion=-5", exception.message)
+        assertTrue(
+            exception.message!!.contains("Unsupported backup schemaVersion=-5"),
+            "unexpected message: ${exception.message}",
+        )
     }
 
     @Test
-    fun `malformed JSON fails with SerializationException`() {
+    fun `malformed JSON fails loudly`() {
         assertFailsWith<SerializationException> { BackupParser.parse("{not json") }
-        assertFailsWith<SerializationException> { BackupParser.parse("null") }
+        // A JSON null has no schemaVersion — rejected as an unsupported backup.
+        assertFailsWith<IllegalArgumentException> { BackupParser.parse("null") }
     }
 
     @Test
-    fun `non-object JSON fails instead of decoding as a bare aggregate`() {
-        // A JSON array has no schemaVersion, so the parser falls through to the
-        // bare v0 decode — which must reject the array rather than yield a
-        // phantom default UserPreferences.
-        assertFailsWith<SerializationException> { BackupParser.parse("[1,2,3]") }
+    fun `non-object JSON is rejected as an unsupported backup`() {
+        // A JSON array has no schemaVersion — the parser rejects it instead of
+        // yielding a phantom default aggregate.
+        assertFailsWith<IllegalArgumentException> { BackupParser.parse("[1,2,3]") }
     }
 
     // ------------------------------------------------------------------
@@ -248,41 +215,5 @@ class BackupParserTest {
         val parsed = BackupParser.parse(json)
 
         assertEquals(extras, runtimeStateOf(parsed))
-    }
-
-    @Test
-    fun `legacy v1 aggregate maps runtime fields toAppRuntimeState`() {
-        val legacy = LegacySettingsBackup(
-            preferences = UserPreferences(
-                favoriteChannels = setOf("c1"),
-                watchLaterPlaylistId = "wl",
-                onboardingCompleted = true,
-            ),
-        )
-        val json = PreferencesJson.export.encodeToString(LegacySettingsBackup.serializer(), legacy)
-
-        val parsed = BackupParser.parse(json)
-
-        val runtime = runtimeStateOf(parsed)
-        assertEquals(setOf("c1"), runtime.favoriteChannels)
-        assertEquals("wl", runtime.watchLaterPlaylistId)
-        assertTrue(runtime.onboardingCompleted)
-        // live-TV channel is a v2-extras-only field: legacy never carries it.
-        assertNull(runtime.liveTvLastChannelId)
-    }
-
-    @Test
-    fun `v0 bare aggregate maps runtime fields toAppRuntimeState`() {
-        val json = PreferencesJson.export.encodeToString(
-            UserPreferences.serializer(),
-            UserPreferences(onboardingCompleted = true),
-        )
-
-        val parsed = BackupParser.parse(json)
-
-        val runtime = runtimeStateOf(parsed)
-        assertTrue(runtime.onboardingCompleted)
-        assertEquals(emptySet(), runtime.favoriteChannels)
-        assertNull(runtime.watchLaterPlaylistId)
     }
 }

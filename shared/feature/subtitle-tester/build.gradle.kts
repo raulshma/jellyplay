@@ -54,7 +54,7 @@ kotlin {
             implementation(project(":shared:core:datastore"))
             // EngineCapabilityMatrix/EngineCapabilities for
             // SubtitleTesterUiState.engineCapabilities (moved here from
-            // :feature:player:video with this conveyor feature).
+            // feature:player:video with this conveyor feature).
             implementation(project(":shared:core:player-contract"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.
@@ -110,7 +110,7 @@ kotlin {
 
 // `compose.resources` is a nested extension with no generated Kotlin-DSL
 // accessor; configure it explicitly. Same package as the legacy
-// :feature:subtitle-tester so migrated files keep their
+// feature:subtitle-tester so migrated files keep their
 // `com.raulshma.jellyplay.feature.subtitle.tester` imports; generated
 // accessors land in `...feature.subtitle.tester.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension

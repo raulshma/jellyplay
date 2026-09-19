@@ -32,8 +32,9 @@ import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
  * asynchronous command runner (`POST /api/v3/command`) for triggering episode
  * / series searches, refreshes, rescans.
  *
- * Adding a method requires updating [ResilientSonarrApiClient] too — see its
- * doc comment.
+ * Adding a method lands on the impl directly — retry rides the shared
+ * jvmShared request funnel (`ArrClientSupport`'s HttpExecutor), so there is
+ * no separate retrying wrapper to keep in sync anymore.
  */
 interface SonarrApiClient {
 

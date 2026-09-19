@@ -1,12 +1,18 @@
 package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
+import com.raulshma.jellyplay.core.data.playback.AudioEffectsSession
+import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.AudioTrackResolver
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
-import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +31,14 @@ import org.koin.dsl.module
  * - [DesktopAudioQueueManager] is the real desktop audio core: the Android
  *   media3 AudioPlaybackManager semantics mirrored over a DEDICATED
  *   audio-only MpvDesktopEngine (`vo=null`), exposed as BOTH the
- *   [AudioQueueManager] contract and the player-audio [AudioPlayerEngine]
- *   seam — the same one-single-two-contracts shape as Android's manager.
+ *   [AudioQueueManager] contract and the shared [AudioPlayerEngine]
+ *   contract — the same one-single-two-contracts shape as Android's
+ *   manager. The class itself lives in core:data jvmMain now (the audio
+ *   queue chassis relocation; its queue-state chassis folds into
+ *   core:data commonMain's `AudioQueueStateCore` over an `EngineDispatch`
+ *   port) — this module stays its Koin home because it binds the
+ *   desktop-only collaborators (the mpv engine factory, the effects
+ *   session).
  *   The audio engine lives entirely inside the queue manager (its
  *   `engineFactory` lambda); there is deliberately NO shared
  *   `single<MediaEngine>` on desktop — a process-wide windowless mpv context
@@ -35,6 +47,11 @@ import org.koin.dsl.module
  * - [AudioQueueFacade] is the shared [DefaultAudioQueueFacade] over the
  *   desktop queue manager — every play/enqueue/instant-mix button in the
  *   music section is real.
+ * - [PlaybackFocus] (ADR-0004 slice 2) is the REAL commonMain
+ *   [DefaultPlaybackFocus] over the in-process [DesktopFocusArbiter] twin
+ *   and the [DesktopAudioQueueManagerSurface] music adapter — cross-player
+ *   exclusivity (music vs book read-aloud) is arbitrated in-process on
+ *   desktop; the wasm graph keeps the Noop fallback (ADR decision 6).
  * - [AudioEffectsManager] is the desktop [DesktopAudioEffectsManager] (full
  *   state machine + mpv `af` DSP via the queue manager's engine); the
  *   concrete instance is wired into the queue manager so effect mutations
@@ -42,7 +59,7 @@ import org.koin.dsl.module
  *   cast seam.
  * - Per-item stream resolution rides [DesktopAudioSourceResolver] — the same
  *   shared `PlaybackRepository.getStreamUrl` overload + adaptive bitrate tier
- *   the Android audio browser uses, with auth in the `api_key` URL parameter
+ *   the Android audio browser uses, with auth in the `ApiKey` URL parameter
  *   (no request headers, matching Android's header-less media3 stack).
  *
  * Engine construction stays lazy (video factory defers until the session asks;
@@ -71,6 +88,25 @@ val desktopPlayerModule: Module = module {
         )
     }
 
+    // ── Cross-player exclusivity (PlaybackFocus, ADR-0004 slice 2) ─────────
+    // The desktop twin of androidCoreDataModule's focus block: the REAL
+    // commonMain module over the in-process arbiter (vacuous grants — there
+    // is no OS seat on desktop) and the music surface adapter. With this
+    // binding, PlayerBookKoinModule's `getOrNull() ?: NoopPlaybackFocus`
+    // fallback resolves a REAL module on desktop — claim-state publication
+    // goes live (wasm keeps the Noop fallback: fail-closed vacuous
+    // arbitration, ADR decision 6). The surface defers the manager via the
+    // same kotlin-Lazy cycle breaker the Android graph uses: the manager
+    // ctor-injects the PlaybackFocus single, the surface touches the manager
+    // only on the first pause command — long after construction.
+    single<FocusArbiter> { DesktopFocusArbiter() }
+    single<PlaybackFocus> {
+        DefaultPlaybackFocus(
+            arbiter = get(),
+            surfaces = listOf(DesktopAudioQueueManagerSurface(manager = lazy { get<DesktopAudioQueueManager>() })),
+        )
+    }
+
     single {
         DesktopAudioQueueManager(
             trackResolver = get(),
@@ -81,6 +117,7 @@ val desktopPlayerModule: Module = module {
             sleepTimerManager = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             effectsManager = get(),
+            playbackFocus = get(),
             engineFactory = { MpvDesktopEngine(extraOptions = mapOf("vo" to "null")) },
         )
     }
@@ -88,6 +125,7 @@ val desktopPlayerModule: Module = module {
     single<AudioPlayerEngine> { get<DesktopAudioQueueManager>() }
     single { DesktopAudioEffectsManager() }
     single<AudioEffectsManager> { get<DesktopAudioEffectsManager>() }
+    single<AudioEffectsSession> { get<DesktopAudioEffectsManager>() }
     single<AudioPlayerCast> { DesktopAudioPlayerCast() }
 
     single<AudioQueueFacade> {

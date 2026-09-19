@@ -31,13 +31,13 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_cancel
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_load_failed
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_canceled
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_success
-import com.raulshma.jellyplay.feature.livetv.rememberLiveTvMessenger
 
 @Composable
 fun ChannelDetailScreen(
@@ -54,16 +54,16 @@ fun ChannelDetailScreen(
     val backgroundColorState = rememberScreenBackgroundColorState()
 
     // One-shot record/cancel feedback (screen-forward seam): resolve the texts
-    // here, forward each emitted message through the messenger actual.
-    val messenger = rememberLiveTvMessenger()
+    // here, post each emitted message through the app-wide UserMessageBus.
+    val bus = LocalUserMessageBus.current
     val successText = stringResource(Res.string.livetv_record_success)
     val canceledText = stringResource(Res.string.livetv_record_canceled)
-    LaunchedEffect(messenger) {
+    LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
-                LiveTvUserMessage.RecordSuccess -> messenger?.info(successText)
-                LiveTvUserMessage.RecordCanceled -> messenger?.info(canceledText)
-                is LiveTvUserMessage.Raw -> messenger?.error(message.text)
+                LiveTvUserMessage.RecordSuccess -> bus.info(successText)
+                LiveTvUserMessage.RecordCanceled -> bus.info(canceledText)
+                is LiveTvUserMessage.Raw -> bus.error(message.text)
             }
         }
     }

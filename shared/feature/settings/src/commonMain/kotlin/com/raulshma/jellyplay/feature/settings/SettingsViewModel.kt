@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
@@ -21,7 +20,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.distinctUntilChanged
-import java.io.IOException
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /**
  * The ~15 preference fields the settings root screen reads, projected
@@ -35,7 +36,7 @@ class SettingsViewModel(
     private val projections: PreferenceProjections,
     private val authRepository: AuthRepository,
     private val seerrRepository: SeerrRepository,
-    private val adminRepository: AdminRepository,
+    private val serverAdminActions: ServerAdminActions,
     private val editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
 ) : JellyPlayViewModel() {
@@ -122,7 +123,7 @@ class SettingsViewModel(
                 .collect { user ->
                     currentUser = user
                     currentUserName = user?.name ?: ""
-                    if (user?.isAdmin == true) {
+                    if (user?.isAdmin == true && serverAdminActions.isSupported) {
                         loadSessions()
                     } else {
                         stopSessionAutoRefresh()
@@ -154,7 +155,7 @@ class SettingsViewModel(
     private fun loadSessions() {
         launch {
             isLoadingSessions = true
-            adminRepository.getSessions()
+            serverAdminActions.getSessions()
                 .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
             isLoadingSessions = false
         }
@@ -170,7 +171,7 @@ class SettingsViewModel(
         sessionRefreshJob = launch {
             while (true) {
                 kotlinx.coroutines.delay(30_000)
-                adminRepository.getSessions()
+                serverAdminActions.getSessions()
                     .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
             }
         }
@@ -186,22 +187,25 @@ class SettingsViewModel(
      * Keeps only active, non-server Jellyfin sessions: drops the headless
      * "Jellyfin Server" entry and any session inactive for more than 5 minutes
      * (unless it is currently playing). An unparseable `lastActivityDate`
-     * resolves to [java.time.Instant.MIN], which predates the cutoff and so
+     * resolves to [Instant.DISTANT_PAST], which predates the cutoff and so
      * excludes the session — deliberate, since a session with no resolvable
-     * activity timestamp should not appear as live.
+     * activity timestamp should not appear as live. (: kotlin.time
+     * Instant — `DISTANT_PAST` replaces the java.time `MIN` sentinel, and
+     * `isAfter` folds into the comparison operators, which are all
+     * kotlin.time.Instant offers.)
      */
     private fun List<com.raulshma.jellyplay.core.model.SessionInfo>.filterActiveSessions(): List<com.raulshma.jellyplay.core.model.SessionInfo> {
-        val cutoff = java.time.Instant.now().minusSeconds(5 * 60)
+        val cutoff = Clock.System.now() - 5.minutes
         return filter {
-            val lastActivity = try { java.time.Instant.parse(it.lastActivityDate) } catch (_: Exception) { java.time.Instant.MIN }
+            val lastActivity = try { Instant.parse(it.lastActivityDate) } catch (_: Exception) { Instant.DISTANT_PAST }
             it.isActive && it.client.isNotBlank() && it.deviceName.isNotBlank() && it.client != "Jellyfin Server" &&
-                (it.nowPlayingItem != null || lastActivity.isAfter(cutoff))
+                (it.nowPlayingItem != null || lastActivity > cutoff)
         }
     }
 
     fun sendMessageToSession(sessionId: String, header: String, text: String) {
         launch {
-            adminRepository.sendMessageToSession(sessionId, header, text)
+            serverAdminActions.sendMessageToSession(sessionId, header, text)
                 .onSuccess {
                     messageSentEvent = "Message sent successfully"
                 }
@@ -284,9 +288,9 @@ class SettingsViewModel(
                 val backup = SettingsBackup(slices = snapshot.slices, extras = snapshot.extras)
                 val jsonString = com.raulshma.jellyplay.core.datastore.PreferencesJson.export
                     .encodeToString(SettingsBackup.serializer(), backup)
-                settingsBackupIo.openExportSink(uri)?.use { stream ->
-                    stream.writer().use { it.write(jsonString) }
-                } ?: throw IOException("Cannot open output stream")
+                if (!settingsBackupIo.writeExportPayload(uri, jsonString)) {
+                    throw IllegalStateException("Cannot open output stream")
+                }
                 backupRestoreStatus = "Settings exported successfully"
             }.onFailure {
                 backupRestoreStatus = "Export failed: ${it.message}"

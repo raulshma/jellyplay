@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 
 /**
@@ -36,7 +37,7 @@ data class HomeSectionCacheEntity(
     val cacheKey: String,
     /** `HomeSectionsResult` encoded as JSON (see [com.raulshma.jellyplay.core.database.Converters]). */
     @ColumnInfo(name = "payloadJson") val payloadJson: String,
-    @ColumnInfo(name = "fetchedAt") val fetchedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "fetchedAt") val fetchedAt: Long = wallNowMillis(),
 ) {
     val payload: HomeSectionsResult?
         get() = com.raulshma.jellyplay.core.database.Converters.decodeHomeSectionsResult(payloadJson)

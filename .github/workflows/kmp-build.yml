@@ -67,9 +67,12 @@ jobs:
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
         # wasmJs target exists on model/datastore/designsystem/ui/network/
-        # data/player-contract plus the calendar/requests/details feature
-        # modules and the apps:web shell —
-        # only database ships without it (no Room on wasm v1).
+        # data/player-contract/database plus the calendar/requests/details
+        # feature modules and the apps:web shell — database joined at:
+        # Room 3 over sqlite-web's WebWorkerSQLiteDriver (vendored OPFS
+        # worker, kspWasmJs codegen). Its wasmJsTest suite is compile-gated
+        # here the same way apps/web's is, while the runnable
+        # wasmJsBrowserTest lane stays local (see the apps/web note below).
         # data gained wasm when the Room-backed repositories moved to
         # its jvmShared source set (the lane line below caught up later —
         # the target existed but was never compiled here, so wasm-only
@@ -100,6 +103,9 @@ jobs:
         # blank-line bug above was fixed.
         run: >
           ./gradlew
+          :shared:core:concurrency:jvmJar
+          :shared:core:concurrency:compileKotlinWasmJs
+          :shared:core:concurrency:compileAndroidMain
           :shared:core:model:jvmJar
           :shared:core:model:compileKotlinWasmJs
           :shared:core:model:compileAndroidMain
@@ -110,6 +116,8 @@ jobs:
           :shared:core:datastore:compileKotlinWasmJs
           :shared:core:datastore:compileAndroidMain
           :shared:core:database:jvmJar
+          :shared:core:database:compileKotlinWasmJs
+          :shared:core:database:compileTestKotlinWasmJs
           :shared:core:database:compileAndroidMain
           :shared:core:network:jvmJar
           :shared:core:network:compileKotlinWasmJs
@@ -125,22 +133,31 @@ jobs:
           :shared:core:player-contract:compileAndroidMain
           :shared:feature:search:jvmJar
           :shared:feature:search:compileAndroidMain
+          :shared:feature:search:compileKotlinWasmJs
           :shared:feature:library:jvmJar
           :shared:feature:library:compileAndroidMain
+          :shared:feature:library:compileKotlinWasmJs
           :shared:feature:music:jvmJar
           :shared:feature:music:compileAndroidMain
+          :shared:feature:music:compileKotlinWasmJs
           :shared:feature:livetv:jvmJar
           :shared:feature:livetv:compileAndroidMain
+          :shared:feature:livetv:compileKotlinWasmJs
           :shared:feature:downloads:jvmJar
           :shared:feature:downloads:compileAndroidMain
+          :shared:feature:downloads:compileKotlinWasmJs
           :shared:feature:syncplay:jvmJar
           :shared:feature:syncplay:compileAndroidMain
+          :shared:feature:syncplay:compileKotlinWasmJs
           :shared:feature:settings:jvmJar
           :shared:feature:settings:compileAndroidMain
+          :shared:feature:settings:compileKotlinWasmJs
           :shared:feature:admin:jvmJar
           :shared:feature:admin:compileAndroidMain
+          :shared:feature:admin:compileKotlinWasmJs
           :shared:feature:editor:jvmJar
           :shared:feature:editor:compileAndroidMain
+          :shared:feature:editor:compileKotlinWasmJs
           :shared:feature:calendar:jvmJar
           :shared:feature:calendar:compileAndroidMain
           :shared:feature:calendar:compileKotlinWasmJs
@@ -149,27 +166,37 @@ jobs:
           :shared:feature:requests:compileKotlinWasmJs
           :shared:feature:shortcuts:jvmJar
           :shared:feature:shortcuts:compileAndroidMain
+          :shared:feature:shortcuts:compileKotlinWasmJs
           :shared:feature:newsletter:jvmJar
           :shared:feature:newsletter:compileAndroidMain
+          :shared:feature:newsletter:compileKotlinWasmJs
           :shared:feature:insights:jvmJar
           :shared:feature:insights:compileAndroidMain
+          :shared:feature:insights:compileKotlinWasmJs
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
+          :shared:feature:onboarding:compileKotlinWasmJs
+          :shared:feature:player-book:compileKotlinWasmJs
           :shared:feature:subtitle-tester:jvmJar
           :shared:feature:subtitle-tester:compileAndroidMain
           :shared:feature:arrqueue:jvmJar
           :shared:feature:arrqueue:compileAndroidMain
+          :shared:feature:arrqueue:compileKotlinWasmJs
           :shared:feature:auth:jvmJar
           :shared:feature:auth:compileAndroidMain
+          :shared:feature:auth:compileKotlinWasmJs
           :shared:feature:details:jvmJar
           :shared:feature:details:compileAndroidMain
           :shared:feature:details:compileKotlinWasmJs
           :shared:feature:home:jvmJar
           :shared:feature:home:compileAndroidMain
+          :shared:feature:home:compileKotlinWasmJs
           :shared:feature:player-live:jvmJar
           :shared:feature:player-live:compileAndroidMain
+          :shared:feature:player-live:compileKotlinWasmJs
           :shared:feature:player-audio:jvmJar
           :shared:feature:player-audio:compileAndroidMain
+          :shared:feature:player-audio:compileKotlinWasmJs
           :shared:feature:player-video:jvmJar
           :shared:feature:player-video:compileAndroidMain
           :apps:web:compileKotlinWasmJs
@@ -182,6 +209,7 @@ jobs:
       - name: Shared tests (JVM)
         run: >
           ./gradlew
+          :shared:core:concurrency:jvmTest
           :shared:core:model:jvmTest
           :shared:core:designsystem:jvmTest
           :shared:core:datastore:jvmTest
@@ -237,7 +265,7 @@ jobs:
         # The legacy :feature:player:video androidTest set moved to
         # :app (AGP KMP library plugins expose no androidTest compilation —
         # syncplay relocation precedent); compile-gate it here.
-        run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace
+        run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Shell tests (Koin registration guard + packaging asset suites)
         # :apps:desktop:test hosts the Koin-registration ratchet
@@ -246,7 +274,7 @@ jobs:
         # the DesktopCrashHandlerTest and
         # PackagingIconAssetsTest suites, so it must run in CI, not just
         # locally.
-        run: ./gradlew :apps:desktop:test --stacktrace
+        run: ./gradlew :apps:desktop:test --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
   android-app:
     # The :app module previously ran in NO
@@ -281,26 +309,25 @@ jobs:
       - name: App unit tests (phone + tv debug)
         # Run in CI, not just as local gate runs (baseline:
         # 94 phone / 98 tv tests).
-        # :core:notification:testDebugUnitTest closes the dark lane that let
-        # its 8 Robolectric suites (67 tests) gate nothing — the exact
-        # no-CI-lane failure mode that stranded the legacy core/data suites
-        # (CONTEXT.md); notification is living code, not a husk.
-        # :core:data:testDebugUnitTest closes the same dark lane for core:data
-        # (worker suites incl. the OfflineWatchSyncContractTest regression
-        # pin); the drain-policy bodies themselves run portable in
-        # :shared:core:data:jvmTest above.
-        # :core:ui:testDebugUnitTest opens the last legacy core module's unit
-        # lane (Robolectric suites incl. RoutePredicatesTest and
-        # TvDrawerFocusWiringTest); :core:ui:assembleDebugAndroidTest
-        # compile-gates its instrumented sources (the dead-by-drift
-        # ConfirmDialogTest was deleted — its ConfirmPanel moved to
-        # :shared:core:ui as internal — same precedent as
-        # :app:assemblePhoneDebugAndroidTest above).
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest :core:data:testDebugUnitTest :core:ui:testDebugUnitTest :core:ui:assembleDebugAndroidTest --stacktrace
+        # :shared:core:{ui,data}:testAndroidHostTest are the cutover
+        # homes of every legacy core module's Robolectric suites — the legacy
+        # :core:ui/:core:data/:core:notification modules dissolved into the
+        # shared tree's androidHostTest lanes (worker suites incl. the
+        # OfflineWatchSyncContractTest regression pin; the drain-policy
+        # bodies run portable in :shared:core:data:jvmTest above; the former
+        # instrumented-only sheet/scrim pairs now execute under Robolectric).
+        # Runner-sized heap/worker overrides (same medicine as the
+        # shared-targets lane above): gradle.properties is tuned for an
+        # 18-core dev box, and the stock 3g Kotlin daemon heap / 12 workers
+        # GC-thrash OOMs on 4-core 16GB runners once this lane compiles the
+        # full shared feature graph for both phone+tv unit-test variants
+        # (compileAndroidMain died with "GC overhead limit exceeded" in four
+        # feature modules before these were added).
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Compose-resources APK guard
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.
-        run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace
+        run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
   desktop-package:
     #  release engineering: packaging dry-run per OS. Proves the
@@ -333,7 +360,12 @@ jobs:
         # -PjellyplayVersion mirrors the release-lane contract documented in
         # apps/desktop/build.gradle.kts (numeric x.y.z only; jpackage/msi
         # constraint).
-        run: ./gradlew :apps:desktop:packageDistributionForCurrentOS -PjellyplayVersion=0.1.0 --stacktrace
+        # Runner-sized heap/worker overrides (same medicine as the
+        # shared-targets lane): the stock gradle.properties Kotlin daemon heap
+        # GC-thrash OOM'd the windows runner mid compileKotlinJvm
+        # (:shared:feature:settings) while ubuntu/macos passed on margin —
+        # same latent risk on all three.
+        run: ./gradlew :apps:desktop:packageDistributionForCurrentOS -PjellyplayVersion=0.1.0 --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Dump jpackage logs on failure
         # Compose's ExternalToolRunner only NAMES the runner-local *-out/-err

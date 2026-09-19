@@ -20,13 +20,19 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the music feature (docs/kmp-migration-plan.md
- * , third conveyor item after search and library). The
+ *,  third conveyor item after search and library). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:
- *  - MediaRepository / DownloadRepository / DownloadIntake / AudioQueueFacade
- *    are still Hilt-owned in the legacy data shim and reach Koin through the
- *    app composition root's Hilt interop module (dies at );
+ *  - MediaRepository / DownloadIntake are still Hilt-owned in the legacy
+ *    data shim and reach Koin through the app composition root's Hilt
+ *    interop module (dies at ); the queue-player seam
+ *    MusicQueuePlayer resolves from
+ *    [platformMusicModule] (jvmShared: adapter over the process-wide
+ *    AudioQueueFacade single; wasmJs: honest unsupported no-op), while the
+ *    download reads resolve from core:data's own seams
+ *    (TrackDownloadStatusWindow for the album rows, ActiveDownloadCount for
+ *    the home badge — both bound by core:data on both platforms);
  *  - ImageUrlProvider / MoodPlaylistRepository / SmartPlaylistRepository
  *    (shared data), HomeDiscoveryStore (shared datastore) and
  *    OfflineModeManager resolve from the C4 shared-module graph;
@@ -42,12 +48,14 @@ import org.koin.dsl.module
  * same extras source the Hilt factory consumed at HEAD).
  */
 val musicModule: Module = module {
+    includes(platformMusicModule())
+
     viewModel {
         MusicHomeViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
-            downloadRepository = get(),
+            activeDownloads = get(),
             homeDiscoveryStore = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
@@ -125,7 +133,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
-            downloadRepository = get(),
+            downloads = get(),
             downloadIntake = get(),
         )
     }

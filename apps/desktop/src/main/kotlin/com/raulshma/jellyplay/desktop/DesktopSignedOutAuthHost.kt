@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
@@ -58,7 +57,9 @@ import org.koin.compose.koinInject
  * observer swaps this host back in, freshly seeded.
  *
  * Esc / Alt+Left pop the stack, refusing to pop below the ServerList root
- * (same rule as DesktopNavScaffold's tab roots): at the root the key event
+ * via [desktopBackKeyDecision] — the same pure fold (back key above the
+ * root, else refuse) DesktopNavScaffold's tab roots run, now one shared fn
+ * instead of a prose promise: at the root the key event
  * falls through unconsumed — it deliberately neither quits the app nor
  * navigates; the window closes via the titlebar / tray Quit like everywhere
  * else in the shell.
@@ -87,9 +88,7 @@ internal fun DesktopSignedOutAuthHost(authRepository: AuthRepository = koinInjec
             .fillMaxSize()
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val isBack = event.key == Key.Escape ||
-                    (event.key == Key.DirectionLeft && event.isAltPressed)
-                if (isBack && backStack.size > 1) {
+                if (desktopBackKeyDecision(event.key, event.isAltPressed, backStack.size)) {
                     navigator.goBack()
                     true
                 } else {

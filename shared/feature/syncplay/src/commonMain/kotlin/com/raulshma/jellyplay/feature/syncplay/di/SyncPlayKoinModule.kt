@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the SyncPlay feature (docs/kmp-migration-plan.md
- * , sixth conveyor item after search, library, music, livetv and
+ *,  sixth conveyor item after search, library, music, livetv and
  * downloads). The HiltViewModel/@Inject/@ApplicationContext annotations were
  * stripped at the move — Koin is the single constructor owner (one framework
  * per type). Ctor deps split three ways:
@@ -15,14 +15,19 @@ import org.koin.dsl.module
  *    Koin through the app composition root's Hilt interop module (dies at
  *    );
  *  - SyncPlayCastStore resolves from the C4 shared-datastore graph;
- *  - SyncPlayManager resolves from dataJvmModule (the SyncPlay stack moved
- *    into :shared:core:data's jvmShared source set during the engine phase).
+ *  - SyncPlaySession resolves from
+ *    [platformSyncPlayModule]: the jvmShared fragment delegates to the
+ *    SyncPlayManager single (dataJvmModule — the SyncPlay stack moved into
+ * shared:core:data's jvmShared source set during the engine phase); the
+ *    wasmJs fragment binds the honest unsupported session.
  */
 val syncPlayModule: Module = module {
+    includes(platformSyncPlayModule())
+
     viewModel {
         SyncPlayViewModel(
             syncPlayRepository = get(),
-            syncPlayManager = get(),
+            syncPlaySession = get(),
             syncPlayCastStore = get(),
         )
     }

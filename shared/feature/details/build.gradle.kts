@@ -55,7 +55,7 @@ kotlin {
         // sections/sheets and the ManageSeries + navigation entryProvider)
         // share android + desktop verbatim: they carry the java.io/java.time/
         // java.text bodies and reach Room-backed data through commonMain
-        // seams, and the cluster stays off web this wave. SeerrDetail's files
+        // seams, and the cluster stays off web for now. SeerrDetail's files
         // stay in commonMain (purified).
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
@@ -116,22 +116,20 @@ kotlin {
             implementation(libs.mockk)
         }
         getByName("androidMain").dependencies {
-            // The trailer-host actual delegates to legacy core:ui's WebView
-            // InlineTrailerPlayer (library/livetv/admin/calendar messenger
-            // precedent — documented shared→legacy androidMain edge; dies at
-            // ). The AudioPlaybackManager/ThemeMusicPlayer adapters
+            // The trailer-host actual delegates to InlineTrailerPlayer
+            // (:shared:core:ui androidMain since the cutover). The
+            // AudioPlaybackManager/ThemeMusicPlayer adapters
             // stay APP-side (AppKoinModule interop adapters; formerly the
             // HiltInteropModule singles) — a shared-module androidMain
             // actual would have to construct second instances. The share +
             // StatFs storage-probe actuals need no legacy types.
-            implementation(project(":core:ui"))
         }
     }
 }
 
 // `compose.resources` is a nested extension with no generated Kotlin-DSL
 // accessor; configure it explicitly. Same package as the legacy
-// :feature:details so migrated files keep their
+// feature:details so migrated files keep their
 // `com.raulshma.jellyplay.feature.details` imports; generated accessors land
 // in `...feature.details.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
@@ -142,7 +140,7 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.details.gen
 // this module fails dependency resolution unless it points at JetBrains'
 // fork of the same release line — same package, ABI-stable surface. Scoped
 // to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (spike w-10C S1/R2; the
+// google's published variants exactly as before (the
 // identical block lives in shared/core/ui + shared/feature/requests).
 configurations.configureEach {
     if (name.lowercase().contains("wasmjs")) {

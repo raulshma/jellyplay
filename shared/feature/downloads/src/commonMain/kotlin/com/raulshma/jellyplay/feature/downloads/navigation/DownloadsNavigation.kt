@@ -15,11 +15,14 @@ fun EntryProviderScope<NavKey>.downloadsSection(
         DownloadsScreen(
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
             onPlayOffline = { itemId, mediaType ->
-                val isAudio = mediaType == MediaType.AUDIO || mediaType == MediaType.MUSIC
-                if (isAudio) {
-                    navigator.navigate(Route.AudioPlayer(itemId))
-                } else {
-                    navigator.navigate(Route.VideoPlayer(itemId))
+                when {
+                    mediaType == MediaType.AUDIO || mediaType == MediaType.MUSIC ->
+                        navigator.navigate(Route.AudioPlayer(itemId))
+                    // Books open the in-app reader, never the video player.
+                    mediaType == MediaType.BOOK ->
+                        navigator.navigate(Route.BookReader(itemId))
+                    else ->
+                        navigator.navigate(Route.VideoPlayer(itemId))
                 }
             },
             onBack = { navigator.goBack() },

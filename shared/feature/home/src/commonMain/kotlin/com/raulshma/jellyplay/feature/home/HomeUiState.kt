@@ -46,6 +46,21 @@ data class SectionConfigState(
 @Immutable
 data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
+    /**
+     * Continue Reading progress bars keyed by item id (the refresher's
+     * book-fraction decodes — see [HomeRefreshState.bookProgressFractions]).
+     * A book card missing from the map falls back to the percent reading of
+     * its ticks, so the row renders even without a TOC cache.
+     */
+    val bookProgressFractions: Map<String, Float> = emptyMap(),
+    /**
+     * The offline twin of [bookProgressFractions]: the offline gate's decodes
+     * from the local TOC cache, collected under the same gate as
+     * [offlineLibrary]. The screen picks whichever map matches the active
+     * render source, so the refresher stays the sole writer of the online
+     * map and the gate of this one.
+     */
+    val offlineBookProgressFractions: Map<String, Float> = emptyMap(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     /**

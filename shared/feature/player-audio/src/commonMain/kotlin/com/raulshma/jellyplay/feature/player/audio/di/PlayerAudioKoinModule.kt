@@ -16,14 +16,29 @@ import org.koin.dsl.module
  *    shared playback contracts the legacy Hilt AudioPlaybackManager single
  *    implements; androidCoreDataModule aliases them onto that manager since
  *    the former app Hilt-interop bridge died with the conveyor move);
- *  - the module-local AudioPlayerEngine / AudioPlayerCast seams are bridged
- *    the same way (app-side `androidAppInteropAdaptersModule` delegate
- *    adapters over the Koin-owned AudioPlaybackManager / CastManager —
- *    details DetailAudioPlayback precedent);
- *  - SleepTimerManager (shared core:data single), MediaRepository /
- *    UserDataMutator / DownloadRepository / DownloadIntake (shared data
- *    cluster) and PreferenceProjections / AudioStore / AudioEffectsStore
- *    (shared datastore) resolve from the shared-module graph;
+ *  - [com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine] is the
+ *    third shared playback contract (the transport/metadata/lyrics half;
+ *    the Android manager implements it directly and androidCoreDataModule
+ *    aliases it onto that single, same as the queue/effects pair) and the
+ *    module-local AudioPlayerCast seam is bridged app-side
+ *    (`androidAppInteropAdaptersModule` adapter over the Koin-owned
+ *    CastManager — details DetailAudioPlayback precedent);
+ *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
+ *    SleepTimerManager single; the wasm fragment binds the wall-clock impl),
+ *    MediaRepository /
+ *    UserDataMutator (shared data
+ *    cluster) and the download window TrackDownloadStatusWindow (core:data's
+ *    own seam since the download-actions consolidation — jvmShared adapter
+ *    over the DownloadRepository single in dataJvmModule, no-op stub in
+ *    dataWasmModule) plus PreferenceProjections / AudioStore /
+ *    AudioEffectsStore (shared datastore) resolve from the shared-module
+ *    graph;
+ *  - TrackDownloadActions (the track-download flip collaborator over the
+ *    intake + window) is defined HERE, factory-per-resolution: its scope is
+ *    the DatastoreQualifiers application scope — the MediaDownloadActions
+ *    precedent in dataJvmModule (Koin has no handle on a ViewModel's
+ *    viewModelScope, and a download start outliving the screen it was
+ *    tapped on is the wanted semantics anyway);
  *  - desktop: LIVE since the real-audio engine — apps/desktop's
  *    desktopPlayerModule binds all four playback/cast deps:
  *    [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] +
@@ -34,6 +49,20 @@ import org.koin.dsl.module
  *    opens the real now-playing screen.
  */
 val playerAudioModule: Module = module {
+    includes(platformPlayerAudioModule())
+
+    // The track-download flip collaborator (audio player's download CTA):
+    // deps are the shared-cluster DownloadIntake + TrackDownloadStatusWindow
+    // singles; the scope follows the MediaDownloadActions precedent (see the
+    // module kdoc). Factory — one instance per resolving ViewModel.
+    factory {
+        com.raulshma.jellyplay.core.data.download.TrackDownloadActions(
+            scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+            intake = get(),
+            statusWindow = get(),
+        )
+    }
+
     viewModel {
         AudioPlayerViewModel(
             queueManager = get(),
@@ -46,8 +75,8 @@ val playerAudioModule: Module = module {
             mediaRepository = get(),
             playlistRepository = get(),
             userDataMutator = get(),
-            downloadRepository = get(),
-            downloadIntake = get(),
+            downloads = get(),
+            trackDownloadActions = get(),
             sleepTimerManager = get(),
         )
     }

@@ -33,8 +33,8 @@ import kotlinx.coroutines.launch
  * itself is owned app-lifetime by `MainViewModel`; we only own the subscription
  * lifecycle.
  *
- * On any socket reconnect (false→true transition of [JellyfinWebSocketClient.isConnected])
- * the Start message is re-sent, because the server drops per-socket subscriptions
+ * On every socket reconnect ([JellyfinWebSocketClient.reconnects]) the Start
+ * message is re-sent, because the server drops per-socket subscriptions
  * when the connection closes.
  */
 class ScheduledTasksRealtimeChannel(
@@ -52,17 +52,27 @@ class ScheduledTasksRealtimeChannel(
         private set
 
     private val rawTasks: Flow<List<ScheduledTaskInfo>> = callbackFlow {
-        // Tracks (re)connection so we can re-subscribe after a socket drop.
-        var lastConnected = webSocketClient.isConnected.value
-        if (lastConnected) sendStart()
+        // Initial subscription — the first-connect arm [JellyfinWebSocketClient.reconnects]
+        // deliberately does NOT cover (its first open is not a reconnect): an
+        // already-up socket subscribes synchronously; a down socket defers the
+        // Start until its first connect lands.
+        var deferredStartJob: Job? = null
+        if (webSocketClient.isConnected.value) {
+            sendStart()
+        } else {
+            deferredStartJob = scope.launch {
+                // Suspend until the socket reports connected, then subscribe.
+                webSocketClient.isConnected.first { it }
+                sendStart()
+            }
+        }
 
+        // Every true reconnect re-subscribes: the server drops per-socket
+        // subscriptions when the connection closes.
         val connectionJob: Job = scope.launch {
-            webSocketClient.isConnected.collect { connected ->
-                if (connected && !lastConnected) {
-                    NetworkLog.d(TAG, "Socket reconnected, re-subscribing to ScheduledTasksInfo")
-                    sendStart()
-                }
-                lastConnected = connected
+            webSocketClient.reconnects.collect {
+                NetworkLog.d(TAG, "Socket reconnected, re-subscribing to ScheduledTasksInfo")
+                sendStart()
             }
         }
 
@@ -79,24 +89,13 @@ class ScheduledTasksRealtimeChannel(
             }
         }
 
-        // If the socket wasn't connected when we started, wait for it then subscribe.
-        // Tracked like the two collector jobs above: this runs on [scope],
-        // NOT the flow's own context, so without the awaitClose cancel a
-        // collector that goes away while the socket is still down would leak
-        // it — the job would later send `ScheduledTasksInfoStart` with no
-        // owner left to send the matching Stop (awaitClose's sendStop has
-        // already run). No-op guard needed on sendStart itself: cancelling
-        // before it runs is the fix; if it already ran, the Stop in awaitClose
-        // balances it.
-        var deferredStartJob: Job? = null
-        if (!lastConnected) {
-            deferredStartJob = scope.launch {
-                // Suspend until the socket reports connected, then subscribe.
-                webSocketClient.isConnected.first { it }
-                sendStart()
-            }
-        }
-
+        // The deferred first-connect Start above runs on [scope], NOT the
+        // flow's own context, so without the awaitClose cancel a collector
+        // that goes away while the socket is still down would leak it — the
+        // job would later send `ScheduledTasksInfoStart` with no owner left
+        // to send the matching Stop (awaitClose's sendStop has already run).
+        // No-op guard needed on sendStart itself: cancelling before it runs
+        // is the fix; if it already ran, the Stop in awaitClose balances it.
         awaitClose {
             connectionJob.cancel()
             eventsJob.cancel()

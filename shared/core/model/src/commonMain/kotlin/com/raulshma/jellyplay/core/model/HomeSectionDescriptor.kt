@@ -95,6 +95,13 @@ private val homeSectionDescriptors: Map<HomeSectionType, HomeSectionDescriptor> 
                 description = "Resume watching in-progress media",
                 isConfigurable = true,
             )
+            HomeSectionType.CONTINUE_READING -> HomeSectionDescriptor(
+                type = type,
+                id = "continue_reading",
+                displayName = "Continue Reading",
+                description = "Resume reading in-progress books",
+                isConfigurable = true,
+            )
             HomeSectionType.NEXT_UP -> HomeSectionDescriptor(
                 type = type,
                 id = "next_up",

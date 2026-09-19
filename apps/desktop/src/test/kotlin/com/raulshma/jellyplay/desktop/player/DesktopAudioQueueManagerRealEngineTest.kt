@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode

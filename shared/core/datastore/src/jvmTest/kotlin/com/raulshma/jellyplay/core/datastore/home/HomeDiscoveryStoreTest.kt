@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -132,12 +132,154 @@ class HomeDiscoveryStoreTest {
     }
 
     @Test
+    fun `a pre-Continue-Reading persisted order inserts CR at its default slot, not the tail`() = runTest {
+        activate("userA")
+        // An order persisted before the section shipped: Continue Reading
+        // must join its DEFAULT neighbourhood (slot 2, between Continue
+        // Watching and Next Up) — the order twin of the enabled-set version
+        // union. Appending at the tail would also bake the tail position in
+        // on the user's next reorder (moveSection's read-modify-write).
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_section_order")] =
+                """["CONTINUE_WATCHING","NEXT_UP","LATEST_MEDIA","RECENTLY_ADDED","RECOMMENDATIONS"]"""
+        }
+        assertEquals(
+            listOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
+                HomeSectionType.NEXT_UP,
+                HomeSectionType.LATEST_MEDIA,
+                HomeSectionType.RECENTLY_ADDED,
+                HomeSectionType.RECOMMENDATIONS,
+            ),
+            slice().homeSectionOrder,
+        )
+    }
+
+    @Test
+    fun `insertion of missing sections preserves the user's persisted relative order`() = runTest {
+        activate("userA")
+        // The user deliberately reordered (Recommendations first): the
+        // inserted section slots before the first present section whose
+        // default index follows it and never reshuffles the persisted entries.
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_section_order")] =
+                """["RECOMMENDATIONS","CONTINUE_WATCHING","RECENTLY_ADDED"]"""
+        }
+        assertEquals(
+            listOf(
+                HomeSectionType.RECOMMENDATIONS,
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
+                HomeSectionType.NEXT_UP,
+                HomeSectionType.LATEST_MEDIA,
+                HomeSectionType.RECENTLY_ADDED,
+            ),
+            slice().homeSectionOrder,
+        )
+    }
+
+    // ── enabled-set version migration (newly-shipped sections default visible) ──
+
+    @Test
+    fun `a pre-Continue-Reading persisted set is unioned with CONTINUE_READING on read`() = runTest {
+        activate("userA")
+        // A set persisted before the section shipped (no version stamp): the
+        // union must surface the new row, and the untouched types must not be
+        // re-enabled if the user had disabled them.
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING","LATEST_MEDIA","RECOMMENDATIONS"]"""
+        }
+        assertEquals(
+            setOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
+                HomeSectionType.LATEST_MEDIA,
+                HomeSectionType.RECOMMENDATIONS,
+            ),
+            slice().enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
+    fun `a current-version set without CONTINUE_READING keeps it disabled`() = runTest {
+        activate("userA")
+        store.setEnabledHomeSectionTypes(
+            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+        )
+        // The write stamped the current version — absence is now the user's
+        // disabled choice, not a not-yet-shipped section.
+        assertEquals(
+            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+            slice().enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
+    fun `setSectionVisible stamps the version so a later disable stays disabled`() = runTest {
+        activate("userA")
+        // Seed a pre-CR set (a user who had disabled RECENTLY_ADDED and
+        // RECOMMENDATIONS), then toggle an unrelated section: the read
+        // modified-write must carry the CR union (and NOT resurrect the
+        // types the user had disabled) AND stamp the version so a
+        // subsequent CR disable is respected.
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING","NEXT_UP"]"""
+        }
+        store.setSectionVisible(HomeSectionType.LATEST_MEDIA, visible = true)
+        assertEquals(
+            setOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
+                HomeSectionType.NEXT_UP,
+                HomeSectionType.LATEST_MEDIA,
+            ),
+            slice().enabledHomeSectionTypes,
+        )
+        store.setSectionVisible(HomeSectionType.CONTINUE_READING, visible = false)
+        assertEquals(
+            setOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.NEXT_UP,
+                HomeSectionType.LATEST_MEDIA,
+            ),
+            slice().enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
+    fun `disabling CONTINUE_READING after a pre-version read sticks without a restart`() = runTest {
+        activate("userA")
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING","NEXT_UP"]"""
+        }
+        // First read populates the per-user parse cache with the unioned value.
+        assertTrue(HomeSectionType.CONTINUE_READING in slice().enabledHomeSectionTypes)
+        // The disable rewrites the SAME encoded set (the write's
+        // read-modify-write drops exactly the unioned member) under the new
+        // version stamp — the parse cache must key on the stamp too, or it
+        // serves the stale unioned value from the first read until restart.
+        store.setSectionVisible(HomeSectionType.CONTINUE_READING, visible = false)
+        assertEquals(
+            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+            slice().enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
     fun `moveSection swaps with neighbour and stays normalized`() = runTest {
         activate("userA")
+        // NEXT_UP's upper neighbour in the default order is CONTINUE_READING.
         store.moveSection(HomeSectionType.NEXT_UP, up = true)
         assertEquals(
-            listOf(HomeSectionType.NEXT_UP, HomeSectionType.CONTINUE_WATCHING) +
-                HomeSectionType.CONFIGURABLE.drop(2),
+            listOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.NEXT_UP,
+                HomeSectionType.CONTINUE_READING,
+            ) + HomeSectionType.CONFIGURABLE.drop(3),
             slice().homeSectionOrder,
         )
     }
@@ -302,7 +444,22 @@ class HomeDiscoveryStoreTest {
         val aSlice = slice()
         assertEquals(setOf("legacySeries"), aSlice.nextUpExcludedSeriesIds)
         assertEquals(false, aSlice.homeHeroEnabled)
-        assertEquals(HomeSectionType.NEXT_UP, aSlice.homeSectionOrder.first())
+        // The claimed legacy order (NEXT_UP only) re-inserts the missing
+        // sections at their default positions around it — the order twin of
+        // the enabled-set version union. The claiming itself is proven by
+        // the two sibling assertions above; a partial legacy order cannot
+        // drag its tail-first spelling into the rebuilt list.
+        assertEquals(
+            listOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
+                HomeSectionType.NEXT_UP,
+                HomeSectionType.LATEST_MEDIA,
+                HomeSectionType.RECENTLY_ADDED,
+                HomeSectionType.RECOMMENDATIONS,
+            ),
+            aSlice.homeSectionOrder,
+        )
 
         // The u_A:: copies exist and the global marker is set.
         assertEquals(raw()[stringPreferencesKey("u_userA::next_up_excluded_series_ids")], """["legacySeries"]""")
@@ -437,11 +594,9 @@ class HomeDiscoveryStoreTest {
     @Test
     fun `backup restore applies canonical payload into the current user's namespace`() = runTest {
         activate("userA")
-        // A v1 backup carries canonical (user-portable) values; restoring it
+        // A backup carries canonical (user-portable) values; restoring it
         // writes into whoever is active — userA here.
-        store.restorePreferences(
-            UserPreferences(homeMode = HomeMode.MUSIC, nextUpExcludedSeriesIds = setOf("fromBackup")),
-        )
+        store.restore(HomeDiscoverySlice(homeMode = HomeMode.MUSIC, nextUpExcludedSeriesIds = setOf("fromBackup")))
         val restored = slice()
         assertEquals(HomeMode.MUSIC, restored.homeMode)
         assertEquals(setOf("fromBackup"), restored.nextUpExcludedSeriesIds)

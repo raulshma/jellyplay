@@ -8,7 +8,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the live player feature (docs/kmp-migration-
- * plan.md , player-live conveyor). The HiltViewModel/@Inject
+ * plan.md,  player-live conveyor). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
  * owner (one framework per type). Ctor deps split three ways:
  *  - LiveTvRepository/PlaybackRepository/ImageUrlProvider are Koin-native

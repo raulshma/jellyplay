@@ -195,10 +195,11 @@ class LibraryLayoutViewModel(
         private set
 
     /** Snapshots the current home-screen layout into a named preset and saves it. */
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
     fun saveCurrentLayoutAsPreset(name: String, idOverride: String? = null) {
         val config = currentLayoutConfig()
         val preset = HomeLayoutPreset(
-            id = idOverride ?: java.util.UUID.randomUUID().toString(),
+            id = idOverride ?: kotlin.uuid.Uuid.random().toString(),
             name = name.trim().ifBlank { "Preset" },
             config = config,
         )

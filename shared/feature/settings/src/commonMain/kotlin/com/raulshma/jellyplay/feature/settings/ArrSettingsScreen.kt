@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,14 +21,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -52,13 +46,14 @@ import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Trash
-import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
-import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import org.jetbrains.compose.resources.stringResource
@@ -83,7 +78,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_arr_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_arr_test
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_arr_test_all
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connecting
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_arr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_name
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_radarr
@@ -123,32 +117,23 @@ fun ArrSettingsScreen(
         tag = "arr_init",
     )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.settings_integrations_arr)) },
-                navigationIcon = {
-                    CircleBgBackButton(onClick = onBack)
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.refreshServers() },
-                        enabled = !isRefreshing,
-                        modifier = Modifier.focusIndicator(CircleShape),
-                    ) {
-                        Icon(Tabler.Outline.Refresh, contentDescription = stringResource(Res.string.settings_refresh_cd))
-                    }
-                },
-            )
+    val backgroundColorState = rememberScreenBackgroundColorState()
+
+    JellyPlayScreenScaffold(
+        title = stringResource(Res.string.settings_integrations_arr),
+        onBack = onBack,
+        backgroundColorState = backgroundColorState,
+        actions = {
+            IconButton(
+                onClick = { viewModel.refreshServers() },
+                enabled = !isRefreshing,
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(Res.string.settings_refresh_cd))
+            }
         },
     ) { padding ->
-        // Center the focused item in the viewport when scrolling reaches the list
-        // edges, instead of parking it at the bottom, which is the default
-        // BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -261,7 +246,7 @@ fun ArrSettingsScreen(
                     ServerRow(
                         server = server,
                         status = serverStatus[server.id]
-                            ?: ArrSettingsViewModel.ServerConnectionStatus.Idle,
+                            ?: ConnectionProbe.Status.Idle,
                         onTest = { viewModel.testServer(server) },
                         onRemove = { viewModel.removeManualServer(server) },
                     )
@@ -298,11 +283,11 @@ fun ArrSettingsScreen(
 @Composable
 private fun ServerRow(
     server: ArrServerConfig,
-    status: ArrSettingsViewModel.ServerConnectionStatus,
+    status: ConnectionProbe.Status<Unit>,
     onTest: () -> Unit,
     onRemove: (ArrServerConfig) -> Unit,
 ) {
-    val isTesting = status is ArrSettingsViewModel.ServerConnectionStatus.Testing
+    val isTesting = status is ConnectionProbe.Status.Testing
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors()) {
         Column(
             modifier = Modifier
@@ -311,7 +296,7 @@ private fun ServerRow(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(status)
+                ConnectionProbeStatusIndicator(status, style = ConnectionProbeIndicatorStyle.Pip)
                 Spacer(Modifier.width(8.dp))
                 Text(server.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(8.dp))
@@ -331,21 +316,12 @@ private fun ServerRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            // Status label + error detail. Connected is shown only briefly via the
-            // green dot; an explicit "Connected" line would crowd every healthy row.
-            when (status) {
-                is ArrSettingsViewModel.ServerConnectionStatus.Error -> Text(
-                    status.message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                is ArrSettingsViewModel.ServerConnectionStatus.Testing -> Text(
-                    stringResource(Res.string.settings_connecting),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                else -> Unit
-            }
+            // Status label + error detail via the shared Message style: it
+            // renders "Connecting…" while Testing and the failure text on
+            // Error, and deliberately NOTHING on Connected — an explicit
+            // "Connected" line would crowd every healthy row (the pip already
+            // tells the story).
+            ConnectionProbeStatusIndicator(status, style = ConnectionProbeIndicatorStyle.Message)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -370,27 +346,6 @@ private fun ServerRow(
             }
         }
     }
-}
-
-/**
- * Colored dot indicating per-server reachability. Green = reachable, amber =
- * probe in flight, red = last probe failed, gray = not yet probed. Kept tiny
- * (10.dp) so it reads as a status pip next to the server name.
- */
-@Composable
-private fun StatusDot(status: ArrSettingsViewModel.ServerConnectionStatus) {
-    val color = when (status) {
-        is ArrSettingsViewModel.ServerConnectionStatus.Connected -> StatusColors.available
-        is ArrSettingsViewModel.ServerConnectionStatus.Testing -> StatusColors.pending
-        is ArrSettingsViewModel.ServerConnectionStatus.Error -> MaterialTheme.colorScheme.error
-        is ArrSettingsViewModel.ServerConnectionStatus.Idle -> MaterialTheme.colorScheme.outline
-    }
-    Box(
-        modifier = Modifier
-            .size(10.dp)
-            .clip(CircleShape)
-            .background(color),
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

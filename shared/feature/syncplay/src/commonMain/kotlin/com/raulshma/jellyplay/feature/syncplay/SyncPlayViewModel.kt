@@ -3,9 +3,9 @@ package com.raulshma.jellyplay.feature.syncplay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -46,16 +46,28 @@ fun SyncPlayMessage.asText(): String = when (this) {
     is SyncPlayMessage.Raw -> text
 }
 
+/**
+ * GROUP-LIST state for the SyncPlay screen (renamed from `SyncPlayUiState`:
+ * that bare name also exists in player-video's `state/SyncPlayUiState.kt`
+ * for the in-session playback state — unrelated types, no longer homonyms).
+ */
 @Immutable
-data class SyncPlayUiState(
+data class SyncPlayGroupsUiState(
     val groups: List<SyncPlayGroup> = emptyList(),
     val currentGroup: SyncPlayGroupInfo? = null,
     val isLoading: Boolean = false,
     val error: SyncPlayMessage? = null,
     val isInGroup: Boolean = false,
     val showCreateDialog: Boolean = false,
-    val pendingJoin: SyncPlayGroup? = null,
-)
+    /** Join-confirmation machine behind [pendingJoin]. */
+    val joinConfirmation: PendingConfirmation<SyncPlayGroup> = PendingConfirmation(),
+    /** True while a joinGroup call is in flight — the confirm/dismiss guard fact. */
+    val isJoining: Boolean = false,
+) {
+    /** Group awaiting join confirmation, if any. Null hides the dialog. */
+    val pendingJoin: SyncPlayGroup?
+        get() = joinConfirmation.item
+}
 
 /**
  * Group list + join/leave state for the SyncPlay screen.
@@ -66,12 +78,12 @@ data class SyncPlayUiState(
  */
 class SyncPlayViewModel(
     private val syncPlayRepository: SyncPlayRepository,
-    private val syncPlayManager: SyncPlayManager,
+    private val syncPlaySession: SyncPlaySession,
     private val syncPlayCastStore: SyncPlayCastStore,
 ) : JellyPlayViewModel() {
 
-    private val _uiState = stateFlow(SyncPlayUiState())
-    val uiState: StateFlow<SyncPlayUiState> = _uiState.flow
+    private val _uiState = stateFlow(SyncPlayGroupsUiState())
+    val uiState: StateFlow<SyncPlayGroupsUiState> = _uiState.flow
 
     private val _notifications = MutableSharedFlow<SyncPlayMessage>(extraBufferCapacity = 10)
     val notifications: SharedFlow<SyncPlayMessage> = _notifications.asSharedFlow()
@@ -85,9 +97,10 @@ class SyncPlayViewModel(
 
     fun loadGroups() {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            syncPlayRepository.getSyncPlayGroups()
-                .onSuccess { result ->
+            SyncPlayLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { syncPlayRepository.getSyncPlayGroups() },
+                onSuccess = { result ->
                     _uiState.update { state ->
                         val currentGroup = if (state.isInGroup) state.currentGroup else null
                         state.copy(groups = result, currentGroup = currentGroup)
@@ -105,15 +118,16 @@ class SyncPlayViewModel(
                             joinGroup(result.first().groupId)
                         }
                     }
-                }
-                .onFailure {
+                },
+                onFailure = {
                     _uiState.update { state ->
                         state.copy(
                             error = it.message?.let { msg -> SyncPlayMessage.Raw(msg) }
                                 ?: SyncPlayMessage.Resource(Res.string.syncplay_error_load_groups),
                         )
                     }
-                }
+                },
+            )
             _uiState.update { it.copy(isLoading = false) }
         }
     }
@@ -121,51 +135,65 @@ class SyncPlayViewModel(
     /**
      * Initiates a join request honouring the [SyncPlayJoinBehavior] preference:
      * - [SyncPlayJoinBehavior.ALWAYS_JOIN] joins immediately.
-     * - [SyncPlayJoinBehavior.ASK] surfaces a confirmation dialog via [SyncPlayUiState.pendingJoin].
+     * - [SyncPlayJoinBehavior.ASK] surfaces a confirmation dialog via [SyncPlayGroupsUiState.pendingJoin].
      * - [SyncPlayJoinBehavior.NEVER_JOIN] emits a notification instead of joining.
      */
     fun requestJoin(group: SyncPlayGroup) {
         when (syncPlayCastStore.syncPlayCast.value.syncPlayJoinBehavior) {
             SyncPlayJoinBehavior.ALWAYS_JOIN -> joinGroup(group.groupId)
-            SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(pendingJoin = group) }
+            SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(joinConfirmation = it.joinConfirmation.hold(group)) }
             SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit(SyncPlayMessage.Resource(Res.string.syncplay_join_disabled))
         }
     }
 
+    /**
+     * Confirm never clears — this site's settle arm is clear-before-action:
+     * [PendingConfirmation.clear] the moment the item is handed to
+     * [joinGroup]. [SyncPlayGroupsUiState.isJoining] is the guard fact, so a
+     * confirm while a join is in flight is a refused no-op.
+     */
     fun confirmJoin() {
-        val pending = _uiState.value.pendingJoin
-        _uiState.update { it.copy(pendingJoin = null) }
-        if (pending != null) joinGroup(pending.groupId)
+        val state = _uiState.value
+        val pending = state.joinConfirmation.confirm(state.isJoining)
+        if (pending != null) {
+            _uiState.update { it.copy(joinConfirmation = it.joinConfirmation.clear()) }
+            joinGroup(pending.groupId)
+        }
     }
 
+    /** Dismiss fold: the machine's in-flight guard, fed the site's [SyncPlayGroupsUiState.isJoining] flag. */
     fun cancelJoin() {
-        _uiState.update { it.copy(pendingJoin = null) }
+        _uiState.update { it.copy(joinConfirmation = it.joinConfirmation.dismiss(it.isJoining)) }
     }
 
     fun joinGroup(groupId: String) {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            syncPlayManager.joinGroup(groupId)
-                .onSuccess {
+            SyncPlayLoad.load(
+                // Flavour start (see SyncPlayLoad): a join raises BOTH the
+                // confirm-dialog guard flag and the screen loading flag.
+                start = { _uiState.update { it.copy(isJoining = true, isLoading = true, error = null) } },
+                fetch = { syncPlaySession.joinGroup(groupId) },
+                onSuccess = {
                     _uiState.update { it.copy(isInGroup = true) }
                     loadCurrentGroup()
                     startEventListener()
-                }
-                .onFailure {
+                },
+                onFailure = {
                     _uiState.update { state ->
                         state.copy(
                             error = it.message?.let { msg -> SyncPlayMessage.Raw(msg) }
                                 ?: SyncPlayMessage.Resource(Res.string.syncplay_error_join_group),
                         )
                     }
-                }
-            _uiState.update { it.copy(isLoading = false) }
+                },
+            )
+            _uiState.update { it.copy(isJoining = false, isLoading = false) }
         }
     }
 
     fun leaveGroup() {
         launch {
-            syncPlayManager.leaveGroup()
+            syncPlaySession.leaveGroup()
                 .onSuccess {
                     _uiState.update { it.copy(isInGroup = false, currentGroup = null) }
                     commandJob?.cancel()
@@ -215,9 +243,9 @@ class SyncPlayViewModel(
     private fun startEventListener() {
         commandJob?.cancel()
         commandJob = launch {
-            syncPlayManager.events.collect { event ->
+            syncPlaySession.events.collect { event ->
                 when (event) {
-                    is SyncPlayEvent.PlayQueueUpdate -> {
+                    is SyncPlaySessionEvent.PlayQueueUpdate -> {
                         _uiState.update { state ->
                             val current = state.currentGroup ?: SyncPlayGroupInfo(
                                 groupId = "",
@@ -232,21 +260,21 @@ class SyncPlayViewModel(
                             )
                         }
                     }
-                    is SyncPlayEvent.StateUpdate -> {
+                    is SyncPlaySessionEvent.StateUpdate -> {
                         _uiState.update { state ->
                             state.copy(currentGroup = state.currentGroup?.copy(isPlaying = event.isPlaying))
                         }
                     }
-                    is SyncPlayEvent.GroupUpdate -> {
+                    is SyncPlaySessionEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
                             // An empty GroupUpdate normally means the server ejected us.
                             // But the server can emit a transient empty update right after
                             // a WebSocket reconnect (before membership is re-asserted); in
                             // that window treat it as a soft signal and re-confirm via the
                             // live group info rather than flipping to "left".
-                            val lastReconnect = syncPlayManager.lastReconnectMs
+                            val lastReconnect = syncPlaySession.lastReconnectMs
                             val recentlyReconnected = lastReconnect > 0L &&
-                                System.currentTimeMillis() - lastReconnect < RECONNECT_GRACE_MS
+                                wallNowMillis() - lastReconnect < RECONNECT_GRACE_MS
                             if (recentlyReconnected) {
                                 loadCurrentGroup()
                             } else {
@@ -257,7 +285,7 @@ class SyncPlayViewModel(
                             loadCurrentGroup()
                         }
                     }
-                    is SyncPlayEvent.Notification -> {
+                    is SyncPlaySessionEvent.Notification -> {
                         _notifications.tryEmit(SyncPlayMessage.Raw(event.message))
                     }
                     else -> {}
@@ -320,7 +348,7 @@ class SyncPlayViewModel(
     }
 
     private suspend fun loadCurrentGroup() {
-        val groupId = syncPlayManager.activeGroupId ?: return
+        val groupId = syncPlaySession.activeGroupId ?: return
         syncPlayRepository.getSyncPlayInfo(groupId)
             .onSuccess { currentGroup -> _uiState.update { it.copy(currentGroup = currentGroup) } }
             .onFailure { _uiState.update { it.copy(currentGroup = null) } }

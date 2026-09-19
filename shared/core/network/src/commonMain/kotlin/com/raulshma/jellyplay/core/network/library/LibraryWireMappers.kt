@@ -92,6 +92,12 @@ internal fun String?.toMediaType(): MediaType = when (this) {
     "BoxSet" -> MediaType.COLLECTION
     "Photo" -> MediaType.PHOTO
     "PhotoAlbum" -> MediaType.PHOTO_FOLDER
+    "Book" -> MediaType.BOOK
+    // Container folders inside a library (books-library volume folders etc.);
+    // the server has no book-specific folder kind — they serialize as "Folder".
+    "Folder" -> MediaType.FOLDER
+    // Audiobooks are audio files — they ride the audio player.
+    "AudioBook" -> MediaType.AUDIO
     "LiveTvChannel", "TvChannel" -> MediaType.CHANNEL
     "LiveTvProgram", "TvProgram" -> MediaType.LIVE_TV
     else -> MediaType.UNKNOWN
@@ -114,6 +120,8 @@ internal fun MediaType.toWireItemKind(): String? = when (this) {
     MediaType.COLLECTION -> "BoxSet"
     MediaType.PHOTO -> "Photo"
     MediaType.PHOTO_FOLDER -> "PhotoAlbum"
+    MediaType.BOOK -> "Book"
+    MediaType.FOLDER -> "Folder"
     MediaType.CHANNEL -> "LiveTvChannel"
     MediaType.LIVE_TV -> "LiveTvProgram"
     MediaType.MUSIC -> "Audio"
@@ -251,6 +259,9 @@ internal fun BaseItemDtoWire.toMediaDetail(): MediaDetail {
         mediaSources = mediaSources,
         externalUrls = externalUrls,
         providerIds = providerIds,
+        path = path,
+        playbackPositionTicks = userData?.playbackPositionTicks ?: 0L,
+        isPlayed = userData?.played == true,
     )
 }
 

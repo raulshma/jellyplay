@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.BackupSliceKey
-import com.raulshma.jellyplay.core.datastore.LegacySettingsBackup
 import com.raulshma.jellyplay.core.datastore.PreferencesJson
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -47,7 +46,6 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.PinLockoutState
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -77,8 +75,9 @@ import kotlin.test.assertTrue
 
 /**
  * The import-preview diff/preview gate that runs BEFORE a destructive backup
- * restore: three backup shapes are classified (v2 per-slice / v1 enveloped /
- * v0 bare) plus the forward-compat future shape, the incoming snapshot never
+ * restore: the v2 per-slice shape (plus the forward-compat future shape) is
+ * classified — legacy v0/v1 are rejected at parse since the v0.11 sunset —
+ * the incoming snapshot never
  * touches the stores until the user confirms, and each import route
  * (all / single category / extras) fans to the right store call.
  * Regression-critical because confirming overwrites every preference.
@@ -219,20 +218,9 @@ class ImportPreviewViewModelTest {
         ),
     )
 
-    private fun v1Json(preferences: UserPreferences): String =
-        PreferencesJson.export.encodeToString(
-            LegacySettingsBackup.serializer(),
-            LegacySettingsBackup(preferences = preferences),
-        )
-
-    private fun v0Json(preferences: UserPreferences): String =
-        PreferencesJson.export.encodeToString(UserPreferences.serializer(), preferences)
-
-    /** Fresh stream per call — the VM re-reads the source on every import. */
+    /** Fresh payload per call — the VM re-reads the source on every import. */
     private fun stubImport(uri: String, json: String) {
-        coEvery { settingsBackupIo.openImportSource(uri) } answers {
-            ByteArrayInputStream(json.toByteArray())
-        }
+        coEvery { settingsBackupIo.readImportPayload(uri) } returns json
     }
 
     private fun viewModel(): ImportPreviewViewModel = ImportPreviewViewModel(
@@ -275,11 +263,9 @@ class ImportPreviewViewModelTest {
 
         assertFalse(vm.isLoading, "loading must finish once the backup is parsed")
         assertEquals(2, vm.schemaVersion)
-        assertFalse(vm.isLegacy, "v2 is the current format")
         assertFalse(vm.versionMismatch)
         assertEquals(ThemeMode.DARK, vm.incomingPrefs?.themeMode, "incoming snapshot must mirror the backup slice")
         assertEquals(ThemeMode.SYSTEM, vm.currentPrefs.themeMode, "current snapshot stays on the live stores")
-        assertNull(vm.legacyIncoming, "v2 has no legacy aggregate")
         assertTrue(vm.rawBackup != null, "v2 keeps the raw envelope for importAll")
         assertNull(vm.error)
     }
@@ -307,38 +293,12 @@ class ImportPreviewViewModelTest {
     }
 
     @Test
-    fun `v1 envelope is classified legacy with a version warning`() = runTest(testDispatcher) {
-        val vm = loadedWith(v1Json(UserPreferences(themeMode = ThemeMode.DARK)), uri = "backup:v1")
-
-        assertEquals(1, vm.schemaVersion)
-        assertTrue(vm.isLegacy)
-        assertTrue(vm.versionMismatch, "legacy imports must warn before overwriting")
-        assertEquals(ThemeMode.DARK, vm.incomingPrefs?.themeMode)
-        assertTrue(vm.legacyIncoming != null, "v1 keeps the legacy aggregate")
-        assertTrue(vm.rawBackup == null, "v1 has no per-slice envelope")
-    }
-
-    @Test
-    fun `bare v0 aggregate is classified legacy with schema zero`() = runTest(testDispatcher) {
-        val vm = loadedWith(
-            v0Json(UserPreferences(themeMode = ThemeMode.DARK, favoriteChannels = setOf("chan-9"))),
-            uri = "backup:v0",
-        )
-
-        assertEquals(0, vm.schemaVersion)
-        assertTrue(vm.isLegacy)
-        assertTrue(vm.versionMismatch)
-        assertEquals(setOf("chan-9"), vm.incomingExtras?.favoriteChannels, "v0 extras are lifted from the aggregate")
-    }
-
-    @Test
     fun `future schema version flags a mismatch but still previews`() = runTest(testDispatcher) {
         val vm = loadedWith(
             v2Json(schemaVersion = SettingsBackup.CURRENT_SCHEMA_VERSION + 1),
             uri = "backup:future",
         )
 
-        assertFalse(vm.isLegacy)
         assertTrue(vm.versionMismatch, "a newer backup must warn before overwriting")
         assertTrue(vm.incomingPrefs != null)
     }
@@ -346,7 +306,7 @@ class ImportPreviewViewModelTest {
     @Test
     fun `unopenable backup file surfaces an error and clears loading`() = runTest(testDispatcher) {
         // A null stream is the dead-SAF-stream shape the seam documents.
-        coEvery { settingsBackupIo.openImportSource("backup:missing") } returns null
+        coEvery { settingsBackupIo.readImportPayload("backup:missing") } returns null
         val vm = viewModel()
         advanceUntilIdle()
         vm.loadBackup("backup:missing")
@@ -365,14 +325,14 @@ class ImportPreviewViewModelTest {
         vm.loadBackup("backup:a")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { settingsBackupIo.openImportSource("backup:a") }
+        coVerify(exactly = 1) { settingsBackupIo.readImportPayload("backup:a") }
 
-        stubImport("backup:b", v1Json(UserPreferences()))
+        stubImport("backup:b", appearanceBackupJson(ThemeMode.LIGHT))
         vm.loadBackup("backup:b")
-        awaitUntil("the second file replaces the preview") { vm.isLegacy }
+        awaitUntil("the second file replaces the preview") { vm.incomingPrefs?.themeMode == ThemeMode.LIGHT }
 
-        coVerify(exactly = 1) { settingsBackupIo.openImportSource("backup:b") }
-        assertEquals(1, vm.schemaVersion, "the second file replaces the preview")
+        coVerify(exactly = 1) { settingsBackupIo.readImportPayload("backup:b") }
+        assertEquals(2, vm.schemaVersion, "the second file replaces the preview")
     }
 
     // ---------------------------------------------------------------- import all
@@ -394,23 +354,6 @@ class ImportPreviewViewModelTest {
     }
 
     @Test
-    fun `importAll on a legacy backup fans to restorePreferences plus runtime restore`() = runTest(testDispatcher) {
-        val vm = loadedWith(v1Json(UserPreferences(themeMode = ThemeMode.DARK)), uri = "backup:v1")
-
-        vm.importAll(restoreSecuritySensitive = false) { }
-        awaitUntil("importAll completes") { vm.importEvent != null }
-
-        assertIs<ImportPreviewViewModel.ImportEvent.AllImported>(vm.importEvent)
-        coVerify(exactly = 1) {
-            userPreferencesStore.restorePreferences(
-                withArg { assertEquals(ThemeMode.DARK, it.themeMode) },
-                false,
-            )
-        }
-        coVerify(exactly = 1) { appRuntimeStateStore.restore(any(), clearNullIds = true) }
-    }
-
-    @Test
     fun `importAll without a loaded backup is a silent no-op`() = runTest(testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
@@ -419,7 +362,6 @@ class ImportPreviewViewModelTest {
         advanceUntilIdle()
 
         assertNull(vm.importEvent)
-        coVerify(exactly = 0) { userPreferencesStore.restorePreferences(any(), any()) }
         coVerify(exactly = 0) { userPreferencesStore.restoreV2(any(), any()) }
     }
 
@@ -456,91 +398,6 @@ class ImportPreviewViewModelTest {
         }
     }
 
-    @Test
-    fun `legacy appearance import merges only the appearance fields`() = runTest(testDispatcher) {
-        val vm = loadedWith(
-            v1Json(UserPreferences(themeMode = ThemeMode.DARK, oledMode = true, pinLockEnabled = true)),
-            uri = "backup:v1",
-        )
-
-        vm.importCategory(PreferenceResetCategory.APPEARANCE, restoreSecuritySensitive = false) { }
-        awaitUntil("category import completes") { vm.importEvent != null }
-
-        coVerify(exactly = 1) {
-            userPreferencesStore.restorePreferences(
-                withArg { merged ->
-                    // Theme + OLED land; the security field must NOT ride along
-                    // on an appearance-category import.
-                    assertEquals(UserPreferences(themeMode = ThemeMode.DARK, oledMode = true), merged)
-                },
-                false,
-            )
-        }
-    }
-
-    @Test
-    fun `legacy security import without opt-in keeps the device lock config`() = runTest(testDispatcher) {
-        val vm = loadedWith(
-            v1Json(UserPreferences(pinLockEnabled = true, pinHash = "stolen-hash", remoteControlEnabled = false)),
-            uri = "backup:v1",
-        )
-
-        vm.importCategory(PreferenceResetCategory.SECURITY, restoreSecuritySensitive = false) { }
-        awaitUntil("category import completes") { vm.importEvent != null }
-
-        coVerify(exactly = 1) {
-            userPreferencesStore.restorePreferences(
-                withArg { merged ->
-                    assertEquals(
-                        UserPreferences(remoteControlEnabled = false),
-                        merged,
-                        "only the non-sensitive remote-control switch may move without opt-in",
-                    )
-                },
-                false,
-            )
-        }
-    }
-
-    @Test
-    fun `legacy security import with opt-in restores the whole lock config`() = runTest(testDispatcher) {
-        val vm = loadedWith(
-            v1Json(
-                UserPreferences(
-                    pinLockEnabled = true,
-                    pinHash = "imported-hash",
-                    biometricLockEnabled = true,
-                    usePinForPlayerLock = true,
-                    autoLockTimerMs = 99_999L,
-                    remoteControlEnabled = false,
-                ),
-            ),
-            uri = "backup:v1",
-        )
-
-        vm.importCategory(PreferenceResetCategory.SECURITY, restoreSecuritySensitive = true) { }
-        awaitUntil("category import completes") { vm.importEvent != null }
-
-        coVerify(exactly = 1) {
-            userPreferencesStore.restorePreferences(
-                withArg { merged ->
-                    assertEquals(
-                        UserPreferences(
-                            pinLockEnabled = true,
-                            pinHash = "imported-hash",
-                            biometricLockEnabled = true,
-                            usePinForPlayerLock = true,
-                            autoLockTimerMs = 99_999L,
-                            remoteControlEnabled = false,
-                        ),
-                        merged,
-                    )
-                },
-                true,
-            )
-        }
-    }
-
     // ---------------------------------------------------------------- import extras
 
     @Test
@@ -554,22 +411,6 @@ class ImportPreviewViewModelTest {
         coVerify(exactly = 1) {
             userPreferencesStore.restoreExtras(
                 withArg { assertEquals(setOf("chan-1"), it.extras.favoriteChannels) },
-            )
-        }
-    }
-
-    @Test
-    fun `importExtras on legacy restores the lifted runtime state`() = runTest(testDispatcher) {
-        val vm = loadedWith(v0Json(UserPreferences(onboardingCompleted = true)), uri = "backup:v0")
-
-        vm.importExtras { }
-        awaitUntil("extras import completes") { vm.importEvent != null }
-
-        assertIs<ImportPreviewViewModel.ImportEvent.ExtrasImported>(vm.importEvent)
-        coVerify(exactly = 1) {
-            appRuntimeStateStore.restore(
-                withArg { assertTrue(it.onboardingCompleted) },
-                clearNullIds = true,
             )
         }
     }

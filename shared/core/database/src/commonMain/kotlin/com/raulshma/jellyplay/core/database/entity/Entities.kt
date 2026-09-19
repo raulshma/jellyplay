@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 @Entity(
     tableName = "servers",
@@ -18,15 +19,15 @@ data class ServerEntity(
     val address: String,
     val userId: String? = null,
     val accessToken: String? = null,
-    val lastConnected: Long = System.currentTimeMillis(),
+    val lastConnected: Long = wallNowMillis(),
     val alternateAddresses: String? = null,
 )
 
 @Entity(
     tableName = "users",
     indices = [
-        androidx.room.Index(value = ["serverId"]),
-        androidx.room.Index(value = ["serverId", "lastConnected"]),
+        androidx.room3.Index(value = ["serverId"]),
+        androidx.room3.Index(value = ["serverId", "lastConnected"]),
     ]
 )
 data class UserEntity(
@@ -42,7 +43,7 @@ data class UserEntity(
     @ColumnInfo(defaultValue = "0")
     val canDeleteContent: Boolean = false,
     @ColumnInfo(defaultValue = "0")
-    val lastConnected: Long = System.currentTimeMillis(),
+    val lastConnected: Long = wallNowMillis(),
 )
 
 @Entity(
@@ -84,7 +85,7 @@ data class DownloadEntity(
     val episodeNumber: Int? = null,
     val seasonNumber: Int? = null,
     @ColumnInfo(defaultValue = "0")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = wallNowMillis(),
     val errorMessage: String? = null,
     @ColumnInfo(defaultValue = "0")
     val priority: Int = 0,
@@ -138,5 +139,5 @@ data class LyricsCacheEntity(
     val duration: Double? = null,
     val lrcLibId: Long? = null,
     @ColumnInfo(defaultValue = "0")
-    val fetchedAt: Long = System.currentTimeMillis(),
+    val fetchedAt: Long = wallNowMillis(),
 )

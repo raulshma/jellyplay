@@ -5,7 +5,6 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_sort_date_added
@@ -26,7 +25,8 @@ import org.jetbrains.compose.resources.StringResource
  * Sort options shared across the music collection screens (albums tab,
  * artists tab, tracks tab, and the browse screen's per-tab pagers). Each entry
  * pairs a Jellyfin [SortOption] with its localized label resource so the
- * same enum drives both the query and the menu UI.
+ * same enum drives both the query and the menu UI. Which collections admit
+ * which options is declared per [MusicCollectionKind], not here.
  */
 enum class MusicSortOption(val option: SortOption, val labelRes: StringResource) {
     NAME(SortOption.SORT_NAME, Res.string.music_sort_name),
@@ -38,11 +38,15 @@ enum class MusicSortOption(val option: SortOption, val labelRes: StringResource)
 
 /**
  * ONE sorted paged music collection, written once for every screen listing
- * artists, albums or tracks (the tab ViewModels and the browse screen's three
- * pagers). Owns the whole "sort → paged query" seam: the sort [StateFlow],
+ * artists, albums or tracks (the standalone ViewModels and the browse screen's
+ * three pagers). Bound to a paged [MusicCollectionKind], which supplies the
+ * [MediaType] for the query and the collection's declared sort set
+ * ([MusicCollectionKind.sortOptions] — the menu's only source; [setSort]
+ * itself stays permissive so tests and programmatic callers can pin any
+ * option). Owns the whole "sort → paged query" seam: the sort [StateFlow],
  * [setSort], and the paged [items] flow that re-queries
  * [MediaRepository.getMediaItemsPaged] with `LibraryFilters(mediaTypes =
- * listOf([mediaType]), sortBy = …)` whenever the sort changes, cached in
+ * listOf(kind.mediaType), sortBy = …)` whenever the sort changes, cached in
  * [scope]. The owning ViewModel is a thin adapter exposing [selectedSort] and
  * [items] under its own names.
  */
@@ -50,9 +54,16 @@ enum class MusicSortOption(val option: SortOption, val labelRes: StringResource)
 class SortedPagedCollection(
     private val mediaRepository: MediaRepository,
     scope: CoroutineScope,
-    private val mediaType: MediaType,
+    /** The bound collection — must be one of the three server-paged kinds. */
+    val kind: MusicCollectionKind,
     initialSort: MusicSortOption = MusicSortOption.NAME,
 ) {
+
+    init {
+        check(kind.mediaType != null) {
+            "${kind.name} is list-sourced; only ARTISTS/ALBUMS/TRACKS ride the sorted paged path"
+        }
+    }
 
     private val sortFlow = MutableStateFlow(initialSort)
 
@@ -62,7 +73,7 @@ class SortedPagedCollection(
     val items: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
             filters = LibraryFilters(
-                mediaTypes = listOf(mediaType),
+                mediaTypes = listOf(requireNotNull(kind.mediaType)),
                 sortBy = sort.option,
             ),
         )

@@ -15,9 +15,32 @@ import com.raulshma.jellyplay.feature.library.PhotoAlbumScreen
 import com.raulshma.jellyplay.feature.library.PhotoViewerScreen
 import com.raulshma.jellyplay.feature.library.StudioDetailScreen
 
-fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
-    entry<Route.Library> {
-        LibraryScreen(
+/**
+ * The [LibraryScreen] wiring every library entry shares — the tab
+ * ([Route.Library]), the browse deep-link ([Route.LibraryBrowse]) and the
+ * section deep-link ([Route.LibrarySection]) used to hand-copy this block
+ * byte-for-byte. The `HomeCallbacks` precedent, bundle shape: the
+ * navigator-derived lambdas are written once and remembered per navigator
+ * lifetime so the screen subtree sees one stable instance instead of fresh
+ * lambda allocations on every recomposition.
+ */
+private class LibraryEntryCallbacks(
+    val onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
+    val onSmartPlaylistsClick: () -> Unit,
+    val onMoodPlaylistsClick: () -> Unit,
+    val onPlaylistsClick: () -> Unit,
+    val onOpenDownloadDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit,
+    val onBack: () -> Unit,
+)
+
+/** Renders [LibraryScreen] over the shared wiring; only the section entry adds [sectionContext] (and with it a back affordance — the tab and browse entries are top-level, no back). */
+@Composable
+private fun LibraryEntry(
+    navigator: Navigator,
+    sectionContext: LibrarySectionContext? = null,
+) {
+    val callbacks = remember(navigator) {
+        LibraryEntryCallbacks(
             onItemClick = { itemId, mediaType, parentId, itemName ->
                 navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
             },
@@ -27,21 +50,27 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
             onOpenDownloadDetail = { itemId, openDownloadSheet ->
                 navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
             },
+            onBack = { navigator.goBack() },
         )
+    }
+    LibraryScreen(
+        onItemClick = callbacks.onItemClick,
+        onSmartPlaylistsClick = callbacks.onSmartPlaylistsClick,
+        onMoodPlaylistsClick = callbacks.onMoodPlaylistsClick,
+        onPlaylistsClick = callbacks.onPlaylistsClick,
+        onOpenDownloadDetail = callbacks.onOpenDownloadDetail,
+        sectionContext = sectionContext,
+        onBack = callbacks.onBack.takeIf { sectionContext != null },
+    )
+}
+
+fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
+    entry<Route.Library> {
+        LibraryEntry(navigator)
     }
 
     entry<Route.LibraryBrowse> {
-        LibraryScreen(
-            onItemClick = { itemId, mediaType, parentId, itemName ->
-                navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
-            },
-            onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
-            onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
-            onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-            onOpenDownloadDetail = { itemId, openDownloadSheet ->
-                navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
-            },
-        )
+        LibraryEntry(navigator)
     }
 
     entry<Route.LibrarySection> { key ->
@@ -60,19 +89,7 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
                 tag = key.tag,
             )
         }
-        LibraryScreen(
-            sectionContext = sectionContext,
-            onBack = { navigator.goBack() },
-            onItemClick = { itemId, mediaType, parentId, itemName ->
-                navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
-            },
-            onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
-            onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
-            onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-            onOpenDownloadDetail = { itemId, openDownloadSheet ->
-                navigator.navigate(Route.MediaDetail(itemId, openDownloadSheet))
-            },
-        )
+        LibraryEntry(navigator, sectionContext)
     }
 
     entry<Route.Favorites> {

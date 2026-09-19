@@ -24,8 +24,9 @@ import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
  * wanted/missing list, and the asynchronous command runner
  * (`POST /api/v3/command`) for triggering searches / refreshes / rescans.
  *
- * Adding a method requires updating [ResilientRadarrApiClient] too — see its
- * doc comment.
+ * Adding a method lands on the impl directly — retry rides the shared
+ * jvmShared request funnel (`ArrClientSupport`'s [com.raulshma.jellyplay.core.network.api.HttpExecutor]),
+ * so there is no separate retrying wrapper to keep in sync anymore.
  */
 interface RadarrApiClient {
 

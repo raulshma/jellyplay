@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.SheetTabRow
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -170,7 +171,7 @@ internal fun SubtitleHubSheet(
     val safeIndex = selectedTabIndex.coerceIn(0, visibleTabs.lastIndex)
     val activeTab = visibleTabs.getOrElse(safeIndex) { SubtitleHubTab.TRACKS }
 
-    // "Get" tab hoisted state — mirrors SubtitleManagerSheet's own.
+    // "Get" tab hoisted state — owned here, passed down to SubtitleManagerSection.
     var getTabIndex by rememberSaveable { mutableIntStateOf(0) }
     val downloadFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
@@ -202,6 +203,13 @@ internal fun SubtitleHubSheet(
                     Tab(
                         selected = safeIndex == index,
                         onClick = { selectedTabIndex = index },
+                        // e2e: click-reach target (harness-gated no-op) — the
+                        // harness lands on Get to reach the upload sub-tab.
+                        modifier = if (tab == SubtitleHubTab.GET) {
+                            Modifier.harnessClickTarget("player-subtitle-hub-get-tab")
+                        } else {
+                            Modifier
+                        },
                         text = {
                             Text(
                                 when (tab) {

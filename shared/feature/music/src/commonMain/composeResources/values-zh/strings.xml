@@ -60,6 +60,11 @@
     <string name="music_tracks_count">%1$d 首曲目</string>
     <string name="music_one_track">1 首曲目</string>
     <string name="music_playlist_tracks_count">%1$d 首曲目</string>
+    <string name="music_playlist_read_only">此播放列表为只读</string>
+    <string name="music_playlist_not_deletable">此播放列表无法删除</string>
+    <string name="music_playlist_create_failed">创建播放列表失败</string>
+    <string name="music_playlist_update_failed">更新播放列表失败</string>
+    <string name="music_playlist_delete_failed">删除播放列表失败</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">播放器界面</string>

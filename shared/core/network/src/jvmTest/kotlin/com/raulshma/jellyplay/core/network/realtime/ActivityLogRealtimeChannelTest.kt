@@ -84,7 +84,7 @@ class ActivityLogRealtimeChannelTest {
 
         val recorded = server.takeRequest(5, TimeUnit.SECONDS)!!
         assertEquals("/socket?deviceId=device-1&deviceName=JellyPlay&client=JellyPlay", recorded.path)
-        assertEquals("token-123", recorded.getHeader("X-Emby-Token"))
+        assertEquals("MediaBrowser Token=\"token-123\"", recorded.getHeader("Authorization"))
         // The token must never leak into the URL.
         assertTrue(recorded.path!!.contains("token-123").not())
         job.cancel()

@@ -28,13 +28,13 @@
 
 **JellyPlay** is a native, high-performance **Jellyfin client** — built from scratch in **Kotlin** and **Jetpack Compose** with **Material 3 Expressive**. No web wrapper, no Cordova, no embedded browser.
 
-One app for every screen: **phones, tablets, foldables, Android TV, and Amazon Fire TV**. Stream movies and shows, play music with synced lyrics, request content via **Jellyseerr/Overseerr**, manage your **Radarr/Sonarr** queues, download for offline, and run your server from a built-in **admin dashboard** — with three switchable video engines (**ExoPlayer, libmpv, LibVLC**), in-app **self-update** via GitHub Releases, no accounts, and no tracking.
+One app for every screen: **phones, tablets, foldables, Android TV, and Amazon Fire TV**. Stream movies and shows, play music with synced lyrics, read comics and ebooks, request content via **Jellyseerr/Overseerr**, manage your **Radarr/Sonarr** queues, download for offline, and run your server from a built-in **admin dashboard** — with three switchable video engines (**ExoPlayer, libmpv, LibVLC**), in-app **self-update** via GitHub Releases, no accounts, and no tracking.
 
-**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback (full effect stack: equalizer, bass boost, night mode, ReplayGain, …), in-player video with working keyboard media keys, the video effect stack (brightness/contrast/saturation/hue/sharpen/blur/rotate), frame capture to `~/Pictures/JellyPlay`, live subtitle cues, and the full metadata editor; sign-in uses the shared auth flow (Quick Connect, remembered users, server-address alternates). An experimental **web (wasm)** shell signs in, renders artwork (memory-cache hit behavior and heap/DOM stability soak-verified over 50 navigation cycles; LRU eviction under large-library pressure and cross-origin artwork from a CORS-enabled non-Jellyfin host e2e-verified — 8 × 14.7 MB decoded posters never let the cache past the 80.5 MB cap — it plateaus at the 5-large-entry floor (73.7 MB, small entries co-resident up to 80.2 MB in some runs)), plays video in-browser, and renders feature screens (requests, calendar, Seerr media details) against a live server — including a Seerr credentials pane whose API key persists in the browser. Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release.
+**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback (full effect stack: equalizer, bass boost, night mode, ReplayGain, …), in-player video with working keyboard media keys, the video effect stack (brightness/contrast/saturation/hue/sharpen/blur/rotate), frame capture to `~/Pictures/JellyPlay`, live subtitle cues, the full metadata editor, and the in-app book reader (CBZ/CBR/PDF/EPUB — read-aloud excepted); sign-in uses the shared auth flow (Quick Connect, remembered users, server-address alternates). An experimental **web (wasm)** shell signs in against a live server (sessions persist across page reloads), renders artwork, plays video in-browser, and renders the routed feature screens (requests, calendar, Seerr media details, ARR queue + its settings, onboarding); it carries a real OPFS-backed SQLite database (Room 3 over WebWorkerSQLiteDriver, single-tab). The KMP migration itself is complete (docs/kmp-migration-plan.md): 23 of 25 feature modules compile for wasm, and the two playback-hub modules stay Android/desktop by recorded scope. Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release; the auto-update client and release checklist have landed, signing and per-OS passes remain.
 
 If you self-host Jellyfin and want a truly native, beautiful, capable client — or a **Plex/Kodi alternative** — give JellyPlay a try.
 
-[Highlights](#highlights) • [Why JellyPlay?](#why-jellyplay) • [Features](#features) • [Tech Stack](#tech-stack) • [Requirements](#requirements) • [Building](#building) • [Permissions](#permissions) • [Project Structure](#project-structure) • [Docs](./docs) • [Website](https://raulshma.github.io/jellyplay/)
+[Highlights](#highlights) • [Why JellyPlay?](#why-jellyplay) • [Features](#features) • [Tech Stack](#tech-stack) • [Requirements](#requirements) • [Building](#building) • [Local Development](#local-development) • [Permissions](#permissions) • [Project Structure](#project-structure) • [Docs](./docs) • [Website](https://raulshma.github.io/jellyplay/)
 
 </div>
 
@@ -46,6 +46,7 @@ If you self-host Jellyfin and want a truly native, beautiful, capable client —
 | 💬 **Full subtitle system** | **ASS/SSA** & **VTT** parsing, external subtitle loading & download, full styling, delay offset, **live sync preview** with cue stack & ±30 s offset slider, **multi-provider search** (Jellyfin, Wyzie, OpenSubtitles), **per-series role memory**, and consistent track labels & badges across engines. |
 | 📱 **Native on every screen** | Phone, tablet, foldable, **Android TV**, and **Fire TV** with D-pad navigation, a Leanback launcher, and adaptive Material 3 layouts — plus an early **Windows desktop** build from the same Kotlin Multiplatform codebase. |
 | 🎵 **Rich audio player** | Synced lyrics via LRCLIB, 10-band equalizer, Night Mode & Dialogue Boost, ambient visualizer, mood playlists, and gapless playback. |
+| 📚 **In-app book reader** | Read comics (CBZ/CBR), PDFs, and EPUBs with bookmarks, highlights & notes, in-book search, EPUB typography, read-aloud with sleep timer, and server-synced reading position. |
 | ⬇️ **Offline downloads & sync** | WorkManager-backed downloads with HTTP Range resumption, multi-connection acceleration, bundled subtitles & trickplay tiles, dedicated offline library, and durable watch-progress sync outbox. |
 | 📡 **Seerr + Arr integration** | Discover and request via **Jellyseerr/Overseerr**, manage **Radarr/Sonarr** queues, and track an upcoming-releases calendar — all in-app. |
 | 👯 **SyncPlay & Play On** | Real-time watch parties with speed/skip-to-sync correction and in-player chat, plus cast-to and control other Jellyfin sessions. |
@@ -226,6 +227,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - Gapless playback and crossfade between tracks
 - Ambient Mode with animated color blobs derived from album art
 - Sleep timer with configurable duration
+- **Playback focus** — music and book read-aloud never talk over each other; the interrupted side stays paused for manual resume
 
 **Music discovery**
 
@@ -265,6 +267,27 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - **Compact episode list preference & vertical layout toggle** for series detail
 - **Photo albums & viewer**: album browsing, full-screen zoom/pan, swipe navigation, EXIF metadata
 - **Watch Progress Heatmap** — GitHub-style year-in-review calendar of watch activity, filter by media type, streak tracking, tap any day for session details, share as PNG (requires Jellyfin Playback Reporting plugin)
+
+</details>
+
+<details>
+<summary><strong>Book reader</strong></summary>
+
+- Read comics (**CBZ/CBR**), **PDF**, and **EPUB** books in-app, straight from the detail screen (**Read** / **Continue**) — on Android, Android TV, and desktop
+- **Bookmarks** — save any position (page or exact EPUB spot) with per-book counts on the detail screen
+- **Highlights & notes** — select EPUB text to highlight in four colors (or underline), attach notes, and export everything to Markdown or JSON
+- **In-book search** — full-text EPUB search with jump-to-hit; PDF outline (table of contents) with page jumps
+- **EPUB typography** — light/sepia/dark themes, type size, font family, line height, margins, justification, and continuous-scroll mode; theme and type size settable per book
+- **Paged zoom & fit** — pinch-zoom with pan, double-tap toggle, and fit modes; zoomed PDF pages re-raster sharply (up to 3×)
+- **Read aloud (Android)** — system TTS with paragraph highlighting, auto chapter advance, sentence-level skip, and adjustable speed/pitch
+- **Sleep timer & auto-scroll** — stop read-aloud/auto-scroll after 5–60 minutes or at chapter end
+- **Chapter tick rail** — opt-in side ticks showing the current chapter in the table of contents; tap to jump, press-drag to scrub
+- **Book-aware detail screen** — cover hero, format badge, reading-progress card, chapter **Contents** row that deep-links into the reader, and "Mark as finished"
+- **Resume that survives devices** — position syncs to the server encoded exactly like jellyfin-web (page ticks for paged books, percent ticks for EPUB), with exact local CFI resume per install on EPUBs
+- **Offline reading** — downloaded books open with no network; offline positions sync back on reconnect
+- Works on **Jellyfin 10.x and 12.x** servers (12.x probes page counts and comic series metadata; older servers render a flat list)
+
+See [Book reader](./docs/book-reader.md) for the full guide.
 
 </details>
 
@@ -483,21 +506,22 @@ Click any section to expand. The full feature list is preserved — collapsed on
 | Category         | Technologies                                                      |
 | ---------------- | ----------------------------------------------------------------- |
 | Language         | Kotlin 2.3.21, Java 17                                            |
-| UI               | Jetpack Compose (BOM 2026.06), Material 3, Material 3 Expressive  |
-| Build            | AGP 9.3.1, Gradle, KSP2                                           |
+| UI               | Jetpack Compose (BOM 2026.06.01), Material 3, Material 3 Expressive  |
+| Build            | AGP 9.4.0, Gradle, KSP2                                           |
 | TV               | Android TV Material, Leanback                                     |
 | Navigation       | Navigation 3                                                      |
-| DI               | Koin 4.2 (Kotlin Multiplatform)                                   |
-| Multiplatform    | Compose Multiplatform 1.11 (shared core/features), libmpv via JNA (desktop), wasmJs web shell |
-| Storage          | Room 2.8, DataStore Preferences, AndroidX Security-Crypto         |
+| DI               | Koin 4.2.2 (Kotlin Multiplatform)                                 |
+| Multiplatform    | Compose Multiplatform 1.11.1 (shared core/features), libmpv via JNA (desktop), wasmJs web shell |
+| Storage          | Room 3.0.3 (androidx.room3), DataStore Preferences, AndroidX Security-Crypto |
 | Background       | WorkManager, Coroutines, StateFlow                                |
 | Video Players    | Media3/ExoPlayer 1.10.1, libmpv, LibVLC                           |
 | Subtitles        | libass (ExoPlayer ASS/SSA), ASS/SSA & VTT parsing                 |
+| Book Reader      | PDFBox 3.0.5 (desktop) / pdfbox-android 2.0.27.0, junrar 8.1.1 (CBR), vendored epub.js 0.3.93 + JSZip 3.10.1 |
 | Audio Effects    | Android Equalizer, LoudnessEnhancer, Virtualizer, Reverb          |
 | Media Session    | Media3 Session, Media3 Cast                                       |
 | Casting          | Google Play Services Cast, DLNA/UPnP                              |
-| Networking       | OkHttp 5.4, Jellyfin SDK 1.8.12, kotlinx.serialization 1.11       |
-| Images           | Coil 3.4 (with BlurHash), Palette (color extraction)             |
+| Networking       | OkHttp 5.4.0, Jellyfin SDK 1.8.12, kotlinx.serialization 1.11.0    |
+| Images           | Coil 3.4.0 (3.5.0 on Android, with BlurHash), Palette (color extraction) |
 | Typography       | Google Fonts (Compose integration)                                |
 | Markdown         | multiplatform-markdown-renderer (release notes, plugin changelogs) |
 | Pagination       | Paging 3                                                          |
@@ -514,7 +538,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - Android 9.0 (API 28) or later
 - JDK 17
 - Android Studio with Android SDK (compileSdk 37)
-- A Jellyfin server for authentication and playback
+- A Jellyfin server (10.x or 12.x) for authentication and playback
 
 ---
 
@@ -572,6 +596,61 @@ dialog instead of a silent black screen.
 
 ---
 
+## Local Development
+
+### Setup
+
+1. Install the [Requirements](#requirements): JDK 17, Android Studio with SDK 37 (compileSdk), and a Jellyfin server (10.x or 12.x) to develop against.
+2. Clone the repo and open it in Android Studio — Gradle sync pulls the wrapper, KMP toolchains, and the bundled libmpv fetch (see below).
+3. Point the app at a local server (e.g. `http://<LAN-IP>:8096`) during onboarding, or use the seeded Docker server from `tools/e2e/bootstrap-jellyfin.sh`.
+
+> The repo is Kotlin Multiplatform: day-to-day feature work happens in `shared/` (commonMain + platform `androidMain`/`jvmMain`/`wasmJsMain` actuals). `app/` is the only Android-only module.
+
+### Run each target
+
+| Target | Command | Notes |
+| :-- | :-- | :-- |
+| Android phone | `./gradlew :app:installPhoneDebug` | Needs a device/emulator connected via adb, or run the `app` config from Android Studio |
+| Android TV | `./gradlew :app:installTvDebug` | Same, on a TV device/emulator |
+| Windows desktop | `./gradlew :apps:desktop:run` | First run fetches a pinned `libmpv-2.dll` — needs 7-Zip on PATH (see [Building](#building)) |
+| Web (wasm, dev server) | `./gradlew :apps:web:wasmJsBrowserDevelopmentRun` | Incremental Kotlin/wasm dev loop in the browser |
+| Web (production bundle) | `./gradlew :apps:web:wasmJsBrowserDistribution` | Output in `apps/web/build/dist/wasmJs/productionExecutable`; serve with `node tools/e2e/serve.mjs --root apps/web/build/dist/wasmJs/productionExecutable --port 8080` (correct `.wasm` MIME is load-bearing) |
+
+### Tests & verification
+
+```bash
+# JVM tests for a shared KMP module
+./gradlew :shared:core:data:jvmTest
+
+# Android unit tests (flavor-aware)
+./gradlew :app:testPhoneDebugUnitTest
+
+# Desktop unit tests (includes the Koin-registration guard)
+./gradlew :apps:desktop:test
+
+# Fast wasm compile gate — what the KMP CI lane runs per PR
+./gradlew :apps:web:compileKotlinWasmJs
+
+# Coverage report (opt-in flag required)
+./gradlew koverHtmlReport -PenableCoverage
+```
+
+### Local E2E & verification lanes
+
+`tools/e2e/` ships the driver scripts used by the project's verification passes:
+
+- `bootstrap-jellyfin.sh` — spins up a local Jellyfin in Docker at `http://localhost:8096` (user `harness` / `harness-e2e-pass`) seeded with generated test media; requires Docker and ffmpeg.
+- Headless-browser lanes (CDP via headless Edge): `web-verify.sh`, `web-cache-eviction.mjs`, `web-soak.mjs`, `foreign-origin.mjs`, `input-probe.mjs`, `desktop-session-pass.sh`, `msi-boot-pass.sh`.
+- Physical-device lanes (adb + UiAutomator): `device-locale-pass.sh`, `device-pip-pass.sh`.
+
+### Tips
+
+- Desktop playback without the auto-fetch: drop a `libmpv-2.dll` into `tools/mpv/`, or point `MPV_LIBRARY` at an absolute path to override on any OS.
+- Prefer the shared tree over `app/` for new features — `app/` is Android glue (deep links, widgets, Cast, PiP host).
+- After touching Koin module registration, `:apps:desktop:test` catches missing registrations that only fail at runtime otherwise.
+
+---
+
 ## CI/CD
 
 A GitHub Actions workflow (`.github/workflows/release.yml`) automates release builds:
@@ -617,22 +696,23 @@ A fourth workflow keeps the Kotlin Multiplatform tree honest:
 
 ## Project Structure
 
-The codebase is mid-migration to Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals), while the Android-only remainder and the new shells sit alongside it.
+The codebase is Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals). The legacy Android-only core modules were folded in at the 2026-09-12 cutover — their Android halves are now `androidMain` source sets of the shared core modules — leaving `app/` the only Android-only Gradle module, beside the desktop and web shells.
 
 ```
 apps/
   desktop/                Windows desktop shell (Compose Multiplatform; libmpv engine via JNA) — preview
-  web/                    Experimental wasmJs browser shell (Coil artwork + HtmlVideoEngine + requests/calendar/SeerrDetail feature screens + Seerr credentials pane verified in-browser against a live server, waves 13-16)
+  web/                    Experimental wasmJs browser shell (Coil artwork + HtmlVideoEngine + requests/calendar/SeerrDetail feature screens + Seerr credentials pane verified in-browser against a live server)
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/
-    model/                Pure Kotlin data models (93 model files)
+    concurrency/          Coroutine utilities (map-concurrent, task bundling, cancellation-safe runCatching)
+    model/                Pure Kotlin data models (105 model files)
     designsystem/         Theming (8 variants), colors, shapes, typography, motion
     datastore/            DataStore preferences (~391 settings), encrypted credentials, OS keyring seam
-    database/             Room KMP database (18 DAOs), v51 migration chain
+    database/             Room KMP database (20 DAOs), v56 migration chain
     network/              Jellyfin API clients, Radarr/Sonarr (Arr) clients, Seerr client, TMDB, LRCLIB, Wyzie/OpenSubtitles, GitHub Releases, server discovery, address failover
-    data/                 Repositories, playback managers, audio effects, SyncPlay, downloads
-    ui/                   Shared UI components, adaptive layouts, TV focus, animations, navigation
+    data/                 Repositories, playback managers, audio effects, SyncPlay, downloads; Android-only machinery (workers, receivers, media session, Cast, notifications) lives in its androidMain
+    ui/                   Shared UI components, adaptive layouts, TV focus, animations, navigation; Android shims (biometric, WebView trailer, TV bits) in its androidMain
     player-contract/      Engine-agnostic MediaEngine contract + engine-shared machinery
   feature/
     auth/                 Server selection and authentication
@@ -644,6 +724,7 @@ shared/
     player-video/         Video playback UI, multi-engine support, SyncPlay integration, Play On
     player-audio/         Audio playback UI, lyrics, equalizer, ambient mode
     player-live/          Live TV playback UI, delivery-method selection, play-method badge, error recovery
+    player-book/          Book reader (CBZ/CBR/PDF/EPUB — typography, bookmarks, highlights & notes, in-book search, TTS read-aloud, sleep timer, chapter tick rail)
     downloads/            Download management, offline library, and offline playback
     settings/             Settings, server/user management, Seerr & Arr configuration, settings search, import preview
     music/                Music browsing, smart/mood playlists, artist/album details
@@ -658,11 +739,7 @@ shared/
     calendar/             Upcoming releases calendar from Radarr/Sonarr libraries
     shortcuts/            App shortcuts (static + dynamic, e.g. Continue Listening)
     subtitle-tester/      Subtitle parser & styling test harness (dev/diagnostic tool, Android-only)
-core/
-  data/                   Android-only remainder: WorkManager workers, receivers, media3 audio stack, Cast, playback session
-  ui/                     Android-only UI shims (biometric, WebView trailer, D-pad/TV bits)
-  notification/           New media notification system (worker, scheduler, dispatcher, channels)
-  testing/                Shared test utilities
+    shell/                Shell-graph aggregator (appSections nav graph + ShellHostHooks shared by the Android and desktop shells)
 baselineprofile/         Baseline profile generator for phone startup optimization
 tools/                   Dev/CI drivers: e2e/ (web-verify, web-cache-eviction, web-soak, foreign-origin, serve.mjs, bootstrap-jellyfin, desktop-session/msi-boot passes, input-probe — headless-Edge CDP lane scripts; device-locale/device-pip passes — physical-phone adb+uiautomator lanes), perf/ (desktop-baseline.sh), and the gitignored mpv/ drop-in dir for libmpv-2.dll (wired into :apps:desktop:test, see Building)
 website/                 Landing page (GitHub Pages)
@@ -681,6 +758,7 @@ Looking for setup, integration, or troubleshooting guides?
 - [SyncPlay watch parties](./docs/syncplay-guide.md) — synchronized group playback
 - [Offline downloads](./docs/offline-downloads.md) — download media for travel
 - [Music player & synced lyrics](./docs/lyrics-music-player.md) — get the most out of your library
+- [Book reader](./docs/book-reader.md) — read comics, PDFs, and EPUBs in-app
 - [Player engines comparison](./docs/player-engines.md) — ExoPlayer vs libmpv vs LibVLC
 - [Playback progress sync](./docs/playback-progress-sync.md) — how watch progress is reported and synced
 ---
@@ -704,12 +782,12 @@ Other open-source projects in the Jellyfin ecosystem:
 
 | Metric | Value |
 | --- | --- |
-| Gradle modules | 40 (app + 4 legacy core + 8 shared core + 23 shared feature + desktop & web shells + 2 baseline profiles) |
-| Feature modules | 23 (KMP, under `shared/feature/`) |
+| Gradle modules | 38 (app + 9 shared core + 25 shared feature + desktop & web shells + baseline profile) |
+| Feature modules | 25 (KMP, under `shared/feature/`) |
 | Configurable settings | ~391 |
-| Data models | 88 |
+| Data models | 105 |
 | API clients | 20+ |
-| Room DAOs | 17 |
+| Room DAOs | 20 |
 | Supported languages | 9 (English, Deutsch, Español, Français, Italiano, Português, 日本語, 한국어, 中文) |
 | External integrations | Jellyfin, Jellyseerr/Overseerr, Radarr, Sonarr, LRCLIB, TMDB, Wyzie, OpenSubtitles, GitHub Releases (self-update), Google Cast |
 | Min SDK | 28 (Android 9.0) |

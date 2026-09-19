@@ -55,6 +55,8 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
@@ -117,7 +119,7 @@ fun HomeLayoutPresetsScreen(
     val backgroundColorState = rememberScreenBackgroundColorState()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val clipboard = LocalClipboardManager.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
     val platformIntents = rememberPlatformIntents()
 
     val focusRequester = remember { FocusRequester() }
@@ -130,7 +132,7 @@ fun HomeLayoutPresetsScreen(
 
     val shareSubject = stringResource(Res.string.settings_home_layout_subject_plain)
     val shareChooser = stringResource(Res.string.settings_share_home_layout)
-    // One-shot toast texts pre-resolved at composable scope (the messenger
+    // One-shot toast texts pre-resolved at composable scope (the message bus
     // takes plain Strings). The saved-name one keeps its %1$s placeholder —
     // the name is only known inside the (non-composable) save callback, so
     // the placeholder is substituted there (common stdlib has no
@@ -146,12 +148,7 @@ fun HomeLayoutPresetsScreen(
         onBack = onBack,
         backgroundColorState = backgroundColorState,
     ) { innerPadding ->
-        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
-        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -247,7 +244,7 @@ fun HomeLayoutPresetsScreen(
             onSave = { name ->
                 viewModel.saveCurrentLayoutAsPreset(name)
                 showSaveSheet = false
-                messenger?.info(presetSavedTemplate.replace("%1\$s", name))
+                bus.info(presetSavedTemplate.replace("%1\$s", name))
             },
         )
     }
@@ -268,7 +265,7 @@ fun HomeLayoutPresetsScreen(
                         }
                         showImportSheet = false
                         viewModel.clearPresetImportError()
-                        messenger?.info(presetAppliedText)
+                        bus.info(presetAppliedText)
                     }
                 }
             },
@@ -286,7 +283,7 @@ fun HomeLayoutPresetsScreen(
             onLoad = {
                 viewModel.applyPreset(preset.config)
                 actionTarget = null
-                messenger?.info(appliedNamedText)
+                bus.info(appliedNamedText)
             },
             onShare = {
                 val json = viewModel.exportPresetJson(preset)
@@ -296,7 +293,7 @@ fun HomeLayoutPresetsScreen(
             onDelete = {
                 viewModel.deleteHomeLayoutPreset(preset.id)
                 actionTarget = null
-                messenger?.info(deletedText)
+                bus.info(deletedText)
             },
         )
     }
@@ -309,7 +306,7 @@ fun HomeLayoutPresetsScreen(
             onConfirm = {
                 viewModel.resetHomeLayout()
                 resetConfirm = false
-                messenger?.info(homeLayoutResetText)
+                bus.info(homeLayoutResetText)
             },
             onDismiss = { resetConfirm = false },
             dismissText = stringResource(CoreUiRes.string.core_cancel),

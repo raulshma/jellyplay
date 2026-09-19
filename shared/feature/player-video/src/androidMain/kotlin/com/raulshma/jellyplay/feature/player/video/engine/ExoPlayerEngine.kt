@@ -72,6 +72,7 @@ import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
@@ -390,37 +391,10 @@ class ExoPlayerEngine(
         }
     }
 
-    /**
-     * Construction-relevant inputs of the last player build. When a new
-     * [load] carries an identical set, the existing player is reused with a
-     * bare [androidx.media3.common.Player.setMediaItem] + prepare — the
-     * common binge-watch/autoplay case where renderers factory (decoder mode,
-     * fallback, audio-processor chain), LoadControl buffers, DRM hook, auth
-     * and the ASS session shape are all unchanged. Any delta takes the full
-     * teardown/rebuild path, so behavior stays identical to a fresh engine.
-     */
-    private data class LoadRebuildInputs(
-        val decoderMode: com.raulshma.jellyplay.core.model.DecoderMode,
-        val exoCfg: ExoPlayerEngineConfig,
-        val minBufferMs: Int,
-        val maxBufferMs: Int,
-        val serverUrl: String?,
-        val authToken: String?,
-        val headers: Map<String, String>,
-        val assSession: Boolean,
-        val pauseOnAudioFocusLoss: Boolean,
-        // The provider itself (not its product): providers have no equals,
-        // so data-class equality degrades to identity — same instance means
-        // same DRM hook, different instance forces the rebuild path.
-        val drmProvider: EngineDrmSessionManagerProvider?,
-        // Whether the data source chain gets the byte-level [VideoStreamCache]
-        // wrapper. Part of the equality set because the wrapper is baked into
-        // the player's MediaSourceFactory: a reused player keeps its existing
-        // chain, so an eligibility flip between items (direct play → transcode,
-        // clear → DRM) MUST take the teardown/rebuild path instead of leaking
-        // the cached chain onto a non-cacheable item (or vice versa).
-        val streamCacheEligible: Boolean,
-    )
+    // LoadRebuildInputs + the reuse-vs-rebuild decision moved to commonMain
+    // (ExoPlayerReusePolicy.kt) so the equality set — including the
+    // drmProvider identity semantics and the stream-cache eligibility flag —
+    // is jvmTest-pinned; this engine keeps only the field below.
 
     private var lastRebuildInputs: LoadRebuildInputs? = null
 
@@ -448,7 +422,15 @@ class ExoPlayerEngine(
         )
 
         val existingPlayer = player
-        if (existingPlayer != null && inputs == lastRebuildInputs) {
+        // The null check stays local so Kotlin can smart-cast for the reuse
+        // call; the presence flag inside the predicate exists for the pure
+        // commonMain test seam (no Media3 type crosses the boundary).
+        if (existingPlayer != null && shouldReuseExistingPlayer(
+                existingPlayerPresent = true,
+                lastInputs = lastRebuildInputs,
+                newInputs = inputs,
+            )
+        ) {
             reusePlayerForRequest(existingPlayer, request, exoCfg, assForRequest)
             return
         }
@@ -889,10 +871,11 @@ class ExoPlayerEngine(
 
         val authority = serverUrl?.let { Uri.parse(it).authority }
         if (authority != null && token != null) {
+            val authHeader = JellyfinAuthorizationHeader.tokenOnlyHeader(token)
             factory = ResolvingDataSource.Factory(factory) { dataSpec ->
                 if (dataSpec.uri.authority.equals(authority, ignoreCase = true)) {
                     dataSpec.withRequestHeaders(
-                        mapOf("X-Emby-Token" to token) + dataSpec.httpRequestHeaders
+                        mapOf(authHeader) + dataSpec.httpRequestHeaders
                     )
                 } else {
                     dataSpec

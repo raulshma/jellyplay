@@ -37,6 +37,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -179,12 +181,7 @@ val biometricGate = rememberBiometricGate()
             )
         },
     ) { innerPadding ->
-        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
-        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -213,16 +210,18 @@ val biometricGate = rememberBiometricGate()
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val baseSecTotal = if (canShowBiometric) 2 else 1
-                    val secTotal = if (showAdvanced) baseSecTotal + 1 else baseSecTotal
-                    var secIdx = 0
+                    // Derived from the security group declaration via the
+                    // admission total beside SettingsScreenGroups (the shipped
+                    // count quirks — pin_for_player_lock never admitted, the
+                    // biometric count ignoring the runtime gate — preserved
+                    // verbatim there).
+                    SettingsItemList(total = securityScreenRowTotal(canShowBiometric, showAdvanced)) {
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
                         title = stringResource(Res.string.settings_pin_lock),
                         subtitle = if (preferences.pinLockEnabled) stringResource(Res.string.settings_pin_locked) else stringResource(Res.string.settings_no_pin_set),
                         checked = preferences.pinLockEnabled,
                         highlighted = highlightSettingId == "pin_lock",
-                        index = secIdx++, count = secTotal,
                         onCheckedChange = { enabled ->
                             if (enabled) activeDialog = SecuritySettingsDialog.PinDialog
                             else activeDialog = SecuritySettingsDialog.PinDisableAuth
@@ -239,7 +238,6 @@ val biometricGate = rememberBiometricGate()
                             subtitle = if (preferences.biometricLockEnabled) stringResource(Res.string.settings_biometric_unlock_subtitle) else stringResource(Res.string.settings_disabled),
                             checked = preferences.biometricLockEnabled,
                             highlighted = highlightSettingId == "biometric_lock",
-                            index = secIdx++, count = secTotal,
                             onCheckedChange = { enabled ->
                                 if (enabled) {
                                     biometricGate.authenticate(
@@ -262,7 +260,6 @@ val biometricGate = rememberBiometricGate()
                             subtitle = if (preferences.usePinForPlayerLock) stringResource(Res.string.settings_require_pin_player) else stringResource(Res.string.settings_slide_to_unlock),
                             checked = preferences.usePinForPlayerLock,
                             highlighted = highlightSettingId == "pin_for_player_lock",
-                            index = secIdx++, count = secTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.edit { scope -> scope.security.setUsePinForPlayerLock(enabled) }
                             },
@@ -284,7 +281,6 @@ val biometricGate = rememberBiometricGate()
                             subtitle = stringResource(Res.string.settings_auto_lock_timer_subtitle),
                             trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
                             highlighted = highlightSettingId == "auto_lock_timer",
-                            index = secIdx, count = secTotal,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = autoLockTimerTitle,
@@ -297,6 +293,7 @@ val biometricGate = rememberBiometricGate()
                                 )
                             },
                         )
+                    }
                     }
                 }
             }

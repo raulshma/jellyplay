@@ -1,168 +1,481 @@
 package com.raulshma.jellyplay.core.model.subtitle
 
 /**
- * Web twin of the jvmShared [SubtitleLanguageCodes] (same package, same API).
- *
- * The JVM original derives its ISO 639 tables from `java.util.Locale`
- * (`getAvailableLocales` / `isO3Language` / `getDisplayLanguage`), which does
- * not exist on wasmJs. This clone keeps byte-level conversion semantics for
- * every code the static tables below cover — including the identical
- * 639-2B↔639-3 override map — and falls back like the original for uncovered
- * inputs (primary-subtag passthrough / raw-code return). Documented deltas
- * vs. the JDK-backed original:
- *  - coverage is bounded by the compiled-in matrix instead of the host CLDR;
- *    codes outside it fall through to the passthrough both implementations
- *    use for unknown codes,
- *  - display names are fixed English names from the table rather than
- *    locale-data lookups (same casing style: "English", "German", ...),
- *  - JDK legacy subtags (`iw`/`in`/`ji`) are normalized to their modern forms
- *    (`he`/`id`/`yi`) before lookup instead of relying on host legacy tables, and
- *  - exotic multi-subtag originals bypass the JVM's secondary
- *    `forLanguageTag` re-parse and resolve against their normalized primary
- *    subtag instead.
- *
- * Keep member semantics in sync when editing the jvmShared original; the
- * :shared:core:model:jvmTest suite pins the JVM side.
+ * wasmJs actuals for the [SubtitleLanguageCodes] resolvers: the browser has no
+ * JDK-equivalent locale enumeration that exposes ISO 639-3, so the tables are
+ * a static snapshot generated from the same source the nonWeb actuals read at
+ * runtime (`Locale.getAvailableLocales()` on Temurin JDK 21, first-locale-wins,
+ * 226 languages). The 639-2B↔639-3 overrides and the 3-letter passthrough live
+ * in commonMain, so only these four lookups need platform data; codes outside
+ * the snapshot simply fall through to the shared raw-code fallbacks.
  */
-object SubtitleLanguageCodes {
 
-    /**
-     * ISO 639-3 (terminologic/T) → ISO 639-2B (bibliographic/B) overrides —
-     * copied verbatim from the jvmShared original so B-form consumers
-     * (OpenSubtitles) stay stable across platforms.
-     */
-    private val ISO3_TO_2B: Map<String, String> = mapOf(
-        "bod" to "tib", "deu" to "ger", "ell" to "gre", "fas" to "per",
-        "fra" to "fre", "hye" to "arm", "isl" to "ice", "mkd" to "mac",
-        "mri" to "mao", "msa" to "may", "mya" to "bur", "nld" to "dut",
-        "ron" to "rum", "slk" to "slo", "sqi" to "alb", "hbs" to "scr",
-        "cym" to "wel", "zho" to "chi", "ces" to "cze", "kat" to "geo",
-        "eus" to "baq", "srp" to "scc",
-    )
+/** ISO 639-3 → ISO 639-1 (generated; see file KDoc). */
+private val ISO3_TO_ISO1: Map<String, String> = mapOf(
+"afr" to "af",
+"agq" to "agq",
+"aka" to "ak",
+"amh" to "am",
+"ann" to "ann",
+"ara" to "ar",
+"asa" to "asa",
+"asm" to "as",
+"ast" to "ast",
+"aze" to "az",
+"bam" to "bm",
+"bas" to "bas",
+"bel" to "be",
+"bem" to "bem",
+"ben" to "bn",
+"bez" to "bez",
+"bgc" to "bgc",
+"bho" to "bho",
+"bod" to "bo",
+"bos" to "bs",
+"bre" to "br",
+"brx" to "brx",
+"bul" to "bg",
+"cat" to "ca",
+"ccp" to "ccp",
+"ceb" to "ceb",
+"ces" to "cs",
+"cgg" to "cgg",
+"che" to "ce",
+"chr" to "chr",
+"chv" to "cv",
+"ckb" to "ckb",
+"cor" to "kw",
+"cym" to "cy",
+"dan" to "da",
+"dav" to "dav",
+"deu" to "de",
+"dje" to "dje",
+"doi" to "doi",
+"dsb" to "dsb",
+"dua" to "dua",
+"dyo" to "dyo",
+"dzo" to "dz",
+"ebu" to "ebu",
+"ell" to "el",
+"eng" to "en",
+"epo" to "eo",
+"est" to "et",
+"eus" to "eu",
+"ewe" to "ee",
+"ewo" to "ewo",
+"fao" to "fo",
+"fas" to "fa",
+"fil" to "fil",
+"fin" to "fi",
+"fra" to "fr",
+"frr" to "frr",
+"fry" to "fy",
+"ful" to "ff",
+"fur" to "fur",
+"gla" to "gd",
+"gle" to "ga",
+"glg" to "gl",
+"glv" to "gv",
+"gsw" to "gsw",
+"guj" to "gu",
+"guz" to "guz",
+"hau" to "ha",
+"haw" to "haw",
+"heb" to "he",
+"hin" to "hi",
+"hrv" to "hr",
+"hsb" to "hsb",
+"hun" to "hu",
+"hye" to "hy",
+"ibo" to "ig",
+"iii" to "ii",
+"ina" to "ia",
+"ind" to "id",
+"isl" to "is",
+"ita" to "it",
+"jav" to "jv",
+"jgo" to "jgo",
+"jmc" to "jmc",
+"jpn" to "ja",
+"kab" to "kab",
+"kal" to "kl",
+"kam" to "kam",
+"kan" to "kn",
+"kas" to "ks",
+"kat" to "ka",
+"kaz" to "kk",
+"kde" to "kde",
+"kea" to "kea",
+"kgp" to "kgp",
+"khm" to "km",
+"khq" to "khq",
+"kik" to "ki",
+"kin" to "rw",
+"kir" to "ky",
+"kkj" to "kkj",
+"kln" to "kln",
+"kok" to "kok",
+"kor" to "ko",
+"ksb" to "ksb",
+"ksf" to "ksf",
+"ksh" to "ksh",
+"kur" to "ku",
+"lag" to "lag",
+"lao" to "lo",
+"lav" to "lv",
+"lin" to "ln",
+"lit" to "lt",
+"lkt" to "lkt",
+"lrc" to "lrc",
+"ltz" to "lb",
+"lub" to "lu",
+"lug" to "lg",
+"luo" to "luo",
+"luy" to "luy",
+"mai" to "mai",
+"mal" to "ml",
+"mar" to "mr",
+"mas" to "mas",
+"mdf" to "mdf",
+"mer" to "mer",
+"mfe" to "mfe",
+"mgh" to "mgh",
+"mgo" to "mgo",
+"mkd" to "mk",
+"mlg" to "mg",
+"mlt" to "mt",
+"mni" to "mni",
+"mon" to "mn",
+"mri" to "mi",
+"msa" to "ms",
+"mua" to "mua",
+"mya" to "my",
+"mzn" to "mzn",
+"naq" to "naq",
+"nde" to "nd",
+"nds" to "nds",
+"nep" to "ne",
+"nld" to "nl",
+"nmg" to "nmg",
+"nnh" to "nnh",
+"nno" to "nn",
+"nob" to "nb",
+"nor" to "no",
+"nus" to "nus",
+"nyn" to "nyn",
+"oci" to "oc",
+"ori" to "or",
+"orm" to "om",
+"oss" to "os",
+"pan" to "pa",
+"pcm" to "pcm",
+"pis" to "pis",
+"pol" to "pl",
+"por" to "pt",
+"pus" to "ps",
+"que" to "qu",
+"raj" to "raj",
+"rof" to "rof",
+"roh" to "rm",
+"ron" to "ro",
+"run" to "rn",
+"rus" to "ru",
+"rwk" to "rwk",
+"sag" to "sg",
+"sah" to "sah",
+"san" to "sa",
+"saq" to "saq",
+"sat" to "sat",
+"sbp" to "sbp",
+"seh" to "seh",
+"ses" to "ses",
+"shi" to "shi",
+"sin" to "si",
+"slk" to "sk",
+"slv" to "sl",
+"sme" to "se",
+"smn" to "smn",
+"sms" to "sms",
+"sna" to "sn",
+"snd" to "sd",
+"som" to "so",
+"spa" to "es",
+"sqi" to "sq",
+"srd" to "sc",
+"srp" to "sr",
+"sun" to "su",
+"swa" to "sw",
+"swe" to "sv",
+"tam" to "ta",
+"tat" to "tt",
+"tel" to "te",
+"teo" to "teo",
+"tgk" to "tg",
+"tha" to "th",
+"tir" to "ti",
+"tok" to "tok",
+"ton" to "to",
+"tuk" to "tk",
+"tur" to "tr",
+"twq" to "twq",
+"tzm" to "tzm",
+"uig" to "ug",
+"ukr" to "uk",
+"urd" to "ur",
+"uzb" to "uz",
+"vai" to "vai",
+"vie" to "vi",
+"vun" to "vun",
+"wae" to "wae",
+"wol" to "wo",
+"xho" to "xh",
+"xog" to "xog",
+"yav" to "yav",
+"yid" to "yi",
+"yor" to "yo",
+"yrl" to "yrl",
+"yue" to "yue",
+"zgh" to "zgh",
+"zho" to "zh",
+"zul" to "zu"
+)
 
-    /** Reversed: ISO 639-2B (B) → ISO 639-3 (T) for the differing codes. */
-    private val ISO2B_TO_3: Map<String, String> = ISO3_TO_2B.entries.associate { (a, b) -> b to a }
+/** ISO 639-3 → English display name (generated; see file KDoc). */
+private val ISO3_TO_DISPLAY: Map<String, String> = mapOf(
+"afr" to "Afrikaans",
+"agq" to "Aghem",
+"aka" to "Akan",
+"amh" to "Amharic",
+"ann" to "Obolo",
+"ara" to "Arabic",
+"asa" to "Asu",
+"asm" to "Assamese",
+"ast" to "Asturian",
+"aze" to "Azerbaijani",
+"bam" to "Bambara",
+"bas" to "Basaa",
+"bel" to "Belarusian",
+"bem" to "Bemba",
+"ben" to "Bangla",
+"bez" to "Bena",
+"bgc" to "Haryanvi",
+"bho" to "Bhojpuri",
+"bod" to "Tibetan",
+"bos" to "Bosnian",
+"bre" to "Breton",
+"brx" to "Bodo",
+"bul" to "Bulgarian",
+"cat" to "Catalan",
+"ccp" to "Chakma",
+"ceb" to "Cebuano",
+"ces" to "Czech",
+"cgg" to "Chiga",
+"che" to "Chechen",
+"chr" to "Cherokee",
+"chv" to "Chuvash",
+"ckb" to "Central Kurdish",
+"cor" to "Cornish",
+"cym" to "Welsh",
+"dan" to "Danish",
+"dav" to "Taita",
+"deu" to "German",
+"dje" to "Zarma",
+"doi" to "Dogri",
+"dsb" to "Lower Sorbian",
+"dua" to "Duala",
+"dyo" to "Jola-Fonyi",
+"dzo" to "Dzongkha",
+"ebu" to "Embu",
+"ell" to "Greek",
+"eng" to "English",
+"epo" to "Esperanto",
+"est" to "Estonian",
+"eus" to "Basque",
+"ewe" to "Ewe",
+"ewo" to "Ewondo",
+"fao" to "Faroese",
+"fas" to "Persian",
+"fil" to "Filipino",
+"fin" to "Finnish",
+"fra" to "French",
+"frr" to "Northern Frisian",
+"fry" to "Western Frisian",
+"ful" to "Fula",
+"fur" to "Friulian",
+"gla" to "Scottish Gaelic",
+"gle" to "Irish",
+"glg" to "Galician",
+"glv" to "Manx",
+"gsw" to "Swiss German",
+"guj" to "Gujarati",
+"guz" to "Gusii",
+"hau" to "Hausa",
+"haw" to "Hawaiian",
+"heb" to "Hebrew",
+"hin" to "Hindi",
+"hrv" to "Croatian",
+"hsb" to "Upper Sorbian",
+"hun" to "Hungarian",
+"hye" to "Armenian",
+"ibo" to "Igbo",
+"iii" to "Sichuan Yi",
+"ina" to "Interlingua",
+"ind" to "Indonesian",
+"isl" to "Icelandic",
+"ita" to "Italian",
+"jav" to "Javanese",
+"jgo" to "Ngomba",
+"jmc" to "Machame",
+"jpn" to "Japanese",
+"kab" to "Kabyle",
+"kal" to "Kalaallisut",
+"kam" to "Kamba",
+"kan" to "Kannada",
+"kas" to "Kashmiri",
+"kat" to "Georgian",
+"kaz" to "Kazakh",
+"kde" to "Makonde",
+"kea" to "Kabuverdianu",
+"kgp" to "Kaingang",
+"khm" to "Khmer",
+"khq" to "Koyra Chiini",
+"kik" to "Kikuyu",
+"kin" to "Kinyarwanda",
+"kir" to "Kyrgyz",
+"kkj" to "Kako",
+"kln" to "Kalenjin",
+"kok" to "Konkani",
+"kor" to "Korean",
+"ksb" to "Shambala",
+"ksf" to "Bafia",
+"ksh" to "Colognian",
+"kur" to "Kurdish",
+"lag" to "Langi",
+"lao" to "Lao",
+"lav" to "Latvian",
+"lin" to "Lingala",
+"lit" to "Lithuanian",
+"lkt" to "Lakota",
+"lrc" to "Northern Luri",
+"ltz" to "Luxembourgish",
+"lub" to "Luba-Katanga",
+"lug" to "Ganda",
+"luo" to "Luo",
+"luy" to "Luyia",
+"mai" to "Maithili",
+"mal" to "Malayalam",
+"mar" to "Marathi",
+"mas" to "Masai",
+"mdf" to "Moksha",
+"mer" to "Meru",
+"mfe" to "Morisyen",
+"mgh" to "Makhuwa-Meetto",
+"mgo" to "Metaʼ",
+"mkd" to "Macedonian",
+"mlg" to "Malagasy",
+"mlt" to "Maltese",
+"mni" to "Manipuri",
+"mon" to "Mongolian",
+"mri" to "Māori",
+"msa" to "Malay",
+"mua" to "Mundang",
+"mya" to "Burmese",
+"mzn" to "Mazanderani",
+"naq" to "Nama",
+"nde" to "North Ndebele",
+"nds" to "Low German",
+"nep" to "Nepali",
+"nld" to "Dutch",
+"nmg" to "Kwasio",
+"nnh" to "Ngiemboon",
+"nno" to "Norwegian Nynorsk",
+"nob" to "Norwegian Bokmål",
+"nor" to "Norwegian",
+"nus" to "Nuer",
+"nyn" to "Nyankole",
+"oci" to "Occitan",
+"ori" to "Odia",
+"orm" to "Oromo",
+"oss" to "Ossetic",
+"pan" to "Punjabi",
+"pcm" to "Nigerian Pidgin",
+"pis" to "Pijin",
+"pol" to "Polish",
+"por" to "Portuguese",
+"pus" to "Pashto",
+"que" to "Quechua",
+"raj" to "Rajasthani",
+"rof" to "Rombo",
+"roh" to "Romansh",
+"ron" to "Romanian",
+"run" to "Rundi",
+"rus" to "Russian",
+"rwk" to "Rwa",
+"sag" to "Sango",
+"sah" to "Yakut",
+"san" to "Sanskrit",
+"saq" to "Samburu",
+"sat" to "Santali",
+"sbp" to "Sangu",
+"seh" to "Sena",
+"ses" to "Koyraboro Senni",
+"shi" to "Tachelhit",
+"sin" to "Sinhala",
+"slk" to "Slovak",
+"slv" to "Slovenian",
+"sme" to "Northern Sami",
+"smn" to "Inari Sami",
+"sms" to "Skolt Sami",
+"sna" to "Shona",
+"snd" to "Sindhi",
+"som" to "Somali",
+"spa" to "Spanish",
+"sqi" to "Albanian",
+"srd" to "Sardinian",
+"srp" to "Serbian",
+"sun" to "Sundanese",
+"swa" to "Swahili",
+"swe" to "Swedish",
+"tam" to "Tamil",
+"tat" to "Tatar",
+"tel" to "Telugu",
+"teo" to "Teso",
+"tgk" to "Tajik",
+"tha" to "Thai",
+"tir" to "Tigrinya",
+"tok" to "Toki Pona",
+"ton" to "Tongan",
+"tuk" to "Turkmen",
+"tur" to "Turkish",
+"twq" to "Tasawaq",
+"tzm" to "Central Atlas Tamazight",
+"uig" to "Uyghur",
+"ukr" to "Ukrainian",
+"urd" to "Urdu",
+"uzb" to "Uzbek",
+"vai" to "Vai",
+"vie" to "Vietnamese",
+"vun" to "Vunjo",
+"wae" to "Walser",
+"wol" to "Wolof",
+"xho" to "Xhosa",
+"xog" to "Soga",
+"yav" to "Yangben",
+"yid" to "Yiddish",
+"yor" to "Yoruba",
+"yrl" to "Nheengatu",
+"yue" to "Cantonese",
+"zgh" to "Standard Moroccan Tamazight",
+"zho" to "Chinese",
+"zul" to "Zulu"
+)
 
-    /**
-     * Full matrix of the officially assigned ISO 639-1 codes, as
-     * `iso1:iso3(T):English name` triplets. One row per 639-1 entry — the
-     * same population the JDK locale sweep exposes on Android/desktop hosts.
-     */
-    private const val LANG_TABLE: String =
-        "aa:aar:Afar;ab:abk:Abkhazian;ae:ave:Avestan;af:afr:Afrikaans;" +
-            "ak:aka:Akan;am:amh:Amharic;an:arg:Aragonese;ar:ara:Arabic;" +
-            "as:asm:Assamese;av:ava:Avaric;ay:aym:Aymara;az:aze:Azerbaijani;" +
-            "ba:bak:Bashkir;be:bel:Belarusian;bg:bul:Bulgarian;bh:bih:Bihari languages;" +
-            "bi:bis:Bislama;bm:bam:Bambara;bn:ben:Bengali;bo:bod:Tibetan;" +
-            "br:bre:Breton;bs:bos:Bosnian;ca:cat:Catalan;ce:che:Chechen;" +
-            "ch:cha:Chamorro;co:cos:Corsican;cr:cre:Cree;cs:ces:Czech;" +
-            "cu:chu:Church Slavic;cv:chv:Chuvash;cy:cym:Welsh;da:dan:Danish;" +
-            "de:deu:German;dv:div:Divehi;dz:dzo:Dzongkha;ee:ewe:Ewe;" +
-            "el:ell:Greek;en:eng:English;eo:epo:Esperanto;es:spa:Spanish;" +
-            "et:est:Estonian;eu:eus:Basque;fa:fas:Persian;ff:ful:Fulah;" +
-            "fi:fin:Finnish;fj:fij:Fijian;fo:fao:Faroese;fr:fra:French;" +
-            "fy:fry:Western Frisian;ga:gle:Irish;gd:gla:Scottish Gaelic;gl:glg:Galician;" +
-            "gv:glv:Manx;gn:grn:Guarani;gu:guj:Gujarati;ha:hau:Hausa;" +
-            "he:heb:Hebrew;hi:hin:Hindi;ho:hmo:Hiri Motu;hr:hrv:Croatian;" +
-            "ht:hat:Haitian Creole;hu:hun:Hungarian;hy:hye:Armenian;hz:her:Herero;" +
-            "ia:ina:Interlingua;id:ind:Indonesian;ie:ile:Interlingue;ig:ibo:Igbo;" +
-            "ii:iii:Sichuan Yi;ik:ipk:Inupiaq;io:ido:Ido;is:isl:Icelandic;" +
-            "it:ita:Italian;iu:iku:Inuktitut;ja:jpn:Japanese;jv:jav:Javanese;" +
-            "ka:kat:Georgian;kg:kon:Kongo;ki:kik:Kikuyu;kj:kua:Kuanyama;" +
-            "kk:kaz:Kazakh;kl:kal:Kalaallisut;km:khm:Central Khmer;kn:kan:Kannada;" +
-            "ko:kor:Korean;kr:kau:Kanuri;ks:kas:Kashmiri;ku:kur:Kurdish;" +
-            "kv:kom:Komi;kw:cor:Cornish;ky:kir:Kirghiz;la:lat:Latin;" +
-            "lb:ltz:Luxembourgish;lg:lug:Ganda;li:lim:Limburgan;ln:lin:Lingala;" +
-            "lo:lao:Lao;lt:lit:Lithuanian;lu:lub:Luba-Katanga;lv:lav:Latvian;" +
-            "mg:mlg:Malagasy;mh:mah:Marshallese;mk:mkd:Macedonian;ml:mal:Malayalam;" +
-            "mn:mon:Mongolian;mr:mar:Marathi;ms:msa:Malay;mt:mlt:Maltese;" +
-            "my:mya:Burmese;na:nau:Nauru;nb:nob:Norwegian Bokmål;nd:nde:North Ndebele;" +
-            "ne:nep:Nepali;ng:ndo:Ndonga;nl:nld:Dutch;nn:nno:Norwegian Nynorsk;" +
-            "no:nor:Norwegian;nr:nbl:South Ndebele;nv:nav:Navajo;ny:nya:Chichewa;oc:oci:Occitan;" +
-            "oj:oji:Ojibwa;om:orm:Oromo;or:ori:Oriya;os:oss:Ossetian;" +
-            "pa:pan:Panjabi;pi:pli:Pali;pl:pol:Polish;ps:pus:Pushto;" +
-            "pt:por:Portuguese;qu:que:Quechua;rm:roh:Romansh;rn:run:Rundi;" +
-            "ro:ron:Romanian;ru:rus:Russian;rw:kin:Kinyarwanda;sa:san:Sanskrit;" +
-            "sc:srd:Sardinian;sd:snd:Sindhi;se:sme:Northern Sami;sg:sag:Sango;" +
-            "si:sin:Sinhala;sk:slk:Slovak;sl:slv:Slovenian;sm:smo:Samoan;" +
-            "sn:sna:Shona;so:som:Somali;sq:sqi:Albanian;sr:srp:Serbian;" +
-            "ss:ssw:Swati;st:sot:Southern Sotho;su:sun:Sundanese;sv:swe:Swedish;" +
-            "sw:swa:Swahili;ta:tam:Tamil;te:tel:Telugu;tg:tgk:Tajik;" +
-            "th:tha:Thai;ti:tir:Tigrinya;tk:tuk:Turkmen;tl:tgl:Tagalog;" +
-            "tn:tsn:Tswana;to:ton:Tonga;tr:tur:Turkish;ts:tso:Tsonga;" +
-            "tt:tat:Tatar;tw:twi:Twi;ty:tah:Tahitian;ug:uig:Uighur;" +
-            "uk:ukr:Ukrainian;ur:urd:Urdu;uz:uzb:Uzbek;ve:ven:Venda;" +
-            "vi:vie:Vietnamese;vo:vol:Volapük;wa:wln:Walloon;wo:wol:Wolof;" +
-            "xh:xho:Xhosa;yi:yid:Yiddish;yo:yor:Yoruba;za:zha:Zhuang;" +
-            "zh:zho:Chinese;zu:zul:Zulu"
+internal actual fun platformShortCodeToIso3(cleaned: String): String? =
+    ISO3_TO_ISO1.entries.firstOrNull { it.value == cleaned }?.key
 
-    private val iso1ToIso3: Map<String, String>
-    private val iso3ToIso1: Map<String, String>
-    private val iso3ToDisplay: Map<String, String>
+internal actual fun platformShortCodeToIso1(code: String): String? =
+    ISO3_TO_ISO1.entries.firstOrNull { it.value == code.trim().replace('_', '-').substringBefore('-') }?.value
 
-    init {
-        val forward = mutableMapOf<String, String>()
-        val names = mutableMapOf<String, String>()
-        for (row in LANG_TABLE.split(';')) {
-            val fields = row.split(':')
-            if (fields.size != 3) continue
-            val (one, three, name) = fields
-            forward[one] = three
-            names[three] = name
-        }
-        iso1ToIso3 = forward
-        iso3ToIso1 = forward.entries.associate { (one, three) -> three to one }
-        iso3ToDisplay = names
-    }
+internal actual fun platformIso3ToIso1(iso3: String): String? = ISO3_TO_ISO1[iso3]
 
-    /** Converts an arbitrary language code (1/2/3-letter or BCP-47) to ISO 639-3. */
-    fun toIso3(code: String?): String? {
-        if (code.isNullOrBlank()) return null
-        val cleaned = code.trim().replace('_', '-').substringBefore('-')
-        val lower = when (cleaned.lowercase()) {
-            // JDK grandfetched tag equivalents (iw→he, in→id, ji→yi): the JVM
-            // original resolves them via host legacy tables; wasm normalizes.
-            "iw" -> "he"
-            "in" -> "id"
-            "ji" -> "yi"
-            else -> cleaned.lowercase()
-        }
-        // Short (639-1 or unregistered BCP-47 prefix) input: table lookup, then
-        // alphabetic passthrough (the JVM fallback's net behavior).
-        if (cleaned.length <= 2) {
-            if (!lower.all { it.isLetter() }) return null
-            return iso1ToIso3[lower] ?: lower.ifBlank { null }
-        }
-        // 3-letter: could be 639-2B (B) or 639-3 (T). Normalize B→T, else passthrough.
-        return ISO2B_TO_3[lower] ?: lower.ifBlank { null }
-    }
-
-    /** Converts an arbitrary language code to ISO 639-1 (2-letter). Null if unmappable. */
-    fun toIso1(code: String?): String? {
-        val iso3 = toIso3(code) ?: return null
-        // Codes without a 639-1 counterpart echo their 3-letter form, matching
-        // the JVM fallback that re-parses the tag into itself.
-        return iso3ToIso1[iso3] ?: iso3
-    }
-
-    /** Converts an arbitrary language code to ISO 639-2B (OpenSubtitles). */
-    fun toIso2B(code: String?): String? {
-        val iso3 = toIso3(code) ?: return null
-        return ISO3_TO_2B[iso3] ?: iso3
-    }
-
-    /**
-     * Joins [codes] (any dialect) into a comma-separated list in the target
-     * dialect, dropping any that fail to convert. Returns "" for empty input so
-     * callers can append `&language=` unconditionally without trailing junk.
-     */
-    fun join(codes: List<String>, convert: (String) -> String?): String =
-        codes.mapNotNull(convert).filter { it.isNotBlank() }.joinToString(",")
-
-    /** Human-readable display name for a code, e.g. `eng` → "English". */
-    fun displayName(code: String?): String? {
-        if (code.isNullOrBlank()) return null
-        val iso3 = toIso3(code) ?: return code
-        return iso3ToDisplay[iso3] ?: iso3
-    }
-}
+internal actual fun platformIso3DisplayName(iso3: String): String? = ISO3_TO_DISPLAY[iso3]

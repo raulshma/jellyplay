@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -28,6 +29,21 @@ import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+
+/**
+ * How BOOK items (which ship no 16:9 backdrop — their one asset is the
+ * portrait cover) render the hero band:
+ *  - [NONE] — non-book items; the hero shows the 16:9 backdrop.
+ *  - [BLURRED] — the cover over-scaled 1.25× and blurred 28dp (the book-app
+ *    hero on tablet/TV/desktop, where the poster card also shows).
+ *  - [SHARP] — the cover cropped edge-to-edge with no blur (compact phones,
+ *    where the hero replaces the poster card entirely).
+ */
+internal enum class BookCoverHero {
+    NONE,
+    BLURRED,
+    SHARP,
+}
 
 /**
  * The full-bleed parallax backdrop behind the detail content: animated image
@@ -52,6 +68,7 @@ internal fun DetailBackdrop(
      * without a network round-trip. Null for REMOTE (behavior unchanged).
      */
     localBackdropPath: String? = null,
+    coverHero: BookCoverHero = BookCoverHero.NONE,
 ) {
     val baseBackdropHeight = scrollState.baseBackdropHeight
     val backdropHeight = scrollState.backdropHeight
@@ -106,17 +123,23 @@ internal fun DetailBackdrop(
                 .fillMaxSize()
                 .graphicsLayer {
                     val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
-                    scaleX = scale
-                    scaleY = scale
+                    // Blur mode over-scales so the blur edges never show.
+                    val coverBoost = if (coverHero == BookCoverHero.BLURRED) 1.25f else 1f
+                    scaleX = scale * coverBoost
+                    scaleY = scale * coverBoost
                 }
-            // Prefer the on-disk backdrop (DetailAssets.backdropPath) for a LOCAL
-            // origin; fall back to the server URL for REMOTE or when no local
-            // path was resolved.
+            // Prefer the on-disk backdrop (DetailAssets.backdropPath, or the
+            // book cover's poster path) for a LOCAL origin; fall back to the
+            // server URL for REMOTE or when no local path was resolved.
             MediaImage(
                 url = localBackdropPath ?: getBackdropUrl(backdropId),
                 contentDescription = null,
                 blurHash = backdropBlurHash,
-                modifier = backdropModifier,
+                modifier = backdropModifier
+                    .then(
+                        if (coverHero == BookCoverHero.BLURRED) Modifier.blur(28.dp)
+                        else Modifier,
+                    ),
                 contentScale = ContentScale.Crop,
                 // Full-bleed hero backdrop: decode large enough for 4K TV width
                 // (3840 px). The default 384² produces visible blur on TV.

@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +75,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
+import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
+import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
 import kotlin.math.pow
@@ -107,10 +110,9 @@ private const val A11Y_STEP_DELTA = 0.1f
 
 @Composable
 internal fun GestureOverlay(
-    seekDirection: Int,
-    seekOffsetMs: Long,
-    brightnessValue: Float,
-    volumeValue: Float,
+    seekState: DpadSeekState,
+    brightnessFlow: StateFlow<Float>,
+    volumeFlow: StateFlow<Float>,
     indicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     gesturesEnabled: Boolean,
     swipeSeekMaxMs: Long,
@@ -133,6 +135,13 @@ internal fun GestureOverlay(
     val currentOnHapticPulse by rememberUpdatedState(onHapticPulse)
     val currentOnStartGesture by rememberUpdatedState(onStartGesture)
     val currentOnCancelOverlays by rememberUpdatedState(onCancelOverlays)
+
+    // The overlay's streams (brightness/volume bars, D-pad seek indicator) are
+    // collected/read here, at their only consumer, so per-pointer-change-frame
+    // drag and key-repeat updates recompose the overlay alone instead of the
+    // player screen scope that hosts the engine surface.
+    val brightnessValue by brightnessFlow.collectAsStateWithLifecycle()
+    val volumeValue by volumeFlow.collectAsStateWithLifecycle()
 
     // Bound-haptic checks below must see the live values, but adding them as
     // pointerInput keys would restart the handler mid-gesture — read through
@@ -277,11 +286,11 @@ internal fun GestureOverlay(
                 } else Modifier
             ),
     ) {
-        if (seekDirection != 0 && seekOffsetMs > 0) {
-            val isLeft = seekDirection < 0
+        if (seekState.direction != 0 && seekState.offsetMs > 0) {
+            val isLeft = seekState.direction < 0
             SeekCircleOverlay(
                 isLeft = isLeft,
-                seekOffsetMs = seekOffsetMs,
+                seekOffsetMs = seekState.offsetMs,
                 modifier = Modifier.fillMaxSize(),
             )
         }

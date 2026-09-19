@@ -23,7 +23,7 @@ import okio.Path.Companion.toPath
  * Config-mapping test for the [com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl]
  * bridge: a write into the NetworkOfflineStore preference domain must land in
  * the [OkHttpConfig] StateFlow the network layer reads — including the
- * self-signed trust set this wave added. Backed by a REAL preferences
+ * self-signed trust set added here. Backed by a REAL preferences
  * DataStore over a per-test temp file (the datastore module's
  * TestDataStoreProvider is test-scope-private to its own module).
  *

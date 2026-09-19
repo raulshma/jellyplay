@@ -17,25 +17,100 @@ import coil3.request.Options
 import coil3.request.SuccessResult
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataWasmModule
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.database.di.databaseDaosModule
+import com.raulshma.jellyplay.core.database.di.webDatabaseModule
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.webDatastoreModule
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
-import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 import com.raulshma.jellyplay.feature.details.detailsModule
+import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
+import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
 import kotlinx.browser.document
 import org.koin.core.context.startKoin
+
+/**
+ * The shared FEATURE modules the web shell registers, exactly — the single
+ * declaration both the startKoin call below and
+ * KoinModuleRegistrationGuardTest's web check derive from (the test reads
+ * this list out of this file's source text; the old hand-kept test-side
+ * allowlist — and its lockstep comment — are gone). When the next feature
+ * gains a wasmJs target and a web nav entry, register it here; the guard
+ * test follows automatically.
+ *
+ * Per-module notes (registration is graph-shaped, routing is per-screen):
+ *  - [requestsModule]: the first feature slice on web — the shared
+ *    RequestsViewModel registration; its repository slice rides
+ *    `dataWasmModule`.
+ *  - [calendarModule]: the second feature slice — the calendar VM (its ctor
+ *    deps ArrRepository/SeerrRepository/ExperimentalStore all resolve from
+ *    the modules above; the module registers nothing new).
+ *  - [detailsModule]: the SeerrDetail slice. The wasm-clean module (the
+ *    MediaDetail cluster's VM/factory defs moved to the jvm platform modules
+ *    the android/desktop apps register); its only def the browser ever
+ *    resolves is SeerrDetailViewModel, whose ctor deps — SeerrRepository +
+ *    SeerrRequestDelegate (dataWasmModule), PreferenceProjections +
+ *    SeerrPreferencesStore (datastoreCommonModule), and the narrow
+ *    MediaRepository (webDetailsPlatformModule below, over networkWasmModule's
+ *    LibraryApiClient) — all resolve on web.
+ *  - [arrqueueModule]: the ARR download queue (third shared feature screen —
+ *    WebAppRoot's entry<Route.ArrQueue>). ArrRepository resolves from
+ *    dataWasmModule; ExperimentalStore from datastoreCommonModule.
+ *  - [onboardingModule]: the onboarding wizard (fourth shared feature
+ *    screen — entry<Route.Onboarding>). All four VM deps resolve from
+ *    datastoreCommonModule + webDatastoreModule.
+ *  - [settingsModule]: the settings feature's first wasm-resolvable slice —
+ *    entry<Route.ArrSettings> (the direct *arr integration settings;
+ *    WebAppRoot wires the two documented calendar/arrqueue no-op stubs to
+ *    it). ArrSettingsViewModel's whole closure resolves on web:
+ *    ArrRepository (dataWasmModule), ArrPreferencesStore (datastoreCommonModule
+ *    over webDatastoreModule's arr_prefs DataStore) and
+ *    ArrSecureCredentialsStore (webDatastoreModule's session-memory
+ *    WasmSecureKeyValueStorage — the same process-lifetime cut every
+ *    non-Seerr web credential store keeps). SeerrSettingsViewModel's closure
+ *    resolves too, but no web surface pushes Route.SeerrSettings (the
+ *    shell's own WebSeerrPane covers the credentials function), so it stays
+ *    latent like the rest of the module's defs — the detailsModule
+ *    precedent. LATENT ON WEB (never resolved in the browser): the wasm
+ *    AuthRepository binding EXISTS since the session-seam port
+ *    (dataWasmModule's WasmAuthRepository — the web landing drives it), but
+ *    SettingsViewModel/ServerManagementViewModel/SecuritySettingsViewModel/
+ *    AboutViewModel stay latent on their OTHER ctor deps:
+ *    SettingsBackupIo/AppMetaProvider/LogCollector are androidMain/jvmMain
+ *    platform defs with no wasm actuals (ServerAdminActions does have one —
+ *    WasmServerAdminActions — yet each of those four VMs pulls at least one
+ *    actual-less dep).
+ *    SubtitleProviderSettingsViewModel needs
+ *    networkJvmModule's Map<SubtitleProviderKind, SubtitleProvider>;
+ *    LibraryLayout/NotificationSettingsViewModel need the real Room-backed
+ *    MediaRepository/PlaylistRepository cluster (the web MediaRepository is
+ *    WebMediaRepositoryNarrow — the SeerrDetail cross-link that loudly
+ *    throws on every other member). The module's two eager defs are
+ *    boot-safe here: SettingsSearchCatalogPrewarmer(createdAtStart) needs
+ *    only the application scope and swallows its own failures; the platform
+ *    fragment is the wasm actual (honest no-op seams + the all-false
+ *    SettingsCapabilities).
+ */
+internal val webFeatureModules = listOf(
+    requestsModule,
+    calendarModule,
+    detailsModule,
+    arrqueueModule,
+    onboardingModule,
+    settingsModule,
+)
 
 /**
  *  web shell entry (docs/kmp-migration-plan.md §): boots the
@@ -45,10 +120,11 @@ import org.koin.core.context.startKoin
  * primitives over the JB fork's NavDisplay.
  *
  * W.1 chunk 3: `networkWasmModule` registers the Ktor wasm clients
- * (auth/library/playback over ONE shared [AtomicSessionState]).:
- * [WebAppRoot] now DRIVES the auth client — connect probe, sign-in,
- * capabilities, logout — through WebConnectController, so the shell observes
- * published sessions it actually created end-to-end.
+ * (auth/library/playback over ONE shared [AtomicSessionState][com.raulshma.jellyplay.core.network.auth.AtomicSessionState]).:
+ * [WebAppRoot] drives the shared session seam — connect probe, sign-in,
+ * capabilities, logout, boot restore — through WebConnectController over
+ * the shared AuthRepository (dataWasmModule's WasmAuthRepository), so the
+ * shell observes published sessions it actually created end-to-end.
  *
  * W.4: boots the Coil image singleton (see main() below). Wired against the
  * repo-wide coil 3.4.0 pin — the last release line whose wasmJs klibs are
@@ -99,32 +175,39 @@ fun main() {
     // DI first: everything composable resolves lazily through Koin, so the
     // container must exist before the first composition. Same module shape
     // as the desktop shell's startKoin, minus the jvm-only stacks. The
-    // requests slice (feature VM + data repositories) — exactly the
-    // set the KoinModuleRegistrationGuardTest's web allowlist pins.
+    // shared feature slices come from [webFeatureModules] — the single
+    // declaration KoinModuleRegistrationGuardTest's web check derives from.
     val koinApp = startKoin {
         modules(
             datastoreCommonModule,
             webDatastoreModule(),
             networkWasmModule,
             dataWasmModule,
-            requestsModule,
-            // The second feature slice on web — the calendar VM
-            // (its ctor deps ArrRepository/SeerrRepository/ExperimentalStore
-            // all resolve from the modules above, calendarModule registers
-            // nothing new). KoinModuleRegistrationGuardTest's web allowlist
-            // pins this registration in the same change.
-            calendarModule,
-            // The SeerrDetail slice. detailsModule is now the
-            // wasm-clean module (the MediaDetail cluster's VM/factory defs
-            // moved to the jvm platform modules the android/desktop apps
-            // register); its only def the browser ever resolves is
-            // SeerrDetailViewModel, whose ctor deps — SeerrRepository +
-            // SeerrRequestDelegate (dataWasmModule), PreferenceProjections +
-            // SeerrPreferencesStore (datastoreCommonModule), and the narrow
-            // MediaRepository (webDetailsPlatformModule below, over
-            // networkWasmModule's LibraryApiClient) — all resolve on web.
-            detailsModule,
+            *webFeatureModules.toTypedArray(),
             webDetailsPlatformModule(),
+            // infrastructure registration: the OPFS-backed Room database
+            // (WebWorkerSQLiteDriver over the vendored worker — see
+            // shared/core/database's WebDatabaseModule KDoc). Nothing on web
+            // resolves JellyPlayDatabase or a DAO yet, so this changes no
+            // behavior — it exists so the DB single is part of the boot graph
+            // and any lazy resolution later finds it. (No
+            // KoinModuleRegistrationGuardTest change needed: the web-prefixed
+            // core modules are platform modules by its platformPrefixes rule,
+            // same as webDatastoreModule.)
+            webDatabaseModule(),
+            // the DAO bindings for the Room database above — the module
+            // promoted from database jvmShared to commonMain, so the
+            // promoted core:data repository impls (dataWasmModule's
+            // SearchHistory/ItemPlaybackPreference/SeenMedia/PlaybackOutbox/
+            // Smart+MoodPlaylist/QueuePersistenceHelper slice) resolve their
+            // ctor DAO deps on web. Listed after webDatabaseModule because
+            // every definition reads get<JellyPlayDatabase>() from it (Koin
+            // resolves lazily, so order is documentation, not a constraint).
+            // (No KoinModuleRegistrationGuardTest change needed: the test's
+            // reverse check skips 'database'-prefixed core modules via
+            // platformPrefixes, and its web forward check only covers
+            // shared/feature commonMain modules.)
+            databaseDaosModule,
         )
     }
 
@@ -246,16 +329,18 @@ fun main() {
             // WebShellPlatformOwners.kt) — wraps the whole shell so the
             // requests entry's koinViewModel() resolves, desktop-style.
             ProvideWebShellViewModelOwners {
-                // The one shared session state the three wasm API clients are
-                // built around — passed in directly rather than via a compose
-                // Koin scope (koin-compose is not a web-shell dep yet). A later pass
-                // adds the auth client (the session's writer) and the shared
-                // "user_prefs" DataStore (last-server-url persistence for the
-                // connect form); WebAppRoot provisions the core/ui composition
-                // locals around its NavDisplay and renders the web-only panes.
+                // The session seam the shell drives (WasmAuthRepository from
+                // dataWasmModule — resolved here, passed down; the shared
+                // "user_prefs" DataStore rides along for the landing form's
+                // one-time legacy URL-seed migration). The Seerr deps follow
+                // the same resolved-here pattern. All UNNAMED singles
+                // (DatastoreQualifiers qualify only the raw DataStores):
+                // datastoreCommonModule → SeerrPreferencesStore,
+                // webDatastoreModule → SeerrSecureCredentialsStore
+                // (localStorage-backed), dataWasmModule → AuthRepository +
+                // SeerrRepository.
                 WebAppRoot(
-                    sessionState = koinApp.koin.get(),
-                    authApiClient = koinApp.koin.get(),
+                    authRepository = koinApp.koin.get(),
                     userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
                     // The WebSeerrController deps (same pattern as
                     // userPrefs above — resolved here, passed down). All
@@ -322,7 +407,7 @@ private fun e2eVariantParam(): String? = js("new URLSearchParams(window.location
 private fun e2eRouteParam(): String? = js("new URLSearchParams(window.location.search).get('e2eRoute')")
 
 /**
- *: process-lifetime counters for the web Coil singleton, surfaced in
+ * process-lifetime counters for the web Coil singleton, surfaced in
  * the WebDiagnostics pane as the load-bearing `COIL_STATS:` / `COIL_CACHE:`
  * lines (see that pane's strings-contract note) and read by the long-session
  * soak lane (tools/e2e/web-soak.mjs). Deliberately dumb totals — no reset, no
@@ -428,7 +513,7 @@ internal object CoilStatsEventListener : EventListener() {
  * ImageLoader.Builder.build() uses when no cache is supplied — so eviction
  * bounds, weak-reference behavior, and cache keys are all unchanged; only the
  * lookup outcome is observed. initialMaxSize is @ExperimentalCoilApi in the
- * interface (the one opt-in this wave needs; a decorator must implement it).
+ * interface (the one opt-in it needs; a decorator must implement it).
  */
 @OptIn(ExperimentalCoilApi::class)
 internal class CountingMemoryCache(private val delegate: MemoryCache) : MemoryCache by delegate {

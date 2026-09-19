@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.filterableMediaTypes
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
@@ -211,7 +212,7 @@ fun LibraryFilterSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                MediaType.entries.filter { it != MediaType.UNKNOWN }.forEach { mediaType ->
+                filterableMediaTypes.forEach { mediaType ->
                     GlassFilterChip(
                         label = mediaType.mediaTypeDisplayNamePlural(),
                         selected = mediaType in selectedMediaTypes,

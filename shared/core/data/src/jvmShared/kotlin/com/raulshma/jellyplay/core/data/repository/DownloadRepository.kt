@@ -4,19 +4,9 @@ import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
 import kotlinx.coroutines.flow.Flow
 
-/**
- * Live per-row transfer progress for an in-flight download — the feature-
- * facing shape of the DAO's `DownloadProgressRow` projection (features never
- * import DAO types; the impl maps at the repository boundary). Rows here are
- * by definition in flight (PENDING/QUEUED/DOWNLOADING); their structural
- * status is read from [getAllDownloads], which re-emits on every status
- * transition.
- */
-data class DownloadProgress(
-    val id: String,
-    val downloadedBytes: Long,
-    val speedBytesPerSec: Long,
-)
+// `DownloadProgress` (the feature-facing per-row transfer projection) lives in
+// commonMain now (repository/DownloadProgress.kt) — promoted verbatim with the
+// DownloadQueue interface, whose surface names it.
 
 /**
  * Download lifecycle, status queries, and series-batch orchestration.

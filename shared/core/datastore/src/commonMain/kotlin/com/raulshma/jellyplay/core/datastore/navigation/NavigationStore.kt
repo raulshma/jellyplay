@@ -5,19 +5,14 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -50,13 +45,8 @@ class NavigationStore constructor(
     private var cachedHiddenNavItems = ParsedCache<Set<String>>(null, emptySet())
     private var cachedNavItemOrder = ParsedCache<List<String>>(null, emptyList())
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val navigation: StateFlow<NavigationSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, NavigationSlice())
+    val navigation: StateFlow<NavigationSlice> =
+        dataStore.sliceStateFlow(scope, seed = NavigationSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): NavigationSlice = NavigationSlice(
         navBarShowLabels = PreferenceCodec.readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
@@ -65,25 +55,28 @@ class NavigationStore constructor(
         navItemOrder = readNavItemOrder(prefs),
     )
 
-    private fun readHiddenNavItems(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.HIDDEN_NAV_ITEMS]
-        return if (raw != cachedHiddenNavItems.raw) {
-            try {
-                raw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedHiddenNavItems = ParsedCache(raw, it) }
-        } else cachedHiddenNavItems.value
-    }
+    // MemoizeNull (this store's pre-promotion policy at every site): a null
+    // raw is a cacheable input — the decoded value depends only on the raw
+    // string, so a memoised default is safe to serve.
+    private fun readHiddenNavItems(prefs: Preferences): Set<String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.HIDDEN_NAV_ITEMS],
+            cache = cachedHiddenNavItems,
+            default = emptySet(),
+            parse = { json.decodeFromString<Set<String>>(it) },
+            cacheRef = { cachedHiddenNavItems = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readNavItemOrder(prefs: Preferences): List<String> {
-        val raw = prefs[Keys.NAV_ITEM_ORDER]
-        return if (raw != cachedNavItemOrder.raw) {
-            try {
-                raw?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-                .also { cachedNavItemOrder = ParsedCache(raw, it) }
-        } else cachedNavItemOrder.value
-    }
+    private fun readNavItemOrder(prefs: Preferences): List<String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.NAV_ITEM_ORDER],
+            cache = cachedNavItemOrder,
+            default = emptyList(),
+            parse = { json.decodeFromString<List<String>>(it) },
+            cacheRef = { cachedNavItemOrder = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
     // ------------------------------------------------------------------
     // Setters
@@ -106,13 +99,15 @@ class NavigationStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. These are the
-     * nav keys split out of the legacy `HOME_DISCOVERY` reset category.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. These are the nav keys split out of the
+     * legacy `HOME_DISCOVERY` reset category.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.NAV_BAR_SHOW_LABELS, Keys.HIDE_BOTTOM_NAV_ON_SCROLL,
-        Keys.NAV_ITEM_ORDER, Keys.HIDDEN_NAV_ITEMS,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -127,24 +122,6 @@ class NavigationStore constructor(
             Keys.NAV_ITEM_ORDER,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the bottom-navigation keys owned by
-     * this store from a decoded [UserPreferences]. The facade calls this (and
-     * every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.NAV_BAR_SHOW_LABELS] = userPreferences.navBarShowLabels
-            it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = userPreferences.hideBottomNavOnScroll
-            it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(userPreferences.hiddenNavItems)
-            it[Keys.NAV_ITEM_ORDER] = json.encodeToString(userPreferences.navItemOrder)
-        }
     }
 
     /**

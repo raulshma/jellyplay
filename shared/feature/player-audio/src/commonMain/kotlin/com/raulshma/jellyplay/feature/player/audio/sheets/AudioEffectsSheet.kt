@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.audio.sheets
 
 import androidx.compose.foundation.layout.Arrangement
+import com.raulshma.jellyplay.feature.player.audio.formatOneDecimal
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -430,7 +431,7 @@ internal fun AudioEffectsSheet(
                                 if (state.pitchSemitones == 0f) stringResource(Res.string.audio_effects_pitch_original)
                                 else stringResource(
                                     Res.string.audio_effects_pitch_value,
-                                    "${if (state.pitchSemitones > 0) "+" else ""}${String.format("%.1f", state.pitchSemitones)}",
+                                    "${if (state.pitchSemitones > 0) "+" else ""}${formatOneDecimal(state.pitchSemitones.toDouble())}",
                                 ),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

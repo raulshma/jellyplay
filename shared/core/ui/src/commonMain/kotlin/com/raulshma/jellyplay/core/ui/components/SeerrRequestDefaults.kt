@@ -13,8 +13,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
  * Extracted verbatim from the panel's inline closures (the `animeDefault`
  * helper, the `defaultIndex` local and the auto-select `LaunchedEffect`
  * bodies) so the JVM test lane can pin it — previously the only pin was a
- * legacy :core:ui androidTest no CI lane runs (the `PlayerKeyPolicy`
- * precedent: leaf math in a pure object beside the component, effect shells
+ * an androidTest in the legacy :core:ui (compile-gated only, no runner —
+ * the same precedent: leaf math in a pure object beside the component, effect shells
  * stay in composition). No Compose types in these signatures.
  *
  * Decision rules (Jellyseerr's requester, mirrored):

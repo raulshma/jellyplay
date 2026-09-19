@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 @Entity(
     tableName = "smart_playlists",
@@ -22,9 +23,9 @@ data class SmartPlaylistEntity(
     @ColumnInfo(defaultValue = "RANDOM")
     val sortBy: String = "RANDOM",
     @ColumnInfo(defaultValue = "0")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = wallNowMillis(),
     @ColumnInfo(defaultValue = "0")
-    val updatedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = wallNowMillis(),
 )
 
 @Entity(
@@ -50,9 +51,9 @@ data class MoodPlaylistEntity(
     val maxItems: Int = 50,
     val themeColorHex: String? = null,
     @ColumnInfo(defaultValue = "0")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = wallNowMillis(),
     @ColumnInfo(defaultValue = "0")
-    val updatedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = wallNowMillis(),
 )
 
 @Entity(
@@ -67,5 +68,5 @@ data class MoodPlaylistPreferenceEntity(
     @ColumnInfo(defaultValue = "0")
     val lastPlayedAt: Long = 0L,
     @ColumnInfo(defaultValue = "0")
-    val updatedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = wallNowMillis(),
 )

@@ -41,6 +41,9 @@ fun EntryProviderScope<NavKey>.detailsSection(
             onAudioClick = { itemId ->
                 navigator.navigate(Route.AudioPlayer(itemId))
             },
+            onReadClick = { itemId, jumpHref, jumpPage ->
+                navigator.navigate(Route.BookReader(itemId, jumpHref, jumpPage))
+            },
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
             onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
             onNavigateToSeries = { seriesId -> navigator.navigate(Route.MediaDetail(seriesId)) },

@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ok
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -103,10 +104,9 @@ fun UpcomingCalendarScreen(
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
     // No-detail tap feedback (screen-forward seam): resolve the string here and
-    // forward through the messenger actual — the legacy UserMessageBus /
-    // UiText(R.id) machinery stays behind the Android actual (livetv
-    // LiveTvMessenger pattern; desktop drops the message).
-    val messenger = rememberCalendarMessenger()
+    // post it through the app-wide UserMessageBus (the drop-by-default local
+    // simply discards the message when no host provides a bus).
+    val bus = LocalUserMessageBus.current
     val noDetailText = stringResource(Res.string.calendar_no_detail)
     val listState = rememberLazyListState()
     val today = remember { today() }
@@ -241,7 +241,7 @@ fun UpcomingCalendarScreen(
                                                     val mediaType = if (item.mediaType == ArrMediaType.MOVIE) "movie" else "tv"
                                                     onItemClick(tmdbId, mediaType)
                                                 } else {
-                                                    messenger?.info(noDetailText)
+                                                    bus.info(noDetailText)
                                                 }
                                             },
                                         )

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -53,9 +53,9 @@ import kotlin.test.assertEquals
  * 4. Quick actions delegate: [SearchViewModel.markItemPlayed] →
  *    [UserDataMutator.setPlayed] (silent-mode default — containers untouched),
  *    [SearchViewModel.downloadItem] →
- *    [MediaDownloadActions.downloadAndReport] with the host's open-detail
+ *    [QuickDownloadActions.downloadAndReport] with the host's open-detail
  *    callback, [SearchViewModel.removeItemDownload] →
- *    [MediaDownloadActions.removeDownload], and the `downloadedIds` exposure
+ *    [QuickDownloadActions.removeDownload], and the `downloadedIds` exposure
  *    is the actions' own flow.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -73,7 +73,7 @@ class SearchViewModelFilterPersistenceTest {
     private lateinit var mediaSearchEngine: MediaSearchEngine
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var searchFiltersStore: SearchFiltersStore
-    private lateinit var mediaDownloadActions: MediaDownloadActions
+    private lateinit var quickDownloadActions: QuickDownloadActions
 
     /** Backs [SearchFiltersStore.searchFiltersJson]; reseated per test. */
     private val persistedJson = MutableStateFlow<String?>(null)
@@ -92,13 +92,13 @@ class SearchViewModelFilterPersistenceTest {
         mediaSearchEngine = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         searchFiltersStore = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
+        quickDownloadActions = mockk(relaxed = true)
 
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns false
         every { searchFiltersStore.searchFiltersJson } returns persistedJson
-        every { mediaDownloadActions.downloadedIds } returns downloadedIds
+        every { quickDownloadActions.downloadedIds } returns downloadedIds
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getTags(any(), any(), any()) } returns Result.success(emptyList())
@@ -124,7 +124,7 @@ class SearchViewModelFilterPersistenceTest {
         mediaSearchEngine,
         offlineRepository,
         searchFiltersStore,
-        mediaDownloadActions,
+        quickDownloadActions,
     )
 
     // ── Persisted-filter restoration ─────────────────────────────────────
@@ -174,7 +174,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.setSortBy(SortOption.RATING)
+        viewModel.onEvent(SearchUiEvent.SetSortBy(SortOption.RATING))
         advanceUntilIdle()
 
         assertEquals(SortOption.RATING, viewModel.filters.value.sortBy)
@@ -187,7 +187,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.setPlayedStatus(PlayedStatus.PLAYED)
+        viewModel.onEvent(SearchUiEvent.SetPlayedStatus(PlayedStatus.PLAYED))
         advanceUntilIdle()
 
         assertEquals(PlayedStatus.PLAYED, viewModel.filters.value.playedStatus)
@@ -202,7 +202,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.toggleMediaType(MediaType.MOVIE)
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.MOVIE))
         advanceUntilIdle()
 
         assertEquals(
@@ -217,7 +217,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.updateFilters(filters)
+        viewModel.onEvent(SearchUiEvent.UpdateFilters(filters))
         advanceUntilIdle()
 
         assertEquals(filters, FilterCodec.decodeFromString<LibraryFilters>(persisted.captured))
@@ -225,10 +225,10 @@ class SearchViewModelFilterPersistenceTest {
 
     @Test
     fun `clearFilters resets state and clears the stored blob`() = runTest(mainDispatcher) {
-        viewModel.updateFilters(LibraryFilters(genres = listOf("Action")))
+        viewModel.onEvent(SearchUiEvent.UpdateFilters(LibraryFilters(genres = listOf("Action"))))
         advanceUntilIdle()
 
-        viewModel.clearFilters()
+        viewModel.onEvent(SearchUiEvent.ClearFilters)
         advanceUntilIdle()
 
         assertEquals(LibraryFilters(), viewModel.filters.value)
@@ -239,7 +239,7 @@ class SearchViewModelFilterPersistenceTest {
     fun `a persist write failure is swallowed and the in-memory filter wins`() = runTest(mainDispatcher) {
         coEvery { searchFiltersStore.setSearchFilters(any()) } throws RuntimeException("disk full")
 
-        viewModel.toggleMediaType(MediaType.SERIES)
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.SERIES))
         advanceUntilIdle()
 
         // In-memory session survives the DataStore hiccup; no crash.
@@ -254,7 +254,7 @@ class SearchViewModelFilterPersistenceTest {
             id = "m1", name = "Movie", mediaType = MediaType.MOVIE,
         )
 
-        viewModel.markItemPlayed(item, played = true)
+        viewModel.onEvent(SearchUiEvent.MarkItemPlayed(item, played = true))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { userDataMutator.setPlayed("m1", true) }
@@ -266,14 +266,14 @@ class SearchViewModelFilterPersistenceTest {
             id = "series-9", name = "Show", mediaType = MediaType.SERIES,
         )
         var routedTo: String? = null
-        coEvery { mediaDownloadActions.downloadAndReport(any(), any()) } coAnswers {
+        coEvery { quickDownloadActions.downloadAndReport(any(), any()) } coAnswers {
             secondArg<(String) -> Unit>().invoke("series-9")
         }
 
-        viewModel.downloadItem(item) { routedTo = it }
+        viewModel.onEvent(SearchUiEvent.DownloadItem(item) { routedTo = it })
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaDownloadActions.downloadAndReport(item, any()) }
+        coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any()) }
         assertEquals("series-9", routedTo)
     }
 
@@ -283,9 +283,9 @@ class SearchViewModelFilterPersistenceTest {
             id = "m2", name = "Movie", mediaType = MediaType.MOVIE,
         )
 
-        viewModel.removeItemDownload(item)
+        viewModel.onEvent(SearchUiEvent.RemoveItemDownload(item))
 
-        io.mockk.verify(exactly = 1) { mediaDownloadActions.removeDownload(item) }
+        io.mockk.verify(exactly = 1) { quickDownloadActions.removeDownload(item) }
     }
 
     @Test

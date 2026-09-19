@@ -2,10 +2,8 @@ package com.raulshma.jellyplay.feature.music.musichome
 
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -20,6 +18,8 @@ import com.raulshma.jellyplay.core.ui.viewmodel.FetchMode
 import com.raulshma.jellyplay.core.ui.viewmodel.LegacyDeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
+import com.raulshma.jellyplay.feature.music.MusicTrackWithAlbumFallback
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -31,8 +31,8 @@ import kotlinx.coroutines.flow.update
 class MusicHomeViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioQueueFacade: AudioQueueFacade,
-    private val downloadRepository: DownloadRepository,
+    private val audioQueueFacade: MusicQueuePlayer,
+    private val activeDownloads: ActiveDownloadCount,
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: MusicMessageBus,
@@ -86,7 +86,7 @@ class MusicHomeViewModel(
 
     val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
-    val activeDownloadCount = downloadRepository.getActiveDownloadCount()
+    val activeDownloadCount = activeDownloads.activeDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
@@ -301,12 +301,12 @@ class MusicHomeViewModel(
      * its own album fallback (the source album's name) so the facade can map
      * per-album naming before concatenation — plan 04 risk 2.
      */
-    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<TrackWithAlbumFallback> {
+    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<MusicTrackWithAlbumFallback> {
         return fetchSemaphore.mapConcurrent(albums) { album ->
             mediaRepository.getAlbumTracks(album.id)
                 .getOrNull()
                 .orEmpty()
-                .map { track -> TrackWithAlbumFallback(track, album.name) }
+                .map { track -> MusicTrackWithAlbumFallback(track, album.name) }
         }.flatten()
     }
 }

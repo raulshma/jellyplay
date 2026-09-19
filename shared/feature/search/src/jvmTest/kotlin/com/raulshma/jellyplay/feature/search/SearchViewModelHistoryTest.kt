@@ -45,7 +45,7 @@ class SearchViewModelHistoryTest {
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val searchFiltersStore: SearchFiltersStore = mockk(relaxed = true)
-    private val mediaDownloadActions: com.raulshma.jellyplay.core.data.download.MediaDownloadActions = mockk(relaxed = true)
+    private val quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions = mockk(relaxed = true)
 
     private lateinit var viewModel: SearchViewModel
 
@@ -76,7 +76,7 @@ class SearchViewModelHistoryTest {
             seerrRequestDelegate,
             mediaSearchEngine,
             offlineRepository,
-            searchFiltersStore, mediaDownloadActions,
+            searchFiltersStore, quickDownloadActions,
         )
     }
 
@@ -87,7 +87,7 @@ class SearchViewModelHistoryTest {
 
     @Test
     fun `onSearchResultsShown persists query when it has at least 2 chars`() = runTest(mainDispatcher) {
-        viewModel.onSearchResultsShown("matrix")
+        viewModel.onEvent(SearchUiEvent.SearchResultsShown("matrix"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaSearchEngine.recordHistory("matrix", jellyfinHadResults = true) }
@@ -95,7 +95,7 @@ class SearchViewModelHistoryTest {
 
     @Test
     fun `onSearchResultsShown skips blank queries`() = runTest(mainDispatcher) {
-        viewModel.onSearchResultsShown("")
+        viewModel.onEvent(SearchUiEvent.SearchResultsShown(""))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { mediaSearchEngine.recordHistory(any(), any()) }

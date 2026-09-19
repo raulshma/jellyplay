@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.util.Log
 import android.util.Rational
 import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,7 +30,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -87,7 +87,7 @@ import org.koin.mp.KoinPlatform
  * configured and the app-scoped AppLockState says locked — see
  * [redirectToLockGateIfNeeded].
  */
-class PlayerActivity : FragmentActivity() {
+class PlayerActivity : ComponentActivity() {
 
     // PlayerActivity is the SOLE driver of the shared PlayerLifecycleManager
     // single (onPause/onResume/onTopResumed/onStop below). MainActivity

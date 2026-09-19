@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tools/e2e/msi-boot-pass.sh — wave 13A "installed-MSI boot pass".
+# tools/e2e/msi-boot-pass.sh — "installed-MSI boot pass".
 #
-# The wave 12 boot smoke only ever launched the createDistributable
+# The boot smoke only ever launched the createDistributable
 # app-image exe. This tool closes the remaining gap: verify the ACTUAL MSI
 # artifact's payload boots. It never installs anything — it administrative-
 # extracts the MSI (msiexec /a, no UAC expected) to a temp dir outside the
@@ -73,7 +73,7 @@ extract_number() {
     sed -n "s/.*\"$2\":\(-\{0,1\}[0-9][0-9.e+]*\).*/\1/p" "$1" 2>/dev/null | head -1
 }
 
-echo "== JellyPlay installed-MSI boot pass (wave 13A) =="
+echo "== JellyPlay installed-MSI boot pass =="
 echo "run dir: $RUN_DIR"
 
 # ── 1. locate / build the MSI ───────────────────────────────────────────────
@@ -120,7 +120,7 @@ MSI_LOG_WIN="$(cygpath -w "$MSI_LOG_NIX")"
 # dialog that blocks the shell forever.
 for p in "$MSI_WIN" "$TGT_WIN" "$MSI_LOG_WIN"; do
     case "$p" in
-        *' '*) fail "path contains spaces, quote-free msiexec line cannot carry it: $p" ;;
+        *' '*) fail "path contains spaces, quote-free msiexec line cannot carry it: $p";;
     esac
 done
 echo "extracting (msiexec /a, no elevation): TARGETDIR=$TGT_WIN"
@@ -170,7 +170,7 @@ fi
 # ── 4. boot the EXTRACTED exe under perf-harness properties ─────────────────
 DATA_DIR_MIXED="$(map_mixed "$DATA_DIR_NIX")"
 case "$DATA_DIR_MIXED" in
-    *" "*) fail "data dir contains spaces ($DATA_DIR_MIXED); JAVA_TOOL_OPTIONS cannot carry it safely" ;;
+    *" "*) fail "data dir contains spaces ($DATA_DIR_MIXED); JAVA_TOOL_OPTIONS cannot carry it safely";;
 esac
 rm -rf "$DATA_DIR_NIX"; mkdir -p "$DATA_DIR_NIX"
 

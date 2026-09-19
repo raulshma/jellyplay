@@ -48,6 +48,8 @@
     <string name="core_media_album">앨범</string>
     <string name="core_media_artist">아티스트</string>
     <string name="core_media_music_video">뮤직 비디오</string>
+    <string name="core_media_book">책</string>
+
     <string name="core_media_collection">컬렉션</string>
     <string name="core_media_photo">사진</string>
     <string name="core_media_photo_album">사진 앨범</string>
@@ -64,6 +66,8 @@
     <string name="core_media_album_plural">앨범</string>
     <string name="core_media_artist_plural">아티스트</string>
     <string name="core_media_music_video_plural">뮤직 비디오</string>
+    <string name="core_media_book_plural">책</string>
+
     <string name="core_media_collection_plural">컬렉션</string>
     <string name="core_media_photo_plural">사진</string>
     <string name="core_media_photo_album_plural">사진 앨범</string>
@@ -244,4 +248,6 @@
     <string name="core_remove_download_title">다운로드를 삭제할까?</string>
     <string name="core_remove_download_message">이 기기에서 “%1$s”의 다운로드된 사본을 삭제합니다. 서버의 사본은 영향을 받지 않습니다.</string>
     <string name="core_remove_download_confirm">삭제</string>
+    <string name="core_ui_read_more">더 보기</string>
+    <string name="core_ui_show_less">접기</string>
 </resources>

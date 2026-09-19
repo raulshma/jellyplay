@@ -32,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
@@ -73,6 +72,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.core.ui.message.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
@@ -91,13 +91,13 @@ import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.UserMessageHost
-import com.raulshma.jellyplay.feature.shell.UpdateCheckMessage
 import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
-import com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
+import com.raulshma.jellyplay.desktop.update.DesktopUpdateCheckController
 import kotlin.reflect.KClass
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,7 +112,7 @@ import org.koin.compose.koinInject
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Desktop nav root ( "desktop nav v1"): session-gated shell over the
+ * Desktop nav root ("desktop nav v1"): session-gated shell over the
  * shared feature conveyor. Signed-out users get [DesktopSignedOutAuthHost]
  * (the shared auth section; retired the legacy DesktopSignInPane
  * with its cut-list); a live session renders the NavigationRail + NavDisplay
@@ -160,13 +160,13 @@ import java.util.concurrent.atomic.AtomicReference
  * add-server discovery included) — here the section only serves signed-in
  * server management.
  *
- * Settings + admin went live with the admin repositories' Koin flip (Wave
- * wB): AdminRepository/AdminStatisticsRepository are Koin singles in
+ * Settings + admin went live with the admin repositories' Koin flip:
+ * AdminRepository/AdminStatisticsRepository are Koin singles in
  * dataJvmModule on both platforms, so [settingsSection] and [adminSection]
  * render below (the settings drill-ins SeerrSettings/ArrSettings included —
  * their Seerr/Arr/datastore ctor deps are all Koin-native).
  *
- * Music went live next (Wave wC) — browse-only at first, and fully playable
+ * Music went live next — browse-only at first, and fully playable
  * since: the last unresolved music ctor dep (AudioQueueFacade) binds
  * to the shared DefaultAudioQueueFacade over the desktop
  * DesktopAudioQueueManager (audio-only MpvDesktopEngine behind it), so
@@ -174,7 +174,7 @@ import java.util.concurrent.atomic.AtomicReference
  * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
  * Track clicks navigate to the live Route.AudioPlayer (registered by
  * [audioPlayerSection] above). Since the music error-feedback seam
- * has a host here too, and since the shared UserMessageHost wave that host
+ * has a host here too, and since the shared UserMessageHost landed, that host
  * is the seam itself: the shell snackbar serves BOTH the DesktopMusicMessageBus
  * relay and the shared UserMessageBus (whose messages desktop previously
  * dropped) through one collector — one surface shared with the dead-end guard
@@ -231,6 +231,23 @@ internal fun DesktopAppRoot(
     // and no fixture.
     if (DesktopNativeDialogHarness.requested()) {
         DesktopNativeDialogHarnessHost()
+    }
+
+    // Flows harness (DesktopFlowHarness KDoc): the lane for the four
+    // native-dialog flows (editor image/subtitle pickers, heatmap share,
+    // player subtitle upload) — composes NOTHING unless
+    // jellyplay.flowpass.enabled=true. Needs the real fixture + libmpv; the
+    // click-reach bridge (HarnessClickBridge) is armed by Main.kt under the
+    // same property, before any screen composes.
+    if (DesktopFlowHarness.requested()) {
+        val editorRepository: com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository = koinInject()
+        val engineRecorder: com.raulshma.jellyplay.desktop.player.EngineActivityRecorder = koinInject()
+        DesktopFlowHarnessHost(
+            authRepository = authRepository,
+            editorRepository = editorRepository,
+            engineRecorder = engineRecorder,
+            windowRef = windowRef,
+        )
     }
 
     // Session-restore probe: until it completes we cannot know whether a
@@ -383,23 +400,26 @@ private fun DesktopNavScaffold(
     // and title bar observe; flows are read at click time, not collected).
     val audioQueueManager: DesktopAudioQueueManager = koinInject()
 
-    // AppUpdate split (Wave xB): the About screen's "Check for updates" row —
-    // this shell's OWN update surface. The check→message MAPPING is shared
-    // (ShellSessionController.updateCheckMessage, ADR 0001's split); only the
-    // wording below is desktop's. Desktop has no self-update (the
-    // desktopDataModule version sentinel makes isUpdateAvailable permanently
-    // false, so selectAsset can never offer an Android APK), so a successful
-    // check always reads "up to date" — same wording as the Android update
-    // sheet. The row itself is pref-gated by selfUpdateCheckEnabled (default
-    // on). Android never uses the shared mapping: its UpdateCoordinator maps
-    // the same repository result into the full update-sheet state machine.
+    // AppUpdate split + desktop auto-update (ADR
+    // desktop-auto-update): the About screen's "Check for updates" row —
+    // this shell's OWN update surface. The check→message mapping, the
+    // browser handoff and the snackbar wording live in
+    // DesktopUpdateCheckController (extracted; pinned by its test — never a
+    // silent install, browser handoff only). The repository binding was
+    // REPLACED by desktopAppUpdateModule (DesktopKoinModules) with the
+    // real-version actual: a packaged release-lane build reports genuine
+    // newer releases from the GitHub feed, a dev build stays "up to date" by
+    // construction. The row itself is pref-gated by selfUpdateCheckEnabled
+    // (default on).
     val appUpdateRepository: AppUpdateRepository = koinInject()
-    val onCheckForUpdates: () -> Unit = {
-        scope.launch {
-            val message = ShellSessionController.updateCheckMessage(appUpdateRepository.checkForUpdate())
-            snackbarHostState.showSnackbar(message.desktopUpdateText())
-        }
+    val updateCheckController = remember(scope, appUpdateRepository, snackbarHostState) {
+        DesktopUpdateCheckController(
+            scope = scope,
+            repository = appUpdateRepository,
+            showMessage = { snackbarHostState.showSnackbar(it) },
+        )
     }
+    val onCheckForUpdates: () -> Unit = updateCheckController::checkForUpdate
 
     // Dead-end guard (runtime safety, not polish): NavDisplay with an
     // unregistered top-of-stack entry is a crash hazard, and the shared
@@ -594,15 +614,11 @@ private fun DesktopNavScaffold(
             // deterministically.
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val isBack = event.key == Key.Escape ||
-                    (event.key == Key.DirectionLeft && event.isAltPressed)
-                if (isBack) {
-                    if (backStack.size <= 1) {
-                        false
-                    } else {
-                        guardedNavigator.goBack()
-                        true
-                    }
+                // desktopBackKeyDecision folds the Esc/Alt+Left test AND the
+                // root-refuse; the same fold runs in DesktopSignedOutAuthHost.
+                if (desktopBackKeyDecision(event.key, event.isAltPressed, backStack.size)) {
+                    guardedNavigator.goBack()
+                    true
                 } else {
                     backStack.lastOrNull() is Route.VideoPlayer &&
                         DesktopPlayerKeyBridge.deliver(event)
@@ -683,6 +699,12 @@ private fun DesktopNavScaffold(
             LocalServerHealth provides serverHealth,
             LocalSurpriseOnLaunch provides surpriseController,
             LocalPullToRefreshRegistry provides refreshRegistry,
+            // The shared screens post one-shot messages through the commonMain
+            // message.LocalUserMessageBus; provide the SAME bus instance the
+            // UserMessageHost above collects, so those messages reach this
+            // shell's snackbar (desktop's severity semantics are unchanged —
+            // everything still flows through the shared host's policy).
+            LocalUserMessageBus provides sharedUserMessageBus,
         ) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 NavDisplay(
@@ -701,28 +723,18 @@ private fun DesktopNavScaffold(
 }
 
 /**
- * Desktop rendering of the shared [UpdateCheckMessage] — ADR 0001's split:
- * the check→message mapping lives in ShellSessionController (commonMain),
- * the WORDING is this shell's own surface. A successful check always reads
- * "up to date" in practice (the desktopDataModule version sentinel keeps
- * `isUpdateAvailable` permanently false — desktop has no self-update), but
- * the available branch is kept honest so a future desktop update story only
- * swaps the sentinel.
- */
-private fun UpdateCheckMessage.desktopUpdateText(): String = when (this) {
-    is UpdateCheckMessage.UpdateAvailable ->
-        "Version $latestVersion is available; self-update is not supported on desktop yet."
-    UpdateCheckMessage.UpToDate -> "You're up to date"
-    is UpdateCheckMessage.Failed -> "Update check failed: ${reason ?: "unknown error"}"
-}
-
-/**
  * The rail renders the shared [NavDestination] registry — label, icon and
  * group come from the one destination-facts table in core/ui (the former
  * per-shell `DesktopRailDescriptor` list is gone). Only the rail's OWN
  * display order stays here; it is per-shell policy, not a destination fact.
+ *
+ * Every listed route MUST have a registry row: resolution below fails loudly
+ * at class-init. The former silent `mapNotNull` drop let a route that lost
+ * its row just vanish off the rail with no failure anywhere.
+ * DesktopRailRegistryContractTest pins this (internal visibility exists for
+ * that test — nothing else in the module may depend on the rail internals).
  */
-private val DESKTOP_RAIL_ITEMS: List<NavDestination> = listOf(
+internal val DESKTOP_RAIL_ROUTES: List<Route> = listOf(
     Route.Home,
     Route.Search,
     Route.Library,
@@ -738,7 +750,14 @@ private val DESKTOP_RAIL_ITEMS: List<NavDestination> = listOf(
     Route.Shortcuts,
     Route.Settings,
     Route.AdminDashboard,
-).mapNotNull(NAV_DESTINATION_BY_ROUTE::get)
+)
+
+internal val DESKTOP_RAIL_ITEMS: List<NavDestination> = DESKTOP_RAIL_ROUTES.map { route ->
+    checkNotNull(NAV_DESTINATION_BY_ROUTE[route]) {
+        "DESKTOP_RAIL_ROUTES lists ${route::class.simpleName} but the NAV_DESTINATIONS registry " +
+            "has no row for it — register the destination or drop it from the rail list."
+    }
+}
 
 /** Rail + tab-switch destinations; Home is the start tab (same as the Android shell). */
 private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = DESKTOP_RAIL_ITEMS.map { it.route }.toSet()

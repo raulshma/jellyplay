@@ -44,6 +44,9 @@ kotlin {
 
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
+            // Cancellation-safe suspend wrappers — the module's flagged
+            // suspend-fun sites ride the same seam as the rest of the tree.
+            implementation(project(":shared:core:concurrency"))
             // Multiplatform core: Preferences/Key/edit + PreferenceDataStoreFactory
             // (the Android-only Context delegate stays in the legacy shim's DI).
             api(libs.datastore.preferences.core)

@@ -11,8 +11,11 @@ import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_failed
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_send_success
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_test_sent
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.todayIn
+import kotlin.time.Clock
 
 class NewsletterViewModel(
     private val newsletterRepository: NewsletterRepository,
@@ -72,10 +75,12 @@ class NewsletterViewModel(
             // is not cached by this repository, so the old global
             // invalidateCaches() call was a no-op for this screen.
 
-            val sinceDate = LocalDate.now()
-                .minusDays(7)
-                .atStartOfDay()
-                .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            // wasmJs rewrite of java.time's ISO_LOCAL_DATE_TIME chain:
+            // kotlinx LocalDate prints ISO "yyyy-MM-dd" zero-padded, so the
+            // hand-built "T00:00:00" suffix is byte-identical to the string
+            // the server has always received ("2026-09-05T00:00:00").
+            val sinceDate =
+                "${Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 7))}T00:00:00"
 
             newsletterRepository.getNewsletterData(sinceDate)
                 .onSuccess { data ->
@@ -114,7 +119,9 @@ class NewsletterViewModel(
 
     private fun markViewed() {
         launch {
-            notificationStore.setNewsletterLastViewed(System.currentTimeMillis())
+            // wasmJs rewrite of System.currentTimeMillis() — the same
+            // epoch millis off the monotonic-wall Clock.System.
+            notificationStore.setNewsletterLastViewed(Clock.System.now().toEpochMilliseconds())
         }
     }
 

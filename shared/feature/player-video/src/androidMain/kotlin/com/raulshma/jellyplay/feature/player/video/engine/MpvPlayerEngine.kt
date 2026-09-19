@@ -14,8 +14,6 @@ import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
-import com.raulshma.jellyplay.core.model.AudioNormalizationMode
-import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.MpvAudioOutput
 import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
@@ -53,6 +51,9 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
+        // Upper bound on how long the cheap-scalar guard in
+        // updateVideoStatsOnly may skip the full property re-read.
+        private const val FULL_STATS_REREAD_MS = 2_000L
         private const val DEMUXER_MAX_BYTES_LOW = 32 * 1024 * 1024L
         private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
@@ -69,9 +70,6 @@ class MpvPlayerEngine(
         // so a no-render bug can be traced end-to-end without logcat drowning.
         private val MPV_SUBTITLE_LOG_PATTERN =
             Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream|vo/|demux|cplayer|vd)")
-        private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
-        private val REDACT_API_KEY_ENCODED = Regex("(?i)(api_key%3D)[^&\\s]+")
-        private val REDACT_EMBY_TOKEN = Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+")
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -1155,6 +1153,9 @@ class MpvPlayerEngine(
         }
     }
 
+    /** ElapsedRealtime of the last unguarded (full) stats read — see updateVideoStatsOnly. */
+    private var lastFullStatsReadMs = 0L
+
     private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
@@ -1171,6 +1172,34 @@ class MpvPlayerEngine(
             val combinedBitrate = (videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)
             val bufferHealthMs = (_bufferedPositionMs.value - posMs).coerceAtLeast(0L)
             val bufferSizeBytes = if (combinedBitrate > 0) combinedBitrate * bufferHealthMs / 8000 else 0L
+            val droppedFrames = try {
+                m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
+            } catch (_: Exception) { 0L }
+            val totalVideoFrames = try {
+                m.getPropertyInt("displayed-frame-count")?.toLong() ?: 0L
+            } catch (_: Exception) { 0L }
+            val bufferedPositionMs = _bufferedPositionMs.value
+
+            // Cheap-scalar change guard first (mirrors the Exo adapter): the
+            // ~10 string/track reads further down are worth paying only once a
+            // scalar actually moved. publishStatsIfChanged stays the final emit
+            // guard. The scalar set can freeze while paused (frame counters
+            // stop, bitrates drop to 0), so a periodic full re-read is forced
+            // anyway to pick up fields the guard never sees move (hwdec
+            // switches, avsync, vo-delayed, track changes).
+            val nowMs = android.os.SystemClock.elapsedRealtime()
+            val last = lastVideoStats
+            if (last != null && last.videoBitrate == videoBitrateBps &&
+                last.audioBitrate == audioBitrateBps &&
+                last.bufferedPositionMs == bufferedPositionMs &&
+                last.droppedFrames == droppedFrames &&
+                last.totalVideoFrames == totalVideoFrames &&
+                nowMs - lastFullStatsReadMs < FULL_STATS_REREAD_MS
+            ) {
+                return
+            }
+            lastFullStatsReadMs = nowMs
+
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
                 videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
@@ -1198,13 +1227,9 @@ class MpvPlayerEngine(
                 } catch (_: Exception) { null },
                 audioBitrate = audioBitrateBps,
                 estimatedBandwidthBps = combinedBitrate.toLong(),
-                droppedFrames = try {
-                    m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
-                } catch (_: Exception) { 0L },
-                totalVideoFrames = try {
-                    m.getPropertyInt("displayed-frame-count")?.toLong() ?: 0L
-                } catch (_: Exception) { 0L },
-                bufferedPositionMs = _bufferedPositionMs.value,
+                droppedFrames = droppedFrames,
+                totalVideoFrames = totalVideoFrames,
+                bufferedPositionMs = bufferedPositionMs,
                 bufferSizeBytes = bufferSizeBytes,
                 avsyncMs = m.propDoubleOrNull("total-avsync")?.let { if (it != 0f) it else null },
                 displayFps = m.propDoubleOrNull("display-fps")?.let { fps -> if (fps > 0f) fps else null },
@@ -1776,11 +1801,9 @@ class MpvPlayerEngine(
         else -> "trace"
     }
 
-    private fun redactSensitive(value: String): String =
-        value
-            .replace(REDACT_API_KEY, "\$1***")
-            .replace(REDACT_API_KEY_ENCODED, "\$1***")
-            .replace(REDACT_EMBY_TOKEN, "\$1***")
+    // The regex set lives in MpvLogRedaction (commonMain) so it is
+    // test-pinned; this alias keeps the engine's call sites unchanged.
+    private fun redactSensitive(value: String): String = MpvLogRedaction.redact(value)
 
     private fun MPV.safeSetOption(name: String, value: String) {
         try {
@@ -1823,43 +1846,7 @@ class MpvPlayerEngine(
     }
 }
 
-/**
- * Pure mapping helpers for mpv option/property values that were
- * previously duplicated verbatim between `initOptions` (load-time,
- * `setOptionString`) and `updateConfig` (live, `setPropertyString`).
- * Keeping the mapping in one place stops the two sites from drifting.
- */
-
-// [mpvOpenableUrl] moved to commonMain (MpvOpenableUrl.kt) so the pure JVM
-// string logic stays unit-testable from jvmTest; same package, call-sites
-// unchanged.
-
-internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
-    // Zero-copy `mediacodec` first: mpv picks the first entry that inits, and
-    // `mediacodec-copy` (GPU→CPU→GPU per frame) almost always inits when listed
-    // first, so copy-first ordering silently forced every HW decode through the
-    // slow path — the primary cause of mpv lag vs. zero-copy ExoPlayer. Keep
-    // copy as fallback, then SW last.
-    DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
-    DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
-    DecoderMode.SW_ONLY -> "no"
-}
-
-internal fun channelMixModeToAudioChannels(
-    mode: ChannelMixMode,
-    enabled: Boolean = true,
-): String = if (!enabled) {
-    "auto"
-} else when (mode) {
-    ChannelMixMode.STEREO_DOWNMIX -> "stereo"
-    ChannelMixMode.MONO -> "mono"
-    ChannelMixMode.SURROUND_UPMIX -> "5.1"
-    ChannelMixMode.AUTO -> "auto"
-}
-
-/** Returns null for NONE so callers can omit it from the af chain. */
-internal fun audioNormalizationModeToAfFilter(mode: AudioNormalizationMode): String? = when (mode) {
-    AudioNormalizationMode.DYNAMIC -> "acompressor=ratio=3:threshold=0.05:attack=10:release=200"
-    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> "loudnorm=I=-23:LRA=7:tp=-1"
-    AudioNormalizationMode.NONE -> null
-}
+// The pure option/property mapping helpers (decoderModeToHwdec,
+// channelMixModeToAudioChannels, audioNormalizationModeToAfFilter) moved to
+// commonMain (MpvAudioMappings.kt) so the tables stay unit-testable from
+// jvmTest; same package, call-sites unchanged.

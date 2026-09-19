@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
 /**
  * Port of the orphaned legacy `:core:data` suite of the same name (the legacy
  * module's test source set stopped compiling when MediaRepositoryImpl moved to
- * :shared:core:data with its 8-arg constructor and lyrics were extracted into
+ * shared:core:data with its 8-arg constructor and lyrics were extracted into
  * LyricsRepositoryImpl). The lyrics tests live in LyricsRepositoryImplTest now;
  * everything here targets the current MediaRepositoryImpl constructor wiring.
  */
@@ -46,6 +46,15 @@ class MediaRepositoryImplTest {
     private val userDataRealtimeChannel: UserDataRealtimeChannel = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
+
+    // Facade split: the playlist members moved to PlaylistRepositoryImpl;
+    // built over the SAME MediaRepositoryInternals single-construction (and
+    // the same mocked apiClient — the union mock doubles as the
+    // LibraryApiClient family view), so the self-invalidation tests below
+    // still pin the cross-surface behavior: an edit through the playlist
+    // impl drops a detail cached through the media impl. Construction-only
+    // re-point; every assertion is unchanged.
+    private lateinit var playlistRepository: PlaylistRepositoryImpl
 
     @BeforeTest
     fun setup() {
@@ -77,6 +86,7 @@ class MediaRepositoryImplTest {
             homeSession,
             sessionCacheRegistry,
         )
+        val internals = MediaRepositoryInternals(apiClient, homeSession)
         repository = MediaRepositoryImpl(
             apiClient,
             homeSectionCacheDao,
@@ -86,7 +96,9 @@ class MediaRepositoryImplTest {
             SystemTimeSource(),
             homeSession,
             sessionCacheRegistry,
+            internals,
         )
+        playlistRepository = PlaylistRepositoryImpl(apiClient, internals)
     }
 
     @Test
@@ -1119,7 +1131,7 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.removeItemsFromPlaylist("pl-1", listOf("e1")) } returns Result.success(Unit)
 
         repository.getMediaDetail("pl-1")
-        repository.removeItemsFromPlaylist("pl-1", listOf("e1"))
+        playlistRepository.removeItemsFromPlaylist("pl-1", listOf("e1"))
         repository.getMediaDetail("pl-1")
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
@@ -1133,7 +1145,7 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.addItemsToPlaylist("pl-1", listOf("m1")) } returns Result.success(Unit)
 
         repository.getMediaDetail("pl-1")
-        repository.addItemsToPlaylist("pl-1", listOf("m1"))
+        playlistRepository.addItemsToPlaylist("pl-1", listOf("m1"))
         repository.getMediaDetail("pl-1")
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
@@ -1147,7 +1159,7 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.movePlaylistItem("pl-1", "e1", 2) } returns Result.success(Unit)
 
         repository.getMediaDetail("pl-1")
-        repository.movePlaylistItem("pl-1", "e1", 2)
+        playlistRepository.movePlaylistItem("pl-1", "e1", 2)
         repository.getMediaDetail("pl-1")
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }

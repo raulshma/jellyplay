@@ -2,15 +2,14 @@ package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
@@ -23,21 +22,44 @@ import kotlin.random.Random
  * interval) with a small jitter so a fleet of desktop clients doesn't stampede
  * a server in lockstep.
  *
- * The check itself ports AutoDownloadWorker.doWork verbatim (same
+ * The check itself is the shared [AutoDownloadCheck] (same
  * `autoDownloadNewEpisodes` prefs gate, same single-query
  * getDownloadedEpisodeIdsBySeries index, same per-season
- * DownloadIntake.startSeries call, same transient-failure → retry semantics
- * with MAX_RETRIES = 3); only the WorkManager result mapping became in-process
- * retry passes.
+ * DownloadIntake.startSeries call, same transient-failure escalation);
+ * `AutoDownloadScheduler.runCheck` used to port that body verbatim and is
+ * gone.
+ *
+ * One deliberate difference from the Android worker: the in-process retry
+ * ladder spaces its
+ * passes by [DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS] directly —
+ * the private `RETRY_DELAY_MS = 30_000L` re-declaration (comment-mirroring
+ * the repository constant) is gone — and the exhausted-retries warning logs
+ * under the shared core's tag instead of a desktop one. Otherwise only the
+ * WorkManager result mapping became in-process retry passes: attempt counts
+ * from 0 like the Android `runAttemptCount`, same [AutoDownloadCheck.MAX_RETRIES]
+ * budget, give-up (not crash) at the cap, the ladder then waiting for the
+ * next periodic tick.
  */
 class DesktopAutoDownloadScheduler(
-    private val downloadsStore: DownloadsStore,
-    private val downloadRepository: DownloadRepository,
-    private val downloadIntake: DownloadIntake,
-    private val episodeCatalogue: EpisodeCatalogue,
+    downloadsStore: DownloadsStore,
+    downloadRepository: DownloadRepository,
+    downloadIntake: DownloadIntake,
+    episodeCatalogue: EpisodeCatalogue,
     /** The process-wide application scope (DatastoreQualifiers.applicationScope in Koin). */
     private val scope: CoroutineScope,
 ) {
+    private val check = AutoDownloadCheck(
+        downloadsStore = downloadsStore,
+        downloadRepository = downloadRepository,
+        downloadIntake = downloadIntake,
+        episodeCatalogue = episodeCatalogue,
+        // The worker's `isStopped` twin: stop() cancels (and nulls) the loop
+        // job, so the pass stops between series/seasons, not just between
+        // passes. The check only ever runs inside that job, so reading the
+        // field is the loop coroutine's own isActive.
+        isStopped = { job?.isActive != true },
+    )
+
     private var job: Job? = null
 
     /** Starts the periodic loop with one immediate check. Idempotent. */
@@ -59,79 +81,27 @@ class DesktopAutoDownloadScheduler(
     }
 
     /**
-     * One auto-download check. A transient failure (a series' catalogue load
-     * failing) escalates up to [MAX_RETRIES] in-process retry passes spaced by
-     * the shared download backoff — the WorkManager `Result.retry()` /
-     * runAttemptCount semantics of the Android worker.
+     * One auto-download check with the WorkManager `Result.retry()` /
+     * runAttemptCount semantics of the Android worker folded in-process: a
+     * transient failure (a series' catalogue load failing) escalates up to
+     * [AutoDownloadCheck.MAX_RETRIES] retry passes spaced by the shared
+     * download backoff, then gives up until the next periodic tick.
      */
     private suspend fun runCheckWithRetries() {
         var attempt = 0
         while (true) {
-            val hadTransientFailure = runCheck()
-            if (!hadTransientFailure) return
-            if (attempt >= MAX_RETRIES) {
-                Log.w(TAG, "AutoDownload exhausted $MAX_RETRIES retries")
-                return
-            }
+            val outcome = check.checkOnce(attempt)
+            if (outcome !is AutoDownloadCheck.Outcome.RetriesPending) return
             attempt++
-            delay(RETRY_DELAY_MS)
+            delay(DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS)
         }
-    }
-
-    /** Returns true when any series' catalogue load failed (transient). */
-    private suspend fun runCheck(): Boolean {
-        val prefs = downloadsStore.downloads.first()
-        if (!prefs.autoDownloadNewEpisodes) return false
-
-        val seriesIds = downloadRepository.getDownloadedSeriesIds()
-        if (seriesIds.isEmpty()) return false
-
-        // Fetch every series' downloaded episode ids in a single 2-column query
-        // (grouped by seriesId) instead of issuing one full-row query per series
-        // inside the loop below (same rationale as the Android worker).
-        val downloadedEpisodeIdsBySeries = downloadRepository.getDownloadedEpisodeIdsBySeries()
-
-        var hadTransientFailure = false
-        for (seriesId in seriesIds) {
-            if (!currentCoroutineContext().isActive) break
-            val alreadyDownloaded = downloadedEpisodeIdsBySeries[seriesId].orEmpty()
-            // One consolidated load per series: seasons + every season's episodes
-            // in a single snapshot. A catalogue failure is a transient error — map
-            // it to an empty snapshot so this series is skipped but the run
-            // continues and escalates retry → give-up below.
-            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId).getOrElse {
-                hadTransientFailure = true
-                continue
-            }
-            for (season in snapshot.seasons) {
-                if (!currentCoroutineContext().isActive) break
-                val newEpisodeIds = snapshot.seasonEpisodes(season.id)
-                    .filter { it.id !in alreadyDownloaded }
-                    .map { it.id }
-                if (newEpisodeIds.isNotEmpty()) {
-                    downloadIntake.startSeries(
-                        seriesId = seriesId,
-                        episodeIds = mapOf(season.id to newEpisodeIds),
-                    )
-                }
-            }
-        }
-        return hadTransientFailure
     }
 
     private companion object {
-        const val TAG = "DesktopAutoDownload"
-
         /** Android's AutoDownloadScheduler CHECK_INTERVAL — 6 h. */
         const val CHECK_INTERVAL_MS = 6L * 60 * 60 * 1000
 
         /** De-sync multiple clients' check times (Android's flex window analogue). */
         const val JITTER_MS = 5L * 60 * 1000
-
-        /** AutoDownloadWorker.MAX_RETRIES. */
-        const val MAX_RETRIES = 3
-
-        /** Shared download backoff base (DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS). */
-        const val RETRY_DELAY_MS = 30_000L
     }
 }

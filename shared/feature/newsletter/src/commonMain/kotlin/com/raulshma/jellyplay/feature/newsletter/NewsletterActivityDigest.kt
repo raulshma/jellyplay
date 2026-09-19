@@ -106,21 +106,9 @@ private fun ActivityDigestItem(
     }
 }
 
-// Built once at class-load rather than per digest entry.
-private val ACTIVITY_DATE_FORMATTER: java.time.format.DateTimeFormatter =
-    java.time.format.DateTimeFormatter.ofPattern("MMM d")
-
-private fun formatRelativeDate(dateStr: String): String {
-    return try {
-        val instant = java.time.Instant.parse(dateStr)
-        val entryDate = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-        val today = java.time.LocalDate.now()
-        when {
-            entryDate == today -> "Today"
-            entryDate == today.minusDays(1) -> "Yesterday"
-            else -> entryDate.format(ACTIVITY_DATE_FORMATTER)
-        }
-    } catch (_: Exception) {
-        dateStr
-    }
-}
+// The digest's relative-date read moved behind the NewsletterDateLabels seam
+// ( wasmJs target: java.time formatting has no multiplatform twin) — the
+// private wrapper stays so the reflection-based jvmTest keeps reaching the
+// pinned branch shape through this file's facade.
+private fun formatRelativeDate(dateStr: String): String =
+    newsletterRelativeDateLabel(dateStr)

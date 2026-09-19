@@ -5,12 +5,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
@@ -18,13 +19,7 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -68,9 +63,6 @@ class AudioEffectsStore constructor(
         val VOLUME_BOOST_GAIN = intPreferencesKey("volume_boost_gain")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
     /**
      * Memoisation holder for the JSON-decoded [EqualizerSettings] blob, keyed on
      * the raw string so the decode is skipped when the underlying key has not
@@ -78,22 +70,21 @@ class AudioEffectsStore constructor(
      */
     private var cachedEqualizerSettings: ParsedCache<EqualizerSettings?> = ParsedCache(null, null)
 
-    val audioEffects: StateFlow<AudioEffectsSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, AudioEffectsSlice())
+    val audioEffects: StateFlow<AudioEffectsSlice> =
+        dataStore.sliceStateFlow(scope, seed = AudioEffectsSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): AudioEffectsSlice {
-        val equalizerSettingsRaw = prefs[Keys.EQUALIZER_SETTINGS]
-        val equalizerSettings = if (equalizerSettingsRaw != cachedEqualizerSettings.raw) {
-            try {
-                equalizerSettingsRaw?.let { PreferenceCodec.json.decodeFromString<EqualizerSettings>(it) }
-            } catch (_: Exception) {
-                null
-            }.also { cachedEqualizerSettings = ParsedCache(equalizerSettingsRaw, it) }
-        } else {
-            cachedEqualizerSettings.value
-        }
+        // MemoizeNull (this store's pre-promotion policy): a null raw is a
+        // cacheable input — the nullable settings blob memoises its null
+        // "absent" result like any other value.
+        val equalizerSettings = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.EQUALIZER_SETTINGS],
+            cache = cachedEqualizerSettings,
+            default = null,
+            parse = { PreferenceCodec.json.decodeFromString<EqualizerSettings>(it) },
+            cacheRef = { cachedEqualizerSettings = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
         return AudioEffectsSlice(
             dialogueBoostEnabled = PreferenceCodec.readBool(prefs, Keys.DIALOGUE_BOOST_ENABLED, "dialogue_boost_enabled", false),
             dialogueBoostStrength = prefs[Keys.DIALOGUE_BOOST_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
@@ -187,15 +178,15 @@ class AudioEffectsStore constructor(
         dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.DIALOGUE_BOOST_ENABLED, Keys.DIALOGUE_BOOST_STRENGTH,
-        Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS, Keys.EQUALIZER_PRESET,
-        Keys.NIGHT_MODE_ENABLED, Keys.NIGHT_MODE_STRENGTH,
-        Keys.BASS_BOOST_ENABLED, Keys.BASS_BOOST_STRENGTH,
-        Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
-        Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED, Keys.VOLUME_BOOST_GAIN,
-        Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -214,41 +205,6 @@ class AudioEffectsStore constructor(
             Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the audio-effects keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly, including the
-     * [EqualizerSettings] JSON blob written via [PreferenceCodec.encodeDefaultsJson].
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.DIALOGUE_BOOST_ENABLED] = userPreferences.dialogueBoostEnabled
-            it[Keys.DIALOGUE_BOOST_STRENGTH] = userPreferences.dialogueBoostStrength.name
-            it[Keys.EQUALIZER_ENABLED] = userPreferences.equalizerEnabled
-            it[Keys.EQUALIZER_SETTINGS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<EqualizerSettings>(),
-                userPreferences.equalizerSettings,
-            )
-            it[Keys.EQUALIZER_PRESET] = userPreferences.equalizerPreset.name
-            it[Keys.NIGHT_MODE_ENABLED] = userPreferences.nightModeEnabled
-            it[Keys.NIGHT_MODE_STRENGTH] = userPreferences.nightModeStrength.name
-            it[Keys.BASS_BOOST_ENABLED] = userPreferences.bassBoostEnabled
-            it[Keys.BASS_BOOST_STRENGTH] = userPreferences.bassBoostStrength.name
-            it[Keys.VIRTUALIZER_ENABLED] = userPreferences.virtualizerEnabled
-            it[Keys.VIRTUALIZER_STRENGTH] = userPreferences.virtualizerStrength
-            it[Keys.REVERB_PRESET] = userPreferences.reverbPreset.name
-            it[Keys.VOLUME_BOOST_ENABLED] = userPreferences.volumeBoostEnabled
-            it[Keys.VOLUME_BOOST_GAIN] = userPreferences.volumeBoostGain
-            it[Keys.LR_BALANCE] = userPreferences.lrBalance
-            it[Keys.AUTO_EQ_BY_GENRE] = userPreferences.autoEqByGenre
-            it[Keys.PITCH_SEMITONES] = userPreferences.pitchSemitones
-        }
     }
 
     /**

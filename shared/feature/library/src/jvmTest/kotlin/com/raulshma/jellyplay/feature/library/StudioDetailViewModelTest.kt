@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.library
 
 import androidx.lifecycle.SavedStateHandle
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -39,7 +39,7 @@ class StudioDetailViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
-    private lateinit var mediaDownloadActions: MediaDownloadActions
+    private lateinit var quickDownloadActions: QuickDownloadActions
 
     @BeforeTest
     fun setUp() {
@@ -47,10 +47,10 @@ class StudioDetailViewModelTest {
         mediaRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
+        quickDownloadActions = mockk(relaxed = true)
 
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
-        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
     }
@@ -75,7 +75,7 @@ class StudioDetailViewModelTest {
             mediaRepository = mediaRepository,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
-            mediaDownloadActions = mediaDownloadActions,
+            quickDownloadActions = quickDownloadActions,
         )
     }
 
@@ -161,7 +161,7 @@ class StudioDetailViewModelTest {
         // The relaxed mock swallows downloadAndReport without ever invoking the
         // callback. Mirror the real cascade (NeedsDetailScreen → onOpenDetail
         // with the plain item id) so the routing actually happens.
-        coEvery { mediaDownloadActions.downloadAndReport(any(), any()) } coAnswers {
+        coEvery { quickDownloadActions.downloadAndReport(any(), any()) } coAnswers {
             secondArg<(String) -> Unit>()(firstArg<MediaItem>().id)
         }
 
@@ -170,7 +170,7 @@ class StudioDetailViewModelTest {
 
         // This host has no pre-presented series sheet: the callback passes the
         // item id straight through to the shared report-and-route cascade.
-        coVerify(exactly = 1) { mediaDownloadActions.downloadAndReport(item, any()) }
+        coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any()) }
         assertEquals("m1", routedTo)
     }
 
@@ -181,12 +181,12 @@ class StudioDetailViewModelTest {
 
         viewModel.removeItemDownload(item)
 
-        verify(exactly = 1) { mediaDownloadActions.removeDownload(item) }
+        verify(exactly = 1) { quickDownloadActions.removeDownload(item) }
     }
 
     @Test
     fun `downloadedIds re-exposes the shared actions flow`() = runTest {
-        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(setOf("done-1"))
+        every { quickDownloadActions.downloadedIds } returns MutableStateFlow(setOf("done-1"))
 
         val viewModel = createViewModel()
 

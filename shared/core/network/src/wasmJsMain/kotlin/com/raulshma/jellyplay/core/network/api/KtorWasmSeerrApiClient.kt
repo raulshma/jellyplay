@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthJellyfinRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthLocalRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
@@ -17,6 +18,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPayload
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeasonDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceServer
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
@@ -54,7 +56,7 @@ private fun seerrUnclassifiedFailureMessage(e: Throwable): String =
 
 /**
  * The wasmJs [SeerrApiClient] — a hand-rolled Ktor replacement for the
- * jvmShared `SeerrApiClientImpl` + `ResilientSeerrApiClient` pair (OkHttp).
+ * jvmShared `SeerrApiClientImpl` (OkHttp; retry in-funnel via `HttpExecutor`).
  * Endpoint paths, query-string assembly, request bodies, `parseErrorMessage`
  * and `formatNetworkError` texts, and the login Set-Cookie capture mirror the
  * JVM implementation request-for-request, string-for-string; the decode path
@@ -62,9 +64,9 @@ private fun seerrUnclassifiedFailureMessage(e: Throwable): String =
  * the JVM impl does (it has no intermediate wire DTOs for this seam).
  *
  * Structure deltas vs the JVM pair (all documented):
- *  - Retry lives HERE (`apiResultWithRetry`, max 4 =
- *    `ResilientSeerrApiClient.MAX_RETRIES`) instead of in a DI-level
- *    Resilient wrapper; the wasm DI module binds the interface straight to
+ *  - Retry lives HERE (`apiResultWithRetry`, max 4 = jvmShared
+ *    `HttpExecutor.MAX_RETRIES`) — in-funnel on both platforms since the
+ *    wrapper deletion; the wasm DI module binds the interface straight to
  *    this class.
  *  - Per-call credentials replace OkHttp's `withAuth` request decorator
  *    ([seerrAuthHeaders] is that `when` as data). Browsers strip the `Cookie`
@@ -230,11 +232,21 @@ class KtorWasmSeerrApiClient(
     override suspend fun getServiceSonarrServers(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrServiceServer>> =
         getAndParseResult(baseUrl, "/service/sonarr", credentials)
 
-    override suspend fun getServiceRadarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRadarrServiceDetail> =
-        getAndParseResult(baseUrl, "/service/radarr/$id", credentials)
-
-    override suspend fun getServiceSonarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrSonarrServiceDetail> =
-        getAndParseResult(baseUrl, "/service/sonarr/$id", credentials)
+    override suspend fun getServiceDetail(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+        kind: ArrServiceKind,
+    ): Result<SeerrServiceDetail> =
+        // Mirror of the JVM client's kind fold: the two endpoints differ only
+        // in path; each kind decodes to its own concrete payload
+        // (Result.map upcasts the subtype to the sealed parent).
+        when (kind) {
+            ArrServiceKind.RADARR ->
+                getAndParseResult<SeerrRadarrServiceDetail>(baseUrl, "/service/radarr/$id", credentials)
+            ArrServiceKind.SONARR ->
+                getAndParseResult<SeerrSonarrServiceDetail>(baseUrl, "/service/sonarr/$id", credentials)
+        }.map { it }
 
     override suspend fun getTrending(baseUrl: String, credentials: SeerrCredentials, page: Int): Result<SeerrSearchResponse> =
         getAndParseResult(baseUrl, "/discover/trending?page=$page", credentials)

@@ -5,20 +5,14 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -52,13 +46,8 @@ class AudioCacheStore constructor(
         val AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB = intPreferencesKey("audio_cache_cellular_monthly_cap_mb")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val audioCache: StateFlow<AudioCacheSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, AudioCacheSlice())
+    val audioCache: StateFlow<AudioCacheSlice> =
+        dataStore.sliceStateFlow(scope, seed = AudioCacheSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): AudioCacheSlice = AudioCacheSlice(
         audioCachingEnabled = prefs[Keys.AUDIO_CACHING_ENABLED] ?: true,
@@ -97,11 +86,15 @@ class AudioCacheStore constructor(
         dataStore.edit { it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = capMb }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.AUDIO_CACHING_ENABLED, Keys.AUDIO_CACHE_SIZE_MB,
-        Keys.AUDIO_PREFETCH_LOOKAHEAD, Keys.AUDIO_PREFETCH_BACKFILL,
-        Keys.AUDIO_CACHE_NETWORK_POLICY, Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -116,26 +109,6 @@ class AudioCacheStore constructor(
             Keys.AUDIO_CACHE_NETWORK_POLICY, Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the audio-cache keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.AUDIO_CACHING_ENABLED] = userPreferences.audioCachingEnabled
-            it[Keys.AUDIO_CACHE_SIZE_MB] = userPreferences.audioCacheSizeMb
-            it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = userPreferences.audioPrefetchLookahead
-            it[Keys.AUDIO_PREFETCH_BACKFILL] = userPreferences.audioPrefetchBackfill
-            it[Keys.AUDIO_CACHE_NETWORK_POLICY] = userPreferences.audioCacheNetworkPolicy.name
-            it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = userPreferences.audioCacheCellularMonthlyCapMb
-        }
     }
 
     /**

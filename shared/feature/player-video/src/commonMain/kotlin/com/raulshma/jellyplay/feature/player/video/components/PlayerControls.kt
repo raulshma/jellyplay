@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -91,6 +92,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.feature.player.video.PlatformCastButton
 import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
 import com.raulshma.jellyplay.feature.player.video.rememberIsPortraitOrientation
@@ -150,6 +152,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 
 import com.raulshma.jellyplay.feature.player.video.AbRepeatState
+import com.raulshma.jellyplay.feature.player.video.PlayerSheet
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -157,6 +160,7 @@ import androidx.compose.foundation.layout.offset
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import com.raulshma.jellyplay.feature.player.video.TrackOption
@@ -165,6 +169,63 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+
+/**
+ * Effects-family bundle for [PlayerControls] (the VideoEffectsController
+ * slice): the dialogue-boost / night-mode / passthrough / normalization /
+ * channel-mix values plus their callbacks ride one `@Immutable` carrier, so
+ * the controls tree's skippability compares one per-concern equality instead
+ * of eighteen flat leaves and the call wall remembers ONE lambda-bearing
+ * bundle (the openSheet funnel's rationale, extended to this family).
+ */
+@Immutable
+internal data class PlayerEffectsControls(
+    val dialogueBoostEnabled: Boolean = false,
+    val dialogueBoostStrength: EffectStrength = EffectStrength.NONE,
+    val nightModeEnabled: Boolean = false,
+    val nightModeStrength: EffectStrength = EffectStrength.NONE,
+    val audioPassthrough: Boolean = false,
+    val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
+    val audioNormalizationEnabled: Boolean = false,
+    val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
+    val channelMixEnabled: Boolean = false,
+    val onDialogueBoostClick: () -> Unit = {},
+    val onDialogueBoostStrengthChange: (EffectStrength) -> Unit = {},
+    val onNightModeClick: () -> Unit = {},
+    val onNightModeStrengthChange: (EffectStrength) -> Unit = {},
+    val onPassthroughClick: () -> Unit = {},
+    val onAudioNormalizationClick: () -> Unit = {},
+    val onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
+    val onChannelMixClick: () -> Unit = {},
+    val onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
+)
+
+/**
+ * Sleep-timer display bundle for [PlayerControls]: the trio the overflow
+ * menu's sleep-timer row reads. The click itself routes through the
+ * [PlayerControls] `openSheet` funnel (PlayerSheet.SleepTimer), so this is
+ * values-only — equality-skippable with no remembered lambdas.
+ */
+@Immutable
+internal data class SleepTimerControls(
+    val active: Boolean = false,
+    val endOfEpisode: Boolean = false,
+    val remainingFlow: StateFlow<Long> = MutableStateFlow(0L),
+)
+
+/**
+ * SyncPlay header/bottom-bar indicator bundle for [PlayerControls]: the
+ * quintet the header pill and the primary-row SyncPlay button render. Like
+ * [SleepTimerControls], values-only — clicks go through `openSheet`.
+ */
+@Immutable
+internal data class SyncPlayIndicator(
+    val inSession: Boolean = false,
+    val groupName: String? = null,
+    val participantCount: Int = 0,
+    val isSynced: Boolean = false,
+    val isSyncing: Boolean = false,
+)
 
 @Composable
 internal fun PlayerControls(
@@ -179,21 +240,15 @@ internal fun PlayerControls(
     videoStatsFlow: StateFlow<EngineVideoStats>,
     playbackSpeed: Float,
     chapters: List<ChapterInfo>,
-    dialogueBoostEnabled: Boolean,
-    dialogueBoostStrength: EffectStrength,
-    nightModeEnabled: Boolean,
-    nightModeStrength: EffectStrength,
-    audioPassthrough: Boolean,
+    effectsControls: PlayerEffectsControls = PlayerEffectsControls(),
     segments: List<MediaSegment> = emptyList(),
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
-    supportsSubtitleStyle: Boolean = false,
-    supportsDialogueBoost: Boolean = false,
-    supportsNightMode: Boolean = false,
-    supportsAudioDelay: Boolean = false,
-    supportsSubtitleDelay: Boolean = false,
-    supportsAudioPassthrough: Boolean = false,
+    // Passed whole (the SubtitleStyleControls capabilities precedent): the
+    // per-engine gates ride the @Immutable EngineCapabilities data class
+    // instead of twelve supportsX booleans flattened at every call site.
+    capabilities: EngineCapabilities = EngineCapabilities(),
     hasEpisodes: Boolean = false,
     episodeBrowserEnabled: Boolean = true,
     onPlayPause: () -> Unit,
@@ -206,55 +261,27 @@ internal fun PlayerControls(
     onNextEpisode: () -> Unit = {},
     tvTrickplayBitmap: PlatformBitmap? = null,
     onBack: () -> Unit,
-    onSpeedClick: () -> Unit,
-    onAudioClick: () -> Unit,
+    // The single sheet-opener funnel: every control that opens a PlayerSheet
+    // and nothing else routes through here. This used to be ~13 separate
+    // no-arg `on*Click` params that each had to be remembered at the call
+    // site or PlayerControls' skippability broke (a fresh lambda per
+    // recomposition forced the ~1500-line controls tree to recompose on
+    // every position tick) — one remembered (PlayerSheet) -> Unit restores
+    // that guarantee structurally. Openers carrying side effects beyond the
+    // sheet id (the subtitle hub's reset-first flag) stay dedicated params.
+    openSheet: (PlayerSheet) -> Unit,
     onSubtitleClick: () -> Unit,
     onSubtitleHubClick: () -> Unit,
-    onChapterClick: () -> Unit,
-    onInfoClick: () -> Unit,
-    onAspectRatioClick: () -> Unit,
-    onDialogueBoostClick: () -> Unit,
-    onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
-    onNightModeClick: () -> Unit,
-    onNightModeStrengthChange: (EffectStrength) -> Unit,
-    onAVSyncClick: () -> Unit,
-    onDecoderClick: () -> Unit,
-    onPassthroughClick: () -> Unit,
-    onEpisodesClick: () -> Unit = {},
-    onSyncPlayClick: () -> Unit = {},
     onPipClick: () -> Unit = {},
     onMuteClick: () -> Unit = {},
     isMuted: Boolean = false,
-    isInSyncPlaySession: Boolean = false,
-    syncPlayGroupName: String? = null,
-    syncPlayParticipantCount: Int = 0,
-    isSyncPlaySynced: Boolean = false,
-    isSyncPlaySyncing: Boolean = false,
+    syncPlay: SyncPlayIndicator = SyncPlayIndicator(),
     showVideoStats: Boolean = false,
     onVideoStatsClick: () -> Unit = {},
     streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     playbackMode: PlaybackMode = PlaybackMode.AUTO,
-    onQualityClick: () -> Unit = {},
-    onPlaybackModeClick: () -> Unit = {},
-    audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
-    audioNormalizationEnabled: Boolean = false,
-    channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
-    channelMixEnabled: Boolean = false,
-    supportsAudioNormalization: Boolean = false,
-    supportsChannelMixing: Boolean = false,
-    supportsLiveQualitySwitch: Boolean = true,
-    onAudioNormalizationClick: () -> Unit = {},
-    onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
-    onChannelMixClick: () -> Unit = {},
-    onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
-    sleepTimerActive: Boolean = false,
-    sleepTimerEndOfEpisode: Boolean = false,
-    sleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L),
-    supportsVideoFilters: Boolean = false,
+    sleepTimer: SleepTimerControls = SleepTimerControls(),
     videoFiltersActive: Boolean = false,
-    onSleepTimerClick: () -> Unit = {},
-    onVideoFilterClick: () -> Unit = {},
-    supportsScreenshot: Boolean = false,
     onScreenshotClick: () -> Unit = {},
     abRepeat: AbRepeatState = AbRepeatState(),
     onAbRepeatToggle: () -> Unit = {},
@@ -459,14 +486,14 @@ internal fun PlayerControls(
                             }
                         }
                     }
-                    if (isInSyncPlaySession) {
+                    if (syncPlay.inSession) {
                         Spacer(Modifier.width(8.dp))
                         SyncPlayHeaderIndicator(
-                            groupName = syncPlayGroupName ?: stringResource(Res.string.player_video_group),
-                            participantCount = syncPlayParticipantCount,
-                            isSynced = isSyncPlaySynced,
-                            isSyncing = isSyncPlaySyncing,
-                            onClick = onSyncPlayClick,
+                            groupName = syncPlay.groupName ?: stringResource(Res.string.player_video_group),
+                            participantCount = syncPlay.participantCount,
+                            isSynced = syncPlay.isSynced,
+                            isSyncing = syncPlay.isSyncing,
+                            onClick = { openSheet(PlayerSheet.SyncPlay) },
                         )
                     }
                     if (castManager != null) {
@@ -584,7 +611,7 @@ internal fun PlayerControls(
                         isConnectionMetered = isConnectionMetered,
                         subtitleDelayMs = subtitleDelayMs,
                         onSubtitleDelayClick = onSubtitleDelayClick,
-                        onPlayMethodClick = onPlaybackModeClick,
+                        onPlayMethodClick = { openSheet(PlayerSheet.PlaybackMode) },
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
@@ -634,23 +661,16 @@ internal fun PlayerControls(
                     // in which Row wraps it and which right-cluster buttons pin.
                     val primaryControls: @Composable () -> Unit = {
                         PrimaryMediaControls(
-                            supportsLiveQualitySwitch = supportsLiveQualitySwitch,
+                            supportsLiveQualitySwitch = capabilities.supportsLiveQualitySwitch,
                             streamingQuality = streamingQuality,
-                            onQualityClick = onQualityClick,
                             playbackSpeed = playbackSpeed,
-                            onSpeedClick = onSpeedClick,
-                            onAudioClick = onAudioClick,
+                            openSheet = openSheet,
                             onSubtitleClick = onSubtitleClick,
                             chapters = chapters,
-                            onChapterClick = onChapterClick,
                             hasEpisodes = hasEpisodes,
                             episodeBrowserEnabled = episodeBrowserEnabled,
-                            onEpisodesClick = onEpisodesClick,
-                            isInSyncPlaySession = isInSyncPlaySession,
-                            onSyncPlayClick = onSyncPlayClick,
+                            isInSyncPlaySession = syncPlay.inSession,
                             currentAspectRatio = currentAspectRatio,
-                            onAspectRatioClick = onAspectRatioClick,
-                            onInfoClick = onInfoClick,
                         )
                     }
                     if (splitBottomControlsEvenly) {
@@ -759,54 +779,54 @@ internal fun PlayerControls(
         PlayerOverflowMenu(
             expanded = showOverflow,
             onDismiss = { showOverflow = false },
-            supportsSubtitleStyle = supportsSubtitleStyle,
-            supportsDialogueBoost = supportsDialogueBoost,
-            supportsNightMode = supportsNightMode,
-            supportsAudioDelay = supportsAudioDelay,
-            supportsSubtitleDelay = supportsSubtitleDelay,
-            supportsAudioPassthrough = supportsAudioPassthrough,
-            supportsAudioNormalization = supportsAudioNormalization,
-            supportsChannelMixing = supportsChannelMixing,
-            dialogueBoostEnabled = dialogueBoostEnabled,
-            dialogueBoostStrength = dialogueBoostStrength,
-            nightModeEnabled = nightModeEnabled,
-            nightModeStrength = nightModeStrength,
-            audioPassthrough = audioPassthrough,
+            supportsSubtitleStyle = capabilities.supportsSubtitleStyle,
+            supportsDialogueBoost = capabilities.supportsDialogueBoost,
+            supportsNightMode = capabilities.supportsNightMode,
+            supportsAudioDelay = capabilities.supportsAudioDelay,
+            supportsSubtitleDelay = capabilities.supportsSubtitleDelay,
+            supportsAudioPassthrough = capabilities.supportsAudioPassthrough,
+            supportsAudioNormalization = capabilities.supportsAudioNormalization,
+            supportsChannelMixing = capabilities.supportsChannelMixing,
+            dialogueBoostEnabled = effectsControls.dialogueBoostEnabled,
+            dialogueBoostStrength = effectsControls.dialogueBoostStrength,
+            nightModeEnabled = effectsControls.nightModeEnabled,
+            nightModeStrength = effectsControls.nightModeStrength,
+            audioPassthrough = effectsControls.audioPassthrough,
             showVideoStats = showVideoStats,
-            audioNormalizationMode = audioNormalizationMode,
-            audioNormalizationEnabled = audioNormalizationEnabled,
-            channelMixMode = channelMixMode,
-            channelMixEnabled = channelMixEnabled,
+            audioNormalizationMode = effectsControls.audioNormalizationMode,
+            audioNormalizationEnabled = effectsControls.audioNormalizationEnabled,
+            channelMixMode = effectsControls.channelMixMode,
+            channelMixEnabled = effectsControls.channelMixEnabled,
             onSubtitleHubClick = {
                 showOverflow = false
                 onSubtitleHubClick()
             },
             onDialogueBoostClick = {
                 showOverflow = false
-                onDialogueBoostClick()
+                effectsControls.onDialogueBoostClick()
             },
-            onDialogueBoostStrengthChange = onDialogueBoostStrengthChange,
+            onDialogueBoostStrengthChange = effectsControls.onDialogueBoostStrengthChange,
             onNightModeClick = {
                 showOverflow = false
-                onNightModeClick()
+                effectsControls.onNightModeClick()
             },
-            onNightModeStrengthChange = onNightModeStrengthChange,
+            onNightModeStrengthChange = effectsControls.onNightModeStrengthChange,
             onAVSyncClick = {
                 showOverflow = false
-                onAVSyncClick()
+                openSheet(PlayerSheet.AVSync)
             },
             playbackMode = playbackMode,
             onPlaybackModeClick = {
                 showOverflow = false
-                onPlaybackModeClick()
+                openSheet(PlayerSheet.PlaybackMode)
             },
             onDecoderClick = {
                 showOverflow = false
-                onDecoderClick()
+                openSheet(PlayerSheet.Decoder)
             },
             onPassthroughClick = {
                 showOverflow = false
-                onPassthroughClick()
+                effectsControls.onPassthroughClick()
             },
             onVideoStatsClick = {
                 showOverflow = false
@@ -814,34 +834,34 @@ internal fun PlayerControls(
             },
             onAudioNormalizationClick = {
                 showOverflow = false
-                onAudioNormalizationClick()
+                effectsControls.onAudioNormalizationClick()
             },
             onAudioNormalizationModeChange = {
                 showOverflow = false
-                onAudioNormalizationModeChange(it)
+                effectsControls.onAudioNormalizationModeChange(it)
             },
             onChannelMixClick = {
                 showOverflow = false
-                onChannelMixClick()
+                effectsControls.onChannelMixClick()
             },
             onChannelMixModeChange = {
                 showOverflow = false
-                onChannelMixModeChange(it)
+                effectsControls.onChannelMixModeChange(it)
             },
-            sleepTimerActive = sleepTimerActive,
-            sleepTimerEndOfEpisode = sleepTimerEndOfEpisode,
-            sleepTimerRemainingFlow = sleepTimerRemainingFlow,
+            sleepTimerActive = sleepTimer.active,
+            sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
+            sleepTimerRemainingFlow = sleepTimer.remainingFlow,
             onSleepTimerClick = {
                 showOverflow = false
-                onSleepTimerClick()
+                openSheet(PlayerSheet.SleepTimer)
             },
-            supportsVideoFilters = supportsVideoFilters,
+            supportsVideoFilters = capabilities.supportsVideoFilters,
             videoFiltersActive = videoFiltersActive,
             onVideoFilterClick = {
                 showOverflow = false
-                onVideoFilterClick()
+                openSheet(PlayerSheet.VideoFilter)
             },
-            supportsScreenshot = supportsScreenshot,
+            supportsScreenshot = capabilities.supportsScreenshot,
             onScreenshotClick = {
                 showOverflow = false
                 onScreenshotClick()
@@ -882,71 +902,68 @@ internal fun PlayerControls(
 private fun PrimaryMediaControls(
     supportsLiveQualitySwitch: Boolean,
     streamingQuality: StreamingQuality,
-    onQualityClick: () -> Unit,
     playbackSpeed: Float,
-    onSpeedClick: () -> Unit,
-    onAudioClick: () -> Unit,
+    // Pure sheet openers funnel through this (see PlayerControls' KDoc);
+    // onSubtitleClick stays separate because it flags the hub's tab state.
+    openSheet: (PlayerSheet) -> Unit,
     onSubtitleClick: () -> Unit,
     chapters: List<ChapterInfo>,
-    onChapterClick: () -> Unit,
     hasEpisodes: Boolean,
     episodeBrowserEnabled: Boolean,
-    onEpisodesClick: () -> Unit,
     isInSyncPlaySession: Boolean,
-    onSyncPlayClick: () -> Unit,
     currentAspectRatio: AspectRatio,
-    onAspectRatioClick: () -> Unit,
-    onInfoClick: () -> Unit,
 ) {
     if (supportsLiveQualitySwitch) {
         PlayerQualityButton(
             quality = streamingQuality,
-            onClick = onQualityClick,
+            onClick = { openSheet(PlayerSheet.Quality) },
         )
     }
-    PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
+    PlayerSpeedButton(speed = playbackSpeed, onClick = { openSheet(PlayerSheet.Speed) })
     PlayerIconButton(
         icon = Tabler.Outline.Music,
         contentDescription = stringResource(Res.string.player_video_audio),
-        onClick = onAudioClick,
+        onClick = { openSheet(PlayerSheet.Audio) },
     )
     PlayerIconButton(
         icon = Tabler.Outline.Subtitles,
         contentDescription = stringResource(Res.string.player_video_subtitles),
         onClick = onSubtitleClick,
+        // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+        modifier = Modifier.harnessClickTarget("player-subtitles-trigger"),
     )
     if (chapters.isNotEmpty()) {
         PlayerIconButton(
             icon = Tabler.Outline.List,
             contentDescription = stringResource(Res.string.player_video_chapters),
-            onClick = onChapterClick,
+            onClick = { openSheet(PlayerSheet.Chapter) },
         )
     }
     if (hasEpisodes && episodeBrowserEnabled) {
         PlayerIconButton(
             icon = Tabler.Outline.ListNumbers,
             contentDescription = stringResource(Res.string.player_video_episodes),
-            onClick = onEpisodesClick,
+            onClick = { openSheet(PlayerSheet.Episodes) },
         )
     }
     if (isInSyncPlaySession) {
         PlayerIconButton(
             icon = Tabler.Outline.Users,
             contentDescription = stringResource(Res.string.player_video_syncplay),
-            onClick = onSyncPlayClick,
+            onClick = { openSheet(PlayerSheet.SyncPlay) },
             tint = MaterialTheme.colorScheme.primary,
         )
     }
     PlayerIconButton(
         icon = Tabler.Outline.AspectRatio,
         contentDescription = stringResource(Res.string.player_video_aspect_ratio_label),
-        onClick = onAspectRatioClick,
+        onClick = { openSheet(PlayerSheet.AspectRatio) },
         tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
     )
     PlayerIconButton(
         icon = Tabler.Outline.InfoCircle,
         contentDescription = stringResource(Res.string.player_video_info),
-        onClick = onInfoClick,
+        onClick = { openSheet(PlayerSheet.PlaybackInfo) },
     )
 }
 

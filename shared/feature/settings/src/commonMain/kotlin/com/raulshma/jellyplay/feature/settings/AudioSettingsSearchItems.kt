@@ -374,6 +374,24 @@ internal val AudioSettingsSearchItems = listOf(
 )
 
 /**
+ * The audio group's per-id declared row admissions — every effect-dependent
+ * strength row only renders behind the advanced toggle AND its parent effect
+ * (`audioScreenRowTotal` and AudioSettingsScreen's emission `if`s read these
+ * one gates). Parent ids are this group's toggle rows; `volume_normalization`
+ * counts as "on" while normalization is in the TRACK/ALBUM modes — the
+ * `audioRowAdmissionFlags` builder translates.
+ */
+internal val AudioRowAdmissions: Map<String, RowAdmission> = mapOf(
+    "replaygain_preamp" to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn("volume_normalization")),
+    "equalizer_preset" to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn("equalizer")),
+    "night_mode_strength" to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn("night_mode")),
+    "bass_boost_strength" to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn("bass_boost")),
+    "virtualizer_strength" to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn("virtualizer")),
+    "volume_boost_gain" to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn("volume_boost")),
+    "channel_mix_mode" to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn("channel_mixing")),
+)
+
+/**
  * Settings-search items for the nested "Audio Caching" group of
  * AudioSettingsScreen. Split out of [AudioSettingsSearchItems] along the
  * screen-group line: these rows render in their own group, gated by

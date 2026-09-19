@@ -18,12 +18,14 @@ package com.raulshma.jellyplay.core.network.library
  * the JVM client resolves them against the SDK [org.jellyfin.sdk.model.api.ItemFields]
  * enum). Projected explicitly because the plain GET /Items/{id} read returns
  * several of these (notably Trickplay, used for scrub preview and download)
- * null without an explicit request.
+ * null without an explicit request. "Path" is projected for the book detail
+ * surface: books have no MediaSources, so Path is the only carrier of their
+ * file format.
  */
 internal val DETAIL_PROJECTION_FIELDS: List<String> = listOf(
     "People", "Chapters", "MediaSources", "Trickplay", "ExternalUrls",
     "OriginalTitle", "ProductionLocations", "Studios", "Genres", "Overview",
-    "ProviderIds", "PrimaryImageAspectRatio",
+    "ProviderIds", "PrimaryImageAspectRatio", "Path",
 )
 
 /**

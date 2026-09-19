@@ -5,8 +5,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -14,13 +16,7 @@ import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 
@@ -66,9 +62,6 @@ class PlayerEngineStore constructor(
         val VIDEO_EFFECTS_SELECTIONS = stringPreferencesKey("video_effects_selections")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
-
     // Memoisation holders for the JSON-decoded engine-config blobs, keyed on the
     // raw string so the decode is skipped when the underlying key has not
     // changed on a given `dataStore.data` emission.
@@ -78,10 +71,8 @@ class PlayerEngineStore constructor(
     private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
     private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
 
-    val playerEngine: StateFlow<PlayerEngineSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, PlayerEngineSlice())
+    val playerEngine: StateFlow<PlayerEngineSlice> =
+        dataStore.sliceStateFlow(scope, seed = PlayerEngineSlice(), read = ::read)
 
     /**
      * Pure read of the engine-config fields from a raw [Preferences] snapshot,
@@ -90,38 +81,53 @@ class PlayerEngineStore constructor(
      * the whole-`UserPreferences` projection without duplicating the read logic.
      */
     internal fun read(prefs: Preferences): PlayerEngineSlice {
-        val mpvConfigRaw = prefs[Keys.MPV_CONFIG]
-        val mpvConfig = if (mpvConfigRaw != cachedMpvConfig.raw) {
-            try {
-                mpvConfigRaw?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
-            } catch (_: Exception) { MpvEngineConfig() }.also { cachedMpvConfig = ParsedCache(mpvConfigRaw, it) }
-        } else cachedMpvConfig.value
+        // MemoizeNull (this store's pre-promotion policy at every site): a
+        // null raw is a cacheable input — the decode inputs are exactly the
+        // raw string, so a memoised default is safe to serve.
+        val mpvConfig = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.MPV_CONFIG],
+            cache = cachedMpvConfig,
+            default = MpvEngineConfig(),
+            parse = { json.decodeFromString<MpvEngineConfig>(it) },
+            cacheRef = { cachedMpvConfig = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-        val libVlcConfigRaw = prefs[Keys.LIBVLC_CONFIG]
-        val libVlcConfig = if (libVlcConfigRaw != cachedLibVlcConfig.raw) {
-            try {
-                libVlcConfigRaw?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
-            } catch (_: Exception) { LibVlcEngineConfig() }.also { cachedLibVlcConfig = ParsedCache(libVlcConfigRaw, it) }
-        } else cachedLibVlcConfig.value
+        val libVlcConfig = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.LIBVLC_CONFIG],
+            cache = cachedLibVlcConfig,
+            default = LibVlcEngineConfig(),
+            parse = { json.decodeFromString<LibVlcEngineConfig>(it) },
+            cacheRef = { cachedLibVlcConfig = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-        val exoPlayerConfigRaw = prefs[Keys.EXO_CONFIG]
-        val exoPlayerConfig = if (exoPlayerConfigRaw != cachedExoPlayerConfig.raw) {
-            try {
-                exoPlayerConfigRaw?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
-            } catch (_: Exception) { ExoPlayerEngineConfig() }.also { cachedExoPlayerConfig = ParsedCache(exoPlayerConfigRaw, it) }
-        } else cachedExoPlayerConfig.value
+        val exoPlayerConfig = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.EXO_CONFIG],
+            cache = cachedExoPlayerConfig,
+            default = ExoPlayerEngineConfig(),
+            parse = { json.decodeFromString<ExoPlayerEngineConfig>(it) },
+            cacheRef = { cachedExoPlayerConfig = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-        val mediaStreamSelectionsRaw = prefs[Keys.MEDIA_STREAM_SELECTIONS]
-        val mediaStreamSelections = if (mediaStreamSelectionsRaw != cachedMediaStreamSelections.raw) {
-            readMediaStreamSelections(prefs)
-                .also { cachedMediaStreamSelections = ParsedCache(mediaStreamSelectionsRaw, it) }
-        } else cachedMediaStreamSelections.value
+        val mediaStreamSelections = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.MEDIA_STREAM_SELECTIONS],
+            cache = cachedMediaStreamSelections,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, MediaStreamSelection>>(it) },
+            cacheRef = { cachedMediaStreamSelections = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-        val videoEffectsByItemRaw = prefs[Keys.VIDEO_EFFECTS_SELECTIONS]
-        val videoEffectsByItem = if (videoEffectsByItemRaw != cachedVideoEffectsByItem.raw) {
-            readVideoEffectsByItem(prefs)
-                .also { cachedVideoEffectsByItem = ParsedCache(videoEffectsByItemRaw, it) }
-        } else cachedVideoEffectsByItem.value
+        val videoEffectsByItem = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.VIDEO_EFFECTS_SELECTIONS],
+            cache = cachedVideoEffectsByItem,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, VideoEffectsConfig>>(it) },
+            cacheRef = { cachedVideoEffectsByItem = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
         return PlayerEngineSlice(
             mpvConfig = mpvConfig,
@@ -218,16 +224,18 @@ class PlayerEngineStore constructor(
     }
 
     /**
-     * Keys owned by this store that reset under
-     * `PreferenceResetCategory.PLAYER_ENGINES`. The two per-item maps
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. The two per-item maps
      * ([Keys.MEDIA_STREAM_SELECTIONS] / [Keys.VIDEO_EFFECTS_SELECTIONS]) are
      * runtime state and are deliberately excluded from category reset (they
      * live in the facade's `resetExcludedKeys`); they remain full slice fields
      * with their own setters.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
@@ -242,31 +250,6 @@ class PlayerEngineStore constructor(
             Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
         )
         else -> emptyList()
-    }
-
-    /**
-     * Restore-backup participation: writes the three JSON-encoded engine
-     * configs owned by this store from a decoded [UserPreferences], mirroring
-     * the facade's `encodeDefaultsJson` round-trips exactly. The per-item
-     * recall maps are runtime state and are not restored here (facade rule).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.MPV_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<MpvEngineConfig>(),
-                userPreferences.mpvConfig,
-            )
-            prefs[Keys.LIBVLC_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<LibVlcEngineConfig>(),
-                userPreferences.libVlcConfig,
-            )
-            prefs[Keys.EXO_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<ExoPlayerEngineConfig>(),
-                userPreferences.exoPlayerConfig,
-            )
-        }
     }
 
     /**

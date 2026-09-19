@@ -4,13 +4,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
 
@@ -22,8 +20,9 @@ import kotlinx.coroutines.flow.map
  * Mirrors [ArrPreferencesStore]: Jetpack DataStore Preferences for the toggles,
  * EncryptedSharedPreferences for the secrets, and a [MutableStateFlow] tick to
  * re-emit whenever the encrypted store mutates (it has no Flow API). On any
- * read/parse error, the flow degrades to defaults rather than throwing —
- * matching the sibling store's `.catch { emptyPreferences() }` pattern.
+ * read/parse error, the flow degrades to defaults rather than throwing — the
+ * module-wide `dataDegradingToDefaults` corrupt-read policy (see
+ * `SliceStateFlow.kt`).
  *
  * The credentials tick is exposed via [credentials] so the repository / settings
  * ViewModel can react to credential writes (e.g. the user pasting an API key)
@@ -47,8 +46,7 @@ class SubtitleProviderPreferencesStore constructor(
      */
     private val credentialsTick = MutableStateFlow(snapshotCredentials())
 
-    val preferences: Flow<SubtitleProviderPreferences> = dataStore.data
-        .catch { _ -> emit(emptyPreferences()) }
+    val preferences: Flow<SubtitleProviderPreferences> = dataStore.dataDegradingToDefaults()
         .map { prefs ->
             SubtitleProviderPreferences(
                 wyzieEnabled = prefs[Keys.WYZIE_ENABLED] ?: false,

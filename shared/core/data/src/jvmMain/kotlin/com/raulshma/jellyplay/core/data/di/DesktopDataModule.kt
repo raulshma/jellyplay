@@ -64,7 +64,7 @@ fun desktopDataModule(dataDir: Path): Module {
     // possibly as early as single construction, so the flag must be set when
     // the module function runs. Desktop defaults to debug logging on unless
     // `jellyplay.debug=false` is set on the JVM command line (desktop app
-    // builds arrive at ; jvmTest smoke tests get verbose logs).
+    // builds arrive at;  jvmTest smoke tests get verbose logs).
     DataBuildFlags.debugBuild = System.getProperty("jellyplay.debug")?.toBoolean() ?: true
 
     return module {
@@ -182,8 +182,10 @@ fun desktopDataModule(dataDir: Path): Module {
         // androidAppModule).
         //  - PlaybackSyncScheduler: REAL since the playback-outbox drainer
         //    moved into shared jvmShared — DesktopPlaybackSyncScheduler runs
-        //    drainer.drainOnce(0) at startup, on every Offline→Online
-        //    transition, and on SyncStatusStateHolder's manual "sync now"
+        //    drainer.drainOnce(0) at startup, on every going-online edge
+        //    (network Offline→Online OR the app-level Offline Mode toggling
+        //    back online — the shared ReconnectTrigger), and on
+        //    SyncStatusStateHolder's manual "sync now"
         //    (see its class KDoc for the declared behaviour delta: desktop
         //    staged outbox rows now actually drain; no periodic backstop).
         //    Android overrides the interface with the WorkManager-backed
@@ -222,6 +224,7 @@ fun desktopDataModule(dataDir: Path): Module {
             DesktopPlaybackSyncScheduler(
                 drainer = get(),
                 networkMonitor = get(),
+                offlineModeManager = get(),
                 scope = get(DatastoreQualifiers.applicationScope),
             )
         }
@@ -257,7 +260,7 @@ fun desktopDataModule(dataDir: Path): Module {
             )
         }
 
-        // ── AppUpdate split (Wave xB): the desktop update-check actual ──────
+        // ── AppUpdate split: the desktop update-check actual ──────
         // The repository resolves (the About screen's "Check for updates" row
         // calls it through DesktopAppRoot), but desktop has NO self-update: the
         // version sentinel below beats every real release tag, so

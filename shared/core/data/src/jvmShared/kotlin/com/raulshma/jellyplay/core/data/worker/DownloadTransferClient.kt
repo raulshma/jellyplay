@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -35,7 +36,7 @@ import java.io.InputStream
  * share one method: [execute] with a [TransferRequest.range] that is null for
  * a probe / fresh start, `"bytes=N-"` for a single-connection resume, and
  * `"bytes=start-end"` for one multi-connection chunk. The adapter emits the
- * User-Agent / `X-Emby-Token` headers both paths previously hand-built.
+ * User-Agent / `Authorization` headers both paths previously hand-built.
  */
 interface DownloadTransferClient {
 
@@ -53,7 +54,7 @@ interface DownloadTransferClient {
  *
  * @param url the download/stream URL.
  * @param head true for a content-size probe (no body consumed).
- * @param accessToken optional `X-Emby-Token`; null/blank omits the header.
+ * @param accessToken optional `Authorization: MediaBrowser` token; null/blank omits the header.
  * @param range `bytes=N-` single-connection resume range, `bytes=start-end`
  *   for one multi-connection chunk, or null for a fresh/probe request.
  */
@@ -111,7 +112,7 @@ class OkHttpDownloadTransferClient(
                 .header("User-Agent", "JellyPlay/1.0.0")
             if (request.head) builder.head()
             if (!request.accessToken.isNullOrBlank()) {
-                builder.header("X-Emby-Token", request.accessToken)
+                builder.tokenAuthHeader(request.accessToken)
             }
             if (!request.range.isNullOrBlank()) {
                 builder.header("Range", request.range)

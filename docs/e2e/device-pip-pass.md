@@ -15,6 +15,14 @@ fix from this round's review (a duplicated unconditional `tap_node "Play"`
 after the details/quick-start branch that would have fail-exited the
 quick-started-playback path).
 
+**Wave-23 status note (2026-09-12): the exit half remains OPEN — device
+unavailable this session** (`adb devices` lists no attached device or
+emulator on this machine). Steps 8-9 of the committed script (menu →
+fullscreen EXPAND, HOME re-entry + menu → X DISMISS, with the `dumpsys`
+assertions) still need a device run to close the wave-19C residual; the
+fixture recipe (`bootstrap-jellyfin.sh`), the 5-minute testsrc clip
+generation and the script itself are all ready as committed.
+
 The wave-19C residual this lane was meant to close ("PiP entry/exit
 needs-device-pass") therefore remains OPEN for the exit half; entry is no
 longer in question.

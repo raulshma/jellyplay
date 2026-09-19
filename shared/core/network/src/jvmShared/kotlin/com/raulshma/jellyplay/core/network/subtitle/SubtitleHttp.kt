@@ -1,7 +1,11 @@
 package com.raulshma.jellyplay.core.network.subtitle
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.NetworkLog
+import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.api.ApiException
+import com.raulshma.jellyplay.core.network.api.HttpExecutor
+import com.raulshma.jellyplay.core.network.api.executeWithStatusSplit
 import com.raulshma.jellyplay.core.network.api.fromNetwork
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
@@ -17,9 +21,15 @@ import java.net.UnknownHostException
  * [WyzieSubtitleProvider] — the `execute`/`wrapNetwork` pair both providers
  * used to hand-copy:
  *
- *  - **[execute]** — OkHttp `execute().use`, non-2xx → bounded `take(500)`
- *    body log → [ApiException.fromHttpResponse] carrying the
- *    "`<service> HTTP <code>`" message and the `Retry-After` header;
+ *  - **[execute]** — the module-wide [executeWithStatusSplit] scaffold (the
+ *    same chassis the Arr/Seerr/TMDB/GitHub/LrcLib clients ride) wrapped in
+ *    [RetryPolicy.executeWithRetry] at [HttpExecutor.MAX_RETRIES] — retry
+ *    lives in the funnel here since the `ResilientSubtitleProvider` DI
+ *    wrapper was folded away (note this puts the backoff delays inside the
+ *    providers' [SubtitleRateLimiter] window, keeping every attempt strictly
+ *    serial per provider). Non-2xx → bounded `take(500)` body log →
+ *    [ApiException.fromHttpResponse] carrying the "`<service> HTTP <code>`"
+ *    message and the `Retry-After` header;
  *  - **[wrapNetwork]** — the friendly ladder (`UnknownHostException` →
  *    "Unable to reach X. Check your connection." / `SocketTimeoutException`
  *    → "X request timed out." / else message passthrough), over the
@@ -61,45 +71,61 @@ internal class SubtitleHttp(private val client: OkHttpClient) {
     )
 
     /**
-     * Runs [request] through the shared executor. [onResponse] receives the
-     * successful (2xx) response and produces the typed value — the caller
-     * owns the body shape (string vs bytes vs whatever); non-2xx responses
-     * are logged (bounded body preview) and mapped to a retryable-flagged
-     * [ApiException] via [ApiException.fromHttpResponse].
+     * Runs [request] through the shared executor under [RetryPolicy]. Every
+     * attempt hands the successful (2xx) response to [onResponse] — the
+     * caller owns the body shape (string vs bytes vs whatever); non-2xx
+     * responses are logged (bounded body preview) and thrown as a
+     * retryable-flagged [ApiException] via [ApiException.fromHttpResponse];
+     * a retryable failure (5xx/429, transport IOException) re-runs the
+     * scaffold up to [HttpExecutor.MAX_RETRIES] extra times. The last
+     * failure is rethrown — [wrapNetwork] then maps it exactly once, as
+     * before.
      */
-    fun <T> execute(
+    suspend fun <T> execute(
         request: Request,
         serviceName: String,
         opts: Options,
         onResponse: (Response) -> T,
-    ): T =
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                // The error body explains *why* (e.g. an unmappable TMDB id), so
-                // log it before discarding. Keep it bounded to avoid spamming
-                // the log with a huge error page.
-                val rawBody = runCatching { response.body?.string() }.getOrNull()
-                val bodyPreview = rawBody?.take(500)
-                NetworkLog.w(
-                    opts.logTag,
-                    "HTTP ${response.code} for ${loggedUrl(request, opts)}" +
-                        (bodyPreview?.let { " body=$it" } ?: ""),
-                )
-                throw ApiException.fromHttpResponse(
-                    response.code,
-                    "$serviceName HTTP ${response.code}",
-                    response.header("Retry-After"),
-                    responseBody = if (opts.captureResponseBody) rawBody else null,
-                )
-            }
-            onResponse(response)
+    ): T = RetryPolicy.executeWithRetry(maxRetries = HttpExecutor.MAX_RETRIES) {
+        runCatchingRethrowingCancellation {
+            client.executeWithStatusSplit(
+                request,
+                onHttpFailure = { response -> throw httpFailure(request, response, serviceName, opts) },
+                onResponse = onResponse,
+            )
         }
+    }.getOrThrow()
+
+    /** The subtitle-shaped non-2xx arm: bounded body log + captured raw body + Retry-After. */
+    private fun httpFailure(
+        request: Request,
+        response: Response,
+        serviceName: String,
+        opts: Options,
+    ): ApiException {
+        // The error body explains *why* (e.g. an unmappable TMDB id), so
+        // log it before discarding. Keep it bounded to avoid spamming
+        // the log with a huge error page.
+        val rawBody = runCatching { response.body?.string() }.getOrNull()
+        val bodyPreview = rawBody?.take(500)
+        NetworkLog.w(
+            opts.logTag,
+            "HTTP ${response.code} for ${loggedUrl(request, opts)}" +
+                (bodyPreview?.let { " body=$it" } ?: ""),
+        )
+        return ApiException.fromHttpResponse(
+            response.code,
+            "$serviceName HTTP ${response.code}",
+            response.header("Retry-After"),
+            responseBody = if (opts.captureResponseBody) rawBody else null,
+        )
+    }
 
     /**
      * [execute] for the common string-body shape: 2xx → the body text, an
      * absent body → `IOException("Empty <serviceName> response")`.
      */
-    fun executeForString(request: Request, serviceName: String, opts: Options): String =
+    suspend fun executeForString(request: Request, serviceName: String, opts: Options): String =
         execute(request, serviceName, opts) { response ->
             response.body?.string() ?: throw IOException("Empty $serviceName response")
         }

@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -33,6 +34,10 @@ import kotlin.test.assertTrue
  *    detail page;
  *  - loadMore appends the next page's top items and advances the cursor, and
  *    is a no-op once hasMoreItems is false;
+ *  - loadMore's PageAppender guard pins: a tap landing while an append is in
+ *    flight is suppressed (double-fire), and a tap during the cold load waits
+ *    for hasMoreItems to be proven (completions cannot be reordered ahead of
+ *    the cold load);
  *  - a repeated loadUser with the same id and data is a no-op, while a new
  *    id resets the state and reloads from page 0;
  *  - failures surface as state.error with loading flags cleared.
@@ -127,6 +132,71 @@ class UserStatisticsDetailViewModelTest {
         advanceUntilIdle()
         coVerify(exactly = 1) { repository.getUserDetailStatistics("u-1", 1, 50) }
         coVerify(exactly = 1) { repository.getUserDetailStatistics("u-1", 0, 50) }
+    }
+
+    @Test
+    fun `loadMore while an append is in flight is suppressed`() = runTest(mainDispatcher) {
+        coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } returns
+            Result.success(page(item("i-1"), hasMore = true))
+        val appendGate = CompletableDeferred<Unit>()
+        coEvery { repository.getUserDetailStatistics("u-1", 1, 50) } coAnswers {
+            appendGate.await()
+            Result.success(page(item("i-2"), hasMore = false))
+        }
+
+        val viewModel = UserStatisticsDetailViewModel(repository)
+        viewModel.loadUser("u-1")
+        advanceUntilIdle()
+
+        viewModel.loadMore()
+        advanceUntilIdle() // the page-1 append parks on the gate
+        assertTrue(viewModel.state.value.isLoadingMore)
+
+        // Double-fire suppression: the second tap neither fetches nor
+        // publishes — the cursor still belongs to the in-flight append.
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.isLoadingMore)
+        assertEquals(listOf("i-1"), viewModel.state.value.detail.topItems.map { it.itemId })
+
+        appendGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf("i-1", "i-2"), viewModel.state.value.detail.topItems.map { it.itemId })
+        assertEquals(1, viewModel.state.value.currentPage)
+        assertFalse(viewModel.state.value.isLoadingMore)
+        coVerify(exactly = 1) { repository.getUserDetailStatistics("u-1", 1, 50) }
+    }
+
+    @Test
+    fun `loadMore during the cold load waits for hasMore to be proven`() = runTest(mainDispatcher) {
+        val coldGate = CompletableDeferred<Unit>()
+        coEvery { repository.getUserDetailStatistics("u-1", 0, 50) } coAnswers {
+            coldGate.await()
+            Result.success(page(item("i-1"), hasMore = true))
+        }
+
+        val viewModel = UserStatisticsDetailViewModel(repository)
+        viewModel.loadUser("u-1")
+        advanceUntilIdle() // the cold load parks on the gate
+        assertTrue(viewModel.state.value.isLoading)
+
+        // Out-of-order tap: the fresh state's hasMoreItems is still the
+        // unproven default (false), so the append is suppressed by the
+        // terminal gate — it cannot order ahead of the completing cold load
+        // (the cold load raises isLoading, not isLoadingMore).
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.isLoading)
+
+        coldGate.complete(Unit)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.getUserDetailStatistics("u-1", 0, 50) }
+        coVerify(exactly = 0) { repository.getUserDetailStatistics("u-1", 1, 50) }
+        assertEquals(0, viewModel.state.value.currentPage)
+        assertTrue(viewModel.state.value.detail.hasMoreItems)
+        assertFalse(viewModel.state.value.isLoading)
     }
 
     // ── reload / user switch ──

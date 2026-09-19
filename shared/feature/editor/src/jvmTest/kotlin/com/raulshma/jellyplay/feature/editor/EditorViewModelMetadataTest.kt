@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.feature.editor
 
+import com.raulshma.jellyplay.core.model.MediaStream
+
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.EditorPerson
@@ -164,28 +165,16 @@ class EditorViewModelMetadataTest {
             editorRepository,
             authRepository,
             subtitleProviderRepository,
-            // No-op streaming subtitle store — metadata tests never exercise the
+            // No-op subtitle store seam — metadata tests never exercise the
             // durable subtitle path (mirrors the upload suite's fake).
-            object : StreamingSubtitleStore {
-                override suspend fun save(
-                    itemId: String,
-                    provider: SubtitleProviderKind,
-                    providerSubtitleId: String,
-                    fileName: String,
-                    language: String?,
-                    codec: String?,
-                    isForced: Boolean,
-                    isHearingImpaired: Boolean,
-                    bytes: ByteArray,
-                ): SavedSubtitle = SavedSubtitle(
-                    provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
-                )
-                override suspend fun loadAll(itemId: String): List<SavedSubtitle> = emptyList()
-                override suspend fun fileFor(itemId: String, saved: SavedSubtitle): java.io.File =
-                    java.io.File(saved.fileRelativePath)
-                override suspend fun delete(itemId: String, saved: SavedSubtitle) = Unit
-                override suspend fun markServerStreamIndex(itemId: String, saved: SavedSubtitle, index: Int) = Unit
-                override suspend fun clear(itemId: String) = Unit
+            object : EditorSubtitleStore {
+                override suspend fun save(save: ProviderSubtitleSave) = Unit
+                override suspend fun attributeUploaded(
+                    save: ProviderSubtitleSave,
+                    streamsAfterUpload: List<MediaStream>,
+                    preUploadExternalIndices: Set<Int>,
+                ) = Unit
+                override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) = Unit
             },
         )
     }
@@ -199,7 +188,7 @@ class EditorViewModelMetadataTest {
     fun `loadEditorData surfaces a media detail failure as error and clears loading`() = runTest {
         coEvery { editorRepository.getMediaDetail(itemId) } returns Result.failure(RuntimeException("detail boom"))
 
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -215,7 +204,7 @@ class EditorViewModelMetadataTest {
         currentUserFlow.value = adminUser
         advanceUntilIdle()
 
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -258,7 +247,7 @@ class EditorViewModelMetadataTest {
         currentUserFlow.value = nonAdminUser
         advanceUntilIdle()
 
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -274,13 +263,13 @@ class EditorViewModelMetadataTest {
 
     @Test
     fun `saveMetadata maps the editor fields into the submitted metadata and clears dirty on success`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.updateField { it.copy(name = "New Name", overview = "Edited overview") }
+        viewModel.onEvent(EditorUiEvent.UpdateField { it.copy(name = "New Name", overview = "Edited overview") })
         assertTrue(viewModel.uiState.value.isDirty)
 
-        viewModel.saveMetadata()
+        viewModel.onEvent(EditorUiEvent.SaveMetadata)
         advanceUntilIdle()
 
         val expected = EditableItemMetadata(
@@ -327,10 +316,10 @@ class EditorViewModelMetadataTest {
 
     @Test
     fun `saveMetadata submits blank text fields as nulls and an empty tagline list`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.updateField {
+        viewModel.onEvent(EditorUiEvent.UpdateField {
             it.copy(
                 originalTitle = "",
                 tagline = "",
@@ -339,9 +328,9 @@ class EditorViewModelMetadataTest {
                 runtimeMinutes = "",
                 productionYear = "",
             )
-        }
+        })
 
-        viewModel.saveMetadata()
+        viewModel.onEvent(EditorUiEvent.SaveMetadata)
         advanceUntilIdle()
 
         val expected = EditableItemMetadata(
@@ -385,13 +374,13 @@ class EditorViewModelMetadataTest {
 
     @Test
     fun `saveMetadata surfaces a repository failure and keeps the dirty flag`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.updateField { it.copy(name = "Changed") }
+        viewModel.onEvent(EditorUiEvent.UpdateField { it.copy(name = "Changed") })
         coEvery { editorRepository.updateItem(any(), any()) } returns Result.failure(RuntimeException("save boom"))
 
-        viewModel.saveMetadata()
+        viewModel.onEvent(EditorUiEvent.SaveMetadata)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -403,10 +392,10 @@ class EditorViewModelMetadataTest {
 
     @Test
     fun `deleteImage forwards image type and index and refreshes the image infos`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.deleteImage("Backdrop", 2)
+        viewModel.onEvent(EditorUiEvent.DeleteImage("Backdrop", 2))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.deleteItemImage(itemId, "Backdrop", 2) }
@@ -415,20 +404,20 @@ class EditorViewModelMetadataTest {
         coVerify(exactly = 1) { editorRepository.getItemImageInfo(itemId) }
         assertEquals(imageInfos, viewModel.uiState.value.imageInfos)
 
-        viewModel.deleteImage("Primary")
+        viewModel.onEvent(EditorUiEvent.DeleteImage("Primary"))
         advanceUntilIdle()
         coVerify(exactly = 1) { editorRepository.deleteItemImage(itemId, "Primary", null) }
     }
 
     @Test
     fun `deleteImage surfaces a repository failure as error`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         coEvery {
             editorRepository.deleteItemImage(any(), any(), any())
         } returns Result.failure(RuntimeException("delete boom"))
 
-        viewModel.deleteImage("Backdrop", 2)
+        viewModel.onEvent(EditorUiEvent.DeleteImage("Backdrop", 2))
         advanceUntilIdle()
 
         assertEquals("delete boom", viewModel.uiState.value.error)
@@ -436,7 +425,7 @@ class EditorViewModelMetadataTest {
 
     @Test
     fun `loadRemoteImages forwards provider and startIndex pagination to the repository`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val result = RemoteImageResult(
             images = listOf(
@@ -451,7 +440,7 @@ class EditorViewModelMetadataTest {
         )
         coEvery { editorRepository.getRemoteImages(itemId, "Primary", "TheMovieDb", 20, 50) } returns Result.success(result)
 
-        viewModel.loadRemoteImages(imageType = "Primary", provider = "TheMovieDb", startIndex = 20)
+        viewModel.onEvent(EditorUiEvent.LoadRemoteImages(imageType = "Primary", provider = "TheMovieDb", startIndex = 20))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.getRemoteImages(itemId, "Primary", "TheMovieDb", 20, 50) }
@@ -461,28 +450,28 @@ class EditorViewModelMetadataTest {
 
     @Test
     fun `updateField marks the state dirty and reverting the change clears it`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         val loaded = viewModel.uiState.value
         assertFalse(loaded.isDirty)
 
-        viewModel.updateField { it.copy(name = "Changed") }
+        viewModel.onEvent(EditorUiEvent.UpdateField { it.copy(name = "Changed") })
         assertTrue(viewModel.uiState.value.isDirty)
 
         // Dirty detection is structural equality against the loaded original,
         // so undoing the edit returns to clean.
-        viewModel.updateField { it.copy(name = loaded.metadata.value.name) }
+        viewModel.onEvent(EditorUiEvent.UpdateField { it.copy(name = loaded.metadata.value.name) })
         assertFalse(viewModel.uiState.value.isDirty)
     }
 
     @Test
     fun `clearError clears a surfaced error`() = runTest {
         coEvery { editorRepository.getMediaDetail(itemId) } returns Result.failure(RuntimeException("load boom"))
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
         assertEquals("load boom", viewModel.uiState.value.error)
 
-        viewModel.clearError()
+        viewModel.onEvent(EditorUiEvent.ClearError)
 
         assertNull(viewModel.uiState.value.error)
     }
@@ -503,14 +492,14 @@ class EditorViewModelMetadataTest {
 
     @Test
     fun `refreshMetadata forwards the mode to both metadata and image refresh`() = runTest {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.refreshMetadata()
+        viewModel.onEvent(EditorUiEvent.RefreshMetadata())
         advanceUntilIdle()
         coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, "FullRefresh", "FullRefresh", false, false) }
 
-        viewModel.refreshMetadata("Default", replaceAllMetadata = true, replaceAllImages = true)
+        viewModel.onEvent(EditorUiEvent.RefreshMetadata("Default", replaceAllMetadata = true, replaceAllImages = true))
         advanceUntilIdle()
         coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, "Default", "Default", true, true) }
         assertNull(viewModel.uiState.value.error)

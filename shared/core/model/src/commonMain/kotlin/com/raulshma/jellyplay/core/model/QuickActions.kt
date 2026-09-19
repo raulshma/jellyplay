@@ -20,6 +20,7 @@ private val LIBRARY_ACTIONABLE_TYPES = setOf(
     MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
     MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
     MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL,
+    MediaType.BOOK,
 )
 
 private val HOME_ACTIONABLE_TYPES = setOf(
@@ -47,7 +48,7 @@ private fun MediaQuickActionScope.actionableTypes(): Set<MediaType> = when (this
  * calls) stays at the call site via [com.raulshma.jellyplay.core.ui.components.MediaQuickActionController].
  *
  * @param includeDownload When true, adds [QuickAction.DOWNLOAD] for audio,
- *   video, and series types (series resolve their season/episode selection
+ *   video, book, and series types (series resolve their season/episode selection
  *   through the host's download flow). Matches the type half of
  *   `MediaOptionsMenu.canDownload`; the mediaSources half is resolved by the
  *   executor once the action fires.
@@ -82,11 +83,15 @@ fun MediaItem.quickActions(
         if (includeFavorite) {
             add(if (isFavorite) QuickAction.UNFAVORITE else QuickAction.FAVORITE)
         }
-        if (includeDownload && (mediaType.isAudioType || mediaType.isVideoType || mediaType == MediaType.SERIES)) {
+        if (includeDownload &&
+            (mediaType.isAudioType || mediaType.isVideoType ||
+                mediaType == MediaType.SERIES || mediaType == MediaType.BOOK)
+        ) {
             add(if (isDownloaded) QuickAction.REMOVE_DOWNLOAD else QuickAction.DOWNLOAD)
         } else if (includeRemoveDownload &&
             (mediaType.isVideoType || mediaType == MediaType.SERIES ||
-                mediaType == MediaType.SEASON || mediaType.isAudioType)
+                mediaType == MediaType.SEASON || mediaType.isAudioType ||
+                mediaType == MediaType.BOOK)
         ) {
             add(QuickAction.REMOVE_DOWNLOAD)
         }

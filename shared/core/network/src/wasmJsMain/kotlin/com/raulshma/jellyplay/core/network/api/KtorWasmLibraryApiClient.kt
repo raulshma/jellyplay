@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.buildItemImageUrl
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -21,6 +22,7 @@ import com.raulshma.jellyplay.core.network.library.BaseItemDtoWire
 import com.raulshma.jellyplay.core.network.library.BaseItemQueryResultDtoWire
 import com.raulshma.jellyplay.core.network.library.CreatePlaylistRequestDtoWire
 import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
+import com.raulshma.jellyplay.core.network.library.ChildItemImageRow
 import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
 import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
@@ -34,16 +36,18 @@ import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
 import com.raulshma.jellyplay.core.network.library.ThemeMediaResultDtoWire
 import com.raulshma.jellyplay.core.network.library.UpdatePlaylistRequestDtoWire
 import com.raulshma.jellyplay.core.network.library.WasmClock
+import com.raulshma.jellyplay.core.network.library.buildChildItemImagesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
-import com.raulshma.jellyplay.core.network.library.buildItemImageUrl
 import com.raulshma.jellyplay.core.network.library.buildItemsByGenreQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildItemsByStudioQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildResumeQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
 import com.raulshma.jellyplay.core.network.library.filterByParentalRating
-import com.raulshma.jellyplay.core.network.library.resumableOnly
+import com.raulshma.jellyplay.core.network.library.toChildItemImageUrls
 import com.raulshma.jellyplay.core.network.library.toCollectionSummary
+import com.raulshma.jellyplay.core.network.library.toFilteredResumeRows
 import com.raulshma.jellyplay.core.network.library.toGenre
 import com.raulshma.jellyplay.core.network.library.toLibraryFolder
 import com.raulshma.jellyplay.core.network.library.toLyricsResult
@@ -204,8 +208,7 @@ class KtorWasmLibraryApiClient(
                     "groupItems" to "true",
                 ),
             )
-            response.map { it.toMediaItem() }
-                .filterByParentalRating(currentMaxParentalRating)
+            response.toFilteredMediaItems()
         }
 
     override suspend fun getNextUp(
@@ -214,42 +217,68 @@ class KtorWasmLibraryApiClient(
         maxDays: Int,
     ): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> = apiResultWithRetry {
         val server = requireConnectedServer()
+        // The limit/projection shape is the shared resume spec (NextUp rides
+        // it with no kind narrowing); the cutoff CLOCK stays here — the
+        // declared per-client divergence vs the JVM's java.time.
+        val spec = buildResumeQuerySpec(limit, isBooks = false)
         val cutoff = if (maxDays > 0) WasmClock.localNowMinusDaysIsoOffset(maxDays.toLong()) else null
         val response = getJson<BaseItemQueryResultDtoWire>(
             url = apiUrl(server.address, "/Shows/NextUp"),
             accessToken = currentToken(),
             query = q(
-                "limit" to limit.toString(),
-                "fields" to LIST_PROJECTION_FIELDS.joined(),
+                "limit" to spec.limit?.toString(),
+                "fields" to spec.fields?.joined(),
                 "nextUpDateCutoff" to cutoff,
                 "enableTotalRecordCount" to "true",
                 "enableResumable" to "true",
                 "enableRewatching" to enableRewatching.toString(),
             ),
         )
-        response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+        response.items.toFilteredMediaItems()
     }
 
     override suspend fun getContinueWatching(limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
         apiResultWithRetry {
             val server = requireConnectedServer()
+            val spec = buildResumeQuerySpec(limit, isBooks = false)
             val response = getJson<BaseItemQueryResultDtoWire>(
                 url = apiUrl(server.address, "/UserItems/Resume"),
                 accessToken = currentToken(),
                 query = q(
-                    "limit" to limit.toString(),
-                    "fields" to LIST_PROJECTION_FIELDS.joined(),
+                    "limit" to spec.limit?.toString(),
+                    "fields" to spec.fields?.joined(),
+                    "enableTotalRecordCount" to "true",
+                    "enableImages" to "true",
+                    "excludeActiveSessions" to "false",
+                ),
+            )
+            // #157: the fold drops played rows the resume endpoint still
+            // reports — see resumableOnly() for the rationale.
+            response.items.map { it.toMediaItem() }
+                .toFilteredResumeRows(currentMaxParentalRating, isBooks = false)
+        }
+
+    override suspend fun getContinueReading(limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
+        apiResultWithRetry {
+            val server = requireConnectedServer()
+            // Same wire shape as getContinueWatching plus the books narrowing
+            // (spec.includeKinds — the SDK getResumeItems' `includeItemTypes`
+            // named arg, serial name "Book").
+            val spec = buildResumeQuerySpec(limit, isBooks = true)
+            val response = getJson<BaseItemQueryResultDtoWire>(
+                url = apiUrl(server.address, "/UserItems/Resume"),
+                accessToken = currentToken(),
+                query = q(
+                    "limit" to spec.limit?.toString(),
+                    "fields" to spec.fields?.joined(),
+                    "includeItemTypes" to spec.includeKinds?.joined(),
                     "enableTotalRecordCount" to "true",
                     "enableImages" to "true",
                     "excludeActiveSessions" to "false",
                 ),
             )
             response.items.map { it.toMediaItem() }
-                .filterByParentalRating(currentMaxParentalRating)
-                .distinctBy { it.id }
-                // #157: same rule the JVM client applies — see resumableOnly()
-                // for the rationale.
-                .resumableOnly()
+                .toFilteredResumeRows(currentMaxParentalRating, isBooks = true)
         }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = apiResultWithRetry {
@@ -322,11 +351,7 @@ class KtorWasmLibraryApiClient(
             resolvedCount = rawItems.size,
             serverTotal = response.totalRecordCount,
         )
-        SearchResult(
-            items = rawItems.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating),
-            totalRecordCount = totalCount,
-            startIndex = startIndex,
-        )
+        toSearchResult(rawItems, totalCount, startIndex)
     }
 
     override suspend fun getMediaDetail(itemId: String): Result<com.raulshma.jellyplay.core.model.MediaDetail> =
@@ -362,7 +387,7 @@ class KtorWasmLibraryApiClient(
                 accessToken = currentToken(),
                 query = listOf("userId" to userId),
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getSpecialFeatures(itemId: String): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -376,8 +401,8 @@ class KtorWasmLibraryApiClient(
                 accessToken = currentToken(),
                 query = listOf("userId" to userId),
             )
-            response.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
-        }
+            response.toFilteredMediaItems()
+    }
 
     override suspend fun getSearchHints(
         query: String,
@@ -399,11 +424,7 @@ class KtorWasmLibraryApiClient(
                 "fields" to spec.fields?.joined(),
             ) + itemsEndpointDefaults,
         )
-        SearchResult(
-            items = response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        toSearchResult(response.items, response.totalRecordCount, startIndex)
     }
 
     override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> = apiResultWithRetry {
@@ -421,11 +442,7 @@ class KtorWasmLibraryApiClient(
                 "fields" to SEARCH_SUGGESTIONS_FIELDS.joined(),
             ) + itemsEndpointDefaults,
         )
-        SearchResult(
-            items = response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = 0,
-        )
+        toSearchResult(response.items, response.totalRecordCount, 0)
     }
 
     override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
@@ -483,11 +500,7 @@ class KtorWasmLibraryApiClient(
                 "recursive" to spec.recursive.toString(),
             ) + itemsEndpointDefaults,
         )
-        SearchResult(
-            items = response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        toSearchResult(response.items, response.totalRecordCount, startIndex)
     }
 
     override suspend fun getStudios(parentId: String?, startIndex: Int, limit: Int): Result<List<Studio>> =
@@ -528,11 +541,7 @@ class KtorWasmLibraryApiClient(
                 "fields" to spec.fields?.joined(),
             ) + itemsEndpointDefaults,
         )
-        SearchResult(
-            items = response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        toSearchResult(response.items, response.totalRecordCount, startIndex)
     }
 
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -550,7 +559,7 @@ class KtorWasmLibraryApiClient(
                     "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ) + itemsEndpointDefaults,
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -568,7 +577,7 @@ class KtorWasmLibraryApiClient(
                     "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ) + itemsEndpointDefaults,
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -579,7 +588,7 @@ class KtorWasmLibraryApiClient(
                 accessToken = currentToken(),
                 query = listOf("limit" to limit.toString()),
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -595,7 +604,7 @@ class KtorWasmLibraryApiClient(
                     "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ),
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -611,7 +620,7 @@ class KtorWasmLibraryApiClient(
                     "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ) + itemsEndpointDefaults,
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getThemeSongs(itemId: String): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -622,7 +631,7 @@ class KtorWasmLibraryApiClient(
                 accessToken = currentToken(),
                 query = listOf("inheritFromParent" to "false"),
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getSeasons(seriesId: String): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -632,7 +641,7 @@ class KtorWasmLibraryApiClient(
                 url = apiUrl(server.address, "/Shows/$seriesId/Seasons"),
                 accessToken = currentToken(),
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -643,7 +652,7 @@ class KtorWasmLibraryApiClient(
                 accessToken = currentToken(),
                 query = listOf("seasonId" to seasonId),
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     override suspend fun getAllEpisodes(seriesId: String): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
@@ -655,7 +664,7 @@ class KtorWasmLibraryApiClient(
                 url = apiUrl(server.address, "/Shows/$seriesId/Episodes"),
                 accessToken = currentToken(),
             )
-            response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+            response.items.toFilteredMediaItems()
         }
 
     // ── Collections / playlists / tags / favorites ─────────────────────────
@@ -677,11 +686,7 @@ class KtorWasmLibraryApiClient(
                 "fields" to LIST_PROJECTION_FIELDS.joined(),
             ) + itemsEndpointDefaults,
         )
-        SearchResult(
-            items = response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        toSearchResult(response.items, response.totalRecordCount, startIndex)
     }
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
@@ -765,11 +770,7 @@ class KtorWasmLibraryApiClient(
                 "fields" to spec.fields?.joined(),
             ) + itemsEndpointDefaults,
         )
-        SearchResult(
-            items = response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        toSearchResult(response.items, response.totalRecordCount, startIndex)
     }
 
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = apiResultWithRetry {
@@ -1003,32 +1004,61 @@ class KtorWasmLibraryApiClient(
 
     override suspend fun getChildItemImageUrls(parentId: String, limit: Int): List<String> {
         return try {
+            // Request shape + Primary-tag fold live in commonMain
+            // (ChildItemImageUrls.kt); this side keeps only the raw-query
+            // transport and the image-URL seam.
             val server = requireConnectedServer()
+            val spec = buildChildItemImagesQuerySpec(parentId, limit)
             val response = getJson<BaseItemQueryResultDtoWire>(
                 url = apiUrl(server.address, "/Items"),
                 accessToken = currentToken(),
                 query = q(
-                    "parentId" to parentId,
-                    "includeItemTypes" to "Photo",
-                    "limit" to limit.toString(),
-                    "sortBy" to "DateCreated",
-                    "sortOrder" to "Descending",
-                    "fields" to "PrimaryImageAspectRatio",
+                    "parentId" to spec.parentId,
+                    "includeItemTypes" to spec.includeKinds?.joined(),
+                    "limit" to spec.limit?.toString(),
+                    "sortBy" to spec.sortBy?.joined(),
+                    "sortOrder" to spec.sortOrderDescending?.let { if (it) "Descending" else "Ascending" },
+                    "fields" to spec.fields?.joined(),
                 ) + itemsEndpointDefaults,
             )
-            response.items.mapNotNull { item ->
-                if (item.imageTags?.containsKey("Primary") == true) {
-                    getImageUrl(item.id ?: "", "Primary", 200)
-                } else {
-                    null
-                }
-            }
+            response.items.map { item ->
+                ChildItemImageRow(
+                    id = item.id ?: "",
+                    hasPrimaryImage = item.imageTags?.containsKey("Primary") == true,
+                )
+            }.toChildItemImageUrls { itemId -> getImageUrl(itemId, "Primary", 200) }
         } catch (_: Exception) {
             emptyList()
         }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * The wasm twin of jvmShared's `List<BaseItemDto>.toFilteredMediaItems`
+     * (JellyfinDtoMappers): the standard map-then-parental-filter tail of
+     * every library listing call, reading this client's session max rating.
+     * Replaces the 22 hand-repeated
+     * `map { it.toMediaItem() }.filterByParentalRating(...)` tails.
+     */
+    private fun List<BaseItemDtoWire>.toFilteredMediaItems(): List<com.raulshma.jellyplay.core.model.MediaItem> =
+        map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
+
+    /**
+     * The query-result tail shared by the seven SearchResult-producing
+     * endpoints: map + parental-filter the wire rows, then wrap them with the
+     * paging envelope. Only the totalRecordCount / startIndex provenance
+     * differs per endpoint.
+     */
+    private fun toSearchResult(
+        items: List<BaseItemDtoWire>,
+        totalRecordCount: Int,
+        startIndex: Int,
+    ): SearchResult = SearchResult(
+        items = items.toFilteredMediaItems(),
+        totalRecordCount = totalRecordCount,
+        startIndex = startIndex,
+    )
 
     /**
      * The non-null query defaults the SDK's typed getItems/getResumeItems

@@ -42,7 +42,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -74,10 +73,9 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_blocklist_search
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_brand_radarr
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_brand_sonarr
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_cancel
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_clear_selection
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_delete
@@ -102,14 +100,6 @@ import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remo
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_retry
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_select_all
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_selected_count
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_completed
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_downloading
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_failed
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_imported
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_paused
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_queued
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_unknown
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_status_warning
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_title
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_unknown_error
 import org.jetbrains.compose.resources.getString
@@ -131,17 +121,17 @@ fun ArrQueueScreen(
     // unresolved ArrQueueMessage values; this collector resolves them with the
     // suspend compose-resources getString — the args-bearing acks (release
     // title) can't be pre-resolved in composition the way livetv's two fixed
-    // strings were — and forwards through the messenger actual (Android: the
-    // app-wide UserMessageBus; desktop: null, messages drop). Collector is
-    // screen-scoped, so an ack emitted just before a quick-back is dropped
-    // (livetv-documented accepted delta).
-    val messenger = rememberArrQueueMessenger()
-    LaunchedEffect(messenger) {
+    // strings were — and posts through the app-wide UserMessageBus (the
+    // drop-by-default local simply discards the message when no host provides
+    // a bus). Collector is screen-scoped, so an ack emitted just before a
+    // quick-back is dropped (livetv-documented accepted delta).
+    val bus = LocalUserMessageBus.current
+    LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
-                is ArrQueueMessage.Info -> messenger?.info(getString(message.res, *message.args.toTypedArray()))
-                is ArrQueueMessage.Error -> messenger?.error(getString(message.res, *message.args.toTypedArray()))
-                is ArrQueueMessage.Raw -> messenger?.error(message.text)
+                is ArrQueueMessage.Info -> bus.info(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Error -> bus.error(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Raw -> bus.error(message.text)
             }
         }
     }
@@ -285,7 +275,11 @@ fun ArrQueueScreen(
             )
             is ArrQueueAction.Import -> ConfirmDialog(
                 title = stringResource(Res.string.arrqueue_import_title),
-                message = stringResource(Res.string.arrqueue_import_message, action.item.title, serviceName(action.item.serverKind)),
+                message = stringResource(
+                    Res.string.arrqueue_import_message,
+                    action.item.title,
+                    stringResource(ArrQueuePresentation.serviceName(action.item.serverKind)),
+                ),
                 confirmText = stringResource(Res.string.arrqueue_import),
                 onConfirm = { viewModel.importItem(action.item) },
                 onDismiss = { viewModel.dismissAction() },
@@ -368,7 +362,7 @@ private fun QueueRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp),
-                color = progressColor(item.status),
+                color = ArrQueuePresentation.progressColor(item.status),
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
             Spacer(Modifier.height(6.dp))
@@ -449,16 +443,13 @@ private fun QueueRow(
 
 @Composable
 private fun ServiceBadge(kind: ArrServiceKind) {
-    val (label, color) = when (kind) {
-        ArrServiceKind.RADARR -> stringResource(Res.string.arrqueue_brand_radarr) to StatusColors.requested
-        ArrServiceKind.SONARR -> stringResource(Res.string.arrqueue_brand_sonarr) to StatusColors.pending
-    }
+    val (label, color) = ArrQueuePresentation.serviceBadge(kind)
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = color.copy(alpha = 0.15f),
     ) {
         Text(
-            text = label,
+            text = stringResource(label),
             style = MaterialTheme.typography.labelSmall,
             color = color,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -469,37 +460,18 @@ private fun ServiceBadge(kind: ArrServiceKind) {
 
 @Composable
 private fun StatusChip(status: ArrDownloadStatus) {
-    val (label, color) = when (status) {
-        ArrDownloadStatus.DOWNLOADING -> stringResource(Res.string.arrqueue_status_downloading) to StatusColors.available
-        ArrDownloadStatus.QUEUED -> stringResource(Res.string.arrqueue_status_queued) to StatusColors.info
-        ArrDownloadStatus.PAUSED -> stringResource(Res.string.arrqueue_status_paused) to StatusColors.pending
-        ArrDownloadStatus.COMPLETED -> stringResource(Res.string.arrqueue_status_completed) to StatusColors.available
-        ArrDownloadStatus.IMPORTED -> stringResource(Res.string.arrqueue_status_imported) to StatusColors.success
-        ArrDownloadStatus.FAILED -> stringResource(Res.string.arrqueue_status_failed) to StatusColors.error
-        ArrDownloadStatus.WARNING -> stringResource(Res.string.arrqueue_status_warning) to StatusColors.warning
-        ArrDownloadStatus.UNKNOWN -> stringResource(Res.string.arrqueue_status_unknown) to StatusColors.debug
-    }
+    val (label, color) = ArrQueuePresentation.statusChip(status)
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = color.copy(alpha = 0.15f),
     ) {
         Text(
-            text = label,
+            text = stringResource(label),
             style = MaterialTheme.typography.labelSmall,
             color = color,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
         )
     }
-}
-
-private fun progressColor(status: ArrDownloadStatus): Color = when (status) {
-    ArrDownloadStatus.COMPLETED -> StatusColors.available
-    ArrDownloadStatus.IMPORTED -> StatusColors.success
-    ArrDownloadStatus.PAUSED -> StatusColors.pending
-    ArrDownloadStatus.DOWNLOADING -> StatusColors.requested
-    ArrDownloadStatus.FAILED -> StatusColors.error
-    ArrDownloadStatus.WARNING -> StatusColors.warning
-    else -> StatusColors.info
 }
 
 // ── States ────────────────────────────────────────────────────────────────
@@ -687,12 +659,6 @@ private fun DeleteActionDialog(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-
-@Composable
-private fun serviceName(kind: ArrServiceKind): String = when (kind) {
-    ArrServiceKind.RADARR -> stringResource(Res.string.arrqueue_brand_radarr)
-    ArrServiceKind.SONARR -> stringResource(Res.string.arrqueue_brand_sonarr)
-}
 
 private val ArrQueueItem.rowKey: String
     get() = "${serverKind.name}|$queueId|${serverId.ifEmpty { "_" }}"

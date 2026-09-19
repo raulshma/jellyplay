@@ -16,13 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
-import org.koin.compose.viewmodel.koinViewModel
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -32,6 +33,7 @@ import com.raulshma.jellyplay.feature.settings.components.PreferenceDiffCategory
 import com.raulshma.jellyplay.feature.settings.components.PreferenceDiffSummaryCard
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset
@@ -62,12 +64,19 @@ fun FactoryResetScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
     val prefs = viewModel.preferences
     val factory = viewModel.factory
 
-    // One pending confirmation at a time: null = none.
-    var pendingReset by remember { mutableStateOf<PendingReset?>(null) }
+    /**
+     * Pending reset confirmation ([PendingConfirmation]). Settle arm: clear()
+     * after the reset call inside the confirm handler — action-then-clear
+     * (the completion toast set alongside, as before). The resets are
+     * fire-and-forget VM calls, so the machine settles synchronously and the
+     * guard's in-flight arm is unreachable here (dismiss/confirm pass
+     * `inFlight = false`).
+     */
+    var pendingReset by remember { mutableStateOf(PendingConfirmation<PendingReset>()) }
     var message by remember { mutableStateOf<StringResource?>(null) }
 
     // Compute the per-category diff once per (prefs, factory) snapshot — not
@@ -115,7 +124,7 @@ fun FactoryResetScreen(
                     titleRes = Res.string.settings_factory_reset,
                     summaryRes = Res.string.settings_factory_reset_summary_card,
                     primaryLabelRes = Res.string.settings_factory_reset_all,
-                    onPrimary = { pendingReset = PendingReset.All },
+                    onPrimary = { pendingReset = pendingReset.hold(PendingReset.All) },
                 )
             }
 
@@ -133,7 +142,7 @@ fun FactoryResetScreen(
                         changedCount = diff.changed.size,
                         totalInCategory = diff.total,
                         fields = diff.changed,
-                        onAction = { pendingReset = PendingReset.Category(diff.view.category) },
+                        onAction = { pendingReset = pendingReset.hold(PendingReset.Category(diff.view.category)) },
                     )
                 }
             }
@@ -141,7 +150,7 @@ fun FactoryResetScreen(
     }
 
     // ---- Single shared confirmation dialog ------------------------------
-    pendingReset?.let { target ->
+    pendingReset.item?.let { target ->
         ConfirmDialog(
             title = stringResource(
                 if (target is PendingReset.All) Res.string.settings_factory_reset_all
@@ -153,19 +162,21 @@ fun FactoryResetScreen(
             ),
             confirmText = stringResource(Res.string.settings_reset),
             onConfirm = {
-                when (target) {
+                val confirmed = pendingReset.confirm(inFlight = false) ?: return@ConfirmDialog
+                when (confirmed) {
                     is PendingReset.All -> {
                         viewModel.resetAll()
                         message = Res.string.settings_factory_reset_all_done
                     }
                     is PendingReset.Category -> {
-                        viewModel.resetCategory(target.category)
+                        viewModel.resetCategory(confirmed.category)
                         message = Res.string.settings_factory_reset_category_done
                     }
                 }
-                pendingReset = null
+                // Settle: action-then-clear, as before.
+                pendingReset = pendingReset.clear()
             },
-            onDismiss = { pendingReset = null },
+            onDismiss = { pendingReset = pendingReset.dismiss(inFlight = false) },
             dismissText = stringResource(Res.string.settings_cancel),
         )
     }
@@ -174,7 +185,7 @@ fun FactoryResetScreen(
     message?.let { res ->
         val text = stringResource(res)
         LaunchedEffect(res) {
-            messenger?.info(text)
+            bus.info(text)
             message = null
         }
     }

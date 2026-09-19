@@ -258,6 +258,34 @@ class VideoEffectsControllerTest {
         coVerify { audioEffectsStore.setNightModeEnabled(any()) }
     }
 
+    /**
+     * STATE_FIRST is load-bearing: the state slice IS the engine-config
+     * input, so the apply leg ([syncConfig]) must run AFTER the update leg.
+     * syncConfig captures the state it rebuilt from — flipping the adapter's
+     * [EffectsCommandCore.Order] to APPLY_FIRST makes the capture stale
+     * (the previous config) and fails here.
+     */
+    @Test
+    fun syncConfig_rebuildsFromThePostUpdateState() = runTest(UnconfinedTestDispatcher()) {
+        val seen = mutableListOf<AudioEffectsState>()
+        lateinit var c0: VideoEffectsController
+        c0 = VideoEffectsController(
+            scope = this,
+            audioStore = audioStore,
+            audioEffectsStore = audioEffectsStore,
+            playbackStore = playbackStore,
+            syncConfig = { seen += c0.state.value },
+        )
+
+        c0.toggleNightMode()
+
+        assertEquals(
+            listOf(AudioEffectsState(nightModeEnabled = true)),
+            seen,
+            "syncConfig must rebuild from the post-update state (STATE_FIRST)",
+        )
+    }
+
     // ── Item-switch semantics ──────────────────────────────────────────────────
 
     /**

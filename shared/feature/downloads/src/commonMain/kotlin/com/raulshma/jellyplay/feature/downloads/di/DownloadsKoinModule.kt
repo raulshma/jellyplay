@@ -8,31 +8,31 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the Downloads feature (docs/kmp-migration-plan.md
- * , fifth conveyor item after search, library, music and livetv). The
+ *,  fifth conveyor item after search, library, music and livetv). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
- * single constructor owner (one framework per type). Ctor deps split three
- * ways:
- *  - DownloadRepository is still Hilt-owned in the legacy data shim
- *    (WorkManager-coupled) and reaches Koin through the app composition root's
- *    Hilt interop module (dies at );
+ * single constructor owner (one framework per type). Ctor deps:
+ *  - DownloadQueue / OfflineResync resolve from core:data's graph (the
+ *    promoted commonMain interfaces — implemented DIRECTLY by the jvmShared
+ *    DownloadRepositoryImpl / OfflineSyncManager singles and bound in
+ *    dataJvmModule; web binds the honest no-op stubs in dataWasmModule).
+ *    The former platformDownloadsModule fragment + JvmDownloadQueue /
+ *    JvmOfflineResync adapters died with the promoted-interface pass.
  *  - OfflineRepository resolves from dataJvmModule and UserDataMutator from
- *    the Hilt interop bridge (the C4 shared-module graph);
- *  - OfflineSyncManager was flipped to a Koin single in dataJvmModule by this
- *    same conveyor item (its MediaRepository/DownloadRepository edges resolve
- *    through the Hilt interop on Android) — the legacy DataModule provider now
- *    bridges to it via koin().get().
+ *    the shared-module graph.
+ *  - OfflineSyncManager is a Koin single in dataJvmModule (the V3 downloads
+ *    conveyor flip).
  *
  * DownloadsViewModel's delete feedback no longer goes through the Android-only
  * UserMessageBus: it emits DownloadsUserMessage values on a messages Flow that
- * DownloadsScreen renders via the DownloadsMessenger actual (bus→flow seam,
- * same shape as the livetv conveyor's LiveTvMessenger).
+ * DownloadsScreen renders, posting the resolved text to the shared
+ * UserMessageBus.
  */
 val downloadsModule: Module = module {
     viewModel {
         DownloadsViewModel(
-            downloadRepository = get(),
+            queue = get(),
             offlineRepository = get(),
-            syncManager = get(),
+            resync = get(),
         )
     }
     viewModel {

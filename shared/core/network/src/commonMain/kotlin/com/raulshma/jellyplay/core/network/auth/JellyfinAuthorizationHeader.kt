@@ -25,6 +25,31 @@ object JellyfinAuthorizationHeader {
     const val HEADER_NAME = "Authorization"
     const val SCHEME = "MediaBrowser"
 
+    /**
+     * Token-only header value — `MediaBrowser Token="…"`. The shape every
+     * header-auth surface that has no client identity to declare (media /
+     * download fetches, the socket, plugin WebView intercepts) sends; the one
+     * builder so the value cannot drift from the SDK encoding. Use with
+     * [HEADER_NAME].
+     *
+     * Mirror contract: the Android plugin WebView shim
+     * (`shared/feature/admin/src/androidMain/assets/pluginBridge.js`) builds
+     * this same value inline in JS — the asset cannot call Kotlin. Its tokens
+     * are server-issued UUID/hex strings (nothing the SDK encoding would
+     * escape), so the two builders agree; change the shape here and the JS
+     * twin must follow.
+     */
+    fun tokenOnly(accessToken: String): String = "$SCHEME ${buildParameter("Token", accessToken)}"
+
+    /**
+     * The token-only header as a name→value pair — the one shape for header
+     * maps and pair-building call sites (`mapOf(tokenOnlyHeader(token))`),
+     * so name and value can never drift apart. OkHttp builders use the
+     * `Request.Builder.tokenAuthHeader` fold instead (jvmShared).
+     */
+    fun tokenOnlyHeader(accessToken: String): Pair<String, String> =
+        HEADER_NAME to tokenOnly(accessToken)
+
     fun build(
         clientName: String,
         clientVersion: String,

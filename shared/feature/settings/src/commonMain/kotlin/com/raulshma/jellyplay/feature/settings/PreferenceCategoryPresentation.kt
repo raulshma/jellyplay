@@ -119,7 +119,7 @@ private fun Any?.enumDisplay(): String = when (this) {
     else -> toString()
 }
 
-private fun Float.fmt1(): String = String.format("%.1f", this)
+private fun Float.fmt1(): String = formatOneDecimal(this.toDouble())
 private fun Float.pct(): String = "${(this * 100).toInt()}%"
 private fun Long.millisToSeconds(): String = "${this / 1000.0}s"
 private fun Long.millisToMinutes(): String = "${this / 60_000.0}m"
@@ -136,7 +136,7 @@ private fun SubtitleStyle.summary(): String =
     ).joinToString(", ")
 
 private fun EqualizerSettings.summary(): String =
-    "Preset bands: ${bandLevels.joinToString(",") { "%+d".format(it) }}"
+    "Preset bands: ${bandLevels.joinToString(",") { formatSignedInt(it) }}"
 
 // ---------------------------------------------------------------------------
 // Field builders — one lambda per category. Each returns the user-facing fields.

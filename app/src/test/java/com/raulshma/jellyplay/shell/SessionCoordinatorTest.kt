@@ -26,6 +26,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
@@ -55,10 +56,13 @@ import org.robolectric.annotation.Config
  *     `onSessionRestored` fires exactly once, *after* session restore settles
  *     (success or failure), so the launch-time update check never races the
  *     session it depends on.
- *  2. The capabilities-after-WebSocket-reconnect rule — capabilities are
- *     re-posted on every false→true socket transition while authenticated and
- *     never posted while logged out, so the device stays castable after every
- *     reconnect (the server drops the session's controller on socket loss).
+ *  2. The capabilities-after-WebSocket-connect rule — capabilities are
+ *     posted on the session's FIRST socket connect (the coordinator's
+ *     explicit initial arm: the server session must exist before the POST)
+ *     and re-posted on every [RealtimeConnection.reconnects] emission while
+ *     authenticated, never while logged out, so the device stays castable
+ *     after every reconnect (the server drops the session's controller on
+ *     socket loss).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -89,6 +93,7 @@ class SessionCoordinatorTest {
 
     private val isAuthenticated = MutableStateFlow(false)
     private val isConnected = MutableStateFlow(false)
+    private val reconnects = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     private val currentServer = MutableStateFlow<ServerInfo?>(null)
     private val currentUser = MutableStateFlow<UserInfo?>(null)
 
@@ -101,6 +106,7 @@ class SessionCoordinatorTest {
         every { authRepository.currentServer } returns currentServer
         every { authRepository.currentUser } returns currentUser
         every { realtimeConnection.isConnected } returns isConnected
+        every { realtimeConnection.reconnects } returns reconnects
         every { realtimeConnection.serverUrl() } returns "http://jellyfin.local"
         coEvery { authRepository.restoreSession() } returns Result.success(Unit)
         every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
@@ -223,29 +229,27 @@ class SessionCoordinatorTest {
         isAuthenticated.value = true
         advanceUntilIdle()
         verify { realtimeConnection.connect(any()) }
-        // Authentication alone must not post capabilities — only a socket
-        // false→true transition does.
+        // Authentication alone must not post capabilities — only the socket's
+        // first connect (the initial arm) and reconnects do.
         coVerify(exactly = 0) { authRepository.postCapabilities() }
 
-        // First connect.
+        // First connect: the initial arm posts once.
         isConnected.value = true
         advanceUntilIdle()
         coVerify(exactly = 1) { authRepository.postCapabilities() }
 
-        // Socket drop + reconnect: the server dropped the session's
-        // controller, so capabilities must be re-armed.
+        // Socket drop + reconnect — delivered as a `reconnects` emission —
+        // re-arms: the server dropped the session's controller on the drop.
         isConnected.value = false
         advanceUntilIdle()
-        isConnected.value = true
+        reconnects.tryEmit(Unit)
         advanceUntilIdle()
         coVerify(exactly = 2) { authRepository.postCapabilities() }
 
         // Teardown gate: a stray reconnect while logged out must not re-post.
         isAuthenticated.value = false
         advanceUntilIdle()
-        isConnected.value = false
-        advanceUntilIdle()
-        isConnected.value = true
+        reconnects.tryEmit(Unit)
         advanceUntilIdle()
         coVerify(exactly = 2) { authRepository.postCapabilities() }
     }

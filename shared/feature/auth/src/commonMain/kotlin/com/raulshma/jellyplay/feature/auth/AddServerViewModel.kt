@@ -5,18 +5,10 @@ import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
-import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_cleartext
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_could_not_connect
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_connection_failed
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_connection_timeout
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_local_network_denied
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_resolve_address
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_server_address_required
-import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_ssl
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
@@ -209,7 +201,12 @@ class AddServerViewModel(
     }
 }
 
-private fun getRootCause(throwable: Throwable): Throwable {
+/**
+ * Walks to the root of a failure chain (loop-guarded). Internal (not private)
+ * because the jvmShared/wasmJsMain actuals of [tlsTrustPromptFor] and
+ * [getConnectionErrorMessage] share it.
+ */
+internal fun getRootCause(throwable: Throwable): Throwable {
     var cause = throwable
     while (cause.cause != null && cause.cause != cause) cause = cause.cause!!
     return cause
@@ -224,55 +221,32 @@ private fun getRootCause(throwable: Throwable): Throwable {
  *
  * Deliberately narrower than the public classifier
  * (`core.network.config.isTlsTrustFailure`, behind `ApiException.isTlsTrustError`
- * on the JVM): this one requires the ROOT cause to be an [javax.net.ssl.SSLException]
- * and ignores bare `CertificateException`s anywhere in the chain. Two reasons
- * the seam can't just reuse the public flag: (a) it is jvmShared/JVM-only
- * (javax types), invisible to this commonMain classifier; (b) the failure
- * crossing this seam is the raw probe/transport chain — never an `ApiException`
- * — and this predicate gates a *security consent dialog*, so it stays
- * conservative: only a root-cause SSL handshake failure (the exact thing a
- * trust grant fixes) may prompt. Kept file-local for the same reason
- * `getConnectionErrorMessage` classifies inline.
+ * on the JVM): the JVM/android actual requires the ROOT cause to be a
+ * `javax.net.ssl.SSLException` and ignores bare `CertificateException`s
+ * anywhere in the chain. Two reasons the seam can't just reuse the public
+ * flag: (a) it is jvmShared/JVM-only (javax types), invisible to this
+ * commonMain classifier; (b) the failure crossing this seam is the raw
+ * probe/transport chain — never an `ApiException` — and this predicate gates
+ * a *security consent dialog*, so it stays conservative: only a root-cause
+ * SSL handshake failure (the exact thing a trust grant fixes) may prompt.
+ * Declared an expect/actual seam for the same reason
+ * [getConnectionErrorMessage] classifies per-platform: the JVM taxonomy is
+ * javax-typed, while the web fetch stack surfaces TLS refusals only as
+ * opaque transport errors (the wasmJs actual therefore never prompts).
  */
-internal fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {
-    val normalized = normalizeServerAddress(address)
-    if (!normalized.startsWith("https://")) return null
-    // SSLHandshakeException / SSLPeerUnverifiedException are both SSLException
-    // subclasses. The network probe wraps TLS-trust failures in a plain
-    // RuntimeException marker (non-retryable, review round) —
-    // getRootCause walks past the wrapper to the underlying SSLException.
-    return if (getRootCause(throwable) is javax.net.ssl.SSLException) normalized else null
-}
+internal expect fun tlsTrustPromptFor(address: String, throwable: Throwable): String?
 
-internal fun getConnectionErrorMessage(
+/**
+ * User-facing connect-failure message for the add-server screen, classified
+ * from the failure's root cause plus the [LocalNetworkStatus] blame for the
+ * Android 17+ local-network permission. Platform seam: the JVM/android
+ * actual keys on `java.net` / `javax.net.ssl` exception types; the wasmJs
+ * actual keys on the ktor/fetch taxonomy (HttpRequestTimeoutException,
+ * ktor-io IOException, browser refusal strings) with the same resources and
+ * the same raw-message fallback for untyped failures.
+ */
+internal expect fun getConnectionErrorMessage(
     address: String,
     throwable: Throwable,
     localNetworkStatus: LocalNetworkStatus,
-): AuthMessage {
-    val root = getRootCause(throwable)
-    // Android 17+: when local network access is denied, attempts to reach a
-    // LAN host fail as a timeout / connect error / unresolved host. Surface a
-    // single actionable message instead of a cryptic generic failure, but only
-    // when the target is actually local (public hosts are unaffected by the
-    // permission, so blaming it there would be misleading).
-    if (localNetworkStatus.blamesFailureOnPermission(address) &&
-        (root is java.net.UnknownHostException ||
-            root is java.net.ConnectException ||
-            root is java.net.SocketTimeoutException)
-    ) {
-        return AuthMessage.Resource(Res.string.auth_error_local_network_denied)
-    }
-    return when {
-        root is java.net.UnknownHostException -> AuthMessage.Resource(Res.string.auth_error_resolve_address)
-        root is java.net.ConnectException -> AuthMessage.Resource(Res.string.auth_error_could_not_connect)
-        root is java.net.SocketTimeoutException -> AuthMessage.Resource(Res.string.auth_error_connection_timeout)
-        root is javax.net.ssl.SSLException -> AuthMessage.Resource(Res.string.auth_error_ssl)
-        root.message?.contains("cleartext", ignoreCase = true) == true ->
-            AuthMessage.Resource(Res.string.auth_error_cleartext)
-        root.message?.contains("ssl", ignoreCase = true) == true ->
-            AuthMessage.Resource(Res.string.auth_error_ssl)
-        else -> root.message?.takeIf {
-            it.isNotBlank() && !it.startsWith("org.") && it.length < 100
-        }?.let { AuthMessage.Raw(it) } ?: AuthMessage.Resource(Res.string.auth_error_connection_failed)
-    }
-}
+): AuthMessage

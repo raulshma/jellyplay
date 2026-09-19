@@ -27,10 +27,21 @@ kotlin {
         }
     }
 
-    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
-    // and its ViewModels resolve AuthRepository/ServerDiscoveryRepository,
-    // whose impls live in core:data's jvmShared half — the web stack
-    // registers no binding for them.
+    // web breadth: the target compiles after the AddServerViewModel
+    // failure classifiers went expect/actual — the javax/java.net taxonomy
+    // moved verbatim to jvmShared (android+desktop stay byte-identical), and
+    // wasmJsMain models the ktor/fetch taxonomy. The ViewModels still resolve
+    // AuthRepository/ServerDiscoveryRepository, whose impls live in core:data's
+    // jvmShared half — the web stack registers no binding yet, so the module
+    // stays unrouted on web (orchestrator wiring lands separately).
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
+
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -40,6 +51,14 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // The javax/java.net actuals of the AddServerViewModel failure
+        // classifiers (JDK-only — no deps), requests-module jvmShared shape:
+        // one copy serves BOTH android and desktop.
+        val jvmShared = create("jvmShared")
+        jvmShared.dependsOn(getByName("commonMain"))
+        getByName("androidMain") { dependsOn(jvmShared) }
+        getByName("jvmMain") { dependsOn(jvmShared) }
+
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
@@ -84,13 +103,18 @@ kotlin {
             implementation(libs.mockk)
         }
         getByName("androidMain").dependencies {
-            // Documented shared→legacy :core:ui androidMain edge (library/
-            // livetv/admin/calendar/downloads/settings/onboarding/arrqueue
-            // precedents; dies at ): the local-network seam actuals
-            // bridge the legacy LocalNetworkAccess object, which keeps the
-            // Android 17 permission logic (and its MainActivity consumer) in
-            // one place.
-            implementation(project(":core:ui"))
+            // The local-network seam actuals bridge LocalNetworkAccess
+            // (:shared:core:ui androidMain since the cutover), which
+            // keeps the Android 17 permission logic (and its MainActivity
+            // consumer) in one place.
+        }
+        getByName("wasmJsMain").dependencies {
+            // The wasmJs failure-classifier actual references ktor types
+            // (HttpRequestTimeoutException, ktor-io IOException) to classify
+            // transport failures — core:data/network expose ktor only as
+            // implementation deps, so the same direct edge apps/web needed
+            // for its connect-flow classifier applies here.
+            implementation(libs.ktor.client.core)
         }
     }
 }
@@ -101,3 +125,20 @@ kotlin {
 // generated accessors land in `...feature.auth.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.auth.generated.resources"
+
+// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
+// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
+// this module fails dependency resolution unless it points at JetBrains'
+// fork of the same release line — same package, ABI-stable surface. Scoped
+// to wasmJs-named configurations so android/jvm graphs keep resolving
+// google's published variants exactly as before (the
+// identical block lives in shared/core/ui and shared/feature/requests).
+configurations.configureEach {
+    if (name.lowercase().contains("wasmjs")) {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("androidx.navigation3:navigation3-ui"))
+                .using(module(libs.jb.navigation3.ui.get().toString()))
+                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+        }
+    }
+}

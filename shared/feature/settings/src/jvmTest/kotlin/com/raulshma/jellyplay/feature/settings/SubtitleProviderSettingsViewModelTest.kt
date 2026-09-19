@@ -41,8 +41,9 @@ import kotlin.test.assertNull
  * null/blank OpenSubtitles username CLEARS the stored credential, a blank
  * password normalizes to null, `testOpenSubtitlesCredentials` verifies the
  * form text (Connected + blank fail-fast), and the Wyzie test surfaces the
- * repository's Error message verbatim plus the Skipped → "Provider not
- * configured" mapping.
+ * repository's Error message verbatim plus the Skipped → localized
+ * "Provider not configured" ([ConnectionProbe.FallbackText.ProviderNotConfigured])
+ * fallback.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SubtitleProviderSettingsViewModelTest {
@@ -134,7 +135,9 @@ class SubtitleProviderSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SubtitleProviderSettingsViewModel.ProviderStatus.Error("Enter credentials first"),
+            ConnectionProbe.Status.Error(
+                ConnectionProbe.Failure.Declared(ConnectionProbe.FallbackText.EnterCredentialsFirst)
+            ),
             viewModel.providerStatus.value[SubtitleProviderKind.WYZIE],
         )
         coVerify(exactly = 0) {
@@ -153,7 +156,7 @@ class SubtitleProviderSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SubtitleProviderSettingsViewModel.ProviderStatus.Connected,
+            ConnectionProbe.Status.Connected(Unit),
             viewModel.providerStatus.value[SubtitleProviderKind.WYZIE],
         )
         // Test probes the form text only — nothing is written to the stores.
@@ -261,7 +264,7 @@ class SubtitleProviderSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SubtitleProviderSettingsViewModel.ProviderStatus.Connected,
+            ConnectionProbe.Status.Connected(Unit),
             viewModel.providerStatus.value[SubtitleProviderKind.OPENSUBTITLES],
         )
         // Test probes the form text only — nothing is written to the stores.
@@ -277,7 +280,9 @@ class SubtitleProviderSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SubtitleProviderSettingsViewModel.ProviderStatus.Error("Enter credentials first"),
+            ConnectionProbe.Status.Error(
+                ConnectionProbe.Failure.Declared(ConnectionProbe.FallbackText.EnterCredentialsFirst)
+            ),
             viewModel.providerStatus.value[SubtitleProviderKind.OPENSUBTITLES],
         )
         coVerify(exactly = 0) {
@@ -296,7 +301,7 @@ class SubtitleProviderSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SubtitleProviderSettingsViewModel.ProviderStatus.Error("403 Forbidden"),
+            ConnectionProbe.Status.Error(ConnectionProbe.Failure.Reported("403 Forbidden")),
             viewModel.providerStatus.value[SubtitleProviderKind.WYZIE],
         )
     }
@@ -312,7 +317,9 @@ class SubtitleProviderSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SubtitleProviderSettingsViewModel.ProviderStatus.Error("Provider not configured"),
+            ConnectionProbe.Status.Error(
+                ConnectionProbe.Failure.Declared(ConnectionProbe.FallbackText.ProviderNotConfigured)
+            ),
             viewModel.providerStatus.value[SubtitleProviderKind.WYZIE],
         )
     }

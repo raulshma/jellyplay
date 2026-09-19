@@ -3,20 +3,21 @@ package com.raulshma.jellyplay.feature.settings
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
-import java.io.OutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * Desktop actual of the [SettingsBackupIo] seam: the picker seam
  * now delivers native `file:` URI strings (see [rememberBackupFilePicker]),
- * so the stream openers map the URI back to a [File] and open plain
- * JDK streams on [Dispatchers.IO] — the same IO-dispatch + open-stream
- * contract the Android actual gives its SAF URIs. A bad URI or an unopenable
- * file throws from the stream constructor, which the ViewModel's existing
+ * so the payload read/write map the URI back to a [File] and run plain JDK
+ * file IO on [Dispatchers.IO] — the same IO-dispatch + open-stream contract
+ * the Android actual gives its SAF URIs. A bad URI or an unopenable file
+ * throws from the stream constructor, which the ViewModel's existing
  * runCatching surfaces as "Export/Import failed: …" exactly like a failing
- * contentResolver stream on Android.
+ * contentResolver stream on Android. The web seam narrowing (raw streams
+ * → text-level payload) moved the former caller-side
+ * `stream.writer().use { it.write(json) }` / `stream.reader().readText()`
+ * bodies here — same streams, same bytes, same failure mapping.
  *
  * The cache estimate walks the desktop's one persistent cache
  * root — `<configDir>/http-cache`, the OkHttp response cache — mirroring the
@@ -27,14 +28,19 @@ internal class DesktopSettingsBackupIo(
     private val httpCacheRoot: File,
 ) : SettingsBackupIo {
 
-    override suspend fun openExportSink(uri: String): OutputStream? =
+    override suspend fun writeExportPayload(uri: String, payload: String): Boolean =
         withContext(Dispatchers.IO) {
-            FileOutputStream(backupFileFor(uri))
+            FileOutputStream(backupFileFor(uri)).use { stream ->
+                stream.writer().use { it.write(payload) }
+            }
+            true
         }
 
-    override suspend fun openImportSource(uri: String): InputStream? =
+    override suspend fun readImportPayload(uri: String): String? =
         withContext(Dispatchers.IO) {
-            FileInputStream(backupFileFor(uri))
+            FileInputStream(backupFileFor(uri)).use { stream ->
+                stream.reader().readText()
+            }
         }
 
     override suspend fun estimateCacheSizeBytes(): Long =

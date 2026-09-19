@@ -28,7 +28,7 @@ import kotlin.random.Random
 
 // This client keeps its org.json-based message routing verbatim.
 // Every emitted [WebSocketEvent] carries the `Data` payload as an
-// org.json object/array because legacy :core:data consumers
+// org.json object/array because the :shared:core:data consumers
 // (RemoteControlReceiver, SyncPlayManager) read those typed fields directly
 // and must keep compiling unchanged. jvmShared compiles org.json against
 // android.jar on the Android target and against the real org.json artifact
@@ -66,6 +66,52 @@ class JellyfinWebSocketClient @Inject constructor(
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private val _reconnects = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
+
+    /**
+     * Emits on every WebSocket open that follows a previous open — a true
+     * reconnect, whether via the fast backoff schedule or the slow background
+     * retry. This is the reconnect vocabulary's single home; consumers no
+     * longer re-derive the false→true edge of [isConnected] themselves.
+     *
+     * **First-connect semantics:** the FIRST open after an explicit
+     * [connect]/[disconnect] pair does not emit ([hadConnectedOnce] is cleared
+     * only by [disconnect], so an explicit re-connect starts a fresh logical
+     * session). Deliberate divergence from the failure/close handlers keeping
+     * the marker set: an `onFailure`/`onClosed` followed by the automatic
+     * reconnect's `onOpen` IS an open following a previous open, so clearing
+     * it there would suppress the very emission this flow exists to deliver.
+     *
+     * Per-consumer arming choices (the pre-`reconnects` edge derivations
+     * differed in whether they also fired on the first connect):
+     *  - [ScheduledTasksRealtimeChannel][com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel]
+     *    arms on the first connect itself (immediate or deferred Start) and
+     *    subscribes this flow for every subsequent re-subscribe — unchanged
+     *    behavior.
+     *  - `SessionCoordinator` (app shell) keeps an explicit initial arm on
+     *    [isConnected]: its former `lastConnected` edge also fired on the
+     *    first connect (the collector starts before the auth fan-out
+     *    connects), and that first post is load-bearing (pins the device's
+     *    capabilities once the server session exists).
+     *  - `SyncPlayManager.startReconnectWatcher` subscribes this flow ONLY —
+     *    declared behavior change: its former `isConnected.drop(1).filter {
+     *    it }` raced the first join's handshake and, whenever the collector
+     *    won, fired a duplicate of `joinGroup`'s own re-assert sequence and
+     *    stamped `lastReconnectAtMs` on a non-reconnect. A true mid-session
+     *    reconnect re-asserts exactly as before.
+     */
+    val reconnects: SharedFlow<Unit> = _reconnects.asSharedFlow()
+
+    /**
+     * Whether this logical session (see [connect]/[disconnect]) has ever seen
+     * an `onOpen`. Set in `onOpen` after the reconnect check; cleared ONLY by
+     * [disconnect] — see [reconnects] for why the failure/close handlers
+     * deliberately keep it. Volatile: written from OkHttp callback threads,
+     * read/cleared from any thread calling [disconnect].
+     */
+    @Volatile
+    private var hadConnectedOnce = false
 
     // KeepAlive engine -------------------------------------------------------
     // The server drops the socket after its idle timeout (default 60s) unless the
@@ -112,6 +158,10 @@ class JellyfinWebSocketClient @Inject constructor(
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 NetworkLog.d(TAG, "WebSocket connected")
+                if (hadConnectedOnce) {
+                    _reconnects.tryEmit(Unit)
+                }
+                hadConnectedOnce = true
                 reconnectAttempts.set(0)
                 // A successful connection ends the failure streak — the next
                 // slow-path retry (if any) starts back at the initial delay.
@@ -238,6 +288,9 @@ class JellyfinWebSocketClient @Inject constructor(
         reconnectJob?.cancel()
         reconnectAttempts.set(maxReconnectAttempts + 1)
         _isConnected.value = false
+        // The next explicit connect() starts a fresh logical session — its
+        // first open is a first connect, not a reconnect (see [reconnects]).
+        hadConnectedOnce = false
         stopKeepAlive()
         webSocket?.close(1000, "Client disconnecting")
         webSocket = null

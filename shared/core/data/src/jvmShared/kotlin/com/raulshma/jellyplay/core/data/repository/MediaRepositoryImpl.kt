@@ -11,9 +11,6 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
-import com.raulshma.jellyplay.core.model.DvrSeriesTimer
-import com.raulshma.jellyplay.core.model.DvrTimer
-import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -22,16 +19,9 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.LiveTvChannel
-import com.raulshma.jellyplay.core.model.LiveTvProgram
-import com.raulshma.jellyplay.core.model.LiveTvRecording
-import com.raulshma.jellyplay.core.model.GuideInfo
-import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.Playlist
-import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
@@ -41,13 +31,11 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
-import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroup
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroups
 import kotlinx.coroutines.Dispatchers
@@ -56,17 +44,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicLong
-
-// Shared by [MediaRepositoryImpl] (the collection-items cache) and the
-// file-private [DetailCacheGroup] below, so the detail-cluster TTL is one
-// value, not two hand-synced constants.
-/** 2 minutes — short enough that server changes are reflected quickly. */
-private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
-private const val DETAIL_CACHE_MAX_ENTRIES = 30
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
-// :core:data shim (same package/name). Ctor-level transforms only — method
+// core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
 //    dataJvmModule constructs this single; every consumer resolves it
@@ -75,7 +55,22 @@ private const val DETAIL_CACHE_MAX_ENTRIES = 30
 //  - `internal suspend fun invalidateCaches` widened to public: its only
 //    production caller (UserDataSyncWorker) lives in the legacy module, and
 //    `internal` no longer crosses the module boundary after this move.
-class MediaRepositoryImpl(
+//
+//  MediaRepository facade split: the LiveTv / Newsletter / Playlist family
+// surfaces moved out to their own impls (LiveTvRepositoryImpl,
+// NewsletterRepositoryImpl, PlaylistRepositoryImpl — same package), each
+// over the narrow API family client (the PlaybackRepositoryImpl ctor
+// precedent). SyncPlayRepository STAYS here by decision: its eleven members
+// interleave with the user-data channel's invalidation choreography, not
+// with any family boundary. The one piece of shared state an extracted
+// surface observes — the detail-cache cluster — moved to the
+// [MediaRepositoryInternals] Koin single this ctor now takes, so the group
+// stays ONE instance across the split. Declared divergence: the primary
+// constructor became `internal` with that move (an internal-typed ctor
+// parameter cannot ride a public constructor) — every constructor caller
+// (the dataJvmModule Koin definitions + this module's test suites) is
+// inside the module, and no external code names the concrete type.
+class MediaRepositoryImpl internal constructor(
     private val apiClient: JellyfinApiClient,
     private val homeSectionCacheDao: HomeSectionCacheDao,
     private val playedStateSync: PlayedStateSync,
@@ -123,21 +118,29 @@ class MediaRepositoryImpl(
      * bespoke collector or long-lived scope of its own.
      */
     private val sessionCacheRegistry: SessionCacheRegistry,
+    /**
+     * The facade split's ONE shared-state holder (see
+     * [MediaRepositoryInternals]): owns the detail-cache cluster this repo
+     * reads/evicts through, shared with [PlaylistRepositoryImpl] so a
+     * playlist edit made through THAT surface invalidates a detail cached
+     * through this one — one epoch-guarded instance, not two hand-synced
+     * copies. A Koin single in dataJvmModule; both impls take the same one.
+     */
+    private val internals: MediaRepositoryInternals,
 ) : MediaRepository,
-    LiveTvRepository,
     SyncPlayRepository,
-    NewsletterRepository,
-    PlaylistRepository,
     MediaRepositoryCacheInvalidation,
     MediaCacheInvalidator {
 
     // The detail screen's item-scoped cache cluster — detail snapshot,
     // similar items (per limit), album tracks, theme songs — plus the one
     // epoch that guards their writes against invalidation. One semantic
-    // unit, one owner: [DetailCacheGroup] (file-private below) owns the key
-    // grammar and the eviction choreography that used to be hand-synced at
-    // two sites per key family inside this class.
-    private val detailCaches = DetailCacheGroup(apiClient, homeSession)
+    // unit, one owner: [DetailCacheGroup] (in MediaRepositoryInternals.kt
+    // since the facade split) owns the key grammar and the eviction
+    // choreography that used to be hand-synced at two sites per key family
+    // inside this class. Reaches through the [internals] single — a get(),
+    // not a captured reference, so the sharing stays visible at every use.
+    private val detailCaches get() = internals.detailCaches
 
     private val libraryFoldersCache = TtlCache<List<LibraryFolder>>(ttlMs = FOLDERS_CACHE_TTL_MS)
     private val genresCache = TtlCache<List<Genre>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
@@ -769,70 +772,21 @@ class MediaRepositoryImpl(
         }
     }
 
-    override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = apiClient.getPlaylists(limit)
-
-    override suspend fun getPlaylistItems(playlistId: String, startIndex: Int, limit: Int): Result<List<PlaylistItem>> =
-        apiClient.getPlaylistItems(playlistId, startIndex, limit)
-
-    override suspend fun createPlaylist(
-        name: String,
-        overview: String?,
-        itemIds: List<String>,
-        mediaType: MediaType,
-    ): Result<String> =
-        // Plan 08: playlist edits self-invalidate. getPlaylistItems is an
-        // uncached passthrough, so the one cached projection of a playlist is
-        // its detail entry — one detailCaches.invalidateItem(playlistId) per edit
-        // (PlaylistDetailViewModel used to drop it by hand on refresh).
-        apiClient.createPlaylist(name, overview, itemIds, mediaType)
-            .onSuccess { detailCaches.invalidateItem(it) }
-
-    override suspend fun updatePlaylist(
-        playlistId: String,
-        name: String?,
-        overview: String?,
-        isPublic: Boolean?,
-    ): Result<Unit> =
-        apiClient.updatePlaylist(playlistId, name, overview, isPublic)
-            .onSuccess { detailCaches.invalidateItem(playlistId) }
-
-    override suspend fun deletePlaylist(playlistId: String): Result<Unit> =
-        apiClient.deletePlaylist(playlistId)
-            .onSuccess { detailCaches.invalidateItem(playlistId) }
-
-    override suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit> =
-        apiClient.addItemsToPlaylist(playlistId, itemIds)
-            .onSuccess { detailCaches.invalidateItem(playlistId) }
-
-    override suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit> =
-        apiClient.removeItemsFromPlaylist(playlistId, entryIds)
-            .onSuccess { detailCaches.invalidateItem(playlistId) }
-
-    override suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit> =
-        apiClient.movePlaylistItem(playlistId, entryId, newIndex)
-            .onSuccess { detailCaches.invalidateItem(playlistId) }
+    //  Facade split: the eight PlaylistRepository members that used to live
+    // here moved to PlaylistRepositoryImpl (same package) over the narrow
+    // LibraryApiClient family seam + the shared [MediaRepositoryInternals]
+    // detail cluster. The six edits' self-invalidation
+    // (detailCaches.invalidateItem per playlist edit) is unchanged — it now
+    // runs in the extracted impl against the SAME single-backed group.
 
     override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
         apiClient.getSyncPlayGroups()
-
-    override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> =
-        apiClient.joinSyncPlayGroup(groupId)
-
-    override suspend fun leaveSyncPlayGroup(): Result<Unit> =
-        apiClient.leaveSyncPlayGroup()
 
     override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> =
         apiClient.createSyncPlayGroup(groupName)
 
     override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
         apiClient.getSyncPlayInfo(groupId)
-
-    override suspend fun syncPlayReady(
-        positionTicks: Long,
-        isPlaying: Boolean,
-        playlistItemId: String?,
-    ): Result<Unit> =
-        apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId)
 
     override suspend fun syncPlayPause(): Result<Unit> =
         apiClient.syncPlayPause()
@@ -845,12 +799,6 @@ class MediaRepositoryImpl(
 
     override suspend fun syncPlayStop(): Result<Unit> =
         apiClient.syncPlayStop()
-
-    override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> =
-        apiClient.syncPlayNextItem(playlistItemId)
-
-    override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> =
-        apiClient.syncPlayPreviousItem(playlistItemId)
 
     override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> =
         apiClient.syncPlaySetRepeatMode(mode)
@@ -868,12 +816,6 @@ class MediaRepositoryImpl(
 
     override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> =
         apiClient.syncPlaySetIgnoreWait(ignore)
-
-    override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> =
-        apiClient.syncPlayRemoveFromPlaylist(playlistItemId)
-
-    override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> =
-        apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
     private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
         extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,
@@ -1047,54 +989,10 @@ class MediaRepositoryImpl(
             ?: cached.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
     }
 
-    override suspend fun getLiveTvChannels(
-        startIndex: Int,
-        limit: Int,
-        addCurrentProgram: Boolean,
-        enableFavoriteSorting: Boolean,
-        isFavorite: Boolean?,
-    ): Result<List<LiveTvChannel>> =
-        apiClient.getLiveTvChannels(startIndex, limit, addCurrentProgram, enableFavoriteSorting, isFavorite)
-
-    override suspend fun getRecommendedPrograms(
-        filters: ProgramFilters,
-        limit: Int,
-    ): Result<List<LiveTvProgram>> =
-        apiClient.getRecommendedPrograms(filters, limit)
-
-    override suspend fun getLiveTvPrograms(channelId: String, startDateUtc: String?, endDateUtc: String?): Result<List<LiveTvProgram>> =
-        apiClient.getLiveTvPrograms(channelId, startDateUtc, endDateUtc)
-
-    override suspend fun getPrograms(channelIds: List<String>, startDateUtc: String, endDateUtc: String): Result<List<LiveTvProgram>> =
-        apiClient.getPrograms(channelIds, startDateUtc, endDateUtc)
-
-    override suspend fun getLiveTvGuide(startDateUtc: String, endDateUtc: String, startIndex: Int, limit: Int): Result<EpgGuide> =
-        apiClient.getLiveTvGuide(startDateUtc, endDateUtc, startIndex, limit)
-
-    override suspend fun getGuideInfo(): Result<GuideInfo> = apiClient.getGuideInfo()
-
-    override suspend fun getRecordings(limit: Int?, isInProgress: Boolean?): Result<List<LiveTvRecording>> =
-        apiClient.getRecordings(limit, isInProgress)
-
-    override suspend fun deleteRecording(recordingId: String): Result<Unit> =
-        apiClient.deleteItem(recordingId)
-
-    override suspend fun getTimers(isActive: Boolean?, isScheduled: Boolean?): Result<List<DvrTimer>> =
-        apiClient.getTimers(isActive, isScheduled)
-
-    override suspend fun getSeriesTimers(sortBy: String?): Result<List<DvrSeriesTimer>> =
-        apiClient.getSeriesTimers(sortBy)
-
-    override suspend fun getDefaultTimer(programId: String): Result<DvrSeriesTimer> =
-        apiClient.getDefaultTimer(programId)
-
-    override suspend fun createTimer(programId: String): Result<Unit> = apiClient.createTimer(programId)
-
-    override suspend fun createSeriesTimer(programId: String): Result<Unit> = apiClient.createSeriesTimer(programId)
-
-    override suspend fun cancelTimer(timerId: String): Result<Unit> = apiClient.cancelTimer(timerId)
-
-    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> = apiClient.cancelSeriesTimer(seriesTimerId)
+    //  Facade split: the fifteen LiveTvRepository members that used to live
+    // here moved to LiveTvRepositoryImpl (same package) over the narrow
+    // LiveTvApiClient/MediaInfoApiClient family seams — every one was a
+    // stateless forward, so nothing shared stayed behind.
 
     /**
      * Wholesale in-memory cache drop (plan 08: demoted off the public
@@ -1141,14 +1039,9 @@ class MediaRepositoryImpl(
         // directly via clearHomeSectionsForIdentity() — see the init block above.
     }
 
-    override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
-        apiClient.getNewsletterData(sinceDate, limit)
-
-    override suspend fun sendNewsletter(): Result<Unit> =
-        apiClient.sendNewsletter()
-
-    override suspend fun sendTestNewsletter(): Result<Unit> =
-        apiClient.sendTestNewsletter()
+    //  Facade split: the three NewsletterRepository members that used to live
+    // here moved to NewsletterRepositoryImpl (same package) over the narrow
+    // MediaInfoApiClient family seam (one-line forwards, nothing shared).
 
     companion object {
         /**
@@ -1175,237 +1068,4 @@ class MediaRepositoryImpl(
         photoFolderChildUrlCache.getOrFetch({ homeSession.cacheIdentity() }, folderId) {
             Result.success(apiClient.getChildItemImageUrls(folderId, limit))
         }.getOrThrow()
-}
-
-/**
- * The detail screen's item-scoped cache group — the single owner of the four
- * caches that co-evict with one detail item (the detail snapshot, similar
- * items, album tracks, theme songs) plus the ONE epoch that guards every
- * write against that invalidation stream. File-private beside
- * [MediaRepositoryImpl] (the `EpisodeCatalogueImpl` shape in miniature: a
- * cache cluster + its invalidation choreography, constructor-injected with
- * its two collaborators); the repo's public members are one-line delegates.
- *
- * ## Key grammar — the drift this group exists to kill
- *
- * Every item-scoped key is constructed here and nowhere else. The historical
- * bug class: `getSimilarItems` stored under `similar_${id}_$limit` while the
- * invalidation removed `similar_$id` (no suffix) — a no-op that pinned every
- * limit variant for the full TTL. The grammar makes the get-key /
- * evict-prefix co-eviction structural:
- *  - similar items are LIMIT-SHAPED — the get key is derived from the
- *    eviction prefix plus `_$limit` ([similarGetKey] literally calls
- *    [similarEvictAllLimitsPrefix]), so a different limit never serves
- *    another limit's truncated list AND one prefix eviction drops every
- *    limit variant at once;
- *  - theme songs and album tracks are UNshaped (`themes_$id`,
- *    `tracks_$id`) — the prefix evict is exact-match equivalent.
- *
- * ## Epoch semantics (verbatim the pre-group `detailCacheEpoch`)
- *
- * One epoch guards every write in the group. `invalidateItem` /
- * `invalidateAll` bump it; a fetch that completes after a bump is returned
- * to its caller but never written back (the `getOrFetchGuarded` write guard
- * and [SingleFlightFetcher]'s guard share [epoch]) — a slow fetch that raced
- * a user-data invalidation must not pin the pre-mutation snapshot for the
- * full TTL. Exactly one bump per invalidation call, no more.
- *
- * ## Identity
- *
- * Every get/put/remove goes through the [TtlCache] identity overloads
- * (fetch paths read [HomeSession.cacheIdentity], the suspend source-flow
- * read; best-effort evictions read [HomeSession.cacheIdentitySnapshot]) so a
- * wrong identity is a guaranteed miss by construction.
- */
-private class DetailCacheGroup(
-    private val apiClient: JellyfinApiClient,
-    private val homeSession: HomeSession,
-) {
-
-    private val detailCache = TtlCache<MediaDetail>(
-        maxSize = DETAIL_CACHE_MAX_ENTRIES,
-        ttlMs = DETAIL_CACHE_TTL_MS,
-    )
-
-    private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
-    private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
-
-    // Theme songs for a detail item: ThemeMusicPlayer releases its player on
-    // screen exit, so every detail re-entry re-fetched the (almost always
-    // empty) list — one HTTP round-trip per navigation for nothing. Cached
-    // with the same 2-minute TTL and epoch-guarded write as its siblings; a
-    // stale list ≤2 min after a server change is harmless for ambient audio.
-    private val themeSongsCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
-
-    // Single-flight dedup for `detail`: the detail screen is reachable from
-    // many entry points (home row tap, deep link, "play next" notification,
-    // cast handshake, download resume) and TtlCache's get-check-put is not
-    // atomic — two near-simultaneous entries share one flight instead of
-    // firing two round-trips. The fetch semantics (caller-scope async,
-    // lock-scope re-check, epoch guard, cancellation ladder) live in
-    // [SingleFlightFetcher]; the epoch it shares with the guarded writes
-    // above/below is [epoch].
-    private val epoch = AtomicLong(0L)
-    private val detailFetcher = SingleFlightFetcher(detailCache, epoch)
-
-    // ── Key grammar (the one home of every item-scoped key) ────────────────
-
-    /**
-     * The limit-agnostic similar-items eviction prefix — a prefix of
-     * [similarGetKey] for EVERY limit, so one prefix eviction drops all of
-     * the item's limit variants.
-     */
-    private fun similarEvictAllLimitsPrefix(itemId: String) = "similar_$itemId"
-
-    /** The per-limit similar-items get key, DERIVED from the eviction prefix. */
-    private fun similarGetKey(itemId: String, limit: Int) =
-        "${similarEvictAllLimitsPrefix(itemId)}_$limit"
-
-    /** Theme-songs key — unshaped; the prefix evict is exact-match equivalent. */
-    private fun themesKey(itemId: String) = "themes_$itemId"
-
-    /** Album-tracks key — unshaped; removed by exact key. */
-    private fun tracksKey(albumId: String) = "tracks_$albumId"
-
-    // ── Accessors ──────────────────────────────────────────────────────────
-
-    /**
-     * The detail snapshot: single-flight cache-through read with the force
-     * freshness lever (drop the cached entry first — the invalidate-then-read
-     * sequence callers used to run by hand; the epoch bump inside
-     * [invalidateItem] also guards a racing fetch from re-inserting the
-     * stale snapshot).
-     */
-    suspend fun detail(itemId: String, force: Boolean): Result<MediaDetail> {
-        if (force) invalidateItem(itemId)
-        return detailFetcher.getOrFetch({ homeSession.cacheIdentity() }, itemId) {
-            apiClient.getMediaDetail(itemId)
-        }
-    }
-
-    /** Similar items — limit-shaped key, epoch-guarded write. */
-    suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
-        similarCache.getOrFetchGuarded(
-            { homeSession.cacheIdentity() },
-            similarGetKey(itemId, limit),
-            currentEpoch = epoch::get,
-        ) {
-            apiClient.getSimilarItems(itemId, limit)
-        }
-
-    /**
-     * Album tracks — epoch-guarded write. [force] mirrors [detail]'s
-     * freshness lever: drop the cached list (plus the epoch bump that
-     * stall-guards in-flight writers) before the cache-through read. Needed
-     * because [invalidateUserData] can only evict `tracks_<itemId>` — a
-     * flip on a TRACK never touches the album's `tracks_<albumId>` entry,
-     * so a deferred silent refresh that must show the post-flip rows cannot
-     * get them without the explicit force.
-     */
-    suspend fun albumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> {
-        if (force) invalidateAlbumTracks(albumId)
-        return albumTracksCache.getOrFetchGuarded(
-            { homeSession.cacheIdentity() },
-            tracksKey(albumId),
-            currentEpoch = epoch::get,
-        ) {
-            apiClient.getAlbumTracks(albumId)
-        }
-    }
-
-    /** Theme songs — epoch-guarded write. */
-    suspend fun themeSongs(itemId: String): Result<List<MediaItem>> =
-        themeSongsCache.getOrFetchGuarded(
-            { homeSession.cacheIdentity() },
-            themesKey(itemId),
-            currentEpoch = epoch::get,
-        ) {
-            apiClient.getThemeSongs(itemId)
-        }
-
-    /** Best-effort pre-eviction read of the cached detail (snapshot identity). */
-    fun cachedDetail(itemId: String): MediaDetail? =
-        detailCache.get(homeSession.cacheIdentitySnapshot(), itemId)
-
-    // ── Invalidation ───────────────────────────────────────────────────────
-
-    /**
-     * Drops EVERY cached shape of one item: the detail snapshot, every limit
-     * variant of its similar items (prefix evict), and its theme songs —
-     * plus the epoch bump that stall-guards in-flight writers.
-     */
-    fun invalidateItem(itemId: String) {
-        epoch.incrementAndGet()
-        val identity = homeSession.cacheIdentitySnapshot()
-        detailCache.remove(identity, itemId)
-        similarCache.removeByKeyPrefix(identity, similarEvictAllLimitsPrefix(itemId))
-        themeSongsCache.removeByKeyPrefix(identity, themesKey(itemId))
-    }
-
-    /**
-     * Drops the album's cached track list plus the epoch bump that
-     * stall-guards in-flight writers — [albumTracks]'s force lever, the
-     * same shape [invalidateItem] gives [detail]. ([invalidateUserData]
-     * keeps its direct, bump-less remove: it follows up with
-     * [invalidateItem], which bumps.)
-     */
-    fun invalidateAlbumTracks(albumId: String) {
-        epoch.incrementAndGet()
-        albumTracksCache.remove(homeSession.cacheIdentitySnapshot(), tracksKey(albumId))
-    }
-
-    /**
-     * Wholesale drop of the detail/similar/themes trio + the epoch bump.
-     * This (not [clearAll]) is the identity-transition reaction: album
-     * tracks rides the registry's cache list there instead — see
-     * [registryCaches].
-     */
-    fun invalidateAll() {
-        epoch.incrementAndGet()
-        detailCache.clear()
-        similarCache.clear()
-        themeSongsCache.clear()
-    }
-
-    /**
-     * The composite "user data for [itemId] changed" eviction. Returns the
-     * cached detail read BEFORE the drop (the caller's series-discovery
-     * input — it must be captured before [invalidateItem] removes it),
-     * removes the item's album tracks (a direct remove, not part of
-     * [invalidateItem]), then runs the full per-item invalidation.
-     */
-    fun invalidateUserData(itemId: String): MediaDetail? {
-        val identity = homeSession.cacheIdentitySnapshot()
-        val cached = detailCache.get(identity, itemId)
-        albumTracksCache.remove(identity, tracksKey(itemId))
-        invalidateItem(itemId)
-        return cached
-    }
-
-    /**
-     * Wholesale drop for [MediaRepositoryImpl.invalidateCaches] (the
-     * background sync-worker path): [invalidateAll] plus the album-tracks
-     * cache, which the identity path clears via the registry's cache list
-     * instead — the two wholesale callers each clear every member exactly
-     * once. Declared resequencing, unobservable: the former body cleared
-     * albumTracks AFTER the episode catalogue's invalidateAll(); the member
-     * caches are independent (no cross-cache read exists) and each is
-     * cleared exactly once, so ordering within the drop cannot matter —
-     * a racing getAlbumTracks put-after-clear was equally possible before.
-     */
-    fun clearAll() {
-        invalidateAll()
-        albumTracksCache.clear()
-    }
-
-    /**
-     * The group's contribution to the repo's `SessionCacheRegistry`
-     * registration: the member caches a plain registry wholesale clear fully
-     * invalidates. Only album tracks qualifies — the detail/similar/themes
-     * trio's reaction needs the epoch bump (an in-flight previous-identity
-     * fetch must not write back into the cleared cache), which a plain clear
-     * cannot express; that trio rides the repo's `media-identity-clear`
-     * ACTION ([invalidateAll]) instead.
-     */
-    val registryCaches: List<TtlCache<*>> get() = listOf(albumTracksCache)
 }

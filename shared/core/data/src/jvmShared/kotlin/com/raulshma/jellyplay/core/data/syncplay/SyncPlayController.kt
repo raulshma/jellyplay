@@ -6,6 +6,20 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CancellationException
 
+/**
+ * The ONE fire-and-forget wrapper home for SyncPlay wire commands that player
+ * plumbing issues without awaiting a result (`SyncPlayBridge`,
+ * `SyncPlayPlaybackCore`, `VideoPlayerViewModel`): every member is a
+ * [safe]-wrapped one-liner over [JellyfinApiClient], and nothing else in the
+ * app wraps these calls. Group lifecycle (join/leave) is NOT here —
+ * `SyncPlayManager` calls the api client directly because it must observe the
+ * results — and the repository seam (`SyncPlayRepository`) only carries the
+ * commands its UI consumers await.
+ *
+ * Members here are pruned to the called vocabulary: `queue`,
+ * `removeFromPlaylist`, and `movePlaylistItem` were removed after a census
+ * (working tree and HEAD) found zero call sites.
+ */
 class SyncPlayController constructor(
     private val apiClient: JellyfinApiClient,
 ) {
@@ -23,9 +37,6 @@ class SyncPlayController constructor(
         apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
     }
 
-    suspend fun queue(itemIds: List<String>, mode: String = "Queue") =
-        safe("queue") { apiClient.syncPlayQueue(itemIds, mode) }
-
     suspend fun nextItem(playlistItemId: String) =
         safe("nextItem") { apiClient.syncPlayNextItem(playlistItemId) }
 
@@ -34,12 +45,6 @@ class SyncPlayController constructor(
 
     suspend fun setPlaylistItem(playlistItemId: String) =
         safe("setPlaylistItem") { apiClient.syncPlaySetPlaylistItem(playlistItemId) }
-
-    suspend fun removeFromPlaylist(playlistItemId: String) =
-        safe("removeFromPlaylist") { apiClient.syncPlayRemoveFromPlaylist(playlistItemId) }
-
-    suspend fun movePlaylistItem(playlistItemId: String, newIndex: Int) =
-        safe("movePlaylistItem") { apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex) }
 
     suspend fun setRepeatMode(mode: SyncPlayRepeatMode) =
         safe("setRepeatMode") { apiClient.syncPlaySetRepeatMode(mode) }
@@ -50,6 +55,17 @@ class SyncPlayController constructor(
     suspend fun setIgnoreWait(ignore: Boolean) =
         safe("setIgnoreWait") { apiClient.syncPlaySetIgnoreWait(ignore) }
 
+    /**
+     * Reports local readiness to the group. [whenMs] MUST be the
+     * TimeSyncManager-based remote-now (`timeSyncManager.remoteNow()`), never
+     * an uncorrected wall clock: the server stamps its schedule from this
+     * instant, and a local-clock value would skew every projection. It is
+     * required (non-nullable) on purpose — the api client's nullable
+     * `whenMs` falls back to `LocalDateTime.now(UTC)`, which is exactly the
+     * uncorrected clock this contract forbids. Position/tick conversions also
+     * flow through [TimeSyncManager] (`msToTicks`/`ticksToMs`), the single
+     * home for SyncPlay clock math.
+     */
     suspend fun reportReady(
         positionTicks: Long = 0L,
         isPlaying: Boolean = false,
@@ -59,6 +75,7 @@ class SyncPlayController constructor(
         apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId, whenMs)
     }
 
+    /** Same [whenMs] clock contract as [reportReady]: remote-now only. */
     suspend fun reportBuffering(
         positionTicks: Long = 0L,
         isPlaying: Boolean = false,

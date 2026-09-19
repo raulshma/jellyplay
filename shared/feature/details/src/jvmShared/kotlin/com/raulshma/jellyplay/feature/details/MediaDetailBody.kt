@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.formatRuntimeLabelFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -100,6 +101,10 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_section
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_tracks
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_videos
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_see_all
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_format_comic
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_finished_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_page_progress
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_percent_progress
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
@@ -215,6 +220,11 @@ internal fun DetailContentBody(
     val isAlbum = item.mediaType == MediaType.ALBUM
     val isLocalOrigin = state.origin?.isLocal == true
     val showContent = true
+    // Book branch: the shared body flow stays, but the metadata row, the
+    // reading card and the Contents section come from the book state (null
+    // for every other media type), and the video-only sections hide.
+    val isBook = item.mediaType == MediaType.BOOK
+    val book = state.book
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -349,6 +359,25 @@ internal fun DetailContentBody(
                         }
                     }
 
+                // Book author line — the one credit a book carries. From
+                // whichever field the server populated (person or artist item).
+                if (isBook) {
+                    bookAuthorLabel(detail, item)?.let { author ->
+                        FadingItem {
+                            Column {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = author,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(12.dp))
                 FadingItem {
                     FlowRow(
@@ -362,10 +391,9 @@ internal fun DetailContentBody(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             )
                         }
-                        item.runTimeTicks?.let { ticks ->
-                            val minutes = ticks / 600_000_000
+                        formatRuntimeLabelFromTicks(item.runTimeTicks)?.let { runtime ->
                             Text(
-                                text = "${minutes}m",
+                                text = runtime,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             )
@@ -418,6 +446,62 @@ internal fun DetailContentBody(
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                     )
                                 }
+                            }
+                        }
+                        // Book meta: file format + reading progress (the
+                        // video-oriented year/runtime/rating set above renders
+                        // mostly empty for books; these are the slots that count).
+                        if (isBook && book != null) {
+                            val comicLabel = stringResource(Res.string.detail_book_format_comic)
+                            Text(
+                                text = bookFormatLabel(book.format, comicLabel),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
+                            when (
+                                val progress = resolveBookReadingProgress(
+                                    isPlayed = item.isPlayed,
+                                    ticks = item.playbackPositionTicks ?: 0L,
+                                    format = book.format,
+                                    pageCount = book.pageCount,
+                                )
+                            ) {
+                                BookReadingProgress.Finished -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(ShapeCache.smooth4)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    ) {
+                                        Text(
+                                            text = stringResource(Res.string.detail_book_finished_badge),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                                is BookReadingProgress.Percent -> if (progress.percent > 0f) {
+                                    Text(
+                                        text = stringResource(
+                                            Res.string.detail_book_percent_progress,
+                                            (progress.percent * 100).toInt().coerceIn(0, 100),
+                                        ),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    )
+                                }
+                                is BookReadingProgress.Pages -> {
+                                    Text(
+                                        text = stringResource(
+                                            Res.string.detail_book_page_progress,
+                                            progress.page,
+                                            progress.pageCount,
+                                        ),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    )
+                                }
+                                BookReadingProgress.NotStarted, BookReadingProgress.Unknown -> Unit
                             }
                         }
                         SegmentAvailabilityChip(
@@ -490,7 +574,7 @@ internal fun DetailContentBody(
                     }
                 }
 
-                detail.studios.takeIf { it.isNotEmpty() }?.let { studios ->
+                detail.studios.takeIf { it.isNotEmpty() && !isBook }?.let { studios ->
                     Spacer(Modifier.height(10.dp))
                     // Studio chips: REMOTE keeps click -> StudioDetail; LOCAL
                     // (detail.item.studios names only, no server id) renders as
@@ -578,6 +662,29 @@ internal fun DetailContentBody(
             )
         }
 
+        // ── Book reading card ──
+        // Progress bar + percent/pages + local marks counts. Occupies the
+        // media-info slot (delayIndex 2) which never renders for books.
+        if (isBook) StaggeredDetailSection(visible = showContent && book != null, delayIndex = 2) {
+            book?.let { bookState ->
+                val progress = resolveBookReadingProgress(
+                    isPlayed = item.isPlayed,
+                    ticks = item.playbackPositionTicks ?: 0L,
+                    format = bookState.format,
+                    pageCount = bookState.pageCount,
+                )
+                FadingItem {
+                    BookReadingCard(
+                        format = bookState.format,
+                        progress = progress,
+                        bookmarkCount = bookState.bookmarkCount,
+                        highlightCount = bookState.highlightCount,
+                        modifier = Modifier.padding(horizontal = bodyContentPad),
+                    )
+                }
+            }
+        }
+
         if (showMediaInfo) StaggeredDetailSection(visible = showContent && !isAudio, delayIndex = 2) {
             // Stream selection is source-aware:
             //  - REMOTE (remoteStreamSelection): full MediaInfoSection with audio
@@ -644,14 +751,29 @@ internal fun DetailContentBody(
             }
         }
 
-        // ── Chapters ──
-        // Rendered as a tappable thumbnail row that resumes the player at the
-        // chapter's start position. Gated by capabilities.chapters (non-empty,
-        // remote OR persisted on the offline row) so an item without chapter
-        // data never offers a drill-in it can't fulfill. Offline, the tile
-        // thumbnails fall back to the placeholder icon; names, timestamps and
-        // resume-on-tap are local.
-        StaggeredDetailSection(visible = showContent && state.capabilities.chapters, delayIndex = 4) {
+        // ── Chapters / Contents ──
+        // Books render the local TOC cache as a vertical, expandable list that
+        // deep-links into the reader (href for EPUB, page for PDF); video keeps
+        // the server chapter thumbnail row that resumes the player at the
+        // chapter's start position (gated by capabilities.chapters so an item
+        // without chapter data never offers a drill-in it can't fulfill).
+        val showBookToc = isBook && !book?.toc.isNullOrEmpty()
+        StaggeredDetailSection(
+            visible = showContent &&
+                (showBookToc || (state.capabilities.chapters && state.detail.chapters.isNotEmpty())),
+            delayIndex = 4,
+        ) {
+            if (showBookToc) {
+                FadingItem {
+                    BookTocSection(
+                        toc = book?.toc.orEmpty(),
+                        contentPadding = bodyContentPad,
+                        onJump = { entry ->
+                            callbacks.playback.onReadClick(item.id, entry.href, entry.page)
+                        },
+                    )
+                }
+            } else {
             val chapters = state.detail.chapters
             if (chapters.isNotEmpty()) {
                 Column {
@@ -694,6 +816,7 @@ internal fun DetailContentBody(
                         )
                     }
                 }
+            }
             }
         }
 
@@ -861,7 +984,7 @@ internal fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent, delayIndex = 8) {
+        StaggeredDetailSection(visible = showContent && !isBook, delayIndex = 8) {
             if (detail.people.isNotEmpty()) {
                 Column {
                     // "See all" appears only when the cast is large enough to hide

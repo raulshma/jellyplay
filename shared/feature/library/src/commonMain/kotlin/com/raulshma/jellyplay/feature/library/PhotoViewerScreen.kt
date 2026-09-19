@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
@@ -114,6 +115,31 @@ import com.raulshma.jellyplay.feature.library.generated.resources.library_reset
 // SynthwaveDynamicShape and square these corners in synthwave mode).
 private val filmstripThumbShape = smoothCornerShape(6.dp)
 
+/** One arm of the photo viewer's ordered back ladder. */
+sealed interface PhotoViewerBackAction {
+    data object DismissInfo : PhotoViewerBackAction
+    data object CloseFilmstrip : PhotoViewerBackAction
+    data object StopSlideshow : PhotoViewerBackAction
+    data object ExitViewer : PhotoViewerBackAction
+}
+
+/**
+ * The viewer's exhaustive back fold: info overlay → filmstrip → slideshow →
+ * exit. Pure so both back sites (the predictive-back callback and the TV
+ * remote's D-pad Back) consume the SAME ladder — the two used to hand-copy it
+ * and could drift apart.
+ */
+fun photoViewerBackAction(
+    showInfo: Boolean,
+    showFilmstrip: Boolean,
+    isSlideshowActive: Boolean,
+): PhotoViewerBackAction = when {
+    showInfo -> PhotoViewerBackAction.DismissInfo
+    showFilmstrip -> PhotoViewerBackAction.CloseFilmstrip
+    isSlideshowActive -> PhotoViewerBackAction.StopSlideshow
+    else -> PhotoViewerBackAction.ExitViewer
+}
+
 @Composable
 fun PhotoViewerScreen(
     itemId: String,
@@ -122,16 +148,21 @@ fun PhotoViewerScreen(
     viewModel: PhotoViewerViewModel = koinViewModel(),
 ) {
     val isTv = LocalTvMode.current
-    val userMessenger = rememberUserMessenger()
+    val bus = LocalUserMessageBus.current
     // Resolved in the composable body — the save-result LaunchedEffect below is
     // not a composable scope (the legacy code deferred this via UiText instead).
     val photoSavedMessage = stringResource(Res.string.library_photo_saved_to_gallery)
-    val photo by viewModel.photo
-    val siblings by viewModel.siblings
-    val currentIndex by viewModel.currentIndex
-    val isLoading by viewModel.isLoading
-    val error by viewModel.error
-    val photoDetail by viewModel.photoDetail
+    // One content snapshot (photo/detail/siblings/index/load pair) behind one
+    // collect — replacing six hand-synced reads that could observe a torn
+    // navigation. Slideshow/export/adjustment states stay separate (hot
+    // sliders must not copy the content state per tick).
+    val viewerState by viewModel.state
+    val photo = viewerState.photo
+    val siblings = viewerState.siblings
+    val currentIndex = viewerState.currentIndex
+    val isLoading = viewerState.isLoading
+    val error = viewerState.error
+    val photoDetail = viewerState.photoDetail
     val isSlideshowActive by viewModel.isSlideshowActive
     val isSaving by viewModel.isSaving
     val saveResult by viewModel.saveResult
@@ -169,11 +200,11 @@ fun PhotoViewerScreen(
     LaunchedEffect(saveResult) {
         when (val result = saveResult) {
             is SaveResult.Success -> {
-                userMessenger?.info(photoSavedMessage)
+                bus.info(photoSavedMessage)
                 viewModel.clearSaveResult()
             }
             is SaveResult.Error -> {
-                userMessenger?.error(result.message)
+                bus.error(result.message)
                 viewModel.clearSaveResult()
             }
             else -> {}
@@ -184,14 +215,14 @@ fun PhotoViewerScreen(
     // back button. Without this the photo viewer — a full-screen scene with a
     // pointer-input layer that consumes edge events — has no back callback, and
     // the predictive-back swipe crashes while the close button (which calls
-    // onBack directly) and the 3-button nav back work. This mirrors the TV
-    // remote's onBack layer-peeling (info -> filmstrip -> slideshow -> exit).
+    // onBack directly) and the 3-button nav back work. Consumes the same pure
+    // layer-peel as the TV remote's onBack (see [photoViewerBackAction]).
     JellyPlayBackHandler(enabled = true) {
-        when {
-            showInfo -> showInfo = false
-            showFilmstrip -> showFilmstrip = false
-            isSlideshowActive -> viewModel.stopSlideshow()
-            else -> onBack()
+        when (photoViewerBackAction(showInfo, showFilmstrip, isSlideshowActive)) {
+            PhotoViewerBackAction.DismissInfo -> showInfo = false
+            PhotoViewerBackAction.CloseFilmstrip -> showFilmstrip = false
+            PhotoViewerBackAction.StopSlideshow -> viewModel.stopSlideshow()
+            PhotoViewerBackAction.ExitViewer -> onBack()
         }
     }
 
@@ -204,11 +235,11 @@ fun PhotoViewerScreen(
             .onDpadKeyEvent(
                 onBack = { e ->
                     if (e.isKeyUp) {
-                        when {
-                            showInfo -> showInfo = false
-                            showFilmstrip -> showFilmstrip = false
-                            isSlideshowActive -> viewModel.stopSlideshow()
-                            else -> onBack()
+                        when (photoViewerBackAction(showInfo, showFilmstrip, isSlideshowActive)) {
+                            PhotoViewerBackAction.DismissInfo -> showInfo = false
+                            PhotoViewerBackAction.CloseFilmstrip -> showFilmstrip = false
+                            PhotoViewerBackAction.StopSlideshow -> viewModel.stopSlideshow()
+                            PhotoViewerBackAction.ExitViewer -> onBack()
                         }
                     }
                     true
@@ -279,6 +310,7 @@ fun PhotoViewerScreen(
                 PhotoImage(
                     photo = photo!!,
                     viewModel = viewModel,
+                    currentIndex = currentIndex,
                     scale = scale,
                     offsetX = offsetX,
                     offsetY = offsetY,
@@ -361,7 +393,7 @@ fun PhotoViewerScreen(
                                         OverlayActionButton(
                                             onClick = {
                                                 viewModel.sharePhoto { errorMsg ->
-                                                    userMessenger?.error(errorMsg)
+                                                    bus.error(errorMsg)
                                                 }
                                             },
                                         ) {
@@ -591,6 +623,7 @@ private fun resetPhotoTransform(
 private fun PhotoImage(
     photo: com.raulshma.jellyplay.core.model.MediaItem,
     viewModel: PhotoViewerViewModel,
+    currentIndex: Int,
     scale: State<Float>,
     offsetX: State<Float>,
     offsetY: State<Float>,
@@ -681,7 +714,9 @@ private fun PhotoImage(
                     } while (changes.any { it.pressed })
 
                     if (!pastSlop && !isMultiTouch) {
-                        val now = System.currentTimeMillis()
+                        // wasmJs rewrite of System.currentTimeMillis() — the same epoch
+                        // millis off Clock.System; the double-tap window math is unchanged.
+                        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
                         if (now - lastTapTime < 300) {
                             onDoubleTap(gestureScale)
                             lastTapTime = 0L
@@ -691,16 +726,16 @@ private fun PhotoImage(
                         }
                     } else if (!isMultiTouch && pastSlop && gestureScale <= 1f) {
                         val swipeThreshold = 150f // pixels
-                        if (Math.abs(dragDeltaX) > swipeThreshold && Math.abs(dragDeltaX) > Math.abs(dragDeltaY)) {
+                        if (kotlin.math.abs(dragDeltaX) > swipeThreshold && kotlin.math.abs(dragDeltaX) > kotlin.math.abs(dragDeltaY)) {
                             if (dragDeltaX > 0) {
                                 // Swipe right -> previous photo
                                 if (viewModel.hasPrevious()) {
-                                    viewModel.navigateTo(viewModel.currentIndex.value - 1)
+                                    viewModel.navigateTo(currentIndex - 1)
                                 }
                             } else {
                                 // Swipe left -> next photo
                                 if (viewModel.hasNext()) {
-                                    viewModel.navigateTo(viewModel.currentIndex.value + 1)
+                                    viewModel.navigateTo(currentIndex + 1)
                                 }
                             }
                         }

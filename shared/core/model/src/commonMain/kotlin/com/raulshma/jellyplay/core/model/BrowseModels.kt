@@ -65,6 +65,7 @@ data class RecommendationResult(
 @Serializable
 enum class HomeSectionType {
     CONTINUE_WATCHING,
+    CONTINUE_READING,
     NEXT_UP,
     RECENTLY_ADDED,
     LATEST_MEDIA,
@@ -103,6 +104,7 @@ enum class HomeSectionType {
          */
         val CONFIGURABLE = listOf(
             CONTINUE_WATCHING,
+            CONTINUE_READING,
             NEXT_UP,
             LATEST_MEDIA,
             RECENTLY_ADDED,

@@ -113,12 +113,8 @@ kotlin {
         }
         getByName("androidMain").dependencies {
             // The user-messenger actual bridges to the app-wide
-            // LocalUserMessageBus, which still lives in the legacy Android-only
-            // :core:ui shim until its own conveyor move — same
-            // transition-period relationship as the livetv conveyor's
-            // AndroidLiveTvMessenger (4th documented shared→legacy :core:ui
-            // androidMain edge after library/livetv/admin), dies at .
-            implementation(project(":core:ui"))
+            // LocalUserMessageBus (:shared:core:ui androidMain since the
+            // cutover dissolved the legacy :core:ui shim).
         }
     }
 }
@@ -135,7 +131,7 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.calendar.ge
 // this module fails dependency resolution unless it points at JetBrains'
 // fork of the same release line — same package, ABI-stable surface. Scoped
 // to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (spike w-10C S1/R2; the
+// google's published variants exactly as before (the
 // identical block lives in shared/core/ui and shared/feature/requests).
 configurations.configureEach {
     if (name.lowercase().contains("wasmjs")) {

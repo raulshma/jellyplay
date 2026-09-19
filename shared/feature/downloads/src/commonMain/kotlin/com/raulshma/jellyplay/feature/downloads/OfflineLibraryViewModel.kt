@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.StringResource
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_all
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_books
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_music
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_videos
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_name
@@ -44,6 +45,7 @@ enum class OfflineLibraryFilter(val labelRes: StringResource) {
     ALL(Res.string.downloads_filter_all),
     VIDEOS(Res.string.downloads_filter_videos),
     MUSIC(Res.string.downloads_filter_music),
+    BOOKS(Res.string.downloads_filter_books),
 }
 
 data class StorageSummary(val totalBytes: Long, val itemCount: Int)
@@ -128,6 +130,8 @@ class OfflineLibraryViewModel(
                 items.filter { it.typeGroup == OfflineMediaTypeGroup.VIDEO }
             OfflineLibraryFilter.MUSIC ->
                 items.filter { it.typeGroup == OfflineMediaTypeGroup.MUSIC }
+            OfflineLibraryFilter.BOOKS ->
+                items.filter { it.typeGroup == OfflineMediaTypeGroup.BOOK }
             OfflineLibraryFilter.ALL -> items
         }
         val q = query.trim()
