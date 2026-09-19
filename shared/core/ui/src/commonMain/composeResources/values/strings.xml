@@ -129,6 +129,7 @@
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Remove</string>
     <string name="core_ui_play">Play</string>
+    <string name="core_ui_read">Read</string>
     <string name="core_ui_backspace">Backspace</string>
     <string name="core_ui_request">Request</string>
     <string name="core_ui_watched">Watched</string>

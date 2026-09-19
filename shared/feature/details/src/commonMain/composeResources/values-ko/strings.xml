@@ -417,6 +417,10 @@
     <string name="detail_book_finished_badge">완독</string>
     <string name="detail_book_page_progress">%2$d쪽 중 %1$d쪽</string>
     <string name="detail_book_percent_progress">%1$d% 읽음</string>
+    <string name="detail_book_contents_page">%1$d쪽</string>
+    <plurals name="detail_book_contents_show_all">
+        <item quantity="other">전체 %1$d개 보기</item>
+    </plurals>
     <string name="detail_cd_mark_as_finished">완독으로 표시</string>
     <string name="detail_cd_mark_as_unfinished">완독 취소</string>
     <plurals name="detail_book_bookmarks">

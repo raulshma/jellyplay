@@ -417,6 +417,10 @@
     <string name="detail_book_finished_badge">読了</string>
     <string name="detail_book_page_progress">%2$dページ中%1$dページ</string>
     <string name="detail_book_percent_progress">%1$d%読了</string>
+    <string name="detail_book_contents_page">%1$dページ</string>
+    <plurals name="detail_book_contents_show_all">
+        <item quantity="other">全%1$d件を表示</item>
+    </plurals>
     <string name="detail_cd_mark_as_finished">読了にする</string>
     <string name="detail_cd_mark_as_unfinished">読了を解除する</string>
     <plurals name="detail_book_bookmarks">

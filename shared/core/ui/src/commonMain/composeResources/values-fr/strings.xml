@@ -117,6 +117,7 @@
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Supprimer</string>
     <string name="core_ui_play">Lire</string>
+    <string name="core_ui_read">Lire</string>
     <string name="core_ui_backspace">Suppression</string>
     <string name="core_ui_request">Demander</string>
     <string name="core_ui_watched">Vu</string>

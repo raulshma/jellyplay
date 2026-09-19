@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_play
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_read
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -132,6 +134,8 @@ fun PlayButtonWithProgress(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     buttonSize: Dp = 36.dp,
+    icon: ImageVector = Tabler.Outline.PlayerPlay,
+    contentDescription: String = stringResource(Res.string.core_ui_play),
 ) {
     val focusInteraction = rememberJellyFocusableInteraction(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
@@ -243,8 +247,8 @@ fun PlayButtonWithProgress(
         }
 
         Icon(
-            Tabler.Outline.PlayerPlay,
-            contentDescription = stringResource(Res.string.core_ui_play),
+            icon,
+            contentDescription = contentDescription,
             modifier = Modifier.size(buttonSize * 0.55f),
             tint = MaterialTheme.colorScheme.onSurface,
         )
@@ -284,6 +288,9 @@ fun PosterCard(
     val cardPrefs = LocalCardDisplayPreferences.current
     val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
     val playButtonSize = if (isTv) 44.dp else 36.dp
+    // Books get a reading affordance instead of the play triangle — the tap
+    // still opens the reader, the glyph just shouldn't claim "play".
+    val isBook = item.mediaType == MediaType.BOOK
 
     // For episode cards in Latest Media rows, show the series name as the title
     // (the episode title alone doesn't identify the show); the season/episode
@@ -360,6 +367,8 @@ fun PosterCard(
         onPlayClick = onPlayClick,
         playButtonDominantColor = dominantColor,
         playButtonSize = playButtonSize,
+        playIcon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
+        playIconContentDescription = stringResource(if (isBook) Res.string.core_ui_read else Res.string.core_ui_play),
         sharedElementKey = sharedElementKey,
         scrimBrush = gradientBrush,
         previewFactory = previewFactory,
@@ -467,7 +476,6 @@ fun PosterCard(
                 // labels. A book in progress shows "% complete" from the
                 // BookProgressPolicy decode instead; an unstarted book shows
                 // nothing at all.
-                val isBook = item.mediaType == MediaType.BOOK
                 val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries && !isBook
                 val hasWatchProgress =
                     item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed

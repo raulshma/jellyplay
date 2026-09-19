@@ -752,11 +752,11 @@ internal fun DetailContentBody(
         }
 
         // ── Chapters / Contents ──
-        // Books render the local TOC cache as a chip row that deep-links into
-        // the reader (href for EPUB, page for PDF); video keeps the server
-        // chapter thumbnail row that resumes the player at the chapter's
-        // start position (gated by capabilities.chapters so an item without
-        // chapter data never offers a drill-in it can't fulfill).
+        // Books render the local TOC cache as a vertical, expandable list that
+        // deep-links into the reader (href for EPUB, page for PDF); video keeps
+        // the server chapter thumbnail row that resumes the player at the
+        // chapter's start position (gated by capabilities.chapters so an item
+        // without chapter data never offers a drill-in it can't fulfill).
         val showBookToc = isBook && !book?.toc.isNullOrEmpty()
         StaggeredDetailSection(
             visible = showContent &&

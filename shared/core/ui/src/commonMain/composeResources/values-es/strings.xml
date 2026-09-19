@@ -117,6 +117,7 @@
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Quitar</string>
     <string name="core_ui_play">Reproducir</string>
+    <string name="core_ui_read">Leer</string>
     <string name="core_ui_backspace">Borrado</string>
     <string name="core_ui_request">Solicitar</string>
     <string name="core_ui_watched">Visto</string>

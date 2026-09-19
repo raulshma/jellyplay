@@ -424,6 +424,11 @@
     <string name="detail_book_finished_badge">Concluído</string>
     <string name="detail_book_page_progress">Página %1$d de %2$d</string>
     <string name="detail_book_percent_progress">%1$d% lido</string>
+    <string name="detail_book_contents_page">p. %1$d</string>
+    <plurals name="detail_book_contents_show_all">
+        <item quantity="one">Mostrar as %1$d entradas</item>
+        <item quantity="other">Mostrar as %1$d entradas</item>
+    </plurals>
     <string name="detail_cd_mark_as_finished">Marcar como concluído</string>
     <string name="detail_cd_mark_as_unfinished">Marcar como não concluído</string>
     <plurals name="detail_book_bookmarks">

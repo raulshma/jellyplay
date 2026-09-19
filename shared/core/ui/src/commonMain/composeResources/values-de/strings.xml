@@ -117,6 +117,7 @@
     <!-- core/ui component content descriptions & labels -->
     <string name="core_ui_remove">Entfernen</string>
     <string name="core_ui_play">Wiedergeben</string>
+    <string name="core_ui_read">Lesen</string>
     <string name="core_ui_backspace">Rücklöschtaste</string>
     <string name="core_ui_request">Anfordern</string>
     <string name="core_ui_watched">Gesehen</string>

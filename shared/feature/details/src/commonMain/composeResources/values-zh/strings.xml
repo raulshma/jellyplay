@@ -417,6 +417,10 @@
     <string name="detail_book_finished_badge">已读完</string>
     <string name="detail_book_page_progress">第 %1$d 页，共 %2$d 页</string>
     <string name="detail_book_percent_progress">已读 %1$d%</string>
+    <string name="detail_book_contents_page">第 %1$d 页</string>
+    <plurals name="detail_book_contents_show_all">
+        <item quantity="other">显示全部 %1$d 项</item>
+    </plurals>
     <string name="detail_cd_mark_as_finished">标记为已读完</string>
     <string name="detail_cd_mark_as_unfinished">标记为未读完</string>
     <plurals name="detail_book_bookmarks">

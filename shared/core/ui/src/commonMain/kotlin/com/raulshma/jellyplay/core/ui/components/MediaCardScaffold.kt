@@ -30,10 +30,16 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.size.Size as CoilSize
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.PlayerPlay
+import org.jetbrains.compose.resources.stringResource
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_play
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
@@ -98,6 +104,8 @@ fun MediaCardScaffold(
     onPlayClick: (() -> Unit)? = null,
     playButtonDominantColor: Color = MaterialTheme.colorScheme.primary,
     playButtonSize: Dp = 36.dp,
+    playIcon: ImageVector = Tabler.Outline.PlayerPlay,
+    playIconContentDescription: String = stringResource(Res.string.core_ui_play),
     sharedElementKey: String? = null,
     scrimBrush: Brush? = null,
     scrimHeight: Dp = 60.dp,
@@ -219,6 +227,8 @@ fun MediaCardScaffold(
                         progressPercent = if (showProgress) progressFraction else 0f,
                         dominantColor = playButtonDominantColor,
                         onClick = onPlayClick,
+                        icon = playIcon,
+                        contentDescription = playIconContentDescription,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(end = 8.dp, bottom = 8.dp),
