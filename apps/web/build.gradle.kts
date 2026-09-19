@@ -227,6 +227,20 @@ kotlin {
     }
 }
 
+// KGP 2.3.21 pins binaryen 125 for wasm production optimization; that wasm-opt
+// build segfaults (SIGSEGV, exit 139) on this bundle ~8 minutes into
+// compileProductionExecutableKotlinWasmJsOptimize (release run 35427847303).
+// Pin a newer binaryen — the same GitHub-release channel KGP's
+// kotlinWasmBinaryenSetup downloads from, older CLI surface untouched.
+// Version 125 still works for every other Kotlin project; only this bundle
+// trips it, so keep the pin scoped to this module's BinaryenPlugin instance
+// (BinaryenExec.register applies the plugin to the compilation's project).
+plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenPlugin> {
+    extensions.configure<org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenEnvSpec> {
+        version.set("128")
+    }
+}
+
 // google's androidx.navigation3:navigation3-ui ships NO web targets at all
 // (android AAR + jvm/linux stubs only — §1), so every wasmJs
 // configuration of this module — including ones that only pull
