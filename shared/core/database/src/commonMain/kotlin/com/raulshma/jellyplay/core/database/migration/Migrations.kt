@@ -421,7 +421,7 @@ class Migration24To25(
     }
 
     private suspend fun encryptUserTokens(db: SQLiteConnection) {
-        collectRowsThenUpdate(db, "SELECT userId, accessToken FROM users") { userId, rawToken ->
+        db.collectRowsThenUpdate("SELECT userId, accessToken FROM users") { userId, rawToken ->
             val encrypted = try {
                 tokenCipher.encrypt(rawToken)
             } catch (e: Exception) {
@@ -441,7 +441,7 @@ class Migration24To25(
     }
 
     private suspend fun encryptServerTokens(db: SQLiteConnection) {
-        collectRowsThenUpdate(db, "SELECT id, accessToken FROM servers") { serverId, rawToken ->
+        db.collectRowsThenUpdate("SELECT id, accessToken FROM servers") { serverId, rawToken ->
             val encrypted = try {
                 tokenCipher.encrypt(rawToken)
             } catch (e: Exception) {
@@ -461,36 +461,10 @@ class Migration24To25(
 }
 
 /**
- * Collect-then-update scan shared by the row-rewriting migrations
- * ([Migration24To25], [Migration53To54]): fully drains [select] — a
- * two-column query shaped `SELECT <key>, <payload> FROM …` with a non-null
- * TEXT key in position 0 and a nullable TEXT payload in position 1 — into
- * memory, and only then runs [updateRow] for each collected row.
- *
- * The row's UPDATE must never be issued while the SELECT cursor is still
- * stepping: the UPDATE writes the very column the open cursor scans (v24→v25
- * rewrites `users.accessToken` / `servers.accessToken`; v53→v54 filters on
- * `downloads.container IS NULL`), and SQLite may revisit or skip rows whose
- * scanned columns change mid-scan — a skipped row would silently keep its
- * stale value (for 24→25, a plaintext token). Collecting the pending rows
- * first is the safe pattern; this helper exists so that rule is enforced and
- * documented in exactly one place.
+ * Collect-then-update scanning lives in SQLiteMigrationCompat.kt
+ * (`SQLiteConnection.collectRowsThenUpdate`), expect/actual so the metadata
+ * compilation never sees the platform-only `prepare`/`step` calls.
  */
-private suspend fun collectRowsThenUpdate(
-    db: SQLiteConnection,
-    select: String,
-    updateRow: suspend (key: String, payload: String?) -> Unit,
-) {
-    val rows = mutableListOf<Pair<String, String?>>()
-    db.prepare(select).use { cursor ->
-        while (cursor.step()) {
-            rows.add(cursor.getText(0) to if (cursor.isNull(1)) null else cursor.getText(1))
-        }
-    }
-    for ((key, payload) in rows) {
-        updateRow(key, payload)
-    }
-}
 
 val MIGRATION_25_26 = object : Migration(25, 26) {
     override suspend fun migrate(db: SQLiteConnection) {
@@ -1102,8 +1076,7 @@ class Migration53To54(
     private val containerProbe: ContainerProbe,
 ) : Migration(53, 54) {
     override suspend fun migrate(db: SQLiteConnection) {
-        collectRowsThenUpdate(
-            db,
+        db.collectRowsThenUpdate(
             "SELECT id, downloadPath FROM downloads WHERE container IS NULL",
         ) { id, downloadPath ->
             // downloadPath is NOT NULL in every downloads schema since the

@@ -1,11 +1,8 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
-import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +31,10 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_
  * a [ManageSeriesUiEvent] through the single [onEvent] funnel (the home
  * feature's `HomeViewModel` precedent) — the per-action handlers are private,
  * so there is no per-screen command method to keep in sync.
+ *
+ * The screen's aggregate state — the season-map folds, the delete confirm
+ * machine, the stats — lives on [ManageSeriesUiState] (ManageSeriesUiState.kt);
+ * this class is the thin async caller that owns the uiState writes.
  */
 class ManageSeriesViewModel internal constructor(
     private val strings: DetailStrings,
@@ -368,75 +369,3 @@ class ManageSeriesViewModel internal constructor(
             ?: 1
     }
 }
-
-/**
- * Immutable UI state for the "Manage Series" screen.
- */
-@Immutable
-data class ManageSeriesUiState(
-    val isLoading: Boolean = true,
-    val error: String? = null,
-    val series: ArrSeriesResolution? = null,
-    /** Season number → episodes (sorted; specials at end). */
-    val episodesBySeason: Map<Int, List<ArrSeriesEpisode>> = emptyMap(),
-    val expandedSeasons: Set<Int> = emptySet(),
-    /** One-shot snackbar message for action feedback. */
-    val userMessage: String? = null,
-    /**
-     * Episode-delete confirm machine ([PendingConfirmation]). The guard RULE
-     * lives in the machine, fed the [ManageSeriesUiState.isDeleting] flag;
-     * the settle arm is an explicit [PendingConfirmation.clear] on BOTH
-     * delete outcomes.
-     */
-    val pendingDelete: PendingConfirmation<ArrSeriesEpisode> = PendingConfirmation(),
-    /** True while the staged episode-file delete is in flight — the machine's guard fact. */
-    val isDeleting: Boolean = false,
-    /** Which target (episode/season/series) has an in-flight action, for spinners. */
-    val actionTarget: ActionTarget? = null,
-) {
-    /** The staged delete target — the pre-fold `pendingDeleteEpisode` field, now derived from [pendingDelete]. */
-    val pendingDeleteEpisode: ArrSeriesEpisode? get() = pendingDelete.item
-
-    /** Updates a single episode in-place across the season map. */
-    fun updateEpisode(updated: ArrSeriesEpisode): ManageSeriesUiState {
-        val newMap = episodesBySeason.mapValues { (season, eps) ->
-            eps.map { if (it.id == updated.id && season == updated.seasonNumber) updated else it }
-        }
-        return copy(episodesBySeason = newMap)
-    }
-
-    /** Updates all episodes in a season via [transform]. */
-    fun updateSeason(seasonNumber: Int, transform: (ArrSeriesEpisode) -> ArrSeriesEpisode): ManageSeriesUiState {
-        val newMap = episodesBySeason.mapValues { (season, eps) ->
-            if (season == seasonNumber) eps.map(transform) else eps
-        }
-        return copy(episodesBySeason = newMap)
-    }
-
-    /** Per-season downloaded/total counts for the season header. */
-    fun seasonStats(seasonNumber: Int): SeasonStats {
-        val eps = episodesBySeason[seasonNumber].orEmpty()
-        val downloaded = eps.count { it.hasFile }
-        return SeasonStats(total = eps.size, downloaded = downloaded, monitored = eps.count { it.monitored })
-    }
-
-    /** Total on-disk storage used by downloaded episodes across all seasons. */
-    val totalStorageBytes: Long
-        get() = episodesBySeason.values.flatten().sumOf { it.fileSizeBytes ?: 0L }
-
-    @Immutable
-    data class SeasonStats(val total: Int, val downloaded: Int, val monitored: Int)
-}
-
-/** Identifies which entity has an in-flight action, for showing a spinner. */
-@Immutable
-sealed class ActionTarget {
-    @Immutable data class Episode(val episodeId: Int) : ActionTarget()
-    @Immutable data class Season(val seasonNumber: Int) : ActionTarget()
-    /** A series-level command (refresh / refresh & scan / search). [action] keys it to one button. */
-    @Immutable data class Series(val action: SeriesAction) : ActionTarget()
-}
-
-/** Which series-level button is in flight, so only that one shows a spinner. */
-@Immutable
-enum class SeriesAction { REFRESH, REFRESH_AND_SCAN, SEARCH }
