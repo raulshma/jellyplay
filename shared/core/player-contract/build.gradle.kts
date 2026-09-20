@@ -1,6 +1,3 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -24,26 +21,10 @@ kotlin {
         }
     }
 
-    // wasmJs target added MediaEngine's supertypes
-    // (PlayerLifecycleCallbacks, RemotePlayableEngine) previously lived in
-    // shared:core:data — which has no wasm build (Room) — and blocked this
-    // module from shipping wasm. They now live here verbatim (SAME packages,
-    // zero consumer import churn) so HtmlVideoEngine gets a wasm-visible
-    // contract. Dependency edge flipped: core:data now depends
+    // PlayerLifecycleCallbacks and RemotePlayableEngine previously lived in
+    // shared:core:data; they now live here verbatim (SAME packages, zero
+    // consumer import churn). Dependency edge flipped: core:data now depends
     // on this module instead of the reverse.
-    wasmJs {
-        browser {
-            testTask {
-                // commonTest suites run via jvmTest; the wasmJs browser test
-                // run needs a local Chrome/Chromium (karma) and stays opt-in
-                // until wires a headless wasm test lane — without this
-                // guard, `gradlew build`/`check` would fail on Chrome-less
-                // machines that previously ran no wasm tests at all. Same
-                // pattern as :shared:core:network.
-                enabled = false
-            }
-        }
-    }
 
     applyDefaultHierarchyTemplate()
 

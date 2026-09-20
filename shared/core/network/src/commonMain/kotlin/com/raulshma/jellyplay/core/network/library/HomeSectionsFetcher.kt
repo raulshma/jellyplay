@@ -53,9 +53,9 @@ internal interface HomeSectionSources {
 }
 
 /**
- * The fetch half of the home feed, extracted from the two hand-copied client
- * choreographies (`LibraryApiClientImpl.getHomeSections` JVM-side and its wasm
- * twin) into ONE commonMain orchestrator. It turns a [HomeSectionQuery] into
+ * The fetch half of the home feed, extracted from the hand-copied client
+ * choreography (`LibraryApiClientImpl.getHomeSections` JVM-side)
+ * into ONE commonMain orchestrator. It turns a [HomeSectionQuery] into
  * the raw sub-call results and hands them to [assembleHomeSections] — which
  * keeps the ordering policy (what fetched data BECOMES); this class owns the
  * fetching (what/when): the concurrent deferred schedule, the semaphore
@@ -82,10 +82,8 @@ internal interface HomeSectionSources {
  * switch misses by construction. [force] (pull-to-refresh) bypasses cache
  * READS but still memoises WRITES — the freshly pulled rows are what the next
  * periodic refresh serves, instead of the pre-pull rows reverting for up to
- * the TTL. Identity note — the ONE deliberate behavior delta vs the two
- * implementations this replaces: both platforms now memoise under
- * [CacheIdentity.UNKNOWN] before login (the wasm twin previously skipped
- * caching entirely when no session existed); nothing cached under UNKNOWN can
+ * the TTL. Identity note: memoisation now runs under
+ * [CacheIdentity.UNKNOWN] before login; nothing cached under UNKNOWN can
  * leak across users, since no real identity ever collides with it.
  *
  * Error policy: partial failures ride [HomeSectionsResult.failedSectionTypes]

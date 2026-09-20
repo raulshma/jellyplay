@@ -56,7 +56,7 @@ interface BookTocCacheRepository {
 
 /**
  * Null-object implementation: the [DetailViewModel] constructor default and
- * a stand-in for tests. (Every real platform — wasm included — binds the
+ * a stand-in for tests. (Every real platform binds the
  * Room-backed repository below.)
  */
 class NoopBookTocCacheRepository : BookTocCacheRepository {

@@ -17,17 +17,13 @@ import kotlin.time.Instant
  * their module-internal function names as thin delegating façades — the logic
  * bodies and hand-rolled month tables live here only.
  *
- * DOCUMENTED LOCALE DEGRADE (stated once, here — the feature façades point at
+ * LOCALE BEHAVIOR (stated once, here — the feature façades point at
  * this KDoc instead of re-documenting it): android/desktop render through
- * java.time DateTimeFormatter with `Locale.getDefault()` (host locale);
- * wasmJs renders the same pattern shapes FIXED ENGLISH through the single
- * English month/day-of-week tables in the wasmJs actual (no ICU/CLDR data
- * table ships in a wasm bundle). The web shell is English-only today, so the
- * visible behavior matches; the degrade is pinned by the jvmTest source-scan
- * contract plus the Locale-pinned JVM shape tests.
+ * java.time DateTimeFormatter with `Locale.getDefault()` (host locale),
+ * pinned by the Locale-pinned JVM shape tests.
  *
- * Declared JVM/wasm pairing of every shape (jvmShared actual ← verbatim
- * java.time bodies the features shipped; wasmJs actual ← the one table set):
+ * Declared JVM pairing of every shape (jvmShared actual ← verbatim
+ * java.time bodies the features shipped):
  *  - [shortMonthDay]        "MMM d"
  *  - [shortMonthDayYear]    "MMM d, yyyy"
  *  - [longMonthDayYear]     "MMMM d, yyyy"
@@ -93,9 +89,9 @@ fun relativeInstantDateLabel(stamp: String): String = try {
 /**
  * Whole minutes between an ISO-8601 OFFSET timestamp and now — negative when
  * the stamp is in the future, null when it does not parse. Strict-offset by
- * contract: a stamp with no zone offset returns null on BOTH platforms (the
- * JVM's `OffsetDateTime.parse` throws; the wasm regex requires the offset),
- * which is what the requests' relative-time buckets rely on.
+ * contract: a stamp with no zone offset returns null (the JVM's
+ * `OffsetDateTime.parse` throws on offset-less stamps), which is what the
+ * requests' relative-time buckets rely on.
  *
  * This is the parse transport behind the "relative time ago" family (whose
  * label templates are localized resource strings, not platform seams).

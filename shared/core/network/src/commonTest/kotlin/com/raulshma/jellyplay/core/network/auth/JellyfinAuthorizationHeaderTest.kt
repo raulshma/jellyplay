@@ -6,7 +6,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 /**
- * Pins the wasm auth header builder's byte-compatibility with the Jellyfin
+ * Pins the auth header builder's byte-compatibility with the Jellyfin
  * SDK's AuthorizationHeaderBuilder (SDK 1.8.12 — format extracted from the
  * shipped jar): parameter order, `", "` joins, `Token` omission when null,
  * value encoding (trim, line-feed strip, unreserved/space/percent rules).

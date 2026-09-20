@@ -14,8 +14,8 @@ import org.koin.dsl.module
  * pending the DownloadRepository flip) reach Koin through the app
  * composition root's Hilt interop module; the rest resolve from the C4
  * shared-module graph. QuickDownloadActions is core:data's own wall-crossing
- * seam (declared, implemented and bound there on both platforms — jvmShared
- * adapter in dataJvmModule, no-op stub in dataWasmModule), so this module
+ * seam (declared, implemented and bound there — jvmShared
+ * adapter in dataJvmModule), so this module
  * needs no platform fragment for it.
  */
 val searchModule: Module = module {

@@ -24,13 +24,12 @@ import org.koin.dsl.module
  *    (`androidAppInteropAdaptersModule` adapter over the Koin-owned
  *    CastManager — details DetailAudioPlayback precedent);
  *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
- *    SleepTimerManager single; the wasm fragment binds the wall-clock impl),
+ *    SleepTimerManager single),
  *    MediaRepository /
  *    UserDataMutator (shared data
  *    cluster) and the download window TrackDownloadStatusWindow (core:data's
  *    own seam since the download-actions consolidation — jvmShared adapter
- *    over the DownloadRepository single in dataJvmModule, no-op stub in
- *    dataWasmModule) plus PreferenceProjections / AudioStore /
+ *    over the DownloadRepository single in dataJvmModule) plus PreferenceProjections / AudioStore /
  *    AudioEffectsStore (shared datastore) resolve from the shared-module
  *    graph;
  *  - TrackDownloadActions (the track-download flip collaborator over the

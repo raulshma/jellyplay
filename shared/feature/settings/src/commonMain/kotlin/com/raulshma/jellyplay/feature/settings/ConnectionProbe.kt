@@ -41,7 +41,7 @@ import org.jetbrains.compose.resources.StringResource
  *    one (Seerr's former `launchTest` discipline, generalized; the refused
  *    alternative was rejected because it would have changed Seerr's
  *    rapid-retry UX). [SingleFlight.CALLER_GATED] leaves an in-flight probe
- *    running — the caller's own UX gates concurrency (the web Seerr pane's
+ *    running — the caller's own UX gates concurrency (the Seerr pane's
  *    buttons-disabled-while-testing contract), so the machine neither cancels
  *    nor restarts; the job-identity guard below still guarantees a
  *    superseded/lost-the-registration probe NEVER lands its outcome. A
@@ -109,8 +109,8 @@ class ConnectionProbe<R : Any, K : Any, D>(
      * In-flight probe jobs by key; at most one per key (restart policy).
      * Concurrent because the [Job.invokeOnCompletion] reaper runs on the
      * completing coroutine's thread, not the callers' dispatcher. The map
-     * itself comes from the [newConcurrentJobMap] seam — the JVM-only
-     * ConcurrentHashMap cannot cross into the wasmJs compilation.
+     * itself comes from the [newConcurrentJobMap] seam — `java.util.concurrent
+     * .ConcurrentHashMap` is JVM-only and stays behind the seam.
      */
     private val jobs: MutableMap<K, Job> = newConcurrentJobMap()
 
@@ -313,7 +313,7 @@ class ConnectionProbe<R : Any, K : Any, D>(
         RESTART,
 
         /**
-         * The caller's UX owns probe concurrency (e.g. the web Seerr pane
+         * The caller's UX owns probe concurrency (e.g. the Seerr pane
          * disables every control while a test runs), so the machine neither
          * cancels nor restarts an in-flight probe. Safety net unchanged: only
          * the job currently registered for the key may land an outcome, and
@@ -334,16 +334,14 @@ class ConnectionProbe<R : Any, K : Any, D>(
 /**
  * seam: a thread-safe map for [ConnectionProbe]'s job table —
  * `java.util.concurrent.ConcurrentHashMap` is JVM-only, so the JVM actual
- * supplies it while wasm (single-threaded JS) gets a plain map, which is
- * honest there: the reaper and the callers run on the same thread.
+ * supplies it.
  */
 internal expect fun <K : Any, V : Any> newConcurrentJobMap(): MutableMap<K, V>
 
 /**
  * Atomic value-checked removal for [ConnectionProbe]'s job table — the JVM
  * actual maps to `ConcurrentHashMap.remove(key, value)` (single atomic
- * compare-and-remove); the wasm actual is a check-then-remove over the plain
- * single-threaded map. Expect/actual because the common `MutableMap` has no
+ * compare-and-remove). Expect/actual because the common `MutableMap` has no
  * two-arg remove.
  */
 internal expect fun <K : Any, V : Any> removeEntryIfCurrent(map: MutableMap<K, V>, key: K, expected: V)

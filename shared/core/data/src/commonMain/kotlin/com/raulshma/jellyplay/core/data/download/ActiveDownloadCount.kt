@@ -19,10 +19,6 @@ import kotlinx.coroutines.flow.Flow
  * promoted-interface pass the JVM actual is the repository itself —
  * jvmShared `DownloadRepositoryImpl` implements this interface directly and
  * dataJvmModule binds it over the repository single.
- *
- * The wasmJs actual — [WasmActiveDownloadCount] in wasmJsMain, bound in
- * dataWasmModule — is an honest zero: the browser has no local download
- * pipeline, so no transfer is ever in flight.
  */
 interface ActiveDownloadCount {
 

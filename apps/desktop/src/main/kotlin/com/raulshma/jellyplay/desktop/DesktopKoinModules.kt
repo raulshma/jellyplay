@@ -57,7 +57,7 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     desktopPlayerVideoModule,
     // The shared commonMain feature Koin modules (declared ONCE in
     // shared/feature/shell; the guard test derives its expected set from
-    // that declaration — webFeatureModules precedent). Desktop's platform
+    // that declaration). Desktop's platform
     // actuals follow inline.
     // The shared list spreads as its typed array — `listOf`'s vararg
     // takes arrays, not lists.

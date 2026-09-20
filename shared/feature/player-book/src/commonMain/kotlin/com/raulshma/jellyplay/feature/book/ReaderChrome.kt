@@ -289,7 +289,7 @@ internal fun PagedBottomBar(
  * The read-aloud action row embedded in the reflowable bottom chrome.
  * [onOpenToc] renders the always-visible TOC entry (leading — reachable on
  * every book and platform without opening the settings sheet). [speechAvailable]
- * false (desktop/web) drops the speech cluster — the caption in the settings
+ * false (desktop) drops the speech cluster — the caption in the settings
  * sheet explains why; [speechActive] drives the indicator tint and the
  * skip/stop affordances (the play button doubles as start when no session is
  * live). The auto-scroll toggle joins the same row right-aligned (scrolled

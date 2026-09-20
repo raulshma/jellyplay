@@ -203,7 +203,7 @@ bridge) or accepts screen-specific pixel maps validated per machine.
 2/2 runs (2026-09-12, Windows 11, 150% display scale, JDK 21.0.7 app
 runtime), every flow on attempt 1 in both runs.** Drives the REAL windowed
 app against the real Docker Jellyfin fixture (`bootstrap-jellyfin.sh`, the
-same one the session/web passes use) with real sign-in, real navigation,
+same one the session passes use) with real sign-in, real navigation,
 real native dialogs, real Robot mouse clicks on the production rows, and
 SERVER-SIDE post-conditions (the strongest observable: what the server
 stores changes, not just what the UI shows).
@@ -239,7 +239,7 @@ stdout (`grep JellyPlay.*flowpass` on the app log).
    drill-in, not the insights screen") was a timebox cut, not a structural
    fact.
 2. **Row clicks: the prescribed "harness-gated accessibility bridge" landed
-   as `HarnessClickBridge`** (`shared/core/ui` commonMain — wasm-clean,
+   as `HarnessClickBridge`** (`shared/core/ui` commonMain —
    `@Volatile`-flag only, zero cost when disarmed): screens annotate their
    rows with `Modifier.harnessClickTarget(id)`; the modifier factory
    returns `this` untouched unless `jellyplay.flowpass.enabled` armed the

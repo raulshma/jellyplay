@@ -17,8 +17,8 @@ import kotlin.test.assertTrue
  * class ("Continue watching shows already watched episode"): the offline row
  * has ALWAYS dropped played/finished rows (`!it.isPlayed &&
  * !it.isFinishedOffline`); these tests make that contract load-bearing so the
- * online row's matching filter (the #157 fix in LibraryApiClientImpl /
- * KtorWasmLibraryApiClient) cannot drift away from it unnoticed.
+ * online row's matching filter (the #157 fix in
+ * LibraryApiClientImpl) cannot drift away from it unnoticed.
  *
  * The mirror rules under test, in the order the implementation applies them:
  *  1. `IsResumable` position rule — `playbackPositionTicks > 0`;

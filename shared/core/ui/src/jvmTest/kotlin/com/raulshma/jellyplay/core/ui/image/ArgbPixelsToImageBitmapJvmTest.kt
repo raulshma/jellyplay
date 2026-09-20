@@ -12,7 +12,7 @@ import kotlin.test.assertNotNull
  * pixel colors (Skia natives are on the jvmTest classpath via
  * compose.desktop.currentOs — same lane as BlurHashCacheAccountingTest).
  *
- * The wasm/android actuals need their platform runtimes and are not covered
+ * The Android actual needs its platform runtime and is not covered
  * here; the common contract pinned is dimension + pixel fidelity, which every
  * actual must satisfy.
  */

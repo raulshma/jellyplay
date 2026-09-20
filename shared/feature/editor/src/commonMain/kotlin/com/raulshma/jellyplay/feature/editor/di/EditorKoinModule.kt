@@ -13,10 +13,10 @@ import org.koin.dsl.module
  *  - MetadataEditorRepository / AuthRepository / SubtitleProviderRepository
  *    are Koin-native (dataJvmModule in :shared:core:data);
  *  - StreamingSubtitleStore: the interface lives in :shared:core:data's
- *    jvmShared source set, so the wasmJs target cannot name it — the VM
+ *    jvmShared source set, so commonMain cannot name it — the VM
  *    consumes the commonMain EditorSubtitleStore seam instead, whose binding
- *    comes from the platformEditorModule() fragment included below (JVM:
- *    wraps that same StreamingSubtitleStore single; wasm: no-op archive).
+ *    comes from the platformEditorModule() fragment included below (wraps
+ *    that same StreamingSubtitleStore single).
  *
  * Live-resolvable on BOTH platforms: desktop renders editorSection
  * (DesktopAppRoot registers Route.MetadataEditor; the platform file-picker

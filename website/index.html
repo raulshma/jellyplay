@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JellyPlay — Modern Jellyfin Client for Android, Android TV, Desktop & Web</title>
-  <meta name="description" content="JellyPlay is a premium, open-source Jellyfin client for Android, Android TV & Fire TV, with a Windows desktop preview and experimental web build. Native Kotlin & Jetpack Compose (Material 3 Expressive). Multi-engine playback (ExoPlayer, libmpv, LibVLC), SyncPlay watch parties, offline downloads, Seerr requests.">
-  <meta name="keywords" content="JellyPlay, Jellyfin client, Jellyfin Android, Jellyfin Android TV, Android TV, Fire TV, Jellyfin Windows, Jellyfin web client, Jellyfin music player, open source, ExoPlayer, libmpv, LibVLC, SyncPlay, watch party, Jellyseerr, Overseerr, Seerr, Material 3, Material 3 Expressive, media player, self-hosted streaming, self-hosted, homelab, offline downloads, live TV, DVR, Kodi alternative, Plex alternative, Emby alternative, jetpack compose, kotlin, kotlin multiplatform, compose multiplatform">
+  <title>JellyPlay — Modern Jellyfin Client for Android, Android TV & Desktop</title>
+  <meta name="description" content="JellyPlay is a premium, open-source Jellyfin client for Android, Android TV & Fire TV, with a Windows desktop preview. Native Kotlin & Jetpack Compose (Material 3 Expressive). Multi-engine playback (ExoPlayer, libmpv, LibVLC), SyncPlay watch parties, offline downloads, Seerr requests.">
+  <meta name="keywords" content="JellyPlay, Jellyfin client, Jellyfin Android, Jellyfin Android TV, Android TV, Fire TV, Jellyfin Windows, Jellyfin music player, open source, ExoPlayer, libmpv, LibVLC, SyncPlay, watch party, Jellyseerr, Overseerr, Seerr, Material 3, Material 3 Expressive, media player, self-hosted streaming, self-hosted, homelab, offline downloads, live TV, DVR, Kodi alternative, Plex alternative, Emby alternative, jetpack compose, kotlin, kotlin multiplatform, compose multiplatform">
   <meta name="author" content="raulshma">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="theme-color" content="#0E1416" media="(prefers-color-scheme: dark)">
@@ -35,8 +35,8 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="JellyPlay">
-  <meta property="og:title" content="JellyPlay — Modern Jellyfin Client for Android, TV, Desktop & Web">
-  <meta property="og:description" content="A premium, open-source Jellyfin client. Stream movies, music, and live TV with Material 3 dynamic color theming, offline downloads, SyncPlay, and multi-engine playback (ExoPlayer, libmpv, LibVLC). Windows desktop preview and experimental web build included.">
+  <meta property="og:title" content="JellyPlay — Modern Jellyfin Client for Android, TV & Desktop">
+  <meta property="og:description" content="A premium, open-source Jellyfin client. Stream movies, music, and live TV with Material 3 dynamic color theming, offline downloads, SyncPlay, and multi-engine playback (ExoPlayer, libmpv, LibVLC). Windows desktop preview included.">
   <meta property="og:image" content="https://raulshma.github.io/jellyplay/assets/og-banner.png">
   <meta property="og:image:secure_url" content="https://raulshma.github.io/jellyplay/assets/og-banner.png">
   <meta property="og:image:width" content="1200">
@@ -47,7 +47,7 @@
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="JellyPlay — Modern Jellyfin Client for Android, TV, Desktop & Web">
+  <meta name="twitter:title" content="JellyPlay — Modern Jellyfin Client for Android, TV & Desktop">
   <meta name="twitter:description" content="Stream movies, music, and live TV with a beautiful Material 3 interface. Features offline downloads, SyncPlay watch parties, and multi-engine playback (ExoPlayer, libmpv, LibVLC).">
   <meta name="twitter:image" content="https://raulshma.github.io/jellyplay/assets/og-banner.png">
   <meta name="twitter:image:alt" content="JellyPlay — Modern Jellyfin client for Android and Android TV">
@@ -89,7 +89,7 @@
       "operatingSystem": "Android 9.0 (API 28) or later",
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Media Player",
-      "description": "JellyPlay is a premium, modern, open-source Jellyfin client for Android, Android TV & Fire TV — with a Windows desktop preview and experimental web build — featuring offline downloads, SyncPlay watch parties, metadata editing, Seerr/Jellyseerr integration, an integrated server admin dashboard, and multi-engine playback (ExoPlayer/Media3, libmpv, LibVLC).",
+      "description": "JellyPlay is a premium, modern, open-source Jellyfin client for Android, Android TV & Fire TV — with a Windows desktop preview — featuring offline downloads, SyncPlay watch parties, metadata editing, Seerr/Jellyseerr integration, an integrated server admin dashboard, and multi-engine playback (ExoPlayer/Media3, libmpv, LibVLC).",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -133,7 +133,6 @@
         "Adaptive layouts for phone, tablet, foldable, and TV",
         "Android TV Leanback launcher",
         "Windows desktop preview (libmpv)",
-        "Experimental web (wasmJs) build",
         "In-app metadata editor",
         "Server admin dashboard",
         "Material You dynamic theming"
@@ -258,10 +257,10 @@
         },
         {
           "@type": "Question",
-          "name": "Is there a Windows or web version?",
+          "name": "Is there a Windows version?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "A Windows desktop preview (Compose Multiplatform with bundled libmpv) already runs browsing, search, details, music, and in-player video, and an experimental WebAssembly build signs in and plays video in the browser. Both ship from the same shared Kotlin codebase; treat them as preview and experimental respectively."
+            "text": "A Windows desktop preview (Compose Multiplatform with bundled libmpv) already runs browsing, search, details, music, and in-player video. It ships from the same shared Kotlin codebase as the Android app; treat it as a preview."
           }
         },
         {
@@ -485,7 +484,7 @@
             Your Jellyfin server,<br>re-imagined for <span class="accent">every screen</span>
           </h1>
           <p class="hero-description">
-            JellyPlay is a high-fidelity, open-source media player for Jellyfin. Built with Kotlin and Jetpack Compose, it features dynamic color theming, offline downloads, and multi-engine playback — on phones, tablets, foldables, Android TV &amp; Fire TV, with a Windows desktop preview and an experimental web build from the same shared codebase.
+            JellyPlay is a high-fidelity, open-source media player for Jellyfin. Built with Kotlin and Jetpack Compose, it features dynamic color theming, offline downloads, and multi-engine playback — on phones, tablets, foldables, Android TV &amp; Fire TV, with a Windows desktop preview from the same shared codebase.
           </p>
           <div class="hero-actions">
             <div class="split-btn-group" id="hero-download-split-btn">
@@ -816,7 +815,7 @@
         <div class="section-header animate-on-scroll">
           <span class="section-eyebrow">Platforms</span>
           <h2 class="section-title">One app, <span class="gradient-text">every screen</span></h2>
-          <p class="section-subtitle">A shared Kotlin Multiplatform core with native shells — stable on Android, preview on desktop, experimental on web.</p>
+          <p class="section-subtitle">A shared Kotlin Multiplatform core with native shells — stable on Android, preview on desktop.</p>
         </div>
 
         <div class="platform-grid">
@@ -845,15 +844,6 @@
             </div>
             <h3 class="feature-title">Windows Desktop</h3>
             <p class="feature-description">Compose Multiplatform shell with bundled libmpv — browsing, search, details, music with the full effect stack, in-player video, keyboard media keys, and frame capture. Packaged MSI ships with releases when available.</p>
-          </div>
-
-          <div class="platform-card glass-card animate-on-scroll">
-            <div class="platform-card-top">
-              <div class="feature-icon"><md-icon>language</md-icon></div>
-              <span class="platform-pill experimental">Experimental</span>
-            </div>
-            <h3 class="feature-title">Web</h3>
-            <p class="feature-description">WebAssembly build that signs in, renders artwork, plays video in-browser, and runs requests, calendar, and Seerr screens against a live server. Player polish is still landing.</p>
           </div>
         </div>
       </div>
@@ -1051,11 +1041,11 @@
               </tr>
               <tr>
                 <td>
-                  <span class="comparison-feature-title">Desktop &amp; web</span>
-                  <span class="comparison-feature-desc">Windows preview and experimental WebAssembly build from one shared codebase</span>
+                  <span class="comparison-feature-title">Desktop</span>
+                  <span class="comparison-feature-desc">Windows preview from one shared codebase</span>
                 </td>
                 <td><span class="cross-icon"><span class="material-symbols-outlined">close</span>Mobile &amp; TV only</span></td>
-                <td class="highlight-col"><span class="check-icon"><span class="material-symbols-outlined">check</span>Windows preview + web experimental</span></td>
+                <td class="highlight-col"><span class="check-icon"><span class="material-symbols-outlined">check</span>Windows preview</span></td>
               </tr>
               <tr>
                 <td>
@@ -1215,7 +1205,7 @@
             </button>
             <div class="faq-content">
               <p class="faq-answer">
-                JellyPlay is a free, open-source Jellyfin client for Android phones, tablets, foldables, Android TV, and Fire TV — with a Windows desktop preview and an experimental web build. It is written natively in Kotlin and Jetpack Compose with Material 3 Expressive, not a web wrapper like the official Android app.
+                JellyPlay is a free, open-source Jellyfin client for Android phones, tablets, foldables, Android TV, and Fire TV — with a Windows desktop preview. It is written natively in Kotlin and Jetpack Compose with Material 3 Expressive, not a web wrapper like the official Android app.
               </p>
             </div>
           </div>
@@ -1306,12 +1296,12 @@
 
           <div class="faq-item">
             <button class="faq-trigger" aria-expanded="false">
-              <span class="faq-question">Is there a Windows or web version?</span>
+              <span class="faq-question">Is there a Windows version?</span>
               <span class="material-symbols-outlined faq-icon">expand_more</span>
             </button>
             <div class="faq-content">
               <p class="faq-answer">
-                A Windows desktop preview (Compose Multiplatform + bundled libmpv) already runs browsing, search, details, music, and in-player video — treat it as a preview, not a release. An experimental WebAssembly build signs in and plays video in the browser. Both ship from the same shared Kotlin codebase; check the Platforms section above and the release notes for current status.
+                A Windows desktop preview (Compose Multiplatform + bundled libmpv) already runs browsing, search, details, music, and in-player video — treat it as a preview, not a release. It ships from the same shared Kotlin codebase as the Android app; check the Platforms section above and the release notes for current status.
               </p>
             </div>
           </div>

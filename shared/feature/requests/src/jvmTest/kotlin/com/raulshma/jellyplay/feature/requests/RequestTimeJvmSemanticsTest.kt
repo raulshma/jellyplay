@@ -13,8 +13,7 @@ import kotlin.test.assertTrue
  * [formatRequestedDate] are the verbatim pre-15B java.time bodies moved out
  * of RequestListItem.kt / RequestDetailBottomSheet.kt — this suite freezes
  * that JVM behavior so a later edit of the actual cannot silently drift from
- * what android + desktop shipped (the wasmJs actuals re-implement the same
- * contract; the browser run stays off, see the build file).
+ * what android + desktop shipped.
  */
 class RequestTimeJvmSemanticsTest {
 

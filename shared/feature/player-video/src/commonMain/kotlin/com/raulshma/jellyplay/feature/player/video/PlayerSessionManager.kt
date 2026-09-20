@@ -1111,7 +1111,7 @@ class PlayerSessionManager(
      * shared:core:data commonMain). Behavior is byte-identical to the
      * ContainerSniffer that used to live in this module's engine package:
      * missing/unreadable/short/unrecognized files return null. The glue stays
-     * here because core:data's commonMain builds for wasmJs (no java.io) and
+     * here because core:data's commonMain is java.io-free and
      * this module's commonMain is JVM-only by design.
      */
     private fun sniffDownloadedContainer(file: java.io.File): String? {

@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.network.library
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 
 /**
- * The empty-library fallback ladder shared by both library clients: when the
+ * The empty-library fallback ladder the library clients share: when the
  * primary /Items query returns nothing for an unfiltered browse (no search
  * term), try /Items/Latest before declaring the library empty, and memoise
  * libraries where BOTH queries returned nothing so a repeat visit pays a
@@ -12,8 +12,7 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
  * The memo itself stays a per-client port (the two constructor lambdas)
  * because the thread-safety regimes genuinely differ: the JVM client runs
  * inside the engine's Dispatchers.IO block and synchronizes its access-order
- * LRU; the single-threaded wasm event loop needs no lock but emulates
- * access-order by remove+reinsert. The DECISION ladder — skip the doubled
+ * LRU. The DECISION ladder — skip the doubled
  * request for known-empty libraries, coerce the fallback limit, remember only
  * genuinely-empty libraries — lives here, once.
  */

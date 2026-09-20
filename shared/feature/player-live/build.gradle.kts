@@ -26,30 +26,6 @@ kotlin {
         }
     }
 
-    // web breadth: the target compiles — uniformity with the other
-    // web modules — but the live player itself stays Android-only. The
-    // commonMain surface (ViewModel, engine seams, UI-state, navigation
-    // vocabulary) now compiles for wasm: its only java.time cluster
-    // (Instant/DateTimeFormatter.ISO_INSTANT in the program-window fetch)
-    // ported to kotlin.time (toString() renders the identical ISO-8601 UTC
-    // instant; parse is a superset — see the VM comment), and every core:data
-    // dep it names (MediaRepository/PlaybackRepository/LiveTvRepository,
-    // TranscodeReasonsRefresher, ImageUrlProvider, the datastore stores) has
-    // been commonMain since. The actual media surface — the screen
-    // (media3 PlayerView), ExoLiveEngine + its OkHttp data source, the
-    // D-pad seek bar — lives in androidMain and has no web artifact, so
-    // Route.LiveTvChannelPlayer stays unrouted on web AND latent on desktop
-    // (the documented desktop dead-end). The web graph therefore compiles a
-    // module whose only live surface is the shared player logic; wiring a
-    // web live player needs an engine seam first. The karma/Chrome browser
-    // run stays off like core:ui/core:network — jvmTest pins the semantics.
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -145,21 +121,3 @@ kotlin {
 // land in `...feature.player.live.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.player.live.generated.resources"
-
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface. Scoped
-// to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (the
-// identical block lives in shared/core/ui, shared/feature/requests and the
-// other web modules).
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
-        }
-    }
-}

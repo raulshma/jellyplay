@@ -5,9 +5,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
 /**
- * Pure, commonMain wire helpers for the wasm Seerr/TMDB client —
+ * Pure, commonMain wire helpers for the Seerr/TMDB client —
  * every byte-level convention of the jvmShared `SeerrApiClientImpl`
- * (OkHttp) extracted so the wasm client consumes them unchanged and
+ * (OkHttp) extracted so
  * commonTest can pin them. The jvmShared impl keeps its own private copies;
  * the two MUST stay in sync (same paths, same error strings, same encodings).
  *
@@ -22,8 +22,7 @@ import kotlinx.serialization.json.jsonObject
  * `encodeDefaults = false` — which is load-bearing on the encode side: the
  * JVM builds `SeerrRequestPayload`/`SeerrEditRequestPayload` and encodes them
  * with THIS configuration, so `is4k = false` and every null field are
- * omitted from the POST body. Any wasm Json that flips encodeDefaults would
- * put `\"is4k\":false` on the wire where the JVM sends nothing.
+ * omitted from the POST body.
  */
 internal val arrSeerrWireJson: Json = Json {
     ignoreUnknownKeys = true
@@ -92,12 +91,6 @@ internal fun urlFormEncode(value: String): String {
 /**
  * `SeerrApiClientImpl.withAuth` as data: `X-Api-Key` for
  * [SeerrCredentials.ApiKey], `Cookie` for [SeerrCredentials.SessionCookie].
- * WASM BROWSER CAVEAT (documented delta, code kept faithful): `Cookie` is a
- * forbidden request-header name for browser `fetch` (the Ktor Js/wasmJs
- * engine), so the browser silently strips it — session-cookie credentials
- * cannot authenticate from a browser tab the way OkHttp does on JVM. The
- * header set here is correct for non-restricted contexts (Node/wasm test
- * runtimes) and for the header-selection contract itself.
  */
 internal fun seerrAuthHeaders(credentials: SeerrCredentials): List<Pair<String, String>> =
     when (credentials) {

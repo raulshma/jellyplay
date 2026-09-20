@@ -105,7 +105,6 @@ class BareRunCatchingRatchetTest {
         "core/notification/src/main",
         "app/src/main",
         "apps/desktop/src/main",
-        "apps/web/src",
     )
 
     private fun repoRoot(): File {

@@ -75,9 +75,7 @@ private fun typeRank(mediaType: ArrMediaType): Int = when (mediaType) {
  * tests are deterministic.
  */
 fun LocalDate.toRelativeLabel(today: LocalDate): String? {
-    // daysUntil(other) is positive when other > this, i.e. the exact
-    // ChronoUnit.DAYS.between(today, this) direction the pre-wasm java.time
-    // body had.
+    // daysUntil(other) is positive when other > this.
     val days = today.daysUntil(this)
     return when {
         days == 0 -> "Today"
@@ -96,9 +94,7 @@ fun LocalDate.isInMonth(month: YearMonth): Boolean =
 /**
  * Day-of-week + day-of-month label, e.g. "Mon, Jul 14". Locale resolution
  * lives behind the core/ui date-label seam (via the [CalendarDateLabels]
- * façade): JVM/android keep the host-locale behavior, wasmJs serves
- * fixed-English headers — the degrade documented once on core:ui's
- * DateLabels.
+ * façade): JVM/android keep the host-locale behavior.
  */
 fun LocalDate.toDayHeaderLabel(): String = calendarDayHeaderLabel(this)
 

@@ -16,8 +16,7 @@ import okhttp3.OkHttpClient
 
 /**
  * Opt-in trust for Jellyfin servers that present a self-signed (or otherwise
- * unverifiable) TLS certificate — desktop + Android. Wasm is deliberately out
- * of scope: the browser owns certificate decisions there.
+ * unverifiable) TLS certificate — desktop + Android.
  *
  * ## Shape
  *

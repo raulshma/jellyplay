@@ -27,25 +27,9 @@ kotlin {
         }
     }
 
-    // web breadth: the target compiles. The feature's java.time
-    // cluster (EPG/schedule/channel-detail parsing and formatting) was ported
-    // to kotlinx-datetime — the lenient ISO parse rides
-    // DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET and the three
-    // wall-clock/date-label formatters are manual component derivation with
-    // fixed English names, so jvmTest's pinned outputs (and the
-    // deliberately-broken naive-local fallback quirk) hold byte-identically on
-    // every target. The ViewModels' clock dep narrowed from the jvmShared
-    // TimeSource to its commonMain EpochMillisSource slice (the only read they
-    // ever made), so no core:data type crosses the seam. The karma/Chrome
-    // browser run stays off like core:ui/core:network/requests — jvmTest pins
-    // the semantics.
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
+    // The ViewModels' clock dep narrowed from the jvmShared TimeSource to
+    // its commonMain EpochMillisSource slice (the only read they ever
+    // made), so no core:data type crosses the seam.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -57,8 +41,7 @@ kotlin {
     sourceSets {
         // jvmShared: the wall-clock/date-label formatters'
         // JVM actual resolves AM/PM and month/day names from the default
-        // FORMAT locale via java.time — the wasm actual pins English
-        // (kotlinx has no CLDR on wasm). Desktop/android keep the localized
+        // FORMAT locale via java.time. Desktop/android keep the localized
         // output the java.time formatters always had.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
@@ -84,7 +67,7 @@ kotlin {
             implementation(libs.tabler.icons.outline)
             implementation(libs.tabler.icons.filled)
             // The Live-TV timestamp vocabulary (LiveTvTimeFormat.kt) and the
-            // EPG window math run kotlinx.datetime — wasmJs has no java.time.
+            // EPG window math run kotlinx.datetime — java.time stays JVM-side.
             implementation(libs.kotlinx.datetime)
             // Nav3 ships KMP variants from google maven directly — no mirror.
             // (The legacy build's lifecycle-viewmodel-navigation3 edge was
@@ -126,21 +109,3 @@ kotlin {
 // generated accessors land in `...feature.livetv.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.livetv.generated.resources"
-
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface. Scoped
-// to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (the
-// identical block lives in shared/core/ui, shared/feature/requests and the
-// other web modules).
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
-        }
-    }
-}

@@ -12,8 +12,8 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_ssl
 
 /**
  * JVM/android actuals of the add-server failure classification (moved
- * verbatim out of AddServerViewModel.kt's commonMain — the javax/java.net
- * types have no web counterpart), so android + desktop behavior is
+ * verbatim out of AddServerViewModel.kt's commonMain; the javax/java.net
+ * types stay behind the JVM seam), so android + desktop behavior is
  * byte-identical — pinned by jvmTest.
  */
 internal actual fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {

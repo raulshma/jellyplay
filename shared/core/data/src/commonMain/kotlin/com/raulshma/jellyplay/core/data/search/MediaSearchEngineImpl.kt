@@ -36,8 +36,7 @@ import kotlinx.coroutines.flow.map
 // (MediaRepository / SeerrRepository / SearchHistoryRepository /
 // ServerIdentityStore / ExperimentalStore / OfflineModeManager /
 // OfflineRepository), so the impl crosses verbatim. Its Koin single stays in
-// dataJvmModule — on wasm MediaRepository/OfflineRepository have no binding
-// yet, so dataWasmModule does not wire it.
+// dataJvmModule.
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class MediaSearchEngineImpl(
     private val mediaRepository: MediaRepository,

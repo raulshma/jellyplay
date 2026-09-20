@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
  *
  * promotion from jvmShared: its only dep is the commonMain
  * [RemoteControlDispatcher] seam, so it crosses verbatim (its Koin single
- * stays in dataJvmModule; nothing on web resolves it yet).
+ * stays in dataJvmModule).
  */
 class UiRemoteControlDispatcher() : RemoteControlDispatcher {
 

@@ -31,8 +31,7 @@ data class OkHttpConfig(
      * Read dynamically by the network layer's trust manager / hostname
      * verifier at handshake time (same live-config contract as the timeout /
      * logging interceptor), so granting or revoking takes effect on the next
-     * TLS handshake without rebuilding any client. Wasm ignores the field:
-     * the browser owns certificate decisions there.
+     * TLS handshake without rebuilding any client.
      */
     val selfSignedTrustHosts: Set<String> = emptySet(),
 )

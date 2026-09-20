@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Minimal Jellyfin wire DTOs for the wasm auth client
+ * Minimal Jellyfin wire DTOs for the auth client
  * (docs/kmp-migration-plan.md § chunk 1).
  *
  * The domain models in `shared/core/model` are @Serializable in their own
@@ -77,9 +77,7 @@ data class QuickConnectResultDto(
 /**
  * Wire form of `ClientCapabilitiesDto` for `POST /Sessions/Capabilities/Full`.
  * `deviceProfile` stays a raw [JsonElement] placeholder: the JVM engine sends
- * the full codec-negotiating DeviceProfile built by `DeviceProfileProvider`,
- * which has no wasm equivalent yet (web playback lands with HtmlVideoEngine,
- *  chunk 3+) — the wasm client omits it and documents the cut.
+ * the full codec-negotiating DeviceProfile built by `DeviceProfileProvider`.
  */
 @Serializable
 data class ClientCapabilitiesWireDto(
@@ -93,7 +91,7 @@ data class ClientCapabilitiesWireDto(
 /**
  * Serial names of `GeneralCommandType` entries in
  * `JellyfinApiEngine.SUPPORTED_REMOTE_COMMANDS`, in the SAME order — the
- * capabilities payload the wasm client posts must match the JVM engine's
+ * capabilities payload posted here must match the JVM engine's
  * command-for-command (server-side remote-control UIs key off this list).
  */
 val SUPPORTED_REMOTE_COMMANDS: List<String> = listOf(
@@ -129,8 +127,7 @@ fun defaultClientCapabilities(): ClientCapabilitiesWireDto = ClientCapabilitiesW
 
 /**
  * Maps an authentication response's user DTO to the model [UserInfo] —
- * semantics verbatim from `AuthApiClientImpl.toUserInfo` (jvmShared) so
- * policy fields can't drift between the JVM and wasm login paths.
+ * semantics verbatim from `AuthApiClientImpl.toUserInfo` (jvmShared).
  */
 fun UserDtoWire.toUserInfo(
     serverAddress: String,

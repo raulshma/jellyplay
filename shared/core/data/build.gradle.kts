@@ -35,23 +35,6 @@ kotlin {
         }
     }
 
-    // The requests slice's data layer compiles for the web shell.
-    // Room stayed behind: :shared:core:database has no wasm build, so the
-    // Room-backed repositories (QueuePersistenceHelper, SeenMedia*,
-    // ItemPlaybackPreference*, PlaylistRepositories, OfflineSyncProjection,
-    // ScanWorkerHelper) plus the other JVM-touching files moved to jvmShared,
-    // and the database edge demoted from commonMain api() to jvmShared
-    // implementation() (core:network precedent: common seams + jvmShared
-    // impls). The browser lane is compile-only like core:network's — no wasm
-    // test task (jvmTest pins the semantics).
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
-
     applyDefaultHierarchyTemplate()
 
     sourceSets {
@@ -79,16 +62,14 @@ kotlin {
             // promotion: the Room-backed repository impls
             // (SearchHistory/ItemPlaybackPreference/SeenMedia/PlaybackOutbox/
             // Smart+MoodPlaylist, QueuePersistenceHelper, RoomTransactions)
-            // moved from jvmShared to commonMain — the database module has a
-            // wasmJs target since (Room 3 + WebWorkerSQLiteDriver), so the
-            // Room edge is no longer JVM-only. Promoted from the old jvmShared
-            // api() edge (kept there too — dataJvmModule still wires the DAO
-            // consumers that remain JVM).
+            // moved from jvmShared to commonMain — the Room edge is no
+            // longer JVM-only. Promoted from the old jvmShared api() edge
+            // (kept there too — dataJvmModule still wires the DAO consumers
+            // that remain JVM).
             api(project(":shared:core:database"))
             // promotion: the promoted impls' Koin definitions live in
-            // dataJvmModule (jvmShared) / dataWasmModule (wasmJs) — both need
-            // the Koin DSL, and koin-core 4.2.2 is multiplatform (wasmJs
-            // stable since 4.0.0).
+            // dataJvmModule (jvmShared) — they need the Koin DSL, and
+            // koin-core 4.2.2 is multiplatform.
             api(libs.koin.core)
             // Room is consumed from BOTH source sets now: the promoted
             // commonMain impls use the commonMain API edge above, while the
@@ -123,10 +104,10 @@ kotlin {
         }
         getByName("jvmShared").dependencies {
             // Module/qualifier types appear in the public di signatures
-            // (Koin construction owner). Never visible to wasmJs.
+            // (Koin construction owner).
             api(libs.koin.core)
             // Room DAOs/entities: confined to jvmShared (the
-            // moved Room-backed repositories above) — never visible to wasmJs.
+            // moved Room-backed repositories above).
             api(project(":shared:core:database"))
             // (No javax.inject dependency: the @Inject/@Singleton decorations
             // were stripped from these impls when Koin took construction

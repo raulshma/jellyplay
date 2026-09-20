@@ -10,16 +10,11 @@ package com.raulshma.jellyplay.core.model
  * entries). Not thread-safe by itself — confine access to one dispatcher
  * or synchronize externally, as each call site documents for its own regime.
  *
- * Promoted to commonMain when `core:data` grew a wasmJs target
- * (its commonMain code was already calling [lruMapOf]). Platform regimes:
+ * Promoted to commonMain (core:data's commonMain code was already calling
+ * [lruMapOf]). Platform regimes:
  *  - JVM (android + desktop): the exact historical body —
  *    `java.util.LinkedHashMap(16, 0.75f, accessOrder = true)` with
  *    `removeEldestEntry`, byte-identical behavior.
- *  - wasmJs: `kotlin.collections.LinkedHashMap` has no access-order mode, so
- *    the actual is INSERTION-ORDER with eldest-insert eviction (DOCUMENTED
- *    DEGRADE — a read no longer refreshes recency, so the cache keeps the
- *    first-inserted rather than the least-recently-read entries when at cap).
- *    Bounded display caches only; the eviction cap semantics are identical.
  */
 expect fun <K, V> lruMapOf(maxSize: Int): MutableMap<K, V>
 

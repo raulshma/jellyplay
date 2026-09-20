@@ -1,21 +1,18 @@
 package com.raulshma.jellyplay.core.network.playback
 
-import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.network.library.toMediaSource
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the playback wire contract for the wasm client: PlaybackInfo
- * response→model mapping (via the shared library mappers), the
- * progress-report request bodies, the mode/live flag table, transcode-reason
- * name conversion, media-segment decode and the server-time passthrough.
+ * Pins the playback wire contract: PlaybackInfo response→model mapping (via
+ * the shared library mappers), the progress-report request bodies,
+ * transcode-reason name conversion, media-segment decode and the
+ * server-time passthrough.
  */
 class PlaybackWireMapperTest {
 
@@ -85,46 +82,6 @@ class PlaybackWireMapperTest {
             """{"ItemId":"item-1","SessionId":"sess-1","PositionTicks":9000,"Failed":false}""",
             stop,
         )
-    }
-
-    @Test
-    fun `flag table mirrors the jvmshared resolve playback flags`() {
-        // AUTO (VOD + live): everything on, bitrate sent.
-        resolveWasmPlaybackFlags(PlaybackMode.AUTO, null, 8_000_000L).let {
-            assertTrue(it.enableDirectPlay && it.enableDirectStream && it.enableTranscoding && it.allowStreamCopy)
-            assertEquals(8_000_000L, it.sendBitrate)
-        }
-        // FORCE_DIRECT_PLAY: copy + transcode off, no bitrate cap.
-        resolveWasmPlaybackFlags(PlaybackMode.FORCE_DIRECT_PLAY, null, 8_000_000L).let {
-            assertTrue(it.enableDirectPlay)
-            assertFalse(it.enableDirectStream)
-            assertFalse(it.enableTranscoding)
-            assertFalse(it.allowStreamCopy)
-            assertNull(it.sendBitrate)
-        }
-        // FORCE_TRANSCODE: direct paths off, cap kept.
-        resolveWasmPlaybackFlags(PlaybackMode.FORCE_TRANSCODE, null, 4_000_000L).let {
-            assertFalse(it.enableDirectPlay)
-            assertFalse(it.enableDirectStream)
-            assertTrue(it.enableTranscoding)
-            assertFalse(it.allowStreamCopy)
-            assertEquals(4_000_000L, it.sendBitrate)
-        }
-        // Live overrides mode: DIRECT_STREAM keeps only direct stream, no cap.
-        resolveWasmPlaybackFlags(PlaybackMode.AUTO, LiveStreamOption.DIRECT_STREAM, 8_000_000L).let {
-            assertFalse(it.enableDirectPlay)
-            assertTrue(it.enableDirectStream)
-            assertFalse(it.enableTranscoding)
-            assertTrue(it.allowStreamCopy)
-            assertNull(it.sendBitrate)
-        }
-        // Live TRANSCODE: only transcoding, no copy.
-        resolveWasmPlaybackFlags(PlaybackMode.FORCE_DIRECT_PLAY, LiveStreamOption.TRANSCODE, null).let {
-            assertFalse(it.enableDirectPlay)
-            assertFalse(it.enableDirectStream)
-            assertTrue(it.enableTranscoding)
-            assertFalse(it.allowStreamCopy)
-        }
     }
 
     @Test

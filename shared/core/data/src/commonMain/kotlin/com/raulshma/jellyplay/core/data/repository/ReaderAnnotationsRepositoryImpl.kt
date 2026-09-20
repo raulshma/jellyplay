@@ -16,9 +16,7 @@ import kotlin.math.roundToInt
 
 /**
  * Room-backed [ReaderAnnotationsRepository] (docs/adr/0003-local-first-reader-marks.md).
- * commonMain by design — the DAOs and entities are commonMain Room 3, so a
- * future wasmJs reader gets marks for free once the reader itself ships
- * there.
+ * commonMain by design — the DAOs and entities are commonMain Room 3.
  *
  * The persisted `style`/`color` columns are raw strings; they parse back
  * through the repo-wide [toEnumOrNull] seam so a corrupt stored value

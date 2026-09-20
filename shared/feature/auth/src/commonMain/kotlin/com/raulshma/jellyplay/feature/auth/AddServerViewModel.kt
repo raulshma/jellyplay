@@ -203,7 +203,7 @@ class AddServerViewModel(
 
 /**
  * Walks to the root of a failure chain (loop-guarded). Internal (not private)
- * because the jvmShared/wasmJsMain actuals of [tlsTrustPromptFor] and
+ * because the platform actuals of [tlsTrustPromptFor] and
  * [getConnectionErrorMessage] share it.
  */
 internal fun getRootCause(throwable: Throwable): Throwable {
@@ -231,8 +231,7 @@ internal fun getRootCause(throwable: Throwable): Throwable {
  * SSL handshake failure (the exact thing a trust grant fixes) may prompt.
  * Declared an expect/actual seam for the same reason
  * [getConnectionErrorMessage] classifies per-platform: the JVM taxonomy is
- * javax-typed, while the web fetch stack surfaces TLS refusals only as
- * opaque transport errors (the wasmJs actual therefore never prompts).
+ * javax-typed.
  */
 internal expect fun tlsTrustPromptFor(address: String, throwable: Throwable): String?
 
@@ -240,10 +239,8 @@ internal expect fun tlsTrustPromptFor(address: String, throwable: Throwable): St
  * User-facing connect-failure message for the add-server screen, classified
  * from the failure's root cause plus the [LocalNetworkStatus] blame for the
  * Android 17+ local-network permission. Platform seam: the JVM/android
- * actual keys on `java.net` / `javax.net.ssl` exception types; the wasmJs
- * actual keys on the ktor/fetch taxonomy (HttpRequestTimeoutException,
- * ktor-io IOException, browser refusal strings) with the same resources and
- * the same raw-message fallback for untyped failures.
+ * actual keys on `java.net` / `javax.net.ssl` exception types, with the
+ * same resources and the same raw-message fallback for untyped failures.
  */
 internal expect fun getConnectionErrorMessage(
     address: String,

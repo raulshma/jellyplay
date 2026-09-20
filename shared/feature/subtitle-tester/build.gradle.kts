@@ -35,8 +35,7 @@ kotlin {
         }
     }
 
-    // No wasmJs target: not in the web v1 slice (requests/calendar/details);
-    // this dev/test utility is android+jvm only (its host surface lives in
+    // This dev/test utility is android+jvm only (its host surface lives in
     // androidMain).
     jvm {
         compilerOptions {

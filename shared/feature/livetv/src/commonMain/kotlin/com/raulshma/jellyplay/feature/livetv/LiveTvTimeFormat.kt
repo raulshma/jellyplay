@@ -23,18 +23,15 @@ import kotlinx.datetime.toInstant
  *    reads: the 5-minute staleness cadence and the injected-clock Instant
  *    bridge (no direct `Clock.System.now()` in the ViewModels).
  *
- * web breadth: this module is pure kotlinx-datetime so the wasmJs
- * target can compile it (no java.time in commonMain). The parse ladder rides
+ * This module is pure kotlinx-datetime (no java.time in commonMain).
+ * The parse ladder rides
  * `DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET` (the
  * `DateTimeFormatter.ISO_OFFSET_DATE_TIME` counterpart), the EPG grid's
  * `HH:mm` header is manual component derivation, and the two user-facing
  * renderers are expect/actual (below).
- * Locale behavior: the two user-facing renderers are
- * expect/actual — the JVM actual formats through java.time with the default
- * FORMAT locale, so desktop/android keep the localized AM/PM and month/day
- * names the former java.time formatters produced; the wasm actual pins
- * English (kotlinx has no CLDR data on wasm) — the same fixed-English
- * degradation the newsletter's web actual took.
+ * Locale behavior: the JVM actual formats through java.time with the
+ * default FORMAT locale, so desktop/android keep the localized AM/PM and
+ * month/day names the former java.time formatters produced.
  *  - [toInstantOrNull]'s offset leg versus the java `ISO_OFFSET_DATE_TIME`
  *    it replaced, honestly: kotlinx requires SECONDS in the offset forms
  *    java accepted without them ("2026-01-02T03:04+02:00" no longer parses
@@ -120,15 +117,14 @@ private fun offsetWallClock(iso: String): LocalDateTime = offsetDateTimeOf(iso)
 /**
  * "h:mm a" — unpadded 12-hour clock + space-padded AM/PM marker (java's
  * single-'h'/'a' output, pinned "2:30 PM"/"12:05 AM" by [LiveTvTimeFormatTest]
- * under the US FORMAT locale). Locale resolution is per-platform: JVM actual
- * formats via java.time with the default FORMAT locale (localized markers);
- * the wasm actual pins the English rendering (no CLDR on wasm).
+ * under the US FORMAT locale). Locale resolution is per-platform: the JVM
+ * actual formats via java.time with the default FORMAT locale (localized
+ * markers).
  */
 internal expect fun formatWallClockTime(local: LocalDateTime): String
 
 /** "EEE, MMM d" — unpadded day ("Mon, Jun 22"), locale-resolved per platform
- * exactly like [formatWallClockTime] (JVM localized via java.time; wasm pins
- * the fixed-English abbreviations). */
+ * exactly like [formatWallClockTime] (JVM localized via java.time). */
 internal expect fun formatDateLabel(local: LocalDateTime): String
 
 /**
@@ -223,7 +219,7 @@ internal const val LIVE_TV_STALENESS_INTERVAL_MS: Long = 5 * 60 * 1000L
 /**
  * Wall-clock "now" through the injected [EpochMillisSource] seam (the
  * commonMain clock slice; the JVM graph binds it to the SystemTimeSource
- * single, the web graph to the wall-clock binding — fake-able in jvmTest) —
+ * single — fake-able in jvmTest) —
  * the Live-TV ViewModels' only Instant read, never a direct clock read.
  *
  * the receiver narrowed from the jvmShared `TimeSource` to its

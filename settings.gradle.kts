@@ -23,59 +23,6 @@ dependencyResolutionManagement {
         // KCEF (the desktop EPUB host) resolves jogamp gluegen/jogl through
         // JogAmp's own repository — not mirrored on Maven Central.
         maven { url = uri("https://jogamp.org/deployment/maven") }
-        // KGP tool-distribution governance — the settings-level
-        // decision the lanes deferred, see the wasmJsNodeTest notes
-        // in shared/core/{model,ui}/build.gradle.kts): Kotlin's
-        // kotlinWasmNodeJsSetup / kotlinWasmYarnSetup / kotlinWasmBinaryenSetup
-        // tasks DOWNLOAD their tool archives through an ivy repository they
-        // register on the PROJECT at task-graph time (KGP 2.3.21
-        // targets/js/AbstractSetupTask.withUrlRepo), which
-        // FAIL_ON_PROJECT_REPOS rejects outright ("'Distributions at
-        // https://nodejs.org/dist' was added by unknown code" — declaring a
-        // lookalike here does NOT help; the detector fires on the add
-        // itself). The working split, using KGP's documented escape hatch
-        // (EnvSpec.downloadBaseUrl: "If the property has no value,
-        // repository is not added, so this can be used to add your own
-        // repository"): the ROOT build script nulls the wasm node/yarn/binaryen
-        // downloadBaseUrl properties so KGP adds nothing, and THESE
-        // settings-owned repos serve the exact coordinates KGP resolves —
-        //   org.nodejs:node:<ver>:<platform>-<arch>@zip from
-        //   https://nodejs.org/dist "v[revision]/[artifact](-v[revision]-<classifier]).[ext]"
-        //   com.yarnpkg:yarn:<ver>@tar.gz from
-        //   https://github.com/yarnpkg/yarn/releases/download
-        //     "v[revision]/[artifact](-v[revision]).[ext]"
-        //   com.github.webassembly:binaryen:<ver>:<platform>@tar.gz from
-        //   https://github.com/WebAssembly/binaryen/releases/download
-        //     "version_[revision]/binaryen-version_[revision]-[classifier].[ext]"
-        // (all artifact-metadata-only ivy repos; patternLayout and
-        // metadataSources mirror KGP's own registration exactly, with a
-        // deliberately broader includeGroup filter where KGP uses
-        // includeModule). Group-scoped content filters keep the
-        // repositories from serving anything but tool distributions. Net
-        // effect: FAIL_ON_PROJECT_REPOS keeps failing real ungoverned repos,
-        // while webpack, binaryen and the wasmJsNodeTest lanes run with no
-        // PREFER_PROJECT flip anywhere.
-        ivy("https://nodejs.org/dist") {
-            patternLayout {
-                artifact("v[revision]/[artifact](-v[revision]-[classifier]).[ext]")
-            }
-            metadataSources { artifact() }
-            content { includeGroup("org.nodejs") }
-        }
-        ivy("https://github.com/yarnpkg/yarn/releases/download") {
-            patternLayout {
-                artifact("v[revision]/[artifact](-v[revision]).[ext]")
-            }
-            metadataSources { artifact() }
-            content { includeGroup("com.yarnpkg") }
-        }
-        ivy("https://github.com/WebAssembly/binaryen/releases/download") {
-            patternLayout {
-                artifact("version_[revision]/binaryen-version_[revision]-[classifier].[ext]")
-            }
-            metadataSources { artifact() }
-            content { includeGroup("com.github.webassembly") }
-        }
     }
 }
 
@@ -154,8 +101,3 @@ include(":shared:feature:player-book")
 
 // Desktop shell
 include(":apps:desktop")
-
-// Web shell: wasmJs/browser app over the shared datastore
-// DI stack, with the W.1 Ktor API transport and W.4 Coil3 image engine
-// landed (three routes live: Requests, Upcoming Calendar, Seerr Detail).
-include(":apps:web")

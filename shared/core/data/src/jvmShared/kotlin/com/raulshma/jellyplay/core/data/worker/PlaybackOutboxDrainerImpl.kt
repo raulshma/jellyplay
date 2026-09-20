@@ -61,7 +61,7 @@ class PlaybackOutboxDrainerImpl(
         val pending = outbox.drain()
 
         // Downloaded items whose played/resume state may have drifted
-        // server-side (watched or resumed on the web / another device). These
+        // server-side (watched or resumed on another device). These
         // are reconciled even when the outbox is empty so a server-side change
         // propagates to the offline store without this device recording any
         // playback of its own — closes the "fixed online, not reflected

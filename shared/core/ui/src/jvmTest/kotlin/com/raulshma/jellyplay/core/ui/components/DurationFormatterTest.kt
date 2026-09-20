@@ -149,8 +149,8 @@ class DurationFormatterTest {
 
     @Test
     fun `formatDurationApproxSeconds pins the one-decimal hour rounding`() {
-        // Pins the `%.1f` JVM contract ahead of the wasmJs commonMain split:
-        // the hour branch is the only String.format-dependent path.
+        // Pins the `%.1f` JVM contract: the hour branch is the only
+        // String.format-dependent path.
         assertEquals("1.0h", formatDurationApproxSeconds(3_660))   // 1.01666 -> 1.0
         // 8100 s = 2.25 h, a binary-exact true tie: HALF_UP prints 2.3 where
         // HALF_EVEN would print 2.2 — this line actually discriminates modes.

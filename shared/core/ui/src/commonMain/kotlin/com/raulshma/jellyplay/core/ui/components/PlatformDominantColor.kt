@@ -16,8 +16,7 @@ internal expect suspend fun extractDominantColor(context: PlatformContext, image
 /** Tiny LRU used by [rememberDominantColor] (replaces android.util.LruCache). */
 internal class DominantColorLruCache(private val maxSize: Int) {
     // `AccessOrderLruMap` + `withUiLock` stand in for the JVM-only
-    // LinkedHashMap(accessOrder=true) + synchronized idiom this class used
-    // before the wasmJs target.
+    // LinkedHashMap(accessOrder=true) + synchronized idiom.
     private val lock = Any()
     private val map = AccessOrderLruMap<String, Color>()
 

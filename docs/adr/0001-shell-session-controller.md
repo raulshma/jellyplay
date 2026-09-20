@@ -58,6 +58,5 @@ revisit triggers fire; the controller only maps a completed check to shell messa
 
 ## Revisit triggers
 
-- A third shell (web) gaining session state — reconsider placement.
 - If the controller accretes UI-shaped concerns (snackbar text, dialog gating), split
   the surface back out per shell and keep only the decision core shared.

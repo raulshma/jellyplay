@@ -26,12 +26,9 @@ kotlin {
         }
     }
 
-    // No wasmJs target: the web shell is live but covers
-    // requests/calendar/details only, and this module's commonMain
-    // legitimately carries java.* (the track-scoring / trickplay helpers use
-    // java.io.File, the seek bar java.text.SimpleDateFormat) which a wasm
-    // target forbids — a web slice would need core:data's jvmShared-style
-    // split first.
+    // This module's commonMain legitimately carries java.* (the
+    // track-scoring / trickplay helpers use java.io.File, the seek bar
+    // java.text.SimpleDateFormat), so it compiles for android+jvm only.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

@@ -12,8 +12,8 @@ import com.raulshma.jellyplay.core.model.descriptor
 /**
  * Pure assembly of [HomeSectionsResult] from already-fetched sub-call
  * results — the section-building/ordering half of the jvmShared
- * `LibraryApiClientImpl.getHomeSections`, extracted so the wasm client shares
- * the exact ordering logic and commonTest can pin it without a server.
+ * `LibraryApiClientImpl.getHomeSections`, extracted so
+ * commonTest can pin it without a server.
  *
  * Emission order (verbatim from the JVM impl):
  * Continue Watching → Continue Reading → Next Up → one Latest Media row per

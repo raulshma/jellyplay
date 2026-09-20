@@ -10,8 +10,7 @@ import org.koin.core.qualifier.named
  * the application scope through [applicationScope].
  *
  * commonMain since § (was jvmShared): the qualifiers are pure Koin
- * naming with no platform symbols, and the web shell needs them to bind its
- * platform DataStores. Same package as before the move, so no consumer
+ * naming with no platform symbols. Same package as before the move, so no consumer
  * import changes.
  */
 object DatastoreQualifiers {

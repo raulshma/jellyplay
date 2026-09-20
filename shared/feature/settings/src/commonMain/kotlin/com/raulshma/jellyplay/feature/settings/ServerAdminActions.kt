@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 
 /**
- * Web seam over core:data's jvmShared `AdminRepository` — the
+ * Common seam over core:data's jvmShared `AdminRepository` — the
  * settings feature only ever consumes three of its ~40 operations (the
  * settings root's active-devices row and the About screen's server info), so
  * commonMain cannot name the class whose constructor closure reaches the
@@ -12,14 +12,7 @@ import com.raulshma.jellyplay.core.model.SystemInfo
  * DownloadQueue): the interface
  * carries exactly the host-facing surface, the jvmShared actual delegates to
  * the process-wide `AdminRepository` single (same DI graph, android/desktop
- * behavior unchanged), and the wasmJs actual is an honest no-op.
- *
- * Web behavior: the browser shell registers no admin surface, so the wasm
- * actual reports [isSupported] = false — [SettingsViewModel] folds that into
- * its session loading (the active-devices row stays structurally empty) and
- * [AboutViewModel] skips the system-info fetch (server name/version keep
- * their placeholders) — while `getSessions` succeeds empty and
- * `sendMessageToSession` reports failure, mirroring a server-less state.
+ * behavior unchanged).
  */
 interface ServerAdminActions {
 

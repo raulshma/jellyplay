@@ -27,23 +27,6 @@ kotlin {
         }
     }
 
-    // The calendar slice follows requests onto the web
-    // target — the web shell renders UpcomingCalendarScreen behind the
-    // Route.UpcomingCalendar entry. The old blocker (java.time in commonMain)
-    // is gone: the grouping helpers, VM month windows, and screen date-picker
-    // math all run kotlinx.datetime, and the two locale formatters moved
-    // behind the CalendarDateLabels expect/actual seam (jvmShared = the
-    // verbatim java.time bodies, wasmJsMain = fixed-English formatting with a
-    // documented degrade). The karma/Chrome browser run stays off like
-    // core:ui/core:network/requests — jvmTest pins the semantics.
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
-
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -64,9 +47,8 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
-            // The whole module runs kotlinx.datetime (wasmJs
-            // purification) — grouping helpers, VM month windows, and the
-            // date-picker epoch math included.
+            // The whole module runs kotlinx.datetime — grouping helpers,
+            // VM month windows, and the date-picker epoch math included.
             implementation(libs.kotlinx.datetime)
             // ExperimentalStore (DIRECT_ARR_INTEGRATION flag slice).
             implementation(project(":shared:core:datastore"))
@@ -125,20 +107,3 @@ kotlin {
 // generated accessors land in `...feature.calendar.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.calendar.generated.resources"
-
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface. Scoped
-// to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (the
-// identical block lives in shared/core/ui and shared/feature/requests).
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
-        }
-    }
-}

@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the wasm Radarr/Sonarr request-wire bytes: the POST/PUT/DELETE bodies
+ * Pins the Radarr/Sonarr request-wire bytes: the POST/PUT/DELETE bodies
  * (which kotlinx must render EXACTLY like the JVM impls' `json.encodeToString`
  * calls through `SeerrApiClientImpl.lenientJson` — encodeDefaults=false means
  * a `false` monitored flag and null ids are OMITTED), the auth header pair,

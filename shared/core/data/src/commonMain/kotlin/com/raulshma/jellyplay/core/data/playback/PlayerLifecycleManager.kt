@@ -15,13 +15,12 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
  * engine lifecycle.
  *
  * [PlayerLifecycleCallbacks] itself (same package) moved to
- * shared:core:player-contract commonMain, so MediaEngine's
- * supertype is wasm-visible; this manager stayed behind in core:data.
+ * shared:core:player-contract commonMain; this manager stayed behind in core:data.
  *
  * promotion from jvmShared: its sole ctor dep ([PlaybackStore]) is a
  * datastore commonMain seam, so the manager crosses verbatim (`@Volatile`
  * became the common kotlin.concurrent annotation). Its Koin single stays in
- * dataJvmModule; nothing on web resolves it yet.
+ * dataJvmModule.
  */
 class PlayerLifecycleManager(
     private val playbackStore: PlaybackStore

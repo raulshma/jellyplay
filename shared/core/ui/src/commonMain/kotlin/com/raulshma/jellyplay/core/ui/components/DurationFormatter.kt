@@ -85,9 +85,8 @@ fun formatDurationApproxSeconds(seconds: Long): String = when {
 
 /**
  * A self-refreshing wall-clock display string, realigned to minute
- * boundaries. Pre-wasm the body lived here atop `SimpleDateFormat` /
- * `System.currentTimeMillis`; it moved verbatim into the jvmShared actual so
- * android/desktop are unchanged, while wasm reads the browser's local time.
+ * boundaries. The body lives in the jvmShared actual atop
+ * `SimpleDateFormat` / `System.currentTimeMillis`.
  */
 @Composable
 expect fun rememberWallClockTimeString(): String

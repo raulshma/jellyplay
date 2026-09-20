@@ -4,10 +4,9 @@ import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 
 /**
  * The ONE stream/subtitle URL policy for the playback clients: pure builders
- * that BOTH platform clients delegate to — the wasm `KtorWasmPlaybackApiClient`
- * (ported from the jvmShared impl's original inline string building) and, since
- * that impl's hand copies were replaced with delegation, the jvmShared
- * `PlaybackApiClientImpl` itself (output unchanged apart from the trailing-'/'
+ * the playback client delegates to — the jvmShared
+ * `PlaybackApiClientImpl`, whose hand copies were replaced with delegation
+ * (output unchanged apart from the trailing-'/'
  * base trim noted at the delegation sites). Pure so commonTest can pin the
  * exact query parameters.
  *

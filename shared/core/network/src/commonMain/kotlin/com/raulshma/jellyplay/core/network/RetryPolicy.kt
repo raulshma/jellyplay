@@ -88,7 +88,5 @@ object RetryPolicy {
  *  - jvmShared actual (android + desktop, verbatim from the pre-split
  *    RetryPolicy): `SocketTimeoutException` / `ConnectException` /
  *    `UnknownHostException` / `IOException`.
- *  - wasmJsMain actual: Ktor request/connect timeouts and the fetch-backed
- *    engine's IO errors.
  */
 internal expect fun isRetryableNetworkError(exception: Throwable): Boolean

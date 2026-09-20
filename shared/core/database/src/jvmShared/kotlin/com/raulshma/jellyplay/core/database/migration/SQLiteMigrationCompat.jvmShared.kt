@@ -3,9 +3,9 @@ package com.raulshma.jellyplay.core.database.migration
 import androidx.sqlite.SQLiteConnection
 
 /**
- * nonWeb actual (android/jvm): [androidx.sqlite.SQLiteConnection.prepare] and
- * [androidx.sqlite.SQLiteStatement.step] are blocking calls here; the suspend
- * signatures exist so the common expect also serves the web actuals (see
+ * jvmShared actual (android/jvm): [androidx.sqlite.SQLiteConnection.prepare]
+ * and [androidx.sqlite.SQLiteStatement.step] are blocking calls here; the
+ * suspend signatures simply match the common expect (see
  * SQLiteMigrationCompat.kt for the full story).
  */
 internal actual suspend fun SQLiteConnection.execSQL(sql: String) {

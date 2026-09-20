@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Wire DTOs for the wasm user-management client (UserApiClient on
- * wasmJs), mirroring the Jellyfin SDK schema PascalCase-for-PascalCase.
+ * Wire DTOs for the user-management client (UserApiClient),
+ * mirroring the Jellyfin SDK schema PascalCase-for-PascalCase.
  *
  * DTO ORGANIZATION CHOICE (documented): these live in their own `user/`
  * package instead of extending `auth/AuthWireDto.kt`'s `UserDtoWire` /
@@ -24,12 +24,12 @@ import kotlinx.serialization.json.JsonElement
  * Field-by-field semantics mirror the jvmShared `JellyfinDtoMappers`
  * (`UserDto.toManagedUser`, `UserPolicy.toManagedPolicy`,
  * `UserPolicy.overlayWith`) — see [UserWireMappers.kt]. Every field is
- * optional-tolerant (defaults) because the shared wasm Json runs with
+ * optional-tolerant (defaults) because the shared wire Json runs with
  * `ignoreUnknownKeys = true` + `isLenient = true`; the defaults equal the
  * jvmShared fallback construction in `UserApiClientImpl.updateUserPolicy`
  * (all-false policy, lockout -1, empty provider ids, SyncPlayAccess None)
  * so a missing-`Policy` user POSTs the same merged shape the JVM would.
- * Wire-encoding note: the shared wasm Json uses kotlinx's default
+ * Wire-encoding note: the shared wire Json uses kotlinx's default
  * `encodeDefaults = false`, matching the SDK's serializer — default-valued
  * fields are omitted from POST bodies exactly like the JVM wire.
  */
@@ -42,7 +42,7 @@ import kotlinx.serialization.json.JsonElement
  * raw element preserves the server's own bytes instead).
  *
  * Date-typed fields (`LastLoginDate`/`LastActivityDate`) keep the raw wire
- * strings — the same documented convention as the wasm library client
+ * strings — the same documented convention as the library client
  * (jvmShared maps them through the SDK `DateTime` and `toString()`).
  */
 @Serializable

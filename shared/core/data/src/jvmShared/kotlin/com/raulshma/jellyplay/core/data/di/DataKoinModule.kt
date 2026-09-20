@@ -345,8 +345,7 @@ val dataJvmModule: Module = module {
     // The identity seam the promoted commonMain graph consumes
     // (SeerrRepositoryImpl's cache keys + SessionCacheRegistry's transition
     // subscription). Binds the SAME HomeSession singleton — android/desktop
-    // behavior unchanged; wasmJs binds the AtomicSessionState-backed provider
-    // in dataWasmModule instead.
+    // behavior unchanged.
     single<SessionIdentityProvider> { get<HomeSession>() }
 
     single {
@@ -730,8 +729,6 @@ val dataJvmModule: Module = module {
     // inject. Since the promoted-interface pass its JVM actual IS the
     // MediaDownloadActions single (the class implements QuickDownloadActions
     // directly — the DownloadIntake precedent, no verbatim-forward adapter).
-    // Web binds the honest no-op stub (WasmQuickDownloadActions) in
-    // dataWasmModule.
     single<QuickDownloadActions> { get<MediaDownloadActions>() }
 
     // ── download-actions seams (promoted core:data interfaces) ───────────
@@ -740,9 +737,8 @@ val dataJvmModule: Module = module {
     // (DownloadRepositoryImpl implements TrackDownloadStatusWindow +
     // ActiveDownloadCount + SeriesEpisodeDownloads + DownloadQueue;
     // OfflineSyncManager implements OfflineResync — the former jvmShared /
-    // feature:downloads verbatim-forward adapters are deleted). Web binds
-    // the honest no-op stubs in dataWasmModule — features never grow their
-    // own wall-crossing template.
+    // feature:downloads verbatim-forward adapters are deleted) — features
+    // never grow their own wall-crossing template.
     //  - TrackDownloadStatusWindow: the audio player's and the album
     //    screen's row window over the DownloadRepository single (its
     //    downloadsFor IS the single getDownloadsByMediaItemIdsFlow IN-query
@@ -770,9 +766,7 @@ val dataJvmModule: Module = module {
             cacheScope = get(DatastoreQualifiers.applicationScope),
             // The poll loop's offline gate — the same platform
             // OfflineModeManager binding every other jvmShared consumer
-            // (PlaybackRepositoryImpl, OfflineSyncManager, …) resolves;
-            // the wasm slice stays on the ctor default (null) since no
-            // wasm OfflineModeManager exists.
+            // (PlaybackRepositoryImpl, OfflineSyncManager, …) resolves.
             offlineModeManager = get(),
         )
     }

@@ -247,7 +247,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 androidAppViewModelsModule,
                 // The shared commonMain feature Koin modules both JVM shells
                 // register, declared ONCE in shared/feature/shell
-                // (sharedFeatureModules — the webFeatureModules precedent);
+                // (sharedFeatureModules);
                 // the per-module conveyor history rides that declaration.
                 // Registration order is inert in Koin (definitions are keyed);
                 // only Android's platform actuals below are order-sensitive,

@@ -8,20 +8,15 @@ commonMain + platform actuals), the core stack in `shared/core/*` — including
 the former legacy modules' Android halves, now `androidMain` source sets of
 `:shared:core:ui` / `:shared:core:data` (identical packages; Robolectric
 suites in their `androidHostTest` lanes) — and the only Android-only module
-left is the `:app` shell, beside `apps/desktop` and `apps/web`. The
-persistence layer is Room 3 (`androidx.room3`) on android/jvm/wasmJs (web:
-WebWorkerSQLiteDriver over OPFS, single-tab); 23 of 25 feature modules
-compile for wasm behind honest fail-closed seams — only player-video and
-subtitle-tester stay jvm/android by recorded scope (see the ledger's
-entry).
+left is the `:app` shell, beside `apps/desktop`. The
+persistence layer is Room 3 (`androidx.room3`) on android/jvm.
 DI is Koin-only repo-wide. Player code lives in two shared modules:
 `shared/core/player-contract` (the engine-agnostic `MediaEngine` contract and
 engine-shared machinery) and `shared/feature/player-video` (the VOD player
 screen, ViewModel, and session collaborators). The two desktop-and-Android shells register their nav sections through one
 aggregator module, `shared/feature/shell` (`appSections` + `ShellHostHooks` +
-a registration ledger the desktop dead-end guard derives from); the web shell
-keeps its own `WebAppRoot` nav. Paths below are relative to the
-repo root.
+a registration ledger the desktop dead-end guard derives from). Paths below
+are relative to the repo root.
 
 ## Engine layer
 
@@ -832,12 +827,11 @@ preserved; RESUMED passed as an argument), and the focus-keyed snap effect.
 
 **Section ordering.** The pure `HomeSectionsAssembler`
 (`shared/core/network/src/commonMain/kotlin/.../library/HomeSectionsAssembler.kt`)
-backs BOTH production paths — the wasm client and
-`LibraryApiClientImpl.getHomeSections` (both fetch through
+backs `LibraryApiClientImpl.getHomeSections` (fetching through
 `HomeSectionsFetcher`, which supplies `HomeSectionsAssemblyInputs`). The
 section-ordering policy (CW → Continue Reading → Next Up → per-folder Latest →
 Recently-Added-insert-after-last-latest → Recommendations/suggestions →
-pinned) is pinned ONCE for both paths by `HomeSectionsAssemblerTest`.
+pinned) is pinned by `HomeSectionsAssemblerTest`.
 
 **`HomeSectionsFetcher`**
 (`shared/core/network/src/commonMain/kotlin/.../library/HomeSectionsFetcher.kt`)
@@ -848,33 +842,28 @@ for similar-items), the recommendations chain and the two
 while the assembler decides what the fetched data becomes. Its
 `HomeSectionSources` port (the eleven client sub-calls; parameter defaults
 omitted because Kotlin forbids duplicate defaults across super-interfaces)
-is satisfied by `LibraryApiClientImpl` and `KtorWasmLibraryApiClient` for
-free via their common `LibraryApiClient` supertype. The fetcher's
+is satisfied by `LibraryApiClientImpl` for free via its
+`LibraryApiClient` supertype. The fetcher's
 suggestions pre-fetch condition (recommendations succeeded but empty) is the
 SAME predicate the assembler's fallback branch renders on — the two are
-pinned together by `HomeSectionsFetcherTest`. Both platforms now memoise
-under `CacheIdentity.UNKNOWN` pre-login (the wasm twin previously skipped
-caching there), and the wasm-only `WasmTtlCache` was deleted — the
-favorite-flag cache migrated to the shared commonMain `TtlCache`
-(access-order LRU eviction, vs the old twin's insertion order).
+pinned together by `HomeSectionsFetcherTest`. The client now memoises
+under `CacheIdentity.UNKNOWN` pre-login, with the favorite-flag cache on the
+shared commonMain `TtlCache` (access-order LRU eviction).
 
 **`LibraryItemsQuerySpec`** (commonMain `library/`, 2026-09-10) is the
-request-SHAPE half of the twin convergence: the five non-trivial read
-endpoints of the library client pair (`getMediaItems`, `getSearchHints`,
+request-SHAPE half of the query convergence: the five non-trivial read
+endpoints of the library client (`getMediaItems`, `getSearchHints`,
 `getFavorites`, `getItemsByGenre`, `getItemsByStudio`) build ONE pure spec
 (include/exclude kinds, filters, sort tokens + descending flag,
-paging, fields — the path stays adapter-side: both clients hit `/Items`
-with their own per-client defaults) via `build*QuerySpec` beside the
+paging, fields — the path stays adapter-side: the client hits `/Items`
+with its own per-client defaults) via `build*QuerySpec` beside the
 assembler/fetcher — the
 JVM client resolves spec → Jellyfin SDK typed args
-(`LibraryItemsQueryResolvers`, jvmShared) and the wasm client renders
-spec → raw query strings, so a filter decision (played-status,
+(`LibraryItemsQueryResolvers`, jvmShared), so a filter decision (played-status,
 resumable, sortOrder normalization, `libraryExcludeKinds` pruning,
 empty-gating) is written once and pinned once by
-`LibraryItemsQuerySpecTest` (commonTest — runs on both lanes' JVM
-runner; the wasmJs node lane never executes in CI, mirror-contract +
-spec pins cover it). Trivial fixed-path endpoints deliberately keep
-their per-client one-liners.
+`LibraryItemsQuerySpecTest` (commonTest). Trivial fixed-path endpoints
+deliberately keep their per-client one-liners.
 
 **`HomeSectionPrefs`** (`shared/core/model/src/commonMain/kotlin/.../HomeSectionPrefs.kt`,
 beside `HomeSectionType`) is the section-prefs write algebra: the prefs
@@ -1348,8 +1337,7 @@ delegates.
   promoted-interface pass (the `DownloadIntake` precedent: a surface that
   is core:model-only crosses commonMain verbatim) there are NO per-read
   adapters: the jvmShared engine implements the interfaces directly and
-  dataJvmModule binds them over the engine singles, wasmJs binds the
-  honest no-op stubs in dataWasmModule. The seams:
+  dataJvmModule binds them over the engine singles. The seams:
   `QuickDownloadActions` (implemented by `MediaDownloadActions` itself;
   replaced the byte-identical library/search twins, `HomeDownloadActions`
   folded), `TrackDownloadStatusWindow` /
@@ -1531,9 +1519,8 @@ caching, plus the hour-throttled eviction) with its own private deps
 `TimeSource` for its clock reads — throttle, cleanup cutoff, `fetchedAt`
 stamps (same seam as `MediaRepositoryImpl`). `MediaRepository` does
 NOT extend `LyricsRepository`: `AudioLyricsManager` and
-`VideoPlayerViewModel` inject the narrow type directly, the app's
-`CacheMaintenanceInitializer` injects it instead of the union, and the wasm
-`WebMediaRepositoryNarrow` drops the lyrics section (web never served it).
+`VideoPlayerViewModel` inject the narrow type directly, and the app's
+`CacheMaintenanceInitializer` injects it instead of the union.
 `DataKoinModule` binds `LyricsRepositoryImpl` as its own single;
 `DataKoinModulesTest` pins resolution.
 
@@ -1555,9 +1542,6 @@ consumers inject BOTH `MediaRepository` and `PlaylistRepository` (music
 browse/playlist VMs, `AudioPlayerViewModel`, `LibraryLayoutViewModel`,
 `AudioLibraryBrowser`) — different singles since the facade split, with
 cross-surface cache invalidation carried by the shared internals single.
-The wasm `WebMediaRepositoryNarrow` implements `MediaRepository` only
-(42 overrides, ~196 lines, down from 86/358 — the family throw stubs are
-gone).
 
 `MediaRepositoryImpl`'s test surface lives beside it in
 `shared/core/data/src/jvmTest/.../repository/`: `MediaRepositoryImplTest`
@@ -1585,11 +1569,7 @@ pairs, which now execute under Robolectric). Keep the Phase-X rule itself:
 treat a legacy-only assertion as dead when its class moves to `androidMain`.
 Still dark is execution, not compilation: the instrumented androidTest
 sources are compile-gated only — :app
-via :app:assemblePhoneDebugAndroidTest, no emulator lane — and apps/web's six
-wasmJsTest files are compile-gated (:apps:web:compileTestKotlinWasmJs in the
-shared-targets matrix) but never executed in CI; the runnable
-wasmJsBrowserTest lane (karma/webpack + headless-Chrome npm graph) stays
-local.
+via :app:assemblePhoneDebugAndroidTest, no emulator lane.
 
 The data layer's clock reads go through the injected **`TimeSource`**
 (jvmShared `util/TimeSource.kt`, the Koin-single `SystemTimeSource`): every
@@ -1670,7 +1650,7 @@ bounded stages; `restoreSession` itself stays hand-rolled (timeout staging,
 KDoc). **`normalizeServerAddress`** (core/model `ServerAddress.kt`, pure,
 pinned by `ServerAddressTest` in commonTest) is the one server-address
 typing policy — trim, trailing-slash strip, `https://` defaulting; the
-eight copies across core:data / core:network (jvm + wasm failover probing)
+copies across core:data / core:network (jvm failover probing)
 / auth's TLS-trust prompt / settings' trust toggle now call it, and the two
 private twins are gone. Trim-only sites (`switchServerAddress`,
 `NetworkOfflineStore`, `ServerAddressRouter`, `SocketUrl`) are a different
@@ -1681,12 +1661,10 @@ the route aliases Jellyfin 12 removed. `ServerAddressRouter.probe` retries
 the stripped bare address when the original answers without a server
 identity (a 404 still counts "reachable", hence the identity check) or is
 outright unreachable, and
-reports it as `AddressProbeResult.resolvedAddress`; the auth clients
-persist the resolved form (`AuthApiClientImpl`, the wasm
-`KtorWasmAuthApiClient` mirror — `ServerAddressRouterTest` /
-`AuthApiClientTest` pin the JVM pair; the wasm twin is kept by the
-mirror-twin convention, not server-tested), so the next connect probes the
-working address directly.
+reports it as `AddressProbeResult.resolvedAddress`; the auth client
+persists the resolved form (`AuthApiClientImpl`, pinned by
+`ServerAddressRouterTest` / `AuthApiClientTest`), so the next connect probes
+the working address directly.
 
 The paged reads and the telemetry
 capture side were deepened. **`JellyfinPagingSource`** (`shared/core/data` commonMain
@@ -1925,10 +1903,8 @@ best-effort `runCatching` around suspend calls: stdlib `runCatching` captures
 `CancellationException` and masks structured cancellation — the recurring
 bug class (masked worker retries, half-applied offline flips, orphaned
 observers) that pre-2026-09-07 commits kept re-fixing one file per commit.
-The wrapper is born commonMain so the wasm stack rides the same
-implementation; both engines' `apiResult` (JVM `JellyfinApiEngine` + wasm
-`WasmApiSupport`) are the helper plus their own typed-exception mapping —
-declared parity, no per-platform twin. Non-suspend bodies (JSON/enum parses
+The wrapper is born commonMain; `JellyfinApiEngine`'s `apiResult` is the
+helper plus its own typed-exception mapping. Non-suspend bodies (JSON/enum parses
 in mappers) keep stdlib `runCatching`. **`BareRunCatchingRatchetTest`**
 (module `jvmTest`) is the source ratchet: bare `runCatching` inside
 `suspend fun` bodies never increases — the guard is repo-complete, and
@@ -1997,56 +1973,32 @@ stays site-side and rebinds the bundle.
 ## Library client policy (network)
 
 **`LibraryRequestPolicy`** (`shared/core/network/src/commonMain/kotlin/.../library/LibraryRequestPolicy.kt`)
-is the one home for the request-level policies the `LibraryApiClient` twins
-(`LibraryApiClientImpl`, `KtorWasmLibraryApiClient`) used to ship hand-copied
-per source set: the 12-field detail projection (`DETAIL_PROJECTION_FIELDS`),
+is the one home for the request-level policies `LibraryApiClientImpl` used
+to ship hand-copied: the 12-field detail projection (`DETAIL_PROJECTION_FIELDS`),
 the list projection (`LIST_PROJECTION_FIELDS` — the two-field
 "Overview"+"PrimaryImageAspectRatio" set every list-shaped query attaches;
-the genre and playlists variants compose on top; the JVM client resolves
-it through the wire-name ladder, the wasm client's private `LIST_FIELDS`
-twin is gone; pinned by `LibraryRequestPolicyTest` in commonTest),
+the genre and playlists variants compose on top, resolved through the
+wire-name ladder; pinned by `LibraryRequestPolicyTest` in commonTest),
 the jellyfin-web search-suggestions shape, the SEASON/EPISODE exclude-drop,
 the empty-library fallback ladder (`EmptyLibraryFallback` + the known-empty
 memo probe and `emptyFallbackTotalCount`), and the favorite-flag cache-aside
 toggle (`FavoriteFlagCache` over an identity-keyed `TtlCache`, 200 entries /
-15 min). Each client resolves the shared wire names against its own
-enum/wire dialect and supplies only transport lambdas plus its platform
-memo/threading regime (JVM: synchronized access-order LRU probed with
-`containsKey`; wasm: lock-free remove+reinsert — a documented divergence,
-not a copy). `JellyfinApiEngine.ratingToAge` and
+15 min). The client resolves the shared wire names against its own
+enum/wire dialect and supplies only transport lambdas plus its
+memo/threading regime (synchronized access-order LRU probed with
+`containsKey`). `JellyfinApiEngine.ratingToAge` and
 `JellyfinDtoMappers.parseItemSortList` delegate to the canonical commonMain
 tables (`parentalRatingAge` / the sort-token parser) instead of carrying
-"verbatim" twins, and the wasm lyrics DTO mapping lives in
+"verbatim" twins, and the lyrics DTO mapping lives in
 `LibraryWireMappers` (the SDK-typed jvmShared mapper stays — its input type
-is invisible to commonMain). Both clients compile against the single policy
-in `:shared:core:network:jvmTest`; the wasm client has no test lane of its
-own, which is exactly why the policies must not live there.
-**`WasmMirrorContractTest`** (network `jvmTest`, the
-`SettingsCatalogScreenContractTest` pattern) is the mirror's source
-contract: it reads `KtorWasmLibraryApiClient` and `LibraryApiClientImpl`
-at test runtime, extracts per endpoint the verb, path template and
-query-parameter names (the JVM side resolved through an explicit
-`sdkEndpoints` table verified against the jellyfin-api 1.8.12 sources),
-and asserts per-method parity — method-set parity both directions plus
-per-method wire-shape equality, with declared-divergence exception slots
-(currently empty; one documented placeholder alias: wasm's `entryId`
-names the SDK's `{itemId}` segment in `movePlaylistItem`). The same
-machinery covers the user-client pair (`KtorWasmUserApiClient` ↔
-`UserApiClientImpl`), the auth
-pair (`KtorWasmAuthApiClient` ↔ `AuthApiClientImpl`) and the playback
-pair (`KtorWasmPlaybackApiClient` ↔ `PlaybackApiClientImpl`); the
-ARR/Seerr/Tmdb wasm mirrors still use a different URL-builder idiom on
-both sides, so they would need different extraction (the deferred
-wire-request unification below).
-Its first run caught a real drift — the wasm `emptyLibraryFallback`'s
-latest-media probe omitted the SDK's always-sent `groupItems=true`.
+is invisible to commonMain). The client compiles against the single policy
+in `:shared:core:network:jvmTest`.
 `JellyfinApiEngine.requireUserId()` / `currentUserId()` (internal, beside
 `requireApi()`) are the named user-id contract replacing the 15+
 hand-rolled `currentUser.value?.id` guards across the jvmShared clients —
 both read the ATOMIC `session` value (a user without a server is no
 identity; the separate `currentUser` flow must not be re-combined for
-this), message-aligned with wasm's `requireCurrentUser()` and pinned in
-`JellyfinApiEngineSessionTest`.
+this), pinned in `JellyfinApiEngineSessionTest`.
 
 **`JellyfinRawRequester`** (jvmShared, beside the clients, internal —
 the 2026-09-07 fold) is the ONE seam for the hand-built raw-OkHttp
@@ -2056,9 +2008,7 @@ across Plugin/MediaInfo/Playback clients, three incompatible private
 guard adapters): session guard → `Authorization: MediaBrowser`
 token header → `newCall().execute().use` → status check with the per-endpoint failure
 text, over `getJson`/`postStatusOnly`/`deleteStatusOnly`/`getBodyText`
-members mirroring the wasm `WasmApiSupport` shapes (this is the JVM
-twin of those helpers, NOT the deferred cross-platform WireRequest
-unification — nothing crosses source sets). The load-bearing rule:
+members. The load-bearing rule:
 every member derives the base from `engine.activeServerAddress` (the
 router's active endpoint, failover-correct) — the pre-fold Plugin and
 MediaInfo sites built URLs from `currentServer.value?.address` (the
@@ -2117,7 +2067,7 @@ fallback.
 
 **`PlaybackUrlBuilders` adoption (JVM)**: `PlaybackApiClientImpl`'s three
 hand-rolled URL methods (stream/subtitle delivery) now delegate to the
-commonMain builders the wasm client already used. Declared delta: the
+commonMain builders. Declared delta: the
 helper's trailing-slash trim now applies on the JVM path (the old inline
 code interpolated `activeBaseUrl` raw; no test pinned the raw form).
 `resolveDeliveryUrlWithApiKey` is the one absolute-ize + append fold for
@@ -2127,17 +2077,15 @@ the guard, so legacy-token URLs double-appended on the subtitle path
 (drift fixed; pinned in `PlaybackUrlBuilderTest`).
 
 **`FailoverPolicy`** (commonMain `failover/`) owns the address-failover
-DECISIONS both platforms used to mirror by KDoc: `ProbeOutcome`,
+DECISIONS the router used to carry by KDoc: `ProbeOutcome`,
 `answersWithIdentity`, the legacy-prefix strip-retry trigger +
 `resolvedAddress` adoption (over core:model's `stripLegacyRoutePrefix`),
-and `selectPreferredAddress` in two forms (injected suspend probe = wasm
+and `selectPreferredAddress` in two forms (injected suspend probe =
 sequential; precomputed results = the JVM's fan-out).
-`KtorWasmAuthApiClient`'s private `ProbeResult` and both prose-mirrored
-ladders are deleted; `ServerAddressRouter` takes its decisions from the
+`ServerAddressRouter` takes its decisions from the
 core and KEEPS its declared divergences (latency capture,
 primary-alone-first + concurrent fan-out, all-down-keeps-CURRENT-active).
-Pinned by `FailoverPolicyTest` (commonTest); `ServerAddressRouterTest`
-and `WasmMirrorContractTest` pass unmodified.
+Pinned by `FailoverPolicyTest` (commonTest) and `ServerAddressRouterTest`.
 
 **`DeviceIdResolution.resolveDeviceId(store, scope)`** (jvmShared) is the
 ONE device-id fallback ladder — the in-definition `ensureDeviceId()`
@@ -2222,8 +2170,8 @@ media keys, surface probe, saved-state config) stay per-shell. Pinned by
 `UserMessageHost.kt`) is the message-presentation seam behind every shell —
 the fix for the two `:app` collectors that hand-copied the
 severity→duration policy and the TV-Toast/phone-Snackbar fork, and for
-desktop/web never collecting the shared `UserMessageBus` at all (shared-feature
-error feedback was silently dropped on non-Android shells). Interface:
+desktop never collecting the shared `UserMessageBus` at all (shared-feature
+error feedback was silently dropped on the desktop shell). Interface:
 `UserMessageHost(resolveText, present)` + `host(vararg sources)` for shared
 `UserMessage` payloads, `hostAdapted(sources, severityOf, resolveText)` for
 shell-owned payloads (the legacy `core:ui` bus), pure `durationFor(severity)`
@@ -2236,22 +2184,9 @@ entire TV-vs-phone fork (`remember(isTv)`; both `LaunchedEffect`s keep the
 shared bus alongside its music relay (the relay's messages deliberately
 normalize to Error/Long with a dismiss action — the presentation Android's
 own music-bus bridge always gave the same messages; desktop's old
-no-dismiss/Short snackbars were the drift). `apps/web` has no message surface
-(inline Text only) and adopts nothing. Pinned by `UserMessageHostTest`
+no-dismiss/Short snackbars were the drift). Pinned by `UserMessageHostTest`
 (severity table, merge exactly-once/order, queue-not-drop, and the
 desktop-receives-shared-bus regression).
-
-`apps/web`'s browser-history integration is split at its natural seam:
-**`WebBackStackMirror`** (wasmJsMain, internal, 2026-09-07) is the pure
-reconcile core — hash↔index parsing, `trimToDepth`, the dispatch-first
-pop with root-refuse, reload normalization and the forward-onto-pruned
-walk-back, returning sealed `WebHistoryCommand`s (Push/Rewrite/
-NavigateBack/GoTo/None) — and `WebAppRoot` keeps only the thin JS
-adapter that applies commands to `window.history` (pushState/back/go,
-one opt-in site). The ~70 KDoc'd model rules moved with the logic;
-pinned by `WebBackStackMirrorTest` (15 cases: root refusal,
-consumed-press, stale/boot-deep/foreign reload hashes, trim depths,
-walk-back deltas).
 
 The shells share the platform-free shell policy in `shared/feature/shell`:
 **`AdminRefreshGate`** is the admin-status dedupe (30 s window + in-flight
@@ -2325,8 +2260,7 @@ are gone — their jvmMain actuals returned null on the stale "desktop has
 no message host" premise (desktop has hosted the shared bus since
 `UserMessageHost`). Every former call site now reads commonMain
 `core.ui.message.LocalUserMessageBus` directly; desktop provisions the
-local beside its `UserMessageHost` wiring (`DesktopAppRoot`); web keeps
-the drop-by-default. Legacy `core.ui.feedback.LocalUserMessageBus`
+local beside its `UserMessageHost` wiring (`DesktopAppRoot`). Legacy `core.ui.feedback.LocalUserMessageBus`
 (androidMain) is untouched, its own recorded lane. This is the
 presentation seam only — the per-feature conveyor fold (VM posts onto
 the bus) is still deferred.
@@ -2420,7 +2354,7 @@ device-level nuance: Android offers the row for the platform's biometric
 APIs, and a device without hardware still nulls the runtime gate — the
 screen requires the gate before rendering or counting the row.) Two axes,
 never mixed: platform
-(ANDROID/DESKTOP/WEB —
+(ANDROID/DESKTOP —
 compile-time, via `currentPlatform` in core/model) is what capabilities
 express; TV vs phone is the runtime `LocalTvMode` composition local and
 stays in core/ui.
@@ -2849,7 +2783,7 @@ doc). Shape notes:
   drives sentence-by-sentence utterances (paragraphs split by the
   controller's sentence heuristic; chapter advance detected by context
   identity, not timing; the `BookSpeechEngine` seam — Android
-  `TextToSpeech`, desktop/web honestly UNAVAILABLE Noop via the
+  `TextToSpeech`, desktop honestly UNAVAILABLE Noop via the
   `BookFormatProbe` Koin pattern; the controller takes the
   `() -> EpubReaderHandle?` seam directly — no VM hop). `ReaderSleepTimer`
   ticks countdown or end-of-chapter. Both jvmTest-pinned with value fakes.
@@ -3015,10 +2949,10 @@ takes the claimant's `FocusAudioAttributes` (matrix rows via
 `PlaybackFocusMatrix.attributesOf` — READ_ALOUD keeps
 USAGE_MEDIA+CONTENT_TYPE_SPEECH, MUSIC→MUSIC, VIDEO→MOVIE), the desktop
 in-process `DesktopFocusArbiter` grants vacuously, and
-`DesktopAudioQueueManagerSurface` gives desktop music the same
-`onPlayingEdge` claim chokepoint Android music has (Denied mirrors to a
-pause). Desktop binds `DefaultPlaybackFocus`; `NoopPlaybackFocus` remains
-for wasmJs and tests. Music's play edge HONORS `acquire()`'s outcome: on
+  `DesktopAudioQueueManagerSurface` gives desktop music the same
+  `onPlayingEdge` claim chokepoint Android music has (Denied mirrors to a
+  pause). Desktop binds `DefaultPlaybackFocus`; `NoopPlaybackFocus` remains
+  for tests. Music's play edge HONORS `acquire()`'s outcome: on
 `FocusOutcome.Denied` (a displaced holder Suspended under an OS loss —
 e.g. read-aloud during a phone call) the manager pauses instead of
 producing audio the interface forbade. The reader claims/releases around
@@ -3222,67 +3156,6 @@ overlap). See docs/adr/0004-playback-focus.md.
   `loadMoreActivity`, flag cleared on both settle arms) — the re-entrant
   double-append defect is fixed and pinned.
 
-## Web shell (`apps/web`)
-
-- **`WebConnectFailurePolicy`** (internal, beside `WebConnectFlow`) pins
-  the CORS/transport taxonomy + 401 sign-in mapping on the wasmJs test
-  lane (20 tests); `WebSideEffectScope` (`launchDegrading`: swallow
-  `Exception`, rethrow `CancellationException`) replaces the two
-  hand-rolled controller scopes. (ktor 3.5.2's
-  `HttpRequestTimeoutException` extends `IOException`, so one cause check
-  is redundant-but-harmless — left, pinned.)
-- **`WebBackStackMirror`** (wasmJsMain, internal) is the pure
-  browser-history reconcile core — hash↔index parsing, `trimToDepth`,
-  the dispatch-first pop with root-refuse, reload normalization and the
-  forward-onto-pruned walk-back — returning sealed `WebHistoryCommand`s
-  (Push/Rewrite/NavigateBack/GoTo/None); `WebAppRoot` keeps only the thin
-  JS adapter that applies commands to `window.history` (one opt-in
-  site). Pinned by `WebBackStackMirrorTest` (15 cases: root refusal,
-  consumed-press, stale/boot-deep/foreign reload hashes, trim depths,
-  walk-back deltas).
-- **`WasmAuthRepository`** (core:data wasmJsMain `repository/`) implements
-  `AuthRepository` ONLY — all 26 members ported over machinery that
-  already existed wasm-side: OPFS Room (`JellyPlayDatabase` + Server/User
-  DAOs), `ServerIdentityStore`, `KtorWasmAuthApiClient`, `WebTokenCipher`
-  (`TokenCipher` was already a core:database commonMain interface with a
-  plaintext web adapter). Declared divergences (KDoc'd): no
-  `RealtimeConnection` (websocket stays jvmShared; web keeps
-  no-realtime), separate `UserApiClient` dep, `EpochMillisSource` for
-  `TimeSource`, 16-entry bounded folder-id map for LruCache.
-  `WebConnectController` deleted its hand-mirrored establishment
-  choreography and now delegates; landing texts/order untouched
-  (e2e-pinned). NEW web behavior, desktop precedent: boot
-  `restoreSession()` once per page — sessions persist across reloads,
-  fail-closed to sign-in; `web_last_server_url` gets a one-time seed into
-  Room then is consumed. Pinned by `WasmAuthRepositoryMirrorContractTest`
-  + the rewritten `WebConnectControllerTest` (wasm browser lane).
-- **Landing affordances + `webFeatureModules`**: `WebConnectFlow`'s seven
-  optional nav lambdas are one `List<WebLandingAffordance>` (label +
-  outlined flag + onOpen) — exact texts/order/styling preserved (the e2e
-  harness asserts them). `Main.kt` declares `webFeatureModules` once and
-  startKoin consumes it; the desktop guard test parses the declared list
-  and keeps set-equality in both directions. The full webSections table
-  stays deferred (LOC-neutral per the feasibility study).
-- **The web pane table**: `WebAppRoot`'s landing affordances and
-  `entry<…>` registrations used to be twin hand-mirrored lists (the
-  hand-mirror class the desktop `ShellSectionRegistry` killed; adopting
-  the shared appSections machinery stays a recorded deferral and is NOT
-  this). One `WebPane` row per level the nav root can push as a landing
-  affordance — label (load-bearing copy: `tools/e2e/web-verify.mjs`
-  finds the buttons by accessible name), outlined flag, pushed key, and
-  the content render closure — declared once in `buildWebPanes`;
-  `toLandingAffordance` projects the buttons and `registerWebPanes`
-  derives the entry registrations from the SAME rows via the scope's
-  class-keyed `addEntryProvider` overload (resolution semantics
-  identical to the former reified `entry<WebX>` blocks; no reflection),
-  threading the shell's guarded pop path in as `onBack` once.
-  Deliberately NOT rows: `WebLanding` itself (renders the table) and
-  Route.ArrSettings / Route.SeerrDetail (pushed programmatically, never
-  landing buttons — their entries stay hand-written). Adding a level =
-  adding one row; button and registration cannot drift. Pinned by
-  `WebPaneTableTest` (browser-free provider-resolution lane, the
-  `WebBackStackMirrorTest` precedent).
-
 ## Preference stores (core:datastore)
 
 - **`sliceStateFlow` / `dataDegradingToDefaults`** (`SliceStateFlow.kt`,
@@ -3426,9 +3299,8 @@ overlap). See docs/adr/0004-playback-focus.md.
   being jvmShared-only. Shared shapes promoted once (short/long date,
   month-year, weekday header, `relativeDayLabel` Today/Yesterday,
   `oneDecimal`, strict ISO parse transports); java.time actual
-  (jvmShared, locale-per-call preserved) + ONE fixed-English wasm
-  month/day table (the degrade is documented once and source-scan
-  pinned). calendar/requests/newsletter label files are thin façades;
+  (jvmShared, locale-per-call preserved). calendar/requests/newsletter
+  label files are thin façades;
   editor folded only `formatOneDecimal` (its pattern formatters are
   genuinely editor-specific). Pinned by `DateLabelsTest` +
   `DateLabelsJvmTest`.
@@ -3505,12 +3377,6 @@ Recorded with evidence so future reviews don't re-suggest them.
   registering source sets through the `KotlinSourceSetContainer` API
   directly) is the recorded viable shape; do not re-attempt the
   script-plugin form.
-- **ADR-0001 shell-policy relocation (web-gaining-session-state
-  trigger)**: web holds session STATE (`WasmAuthRepository`
-  restore/logout) but none of the controller's policy surface (no admin
-  section, no homeMode, no revoke fork), and the shell module's wasmJs
-  target already compiles the four policy files — there is nothing to
-  re-place. Recorded so the next review doesn't re-litigate.
 
 ## Deferred designs
 
@@ -3568,34 +3434,6 @@ re-derives the designs nor lands them casually.
   native key. Deferred: the three implementations live in androidMain
   where no unit test can reach them — land it together with an
   engine-harness seam, tests first.
-- **Wire-request twin unification**: the remaining wasm↔JVM API-client
-  pairs (ARR/Seerr/Tmdb — Library/User/Auth/Playback are contract-pinned
-  by `WasmMirrorContractTest` but still mirrored line-for-line, ~1,500
-  mirrored assembly lines) hand-copy endpoint paths, query assembly,
-  bodies and error strings request-for-request. Design: commonMain
-  `WireRequest` spec values + a ~60-line per-platform `WireExecutor`
-  (OkHttp vs the wasm Ktor mechanics), error taxonomy as one commonMain
-  table; specs become plain-value tests. Deferred: ~7k lines of surface
-  across both platforms — land per family (arr first, piggybacking
-  `ArrServiceClient`), in a dedicated session.
-- **`WebSeerrController` routing** (re-homed 2026-09-17): apps/web's Seerr
-  credentials pane is the permanent WEB-VIABLE narrower surface — API-key
-  only, because a browser tab cannot set the `Cookie` request header
-  (fetch-forbidden) nor read `Set-Cookie`, so the ViewModel's cookie login
-  paths are ABSENT from it, not hidden (SeerrWireSupport's WASM BROWSER
-  CAVEAT; `Main.kt` keeps the shared `SeerrSettingsScreen` latent). The
-  former drift is dead: the pane no longer hand-mirrors
-  `SeerrSettingsViewModel`'s status algebra — the probe board is the
-  SHARED `ConnectionProbe` machine (the same board behind the Seerr
-  ViewModel, *arr settings and the subtitle providers), with the web pane
-  constructed on the declared `SingleFlight.CALLER_GATED` arm (the pane's
-  buttons-disabled UX owns probe concurrency — the opposite of the
-  ViewModel's RESTART discipline; the machine's job-identity guard still
-  prevents double-landing). Refusal pre-flight and failure texts ride the
-  machine's localized `FallbackText`s, and the persist-then-test call
-  order (byte-identical to the former hand-rolled `persist` +
-  `testApiKeyConnection`'s API-key slice) is pinned event-by-event by
-  `WebSeerrControllerTest` on the browser-free kotlin.test lane.
 - **Feature-VM load-ladder fold**: the `isLoading = true, error = null`
   suspend-guard ladder remains hand-copied across requests, calendar,
   editor, syncplay (the livetv slice landed as `LiveTvLoad`, the admin
@@ -3682,9 +3520,9 @@ re-derives the designs nor lands them casually.
   (music's, player-video's), and the per-screen SnackbarHostState sites
   (SyncPlay, Newsletter, UserDetail, ManageSeries, both players). The
   shared bus's `UiText.Resource(args)` already covers every seal's shape.
-  Presentation is the blocker: web has no message surface, several
-  screens own their SnackbarHostState, and moving VM posts onto the
-  shared bus changes what non-Android shells render. Design: land per
+  Presentation is the blocker: several screens own their
+  SnackbarHostState, and moving VM posts onto the
+  shared bus changes what the desktop shell renders. Design: land per
   feature (VM posts `UserMessage` with resolved `UiText`), starting with
   a feature whose screen already defers to `UserMessageHost`; needs a
   per-shell presentation mapping decision first — deserves the grilling
@@ -3703,10 +3541,9 @@ re-derives the designs nor lands them casually.
 - **`Resilient*` wrapper deletion** (landed 2026-09-17): the five
   pass-through wrapper modules (~504 lines — Seerr/Sonarr/Radarr/Tmdb/
   SubtitleProvider) and their DI indirection are deleted; retry moved
-  into each family's request funnel on BOTH platforms. jvmShared rides
-  one execute chassis — `HttpExecutor` (`core/network/api/`, internal;
-  the JVM counterpart of the wasmJsMain `ArrSeerrApiSupport`/
-  `WasmApiSupport` bases) with the member vocabulary `parseJson` /
+  into each family's request funnel. jvmShared rides
+  one execute chassis — `HttpExecutor` (`core/network/api/`, internal)
+  with the member vocabulary `parseJson` /
   `parseUnit` / `executeForText` / `executeForCookie` over an `Options`
   record that carries the genuine per-family divergences (error shapers,
   Retry-After capture, empty-body shape) as declared data — it also
@@ -3714,9 +3551,8 @@ re-derives the designs nor lands them casually.
   declared count, `HttpExecutor.MAX_RETRIES` (4): Arr/Seerr set
   `Options.retryHttpCalls` on the chassis, `SubtitleHttp` wraps its own
   funnel (moving UP from 3 — the former unpinned divergence resolved by
-  declaring it), TMDB wraps `tmdbFetch`, and the wasm twins re-document
-  their const as the same shared count — in-funnel retry is now one
-  idiom on both platforms. GitHub/LrcLib never had wrappers: their
+  declaring it), TMDB wraps `tmdbFetch` — in-funnel retry is now one
+  idiom. GitHub/LrcLib never had wrappers: their
   executors leave the flag off, keeping direct-construction semantics.
   The formerly deferred semantic check held — every Seerr funnel
   (parse/text/cookie) is a single HTTP call per attempt, so call-level

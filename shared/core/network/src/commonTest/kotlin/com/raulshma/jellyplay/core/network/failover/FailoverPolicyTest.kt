@@ -9,9 +9,9 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Pins the common failover decision tables shared by both probe transports
- * (the jvmShared OkHttp router and the wasmJs Ktor client — the lane this
- * suite actually runs on is jvmTest, the wasm browser lane stays off). Each
+ * Pins the common failover decision tables the probe transports share
+ * (the jvmShared OkHttp router; the lane this
+ * suite actually runs on is jvmTest). Each
  * test names the transport behavior it pins; the JVM's declared divergences
  * (latency capture, concurrent fan-out, all-down-keeps-current-active) live
  * on the router and are pinned by ServerAddressRouterTest, not here.

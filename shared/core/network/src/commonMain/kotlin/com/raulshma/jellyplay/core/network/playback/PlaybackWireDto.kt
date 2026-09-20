@@ -5,7 +5,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Minimal Jellyfin wire DTOs for the wasm playback client
+ * Minimal Jellyfin wire DTOs for the playback client
  * (docs/kmp-migration-plan.md § chunk 2), following the chunk-1
  * `auth/AuthWireDto.kt` pattern. Response mapping semantics mirror the
  * jvmShared `PlaybackApiClientImpl` + `JellyfinDtoMappers.toMediaSource` /
@@ -20,10 +20,8 @@ data class PlaybackInfoRequestDtoWire(
     @SerialName("SubtitleStreamIndex") val subtitleStreamIndex: Int? = null,
     @SerialName("MediaSourceId") val mediaSourceId: String? = null,
     /**
-     * wasm v1 cut: no codec-constraining DeviceProfile is sent (no codec
-     * negotiation exists until HtmlVideoEngine lands in a later 
-     * chunk and documents the web `<video>` profile) — the flag table in
-     * `resolveWasmPlaybackFlags` still honors PlaybackMode/LiveStreamOption.
+     * No codec-constraining DeviceProfile is sent — the flags honor
+     * PlaybackMode/LiveStreamOption.
      */
     @SerialName("EnableDirectPlay") val enableDirectPlay: Boolean? = null,
     @SerialName("EnableDirectStream") val enableDirectStream: Boolean? = null,
@@ -145,7 +143,7 @@ data class MediaSegmentQueryResultDtoWire(
     @SerialName("TotalRecordCount") val totalRecordCount: Int = 0,
 )
 
-/** Wire form of `GET /GetUtcTime`. Dates stay raw ISO strings (wasm delta: no zone shift). */
+/** Wire form of `GET /GetUtcTime`. Dates stay raw ISO strings (no zone shift). */
 @Serializable
 data class UtcTimeDtoWire(
     @SerialName("RequestReceptionTime") val requestReceptionTime: String? = null,

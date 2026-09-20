@@ -3,10 +3,9 @@ package com.raulshma.jellyplay.core.network.failover
 import com.raulshma.jellyplay.core.model.stripLegacyRoutePrefix
 
 /**
- * The transport-agnostic failover decision core — the pure tables both probe
- * transports run. Today those transports are:
- *  - the jvmShared OkHttp prober ([ServerAddressRouter]) — android + desktop;
- *  - the wasmJs Ktor prober ([com.raulshma.jellyplay.core.network.api.KtorWasmAuthApiClient]).
+ * The transport-agnostic failover decision core — the pure tables the probe
+ * transports run. Today that transport is:
+ *  - the jvmShared OkHttp prober ([ServerAddressRouter]) — android + desktop.
  *
  * Everything here decides; nothing transports. A probe is an unauthenticated
  * `GET {address}/System/Info/Public`; ANY HTTP response — including a
@@ -25,8 +24,7 @@ import com.raulshma.jellyplay.core.model.stripLegacyRoutePrefix
  *    carries none by design.
  *  - probe fan-out: the router probes the primary alone first, then the
  *    alternates concurrently ([selectPreferredAddress]'s precomputed overload
- *    decides over the results); wasm probes strictly sequentially via the
- *    suspend overload.
+ *    decides over the results).
  *  - all-down fallback: the router keeps its CURRENT active address (the app
  *    is simply offline; cached content keeps working); the common selection
  *    falls back to the primary for its stateless callers.
@@ -109,7 +107,7 @@ suspend fun probeResolvedAddress(
 }
 
 /**
- * Address selection, sequential form (the wasm transport): probe the primary,
+ * Address selection, sequential form: probe the primary,
  * then the alternates in order, returning the first reachable address — the
  * primary is always preferred while available. When nothing answers, the
  * primary is kept (the caller's stateless fallback; the JVM router instead

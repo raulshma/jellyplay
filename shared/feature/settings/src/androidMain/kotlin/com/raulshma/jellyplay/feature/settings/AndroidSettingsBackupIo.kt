@@ -11,7 +11,7 @@ import java.io.InputStream
 /**
  * Android actual of the [SettingsBackupIo] seam: SAF contentResolver IO plus
  * the concurrent internal/external cache-dir walk, moved verbatim from the
- * pre-migration SettingsViewModel bodies. The web seam narrowing (raw
+ * pre-migration SettingsViewModel bodies. The seam narrowing (raw
  * streams → text-level payload) moved the former caller-side
  * `stream.writer().use { it.write(json) }` / `stream.reader().readText()`
  * bodies here — same stream openers, same UTF-8 writer/reader chain, so the

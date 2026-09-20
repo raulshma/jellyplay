@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the pure UTC-millis → local ISO offset formatter backing the wasm
+ * Pins the pure UTC-millis → local ISO offset formatter backing the
  * NextUp `nextUpDateCutoff` (the java.time-less stand-in for
  * LocalDateTime.now().minusDays(n) + ISO_OFFSET_DATE_TIME).
  */

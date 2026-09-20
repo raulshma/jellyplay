@@ -11,9 +11,9 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Font families are a platform seam: Android resolves Google Fonts through the
- * GMS fonts provider (`FontFamilies.android.kt`); desktop and web load the
- * bundled compose-resources statics (`FontFamilies.jvm.kt` /
- * `FontFamilies.wasmJs.kt`) so every target renders identical brand type.
+ * GMS fonts provider (`FontFamilies.android.kt`); desktop loads the
+ * bundled compose-resources statics (`FontFamilies.jvm.kt`)
+ * so every target renders identical brand type.
  *
  * The resolution is a `@Composable` read because CMP 1.11.1 only publishes a
  * composable `Font(resource, weight, style)` loader for font resources (there
@@ -37,7 +37,7 @@ internal expect val monochromeBodyFontFamily: FontFamily
     @Composable get
 
 // v0.10.6 variant families (Aurora/Sakura/VectorPop/Vivid). Android resolves
-// the real Google Fonts faces; desktop/web actuals map to the closest bundled
+// the real Google Fonts faces; the desktop actuals map to the closest bundled
 // faces (the four statics are not bundled — follow-up, see FontFamilies.jvm.kt).
 internal expect val auroraFontFamily: FontFamily
     @Composable get

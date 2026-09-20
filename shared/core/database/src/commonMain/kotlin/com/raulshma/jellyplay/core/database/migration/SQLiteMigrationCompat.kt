@@ -12,15 +12,14 @@ import androidx.sqlite.SQLiteStatement
  *
  * The shims are expect/actual because androidx.sqlite 2.7.x declares
  * [SQLiteConnection.prepare] and [SQLiteStatement.step] only in its platform
- * actuals — blocking on the nonWeb targets (android/jvm/native), suspend on
- * the web targets (js/wasmJs) — while the common expects carry neither.
+ * actuals — blocking on android/jvm — while the common expects carry neither.
  * Target compilations see the merged common+actual API, but the *metadata*
  * compilation compiles commonMain against the common-only dependency klibs
  * and rejects any `prepare`/`step` reference. Declaring the shims suspend
  * here (one signature legally wrapping both the blocking and the suspend
  * actuals, since every caller sits inside the suspend `Migration.migrate`)
  * keeps every call site in commonMain; the bodies live once per variant in
- * jvmShared (nonWeb) and wasmJsMain (web) and are textually identical.
+ * jvmShared and are textually identical.
  */
 internal expect suspend fun SQLiteConnection.execSQL(sql: String)
 

@@ -12,9 +12,8 @@ import okhttp3.Response
 import java.io.IOException
 
 /**
- * The ONE OkHttp execute chassis for this module's hand-rolled clients — the
- * jvmShared counterpart of the wasmJsMain `ArrSeerrApiSupport`/
- * `WasmApiSupport` bases, with the same member vocabulary
+ * The ONE OkHttp execute chassis for this module's hand-rolled clients —
+ * the member vocabulary
  * ([parseJson]/[parseUnit]/[executeForText]/[executeForCookie]) over an
  * [Options] record in the `SubtitleHttp.Options` idiom. Every
  * `newCall().execute().use` → status check → body-null guard →
@@ -98,9 +97,7 @@ internal class HttpExecutor(
      * The retry budget for every family whose retry used to live in the
      * deleted `Resilient*` wrappers. Declared ONCE for all five families
      * (Seerr, Radarr, Sonarr, TMDB, Subtitle): 4 — the count three of the
-     * wrappers enforced and the wasm twins (`ArrSeerrApiSupport.RESILIENT_MAX_RETRIES`,
-     * uneditable from this module's JVM sources) still enforce for the same
-     * families; Subtitle moves up from `RetryPolicy.DEFAULT_MAX_RETRIES`
+     * wrappers enforced; Subtitle moves up from `RetryPolicy.DEFAULT_MAX_RETRIES`
      * (3) as part of the fold. Pinned per family by the give-up-after-N
      * retry tests.
      */

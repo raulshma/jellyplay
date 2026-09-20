@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Platform read-aloud capability. Android reports AVAILABLE once its TTS
- * service connects with a usable language; desktop/web stay UNAVAILABLE
+ * service connects with a usable language; desktop stays UNAVAILABLE
  * (honest degradation — desktop TTS is roadmap-future), which hides the
  * read-aloud controls and captions the settings section instead of failing
  * mid-utterance. INITIALIZING covers the lazy engine's connect window, so a
@@ -18,7 +18,7 @@ enum class BookSpeechAvailability { AVAILABLE, UNAVAILABLE, INITIALIZING }
 /**
  * Read-aloud engine: one utterance at a time — the controller decides
  * granularity (sentences), the engine just speaks text. Android speaks;
- * desktop/web report unavailable. [speak] replaces any in-flight utterance,
+ * desktop reports unavailable. [speak] replaces any in-flight utterance,
  * and [onDone] fires when THIS utterance completes — the reader speech loop
  * drives advancement off it. Implementations must be safe to call from any
  * thread (they confine internally) and must post [onDone] to the main
@@ -43,7 +43,7 @@ interface BookSpeechEngine {
 }
 
 /**
- * Neutral fallback for platforms without a speech binding (web — and any
+ * Neutral fallback for platforms without a speech binding (any
  * graph where no platform module registered an engine): permanently
  * UNAVAILABLE, every command a no-op. Same pattern as [NoopBookFormatProbe]:
  * the common Koin module resolves `getOrNull() ?: NoopBookSpeechEngine`.

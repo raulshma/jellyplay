@@ -10,26 +10,22 @@ import com.raulshma.jellyplay.core.model.PlayedStatus
  * un-extracted counterpart of [LibraryRequestPolicy]'s projections and
  * [HomeSectionsFetcher]'s choreography. Each builder below decides, ONCE, what
  * one read endpoint's `/Items` query contains (filters, sort field+order, kind
- * include/exclude, paging, field projection); the two hand-mirrored clients
- * ([com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl] on the JVM,
- * [com.raulshma.jellyplay.core.network.api.KtorWasmLibraryApiClient] on wasm)
- * become thin adapters that only translate a [LibraryItemsQuerySpec] into
- * their transport vocabulary — SDK typed setters vs raw query strings.
+ * include/exclude, paging, field projection); the hand-mirrored client
+ * ([com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl] on the JVM)
+ * becomes a thin adapter that only translates a [LibraryItemsQuerySpec] into
+ * its transport vocabulary — SDK typed setters.
  *
- * Everything here is wire-level (string serial names) and pure: no Ktor, no
+ * Everything here is wire-level (string serial names) and pure: no
  * Jellyfin SDK, only shared/core/model inputs. The JVM adapter resolves the
  * wire names against the SDK enums it sends (the same serialName-lookup
- * regime [LibraryRequestPolicy] established); the wasm adapter sends them
- * as-is.
+ * regime [LibraryRequestPolicy] established).
  *
  * Collection encoding stays adapter-side BY DESIGN: the SDK's UrlBuilder
- * repeats a collection param per element (`fields=A&fields=B`) while the wasm
- * client comma-joins (`fields=A,B`) — server-side model binding treats both
- * identically, and [WasmMirrorContractTest] pins the param-NAME parity rather
- * than the encoding. The same reasoning lets builders normalize empty
+ * repeats a collection param per element (`fields=A&fields=B`). The same
+ * reasoning lets builders normalize empty
  * collections to null: the SDK's UrlBuilder skips null values AND adds zero
  * params for an empty collection, so "null" and "empty" are wire-identical on
- * the JVM side, and the wasm adapter's null-filtering `q()` drops both.
+ * the JVM side.
  *
  * Endpoints whose assembly is a single fixed path (no per-call decisions —
  * e.g. getLatestMedia, getAlbumTracks, getCollections, the detail projection)
@@ -125,8 +121,7 @@ internal fun buildMediaItemsQuerySpec(
         tags = filters.tags.takeIf { it.isNotEmpty() },
         sortBy = parseItemSortList(filters.sortBy.apiValue).takeIf { it.isNotEmpty() },
         // SortOption carries "Ascending"/"Descending"; normalize case-
-        // insensitively with an Ascending default — the fallback both twins
-        // applied (JVM: SortOrder enum lookup, wasm: string re-derivation).
+        // insensitively with an Ascending default (JVM: SortOrder enum lookup).
         sortOrderDescending = filters.sortBy.sortOrder.equals("Descending", ignoreCase = true),
         startIndex = startIndex,
         limit = limit,
@@ -202,12 +197,10 @@ internal fun buildItemsByStudioQuerySpec(
  * Books narrow server-side via `includeItemTypes` ("Book" — the SDK
  * getResumeItems named arg); the video row sends no kind constraint.
  *
- * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (a declared per-client
- * divergence — `java.time` on the JVM, the JS clock + local offset via
- * `WasmClock` on wasm) and the SDK's non-null enable* defaults
+ * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (`java.time`, JVM-side)
+ * and the SDK's non-null enable* defaults
  * (enableTotalRecordCount / enableImages / excludeActiveSessions), which are
- * transport-level — the wasm client pins them explicitly, the JVM SDK sends
- * them as non-null defaults.
+ * transport-level — the JVM SDK sends them as non-null defaults.
  */
 internal fun buildResumeQuerySpec(
     limit: Int,

@@ -1,6 +1,3 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -25,26 +22,12 @@ kotlin {
         }
     }
 
-    wasmJs {
-        browser {
-            testTask {
-                // commonTest suites run via jvmTest; the wasmJs browser test
-                // run needs a local Chrome/Chromium (karma) and stays opt-in
-                // until wires a headless wasm test lane — without this
-                // guard, `gradlew build`/`check` would fail on Chrome-less
-                // machines that previously ran no wasm tests at all.
-                enabled = false
-            }
-        }
-    }
-
     applyDefaultHierarchyTemplate()
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop: every
         // OkHttp / Jellyfin-SDK implementation, the failover router, the
-        // subtitle providers and the realtime WebSocket plumbing. Wasm gets a
-        // pure-Kotlin HTTP stack when its consumers ship.
+        // subtitle providers and the realtime WebSocket plumbing.
         // NOTE: the websocket event currency stays org.json —
         // WebSocketEvent.data is consumed as JSONObject by :shared:core:data
         // (RemoteControlReceiver / SyncPlayManager), which must keep compiling
@@ -59,8 +42,8 @@ kotlin {
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
             // runCatchingRethrowingCancellation around every suspend fetch —
-            // the helper lives below this module on purpose (repositories,
-            // workers and the wasm stack cross the same seam).
+            // the helper lives below this module on purpose (repositories
+            // and workers cross the same seam).
             implementation(project(":shared:core:concurrency"))
             implementation(libs.kotlinx.serialization.json)
             // suspend/Flow surface of the api client interfaces + OkHttpConfig's
@@ -93,27 +76,6 @@ kotlin {
             // Real org.json for the desktop target (see jvmShared note above);
             // android resolves the same classes from its own framework jar.
             implementation(libs.org.json)
-        }
-        getByName("wasmJsMain").dependencies {
-            //  chunk 1 (wasm transport + auth client): the Ktor stack
-            // is confined to wasmJsMain so nothing leaks into the android/jvm
-            // compile paths — commonMain stays transport-pure and keeps using
-            // the jvmShared OkHttp + Jellyfin-SDK impls. The Js engine ships a
-            // wasmJs variant (fetch-backed) since Ktor 3.0.
-            implementation(libs.ktor.client.core)
-            implementation(libs.ktor.client.js)
-            implementation(libs.ktor.client.content.negotiation)
-            implementation(libs.ktor.serialization.kotlinx.json)
-            // networkWasmModule (Koin construction owner on wasm, mirroring
-            // networkJvmModule's role for android/jvm).
-            implementation(libs.koin.core)
-            // localStorage access for the persistent device id
-            // (`persistedOrRandomDeviceId` in WasmIdentity.kt) — the same
-            // klib the datastore module's Seerr credential store uses; the
-            // network stack reads/writes `jellyplay/device-id` directly
-            // (synchronously, at first identity resolution) instead of
-            // through the async web DataStores.
-            implementation(libs.kotlinx.browser)
         }
         getByName("commonTest").dependencies {
             implementation(kotlin("test"))

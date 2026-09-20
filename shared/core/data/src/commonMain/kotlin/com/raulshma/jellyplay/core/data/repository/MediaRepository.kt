@@ -48,9 +48,8 @@ interface MediaRepository {
      * store at consumption, so stale items simply drop out. Null when no
      * snapshot exists for the identity (fresh install, cleared data).
      *
-     * Defaults to null so the wasmJs narrow repository (web shell) keeps
-     * compiling without an offline-home implementation — the offline home is
-     * a jvm/android feature; on web there is never a snapshot.
+     * Defaults to null — the offline home is
+     * a jvm/android feature.
      */
     suspend fun getOfflineHomeLayout(): HomeSectionsResult? = null
 

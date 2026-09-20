@@ -1,7 +1,4 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -45,36 +42,12 @@ kotlin {
         }
     }
 
-    // Web UI target: paging 3.5.0 / lifecycle 2.11 / tabler /
-    // coil 3.4.0 ship readable wasm klibs; nav3-ui and mikepenz need the
-    // substitutions/scopes configured below. Shares commonMain with android+jvm.
-    wasmJs {
-        browser {
-            testTask {
-                // The karma/Chrome browser run stays opt-in/off: `gradlew
-                // build`/`check` must not fail on Chrome-less machines (same
-                // deliberate disable as :shared:core:network).
-                enabled = false
-            }
-        }
-        // Headless wasm test lane: wasmJsNodeTest compiles the full
-        // main+test wasm graphs headlessly — no Karma, no Chrome — but CANNOT
-        // EXECUTE this module's tests under plain Node: the Compose graph
-        // links skiko.mjs and Node cannot fetch/prepare its wasm ("both async
-        // and sync fetching of the wasm failed"). Execution is proven green
-        // only for skiko-free modules (:shared:core:model). Kept as a compile
-        // gate plus future hook; runs under FAIL_ON_PROJECT_REPOS — the
-        // settings.gradle.kts node/yarn governance (no flips needed).
-        nodejs()
-    }
-
     applyDefaultHierarchyTemplate()
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop: the
         // SimpleDateFormat pipeline, the markdown renderer body, the LRU lock
-        // actual, and the PlatformTime JVM actuals. Wasm gets pure-Kotlin
-        // replacements in wasmJsMain for everything commonMain references.
+        // actual, and the PlatformTime JVM actuals.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }
@@ -105,12 +78,12 @@ kotlin {
             implementation(libs.tabler.icons.filled)
             implementation(libs.coil.compose)
             // MarkdownText's engine: the mikepenz 0.41.0 pin
-            // publishes Kotlin-2.3-built wasm klibs, so the SAME GFM pipeline
-            // renders on android + desktop + wasm (see the catalog note).
+            // publishes Kotlin-2.3-built klibs, so the SAME GFM pipeline
+            // renders on android + desktop (see the catalog note).
             implementation(libs.multiplatform.markdown.renderer)
             implementation(libs.multiplatform.markdown.renderer.m3)
             // Nav3 ships KMP variants from google maven directly (desktop/iOS/
-            // js/wasm variants in the same androidx coordinates) — no mirror.
+            // js variants in the same androidx coordinates) — no mirror.
             implementation(libs.navigation3.runtime)
             implementation(libs.navigation3.ui)
             implementation(libs.lifecycle.viewmodel)
@@ -167,23 +140,6 @@ kotlin.sourceSets.configureEach {
             implementation(project.dependencies.platform(libs.compose.bom))
             implementation(libs.compose.ui.test)
             implementation(libs.compose.ui.test.manifest)
-        }
-    }
-}
-
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface; the
-// fork's 1.1.1 already covers this repo on desktop (see apps/desktop).
-// Scoped to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before.
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
         }
     }
 }

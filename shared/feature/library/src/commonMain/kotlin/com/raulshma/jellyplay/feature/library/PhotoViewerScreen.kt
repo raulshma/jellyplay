@@ -714,8 +714,8 @@ private fun PhotoImage(
                     } while (changes.any { it.pressed })
 
                     if (!pastSlop && !isMultiTouch) {
-                        // wasmJs rewrite of System.currentTimeMillis() — the same epoch
-                        // millis off Clock.System; the double-tap window math is unchanged.
+                        // Clock.System epoch-millis read — the double-tap
+                        // window math is unchanged.
                         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
                         if (now - lastTapTime < 300) {
                             onDoubleTap(gestureScale)

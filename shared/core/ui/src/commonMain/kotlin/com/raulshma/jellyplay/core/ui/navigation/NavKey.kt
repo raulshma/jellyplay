@@ -806,10 +806,9 @@ val TOP_LEVEL_ROUTES = VIDEO_TOP_LEVEL_ROUTES
 
 // The two maps above keep explicit Map<Route, String> annotations: the
 // previous hand-written form put Pair varargs inline, and without the
-// annotations the wasmJs frontend unified the vararg keys up to `out Any`
-// (a first attempt at an explicit union type argument failed differently)
-// and every downstream Set<Route> use broke. JVM/android inference was
-// unaffected (class E). The derivation helper removes the Pair shape
+// annotations type inference unified the vararg keys up to `out Any`
+// and every downstream Set<Route> use broke (JVM/android inference was
+// unaffected, class E). The derivation helper removes the Pair shape
 // entirely, but the annotations stay as a guard against reintroducing one.
 val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
     VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)

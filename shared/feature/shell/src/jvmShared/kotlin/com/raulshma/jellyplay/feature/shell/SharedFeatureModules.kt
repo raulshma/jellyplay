@@ -30,8 +30,8 @@ import org.koin.core.module.Module
  * (`*sharedFeatureModules`) and KoinModuleRegistrationGuardTest derives its
  * expected set from (set-equality in BOTH directions against the feature
  * modules discovered under `shared/feature/<module>/src/{commonMain,jvmShared}`; the
- * test reads this list out of this file's source text — the webFeatureModules
- * precedent). When a new feature lands a commonMain/jvmShared Module, add it
+ * test reads this list out of this file's source text). When a new feature
+ * lands a commonMain/jvmShared Module, add it
  * here; the guard test follows automatically. Forgetting this line is the
  * arrqueue/shortcuts lesson — compile gates are BLIND to Koin registration.
  *

@@ -19,8 +19,7 @@ internal data class RawSession(val base: String, val token: String)
  * plugin catalogue, the newsletter / playback-reporting plugin endpoints, the
  * intro/credit timestamp probes): session guard → failover-correct base URL →
  * `Authorization` header → `newCall().execute().use` → status check, with the
- * per-endpoint failure text. The JVM twin of the wasm stack's WasmApiSupport
- * helpers (`getJson` / `postStatusOnly` / `deleteStatusOnly`) — one fold of
+ * per-endpoint failure text. One fold of
  * the choreography PluginApiClientImpl, MediaInfoApiClientImpl and
  * PlaybackApiClientImpl used to copy per endpoint.
  *
@@ -150,8 +149,7 @@ internal class JellyfinRawRequester(
     /**
      * GET whose BODY TEXT the caller needs, null on non-2xx — failure is "no
      * data", never an error (intro/credit timestamps, remote-subtitle search,
-     * the playback-reporting availability probe). The JVM twin of the wasm
-     * support's `getBodyText`; [session] defaults to [requireSession], and the
+     * the playback-reporting availability probe). [session] defaults to [requireSession], and the
      * playback client passes its [requirePlaybackSession] flavour so its
      * historic guard texts survive.
      */

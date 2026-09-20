@@ -23,13 +23,13 @@ import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 
 /**
- * Wire → core.model mappers for the wasm library/playback clients.
+ * Wire → core.model mappers for the library/playback clients.
  * Every mapped field, fallback and tick conversion mirrors the jvmShared
  * `JellyfinDtoMappers` + the inline mappings in `LibraryApiClientImpl`
- * field-for-field; deviations are limited to the two documented wasm deltas:
+ * field-for-field; deviations are limited to the two documented deltas:
  *  - DATE FIELDS stay the raw wire ISO strings. The SDK deserializes dates
  *    into a zone-shifted LocalDateTime and the JVM mappers re-emit them via
- *    `.toString()` (no offset); wasm keeps the server's original string.
+ *    `.toString()` (no offset); these mappers keep the server's original string.
  *  - `MediaSource.id` keeps the SDK's `id.toString()` fallback literally
  *    (a missing server Id maps to the string "null"), byte-parity with the
  *    JVM mapper.
@@ -324,9 +324,9 @@ internal fun BaseItemDtoWire.toCollectionSummary() = CollectionSummary(
 
 /**
  * The canonical rating→age table (unknown ratings map to null = "no
- * opinion"). Both platform parental-filter tails resolve ratings through it
+ * opinion"). The parental-filter tails resolve ratings through it
  * (jvmShared: the SDK-typed `toFilteredMediaItems` mapper tail over
- * [filterByParentalRating]; wasm: the client's own call of the same).
+ * [filterByParentalRating]).
  */
 internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
     "G", "TV-Y", "TV-G" -> 0
@@ -404,8 +404,7 @@ private val ITEM_SORT_BY_TOKENS: Map<String, String> = buildMap {
 /**
  * Maps the wire lyric DTO to [LyricsResult]: per-line start/end times derived
  * from the next line (clamped non-negative), per-word cues sliced out of the
- * line text, and [LyricsSource.UNKNOWN] exactly when no lines parsed. Formerly
- * a private twin of this exact body inside `KtorWasmLibraryApiClient`; the
+ * line text, and [LyricsSource.UNKNOWN] exactly when no lines parsed. The
  * jvmShared `LyricsApi` keeps its own SDK-typed copy because its input is the
  * deserialized `org.jellyfin.sdk.model.api.LyricDto`, which commonMain cannot
  * see.

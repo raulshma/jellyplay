@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the pure home-sections assembly (the ordering/filters half of the
- * jvmShared getHomeSections) extracted for the wasm client: emission order,
+ * jvmShared getHomeSections): emission order,
  * Next Up exclusion rules, per-library Latest rows, Recently Added insertion
  * position, recommendations fallback, pinned rows last, and the
  * failedSectionTypes accounting.

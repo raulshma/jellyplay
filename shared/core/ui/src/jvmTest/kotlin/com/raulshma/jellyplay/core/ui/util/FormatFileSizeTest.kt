@@ -8,8 +8,8 @@ import kotlin.test.assertEquals
 
 /**
  * Pins formatFileSize's one-decimal SI outputs (the `%.1f` JVM formatting
- * contract) ahead of the wasmJs commonMain extraction, so any drift in the
- * shared replacement shows up as a test failure instead of a UI string change.
+ * contract), so any drift in the shared implementation shows up as a test
+ * failure instead of a UI string change.
  */
 class FormatFileSizeTest {
 

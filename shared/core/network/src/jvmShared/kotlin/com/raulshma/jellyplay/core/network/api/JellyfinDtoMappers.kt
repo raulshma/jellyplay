@@ -98,8 +98,7 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
 /**
  * Maps a detail-projection [BaseItemDto] onto the domain [MediaDetail] —
  * formerly the ~60-line inline body of `LibraryApiClientImpl.getMediaDetail`
- * (the wasm twin's copy already lived in commonMain
- * `LibraryWireMappers.toMediaDetail`; this is the SDK-typed jvmShared twin,
+ * (this is the SDK-typed jvmShared twin,
  * same file as [toMediaItem]). `relatedItems` stays empty: similar items are
  * fetched separately (getSimilarItems) and merged by the caller.
  */
@@ -164,8 +163,7 @@ internal fun BaseItemDto.toMediaDetail() = MediaDetail(
  * The standard tail of every library listing call: map the DTOs to
  * [MediaItem]s, then parental-rate them through the commonMain policy
  * ([filterByParentalRating] over the caller-supplied max, e.g.
- * `JellyfinApiEngine.currentMaxParentalRating`) — the JVM twin of the wasm
- * client's `map { it.toMediaItem() }.filterByParentalRating(max)` tail. The
+ * `JellyfinApiEngine.currentMaxParentalRating`). The
  * map-then-filter order is equivalent to the former engine member
  * (filter-then-map keyed on `officialRating`) because [toMediaItem] carries
  * `officialRating` through unchanged.
@@ -548,8 +546,8 @@ internal fun parseItemKind(type: String): BaseItemKind? = when (type) {
  * Parses a compound sort key ("ProductionYear,SortName") into SDK
  * [ItemSortBy] entries, delegating token parsing to the commonMain wire
  * ([parseItemSortTokens]) and resolving its serial names against the enum —
- * the canonical token table lives there (the wasm client parses the same
- * string), so the two can never drift.
+ * the canonical token table lives there,
+ * so the two can never drift.
  */
 internal fun parseItemSortList(sortBy: String): List<org.jellyfin.sdk.model.api.ItemSortBy> =
     parseItemSortTokens(sortBy).mapNotNull { serial ->

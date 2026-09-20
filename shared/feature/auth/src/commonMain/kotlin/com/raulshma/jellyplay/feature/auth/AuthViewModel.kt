@@ -82,9 +82,8 @@ class AuthViewModel(
         _serverHealth.set(servers.associate { it.address to ServerHealth.Checking })
         healthCheckJob = launch {
             servers.forEach { server ->
-                // Monotonic elapsed read (stdlib) — the web target has no
-                // System.currentTimeMillis, and latency wants the wall-clock-
-                // independent measure anyway.
+                // Monotonic elapsed read (stdlib) — latency wants the
+                // wall-clock-independent measure anyway.
                 val probeClock = TimeSource.Monotonic.markNow()
                 val addresses = listOf(server.address) + server.alternateAddresses
                 val reachable = addresses.any { address ->

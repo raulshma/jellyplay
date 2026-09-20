@@ -14,8 +14,7 @@ internal expect fun dynamicPlatformColorScheme(darkTheme: Boolean): ColorScheme?
 /**
  * Artwork-driven palette for ambient theming, resolved from [imageUrl] through
  * the platform image stack. Android extracts swatches via Palette from a Coil
- * bitmap; desktop ports the same swatch classification over Skia pixels; web
- * returns null until its image pipeline lands (consumers already handle null).
+ * bitmap; desktop ports the same swatch classification over Skia pixels.
  */
 @Composable
 expect fun rememberArtworkColors(imageUrl: String?): ArtworkColors?

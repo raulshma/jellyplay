@@ -33,8 +33,7 @@ private fun obtainFormatter(pattern: String, locale: Locale): SimpleDateFormat {
  * answers from ICU's `getBestDateTimePattern`; desktop derives it from the
  * locale's SHORT date format (both yield the locale's numeric date
  * convention). Declared here (not commonMain) because it exists solely
- * behind the `SimpleDateFormat` pipeline — wasm renders SYSTEM dates from
- * its own region table.
+ * behind the `SimpleDateFormat` pipeline.
  */
 internal expect fun bestDateTimePattern(locale: Locale): String
 
@@ -43,9 +42,9 @@ actual fun formatDate(timestamp: Long, preference: DateFormatPreference): String
 
 /**
  * The formatter-backed half of DateFormatHelper, moved verbatim from
- * commonMain when the wasmJs target landed (only android/desktop can honor a
- * `java.text.SimpleDateFormat` return type). Resolves SYSTEM patterns via
- * each platform's [bestDateTimePattern] actual.
+ * commonMain (only android/desktop can honor a `java.text.SimpleDateFormat`
+ * return type). Resolves SYSTEM patterns via each platform's
+ * [bestDateTimePattern] actual.
  */
 fun getDateFormat(preference: DateFormatPreference): SimpleDateFormat = when (preference) {
     DateFormatPreference.SYSTEM -> {

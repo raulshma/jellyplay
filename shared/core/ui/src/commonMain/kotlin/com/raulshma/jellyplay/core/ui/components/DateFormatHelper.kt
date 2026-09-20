@@ -5,12 +5,10 @@ import com.raulshma.jellyplay.core.model.DateFormatPreference
 /**
  * Formats a wall-clock timestamp using the user's [DateFormatPreference].
  *
- * Pre-wasm this lived here directly atop `java.text.SimpleDateFormat`; the
- * JVM pipeline (per-thread cached formatters, ICU/SHORT-date-derived SYSTEM
- * patterns via [getDateFormat]) moved to the jvmShared actual unchanged, so
+ * The JVM pipeline (per-thread cached formatters, ICU/SHORT-date-derived
+ * SYSTEM patterns via [getDateFormat]) lives in the jvmShared actual, so
  * android/desktop outputs stay byte-identical (pinned by
- * DateFormatHelperTest). Wasm renders the same fixed pattern families from
- * pure local-date math, resolving SYSTEM through the browser's ICU region.
+ * DateFormatHelperTest).
  */
 expect fun formatDate(
     timestamp: Long,

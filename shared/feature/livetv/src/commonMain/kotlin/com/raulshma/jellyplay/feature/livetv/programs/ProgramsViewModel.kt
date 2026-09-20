@@ -39,7 +39,7 @@ data class ProgramsUiState(
  * Drives the Programs tab — six category rows fetched in parallel from
  * `GET /LiveTv/Programs/Recommended`, exactly matching jellyfin-web's
  * `livetvsuggested.js` reload(): On Now (isAiring), then Shows/Movies/Sports/
- * Kids/News (hasAired=false + the category flag). Implements the web app's
+ * Kids/News (hasAired=false + the category flag). Implements jellyfin-web's
  * 5-minute full-render throttle: a re-entry within
  * [LIVE_TV_STALENESS_INTERVAL_MS] only refreshes the "On Now" row.
  */

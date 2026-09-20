@@ -14,11 +14,10 @@ fun EntryProviderScope<NavKey>.requestsSection(
         // The ViewModelStoreOwner/LifecycleOwner provisioning
         // fallback MUST sit outside RequestsScreen — koinViewModel() evaluates
         // as a default parameter before an in-screen provider would run (see
-        // ProvidePlatformLocalsFallback).  update: pass-through on
-        // ALL shipped surfaces now — android/desktop have their own owners
-        // and the web shell provisions at its root
-        // (apps/web ProvideWebShellViewModelOwners); the wrapper remains the
-        // fallback for non-shell hosts only.
+        // ProvidePlatformLocalsFallback). Pass-through on
+        // ALL shipped surfaces — android/desktop have their own owners;
+        // the wrapper remains the fallback for hosts without owners
+        // (tests, embedded previews) only.
         ProvidePlatformLocalsFallback {
             RequestsScreen(
                 onBack = { navigator.goBack() },

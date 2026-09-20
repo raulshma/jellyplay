@@ -3,12 +3,9 @@ package com.raulshma.jellyplay.feature.settings
 /**
  * Platform-format seam for the settings screens (the editor's PlatformFormats
  * template): the JVM-only `String.format` / `"%1$d".format` reads in commonMain
- * UI moved behind module-internal expects so the wasmJs target compiles.
+ * UI moved behind module-internal expects.
  *  - jvmShared actual: the verbatim `java.text.String.format` bodies
  *    (android + desktop output unchanged, locale included).
- *  - wasmJs actual: hand-rolled slot substitution over the module's own
- *    resource patterns + integer-math decimal rendering — documented locale
- *    degrade (fixed '.' decimal separator, fixed +/- sign position).
  */
 internal expect fun formatOneDecimal(value: Double): String
 

@@ -109,7 +109,7 @@ object TrackLabelFormatter {
     fun mimeToCodec(mime: String?): String? {
         if (mime.isNullOrBlank()) return null
         // No-arg lowercase() = invariant locale — same semantics as the old
-        // lowercase(Locale.ROOT) and legal on wasmJs (W.3).
+        // lowercase(Locale.ROOT).
         val key = mime.trim().lowercase()
         return when {
             // Media3 internal renderer-output mime — not a real container codec.
@@ -160,9 +160,9 @@ object TrackLabelFormatter {
     }
 
     private fun displayLanguage(lang: String): String? =
-        // BCP-47 display-name resolution is platform-specific (W.3 wasmJs
-        // seam): JVM/Android use java.util.Locale; wasm falls back to the raw
-        // tag. Blank/unresolvable → show the raw language code.
+        // BCP-47 display-name resolution is platform-specific (the
+        // LanguageDisplayName expect/actual seam): JVM/Android use
+        // java.util.Locale. Blank/unresolvable → show the raw language code.
         platformLanguageDisplayName(lang.replace('_', '-'))
             ?.takeIf { it.isNotBlank() }
             ?: lang.takeIf { it.isNotBlank() }

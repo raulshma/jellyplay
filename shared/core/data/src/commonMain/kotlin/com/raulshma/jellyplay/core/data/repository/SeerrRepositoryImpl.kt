@@ -51,8 +51,7 @@ class SeerrRepositoryImpl(
      * Identity source for the detail cache's composite keys (see
      * [SessionIdentityProvider.cacheIdentity]): a bare-String key previously
      * let the previous Jellyfin user's Seerr view survive a switch for the
-     * full TTL. jvmShared DI binds [HomeSession]; wasmJs binds the
-     * AtomicSessionState-backed provider.
+     * full TTL. jvmShared DI binds [HomeSession].
      */
     private val sessionIdentity: SessionIdentityProvider,
     /** Registers the detail cache for wholesale clears on identity change. */
@@ -67,16 +66,13 @@ class SeerrRepositoryImpl(
      * Offline gate for the background poll — the SAME signal
      * `HomeRefresher`'s periodic loop consults (`isOffline` skip), resolved
      * by the jvmShared DI module from the platform OfflineModeManager
-     * binding. Nullable because the promoted commonMain constructor must
-     * also serve the wasmJs slice (see `dataWasmModule`), which binds no
-     * OfflineModeManager — web polling runs ungated and leans on browser
-     * background-timer throttling instead.
+     * binding. Nullable; a null manager skips the offline gate.
      */
     private val offlineModeManager: OfflineModeManager? = null,
 ) : SeerrRepository {
 
     // Both fields carried @Volatile on the pre-15B JVM sources; the promotion
-    // keeps it via kotlin.concurrent.Volatile (common — has a wasmJs actual;
+    // keeps it via kotlin.concurrent.Volatile (common;
     // the same annotation this repo already uses in commonMain,
     // e.g. WidgetDataStore).
     @Volatile
@@ -509,7 +505,7 @@ class SeerrRepositoryImpl(
         // periodic loop applies (`if (offlineModeManager.isOffline)
         // continue`), placed here rather than in the loop so the prefs
         // collector's immediate-on-enable poll is gated too. Null manager =
-        // the wasmJs slice, which binds no OfflineModeManager.
+        // the offline gate is skipped.
         if (offlineModeManager?.isOffline == true) return
         // getRequestCount stamps _pendingRequestCount on success (its own
         // .also) — the badge StateFlow is the poll's output channel.

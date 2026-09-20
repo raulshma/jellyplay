@@ -51,7 +51,7 @@ import org.koin.dsl.module
  *   [DefaultPlaybackFocus] over the in-process [DesktopFocusArbiter] twin
  *   and the [DesktopAudioQueueManagerSurface] music adapter — cross-player
  *   exclusivity (music vs book read-aloud) is arbitrated in-process on
- *   desktop; the wasm graph keeps the Noop fallback (ADR decision 6).
+ *   desktop.
  * - [AudioEffectsManager] is the desktop [DesktopAudioEffectsManager] (full
  *   state machine + mpv `af` DSP via the queue manager's engine); the
  *   concrete instance is wired into the queue manager so effect mutations
@@ -94,8 +94,7 @@ val desktopPlayerModule: Module = module {
     // is no OS seat on desktop) and the music surface adapter. With this
     // binding, PlayerBookKoinModule's `getOrNull() ?: NoopPlaybackFocus`
     // fallback resolves a REAL module on desktop — claim-state publication
-    // goes live (wasm keeps the Noop fallback: fail-closed vacuous
-    // arbitration, ADR decision 6). The surface defers the manager via the
+    // goes live. The surface defers the manager via the
     // same kotlin-Lazy cycle breaker the Android graph uses: the manager
     // ctor-injects the PlaybackFocus single, the surface touches the manager
     // only on the first pause command — long after construction.

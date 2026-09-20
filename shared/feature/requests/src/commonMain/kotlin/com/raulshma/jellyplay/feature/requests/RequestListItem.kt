@@ -389,8 +389,7 @@ private fun rememberRelativeTimeFormats(): RelativeTimeFormats {
 /**
  * the java.time body moved to the [requestAgeMinutes] seam (routed through
  * core:ui's DateLabels actuals — the verbatim `OffsetDateTime`/`Duration`
- * pipeline is the jvmShared actual; wasmJs gets strict-regex + integer-math;
- * see RequestTime.kt). The buckets
+ * pipeline is the jvmShared actual; see RequestTime.kt). The buckets
  * are integer-math over whole minutes and provably match the old
  * `Duration`-based thresholds:
  *  - `toMinutes() < 1`            -> minutes < 1 (also absorbs every negative

@@ -11,8 +11,8 @@ import org.jellyfin.sdk.model.api.SortOrder
  * The JVM half of the [LibraryItemsQuerySpec] seam: wire serial names → the
  * Jellyfin SDK enums `itemsApi.getItems` accepts. The shared commonMain
  * builders hold the per-endpoint request DECISIONS in wire vocabulary; these
- * resolvers (with the wasm client's raw query strings) are the two adapters
- * that prove the seam — one spec, two transports. Same serialName-lookup
+ * resolvers are the adapter
+ * that proves the seam — one spec, one transport. Same serialName-lookup
  * regime as [LIST_ITEM_FIELDS]: resolve against prebuilt serialName maps,
  * failing fast on SDK drift, so a spec token the SDK no longer knows about
  * cannot silently degrade a query.

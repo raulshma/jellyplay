@@ -21,8 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * Home note: this file moved verbatim from shared/core:data's
  * commonMain (SAME package, so no consumer import changes) because `MediaEngine`
- * extends it and this module needs a wasmJs target for `HtmlVideoEngine` —
- * shared/core:data has no wasm build (Room). The core:data consumers
+ * extends it. The core:data consumers
  * (`ActivePlayerController`, `VideoMiniPlayerState`, remote-control
  * dispatchers) now reach it through core:data's `api(player-contract)` edge.
  */

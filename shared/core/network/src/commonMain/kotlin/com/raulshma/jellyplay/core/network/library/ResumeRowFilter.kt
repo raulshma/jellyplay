@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 /**
  * Resume rows the user can actually continue — the client-side half of the
  * #157 rule, applied by every `getContinueWatching` implementation
- * (JVM `LibraryApiClientImpl`, wasm `KtorWasmLibraryApiClient`).
+ * (JVM `LibraryApiClientImpl`).
  *
  * /Items/Resume filters on PlaybackPositionTicks > 0 only — it does NOT
  * exclude played items. A position report landing on an already-played item
@@ -38,7 +38,7 @@ fun List<MediaItem>.resumableOnly(): List<MediaItem> =
  * #157 played-row rule (the resume endpoint does not exclude played items, so
  * a finished book's lingering position would otherwise occupy the row
  * forever). Applied by every `getContinueReading` implementation (JVM
- * `LibraryApiClientImpl`, wasm `KtorWasmLibraryApiClient`) as the
+ * `LibraryApiClientImpl`) as the
  * belt-and-braces client-side filter behind the server's
  * `IncludeItemTypes=Book` narrowing.
  */
@@ -46,11 +46,11 @@ fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
     filter { !it.isPlayed && it.mediaType == MediaType.BOOK }
 
 /**
- * The resume rows' full post-fetch chain, folded once for both client twins
- * (`LibraryApiClientImpl`, `KtorWasmLibraryApiClient` — each used to hand-copy
+ * The resume rows' full post-fetch chain, folded once for the client twins
+ * (`LibraryApiClientImpl` — which used to hand-copy
  * this tail per endpoint): parental filter → id-distinct → the #157
  * played-row rule's books-or-video half. [isBooks] selects
- * [readingResumableOnly] over [resumableOnly] exactly as the two
+ * [readingResumableOnly] over [resumableOnly] exactly as the
  * getContinueReading implementations do behind their server-side Book
  * narrowing.
  */

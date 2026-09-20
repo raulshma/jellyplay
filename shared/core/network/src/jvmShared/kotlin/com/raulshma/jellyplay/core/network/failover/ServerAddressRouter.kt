@@ -38,8 +38,7 @@ import okhttp3.Request
  * live in the commonMain [FailoverPolicy] core ([ProbeOutcome] is its
  * latency-free value twin — see `toProbeOutcome`); this JVM type stays
  * platform-side solely because of [latencyMs], the DECLARED JVM DIVERGENCE:
- * every probe records its wall-clock cost here for health checks/validation,
- * which the wasm transport has no equivalent for.
+ * every probe records its wall-clock cost here for health checks/validation.
  */
 data class AddressProbeResult(
     val reachable: Boolean,
@@ -94,8 +93,7 @@ private fun AddressProbeResult.toProbeOutcome() = ProbeOutcome(
  *
  * The pure decision tables (probe identity bar, legacy-prefix strip-retry,
  * resolved-address adoption, primary-then-alternates selection) live in the
- * commonMain [FailoverPolicy] core, shared with the wasmJs Ktor transport
- * (`KtorWasmAuthApiClient`). What stays JVM-side by declaration: the
+ * commonMain [FailoverPolicy] core. What stays JVM-side by declaration: the
  * per-probe latency capture on [AddressProbeResult] (the common [ProbeOutcome]
  * carries none), the primary-alone-first + concurrent-alternates probe
  * fan-out, and the all-down behavior of keeping the CURRENT active address
@@ -280,8 +278,7 @@ class ServerAddressRouter @Inject constructor(
      * cheap probe); only when it is down are the alternates probed
      * concurrently, so a black-holed network costs one probe window rather
      * than the sum of every endpoint's timeout. Both fan-out shapes are the
-     * router's transport (a DECLARED divergence — the wasm transport probes
-     * sequentially); the primary-then-alternates ORDER they serve is the
+     * router's transport; the primary-then-alternates ORDER they serve is the
      * common [selectPreferredAddress] decision.
      *
      * Returns true when the active address changed.
@@ -332,8 +329,7 @@ class ServerAddressRouter @Inject constructor(
      *
      * The ladder decisions (when to strip-retry, which answer is adopted and
      * what [AddressProbeResult.resolvedAddress] becomes) are the common
-     * FailoverPolicy tables — the wasm transport runs the identical ladder
-     * through [probeResolvedAddress]. The orchestration stays here so the
+     * FailoverPolicy tables. The orchestration stays here so the
      * latency-carrying [AddressProbeResult] values never flatten through the
      * latency-free [ProbeOutcome].
      */

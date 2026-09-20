@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Wire DTOs for the wasm Radarr/Sonarr clients — field-for-field
+ * Wire DTOs for the Radarr/Sonarr clients — field-for-field
  * transcriptions of the PRIVATE nested DTOs inside the jvmShared
  * `RadarrApiClientImpl` / `SonarrApiClientImpl`. Same names (those are
  * class-nested there, so no collision with these top-level declarations),
@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
  * Decoding runs through [arrSeerrWireJson] — the exact config the JVM impls
  * use (`SeerrApiClientImpl.lenientJson`).
  *
- * These are consumed only by the wasmJs clients; on android/jvm they compile
+ * These are consumed only by commonTest; on android/jvm they compile
  * unused (same arrangement as the `library/` / `user/` wire DTOs).
  */
 

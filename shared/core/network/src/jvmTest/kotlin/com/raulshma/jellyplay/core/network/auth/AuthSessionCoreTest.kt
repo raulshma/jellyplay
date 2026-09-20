@@ -18,9 +18,9 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the [AuthSessionCore] spine — the capture/adopt/try/publish/restore
- * discipline both auth API clients delegate to (the jvmShared
+ * discipline the auth API clients delegate to (the jvmShared
  * AuthApiClientImpl with the engine's ApiClient swap as its side-effects
- * port, the wasm KtorWasmAuthApiClient with the inert one). The platform
+ * port). The platform
  * files keep only their wire legs; every invariant below is therefore
  * platform-free by construction.
  *

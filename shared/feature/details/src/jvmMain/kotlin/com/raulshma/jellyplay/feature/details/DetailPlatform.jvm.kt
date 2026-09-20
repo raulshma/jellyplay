@@ -60,8 +60,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     // The jvm-only detail defs (dependency closure reaches the
     // jvmShared halves of core:data — AudioQueueFacade, DownloadIntake,
     // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's
-    // detailsModule, which is now the wasm-clean module the web shell
-    // registers. Desktop registers BOTH modules; these defs resolve exactly
+    // detailsModule. Desktop registers BOTH modules; these defs resolve exactly
     // as before (same Koin defs, different module home).
     single { DownloadLifecycleActions.Factory(get(), get(), get(), get()) }
     single { ResyncActions.Factory(get(), get()) }

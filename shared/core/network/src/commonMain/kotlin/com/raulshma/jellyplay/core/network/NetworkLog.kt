@@ -6,7 +6,6 @@ package com.raulshma.jellyplay.core.network
  * each target maps onto its native logger:
  *  - androidMain → android.util.Log (identical tags/levels as pre-migration)
  *  - jvmMain     → slf4j (the same backend the Jellyfin SDK logs through)
- *  - wasmJsMain  → console
  *
  * Expect functions cannot have default arguments, so the warn-with-throwable
  * form is a separate overload and call sites pass the error explicitly.

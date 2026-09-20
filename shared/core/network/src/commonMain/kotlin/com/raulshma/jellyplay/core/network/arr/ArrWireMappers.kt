@@ -12,11 +12,11 @@ import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
 /**
- * Wire→model mappers for the wasm Radarr/Sonarr clients — verbatim
+ * Wire→model mappers for the Radarr/Sonarr clients — verbatim
  * transcriptions of the private mapper functions inside the jvmShared
  * `RadarrApiClientImpl` / `SonarrApiClientImpl` (same names, same fallbacks,
  * same computation order), extracted to commonMain so commonTest can pin
- * them and the wasm clients consume them unchanged. Read each mapper against
+ * them. Read each mapper against
  * its JVM original when touching either side.
  */
 

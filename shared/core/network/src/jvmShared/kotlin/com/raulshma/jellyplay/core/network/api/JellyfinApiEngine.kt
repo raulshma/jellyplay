@@ -118,8 +118,7 @@ class JellyfinApiEngine @Inject constructor(
         _api ?: throw IllegalStateException("Not connected to server")
 
     /**
-     * The authenticated user's id, throwing when no session is established —
-     * the engine-side twin of the wasm support's `requireCurrentUser()`
+     * The authenticated user's id, throwing when no session is established
      * (message-aligned: "Not authenticated"). Reads the ATOMIC [session]
      * value, never the separate [currentUser] flow alone: a user published
      * without a server is no identity (see [publishSession]), and the

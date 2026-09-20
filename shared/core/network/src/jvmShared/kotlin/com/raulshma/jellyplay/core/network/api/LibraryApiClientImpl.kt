@@ -172,8 +172,8 @@ class LibraryApiClientImpl @Inject constructor(
         maxDays: Int,
     ): Result<List<MediaItem>> = engine.apiResultWithRetry {
         // The limit/projection shape is the shared resume spec (NextUp rides
-        // it with no kind narrowing); the cutoff CLOCK stays here — the
-        // declared per-client divergence vs wasm's WasmClock.
+        // it with no kind narrowing); the cutoff CLOCK stays here (JVM-side
+        // java.time).
         val spec = buildResumeQuerySpec(limit, isBooks = false)
         val cutoff = if (maxDays > 0) {
             java.time.LocalDateTime.now().minusDays(maxDays.toLong())

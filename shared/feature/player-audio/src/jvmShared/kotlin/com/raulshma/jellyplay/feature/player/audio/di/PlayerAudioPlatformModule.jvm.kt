@@ -10,7 +10,6 @@ import org.koin.dsl.module
 // AudioTrackDownloads seam — is core:data's own binding in dataJvmModule
 // (since the promoted-interface pass, over DownloadRepositoryImpl itself,
 // which implements the window directly). This fragment stays so commonMain's
-// includes(platformPlayerAudioModule()) keeps a jvmShared counterpart to
-// merge with the wasmJs actual's sleep-timer binding.
+// includes(platformPlayerAudioModule()) keeps its jvmShared counterpart.
 internal actual fun platformPlayerAudioModule(): Module = module {
 }

@@ -261,8 +261,7 @@ fun UpcomingCalendarScreen(
             // UTC (NOT the device zone) — reading it in a zoned instant could
             // shift the civil day when the device offset pushes the UTC
             // midnight across a date boundary, so the UTC .date read is the
-            // load-bearing part of this round-trip (same shape the pre-wasm
-            // java.time `LocalDate.ofEpochDay(millis / 86_400_000L)` had).
+            // load-bearing part of this round-trip.
             val datePickerState = rememberDatePickerState(
                 initialSelectedDateMillis = state.visibleMonth
                     .onDay(1)

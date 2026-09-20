@@ -18,7 +18,7 @@ private fun googleFont(name: String): FontFamily = FontFamily(
 
 // GMS fonts are resolved on demand from the Google Fonts provider; Android
 // bundles no font binaries. The @Composable getters mirror the expect
-// declarations (the jvm/wasm actuals load bundled resources through the
+// declarations (the jvm actual loads bundled resources through the
 // composable `org.jetbrains.compose.resources.Font` API).
 internal actual val displayFontFamily: FontFamily
     @Composable get() = googleFont("Space Grotesk")

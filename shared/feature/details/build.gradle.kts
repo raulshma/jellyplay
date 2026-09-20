@@ -26,22 +26,6 @@ kotlin {
         }
     }
 
-    // Second shared/feature module with the web target — the
-    // SeerrDetail slice renders in the ComposeViewport web shell (the
-    // Requests→SeerrDetail navigation stub becomes real). The old blocker
-    // (java.time/java.text in commonMain) is gone two ways: SeerrDetailScreen/
-    // SeerrDetailUtils were purified onto integer-math + kotlinx.datetime
-    // seams, and the MediaDetail cluster (Room-blocked, OFF web) moved to
-    // jvmShared with its java.* bodies verbatim. The karma/Chrome browser run
-    // stays off like core:ui/core:network/requests — jvmTest pins semantics.
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
-
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -55,8 +39,7 @@ kotlin {
         // sections/sheets and the ManageSeries + navigation entryProvider)
         // share android + desktop verbatim: they carry the java.io/java.time/
         // java.text bodies and reach Room-backed data through commonMain
-        // seams, and the cluster stays off web for now. SeerrDetail's files
-        // stay in commonMain (purified).
+        // seams. SeerrDetail's files stay in commonMain (purified).
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }
@@ -134,20 +117,3 @@ kotlin {
 // in `...feature.details.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.details.generated.resources"
-
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface. Scoped
-// to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (the
-// identical block lives in shared/core/ui + shared/feature/requests).
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
-        }
-    }
-}

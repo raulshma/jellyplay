@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  * Pins the library wire DTOs' PascalCase contract and the
  * DTO→core.model mapping semantics (mirrors the jvmShared JellyfinDtoMappers
  * these tests substitute for), decoded through the same lenient Json the
- * wasm client uses. Field-for-field spot checks per the chunk-2 task list:
+ * wire client uses. Field-for-field spot checks per the chunk-2 task list:
  * MediaItem (UserData/ImageTags/series fields), MediaDetail/MediaSource/
  * MediaStream, playlists/collections, parental-rating filter and sort-token
  * parsing.
@@ -78,7 +78,7 @@ class LibraryWireMapperTest {
         assertEquals(3, item.playCount)
         assertEquals("2026-01-02T03:04:05.0000000Z", item.lastPlayedDate)
         assertEquals(4, item.unplayedItemCount)
-        // Raw wire string kept (wasm delta vs the SDK zone-shifted format).
+        // Raw wire string kept (delta vs the SDK zone-shifted format).
         assertEquals("1982-06-25T00:00:00.0000000Z", item.premiereDate)
         assertEquals(listOf("Sci-Fi", "Drama"), item.genres)
         assertEquals(listOf("Warner Bros"), item.studios, "studio without a name is dropped")

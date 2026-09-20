@@ -16,14 +16,8 @@ import kotlin.test.assertTrue
  * in commonTest's DateLabelsTest): every shape renders through java.time with
  * Locale.getDefault() — pinned to English here for determinism, the same
  * technique CalendarGroupingTest/DurationFormatterTest use. Byte-parity with
- * the pre-promotion feature bodies is what these assertions freeze.
- *
- * The wasmJs FIXED-ENGLISH degrade documented once on the DateLabels KDoc is
- * pinned here too, source-scan style (the WasmMirrorContractTest precedent —
- * the wasm browser test lane never runs, so the degrade is ratcheted from the
- * JVM build): the wasm actual must format from its own English tables and
- * must not consult host-locale services (Intl/DateTimeFormat), while the JVM
- * actual must keep Locale.getDefault().
+ * the pre-promotion feature bodies is what these assertions freeze. The JVM
+ * actual must keep Locale.getDefault() — pinned source-scan style below.
  */
 class DateLabelsJvmTest {
 
@@ -88,7 +82,7 @@ class DateLabelsJvmTest {
         assertEquals(older.format(DateTimeFormatter.ofPattern("MMM d")), relativeInstantDateLabel(stamp))
     }
 
-    // ── the fixed-English degrade, source-scan contract ───────────────────
+    // ── the host-locale contract, source-scan style ──────────────────────
 
     /** This module's root (the nearest ancestor holding our source sets). */
     private val moduleRoot: File by lazy {
@@ -99,30 +93,6 @@ class DateLabelsJvmTest {
             "could not locate src/jvmShared from ${System.getProperty("user.dir")}",
         )
         dir
-    }
-
-    @Test
-    fun `wasm actual renders fixed english from its own tables and consults no locale service`() {
-        val wasmActual = File(
-            moduleRoot,
-            "src/wasmJsMain/kotlin/com/raulshma/jellyplay/core/ui/components/DateLabels.wasmJs.kt",
-        ).let { file ->
-            assertTrue(file.isFile, "missing wasm DateLabels actual at ${file.absolutePath}")
-            file.readText(Charsets.UTF_8)
-        }
-
-        // The single English table set (the one the feature actuals used to
-        // hand-roll individually).
-        assertTrue(
-            "\"Jan\", \"Feb\", \"Mar\"" in wasmActual && "\"January\", \"February\", \"March\"" in wasmActual &&
-                "\"Mon\", \"Tue\", \"Wed\"" in wasmActual,
-            "wasm actual lost its English month/day tables",
-        )
-        // The degrade is FIXED English: no host-locale lookups anywhere.
-        assertTrue(
-            "Intl." !in wasmActual && "DateTimeFormat" !in wasmActual,
-            "wasm actual must not consult host-locale services (Intl/DateTimeFormat) — that is the documented degrade's flip side",
-        )
     }
 
     @Test

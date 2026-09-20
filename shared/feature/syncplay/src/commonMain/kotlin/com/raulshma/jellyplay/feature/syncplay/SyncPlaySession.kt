@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayQueueUpdateData
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Web seam over core:data's jvmShared `SyncPlayManager` —
+ * Common seam over core:data's jvmShared `SyncPlayManager` —
  * the group-session handle the screen's ViewModel reads (join/leave, the
  * active group id, the reconnect timestamp, and the WebSocket event stream).
  * The manager's constructor closure is the JVM SyncPlay stack (OkHttp
@@ -14,13 +14,7 @@ import kotlinx.coroutines.flow.Flow
  * Promoted-interface precedent (DownloadIntake/DownloadQueue): the interface
  * carries exactly the host-facing surface, the jvmShared actual delegates to the process-wide
  * `SyncPlayManager` single (same DI graph — android/desktop behavior
- * unchanged), and the wasmJs actual is an honest "unsupported" session.
- *
- * Web behavior: the browser has no SyncPlay transport (the manager's
- * WebSocket client is JVM-only and the web stack registers no binding), so
- * the wasm actual reports the failure to join/leave with an explicit cause,
- * an always-null [activeGroupId] and a never-emitting [events] flow — no
- * group state is ever fabricated.
+ * unchanged).
  */
 interface SyncPlaySession {
 

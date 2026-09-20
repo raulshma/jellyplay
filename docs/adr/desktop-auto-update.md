@@ -140,7 +140,7 @@ repo does not have.
 2. **CI artifacts.** The `desktop-package` matrix (ubuntu/windows/macos)
    runs `:apps:desktop:packageDistributionForCurrentOS` per OS and uploads
    version-tagged installers: `jellyplay-desktop-<platform>-v<display>.msi |
-   .deb | .rpm | .dmg`; the `release` job attaches them (plus the web bundle)
+   .deb | .rpm | .dmg`; the `release` job attaches them
    to the GitHub release.
 3. *(manual)* **Boot each installer on each OS** (packaging smoke below)
    BEFORE publishing — a broken installer published as `latest` becomes every

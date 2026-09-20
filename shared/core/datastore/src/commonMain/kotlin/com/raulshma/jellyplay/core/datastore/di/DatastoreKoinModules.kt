@@ -50,14 +50,14 @@ import org.koin.dsl.module
  * commonMain (was jvmShared): every def is common-legal — the
  * 41 store classes are commonMain and the applicationScope single constructs
  * CoroutineScope(SupervisorJob() + Dispatchers.Default), identical semantics
- * on android/jvm/wasmJs. At promotion NOTHING stayed behind in
+ * on android/jvm. At promotion NOTHING stayed behind in
  * jvmShared (its remaining files are the PinHasher/RandomUuidString/
  * BlockingFirstOrNull JVM actuals, which no def here references — their
  * expects are commonMain).
  *
  * Platform-bound definitions (the per-file DataStores and the
  * SecureKeyValueStorage-backed credential stores) live in
- * [androidDatastoreModule] / [desktopDatastoreModule] / webDatastoreModule.
+ * [androidDatastoreModule] / [desktopDatastoreModule].
  */
 val datastoreCommonModule = module {
 

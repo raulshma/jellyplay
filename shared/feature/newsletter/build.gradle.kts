@@ -27,20 +27,6 @@ kotlin {
         }
     }
 
-    // web breadth: the target compiles — the newsletter's data seams
-    // (NewsletterRepository, AuthRepository, ImageUrlProvider, NotificationStore)
-    // are all commonMain since the D-phase purifications, so only the
-    // java.time reads needed seams (NewsletterDateLabels expect/actual, the
-    // requests RequestTime.kt template). The karma/Chrome browser run stays
-    // off like core:ui/core:network/requests — jvmTest pins the semantics.
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
-
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -67,8 +53,7 @@ kotlin {
             // the section ordering from.
             implementation(project(":shared:core:datastore"))
             // The since-digest window ("today minus 7d at start of day") and
-            // the header's weekend check run kotlinx.datetime — wasmJs has no
-            // java.time.
+            // the header's weekend check run kotlinx.datetime.
             implementation(libs.kotlinx.datetime)
             implementation(project(":shared:core:ui"))
             // JetBrains CMP distribution (see catalog note): Android targets
@@ -120,21 +105,3 @@ kotlin {
 // generated accessors land in `...feature.newsletter.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.newsletter.generated.resources"
-
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface. Scoped
-// to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (the
-// identical block lives in shared/core/ui, shared/feature/requests and the
-// other web modules).
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
-        }
-    }
-}

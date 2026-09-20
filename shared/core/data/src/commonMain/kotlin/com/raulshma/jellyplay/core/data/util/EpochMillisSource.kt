@@ -19,10 +19,6 @@ package com.raulshma.jellyplay.core.data.util
  *    extends this interface, and dataJvmModule binds
  *    `EpochMillisSource -> get<TimeSource>()` — the same SystemTimeSource
  *    single serves both seams (one framework per clock).
- *  - wasmJs: dataWasmModule binds this seam over
- *    `com.raulshma.jellyplay.core.model.wallNowMillis()` (core:model's
- *    commonMain platform seam — `System.currentTimeMillis` on JVM, the same
- *    read the JVM binding performs).
  */
 fun interface EpochMillisSource {
 

@@ -59,8 +59,7 @@ fun androidDetailsModule(context: Context): Module = module {
     // The jvm-only detail defs (dependency closure reaches the
     // jvmShared halves of core:data — AudioQueueFacade, DownloadIntake,
     // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's
-    // detailsModule, which is now the wasm-clean module the web shell
-    // registers. Android registers BOTH modules; these defs resolve exactly
+    // detailsModule. Android registers BOTH modules; these defs resolve exactly
     // as before (same Koin defs, different module home).
     single { DownloadLifecycleActions.Factory(get(), get(), get(), get()) }
     single { ResyncActions.Factory(get(), get()) }
@@ -112,7 +111,7 @@ fun androidDetailsModule(context: Context): Module = module {
 /**
  * Android actual of the trailer-host seam: verbatim delegation to legacy
  * core:ui's WebView YouTube iframe player (the only consumer of it in the
- * repo; it stays legacy until a desktop/web embed story exists).
+ * repo; it stays legacy until a desktop embed story exists).
  */
 @Composable
 internal actual fun InlineTrailerPlayerHost(

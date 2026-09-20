@@ -167,8 +167,7 @@ fun RequestDetailBottomSheet(
 
     // The java.time read moved to the [formatRequestedDate] seam
     // (verbatim `LocalDateTime.parse` + "MMM d, yyyy" on core:ui's jvmShared
-    // actual; strict-regex + fixed-English months on wasmJs — RequestTime.kt
-    // documents the equivalence, core:ui's DateLabels the locale degrade).
+    // actual — RequestTime.kt documents the equivalence).
     // The take(10) fallback is the original catch path.
     val formattedDate = remember(request.createdAt) {
         formatRequestedDate(request.createdAt) ?: request.createdAt.take(10)

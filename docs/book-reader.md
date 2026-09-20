@@ -67,8 +67,8 @@ back to the server so you can pick up on any device.
 - 📚 **Offline reading** — books download like any other media and open
   from the offline library with no network; positions made offline are
   queued and synced to the server on reconnect.
-- 🖥️ **TV & desktop** — the reader ships on Android/Android TV and desktop
-  (see [Limitations](#limitations) for web). TV remotes page with the D-pad
+- 🖥️ **TV & desktop** — the reader ships on Android/Android TV and desktop.
+  TV remotes page with the D-pad
   arrows; D-pad center (or Enter/Menu) toggles the reader chrome, whose
   settings gear opens direction, typography, behavior, and TOC.
 
@@ -168,9 +168,6 @@ the native view — use the system brightness).
 
 ## Limitations
 
-- **No web reading yet** — JellyPlay's detail screens (and therefore the
-  reader entry points) have no wasm target today; book reading on web rides
-  the detail-cluster web roadmap.
 - **Read aloud is Android-only** — desktop has no bundled TTS engine; the
   controls report the feature as unavailable there instead of failing
   mid-book.

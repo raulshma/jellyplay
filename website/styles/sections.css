@@ -2380,7 +2380,7 @@
 
 .platform-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 24px;
 }
 
@@ -2433,19 +2433,7 @@
   border: 1px solid var(--jp-warning-alpha-25);
 }
 
-.platform-pill.experimental {
-  background: var(--jp-secondary-alpha-12);
-  color: var(--md-sys-color-secondary);
-  border: 1px solid var(--jp-secondary-alpha-30);
-}
-
-@media (max-width: 1024px) {
-  .platform-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 560px) {
+@media (max-width: 768px) {
   .platform-grid {
     grid-template-columns: 1fr;
   }

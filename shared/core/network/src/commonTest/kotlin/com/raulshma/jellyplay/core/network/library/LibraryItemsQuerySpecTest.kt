@@ -11,13 +11,12 @@ import kotlin.test.assertNull
 
 /**
  * Pins the commonMain query-spec builders ([buildMediaItemsQuerySpec] and
- * siblings): the per-endpoint request assembly BOTH library clients now
+ * siblings): the per-endpoint request assembly the library clients now
  * derive their `/Items` queries from. These are the decisions that were
- * previously hand-mirrored in `LibraryApiClientImpl` (SDK enums) and
- * `KtorWasmLibraryApiClient` (raw strings) — played-status/resumable filter
+ * previously hand-mirrored in `LibraryApiClientImpl` (SDK enums) — played-status/resumable filter
  * mapping, sort field+order derivation, kind include/exclude resolution,
  * empty-collection omission, the rating floor, paging and field projections —
- * so a value pinned here is a value BOTH adapters put on the wire.
+ * so a value pinned here is a value the adapter puts on the wire.
  */
 class LibraryItemsQuerySpecTest {
 
@@ -118,8 +117,8 @@ class LibraryItemsQuerySpecTest {
 
         // Season explicitly included → only Episode excluded; with episodes
         // included too the exclude list empties and the param is omitted
-        // (wire-identical on both adapters: the SDK's UrlBuilder emits zero
-        // params for an empty collection, wasm drops nulls).
+        // (wire-identical on the adapter: the SDK's UrlBuilder emits zero
+        // params for an empty collection).
         val withSeason = spec(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE, MediaType.SEASON)))
         assertEquals(listOf("Movie", "Season"), withSeason.includeKinds)
         assertEquals(listOf("Episode"), withSeason.excludeKinds)

@@ -13,8 +13,8 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the JVM (android/desktop) actuals of the [PlatformTime] seam — the
- * bodies moved verbatim out of commonMain when the wasmJs target arrived, so
- * these tests freeze the desktop/Android behavior contract:
+ * bodies moved verbatim out of commonMain, so these tests freeze the
+ * desktop/Android behavior contract:
  *
  *  - `formatOneDecimal` keeps the `%.1f` HALF_UP rounding contract (locale
  *    normalization applied so the pinned digits hold under any host locale);

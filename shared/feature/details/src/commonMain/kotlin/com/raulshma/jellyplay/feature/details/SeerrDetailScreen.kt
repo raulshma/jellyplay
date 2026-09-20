@@ -2156,11 +2156,11 @@ private fun MediaInfoRow(
     }
 }
 
-// ──  formatting seams (java.text purification) ───────────────────────
-// java.text.NumberFormat/String.format have no wasmJs variant; these integer-
-// math helpers replicate the Locale.US output shapes the two replaced call
-// sites produced. Same body as core:ui's wasmJs formatOneDecimal actual (wave
-// 11), which is `internal` to that module — hence the private copies here.
+// ──  formatting seams ────────────────────────────────────────────────
+// These integer-math helpers replicate the Locale.US output shapes the two
+// replaced java.text.NumberFormat/String.format call sites produced. Same
+// body as core:ui's formatOneDecimal actual, which is `internal` to that
+// module — hence the private copies here.
 
 /**
  * "%.1f" formatting contract (the two former `String.format("%.1f", …)` /

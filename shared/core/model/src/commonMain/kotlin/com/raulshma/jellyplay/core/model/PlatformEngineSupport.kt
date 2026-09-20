@@ -32,7 +32,5 @@ data class PlatformEngineSupport(
  *   intent). Default EXO_PLAYER — the historical stored default.
  * - Desktop: MPV only (`DesktopMpvPlayerEngineFactory` rides every choice on
  *   mpv; Exo/VLC/EXTERNAL have no desktop engine). Default MPV.
- * - Web: empty — web playback does not route through [PlayerType] yet; the
- *   default is inert.
  */
 expect val platformEngineSupport: PlatformEngineSupport

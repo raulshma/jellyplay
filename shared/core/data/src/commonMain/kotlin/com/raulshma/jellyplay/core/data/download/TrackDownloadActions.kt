@@ -27,9 +27,7 @@ import kotlinx.coroutines.sync.Semaphore
  * `DownloadRepositoryImpl` implements this interface directly (its
  * `downloadsFor` IS the repository's one
  * `getDownloadsByMediaItemIdsFlow` IN-query read) and dataJvmModule binds it
- * over the repository single; the honest no-op wasmJs actual
- * [WasmTrackDownloadStatusWindow] (wasmJsMain, bound in dataWasmModule)
- * completes the pair — the hosts inject this one window directly.
+ * over the repository single — the hosts inject this one window directly.
  *
  * IDIOM RULE (declared with the download-actions seam consolidation,
  * tightened by the promoted-interface pass): a download read a feature needs

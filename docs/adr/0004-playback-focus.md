@@ -67,7 +67,7 @@ pause whom" had NO owner:
    behavior change.
 6. **Platforms without a binding degrade to vacuous arbitration.**
    `NoopPlaybackFocus` grants everything: where only one sound-maker can
-   exist (web; desktop until slice 2; test harnesses), exclusivity is
+   exist (desktop until slice 2; test harnesses), exclusivity is
    trivially true, and denying would break single-player sessions for no
    protective gain.
 

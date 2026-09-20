@@ -14,8 +14,7 @@ import org.koin.core.KoinApplication
  * The desktop image engine (extracted from Main.kt): the shared JVM Coil
  * builder policy ([jellyPlayImageLoader] in core:data's jvmShared) over this
  * shell's two divergences — the Koin-owned base STREAMING client and the
- * `<configDir>` cache root. Web stays untouched (genuinely divergent: Ktor
- * fetcher, no disk cache).
+ * `<configDir>` cache root.
  *
  * The streaming client derives from the base client via newBuilder(), so it
  * shares the base sslSocketFactory/hostnameVerifier and the SAME dynamic

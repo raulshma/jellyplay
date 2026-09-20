@@ -99,7 +99,7 @@ class BookReaderViewModel(
      */
     private val formatProbe: BookFormatProbe = NoopBookFormatProbe,
     /**
-     * Paragraph read-aloud engine (Android TTS; desktop/web degrade to the
+     * Paragraph read-aloud engine (Android TTS; desktop degrades to the
      * neutral [NoopBookSpeechEngine] and the reader hides its speech UI).
      * Defaulted so tests and non-DI constructions compile unchanged.
      */
@@ -672,7 +672,7 @@ class BookReaderViewModel(
      * the persisted rate/pitch, marks the session live and asks the host
      * (through the attached session's seam) for the current chapter's
      * paragraphs at the exact resume anchor — the answer lands in
-     * [onSpeechContext]. Unavailable engines (desktop/web) and paged books
+     * [onSpeechContext]. Unavailable engines (desktop) and paged books
      * are a silent no-op — their UI never offers the button.
      */
     fun startReadAloud() {

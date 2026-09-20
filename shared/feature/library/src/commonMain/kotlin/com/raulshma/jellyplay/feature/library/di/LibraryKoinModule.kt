@@ -30,8 +30,8 @@ import org.koin.dsl.module
  * same extras source the Hilt factory consumed at HEAD).
  *
  * QuickDownloadActions is core:data's own wall-crossing seam (declared,
- * implemented and bound there on both platforms — jvmShared adapter in
- * dataJvmModule, no-op stub in dataWasmModule), so this module needs no
+ * implemented and bound there — jvmShared adapter in
+ * dataJvmModule), so this module needs no
  * platform fragment for it.
  */
 val libraryModule: Module = module {

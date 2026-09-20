@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 
 /**
  * Pins the SHARED Radarr/Sonarr `parseErrorMessage` (the two jvmShared impls
- * are character-identical here — one wasm helper serves both) against the
+ * are character-identical here — one shared helper serves both) against the
  * JVM strings: re-parsed COMPACT JSON (raw whitespace never survives), the
  * bare-`HTTP $code` blank branch, and the 200-char non-JSON fallback.
  */

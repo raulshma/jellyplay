@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bootstrap a local Jellyfin E2E server for the verification passes
-# (desktop real-server session pass, web browser pass). This commits the
+# (desktop real-server session pass). This commits the
 # recipe that used ad-hoc (plan: "Jellyfin in Docker + generated media
 # + wizard/API bootstrap").
 #
@@ -9,13 +9,8 @@
 # audio and a primary image). Prints the item id on success.
 #
 # adds N=8 "Cache Probe Clip <i> (2026)" movies, each with a DISTINCT
-# LARGE poster (2560x1440 testsrc2 frame, hue-rotated per item). Sizing
-# arithmetic: a 2560x1440 bitmap decodes to 2560*1440*4 = 14,745,600 bytes, so
-# 8 posters = 117,964,800 decoded bytes > Coil's MEASURED wasm memory-cache cap
-# (80,530,636 bytes = 15% of the 512 MiB wasm budget — see apps/web Main.kt
-# CoilStats). A sequential poster probe through the app therefore MUST evict
-# early entries (LRU) — the eviction lane (tools/e2e/web-cache-eviction.mjs)
-# proves it by re-fetching item #1 after a full pass.
+# LARGE poster (2560x1440 testsrc2 frame, hue-rotated per item) — a
+# large-artwork library useful for image-heavy flows.
 #
 # Usage:   tools/e2e/bootstrap-jellyfin.sh [--keep-media]
 # Env:     JELLYFIN_IMAGE   docker image (default jellyfin/jellyfin:latest)

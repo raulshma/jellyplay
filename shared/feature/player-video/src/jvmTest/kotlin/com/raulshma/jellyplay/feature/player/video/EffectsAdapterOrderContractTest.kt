@@ -13,8 +13,7 @@ import kotlin.test.assertTrue
  * the audio flip is behavior-neutral today (the persist leg reads the
  * manager's post-apply `.value` under either order), so this source pin is
  * its only guard. Comments are stripped before matching so KDoc mentions of
- * the order names can't satisfy it (the
- * `WasmAuthRepositoryMirrorContractTest` precedent).
+ * the order names can't satisfy it.
  */
 class EffectsAdapterOrderContractTest {
 

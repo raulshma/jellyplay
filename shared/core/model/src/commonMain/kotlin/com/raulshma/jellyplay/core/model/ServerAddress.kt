@@ -9,7 +9,7 @@ package com.raulshma.jellyplay.core.model
  * Every address-entry point normalizes through this so the stored, probed
  * and trust-granted forms of one address agree byte-for-byte: the auth
  * repository's address add / login / Quick Connect lookups, both API
- * clients' probe paths (JVM and wasm — the wasm failover probing included),
+ * clients' probe paths,
  * the Add Server TLS-trust prompt, and the settings self-signed-trust
  * toggle. Sites that only trim (no scheme defaulting — they match
  * already-schemed stored addresses) are a deliberately different policy and

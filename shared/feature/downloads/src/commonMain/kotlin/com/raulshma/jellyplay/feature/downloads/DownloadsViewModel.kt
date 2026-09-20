@@ -229,9 +229,8 @@ class DownloadsViewModel(
             }
             if (action == DownloadBulkAction.DELETE) {
                 if (scope == DownloadActionScope.Selected) clearSelection()
-                // Only claim success where deletions are real — the wasm
-                // queue seam is a no-op, and a fabricated "Deleted" toast
-                // would lie.
+                // Only claim success where deletions are real — a
+                // fabricated "Deleted" toast would lie.
                 if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
             }
         }

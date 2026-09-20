@@ -8,8 +8,7 @@ import kotlin.test.assertTrue
 /**
  * JVM-lane tests for [lruMapOf]: the JVM/Android actual is the historical
  * `LinkedHashMap(16, 0.75f, accessOrder = true)` + `removeEldestEntry` idiom, so
- * these pin the ACCESS-ORDER semantics (a wasmJs actual would be insertion-ordered
- * and fail the read-refresh tests by documented degrade — hence this suite lives in
+ * these pin the ACCESS-ORDER semantics (hence this suite lives in
  * jvmTest, not commonTest):
  *  - The LRU (least-recently ACCESSED) entry is evicted on insert once the cap is
  *    exceeded — reads (and put-updates) refresh recency.

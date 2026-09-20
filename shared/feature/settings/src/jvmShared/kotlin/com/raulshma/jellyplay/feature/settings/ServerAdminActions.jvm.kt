@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.SystemInfo
 /**
  * The JVM adapter over core:data's `AdminRepository` single — the settings
  * feature's three operations consume the repository verbatim; the adapter
- * only bridges the wasm-safe seam type (android/desktop behavior unchanged).
+ * only bridges the seam type (android/desktop behavior unchanged).
  */
 internal class JvmServerAdminActions(
     private val adminRepository: AdminRepository,

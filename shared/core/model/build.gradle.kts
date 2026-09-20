@@ -1,6 +1,3 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -29,26 +26,13 @@ kotlin {
         }
     }
 
-    wasmJs {
-        browser()
-        // Headless commonTest lane: wasmJsNodeTest runs under Kotlin's
-        // downloaded Node.js distribution — no Karma, no Chrome (the browser
-        // lane demanded Chrome, see plan history). The earlier note about a
-        // PREFER_PROJECT flip being required is OBSOLETE: the
-        // settings.gradle.kts node/yarn governance owns the tool
-        // repositories, so this lane runs under FAIL_ON_PROJECT_REPOS with
-        // no flips. Suite verified green on Node that way.
-        nodejs()
-    }
-
     applyDefaultHierarchyTemplate()
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop: TtlCache
         // (synchronizedMap/LinkedHashMap access-order), BoundedCollections,
         // CacheIdentity (@JvmInline), and the java.util.Locale-driven
-        // language-code tables. Wasm gets a pure-Kotlin replacement when it
-        // first needs them.
+        // language-code tables.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }

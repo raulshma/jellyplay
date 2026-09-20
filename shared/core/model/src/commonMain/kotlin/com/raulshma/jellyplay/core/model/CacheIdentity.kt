@@ -16,8 +16,7 @@ package com.raulshma.jellyplay.core.model
  * promoted to commonMain (the [SessionIdentityProvider] seam in
  * `core:data` exposes this type) as an expect/actual value class — the
  * `@JvmInline` annotation is JVM-only, so the JVM actual carries it (inline
- * representation preserved) and the wasmJs actual is an unboxed where
- * possible value class. Equality/hash/encoding are identical on every target.
+ * representation preserved). Equality/hash/encoding are identical on every target.
  */
 public expect value class CacheIdentity private constructor(public val encoded: String) {
     public companion object {

@@ -313,7 +313,7 @@ fun JellyPlayTheme(
     // composable consumer; this SideEffect only mirrors it for the non-composable Shape path.
     androidx.compose.runtime.SideEffect { _isSynthwaveActive.value = synthwaveMode }
 
-    // Material You dynamic color is a platform seam: null on desktop/web means
+    // Material You dynamic color is a platform seam: null on desktop means
     // the branch falls through to the brand/contrast schemes below.
     val platformDynamic = if (accentColorSwatch == "dynamic" && dynamicColor &&
         contrastLevel == ContrastLevel.DEFAULT && !isTv

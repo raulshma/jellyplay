@@ -471,7 +471,7 @@ class HomeSectionsFetcherTest {
         assertEquals(2, fake.calls.count { it.startsWith("latest:") })
 
         // Unified pre-login semantics: null normalizes to UNKNOWN, which
-        // memoises like any identity (wasm previously skipped caching there).
+        // memoises like any identity.
         identity = null
         f.fetch(query)                    // miss under UNKNOWN → fetch 3
         f.fetch(query)                    // hit under UNKNOWN

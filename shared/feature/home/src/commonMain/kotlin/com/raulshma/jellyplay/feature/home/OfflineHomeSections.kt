@@ -288,8 +288,8 @@ internal fun buildOfflineHomeSections(
     if (library.isEmpty() && episodes.isEmpty()) return emptyList()
 
     // Single pass over the library: partition by type and track the newest
-    // RECENT_LIMIT items via a bounded keeper — the wasm port of the
-    // former java.util.PriorityQueue min-heap (same top-k selection: an
+    // RECENT_LIMIT items via a bounded keeper — the same top-k selection
+    // the former java.util.PriorityQueue min-heap made (an
     // item enters only if it beats the current oldest; O(n·k) with k =
     // RECENT_LIMIT, a handful — the heap's tie-breaking at equal createdAt
     // was arbitrary either way).
@@ -778,13 +778,12 @@ private const val MILLIS_PER_DAY = 86_400_000L
  * offset, variable precision) and bare local dates. Null when blank or
  * unparseable — callers treat null as "no activity".
  *
- * wasm port: kotlinx-datetime replaces the java.time trio. Honest
+ * kotlinx-datetime replaces the former java.time trio. Honest
  * deltas vs `OffsetDateTime.parse` (ISO_OFFSET_DATE_TIME): kotlinx's
  * ISO_DATE_TIME_OFFSET requires SECONDS in the offset where java accepted
  * their absence, and accepts bare-hours offsets ("+02") where java
  * rejected them — the offline store's writes always carry full ±HH:MM
- * offsets, so no real payload moves legs (the livetv LiveTvTimeFormat
- * precedent, same documented deltas).
+ * offsets, so no real payload moves legs.
  */
 private fun isoEpochMillis(value: String?): Long? {
     if (value.isNullOrBlank()) return null

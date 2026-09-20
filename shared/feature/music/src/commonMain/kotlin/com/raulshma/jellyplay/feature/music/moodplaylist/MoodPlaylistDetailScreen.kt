@@ -147,9 +147,8 @@ fun MoodPlaylistDetailScreen(
                                     val totalSeconds = ticks / 10_000_000
                                     val minutes = (totalSeconds % 3600) / 60
                                     val seconds = totalSeconds % 60
-                                    // Manual render — java.lang.String.format
-                                    // has no wasm surface ( port,
-                                    // output identical for m:ss).
+                                    // Manual render (output identical
+                                    // for m:ss).
                                     "$minutes:${seconds.toString().padStart(2, '0')}"
                                 },
                                 imageUrl = viewModel.getImageUrl(track.id),

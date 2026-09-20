@@ -16,15 +16,8 @@ import com.mikepenz.markdown.m3.markdownTypography
  * links (links route through the ambient `UriHandler`, opening in the
  * browser).
  *
- *  collapsed the old expect/actual seam onto this ONE
- * implementation: while the catalog pin sat at 0.43.0 the mikepenz wasm
- * klibs were Kotlin-2.4-ABI (silently skipped by this repo's 2.3.21 klib
- * loader — class C), so wasm carried a home-grown
- * MiniMarkdownParser pipeline and the dependency was confined to jvmShared.
- * The 0.41.0 pin publishes Kotlin-2.3-built wasm klibs, so every target
- * renders through the same code and the mini parser (+ its wasm actual and
- * test matrix) was deleted. Public signature preserved so call sites need
- * no changes.
+ * The old expect/actual seam was collapsed onto this ONE implementation;
+ * the public signature was preserved so call sites need no changes.
  */
 @Composable
 fun MarkdownText(

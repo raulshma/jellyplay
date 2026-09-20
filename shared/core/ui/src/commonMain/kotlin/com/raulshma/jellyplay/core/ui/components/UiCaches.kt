@@ -2,8 +2,7 @@ package com.raulshma.jellyplay.core.ui.components
 
 /**
  * Mutual-exclusion seam for the UI module's hand-rolled caches. JVM targets
- * (android + desktop, via jvmShared) run [block] under `kotlin.synchronized`;
- * wasm/JS is single-threaded, so its actual is a pass-through.
+ * (android + desktop, via jvmShared) run [block] under `kotlin.synchronized`.
  *
  * The [lock] receiver stays a plain per-cache `Any()` so call sites keep their
  * original structure and only swap the intrinsic for this seam.

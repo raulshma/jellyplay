@@ -19,8 +19,8 @@ internal object BlurHashCache {
 
     // Access-order LRU (reads promote to MRU, eldest evicted first) with a
     // byte budget; both ride the cross-platform `AccessOrderLruMap` +
-    // `withUiLock` replacements for the JVM-only LinkedHashMap(accessOrder=true)
-    // + synchronized idiom this cache used before the wasmJs target.
+    // `withUiLock` replacements for the JVM-only
+    // LinkedHashMap(accessOrder=true) + synchronized idiom.
     private val lock = Any()
     private val cache = AccessOrderLruMap<String, Entry>()
     private var totalBytes = 0

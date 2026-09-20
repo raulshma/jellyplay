@@ -30,8 +30,7 @@ fun PdfOutlineNode.flattenToTocEntries(level: Int = 0): List<BookTocEntry> = bui
  * PDF outline extraction seam (the paged TOC story): desktop walks the outline
  * with Apache PDFBox, Android with pdfbox-android (the same API surface —
  * PDFBoxResourceLoader is initialized lazily from the injected application
- * context), and wasmJs degrades to an empty tree (no PDF back-end exists
- * there, same fail-closed shape as the document seams).
+ * context).
  *
  * `parse` is a blocking file-IO function — callers own the dispatcher hop
  * (the ViewModel parses on Dispatchers.Default). Every failure mode (missing

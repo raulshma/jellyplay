@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Minimal Jellyfin wire DTOs for the wasm library client
+ * Minimal Jellyfin wire DTOs for the library client
  * (docs/kmp-migration-plan.md § chunk 2), following the chunk-1
  * `auth/AuthWireDto.kt` pattern: PascalCase `@SerialName`s for exactly the
  * fields the library/playback mappers read, decoded with the SDK-lenient
@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
  * Field mapping semantics mirror the jvmShared `JellyfinDtoMappers` (THE
  * source of truth) field-for-field; see `LibraryWireMappers.kt`. Date fields
  * stay raw wire strings — the SDK's zone-shifted `DateTime` re-formatting is
- * a documented wasm delta (KDoc on the mappers).
+ * a documented delta (KDoc on the mappers).
  *
  * DTO subset grows on demand (plan: scripted generation from openapi.json
  * later).

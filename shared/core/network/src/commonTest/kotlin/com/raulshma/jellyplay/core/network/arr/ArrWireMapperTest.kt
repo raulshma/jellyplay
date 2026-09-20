@@ -9,7 +9,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the wasm Radarr/Sonarr wire DTOs' decode behavior and the wire→model
+ * Pins the Radarr/Sonarr wire DTOs' decode behavior and the wire→model
  * mappers against the jvmShared `RadarrApiClientImpl` / `SonarrApiClientImpl`
  * behavior they substitute for (field-for-field, including every fallback:
  * "Unknown" titles, poster remoteUrl-then-url preference, the progress math,

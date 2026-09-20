@@ -30,7 +30,7 @@
 
 One app for every screen: **phones, tablets, foldables, Android TV, and Amazon Fire TV**. Stream movies and shows, play music with synced lyrics, read comics and ebooks, request content via **Jellyseerr/Overseerr**, manage your **Radarr/Sonarr** queues, download for offline, and run your server from a built-in **admin dashboard** — with three switchable video engines (**ExoPlayer, libmpv, LibVLC**), in-app **self-update** via GitHub Releases, no accounts, and no tracking.
 
-**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback (full effect stack: equalizer, bass boost, night mode, ReplayGain, …), in-player video with working keyboard media keys, the video effect stack (brightness/contrast/saturation/hue/sharpen/blur/rotate), frame capture to `~/Pictures/JellyPlay`, live subtitle cues, the full metadata editor, and the in-app book reader (CBZ/CBR/PDF/EPUB — read-aloud excepted); sign-in uses the shared auth flow (Quick Connect, remembered users, server-address alternates). An experimental **web (wasm)** shell signs in against a live server (sessions persist across page reloads), renders artwork, plays video in-browser, and renders the routed feature screens (requests, calendar, Seerr media details, ARR queue + its settings, onboarding); it carries a real OPFS-backed SQLite database (Room 3 over WebWorkerSQLiteDriver, single-tab). The KMP migration itself is complete (docs/kmp-migration-plan.md): 23 of 25 feature modules compile for wasm, and the two playback-hub modules stay Android/desktop by recorded scope. Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release; the auto-update client and release checklist have landed, signing and per-OS passes remain.
+**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback (full effect stack: equalizer, bass boost, night mode, ReplayGain, …), in-player video with working keyboard media keys, the video effect stack (brightness/contrast/saturation/hue/sharpen/blur/rotate), frame capture to `~/Pictures/JellyPlay`, live subtitle cues, the full metadata editor, and the in-app book reader (CBZ/CBR/PDF/EPUB — read-aloud excepted); sign-in uses the shared auth flow (Quick Connect, remembered users, server-address alternates). The KMP migration itself is complete (docs/kmp-migration-plan.md). Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release; the auto-update client and release checklist have landed, signing and per-OS passes remain.
 
 If you self-host Jellyfin and want a truly native, beautiful, capable client — or a **Plex/Kodi alternative** — give JellyPlay a try.
 
@@ -511,7 +511,7 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 | TV               | Android TV Material, Leanback                                     |
 | Navigation       | Navigation 3                                                      |
 | DI               | Koin 4.2.2 (Kotlin Multiplatform)                                 |
-| Multiplatform    | Compose Multiplatform 1.11.1 (shared core/features), libmpv via JNA (desktop), wasmJs web shell |
+| Multiplatform    | Compose Multiplatform 1.11.1 (shared core/features), libmpv via JNA (desktop) |
 | Storage          | Room 3.0.3 (androidx.room3), DataStore Preferences, AndroidX Security-Crypto |
 | Background       | WorkManager, Coroutines, StateFlow                                |
 | Video Players    | Media3/ExoPlayer 1.10.1, libmpv, LibVLC                           |
@@ -564,9 +564,6 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 
 # Desktop (JVM; Windows tested, macOS/Linux build-from-source and untested)
 ./gradlew :apps:desktop:run
-
-# Web shell (wasmJs compile check)
-./gradlew :apps:web:compileKotlinWasmJs
 ```
 
 The project uses product flavors — `phone` (standard mobile) and `tv` (Android TV with Leanback launcher). Release builds ship `arm64-v8a` and universal APKs; debug builds additionally produce `x86_64` and `x86` APKs for emulators and legacy Android TV system images.
@@ -604,7 +601,7 @@ dialog instead of a silent black screen.
 2. Clone the repo and open it in Android Studio — Gradle sync pulls the wrapper, KMP toolchains, and the bundled libmpv fetch (see below).
 3. Point the app at a local server (e.g. `http://<LAN-IP>:8096`) during onboarding, or use the seeded Docker server from `tools/e2e/bootstrap-jellyfin.sh`.
 
-> The repo is Kotlin Multiplatform: day-to-day feature work happens in `shared/` (commonMain + platform `androidMain`/`jvmMain`/`wasmJsMain` actuals). `app/` is the only Android-only module.
+> The repo is Kotlin Multiplatform: day-to-day feature work happens in `shared/` (commonMain + platform `androidMain`/`jvmMain` actuals). `app/` is the only Android-only module.
 
 ### Run each target
 
@@ -613,8 +610,6 @@ dialog instead of a silent black screen.
 | Android phone | `./gradlew :app:installPhoneDebug` | Needs a device/emulator connected via adb, or run the `app` config from Android Studio |
 | Android TV | `./gradlew :app:installTvDebug` | Same, on a TV device/emulator |
 | Windows desktop | `./gradlew :apps:desktop:run` | First run fetches a pinned `libmpv-2.dll` — needs 7-Zip on PATH (see [Building](#building)) |
-| Web (wasm, dev server) | `./gradlew :apps:web:wasmJsBrowserDevelopmentRun` | Incremental Kotlin/wasm dev loop in the browser |
-| Web (production bundle) | `./gradlew :apps:web:wasmJsBrowserDistribution` | Output in `apps/web/build/dist/wasmJs/productionExecutable`; serve with `node tools/e2e/serve.mjs --root apps/web/build/dist/wasmJs/productionExecutable --port 8080` (correct `.wasm` MIME is load-bearing) |
 
 ### Tests & verification
 
@@ -628,9 +623,6 @@ dialog instead of a silent black screen.
 # Desktop unit tests (includes the Koin-registration guard)
 ./gradlew :apps:desktop:test
 
-# Fast wasm compile gate — what the KMP CI lane runs per PR
-./gradlew :apps:web:compileKotlinWasmJs
-
 # Coverage report (opt-in flag required)
 ./gradlew koverHtmlReport -PenableCoverage
 ```
@@ -640,7 +632,7 @@ dialog instead of a silent black screen.
 `tools/e2e/` ships the driver scripts used by the project's verification passes:
 
 - `bootstrap-jellyfin.sh` — spins up a local Jellyfin in Docker at `http://localhost:8096` (user `harness` / `harness-e2e-pass`) seeded with generated test media; requires Docker and ffmpeg.
-- Headless-browser lanes (CDP via headless Edge): `web-verify.sh`, `web-cache-eviction.mjs`, `web-soak.mjs`, `foreign-origin.mjs`, `input-probe.mjs`, `desktop-session-pass.sh`, `msi-boot-pass.sh`.
+- Desktop lanes: `desktop-session-pass.sh`, `msi-boot-pass.sh`, `desktop-native-dialog-pass.sh`, `desktop-native-dialog-flows-pass.sh`.
 - Physical-device lanes (adb + UiAutomator): `device-locale-pass.sh`, `device-pip-pass.sh`.
 
 ### Tips
@@ -667,7 +659,7 @@ Two more workflows run alongside it:
 
 A fourth workflow keeps the Kotlin Multiplatform tree honest:
 
-- `.github/workflows/kmp-build.yml` — on pushes to `main`/`master`/`kmp-alpha` and every PR, compiles all configured targets of the `shared/` tree (JVM + wasmJs + Android) on Ubuntu, Windows, and macOS, runs the full `jvmTest` suite per shared module, and runs `:apps:desktop:test` (home of the Koin-registration guard) plus the `:apps:web:compileKotlinWasmJs` lane
+- `.github/workflows/kmp-build.yml` — on pushes to `main`/`master`/`kmp-alpha` and every PR, compiles all configured targets of the `shared/` tree (JVM + Android) on Ubuntu, Windows, and macOS, runs the full `jvmTest` suite per shared module, and runs `:apps:desktop:test` (home of the Koin-registration guard)
 
 ---
 
@@ -696,12 +688,11 @@ A fourth workflow keeps the Kotlin Multiplatform tree honest:
 
 ## Project Structure
 
-The codebase is Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals). The legacy Android-only core modules were folded in at the 2026-09-12 cutover — their Android halves are now `androidMain` source sets of the shared core modules — leaving `app/` the only Android-only Gradle module, beside the desktop and web shells.
+The codebase is Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals). The legacy Android-only core modules were folded in at the 2026-09-12 cutover — their Android halves are now `androidMain` source sets of the shared core modules — leaving `app/` the only Android-only Gradle module, beside the desktop shell.
 
 ```
 apps/
   desktop/                Windows desktop shell (Compose Multiplatform; libmpv engine via JNA) — preview
-  web/                    Experimental wasmJs browser shell (Coil artwork + HtmlVideoEngine + requests/calendar/SeerrDetail feature screens + Seerr credentials pane verified in-browser against a live server)
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/
@@ -741,7 +732,7 @@ shared/
     subtitle-tester/      Subtitle parser & styling test harness (dev/diagnostic tool, Android-only)
     shell/                Shell-graph aggregator (appSections nav graph + ShellHostHooks shared by the Android and desktop shells)
 baselineprofile/         Baseline profile generator for phone startup optimization
-tools/                   Dev/CI drivers: e2e/ (web-verify, web-cache-eviction, web-soak, foreign-origin, serve.mjs, bootstrap-jellyfin, desktop-session/msi-boot passes, input-probe — headless-Edge CDP lane scripts; device-locale/device-pip passes — physical-phone adb+uiautomator lanes), perf/ (desktop-baseline.sh), and the gitignored mpv/ drop-in dir for libmpv-2.dll (wired into :apps:desktop:test, see Building)
+tools/                   Dev/CI drivers: e2e/ (bootstrap-jellyfin; desktop-session / msi-boot / native-dialog passes — desktop lane scripts; device-locale / device-pip passes — physical-phone adb+uiautomator lanes), perf/ (desktop-baseline.sh), and the gitignored mpv/ drop-in dir for libmpv-2.dll (wired into :apps:desktop:test, see Building)
 website/                 Landing page (GitHub Pages)
 docs/                    Documentation guides
 ```
@@ -782,7 +773,7 @@ Other open-source projects in the Jellyfin ecosystem:
 
 | Metric | Value |
 | --- | --- |
-| Gradle modules | 38 (app + 9 shared core + 25 shared feature + desktop & web shells + baseline profile) |
+| Gradle modules | 37 (app + 9 shared core + 25 shared feature + desktop shell + baseline profile) |
 | Feature modules | 25 (KMP, under `shared/feature/`) |
 | Configurable settings | ~391 |
 | Data models | 105 |

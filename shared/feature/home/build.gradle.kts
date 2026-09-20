@@ -26,35 +26,6 @@ kotlin {
         }
     }
 
-    // web breadth: the target compiles. The ViewModel/refresher's
-    // jvmShared core:data handles went behind feature-local seams
-    // (AudioTrackDownloads/QuickDownloadActions templates, plus the livetv
-    // clock-narrowing and locale-split precedents):
-    //  - HomeClock over TimeSource (the java.time today(zone) surface stays
-    //    JVM; wasm derives the same system-zone calendar day via kotlinx);
-    //  - the download reads (QuickDownloadActions over MediaDownloadActions,
-    //    SeriesEpisodeDownloads over DownloadRepository) folded onto
-    //    core:data's own seams with the download-actions seam consolidation —
-    //    core:data declares/implements/binds them on both platforms
-    //    (dataJvmModule here, dataWasmModule's honest web no-ops);
-    //  - HomeSyncStatus(+Factory) over SyncStatusStateHolder (wasm: the
-    //    outbox is genuinely idle — no downloads exist to queue watch events);
-    //  - HomeNewsletterGate over NewsletterTriggerManager (wasm: no
-    //    notification pipeline, banner never shows).
-    // HomeSession narrowed to its commonMain SessionIdentityProvider
-    // interface (: bound on jvmShared AND wasm graphs). OfflineHomeSections'
-    // java.util.PriorityQueue/java.time parse cluster ported to a bounded
-    // keeper + kotlinx-datetime (deltas documented in place); wall-clock
-    // reads ride core:model's wallNowMillis. Web routing/registration stays
-    // with the orchestrator's integration pass. The karma/Chrome browser run
-    // stays off like core:ui/core:network — jvmTest pins the semantics.
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -64,7 +35,7 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // The JVM-side bindings (the web seam adapters over the core:data
+        // The JVM-side bindings (the seam adapters over the core:data
         // jvmShared singles, plus the SyncStatusStateHolderFactory single
         // whose deps are jvmShared) — the player-audio jvmShared
         // platform-module pattern.
@@ -139,21 +110,3 @@ kotlin {
 // generated accessors land in `...feature.home.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.home.generated.resources"
-
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface. Scoped
-// to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (the
-// identical block lives in shared/core/ui, shared/feature/requests and the
-// other web modules).
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
-        }
-    }
-}

@@ -1,9 +1,0 @@
-{
-  "name": "jellyplay-sqlite-wasm-worker",
-  "version": "1.0.0",
-  "license": "APACHE-2.0",
-  "description": "Web Worker implementing the androidx.sqlite WebWorkerSQLiteDriver message protocol over @sqlite.org/sqlite-wasm (OPFS-backed).",
-  "dependencies": {
-    "@sqlite.org/sqlite-wasm": "3.50.1-build1"
-  }
-}

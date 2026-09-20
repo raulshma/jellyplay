@@ -13,14 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
  * QuickDownloadActions template adapters: the surface is core:model only, so
  * — per the DownloadIntake precedent — it crosses verbatim and its natural
  * JVM source, `OfflineSyncManager` (jvmShared `sync/`), implements it
- * directly (bound in dataJvmModule over the manager single). The wasmJs
- * actual — [WasmOfflineResync] in wasmJsMain, bound in dataWasmModule — is an
- * honest no-op.
- *
- * Web behavior: the browser has no offline downloads to check or resync, so
- * the wasm actual keeps [batchProgress] idle-empty, [checkForUpdatesBatch]
- * returns no results and [resyncBatch] is inert — never a fabricated
- * "everything up to date" result.
+ * directly (bound in dataJvmModule over the manager single).
  */
 interface OfflineResync {
 
@@ -29,7 +22,7 @@ interface OfflineResync {
 
     /**
      * Checks [itemIds] against their persisted sync baselines; returns the
-     * per-item verdicts (empty on web — no baselines exist there).
+     * per-item verdicts.
      */
     suspend fun checkForUpdatesBatch(itemIds: List<String>, force: Boolean = false): List<ResyncCheckResult>
 

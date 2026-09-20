@@ -80,12 +80,11 @@ internal actual val soothingFontFamily: FontFamily
     )
 
 // Accepted delta: the Monochrome variant's pixel display font (DotGothic16)
-// is NOT bundled for desktop and web — a ~2.1 MB Japanese font for a single
+// is NOT bundled for desktop — a ~2.1 MB Japanese font for a single
 // theme-variant display slot is a disproportionate bundle cost, and Android
 // only fetches it on demand from GMS (Android ships no font binaries either),
 // so bundling would not close an Android-side gap, it would only grow the
-// Android APK. Desktop and web keep the system monospace fallback for this
-// slot.
+// Android APK. Desktop keeps the system monospace fallback for this slot.
 internal actual val monochromeDisplayFontFamily: FontFamily
     @Composable get() = FontFamily.Monospace
 
@@ -98,7 +97,7 @@ internal actual val monochromeBodyFontFamily: FontFamily
     )
 
 // Accepted delta (v0.10.6 merge): the four variant faces (Manrope/Quicksand/
-// Poppins/Outfit) are NOT bundled for desktop and web yet — Android resolves
+// Poppins/Outfit) are NOT bundled for desktop yet — Android resolves
 // them on demand from GMS (see FontFamilies.android.kt); here they map to the
 // closest bundled faces (geometric sans -> Space Grotesk, rounded sans ->
 // Nunito Sans). Bundling the real statics is a tracked follow-up.

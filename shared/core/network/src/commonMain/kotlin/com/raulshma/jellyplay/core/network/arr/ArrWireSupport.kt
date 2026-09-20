@@ -4,9 +4,9 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.network.seerr.arrSeerrWireJson
 
 /**
- * Pure, commonMain wire helpers for the wasm Radarr/Sonarr clients —
+ * Pure, commonMain wire helpers for the Radarr/Sonarr clients —
  * the byte-level conventions of the jvmShared `RadarrApiClientImpl` /
- * `SonarrApiClientImpl` (OkHttp) extracted for wasm + commonTest. The
+ * `SonarrApiClientImpl` (OkHttp) extracted for commonTest. The
  * jvmShared impls keep their own private copies; the two MUST stay in sync.
  */
 

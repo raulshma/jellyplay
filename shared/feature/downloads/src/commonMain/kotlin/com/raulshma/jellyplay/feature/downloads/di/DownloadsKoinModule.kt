@@ -14,7 +14,7 @@ import org.koin.dsl.module
  *  - DownloadQueue / OfflineResync resolve from core:data's graph (the
  *    promoted commonMain interfaces — implemented DIRECTLY by the jvmShared
  *    DownloadRepositoryImpl / OfflineSyncManager singles and bound in
- *    dataJvmModule; web binds the honest no-op stubs in dataWasmModule).
+ *    dataJvmModule).
  *    The former platformDownloadsModule fragment + JvmDownloadQueue /
  *    JvmOfflineResync adapters died with the promoted-interface pass.
  *  - OfflineRepository resolves from dataJvmModule and UserDataMutator from

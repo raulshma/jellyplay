@@ -166,8 +166,7 @@ class PlaybackApiClientImpl @Inject constructor(
         val (server, user) = activeSession() ?: return ""
         // Unlike the former inline string building, the shared helper trims
         // a trailing '/' off the base, so a trailing-slash
-        // active endpoint no longer yields "//Videos/…" (the wasm side
-        // always had the trim — it only ever went through this helper).
+        // active endpoint no longer yields "//Videos/…".
         // Pinned exact-string by PlaybackUrlBuilderTest (commonTest).
         return buildStreamUrl(
             baseUrl = activeBaseUrl(server),

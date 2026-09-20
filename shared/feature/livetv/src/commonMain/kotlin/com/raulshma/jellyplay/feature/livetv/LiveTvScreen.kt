@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 /**
  * Top-level Live TV host — a 6-tab screen mirroring jellyfin-web's Live TV
  * collection: Programs, Guide, Channels, Recordings, Schedule, Series. The
- * default landing tab is Programs (the web app's default landing), reachable
+ * default landing tab is Programs (jellyfin-web's default landing), reachable
  * via the top-level "Live TV" navigation entry.
  *
  * The tab bar uses Material 3 Expressive styling: a content-hugging pill

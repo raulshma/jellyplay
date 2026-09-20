@@ -19,7 +19,7 @@ import kotlinx.datetime.toKotlinLocalDate
  * ViewModel/refresher's reads and commands delegate verbatim to
  * `TimeSource` / `SyncStatusStateHolder(+Factory)` /
  * `NewsletterTriggerManager` (android/desktop behavior unchanged). Each
- * adapter only narrows or re-shapes the JVM surface into its wasm-safe
+ * adapter only narrows or re-shapes the JVM surface into its
  * feature seam:
  *  - [JvmHomeClock] keeps the java.time `today(system zone)` wall read the
  *    TimeSource always had (the refresher's former

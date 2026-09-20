@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the wasm Seerr client's wire string-shaping helpers against the
+ * Pins the Seerr client's wire string-shaping helpers against the
  * jvmShared `SeerrApiClientImpl` behavior they substitute for: the verbatim
  * `parseErrorMessage` texts, the login Set-Cookie join, the URLEncoder
  * stand-in, the credential→header selection (the OkHttp `withAuth` `when`),
