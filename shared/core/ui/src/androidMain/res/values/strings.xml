@@ -13,6 +13,7 @@
     <string name="core_ui_auth_use_screen_lock">Use screen lock</string>
     <string name="core_ui_auth_unlock_screen_lock">Unlock with screen lock</string>
     <string name="core_ui_auth_device_credential_prompt">Use your device screen lock to unlock</string>
+    <string name="core_ui_auth_no_unlock_method">Unlock is unavailable: no biometrics or screen lock are usable on this device. Clear app data to reset the lock.</string>
     <string name="core_ui_seerr_season">Season %1$d</string>
     <string name="detail_episodes_selected">%1$d of %2$d episodes selected</string>
     <string name="transcode_reason_unknown">Server reported: %1$s</string>

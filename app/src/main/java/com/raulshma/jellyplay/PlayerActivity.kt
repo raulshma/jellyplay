@@ -15,7 +15,7 @@ import android.os.Bundle
 import android.util.Log
 import android.util.Rational
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -87,7 +87,9 @@ import org.koin.mp.KoinPlatform
  * configured and the app-scoped AppLockState says locked — see
  * [redirectToLockGateIfNeeded].
  */
-class PlayerActivity : ComponentActivity() {
+// FragmentActivity for parity with MainActivity: androidx.biometric's prompt
+// requires a FragmentActivity host (see issue #162).
+class PlayerActivity : FragmentActivity() {
 
     // PlayerActivity is the SOLE driver of the shared PlayerLifecycleManager
     // single (onPause/onResume/onTopResumed/onStop below). MainActivity

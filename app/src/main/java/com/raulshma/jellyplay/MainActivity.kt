@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.graphics.Color
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,7 +58,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity is load-bearing: androidx.biometric.BiometricPrompt hosts its
+// dialog in a support fragment, so AuthChallengeScreen's findFragmentActivity()
+// resolves the prompt host from this activity. The v0.11.0 ComponentActivity
+// migration returned null there and left fingerprint-only users on an empty
+// (black) lock screen — see issue #162.
+class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
 
