@@ -1,50 +1,22 @@
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.feature.book"
-        compileSdk = 37
-        minSdk = 28
-        // Compose-resources packaging (device-pass finding): with the
-        // AGP-9 KMP library plugin, android resources are OFF by default, so
-        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
-        // app APK ships this module's Res accessors with NO backing .cvr
-        // assets — runtime MissingResourceException on the first string read.
-        androidResources {
-            enable = true
-        }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
         // android + desktop share the document/back-end layer verbatim: the
         // CBZ pager (java.util.zip.ZipFile + natural sort) and the OkHttp
         // reader-cache fetcher carry java.* bodies, while the page decoders
         // and PDF back-ends split per platform behind commonMain seams.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // (The jvmShared middle source set comes from the convention plugin.)
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
@@ -86,11 +58,8 @@ kotlin {
             // CBR (RAR) extraction — see the catalog entry's license note.
             implementation(libs.junrar)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-        }
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
+            // (kotlin("test") comes from the convention plugin.)
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
             // Compose UI regression for the TOC tick rail (ReaderTocRailUiTest):

@@ -20,8 +20,14 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolve
  * the resolved magnitudes (ARGB ints + outline/shadow) for both the custom and
  * default branches, so native captions, the Compose overlay, and these unit
  * tests all read one set of values.
+ *
+ * Public (not internal) because the desktop `MpvDesktopEngine` adapter applies
+ * this same mapping to its JNA mpv handle (its former private
+ * `argbCss`/edge-table mirror is deleted). Consumers stay the engine adapters
+ * and the mapping test; this is not a stable API surface (the
+ * `mergeAccumulatedCues` / `PlaybackVolumePolicy` precedent).
  */
-internal object MpvStyleMapping {
+object MpvStyleMapping {
 
     /**
      * mpv/libass native caption defaults. Color/edge/font-size/bold/italic read

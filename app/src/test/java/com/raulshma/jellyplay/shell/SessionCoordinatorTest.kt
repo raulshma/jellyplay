@@ -168,7 +168,8 @@ class SessionCoordinatorTest {
         // The launch "add server" flash, as measured on device: the
         // repository's isAuthenticated flip resumed the restore coroutine a
         // few ms BEFORE the coordinator's mirror collector ran, so the splash
-        // gate released while the shell still composed AuthContent — one
+        // gate released while the shell still composed the signed-out auth
+        // host (SignedOutAuthHost) — one
         // (isRestoring=false, isAuthenticated=false) frame flashes the
         // server list over Home. This reproduces the shape: the flip lands
         // while restoreSession() is still running, before the mirror

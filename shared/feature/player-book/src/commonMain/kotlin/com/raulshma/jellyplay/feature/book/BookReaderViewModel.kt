@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.book
 
 import androidx.compose.ui.graphics.ImageBitmap
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
@@ -798,7 +799,7 @@ class BookReaderViewModel(
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
         val existing = bookmarkAtCurrentPosition()
         scope.launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 if (existing != null) {
                     annotationsRepository.removeBookmark(existing.id)
                 } else {
@@ -815,7 +816,7 @@ class BookReaderViewModel(
     }
 
     fun deleteBookmark(id: Long) {
-        scope.launch { runCatching { annotationsRepository.removeBookmark(id) } }
+        scope.launch { runCatchingRethrowingCancellation { annotationsRepository.removeBookmark(id) } }
     }
 
     /**
@@ -849,7 +850,7 @@ class BookReaderViewModel(
         val chapterLabel = _currentEpubLocation.value?.chapterLabel.orEmpty()
         _selection.value = null
         scope.launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 annotationsRepository.addAnnotation(
                     itemId = itemId,
                     cfi = selection.cfi,
@@ -875,12 +876,12 @@ class BookReaderViewModel(
         style: ReaderAnnotationStyle? = null,
     ) {
         scope.launch {
-            runCatching { annotationsRepository.updateAnnotation(id, note, color, style) }
+            runCatchingRethrowingCancellation { annotationsRepository.updateAnnotation(id, note, color, style) }
         }
     }
 
     fun deleteAnnotation(id: Long) {
-        scope.launch { runCatching { annotationsRepository.deleteAnnotation(id) } }
+        scope.launch { runCatchingRethrowingCancellation { annotationsRepository.deleteAnnotation(id) } }
     }
 
     /** The persisted annotation sitting on the live selection's CFI, if any (edit vs create row). */

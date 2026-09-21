@@ -36,6 +36,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -726,7 +727,7 @@ fun StorageSettingsScreen(
                                 label = { mount ->
                                     val label = mountLabel(mount.kind)
                                     if (mount.availableBytes > 0L) {
-                                        "$label (${mount.availableBytes / (1024L * 1024 * 1024)} GB)"
+                                        "$label (${mount.availableBytes.formatBytes()})"
                                     } else {
                                         label
                                     }

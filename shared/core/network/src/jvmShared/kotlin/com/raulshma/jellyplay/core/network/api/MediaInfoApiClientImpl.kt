@@ -31,11 +31,8 @@ import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.*
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class MediaInfoApiClientImpl @Inject constructor(
+class MediaInfoApiClientImpl(
     private val engine: JellyfinApiEngine,
 ) : MediaInfoApiClient {
 
@@ -155,14 +152,13 @@ class MediaInfoApiClientImpl @Inject constructor(
         rawRequester.postStatusOnly("/newsletter/test", "Failed to send test newsletter")
     }
 
-    override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.withApi { api ->
         val response = api.userApi.getUsers().content ?: emptyList()
         response.map(::toJellyfinUser)
     }
 
-    override suspend fun getUserById(userId: String): Result<JellyfinUser> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.getUserById(java.util.UUID.fromString(userId)).content.let(::toJellyfinUser)
+    override suspend fun getUserById(userId: String): Result<JellyfinUser> = engine.withApi { api ->
+        api.userApi.getUserById(java.util.UUID.fromString(userId)).content.let(::toJellyfinUser)
     }
 
     private fun toJellyfinUser(dto: org.jellyfin.sdk.model.api.UserDto): JellyfinUser = JellyfinUser(
@@ -177,8 +173,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         hasPassword = dto.hasPassword,
     )
 
-    override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.withApi { api ->
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val response = api.itemsApi.getItems(
             userId = java.util.UUID.fromString(userId),
@@ -191,8 +186,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         response?.totalRecordCount ?: 0
     }
 
-    override suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.withApi { api ->
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val response = api.itemsApi.getItems(
             userId = java.util.UUID.fromString(userId),
@@ -213,8 +207,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         sortOrder: String,
         startIndex: Int,
         limit: Int,
-    ): Result<Pair<Int, List<MediaItem>>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Pair<Int, List<MediaItem>>> = engine.withApi { api ->
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val sortList = parseItemSortList(sortBy)
         val order = if (sortOrder == "Descending") SortOrder.DESCENDING else SortOrder.ASCENDING
@@ -243,8 +236,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
         useDateAdded: Boolean,
-    ): Result<Pair<Int, List<StaleMediaItem>>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Pair<Int, List<StaleMediaItem>>> = engine.withApi { api ->
         val types = includeItemTypes.mapNotNull { parseItemKind(it) }
         val allItems = mutableListOf<StaleMediaItem>()
         var totalEstimate = 0
@@ -337,8 +329,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         parentId: String?,
         startIndex: Int,
         limit: Int,
-    ): Result<Pair<Int, List<WatchedMediaItem>>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Pair<Int, List<WatchedMediaItem>>> = engine.withApi { api ->
         val types = includeItemTypes.mapNotNull { parseItemKind(it) }
         val response = api.itemsApi.getItems(
             userId = java.util.UUID.fromString(userId),
@@ -400,12 +391,12 @@ class MediaInfoApiClientImpl @Inject constructor(
         Pair(total, watchedItems)
     }
 
-    override suspend fun deleteItem(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().libraryApi.deleteItem(itemId = java.util.UUID.fromString(itemId))
+    override suspend fun deleteItem(itemId: String): Result<Unit> = engine.withApi { api ->
+        api.libraryApi.deleteItem(itemId = java.util.UUID.fromString(itemId))
     }
 
-    override suspend fun deleteItems(itemIds: List<String>): Result<Int> = engine.apiResultWithRetry {
-        engine.requireApi().libraryApi.deleteItems(
+    override suspend fun deleteItems(itemIds: List<String>): Result<Int> = engine.withApi { api ->
+        api.libraryApi.deleteItems(
             ids = itemIds.map { java.util.UUID.fromString(it) },
         )
         itemIds.size

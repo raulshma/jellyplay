@@ -64,6 +64,7 @@ import com.raulshma.jellyplay.feature.editor.EditorUiState
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.feature.editor.EditorFilePicker
 import com.raulshma.jellyplay.feature.editor.EditorPickedFile
+import com.raulshma.jellyplay.feature.editor.EditorUiEvent
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.raulshma.jellyplay.feature.editor.rememberImageFilePicker
 import com.composables.icons.tabler.Tabler
@@ -206,7 +207,7 @@ internal fun ImagesTab(
                 Text(stringResource(Res.string.editor_images_upload))
             }
             FilledTonalButton(onClick = {
-                viewModel.loadRemoteImages(null, null, null)
+                viewModel.onEvent(EditorUiEvent.LoadRemoteImages(null, null, null))
                 showBrowseSheet = true
             }) {
                 Icon(Tabler.Outline.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -252,9 +253,11 @@ internal fun ImagesTab(
             confirmText = stringResource(Res.string.editor_images_delete_action),
             onConfirm = {
                 val target = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
-                viewModel.deleteImage(
-                    target.imageType,
-                    if (target.imageIndex > 0) target.imageIndex else null,
+                viewModel.onEvent(
+                    EditorUiEvent.DeleteImage(
+                        target.imageType,
+                        if (target.imageIndex > 0) target.imageIndex else null,
+                    ),
                 )
                 // Settle: action-then-clear, as before.
                 pendingDelete = pendingDelete.clear()
@@ -270,11 +273,11 @@ internal fun ImagesTab(
         ImageUploadSheet(
             onDismiss = { showUploadSheet = false },
             onUploadFile = { file, imageType ->
-                viewModel.uploadImageFromFile(file, imageType)
+                viewModel.onEvent(EditorUiEvent.UploadImageFromFile(file, imageType))
                 showUploadSheet = false
             },
             onUploadUrl = { url, imageType ->
-                viewModel.uploadImageFromUrl(url, imageType)
+                viewModel.onEvent(EditorUiEvent.UploadImageFromUrl(url, imageType))
                 showUploadSheet = false
             },
         )
@@ -285,10 +288,10 @@ internal fun ImagesTab(
             state = state,
             onDismiss = { showBrowseSheet = false },
             onLoadImages = { type, provider, startIndex ->
-                viewModel.loadRemoteImages(type, provider, startIndex)
+                viewModel.onEvent(EditorUiEvent.LoadRemoteImages(type, provider, startIndex))
             },
             onDownload = { imageUrl, imageType ->
-                viewModel.uploadImageFromUrl(imageUrl, imageType)
+                viewModel.onEvent(EditorUiEvent.UploadImageFromUrl(imageUrl, imageType))
             },
         )
     }

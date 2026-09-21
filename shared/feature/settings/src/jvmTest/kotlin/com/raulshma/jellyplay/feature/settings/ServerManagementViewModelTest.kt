@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
@@ -26,12 +27,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the Server Management trust-toggle semantics
- * against the SAME matcher the handshake layer uses (display drift — a
- * portless grant honors any port, so exact string membership showed the
- * toggle OFF for a grant every TLS handshake accepted), and the orphan-grant
- * cleanup on address/server removal (a grant covering no known address is
- * dropped; one still covering another address survives).
+ * Pins the Server Management trust-toggle semantics through the real
+ * core:data SelfSignedTrustRepository seam (backed by the SAME matcher the
+ * handshake layer uses — display drift: a portless grant honors any port, so
+ * exact string membership showed the toggle OFF for a grant every TLS
+ * handshake accepted), and the orphan-grant cleanup on address/server removal
+ * (a grant covering no known address is dropped; one still covering another
+ * address survives).
  *
  * Stores are mockk'd (final DataStore-backed classes); the granted set is a
  * plain [MutableStateFlow] the test controls. Main-dispatcher rule inlined
@@ -76,6 +78,10 @@ class ServerManagementViewModelTest {
         authRepository = authRepository,
         serverIdentityStore = serverIdentityStore,
         networkOfflineStore = networkOfflineStore,
+        // The REAL decision seam (stateless; core:data's view of the network
+        // matcher) so these tests keep pinning genuine matching semantics
+        // against the mocked store state — not a stubbed answer.
+        selfSignedTrustRepository = SelfSignedTrustRepositoryImpl(),
     )
 
     // ------------------------------------------------------- toggle semantics

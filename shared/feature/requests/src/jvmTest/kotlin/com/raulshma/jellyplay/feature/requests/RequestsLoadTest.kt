@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.requests
 
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -11,7 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Coverage for the requests feature's one load ladder ([RequestsLoad.load])
+ * Coverage for the requests feature's one load ladder ([loadInto])
  * — the arms [RequestsViewModel.loadRequests] folds onto. Pins the dispatch
  * contract the folded site relies on: start raises before the fetch and
  * clears the stale error, exactly one arm fires, neither arm runs before
@@ -49,7 +50,7 @@ class RequestsLoadTest {
         val events = mutableListOf<String>()
         var stateAtFetch: FakeRequestsState? = null
 
-        RequestsLoad.load(
+        loadInto(
             start = {
                 events += "start"
                 screen.update { it.copy(isLoading = true, error = null) }
@@ -79,7 +80,7 @@ class RequestsLoadTest {
         val screen = FakeRequestsScreen(FakeRequestsState(isLoading = true))
         val events = mutableListOf<String>()
 
-        RequestsLoad.load(
+        loadInto(
             start = { screen.update { it.copy(isLoading = true, error = null) } },
             fetch = { Result.failure<Unit>(RuntimeException("boom")) },
             onSuccess = { events += "onSuccess" },
@@ -101,7 +102,7 @@ class RequestsLoadTest {
         val fetchGate = CompletableDeferred<Unit>()
         val events = mutableListOf<String>()
         val job = launch {
-            RequestsLoad.load(
+            loadInto(
                 start = { screen.update { it.copy(isLoading = true, error = null) } },
                 fetch = {
                     fetchGate.await() // the repository round-trip in flight

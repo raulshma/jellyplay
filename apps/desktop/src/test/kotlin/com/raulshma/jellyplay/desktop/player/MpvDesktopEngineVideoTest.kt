@@ -55,7 +55,7 @@ class MpvDesktopEngineVideoTest {
             assumeTrue(engine.isSoftwareRendererActive, { "libmpv has no usable 'sw' render backend" })
             engine.load(PlaybackRequest(uri = clip().absolutePath, title = "vf-test"))
             waitUntil(15_000) { engine.playbackState.value == EnginePlaybackState.READY }
-            val ctx = engine.underlyingPlayer as Pointer
+            val ctx = engine.liveMpvHandle() as Pointer
             // mpv's vf readback inserts %len% escapes before every string
             // value ('brightness=%3%0.2') and renames unsharp's positional
             // args ('@0=5'); strip the escapes so assertions see the plain
@@ -118,7 +118,7 @@ class MpvDesktopEngineVideoTest {
             assumeTrue(engine.isSoftwareRendererActive, { "libmpv has no usable 'sw' render backend" })
             engine.load(PlaybackRequest(uri = clip().absolutePath, title = "vf-stack-test"))
             waitUntil(15_000) { engine.playbackState.value == EnginePlaybackState.READY }
-            val ctx = engine.underlyingPlayer as Pointer
+            val ctx = engine.liveMpvHandle() as Pointer
 
             engine.updateConfig(
                 EngineConfig(
@@ -161,7 +161,7 @@ class MpvDesktopEngineVideoTest {
 
             // Property-level evidence first: the raw command produces a
             // non-trivial PNG on disk (the engine method's underlying path).
-            val ctx = engine.underlyingPlayer as Pointer
+            val ctx = engine.liveMpvHandle() as Pointer
             val rawShot = File(tempDir, "raw-shot.png")
             val rc = MpvLib.command(ctx, "screenshot-to-file", rawShot.absolutePath, "subtitles")
             assertTrue(rc, "screenshot-to-file command accepted")

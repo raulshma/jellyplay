@@ -45,7 +45,6 @@ class VideoMiniPlayerStateTest {
         val playingFlow = MutableStateFlow(playing)
         override val currentPositionMs: Long get() = 0L
         override val isPlaying get() = playingFlow
-        override val underlyingPlayer: Any? get() = null
         override val volume: Float get() = 1f
         override fun play() { playing = true; playingFlow.value = true }
         override fun pause() { pauseCount++; playing = false; playingFlow.value = false }

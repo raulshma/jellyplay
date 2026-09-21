@@ -29,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +61,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.ErrorBanner
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
@@ -147,7 +147,13 @@ fun PluginDetailScreen(
             ) {
                 state.plugin?.let { plugin ->
                     if (state.error != null) {
-                        item { ErrorBanner(message = state.error, onDismiss = { viewModel.clearError() }) }
+                        item {
+                            ErrorBanner(
+                                message = state.error,
+                                onDismiss = { viewModel.clearError() },
+                                dismissLabel = stringResource(Res.string.admin_dismiss),
+                            )
+                        }
                     }
 
                     item {
@@ -565,40 +571,6 @@ private fun VersionHistoryItem(
                     }
                 }
             }
-        }
-    }
-}
-
-/** Inline error banner for failed enable/disable/install/uninstall operations. */
-@Composable
-private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-        ),
-        shape = ShapeCache.smooth16,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                Tabler.Outline.AlertTriangle,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onErrorContainer,
-            )
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.admin_dismiss)) }
         }
     }
 }

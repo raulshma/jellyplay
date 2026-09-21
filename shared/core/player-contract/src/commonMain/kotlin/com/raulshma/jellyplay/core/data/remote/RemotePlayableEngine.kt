@@ -29,15 +29,6 @@ interface RemotePlayableEngine {
     val currentPositionMs: Long
     val isPlaying: StateFlow<Boolean>
 
-    /**
-     * Opaque native player handle for platform integrations, or `null` when
-     * the engine has no exposed native player. Android consumers cast to
-     * `androidx.media3.common.Player` (ExoPlayer); implementations may narrow
-     * the type via val covariance. Was a media3 `Player?` before the 
-     * common-ization — kept type-erased so this interface stays commonMain-pure.
-     */
-    val underlyingPlayer: Any?
-
     val volume: Float
 
     fun play()

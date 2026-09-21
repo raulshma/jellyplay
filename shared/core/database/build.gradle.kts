@@ -1,8 +1,5 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    id("jellyplay.kmp.library.base")
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
@@ -10,36 +7,16 @@ plugins {
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.database"
-        compileSdk = 37
-        minSdk = 28
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // JVM-semantics code shared verbatim by android + desktop: the
-        // javax.crypto AES-GCM TokenCipher body.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
-
         getByName("jvmShared").dependencies {
             // Module/qualifier types appear in the public di signatures
             // (Koin construction owner).
             api(libs.koin.core)
         }
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             api(project(":shared:core:model"))
             api(libs.room3.runtime)
             // databaseDaosModule moved from jvmShared to commonMain (all it
@@ -55,7 +32,6 @@ kotlin {
             implementation(libs.androidx.sqlite.bundled)
         }
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             // BundledSQLiteDriver for in-memory DAO tests and the JVM-driver
             // migration chain verification.
@@ -84,4 +60,3 @@ dependencies {
 ksp {
     arg("room.schemaLocation", "$rootDir/shared/core/database/schemas")
 }
-

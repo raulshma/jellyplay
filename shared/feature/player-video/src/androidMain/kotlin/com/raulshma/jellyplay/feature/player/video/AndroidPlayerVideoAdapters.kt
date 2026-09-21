@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
+import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -54,21 +57,25 @@ internal class AndroidJellyfinRemotePlayCastStrategy(
  * the androidMain [AndroidMediaSessionController] with the app [Context] and
  * the Hilt-owned legacy [PlaybackSessionManager] the ViewModel used to take
  * as a constructor dependency — the legacy type now lives entirely on the
- * Android side of the seam. [getPlayer]'s opaque handle is narrowed to media3
- * `Player?` inside the controller.
+ * Android side of the seam. [getEngine]'s engine is narrowed to media3
+ * `Player?` here via [asMedia3Player]; [getCastPlayer] hands the controller
+ * the legacy media3-typed cast player for the background-cast detach path
+ * (wired from the legacy `core:data` CastManager in the Koin module).
  */
 internal class AndroidMediaSessionFactory(
     private val context: Context,
     private val sessionManager: PlaybackSessionManager,
+    private val getCastPlayer: () -> Player?,
 ) : VideoMediaSessionFactory {
 
     override fun create(
-        getPlayer: () -> Any?,
+        getEngine: () -> MediaEngine?,
         getImageUrl: (itemId: String, maxWidth: Int) -> String,
     ): MediaSessionController = AndroidMediaSessionController(
         context = context,
         sessionManager = sessionManager,
-        getPlayer = { getPlayer() as? androidx.media3.common.Player },
+        getPlayer = { getEngine()?.asMedia3Player() },
+        getCastPlayer = getCastPlayer,
         getImageUrl = getImageUrl,
     )
 }

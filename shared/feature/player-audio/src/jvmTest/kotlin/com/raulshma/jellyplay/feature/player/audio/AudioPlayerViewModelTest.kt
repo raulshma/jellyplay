@@ -106,10 +106,10 @@ class AudioPlayerViewModelTest {
 
     @Test
     fun setKaraokeModeEnabled_setsState() {
-        viewModel.setKaraokeModeEnabled(true)
+        viewModel.onEvent(AudioPlayerUiEvent.SetKaraokeModeEnabled(true))
         assertTrue(viewModel.karaokeMode)
         assertTrue(viewModel.uiState.value.lyrics.karaokeMode)
-        viewModel.setKaraokeModeEnabled(false)
+        viewModel.onEvent(AudioPlayerUiEvent.SetKaraokeModeEnabled(false))
         assertFalse(viewModel.karaokeMode)
         assertFalse(viewModel.uiState.value.lyrics.karaokeMode)
     }
@@ -117,9 +117,9 @@ class AudioPlayerViewModelTest {
     @Test
     fun toggleKaraokeMode_flipsState() {
         val before = viewModel.karaokeMode
-        viewModel.toggleKaraokeMode()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleKaraokeMode)
         assertEquals(!before, viewModel.karaokeMode)
-        viewModel.toggleKaraokeMode()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleKaraokeMode)
         assertEquals(before, viewModel.karaokeMode)
     }
 
@@ -130,7 +130,7 @@ class AudioPlayerViewModelTest {
 
     @Test
     fun seekTo_delegatesToManager() {
-        viewModel.seekTo(12_000L)
+        viewModel.onEvent(AudioPlayerUiEvent.SeekTo(12_000L))
         verify { engine.seekTo(12_000L) }
     }
 
@@ -144,7 +144,7 @@ class AudioPlayerViewModelTest {
             com.raulshma.jellyplay.core.data.repository.AppliedMutation("track-1", favorite = true),
         )
 
-        viewModel.toggleFavorite()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleFavorite)
 
         io.mockk.coVerify(exactly = 1) { userDataMutator.setFavorite("track-1") }
         assertTrue(viewModel.uiState.value.isFavorite)
@@ -154,145 +154,139 @@ class AudioPlayerViewModelTest {
     fun toggleFavorite_withoutCurrentItem_isNoOp() {
         every { queueManager.currentPlayingItemId } returns MutableStateFlow(null)
 
-        viewModel.toggleFavorite()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleFavorite)
 
         io.mockk.coVerify(exactly = 0) { userDataMutator.setFavorite(any()) }
     }
 
     @Test
     fun togglePlayPause_delegatesToManager() {
-        viewModel.togglePlayPause()
+        viewModel.onEvent(AudioPlayerUiEvent.TogglePlayPause)
         verify { engine.togglePlayPause() }
     }
 
     @Test
     fun changePlaybackSpeed_delegatesToManager() {
-        viewModel.changePlaybackSpeed(1.25f)
+        viewModel.onEvent(AudioPlayerUiEvent.ChangePlaybackSpeed(1.25f))
         verify { engine.changePlaybackSpeed(1.25f) }
     }
 
     @Test
     fun toggleShuffle_delegatesToManager() {
-        viewModel.toggleShuffle()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleShuffle)
         verify { queueManager.toggleShuffle() }
     }
 
     @Test
     fun cycleRepeatMode_delegatesToManager() {
-        viewModel.cycleRepeatMode()
+        viewModel.onEvent(AudioPlayerUiEvent.CycleRepeatMode)
         verify { queueManager.cycleRepeatMode() }
     }
 
     @Test
     fun skipToNext_delegatesToManager() {
-        viewModel.skipToNext()
+        viewModel.onEvent(AudioPlayerUiEvent.SkipToNext)
         verify { queueManager.skipToNext() }
     }
 
     @Test
     fun skipToPrevious_delegatesToManager() {
-        viewModel.skipToPrevious()
+        viewModel.onEvent(AudioPlayerUiEvent.SkipToPrevious)
         verify { queueManager.skipToPrevious() }
     }
 
     @Test
     fun playFromQueue_delegatesToManager() {
-        viewModel.playFromQueue(3)
+        viewModel.onEvent(AudioPlayerUiEvent.PlayFromQueue(3))
         verify { queueManager.playFromQueue(3) }
     }
 
     @Test
     fun setDialogueBoostStrength_updatesStateAndDelegates() {
-        viewModel.setDialogueBoostStrength(EffectStrength.HIGH)
+        viewModel.onEvent(AudioPlayerUiEvent.SetDialogueBoostStrength(EffectStrength.HIGH))
         assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.dialogueBoostStrength)
         verify { effectsManager.setDialogueBoostStrength(EffectStrength.HIGH) }
     }
 
     @Test
     fun setNightModeStrength_updatesStateAndDelegates() {
-        viewModel.setNightModeStrength(EffectStrength.LOW)
+        viewModel.onEvent(AudioPlayerUiEvent.SetNightModeStrength(EffectStrength.LOW))
         assertEquals(EffectStrength.LOW, viewModel.effectsState.value.nightModeStrength)
         verify { effectsManager.setNightModeStrength(EffectStrength.LOW) }
     }
 
     @Test
     fun toggleDialogueBoost_delegatesToManager() {
-        viewModel.toggleDialogueBoost()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleDialogueBoost)
         verify { effectsManager.toggleDialogueBoost() }
     }
 
     @Test
     fun toggleNightMode_delegatesToManager() {
-        viewModel.toggleNightMode()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleNightMode)
         verify { effectsManager.toggleNightMode() }
     }
 
     @Test
     fun toggleEqualizer_delegatesToManager() {
-        viewModel.toggleEqualizer()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleEqualizer)
         verify { effectsManager.toggleEqualizer() }
     }
 
     @Test
     fun setEqualizerBand_delegatesToManager() {
-        viewModel.setEqualizerBand(2, 3)
+        viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerBand(2, 3))
         verify { effectsManager.setEqualizerBand(2, 3) }
     }
 
     @Test
     fun resetEqualizer_delegatesToManager() {
-        viewModel.resetEqualizer()
+        viewModel.onEvent(AudioPlayerUiEvent.ResetEqualizer)
         verify { effectsManager.resetEqualizer() }
     }
 
     @Test
     fun setReplayGainMode_delegatesToManager() {
-        viewModel.setReplayGainMode(AudioNormalizationMode.TRACK)
+        viewModel.onEvent(AudioPlayerUiEvent.SetReplayGainMode(AudioNormalizationMode.TRACK))
         verify { effectsManager.setReplayGainMode(AudioNormalizationMode.TRACK) }
-    }
-
-    @Test
-    fun setReplayGainPreAmpDb_delegatesToManager() {
-        viewModel.setReplayGainPreAmpDb(-2.5f)
-        verify { effectsManager.setReplayGainPreAmpDb(-2.5f) }
     }
 
     // ─── Persistence side-effects (handlers also write to the domain stores) ─────
 
     @Test
     fun setDialogueBoostStrength_persistsToStore() {
-        viewModel.setDialogueBoostStrength(EffectStrength.HIGH)
+        viewModel.onEvent(AudioPlayerUiEvent.SetDialogueBoostStrength(EffectStrength.HIGH))
         coVerify { audioEffectsStore.setDialogueBoostStrength(EffectStrength.HIGH) }
     }
 
     @Test
     fun setNightModeStrength_persistsToStore() {
-        viewModel.setNightModeStrength(EffectStrength.LOW)
+        viewModel.onEvent(AudioPlayerUiEvent.SetNightModeStrength(EffectStrength.LOW))
         coVerify { audioEffectsStore.setNightModeStrength(EffectStrength.LOW) }
     }
 
     @Test
     fun setReplayGainMode_persistsToStore() {
-        viewModel.setReplayGainMode(AudioNormalizationMode.ALBUM)
+        viewModel.onEvent(AudioPlayerUiEvent.SetReplayGainMode(AudioNormalizationMode.ALBUM))
         verify { effectsManager.setReplayGainMode(AudioNormalizationMode.ALBUM) }
         coVerify { audioStore.setAudioNormalizationMode(AudioNormalizationMode.ALBUM) }
     }
 
     @Test
     fun toggleEqualizer_persistsEnabledFlagToStore() {
-        viewModel.toggleEqualizer()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleEqualizer)
         coVerify { audioEffectsStore.setEqualizerEnabled(any()) }
     }
 
     @Test
     fun setEqualizerBand_persistsSettingsToStore() {
-        viewModel.setEqualizerBand(bandIndex = 2, levelDb = 3)
+        viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerBand(bandIndex = 2, levelDb = 3))
         coVerify { audioEffectsStore.setEqualizerSettings(any()) }
     }
 
     @Test
     fun resetEqualizer_persistsSettingsAndPreset() {
-        viewModel.resetEqualizer()
+        viewModel.onEvent(AudioPlayerUiEvent.ResetEqualizer)
         coVerify { audioEffectsStore.setEqualizerSettings(any()) }
         coVerify { audioEffectsStore.setEqualizerPreset(any()) }
     }
@@ -301,7 +295,7 @@ class AudioPlayerViewModelTest {
 
     @Test
     fun setBassBoostStrength_updatesStateDelegatesAndPersists() {
-        viewModel.setBassBoostStrength(EffectStrength.HIGH)
+        viewModel.onEvent(AudioPlayerUiEvent.SetBassBoostStrength(EffectStrength.HIGH))
         assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.bassBoostStrength)
         verify { effectsManager.setBassBoostStrength(EffectStrength.HIGH) }
         coVerify { audioEffectsStore.setBassBoostStrength(EffectStrength.HIGH) }
@@ -309,79 +303,65 @@ class AudioPlayerViewModelTest {
 
     @Test
     fun toggleBassBoost_delegatesAndPersists() {
-        viewModel.toggleBassBoost()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleBassBoost)
         verify { effectsManager.toggleBassBoost() }
         coVerify { audioEffectsStore.setBassBoostEnabled(any()) }
     }
 
     @Test
     fun toggleVirtualizer_delegatesAndPersists() {
-        viewModel.toggleVirtualizer()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleVirtualizer)
         verify { effectsManager.toggleVirtualizer() }
         coVerify { audioEffectsStore.setVirtualizerEnabled(any()) }
     }
 
     @Test
     fun setVirtualizerStrength_delegatesAndPersists() {
-        viewModel.setVirtualizerStrength(800)
+        viewModel.onEvent(AudioPlayerUiEvent.SetVirtualizerStrength(800))
         verify { effectsManager.setVirtualizerStrength(800) }
         coVerify { audioEffectsStore.setVirtualizerStrength(800) }
     }
 
     @Test
     fun setReverbPreset_delegatesAndPersists() {
-        viewModel.setReverbPreset(ReverbPreset.LARGE_HALL)
+        viewModel.onEvent(AudioPlayerUiEvent.SetReverbPreset(ReverbPreset.LARGE_HALL))
         verify { effectsManager.setReverbPreset(ReverbPreset.LARGE_HALL) }
         coVerify { audioEffectsStore.setReverbPreset(ReverbPreset.LARGE_HALL) }
     }
 
     @Test
     fun setLrBalance_delegatesAndPersists() {
-        viewModel.setLrBalance(-0.5f)
+        viewModel.onEvent(AudioPlayerUiEvent.SetLrBalance(-0.5f))
         verify { effectsManager.setLrBalance(-0.5f) }
         coVerify { audioEffectsStore.setLrBalance(-0.5f) }
     }
 
     @Test
     fun setPitchSemitones_delegatesAndPersists() {
-        viewModel.setPitchSemitones(2f)
+        viewModel.onEvent(AudioPlayerUiEvent.SetPitchSemitones(2f))
         verify { effectsManager.setPitchSemitones(2f) }
         coVerify { audioEffectsStore.setPitchSemitones(2f) }
     }
 
     @Test
     fun setAutoEqByGenre_delegatesAndPersists() {
-        viewModel.setAutoEqByGenre(true)
+        viewModel.onEvent(AudioPlayerUiEvent.SetAutoEqByGenre(true))
         verify { effectsManager.setAutoEqByGenre(true) }
         coVerify { audioEffectsStore.setAutoEqByGenre(true) }
     }
 
     @Test
     fun setEqualizerPreset_delegatesAndPersists() {
-        viewModel.setEqualizerPreset(EqualizerPreset.ROCK)
+        viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerPreset(EqualizerPreset.ROCK))
         verify { effectsManager.setEqualizerPreset(EqualizerPreset.ROCK) }
         coVerify { audioEffectsStore.setEqualizerPreset(EqualizerPreset.ROCK) }
-    }
-
-    @Test
-    fun updateCrossfadeDuration_delegatesAndPersists() {
-        viewModel.updateCrossfadeDuration(4_000L)
-        verify { engine.setCrossfadeDurationMs(4_000L) }
-        coVerify { audioStore.setAudioCrossfadeDurationMs(4_000L) }
-    }
-
-    @Test
-    fun updateGaplessPlayback_delegatesAndPersists() {
-        viewModel.updateGaplessPlayback(false)
-        verify { engine.setGaplessEnabled(false) }
-        coVerify { audioStore.setAudioGaplessEnabled(false) }
     }
 
     // ─── Sleep timer configuration ─────────────────────────────────────────────
 
     @Test
     fun startSleepTimer_activatesStateAndPersistsLastUsed() {
-        viewModel.startSleepTimer(15 * 60 * 1000L)
+        viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimer(15 * 60 * 1000L))
 
         with(viewModel.uiState.value.sleepTimer) {
             assertTrue(active)
@@ -396,7 +376,7 @@ class AudioPlayerViewModelTest {
 
     @Test
     fun startSleepTimerEndOfEpisode_activatesEndOfEpisodeState() {
-        viewModel.startSleepTimerEndOfEpisode()
+        viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimerEndOfEpisode)
 
         with(viewModel.uiState.value.sleepTimer) {
             assertTrue(active)
@@ -409,8 +389,8 @@ class AudioPlayerViewModelTest {
 
     @Test
     fun cancelSleepTimer_clearsState() {
-        viewModel.startSleepTimer(1_000L)
-        viewModel.cancelSleepTimer()
+        viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimer(1_000L))
+        viewModel.onEvent(AudioPlayerUiEvent.CancelSleepTimer)
 
         with(viewModel.uiState.value.sleepTimer) {
             assertFalse(active)
@@ -419,41 +399,29 @@ class AudioPlayerViewModelTest {
         verify { sleepTimerManager.cancelSleepTimer() }
     }
 
-    @Test
-    fun triggerSleepTimerEndOfEpisode_delegatesToManager() {
-        viewModel.triggerSleepTimerEndOfEpisode()
-        verify { sleepTimerManager.triggerEndOfEpisode() }
-    }
-
     // ─── Queue operations ──────────────────────────────────────────────────────
 
     @Test
     fun removeFromQueue_delegatesToManager() {
-        viewModel.removeFromQueue(4)
+        viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(4))
         verify { queueManager.removeFromQueue(4) }
     }
 
     @Test
     fun cycleAbLoop_delegatesToManager() {
-        viewModel.cycleAbLoop()
+        viewModel.onEvent(AudioPlayerUiEvent.CycleAbLoop)
         verify { engine.cycleAbLoop() }
     }
 
     @Test
-    fun stopPlayback_delegatesToManager() {
-        viewModel.stopPlayback()
-        verify { engine.stopAndRelease() }
-    }
-
-    @Test
     fun setLyricsVisible_persistsToStore() {
-        viewModel.setLyricsVisible(true)
+        viewModel.onEvent(AudioPlayerUiEvent.SetLyricsVisible(true))
         coVerify { audioStore.setAudioLyricsVisible(true) }
     }
 
     @Test
     fun clearLyricsSearch_emptiesResults() {
-        viewModel.clearLyricsSearch()
+        viewModel.onEvent(AudioPlayerUiEvent.ClearLyricsSearch)
         assertTrue(viewModel.uiState.value.lyrics.searchResults.isEmpty())
     }
 
@@ -462,21 +430,9 @@ class AudioPlayerViewModelTest {
     @Test
     fun castToDevice_noCurrentItem_doesNothing() {
         every { queueManager.currentPlayingItemId } returns MutableStateFlow(null)
-        viewModel.castToDevice()
+        viewModel.onEvent(AudioPlayerUiEvent.CastToDevice)
         verify(exactly = 0) { cast.loadMedia(any(), any()) }
         verify(exactly = 0) { engine.pause() }
-    }
-
-    @Test
-    fun castPlayPauseSeekVolume_delegateToCastManager() {
-        viewModel.castPlay()
-        viewModel.castPause()
-        viewModel.castSeekTo(30_000L)
-        viewModel.setCastVolume(0.7f)
-        verify { cast.play() }
-        verify { cast.pause() }
-        verify { cast.seekTo(30_000L) }
-        verify { cast.setVolume(0.7f) }
     }
 
     @Test
@@ -497,7 +453,7 @@ class AudioPlayerViewModelTest {
             ),
         )
 
-        viewModel.play("item-1")
+        viewModel.onEvent(AudioPlayerUiEvent.Play("item-1"))
 
         verify { engine.play("item-1") }
         verify { engine.changePlaybackSpeed(1.5f) }
@@ -515,7 +471,7 @@ class AudioPlayerViewModelTest {
     fun play_defaultSpeed_skipsChangePlaybackSpeedCall() {
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
         every { audioEffectsStore.audioEffects } returns MutableStateFlow(AudioEffectsSlice())
-        viewModel.play("item-2")
+        viewModel.onEvent(AudioPlayerUiEvent.Play("item-2"))
         verify(exactly = 0) { engine.changePlaybackSpeed(any()) }
     }
 

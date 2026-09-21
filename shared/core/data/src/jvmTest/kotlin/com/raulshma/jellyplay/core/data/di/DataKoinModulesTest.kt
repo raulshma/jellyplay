@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -151,6 +152,9 @@ class DataKoinModulesTest {
             assertResolves<SessionCacheRegistry>(koin)
             assertResolves<SyncPlayManager>(koin)
             assertResolves<EpisodeCatalogue>(koin)
+            // The auth-cluster narrow seam the Server Management screen's
+            // trust toggle resolves (stateless impl single — no ctor graph).
+            assertResolves<SelfSignedTrustRepository>(koin)
 
             // The @IntoMap subtitle fan-out flipped to Koin: same two keys the
             // legacy SubtitleProviderModule built, values wrapped resilient.

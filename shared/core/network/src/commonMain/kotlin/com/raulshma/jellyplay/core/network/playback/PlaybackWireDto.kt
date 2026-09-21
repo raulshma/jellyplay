@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.network.playback
 
-import com.raulshma.jellyplay.core.network.library.MediaSourceInfoWire
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -9,7 +8,8 @@ import kotlinx.serialization.Serializable
  * (docs/kmp-migration-plan.md § chunk 2), following the chunk-1
  * `auth/AuthWireDto.kt` pattern. Response mapping semantics mirror the
  * jvmShared `PlaybackApiClientImpl` + `JellyfinDtoMappers.toMediaSource` /
- * `toMediaStream` (via `library/` mappers, shared with the detail path).
+ * `toMediaStream` (the SDK-typed originals; the former commonMain wire
+ * mappers went with the wasmJs target).
  */
 @Serializable
 data class PlaybackInfoRequestDtoWire(
@@ -36,6 +36,54 @@ data class PlaybackInfoRequestDtoWire(
 data class PlaybackInfoResponseDtoWire(
     @SerialName("PlaySessionId") val playSessionId: String? = null,
     @SerialName("MediaSources") val mediaSources: List<MediaSourceInfoWire> = emptyList(),
+)
+
+/**
+ * Wire subset of the SDK `MediaSourceInfo`, read through the PlaybackInfo
+ * response (formerly shared with the library wire set, which went with the
+ * wasmJs target).
+ */
+@Serializable
+data class MediaSourceInfoWire(
+    @SerialName("Id") val id: String? = null,
+    @SerialName("Name") val name: String? = null,
+    @SerialName("Container") val container: String? = null,
+    @SerialName("Size") val size: Long? = null,
+    @SerialName("Bitrate") val bitrate: Int? = null,
+    @SerialName("RunTimeTicks") val runTimeTicks: Long? = null,
+    @SerialName("SupportsTranscoding") val supportsTranscoding: Boolean? = null,
+    @SerialName("SupportsDirectStream") val supportsDirectStream: Boolean? = null,
+    @SerialName("SupportsDirectPlay") val supportsDirectPlay: Boolean? = null,
+    @SerialName("TranscodingUrl") val transcodingUrl: String? = null,
+    @SerialName("LiveStreamId") val liveStreamId: String? = null,
+    @SerialName("RequiresOpening") val requiresOpening: Boolean? = null,
+    @SerialName("Path") val path: String? = null,
+    @SerialName("MediaStreams") val mediaStreams: List<MediaStreamDtoWire>? = null,
+)
+
+/** Wire subset of the SDK `MediaStream`. */
+@Serializable
+data class MediaStreamDtoWire(
+    @SerialName("Index") val index: Int = 0,
+    @SerialName("Type") val type: String? = null,
+    @SerialName("Codec") val codec: String? = null,
+    @SerialName("Language") val language: String? = null,
+    @SerialName("Title") val title: String? = null,
+    @SerialName("DisplayTitle") val displayTitle: String? = null,
+    @SerialName("IsDefault") val isDefault: Boolean? = null,
+    @SerialName("IsForced") val isForced: Boolean? = null,
+    @SerialName("IsHearingImpaired") val isHearingImpaired: Boolean? = null,
+    @SerialName("IsExternal") val isExternal: Boolean? = null,
+    @SerialName("Width") val width: Int? = null,
+    @SerialName("Height") val height: Int? = null,
+    @SerialName("BitRate") val bitRate: Int? = null,
+    @SerialName("SampleRate") val sampleRate: Int? = null,
+    @SerialName("Channels") val channels: Int? = null,
+    @SerialName("DeliveryUrl") val deliveryUrl: String? = null,
+    @SerialName("VideoRange") val videoRange: String? = null,
+    @SerialName("VideoRangeType") val videoRangeType: String? = null,
+    @SerialName("RealFrameRate") val realFrameRate: Double? = null,
+    @SerialName("VideoDoViTitle") val videoDoViTitle: String? = null,
 )
 
 /**

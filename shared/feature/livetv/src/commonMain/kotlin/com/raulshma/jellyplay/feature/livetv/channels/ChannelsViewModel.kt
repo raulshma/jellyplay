@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,7 +50,7 @@ class ChannelsViewModel(
 
     fun loadChannels() {
         launch {
-            LiveTvLoad.load(
+            loadInto(
                 start = { _uiState.update { it.copy(isLoading = true, error = null) } },
                 fetch = { mediaRepository.getLiveTvChannels(limit = 100) },
                 onSuccess = { channels ->

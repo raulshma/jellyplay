@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -64,9 +64,9 @@ class LogsViewModel(
 
     fun loadInitialData() {
         launch {
-            AdminLoad.load(
+            loadInto(
                 start = { _state.value = _state.value.copy(isLoading = true, error = null) },
-                // Declared variant (see AdminLoad): the legacy ladder fetched
+                // Declared variant (see loadInto): the legacy ladder fetched
                 // both halves in parallel and settled each with
                 // `getOrNull() ?: emptyList()` — a failed Result never surfaces
                 // an error here, only a THROWN exception does (the old catch),

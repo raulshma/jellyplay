@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.admin
 
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -11,7 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Coverage for the admin feature's one load ladder ([AdminLoad.load]) — the
+ * Coverage for the admin feature's one load ladder ([loadInto]) — the
  * `isLoading = true, error = null` suspend-guard choreography folded from the
  * admin ViewModels (Dashboard, Devices, Logs, Plugin Detail, Plugins, User
  * Statistics, User Statistics Detail, Scheduled Tasks, Users, and the
@@ -49,7 +50,7 @@ class AdminLoadTest {
         val events = mutableListOf<String>()
         var loadingAtFetch: Boolean? = null
 
-        AdminLoad.load(
+        loadInto(
             start = {
                 events += "start"
                 screen.update { it.copy(isLoading = true, error = null) }
@@ -81,7 +82,7 @@ class AdminLoadTest {
         val screen = FakeAdminScreen(FakeAdminState(items = listOf("prior")))
         val events = mutableListOf<String>()
 
-        AdminLoad.load(
+        loadInto(
             start = {
                 events += "start"
                 screen.update { it.copy(isLoading = true, error = null) }
@@ -113,7 +114,7 @@ class AdminLoadTest {
         val screen = FakeAdminScreen(FakeAdminState(error = "old failure"))
         val errorBeforeLoad: String? = screen.state.error
 
-        AdminLoad.load(
+        loadInto(
             start = { screen.update { it.copy(isLoading = true, error = null) } },
             fetch = {
                 // The ladder's whole point: the previous error is gone while
@@ -141,7 +142,7 @@ class AdminLoadTest {
         val loadingMidFlight = CompletableDeferred<Boolean>()
         val settleAfterLadder = CompletableDeferred<Unit>()
         val job = launch {
-            AdminLoad.load(
+            loadInto(
                 start = { screen.update { it.copy(isLoading = true, error = null) } },
                 fetch = {
                     loadingMidFlight.complete(screen.state.isLoading)
@@ -167,7 +168,7 @@ class AdminLoadTest {
         val screen = FakeAdminScreen()
 
         launch {
-            AdminLoad.load(
+            loadInto(
                 start = { screen.update { it.copy(isLoading = true, error = null) } },
                 fetch = { Result.failure<List<String>>(RuntimeException("offline")) },
                 onSuccess = { items -> screen.update { it.copy(items = items) } },
@@ -188,7 +189,7 @@ class AdminLoadTest {
         // deliberately does NOT clear a shown error; Stats Detail's page > 0
         // raises isLoadingMore the same way. Both ride the start closure.
         val refreshScreen = FakeAdminScreen(FakeAdminState(error = "kept"))
-        AdminLoad.load(
+        loadInto(
             start = { refreshScreen.update { it.copy(isRefreshing = true) } },
             fetch = { Result.success(listOf("users")) },
             onSuccess = { users ->
@@ -199,7 +200,7 @@ class AdminLoadTest {
         assertEquals(FakeAdminState(items = listOf("users")), refreshScreen.state)
 
         val pagedScreen = FakeAdminScreen(FakeAdminState(items = listOf("page0")))
-        AdminLoad.load(
+        loadInto(
             start = { pagedScreen.update { it.copy(isLoadingMore = true) } },
             fetch = { Result.success(listOf("page1")) },
             onSuccess = { page ->
@@ -220,7 +221,7 @@ class AdminLoadTest {
         val screen = FakeAdminScreen()
         val fetchGate = CompletableDeferred<Unit>()
         val loadJob = launch {
-            AdminLoad.load(
+            loadInto(
                 start = { screen.update { it.copy(isLoading = true, error = null) } },
                 fetch = {
                     fetchGate.await()
@@ -245,13 +246,13 @@ class AdminLoadTest {
     fun exactly_one_arm_fires_per_ladder() = runTest {
         val ran = mutableListOf<String>()
 
-        AdminLoad.load(
+        loadInto(
             start = { },
             fetch = { Result.success("summary") },
             onSuccess = { ran += "success arm" },
             onFailure = { ran += "failure arm" },
         )
-        AdminLoad.load(
+        loadInto(
             start = { },
             fetch = { runCatching { error("no summary") } },
             onSuccess = { ran += "success arm" },

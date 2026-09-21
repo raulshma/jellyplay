@@ -238,7 +238,6 @@ class DetailViewModelTest {
                 arrRepository = mockk<ArrRepository>(relaxed = true),
                 offlineModeManager = offlineModeManager,
             ),
-            audioPlaybackManager = mockk<DetailAudioPlayback>(relaxed = true),
             audioQueueFacade = audioQueueFacade,
             themeMusicPlayer = themeMusicPlayer,
             actionFactories = actionFactories,
@@ -396,7 +395,7 @@ class DetailViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val flow = stubProvider("m1", DetailLoadState.Error(DetailLoadError("boom")))
 
-        viewModel.loadItem("m1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
         advanceUntilIdle()
 
         val err = viewModel.uiState.value.loadState
@@ -413,7 +412,7 @@ class DetailViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider("m1", DetailLoadState.Error(DetailLoadError("x", isUnavailableOffline = true)))
 
-        viewModel.loadItem("m1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
         advanceUntilIdle()
 
         val err = viewModel.uiState.value.loadState as DetailUiLoadState.Error
@@ -430,7 +429,7 @@ class DetailViewModelTest {
             DetailLoadState.Error(DetailLoadError("x", isAccessDenied = true)),
         )
 
-        viewModel.loadItem("m1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
         advanceUntilIdle()
 
         val err = viewModel.uiState.value.loadState as DetailUiLoadState.Error
@@ -447,7 +446,7 @@ class DetailViewModelTest {
             remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
         )
 
-        viewModel.loadItem("m1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
         advanceUntilIdle()
 
         assertNotNull(viewModel.uiState.value.detail)
@@ -468,7 +467,7 @@ class DetailViewModelTest {
         val ep2 = episode("e2", 1, 2, isPlayed = false)
         stubSeries("s1", season, listOf(ep1, ep2))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
         // Precondition: the series screen holds the sorted episode list.
         assertEquals(listOf("e1", "e2"), viewModel.uiState.value.sortedEpisodes.map { it.id })
@@ -476,7 +475,7 @@ class DetailViewModelTest {
         // Navigate to a new item whose provider flow never emits Loaded, so
         // the post-reset state (not a subsequent reduction) is observed.
         stubProvider("m2")
-        viewModel.loadItem("m2")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m2"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -494,7 +493,7 @@ class DetailViewModelTest {
         val ep1 = episode("e1", 1, 1, isPlayed = false)
         stubSeries("s1", season, listOf(ep1))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
         assertEquals(listOf("e1"), viewModel.uiState.value.sortedEpisodes.map { it.id })
 
@@ -502,7 +501,7 @@ class DetailViewModelTest {
         val gate = CompletableDeferred<Unit>()
         coEvery { mediaDetailProvider.refresh("s1") } coAnswers { gate.await() }
 
-        viewModel.forceRefresh()
+        viewModel.onEvent(DetailUiEvent.ForceRefresh)
         advanceUntilIdle()
 
         // Declared survivors: the detail stays visible under Refreshing; the
@@ -528,7 +527,7 @@ class DetailViewModelTest {
     fun forceRefresh_withoutLoadedDetail_isNoOp() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
 
-        viewModel.forceRefresh()
+        viewModel.onEvent(DetailUiEvent.ForceRefresh)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { mediaDetailProvider.refresh(any()) }
@@ -543,14 +542,14 @@ class DetailViewModelTest {
             MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
         )
 
-        viewModel.loadItem("m1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
         advanceUntilIdle()
 
         // Hold the provider's refresh open so the in-flight state is observable.
         val gate = CompletableDeferred<Unit>()
         coEvery { mediaDetailProvider.refresh("m1") } coAnswers { gate.await() }
 
-        viewModel.forceRefresh()
+        viewModel.onEvent(DetailUiEvent.ForceRefresh)
         advanceUntilIdle()
 
         // Unlike loadItem, the detail must stay on screen during the refresh —
@@ -573,10 +572,10 @@ class DetailViewModelTest {
             MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
         )
 
-        viewModel.loadItem("m1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
         advanceUntilIdle()
 
-        viewModel.forceRefresh()
+        viewModel.onEvent(DetailUiEvent.ForceRefresh)
         advanceUntilIdle()
 
         // The VM delegates invalidation + refetch to the provider (called once).
@@ -590,10 +589,10 @@ class DetailViewModelTest {
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         stubSeries("s1", season, listOf(episode("e1", 1, 1, isPlayed = false)))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
-        viewModel.forceRefresh()
+        viewModel.onEvent(DetailUiEvent.ForceRefresh)
         advanceUntilIdle()
 
         // The reset invalidates the current series through the provider so
@@ -609,12 +608,12 @@ class DetailViewModelTest {
         flow.value = remoteSnapshot(
             MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
         )
-        viewModel.loadItem("m1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
         advanceUntilIdle()
 
         // The provider's re-resolution fails: emit Error.
         flow.value = DetailLoadState.Error(DetailLoadError("boom"))
-        viewModel.forceRefresh()
+        viewModel.onEvent(DetailUiEvent.ForceRefresh)
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.loadState is DetailUiLoadState.Refreshing)
@@ -630,7 +629,7 @@ class DetailViewModelTest {
         val ep2 = episode("e2", 1, 2, isPlayed = false)
         stubSeries("s1", season, listOf(ep1, ep2))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         val target = viewModel.uiState.value.smartPlayTarget
@@ -648,7 +647,7 @@ class DetailViewModelTest {
         val ep2 = episode("e2", 1, 2, isPlayed = false, positionTicks = 50_000_000L)
         stubSeries("s1", season, listOf(ep1, ep2))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         val target = viewModel.uiState.value.smartPlayTarget!!
@@ -665,7 +664,7 @@ class DetailViewModelTest {
         val ep2 = episode("e2", 1, 2, isPlayed = false)
         stubSeries("s1", season, listOf(ep1, ep2))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         val target = viewModel.uiState.value.smartPlayTarget!!
@@ -680,7 +679,7 @@ class DetailViewModelTest {
         val ep2 = episode("e2", 1, 2, isPlayed = true)
         stubSeries("s1", season, listOf(ep1, ep2))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         val target = viewModel.uiState.value.smartPlayTarget!!
@@ -696,7 +695,7 @@ class DetailViewModelTest {
         val ep2 = episode("e2", 1, 2, isPlayed = false)
         stubSeries("s1", season, listOf(ep1, ep2))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         val target = viewModel.uiState.value.smartPlayTarget!!
@@ -711,7 +710,7 @@ class DetailViewModelTest {
         val ep1 = episode("e1", 1, 1, isPlayed = false)
         stubSeries("s1", season, listOf(ep2, ep1))
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         val target = viewModel.uiState.value.smartPlayTarget!!
@@ -739,7 +738,7 @@ class DetailViewModelTest {
             ),
         )
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         val target = viewModel.uiState.value.smartPlayTarget
@@ -761,9 +760,9 @@ class DetailViewModelTest {
         )
         stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
 
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
-        viewModel.markPlayed()
+        viewModel.onEvent(DetailUiEvent.MarkPlayed)
         advanceUntilIdle()
 
         val updated = viewModel.uiState.value.detail!!.item
@@ -783,9 +782,9 @@ class DetailViewModelTest {
         )
         stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
 
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
-        viewModel.markUnplayed()
+        viewModel.onEvent(DetailUiEvent.MarkUnplayed)
         advanceUntilIdle()
 
         val updated = viewModel.uiState.value.detail!!.item
@@ -806,15 +805,15 @@ class DetailViewModelTest {
         userDataMutator.favoriteResult = { Result.success(AppliedMutation("movie-1", favorite = false)) }
         stubOptimisticItemState("movie-1", flow)
 
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
-        viewModel.toggleFavorite()
+        viewModel.onEvent(DetailUiEvent.ToggleFavorite)
         advanceUntilIdle()
         assertFalse(viewModel.uiState.value.detail!!.item.isFavorite)
 
         // Re-entry replays the provider's source snapshot, just as a real
         // detail screen does after navigating home and opening the item again.
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.detail!!.item.isFavorite)
@@ -838,10 +837,10 @@ class DetailViewModelTest {
                 Result.success(AppliedMutation("movie-1", favorite = calls == 2))
             }
 
-            viewModel.loadItem("movie-1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
             advanceUntilIdle()
-            viewModel.toggleFavorite()
-            viewModel.toggleFavorite()
+            viewModel.onEvent(DetailUiEvent.ToggleFavorite)
+            viewModel.onEvent(DetailUiEvent.ToggleFavorite)
             advanceUntilIdle()
 
             // Two toggles return to the original server state; the second
@@ -867,10 +866,10 @@ class DetailViewModelTest {
             stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
             userDataMutator.favoriteResult = { Result.failure(RuntimeException("boom")) }
 
-            viewModel.loadItem("movie-1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
             advanceUntilIdle()
 
-            viewModel.toggleFavorite()
+            viewModel.onEvent(DetailUiEvent.ToggleFavorite)
 
             val message = withTimeout(1_000) { viewModel.messages.first() }
             assertTrue(message is DetailMessage.Text)
@@ -889,13 +888,13 @@ class DetailViewModelTest {
         val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
         stubOptimisticItemState("movie-1", flow)
 
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
-        viewModel.markPlayed()
+        viewModel.onEvent(DetailUiEvent.MarkPlayed)
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.detail!!.item.isPlayed)
 
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.detail!!.item.isPlayed)
@@ -914,48 +913,17 @@ class DetailViewModelTest {
         val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
         stubOptimisticItemState("movie-1", flow)
 
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
-        viewModel.markUnplayed()
+        viewModel.onEvent(DetailUiEvent.MarkUnplayed)
         advanceUntilIdle()
         assertFalse(viewModel.uiState.value.detail!!.item.isPlayed)
 
-        viewModel.loadItem("movie-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("movie-1"))
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.detail!!.item.isPlayed)
         assertFalse((flow.value as DetailLoadState.Loaded).snapshot.detail.item.isPlayed)
-    }
-
-    @Test
-    fun markEpisodePlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcher) {
-        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        val season = MediaItem(id = "season-1", name = "Season", mediaType = MediaType.SEASON)
-        val episode = episode("episode-1", 1, 1, isPlayed = false)
-        val flow = stubProvider(
-            "series-1",
-            remoteSnapshot(
-                detail = MediaDetail(
-                    item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES),
-                ),
-                seasons = listOf(season),
-                episodesBySeason = mapOf("season-1" to listOf(episode)),
-                fetchedSeasonIds = setOf("season-1"),
-            ),
-        )
-        stubOptimisticItemState("episode-1", flow)
-
-        viewModel.loadItem("series-1")
-        advanceUntilIdle()
-        viewModel.markEpisodePlayed("episode-1", played = true)
-        advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
-
-        viewModel.loadItem("series-1")
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
-        assertTrue((flow.value as DetailLoadState.Loaded).snapshot.sortedEpisodes.single().isPlayed)
     }
 
     @Test
@@ -976,14 +944,14 @@ class DetailViewModelTest {
         )
         stubOptimisticItemState("episode-1", flow)
 
-        viewModel.loadItem("series-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("series-1"))
         advanceUntilIdle()
         // The row action is fed directly with the card item, as MediaDetailScreen does.
-        viewModel.markRowItemPlayed(item, played = true)
+        viewModel.onEvent(DetailUiEvent.MarkRowItemPlayed(item, played = true))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
-        viewModel.loadItem("series-1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("series-1"))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
@@ -1007,12 +975,12 @@ class DetailViewModelTest {
             val ep2 = episode("e2", 1, 2, isPlayed = false)
             stubSeries("s1", season, listOf(ep1, ep2))
 
-            viewModel.loadItem("s1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
             advanceUntilIdle()
             // Sanity: before the action, smart-play points at the first unplayed ep.
             assertEquals("e1", viewModel.uiState.value.smartPlayTarget!!.episode.id)
 
-            viewModel.markSeasonPlayed("season1")
+            viewModel.onEvent(DetailUiEvent.MarkSeasonPlayed("season1"))
             advanceUntilIdle()
 
             val episodes = viewModel.uiState.value.episodes["season1"]!!
@@ -1044,10 +1012,10 @@ class DetailViewModelTest {
             val ep2 = episode("e2", 1, 2, isPlayed = true)
             stubSeries("s1", season, listOf(ep1, ep2))
 
-            viewModel.loadItem("s1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
             advanceUntilIdle()
 
-            viewModel.markSeasonUnplayed("season1")
+            viewModel.onEvent(DetailUiEvent.MarkSeasonUnplayed("season1"))
             advanceUntilIdle()
 
             // No post-mutation refetch from the VM.
@@ -1094,7 +1062,7 @@ class DetailViewModelTest {
                 com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse(results = listOf(recItem)),
             )
 
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             assertEquals(listOf(recItem), viewModel.uiState.value.seerrRecommendations)
@@ -1130,7 +1098,7 @@ class DetailViewModelTest {
             )
             coEvery { seerrRepository.getTmdbReviews(123, MediaType.MOVIE) } returns Result.success(listOf(review))
 
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             assertEquals(listOf(review), viewModel.uiState.value.tmdbReviews)
@@ -1149,7 +1117,7 @@ class DetailViewModelTest {
                 "m1",
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("m1")))
@@ -1166,7 +1134,7 @@ class DetailViewModelTest {
                 "m1",
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("other-1", "other-2")))
@@ -1187,7 +1155,7 @@ class DetailViewModelTest {
                 "m1",
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("m1")))
@@ -1234,13 +1202,13 @@ class DetailViewModelTest {
                 eps
             }
 
-            viewModel.loadItem("s1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
             advanceUntilIdle()
 
             // season1 was not in the snapshot, so it must NOT be marked fetched.
             assertEquals(false, viewModel.uiState.value.fetchedSeasonIds.contains("season1"))
             // On-demand load for season1 must fire the per-season refetch.
-            viewModel.loadEpisodesForSeason("s1", "season1")
+            viewModel.onEvent(DetailUiEvent.LoadEpisodesForSeason("s1", "season1"))
             advanceUntilIdle()
 
             assertEquals(setOf("season1"), viewModel.uiState.value.fetchedSeasonIds)
@@ -1273,12 +1241,12 @@ class DetailViewModelTest {
                 emptyList()
             }
 
-            viewModel.loadItem("s1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.fetchedSeasonIds.contains("season1"))
 
-            viewModel.loadEpisodesForSeason("s1", "season1")
+            viewModel.onEvent(DetailUiEvent.LoadEpisodesForSeason("s1", "season1"))
             advanceUntilIdle()
 
             assertEquals(setOf("season1"), viewModel.uiState.value.fetchedSeasonIds)
@@ -1304,7 +1272,7 @@ class DetailViewModelTest {
             ),
         )
 
-        viewModel.loadItem("s1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
         advanceUntilIdle()
 
         // LOCAL origin now resolves the smart-play target from downloaded
@@ -1342,7 +1310,7 @@ class DetailViewModelTest {
             )
             coEvery { playbackRepository.getMediaSegments("m1") } returns Result.success(listOf(introSegment))
 
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             // The pre-warm fetch fired (and warmed the player's segment cache).
@@ -1369,7 +1337,7 @@ class DetailViewModelTest {
                 ),
             )
 
-            viewModel.loadItem("s1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
             advanceUntilIdle()
 
             // A LOCAL origin short-circuits remote side effects — no segment
@@ -1412,7 +1380,7 @@ class DetailViewModelTest {
                 MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
             )
 
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             // The on-device mining fired for the LOCAL origin's genres/studios…
@@ -1442,7 +1410,7 @@ class DetailViewModelTest {
             )
             stubProvider("m1", localSnapshot(detail))
 
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             coVerify(exactly = 0) { offlineRepository.getLocalRelated(any(), any(), any(), any()) }
@@ -1466,7 +1434,7 @@ class DetailViewModelTest {
                 endTicks = 5_000_000L,
             )
             coEvery { playbackRepository.getMediaSegments("m1") } returns Result.success(listOf(introSegment))
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.hasIntroSegment)
 
@@ -1485,7 +1453,7 @@ class DetailViewModelTest {
                     fetchedSeasonIds = setOf(season.id),
                 ),
             )
-            viewModel.loadItem("s1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.hasIntroSegment)
@@ -1511,7 +1479,7 @@ class DetailViewModelTest {
             )
             coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
 
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             // The fetch fired exactly once for the resolved item.
@@ -1531,7 +1499,7 @@ class DetailViewModelTest {
             )
             val extras = listOf(MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE))
             coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
 
@@ -1550,7 +1518,7 @@ class DetailViewModelTest {
                     fetchedSeasonIds = setOf(season.id),
                 ),
             )
-            viewModel.loadItem("s1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("s1"))
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.specialFeatures.isEmpty())
@@ -1578,10 +1546,10 @@ class DetailViewModelTest {
             coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
                 AudioQueueOutcome.Started(emptyList(), 0)
 
-            viewModel.loadItem("album1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("album1"))
             advanceUntilIdle()
 
-            viewModel.startInstantMix()
+            viewModel.onEvent(DetailUiEvent.StartInstantMix)
             advanceUntilIdle()
 
             coVerify(exactly = 1) { audioQueueFacade.startInstantMix("album1", "Album", any()) }
@@ -1596,10 +1564,10 @@ class DetailViewModelTest {
             coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
                 AudioQueueOutcome.Started(emptyList(), 0)
 
-            viewModel.loadItem("t1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("t1"))
             advanceUntilIdle()
 
-            viewModel.startInstantMix()
+            viewModel.onEvent(DetailUiEvent.StartInstantMix)
             advanceUntilIdle()
 
             coVerify(exactly = 1) { audioQueueFacade.startInstantMix("t1", "Track", any()) }
@@ -1620,10 +1588,10 @@ class DetailViewModelTest {
                 viewModel.messages.collect { firstMessage.complete(it) }
             }
 
-            viewModel.loadItem("album1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("album1"))
             advanceUntilIdle()
 
-            viewModel.startInstantMix()
+            viewModel.onEvent(DetailUiEvent.StartInstantMix)
             advanceUntilIdle()
 
             assertTrue(firstMessage.isCompleted, "instant mix empty message was not emitted")
@@ -1648,10 +1616,10 @@ class DetailViewModelTest {
                 viewModel.messages.collect { firstMessage.complete(it) }
             }
 
-            viewModel.loadItem("album1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("album1"))
             advanceUntilIdle()
 
-            viewModel.startInstantMix()
+            viewModel.onEvent(DetailUiEvent.StartInstantMix)
             advanceUntilIdle()
 
             assertTrue(firstMessage.isCompleted, "instant mix failure message was not emitted")
@@ -1675,10 +1643,10 @@ class DetailViewModelTest {
                 viewModel.messages.collect { firstMessage.complete(it) }
             }
 
-            viewModel.loadItem("album1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("album1"))
             advanceUntilIdle()
 
-            viewModel.startInstantMix()
+            viewModel.onEvent(DetailUiEvent.StartInstantMix)
             advanceUntilIdle()
 
             // A suppressed start (navigation drift) is silent by design.
@@ -1694,10 +1662,10 @@ class DetailViewModelTest {
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
 
-            viewModel.loadItem("m1")
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
-            viewModel.startInstantMix()
+            viewModel.onEvent(DetailUiEvent.StartInstantMix)
             advanceUntilIdle()
 
             // Non-audio items short-circuit before the facade is touched.
@@ -1769,11 +1737,11 @@ class DetailViewModelTest {
 
     @Test
     fun setShowDetailUpNext_delegatesToLibraryStore() = runTest(mainDispatcher) {
-        viewModel.setShowDetailUpNext(false)
+        viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(false))
         advanceUntilIdle()
         coVerify { libraryStore.setShowDetailUpNext(false) }
 
-        viewModel.setShowDetailUpNext(true)
+        viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(true))
         advanceUntilIdle()
         coVerify { libraryStore.setShowDetailUpNext(true) }
     }

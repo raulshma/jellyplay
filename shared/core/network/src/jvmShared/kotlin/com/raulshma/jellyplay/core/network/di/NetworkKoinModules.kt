@@ -72,9 +72,9 @@ import org.koin.dsl.module
  * [androidNetworkModule] / [desktopNetworkModule]; everything here resolves
  * them via cross-module `get()`.
  *
- * The impl classes keep their `@Inject` constructors on the classpath (the
- * legacy Hilt shim reads them from binaries while its bridges route to these
- * Koin definitions), but Koin is now the single construction owner.
+ * Koin is the single construction owner for every impl bound here — the
+ * vestigial javax decoration annotations (kept for the deleted Hilt shim)
+ * have been stripped along with their compile-only dependency.
  */
 val networkJvmModule: Module = module {
     single { Json { ignoreUnknownKeys = true } }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.book
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.datastore.reader.PerBookAppearance
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
@@ -317,7 +318,7 @@ class ReaderPreferences(
      * synchronous snapshot update is pointless).
      */
     fun setLastCfi(itemId: String, cfi: String) {
-        scope.launch { runCatching { store.setLastCfi(itemId, cfi) } }
+        scope.launch { runCatchingRethrowingCancellation { store.setLastCfi(itemId, cfi) } }
     }
 
     // -----------------------------------------------------------------
@@ -340,7 +341,7 @@ class ReaderPreferences(
         _snapshot.value = transform(_snapshot.value)
         scope.launch {
             try {
-                runCatching { persist() }
+                runCatchingRethrowingCancellation { persist() }
             } finally {
                 decrementInFlight()
             }

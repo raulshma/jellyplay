@@ -54,8 +54,10 @@ internal class AudioSleepTimerController(
     }
 
     /**
-     * Start an end-of-episode timer: no countdown display, no fade — pauses the
-     * moment [triggerSleepTimerEndOfEpisode] fires.
+     * Start an end-of-episode timer: no countdown display, no fade — pauses
+     * at the end-of-episode trigger, which the platform queue managers fire
+     * themselves (Android on track end, desktop on queue exhaustion); the
+     * mode + active guard lives on [AudioSleepTimerManager].
      */
     fun startSleepTimerEndOfEpisode() {
         scope.launch {
@@ -70,9 +72,6 @@ internal class AudioSleepTimerController(
         sleepTimerManager.cancelSleepTimer()
         updateState { it.copy(active = false, endOfEpisode = false) }
     }
-
-    /** Fire the end-of-episode pause; mode + active guard live on the manager. */
-    fun triggerSleepTimerEndOfEpisode() = sleepTimerManager.triggerEndOfEpisode()
 
     /**
      * The ONE home for the expiry callback — explicit pause rather than

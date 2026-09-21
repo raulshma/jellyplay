@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserDetailPage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.flow.first
 
 @Immutable
@@ -36,8 +36,8 @@ class UserStatisticsDetailViewModel(
 
     private fun loadPage(page: Int) {
         launch {
-            AdminLoad.load(
-                // Flavour start (see AdminLoad): the cold page raises the
+            loadInto(
+                // Flavour start (see loadInto): the cold page raises the
                 // load pair, an older page raises only the pager's flag.
                 start = {
                     if (page == 0) {

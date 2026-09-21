@@ -22,8 +22,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * OkHttp-backed implementation of [RadarrApiClient]. Mirrors
@@ -39,8 +37,7 @@ import javax.inject.Singleton
  * Radarr's v3 API uses `X-Api-Key` for auth — the same header name Seerr uses —
  * so no new credential type is required.
  */
-@Singleton
-class RadarrApiClientImpl @Inject constructor(
+class RadarrApiClientImpl(
     private val okHttpClient: OkHttpClient,
 ) : RadarrApiClient {
 

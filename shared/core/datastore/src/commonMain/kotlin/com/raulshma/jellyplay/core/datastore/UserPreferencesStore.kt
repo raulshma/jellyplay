@@ -217,6 +217,259 @@ class UserPreferencesStore constructor(
     // ----------------------------------------------------------------------
 
     /**
+     * One row per backed-up domain slice: the single table every backup /
+     * per-category-import / reset fan-out below iterates. A row names the
+     * slice's wire key ([BackupSliceKey]), the [PreferenceResetCategory]s
+     * whose fields live in that slice ([slicesForCategory] inverts this), how
+     * to read the live slice, how to hand a decoded slice back to the owning
+     * store, and which keys that store clears per category.
+     *
+     * Two optional hooks capture the only per-slice deviations:
+     *  - [restoreSensitive] — `SecurityStore` only: the non-sensitive
+     *    remote-control switch restores unconditionally, the lock config just
+     *    when the caller opts in (`restoreSecuritySensitive`).
+     *  - [merge] — the six slices co-owned by several categories (appearance,
+     *    playback, audio, notification, subtitle, experimental): on the
+     *    per-category import path they merge field-level via
+     *    `SliceCategoryMergers` instead of being wholesale-replaced. `null`
+     *    means the slice has a single owner and always restores wholesale.
+     */
+    private class SliceBinding<T>(
+        val key: String,
+        val categories: Set<PreferenceResetCategory>,
+        private val read: suspend () -> T,
+        private val serializer: kotlinx.serialization.KSerializer<T>,
+        private val restore: suspend (T) -> Unit,
+        private val restoreSensitive: (suspend (T) -> Unit)? = null,
+        private val merge: ((T, T, Set<PreferenceResetCategory>) -> T)? = null,
+        private val resetKeys: (PreferenceResetCategory) -> List<Preferences.Key<*>>,
+    ) {
+        /** Encodes the live slice state for [snapshotForBackup]. */
+        suspend fun snapshotElement(): kotlinx.serialization.json.JsonElement =
+            PreferencesJson.export.encodeToJsonElement(serializer, read())
+
+        /**
+         * Decodes this slice from [slices]; null when the key is absent or the
+         * element fails to decode (an older v2 export that predates a slice is
+         * still importable, a malformed slice is skipped — forward-compat is
+         * handled here, not by the slice decoders).
+         */
+        fun decodeOrNull(
+            slices: Map<String, kotlinx.serialization.json.JsonElement>,
+            json: kotlinx.serialization.json.Json,
+        ): T? {
+            val element = slices[key] ?: return null
+            return runCatching { json.decodeFromJsonElement(serializer, element) }.getOrNull()
+        }
+
+        /** Wholesale restore path — [restoreV2]. */
+        suspend fun restoreFromBackup(
+            slices: Map<String, kotlinx.serialization.json.JsonElement>,
+            json: kotlinx.serialization.json.Json,
+            restoreSecuritySensitive: Boolean,
+        ) {
+            val slice = decodeOrNull(slices, json) ?: return
+            restoreDecoded(slice, restoreSecuritySensitive)
+        }
+
+        /**
+         * Per-category path — [restoreV2Categories]: field-level merge for the
+         * co-owned slices ([merge] != null), wholesale restore otherwise.
+         */
+        suspend fun restoreFromBackupForCategories(
+            slices: Map<String, kotlinx.serialization.json.JsonElement>,
+            json: kotlinx.serialization.json.Json,
+            categories: Set<PreferenceResetCategory>,
+            restoreSecuritySensitive: Boolean,
+        ) {
+            val incoming = decodeOrNull(slices, json) ?: return
+            val merger = merge
+            if (merger == null) {
+                restoreDecoded(incoming, restoreSecuritySensitive)
+            } else {
+                val current = read()
+                val merged = merger(current, incoming, categories)
+                if (merged != current) restore(merged)
+            }
+        }
+
+        /** Keys the owning store clears for [category] ([resetCategoryKeys]). */
+        fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+            resetKeys(category)
+
+        private suspend fun restoreDecoded(slice: T, restoreSecuritySensitive: Boolean) {
+            restore(slice)
+            val sensitive = restoreSensitive
+            if (restoreSecuritySensitive && sensitive != null) sensitive(slice)
+        }
+    }
+
+    /**
+     * The 18 domain slices in [BackupSliceKey] order — snapshot keys, restore
+     * fan-out and reset-key flattening all follow this order. Adding a domain
+     * store means adding one row here (plus its constructor parameter); every
+     * fan-out below picks it up. Extras (`AppRuntimeState`) stay orthogonal:
+     * they have no category and are written by the restore entry points.
+     */
+    private val sliceBindings: List<SliceBinding<*>> = listOf(
+        SliceBinding(
+            key = BackupSliceKey.PLAYBACK,
+            categories = setOf(
+                PreferenceResetCategory.PLAYBACK,
+                PreferenceResetCategory.SUBTITLES_LANGUAGE,
+                PreferenceResetCategory.MISC_APP,
+            ),
+            read = { playbackStore.playback.first() },
+            serializer = PlaybackSlice.serializer(),
+            restore = { playbackStore.restore(it) },
+            merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
+            resetKeys = { playbackStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.APPEARANCE,
+            categories = setOf(PreferenceResetCategory.APPEARANCE, PreferenceResetCategory.MISC_APP),
+            read = { appearanceStore.appearance.first() },
+            serializer = AppearanceSlice.serializer(),
+            restore = { appearanceStore.restore(it) },
+            merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
+            resetKeys = { appearanceStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.VIDEO_PLAYER,
+            categories = setOf(PreferenceResetCategory.PLAYBACK),
+            read = { videoPlayerStore.videoPlayer.first() },
+            serializer = VideoPlayerSlice.serializer(),
+            restore = { videoPlayerStore.restore(it) },
+            resetKeys = { videoPlayerStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.DOWNLOADS,
+            categories = setOf(PreferenceResetCategory.DOWNLOADS_NETWORK),
+            read = { downloadsStore.downloads.first() },
+            serializer = DownloadsSlice.serializer(),
+            restore = { downloadsStore.restore(it) },
+            resetKeys = { downloadsStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.PLAYER_ENGINE,
+            categories = setOf(PreferenceResetCategory.PLAYER_ENGINES),
+            read = { engineStore.playerEngine.first() },
+            serializer = PlayerEngineSlice.serializer(),
+            restore = { engineStore.restore(it) },
+            resetKeys = { engineStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.HOME_DISCOVERY,
+            categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
+            read = { homeDiscoveryStore.homeDiscovery.first() },
+            serializer = HomeDiscoverySlice.serializer(),
+            restore = { homeDiscoveryStore.restore(it) },
+            resetKeys = { homeDiscoveryStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.AUDIO,
+            categories = setOf(PreferenceResetCategory.PLAYBACK, PreferenceResetCategory.AUDIO),
+            read = { audioStore.audio.first() },
+            serializer = AudioSlice.serializer(),
+            restore = { audioStore.restore(it) },
+            merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
+            resetKeys = { audioStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.AUDIO_EFFECTS,
+            categories = setOf(PreferenceResetCategory.AUDIO),
+            read = { audioEffectsStore.audioEffects.first() },
+            serializer = AudioEffectsSlice.serializer(),
+            restore = { audioEffectsStore.restore(it) },
+            resetKeys = { audioEffectsStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.AUDIO_CACHE,
+            categories = setOf(PreferenceResetCategory.AUDIO_CACHE),
+            read = { audioCacheStore.audioCache.first() },
+            serializer = AudioCacheSlice.serializer(),
+            restore = { audioCacheStore.restore(it) },
+            resetKeys = { audioCacheStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.LIBRARY,
+            categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
+            read = { libraryStore.library.first() },
+            serializer = LibrarySlice.serializer(),
+            restore = { libraryStore.restore(it) },
+            resetKeys = { libraryStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.NAVIGATION,
+            categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
+            read = { navigationStore.navigation.first() },
+            serializer = NavigationSlice.serializer(),
+            restore = { navigationStore.restore(it) },
+            resetKeys = { navigationStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.NETWORK_OFFLINE,
+            categories = setOf(PreferenceResetCategory.DOWNLOADS_NETWORK),
+            read = { networkOfflineStore.networkOffline.first() },
+            serializer = NetworkOfflineSlice.serializer(),
+            restore = { networkOfflineStore.restore(it) },
+            resetKeys = { networkOfflineStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.NOTIFICATION,
+            categories = setOf(PreferenceResetCategory.NOTIFICATIONS, PreferenceResetCategory.NEWSLETTER),
+            read = { notificationStore.notification.first() },
+            serializer = NotificationSlice.serializer(),
+            restore = { notificationStore.restore(it) },
+            merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
+            resetKeys = { notificationStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.SCREENSAVER,
+            categories = setOf(PreferenceResetCategory.SCREENSAVER),
+            read = { screensaverStore.screensaver.first() },
+            serializer = ScreensaverSlice.serializer(),
+            restore = { screensaverStore.restore(it) },
+            resetKeys = { screensaverStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.SECURITY,
+            categories = setOf(PreferenceResetCategory.SECURITY),
+            read = { securityStore.security.first() },
+            serializer = SecuritySlice.serializer(),
+            restore = { securityStore.restore(it) },
+            restoreSensitive = { securityStore.restoreSecuritySensitive(it) },
+            resetKeys = { securityStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.SUBTITLE,
+            categories = setOf(PreferenceResetCategory.SUBTITLES_LANGUAGE, PreferenceResetCategory.MISC_APP),
+            read = { subtitleLanguageStore.subtitle.first() },
+            serializer = SubtitleSlice.serializer(),
+            restore = { subtitleLanguageStore.restore(it) },
+            merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
+            resetKeys = { subtitleLanguageStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.SYNC_PLAY_CAST,
+            categories = setOf(PreferenceResetCategory.SYNCPLAY_CASTING),
+            read = { syncPlayCastStore.syncPlayCast.first() },
+            serializer = SyncPlayCastSlice.serializer(),
+            restore = { syncPlayCastStore.restore(it) },
+            resetKeys = { syncPlayCastStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.EXPERIMENTAL,
+            categories = setOf(PreferenceResetCategory.EXPERIMENTAL, PreferenceResetCategory.MISC_APP),
+            read = { experimentalStore.experimental.first() },
+            serializer = ExperimentalSlice.serializer(),
+            restore = { experimentalStore.restore(it) },
+            merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
+            resetKeys = { experimentalStore.resetKeysFor(it) },
+        ),
+    )
+
+    /**
      * Snapshot of the live store state for export, ready to be wrapped in a
      * [SettingsBackup]. Holding the decoded slices (rather than pre-encoded
      * JSON) lets the caller stamp `schemaVersion` / `exportedAt` and pick the
@@ -240,25 +493,8 @@ class UserPreferencesStore constructor(
         val slices = linkedMapOf<String, kotlinx.serialization.json.JsonElement>()
         coroutineScope {
             val jobs = linkedMapOf<String, kotlinx.coroutines.Deferred<kotlinx.serialization.json.JsonElement>>()
-            jobs[BackupSliceKey.PLAYBACK] = async { encodeSliceElement(playbackStore.playback.first(), PlaybackSlice.serializer()) }
-            jobs[BackupSliceKey.APPEARANCE] = async { encodeSliceElement(appearanceStore.appearance.first(), AppearanceSlice.serializer()) }
-            jobs[BackupSliceKey.VIDEO_PLAYER] = async { encodeSliceElement(videoPlayerStore.videoPlayer.first(), VideoPlayerSlice.serializer()) }
-            jobs[BackupSliceKey.DOWNLOADS] = async { encodeSliceElement(downloadsStore.downloads.first(), DownloadsSlice.serializer()) }
-            jobs[BackupSliceKey.PLAYER_ENGINE] = async { encodeSliceElement(engineStore.playerEngine.first(), PlayerEngineSlice.serializer()) }
-            jobs[BackupSliceKey.HOME_DISCOVERY] = async { encodeSliceElement(homeDiscoveryStore.homeDiscovery.first(), HomeDiscoverySlice.serializer()) }
-            jobs[BackupSliceKey.AUDIO] = async { encodeSliceElement(audioStore.audio.first(), AudioSlice.serializer()) }
-            jobs[BackupSliceKey.AUDIO_EFFECTS] = async { encodeSliceElement(audioEffectsStore.audioEffects.first(), AudioEffectsSlice.serializer()) }
-            jobs[BackupSliceKey.AUDIO_CACHE] = async { encodeSliceElement(audioCacheStore.audioCache.first(), AudioCacheSlice.serializer()) }
-            jobs[BackupSliceKey.LIBRARY] = async { encodeSliceElement(libraryStore.library.first(), LibrarySlice.serializer()) }
-            jobs[BackupSliceKey.NAVIGATION] = async { encodeSliceElement(navigationStore.navigation.first(), NavigationSlice.serializer()) }
-            jobs[BackupSliceKey.NETWORK_OFFLINE] = async { encodeSliceElement(networkOfflineStore.networkOffline.first(), NetworkOfflineSlice.serializer()) }
-            jobs[BackupSliceKey.NOTIFICATION] = async { encodeSliceElement(notificationStore.notification.first(), NotificationSlice.serializer()) }
-            jobs[BackupSliceKey.SCREENSAVER] = async { encodeSliceElement(screensaverStore.screensaver.first(), ScreensaverSlice.serializer()) }
-            jobs[BackupSliceKey.SECURITY] = async { encodeSliceElement(securityStore.security.first(), SecuritySlice.serializer()) }
-            jobs[BackupSliceKey.SUBTITLE] = async { encodeSliceElement(subtitleLanguageStore.subtitle.first(), SubtitleSlice.serializer()) }
-            jobs[BackupSliceKey.SYNC_PLAY_CAST] = async { encodeSliceElement(syncPlayCastStore.syncPlayCast.first(), SyncPlayCastSlice.serializer()) }
-            jobs[BackupSliceKey.EXPERIMENTAL] = async { encodeSliceElement(experimentalStore.experimental.first(), ExperimentalSlice.serializer()) }
-            for ((key, deferred) in jobs) slices[key] = deferred.await()
+            for (binding in sliceBindings) jobs[binding.key] = async { binding.snapshotElement() }
+            for (binding in sliceBindings) slices[binding.key] = jobs.getValue(binding.key).await()
         }
         return SettingsBackupSnapshot(slices, appRuntimeStateStore.state.first())
     }
@@ -281,51 +517,20 @@ class UserPreferencesStore constructor(
     ) {
         val json = PreferencesJson.import
         val slices = backup.slices
-        decodeOrNull(slices, BackupSliceKey.PLAYBACK, PlaybackSlice.serializer(), json)?.let { playbackStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.APPEARANCE, AppearanceSlice.serializer(), json)?.let { appearanceStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.VIDEO_PLAYER, VideoPlayerSlice.serializer(), json)?.let { videoPlayerStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.DOWNLOADS, DownloadsSlice.serializer(), json)?.let { downloadsStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.PLAYER_ENGINE, PlayerEngineSlice.serializer(), json)?.let { engineStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.HOME_DISCOVERY, HomeDiscoverySlice.serializer(), json)?.let { homeDiscoveryStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.AUDIO, AudioSlice.serializer(), json)?.let { audioStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.AUDIO_EFFECTS, AudioEffectsSlice.serializer(), json)?.let { audioEffectsStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.AUDIO_CACHE, AudioCacheSlice.serializer(), json)?.let { audioCacheStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.LIBRARY, LibrarySlice.serializer(), json)?.let { libraryStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.NAVIGATION, NavigationSlice.serializer(), json)?.let { navigationStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.NETWORK_OFFLINE, NetworkOfflineSlice.serializer(), json)?.let { networkOfflineStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.NOTIFICATION, NotificationSlice.serializer(), json)?.let { notificationStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.SCREENSAVER, ScreensaverSlice.serializer(), json)?.let { screensaverStore.restore(it) }
-        // Security split: remote-control switch unconditional, lock config gated.
-        decodeOrNull(slices, BackupSliceKey.SECURITY, SecuritySlice.serializer(), json)?.let { slice ->
-            securityStore.restore(slice)
-            if (restoreSecuritySensitive) securityStore.restoreSecuritySensitive(slice)
+        for (binding in sliceBindings) {
+            binding.restoreFromBackup(slices, json, restoreSecuritySensitive)
         }
-        decodeOrNull(slices, BackupSliceKey.SUBTITLE, SubtitleSlice.serializer(), json)?.let { subtitleLanguageStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.SYNC_PLAY_CAST, SyncPlayCastSlice.serializer(), json)?.let { syncPlayCastStore.restore(it) }
-        decodeOrNull(slices, BackupSliceKey.EXPERIMENTAL, ExperimentalSlice.serializer(), json)?.let { experimentalStore.restore(it) }
         appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
     }
 
-    private fun <T> encodeSliceElement(slice: T, serializer: kotlinx.serialization.KSerializer<T>): kotlinx.serialization.json.JsonElement =
-        PreferencesJson.export.encodeToJsonElement(serializer, slice)
-
-    private fun <T> decodeOrNull(
-        slices: Map<String, kotlinx.serialization.json.JsonElement>,
-        key: String,
-        serializer: kotlinx.serialization.KSerializer<T>,
-        json: kotlinx.serialization.json.Json,
-    ): T? {
-        val element = slices[key] ?: return null
-        return runCatching { json.decodeFromJsonElement(serializer, element) }.getOrNull()
-    }
-
     /**
-     * Per-category import support. Maps each [PreferenceResetCategory] to the
-     * set of [BackupSliceKey]s that carry its fields. Used only to decide
-     * *which* slices to touch; the actual per-category write for co-owned
-     * slices is field-level via `SliceCategoryMergers` (so `AUDIO` + `PLAYBACK`
-     * sharing `AudioSlice.audioDelayMs` no longer bleeds). Keeping the map
-     * here (not in `feature:settings`'s presentation registry) avoids a
+     * Per-category import support. Derives, by inverting the per-slice
+     * `categories` in the [sliceBindings] table, the set of [BackupSliceKey]s
+     * that carry [category]'s fields. Used only to decide *which* slices to
+     * touch; the actual per-category write for co-owned slices is field-level
+     * via `SliceCategoryMergers` (so `AUDIO` + `PLAYBACK` sharing
+     * `AudioSlice.audioDelayMs` no longer bleeds). Keeping the routing here
+     * (not in `feature:settings`'s presentation registry) avoids a
      * `core:datastore → feature:settings` dependency cycle — the registry
      * already lives in `feature:settings`, but the store must know the slice
      * keys without depending on UI.
@@ -334,23 +539,8 @@ class UserPreferencesStore constructor(
      * `PreferenceResetCategory` and are imported as part of `restoreV2` all or
      * via the synthetic `APP_RUNTIME` card.
      */
-    fun slicesForCategory(category: PreferenceResetCategory): Set<String> = when (category) {
-        PreferenceResetCategory.APPEARANCE -> setOf(BackupSliceKey.APPEARANCE)
-        PreferenceResetCategory.PLAYBACK -> setOf(BackupSliceKey.PLAYBACK, BackupSliceKey.VIDEO_PLAYER, BackupSliceKey.AUDIO)
-        PreferenceResetCategory.AUDIO -> setOf(BackupSliceKey.AUDIO, BackupSliceKey.AUDIO_EFFECTS)
-        PreferenceResetCategory.SUBTITLES_LANGUAGE -> setOf(BackupSliceKey.SUBTITLE, BackupSliceKey.PLAYBACK)
-        PreferenceResetCategory.DOWNLOADS_NETWORK -> setOf(BackupSliceKey.DOWNLOADS, BackupSliceKey.NETWORK_OFFLINE)
-        PreferenceResetCategory.HOME_DISCOVERY -> setOf(BackupSliceKey.HOME_DISCOVERY, BackupSliceKey.LIBRARY, BackupSliceKey.NAVIGATION)
-        PreferenceResetCategory.AUDIO_CACHE -> setOf(BackupSliceKey.AUDIO_CACHE)
-        PreferenceResetCategory.SECURITY -> setOf(BackupSliceKey.SECURITY)
-        PreferenceResetCategory.NOTIFICATIONS -> setOf(BackupSliceKey.NOTIFICATION)
-        PreferenceResetCategory.SCREENSAVER -> setOf(BackupSliceKey.SCREENSAVER)
-        PreferenceResetCategory.NEWSLETTER -> setOf(BackupSliceKey.NOTIFICATION)
-        PreferenceResetCategory.SYNCPLAY_CASTING -> setOf(BackupSliceKey.SYNC_PLAY_CAST)
-        PreferenceResetCategory.PLAYER_ENGINES -> setOf(BackupSliceKey.PLAYER_ENGINE)
-        PreferenceResetCategory.EXPERIMENTAL -> setOf(BackupSliceKey.EXPERIMENTAL)
-        PreferenceResetCategory.MISC_APP -> setOf(BackupSliceKey.APPEARANCE, BackupSliceKey.PLAYBACK, BackupSliceKey.SUBTITLE, BackupSliceKey.EXPERIMENTAL)
-    }
+    fun slicesForCategory(category: PreferenceResetCategory): Set<String> =
+        sliceBindings.filter { category in it.categories }.mapTo(linkedSetOf()) { it.key }
 
     /**
      * Restores only the slices that belong to [categories] with **field-level**
@@ -372,69 +562,10 @@ class UserPreferencesStore constructor(
         if (categories.isEmpty() && !includeExtras) return
         val json = PreferencesJson.import
         val slices = backup.slices
-        val allowed = categories.flatMapTo(mutableSetOf()) { slicesForCategory(it) }
-
-        // Shared slices — field-level merge so per-category import does not bleed.
-        if (BackupSliceKey.APPEARANCE in allowed) {
-            decodeOrNull(slices, BackupSliceKey.APPEARANCE, AppearanceSlice.serializer(), json)?.let { incoming ->
-                val current = appearanceStore.appearance.first()
-                val merged = current.mergeWith(incoming, categories)
-                if (merged != current) appearanceStore.restore(merged)
-            }
+        for (binding in sliceBindings) {
+            if (binding.categories.none { it in categories }) continue
+            binding.restoreFromBackupForCategories(slices, json, categories, restoreSecuritySensitive)
         }
-        if (BackupSliceKey.PLAYBACK in allowed) {
-            decodeOrNull(slices, BackupSliceKey.PLAYBACK, PlaybackSlice.serializer(), json)?.let { incoming ->
-                val current = playbackStore.playback.first()
-                val merged = current.mergeWith(incoming, categories)
-                if (merged != current) playbackStore.restore(merged)
-            }
-        }
-        if (BackupSliceKey.AUDIO in allowed) {
-            decodeOrNull(slices, BackupSliceKey.AUDIO, AudioSlice.serializer(), json)?.let { incoming ->
-                val current = audioStore.audio.first()
-                val merged = current.mergeWith(incoming, categories)
-                if (merged != current) audioStore.restore(merged)
-            }
-        }
-        if (BackupSliceKey.NOTIFICATION in allowed) {
-            decodeOrNull(slices, BackupSliceKey.NOTIFICATION, NotificationSlice.serializer(), json)?.let { incoming ->
-                val current = notificationStore.notification.first()
-                val merged = current.mergeWith(incoming, categories)
-                if (merged != current) notificationStore.restore(merged)
-            }
-        }
-        if (BackupSliceKey.EXPERIMENTAL in allowed) {
-            decodeOrNull(slices, BackupSliceKey.EXPERIMENTAL, ExperimentalSlice.serializer(), json)?.let { incoming ->
-                val current = experimentalStore.experimental.first()
-                val merged = current.mergeWith(incoming, categories)
-                if (merged != current) experimentalStore.restore(merged)
-            }
-        }
-        if (BackupSliceKey.SUBTITLE in allowed) {
-            decodeOrNull(slices, BackupSliceKey.SUBTITLE, SubtitleSlice.serializer(), json)?.let { incoming ->
-                val current = subtitleLanguageStore.subtitle.first()
-                val merged = current.mergeWith(incoming, categories)
-                if (merged != current) subtitleLanguageStore.restore(merged)
-            }
-        }
-        // Exclusive slices — wholesale restore when their category was requested.
-        if (BackupSliceKey.VIDEO_PLAYER in allowed) decodeOrNull(slices, BackupSliceKey.VIDEO_PLAYER, VideoPlayerSlice.serializer(), json)?.let { videoPlayerStore.restore(it) }
-        if (BackupSliceKey.DOWNLOADS in allowed) decodeOrNull(slices, BackupSliceKey.DOWNLOADS, DownloadsSlice.serializer(), json)?.let { downloadsStore.restore(it) }
-        if (BackupSliceKey.PLAYER_ENGINE in allowed) decodeOrNull(slices, BackupSliceKey.PLAYER_ENGINE, PlayerEngineSlice.serializer(), json)?.let { engineStore.restore(it) }
-        if (BackupSliceKey.HOME_DISCOVERY in allowed) decodeOrNull(slices, BackupSliceKey.HOME_DISCOVERY, HomeDiscoverySlice.serializer(), json)?.let { homeDiscoveryStore.restore(it) }
-        if (BackupSliceKey.AUDIO_EFFECTS in allowed) decodeOrNull(slices, BackupSliceKey.AUDIO_EFFECTS, AudioEffectsSlice.serializer(), json)?.let { audioEffectsStore.restore(it) }
-        if (BackupSliceKey.AUDIO_CACHE in allowed) decodeOrNull(slices, BackupSliceKey.AUDIO_CACHE, AudioCacheSlice.serializer(), json)?.let { audioCacheStore.restore(it) }
-        if (BackupSliceKey.LIBRARY in allowed) decodeOrNull(slices, BackupSliceKey.LIBRARY, LibrarySlice.serializer(), json)?.let { libraryStore.restore(it) }
-        if (BackupSliceKey.NAVIGATION in allowed) decodeOrNull(slices, BackupSliceKey.NAVIGATION, NavigationSlice.serializer(), json)?.let { navigationStore.restore(it) }
-        if (BackupSliceKey.NETWORK_OFFLINE in allowed) decodeOrNull(slices, BackupSliceKey.NETWORK_OFFLINE, NetworkOfflineSlice.serializer(), json)?.let { networkOfflineStore.restore(it) }
-        if (BackupSliceKey.SCREENSAVER in allowed) decodeOrNull(slices, BackupSliceKey.SCREENSAVER, ScreensaverSlice.serializer(), json)?.let { screensaverStore.restore(it) }
-        if (BackupSliceKey.SECURITY in allowed) {
-            decodeOrNull(slices, BackupSliceKey.SECURITY, SecuritySlice.serializer(), json)?.let { slice ->
-                securityStore.restore(slice)
-                if (restoreSecuritySensitive) securityStore.restoreSecuritySensitive(slice)
-            }
-        }
-        if (BackupSliceKey.SYNC_PLAY_CAST in allowed) decodeOrNull(slices, BackupSliceKey.SYNC_PLAY_CAST, SyncPlayCastSlice.serializer(), json)?.let { syncPlayCastStore.restore(it) }
         if (includeExtras) appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
     }
 
@@ -484,31 +615,12 @@ class UserPreferencesStore constructor(
 
     /**
      * Keys cleared by [resetCategory] for [category]. Extracted as a pure function
-     * so it can be inspected by tooling (and asserted complete via
-     * [assertAllUserKeysCovered]) without touching the DataStore.
+     * so it can be inspected by tooling (and asserted complete by the JVM
+     * test-source reset-coverage guard, `uncoveredResetKeys`) without touching
+     * the DataStore.
      */
-    @Suppress("CyclomaticComplexMethod", "LongMethod")
     internal fun resetCategoryKeys(category: PreferenceResetCategory): List<Preferences.Key<*>> =
-        listOf(
-            playbackStore.resetKeysFor(category),
-            appearanceStore.resetKeysFor(category),
-            videoPlayerStore.resetKeysFor(category),
-            downloadsStore.resetKeysFor(category),
-            engineStore.resetKeysFor(category),
-            homeDiscoveryStore.resetKeysFor(category),
-            audioStore.resetKeysFor(category),
-            audioEffectsStore.resetKeysFor(category),
-            audioCacheStore.resetKeysFor(category),
-            libraryStore.resetKeysFor(category),
-            navigationStore.resetKeysFor(category),
-            networkOfflineStore.resetKeysFor(category),
-            notificationStore.resetKeysFor(category),
-            screensaverStore.resetKeysFor(category),
-            securityStore.resetKeysFor(category),
-            subtitleLanguageStore.resetKeysFor(category),
-            syncPlayCastStore.resetKeysFor(category),
-            experimentalStore.resetKeysFor(category),
-        ).flatten()
+        sliceBindings.flatMap { it.resetKeysFor(category) }
 
     /**
      * Preference keys deliberately excluded from category reset because they are

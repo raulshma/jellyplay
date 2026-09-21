@@ -1,22 +1,16 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    id("jellyplay.kmp.library.base")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.data"
-        compileSdk = 37
-        minSdk = 28
         // The moved notification drawables/strings (media-session icons,
         // playback-sync + download notifications) are real android res —
-        // same packaging note as :shared:core:ui.
-        androidResources {
-            enable = true
-        }
+        // same packaging note as :shared:core:ui. (androidResources.enable
+        // itself comes from the convention plugin; see its KDoc for the
+        // MissingResourceException story.)
         // cutover: the legacy :core:data module's Robolectric suites
         // moved here (androidHostTest). Flags carried over from the legacy
         // module's testOptions verbatim.
@@ -24,18 +18,7 @@ kotlin {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop — this is
@@ -47,13 +30,10 @@ kotlin {
         // OkHttp transfer machinery and the repositories whose signatures leak
         // File/URI/stream edges). commonMain holds the common-safe seams + the
         // promoted Seerr/Arr repositories (kotlinx-datetime instead of
-        // java.time) + the promoted DAO-backed impls.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // java.time) + the promoted DAO-backed impls. The jvmShared middle
+        // source set itself comes from the convention plugin.
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             api(project(":shared:core:model"))
             api(project(":shared:core:network"))
             // Cancellation-safe suspend wrappers + TaskBundle — the module's
@@ -183,13 +163,12 @@ kotlin {
             // AAR's consumer metadata.
             implementation(libs.org.json)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
+        // kotlin("test") + coroutines-test on commonTest cover both test lanes
+        // through the commonTest → jvmTest hierarchy edge.
+        commonTest.dependencies {
             implementation(libs.coroutines.test)
         }
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.coroutines.test)
             // Koin module smoke tests (C4): load dataJvmModule +
             // desktopDataModule against the datastore/network/database modules.
             implementation(libs.koin.test)

@@ -24,11 +24,6 @@ internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
         { /* no-op on desktop v1 */ }
     }
 
-/** Desktop per-item audio playback: silent no-op (see [DetailAudioPlayback] doc). */
-private object NoopDetailAudioPlayback : DetailAudioPlayback {
-    override fun play(itemId: String) = Unit
-}
-
 /** Desktop ambient theme music: silent no-op (no desktop player for it v1). */
 private object NoopDetailThemeMusic : DetailThemeMusic {
     override fun playThemeFor(itemId: String) = Unit
@@ -54,7 +49,6 @@ class DesktopDetailStorageProbe(
 
 /** Desktop platform pick for the details module (registered in desktop Main.kt). */
 fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
-    single<DetailAudioPlayback> { NoopDetailAudioPlayback }
     single<DetailThemeMusic> { NoopDetailThemeMusic }
     single<DetailStorageProbe> { DesktopDetailStorageProbe(dataDir) }
     // The jvm-only detail defs (dependency closure reaches the
@@ -78,7 +72,6 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             offlineRepository = get(),
             stores = get(),
             remoteDiscovery = get(),
-            audioPlaybackManager = get(),
             audioQueueFacade = get(),
             themeMusicPlayer = get(),
             actionFactories = get(),

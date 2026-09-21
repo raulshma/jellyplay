@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserStatistics
 import com.raulshma.jellyplay.core.model.sortedWithCachedKey
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_name
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_plays
@@ -69,7 +69,7 @@ class UserStatisticsViewModel(
 
     fun loadStatistics() {
         launch {
-            AdminLoad.load(
+            loadInto(
                 start = { _state.update { it.copy(isLoading = true, error = null) } },
                 fetch = {
                     // Status refresh precedes the fetch (its legacy position in

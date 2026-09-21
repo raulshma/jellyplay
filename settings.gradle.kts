@@ -10,6 +10,15 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    // Class-based convention plugins for the shared/ KMP library modules
+    // (jellyplay.kmp.library.*). The script-plugin form (precompiled script
+    // plugin in an included build) was tried and rejected: type-safe accessors
+    // do not generate for source-set manipulation from a precompiled script
+    // plugin's transitive classpath ("KotlinSourceSet with name 'jvmMain' not
+    // found" through every withPlugin-guard variant). The class-based shape —
+    // plugin types used by classpath (KotlinSourceSetContainer API), not
+    // accessors — is the one that works.
+    includeBuild("build-logic-convention")
 }
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.insights.heatmap
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.StreakInfo
@@ -12,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Semaphore
 import java.time.LocalDate
@@ -108,36 +110,52 @@ class WatchProgressHeatmapViewModel(
 
     private fun loadHeatmapData() {
         launch {
+            // One read of the year/filter pair drives the whole ladder — the
+            // legacy body's reads, at their legacy position (an event landing
+            // mid-flight must not half-update the request window).
             val state = _uiState.value
             val year = state.year
             val filter = state.filter
 
-            try {
-                val activities = watchHistoryRepository.getDailyActivity(year, filter)
-                val streaks = calculateStreaks(activities)
+            loadInto(
+                // The flag is raised by the entry points (SetYear, SetFilter,
+                // refresh); the cold init path rides the state's isLoading=true
+                // default — nothing to raise here.
+                start = { },
+                fetch = {
+                    // The legacy ladder's catch shape (CancellationException
+                    // rethrown, every other throw settling as the error arm)
+                    // expressed as the sanctioned wrapper.
+                    runCatchingRethrowingCancellation {
+                        val activities = watchHistoryRepository.getDailyActivity(year, filter)
+                        val streaks = calculateStreaks(activities)
 
-                val isPluginAvailable = watchHistoryRepository.playbackReportingStatus.value ==
-                    com.raulshma.jellyplay.core.model.PlaybackReportingStatus.AVAILABLE
+                        val isPluginAvailable = watchHistoryRepository.playbackReportingStatus.value ==
+                            com.raulshma.jellyplay.core.model.PlaybackReportingStatus.AVAILABLE
 
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        dailyActivities = activities,
-                        streakInfo = streaks,
-                        isPluginAvailable = isPluginAvailable,
-                        error = null,
-                    )
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = e.localizedMessage ?: e.message ?: "",
-                    )
-                }
-            }
+                        Triple(activities, streaks, isPluginAvailable)
+                    }
+                },
+                onSuccess = { (activities, streaks, isPluginAvailable) ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            dailyActivities = activities,
+                            streakInfo = streaks,
+                            isPluginAvailable = isPluginAvailable,
+                            error = null,
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.localizedMessage ?: e.message ?: "",
+                        )
+                    }
+                },
+            )
         }
     }
 

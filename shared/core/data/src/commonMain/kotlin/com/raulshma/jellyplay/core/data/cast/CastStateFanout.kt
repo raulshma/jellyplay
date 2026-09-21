@@ -9,7 +9,6 @@ package com.raulshma.jellyplay.core.data.cast
  */
 object CastStrategyNames {
     const val GOOGLE: String = "google"
-    const val LIBVLC: String = "libvlc"
     const val DLNA: String = "dlna"
     const val JELLYFIN: String = "jellyfin"
 }
@@ -91,7 +90,7 @@ internal data class CastStateFanout(
  * always gathers the active branch's payload right before calling.
  *
  * Branch semantics (mirrors CastManager's transport dispatch, whose else-arm
- * also covers the libvlc fallback and ad-hoc registered strategies):
+ * also covers unknown / ad-hoc registered strategies):
  *  - [CastStrategyNames.DLNA] contributes position, duration, isPlaying,
  *    volume;
  *  - [CastStrategyNames.JELLYFIN] contributes those four plus title/subtitle;

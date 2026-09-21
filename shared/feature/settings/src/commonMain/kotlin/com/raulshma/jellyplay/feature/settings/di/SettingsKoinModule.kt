@@ -217,6 +217,10 @@ val settingsModule: Module = module {
             // Per-server self-signed trust toggle state + grants (network
             // DataStore, same store the OkHttp config StateFlow flows from).
             networkOfflineStore = get(),
+            // The trust-toggle DECISION seam (core:data) — grants still
+            // observed/written through the store above; matching happens
+            // behind this repository so no core:network type reaches here.
+            selfSignedTrustRepository = get(),
         )
     }
     viewModel {

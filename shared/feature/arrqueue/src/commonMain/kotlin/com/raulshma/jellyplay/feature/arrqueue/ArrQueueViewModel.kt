@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_grab_sent
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_import_sent
@@ -112,9 +113,15 @@ class ArrQueueViewModel(
             return
         }
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            arrRepository.refreshQueue()
-                .onFailure { _state.value = _state.value.copy(error = it.message) }
+            loadInto(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+                // The success arm is deliberately empty (the queue arrives
+                // through the repository collector above); only the failure
+                // arm writes the error. The flag settles once after the ladder.
+                fetch = { arrRepository.refreshQueue() },
+                onSuccess = { },
+                onFailure = { _state.value = _state.value.copy(error = it.message) },
+            )
             _state.value = _state.value.copy(isLoading = false)
         }
     }

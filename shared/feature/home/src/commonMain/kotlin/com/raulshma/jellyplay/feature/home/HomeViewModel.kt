@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.NextEpisode
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
@@ -220,11 +221,12 @@ internal class HomeViewModel(
         offlineRepository = offlineRepository,
         fetchFailed = refresher.state.map { it.fetchFailed },
         // The offline home's layout mirror (#147): the cached online sections
-        // the offline home reproduces filtered to downloads. runCatching so a
-        // corrupt blob degrades to the generic offline rows instead of
-        // crashing the gate collector.
+        // the offline home reproduces filtered to downloads.
+        // runCatchingRethrowingCancellation so a corrupt blob degrades to the
+        // generic offline rows instead of crashing the gate collector, while a
+        // cancelled read still propagates.
         homeLayoutProvider = {
-            runCatching { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
+            runCatchingRethrowingCancellation { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
                 .getOrDefault(emptyList())
         },
         bookTocCacheRepository = bookTocCacheRepository,

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
@@ -166,13 +167,13 @@ class UpcomingCalendarViewModel(
             return
         }
         launch {
-            CalendarLoad.load(
+            loadInto(
                 start = { _state.value = _state.value.copy(isLoading = true, error = null) },
                 fetch = {
                     val month = _state.value.visibleMonth
                     arrRepository.refreshCalendar(month.onDay(1), month.lastDay)
                 },
-                // The success arm is deliberately empty (see CalendarLoad):
+                // The success arm is deliberately empty (see loadInto):
                 // items land through the month collector, not this payload.
                 onSuccess = { },
                 onFailure = { _state.value = _state.value.copy(error = it.message) },

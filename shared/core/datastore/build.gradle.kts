@@ -1,40 +1,15 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    id("jellyplay.kmp.library.base")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.datastore"
-        compileSdk = 37
-        minSdk = 28
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // JVM-semantics code shared verbatim by android + desktop: PinHasher
-        // (java.security PBKDF2/SHA-256), UUID generation and runBlocking
-        // first-value reads. The DI module/qualifiers moved to commonMain;
-        // jvmShared keeps only these platform actuals.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
-
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             api(project(":shared:core:model"))
             // Cancellation-safe suspend wrappers — the module's flagged
             // suspend-fun sites ride the same seam as the rest of the tree.
@@ -60,13 +35,12 @@ kotlin {
             // SecureKeyValueStorage desktop actual (OS keyring via JNA).
             implementation(libs.java.keyring)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
+        // kotlin("test") + coroutines-test on commonTest cover both test lanes
+        // through the commonTest → jvmTest hierarchy edge.
+        commonTest.dependencies {
             implementation(libs.coroutines.test)
         }
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.coroutines.test)
             implementation(libs.koin.test)
         }
     }

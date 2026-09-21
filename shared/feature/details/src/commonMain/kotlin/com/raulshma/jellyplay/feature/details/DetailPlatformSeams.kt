@@ -12,36 +12,24 @@ import androidx.compose.ui.Modifier
  * collaborator that used to be a Hilt-injected Android class arrives through
  * one of these module-local interfaces instead:
  *
- * - [DetailAudioPlayback] — legacy `AudioPlaybackManager` (ExoPlayer/media3,
- *   Hilt-owned in legacy `:core:data` until ). The detail screen's ONLY
- *   use of the manager is per-item `play(itemId)` with its local-source
- *   fallback (`playLocalTrack`).
  * - [DetailThemeMusic] — legacy `ThemeMusicPlayer` (a dedicated ExoPlayer
  *   instance for ambient detail-page theme music; same Hilt singleton).
  * - [DetailStorageProbe] — the `StatFs`/`Environment` available-bytes probe
  *   that used to live inline in [DetailViewModel.getAvailableStorageBytes].
  *
- * Android actuals for the first two live APP-side
- * (`AppKoinModule`'s interop adapters over the Koin-owned legacy
- * AudioPlaybackManager/ThemeMusicPlayer singles — formerly the HiltInterop
- * lazy singles) because constructing the singletons here would mean a
- * second module boundary per type. [DetailStorageProbe]'s Android
- * impl is plain `android.os` API and lives in this module's androidMain;
- * desktop impls (no-op audio/theme, appdata usable-space probe) live in
- * jvmMain.
+ * ([DetailAudioPlayback] — the legacy per-item `AudioPlaybackManager.play`
+ * seam — died with its only caller, the production-unreachable local-track
+ * play command; album/track playback from the detail screen routes through
+ * AudioQueueFacade.)
+ *
+ * Android actuals for [DetailThemeMusic] live APP-side
+ * (`AppKoinModule`'s interop adapter over the Koin-owned legacy
+ * ThemeMusicPlayer single — formerly the HiltInterop lazy single) because
+ * constructing the singleton here would mean a second module boundary per
+ * type. [DetailStorageProbe]'s Android impl is plain `android.os` API and
+ * lives in this module's androidMain; desktop impls (no-op theme music,
+ * appdata usable-space probe) live in jvmMain.
  */
-interface DetailAudioPlayback {
-    /**
-     * Starts local-capable playback of a single (audio) item — the legacy
-     * `AudioPlaybackManager.play(itemId)` local-track path including the
-     * `resolveLocalSource` fallback when the server detail fetch fails.
-     * Desktop v1: silent no-op (audio playback goes through the music queue
-     * facade there; the detail-screen audio buttons are dead-clicks,
-     * documented).
-     */
-    fun play(itemId: String)
-}
-
 interface DetailThemeMusic {
     /** Plays ambient theme music for [itemId] when the pref is on; no-op guard rules live in the impl. */
     fun playThemeFor(itemId: String)

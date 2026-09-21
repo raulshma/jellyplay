@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 
 data class UsersState(
     val isLoading: Boolean = true,
@@ -64,21 +64,21 @@ class UsersViewModel(
     fun refresh() {
         launch {
             _state.value = _state.value.copy(isRefreshing = true)
-            loadInto(refreshing = true)
+            loadUsers(refreshing = true)
         }
     }
 
     fun loadUsers() {
-        launch { loadInto(refreshing = false) }
+        launch { loadUsers(refreshing = false) }
     }
 
-    private suspend fun loadInto(refreshing: Boolean) {
+    private suspend fun loadUsers(refreshing: Boolean) {
         // Access control is enforced by AdminRouteContainer before this screen
         // is reached; the server still 403s as a backstop if state is stale.
-        // Flavour start (see AdminLoad): the cold load raises the pair, a
+        // Flavour start (see loadInto): the cold load raises the pair, a
         // refresh raises nothing here (its isRefreshing was already raised by
         // the caller, and a shown error is deliberately kept).
-        AdminLoad.load(
+        loadInto(
             start = {
                 if (!refreshing) {
                     _state.value = _state.value.copy(isLoading = true, error = null)

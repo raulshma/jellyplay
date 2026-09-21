@@ -9,11 +9,8 @@ import okio.buffer
 import java.io.IOException
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.locks.ReentrantLock
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class BandwidthInterceptor @Inject constructor() : Interceptor {
+class BandwidthInterceptor() : Interceptor {
 
     private val _estimatedBandwidthKbps = MutableStateFlow(0.0)
     val estimatedBandwidthKbps: StateFlow<Double> = _estimatedBandwidthKbps.asStateFlow()

@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.SubtitleColor
-import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
@@ -34,7 +32,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
+import com.raulshma.jellyplay.feature.player.video.engine.MpvStyleMapping
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackVolumePolicy
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.engine.TimedCue
@@ -208,8 +208,6 @@ open class MpvDesktopEngine(
     @Volatile private var volumePercent: Double = 100.0
     override val volume: Float get() = (volumePercent / 100.0).toFloat()
 
-    override val underlyingPlayer: Any? get() = aliveCtx()
-
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         val ticker = EnginePositionTicker(
@@ -357,12 +355,15 @@ open class MpvDesktopEngine(
     private fun aliveCtx(): Pointer? = if (released.get()) null else ctx
 
     /**
-     * Engine-variant hook: the live mpv handle for subclasses that
-     * attach auxiliary contexts tied to it — [MpvSoftwareRenderEngine]'s
-     * render-API context is created on this handle at construction. Returns
-     * null post-[release] like [aliveCtx].
+     * The live mpv handle: for subclasses that attach auxiliary contexts tied
+     * to it ([MpvSoftwareRenderEngine]'s render-API context is created on
+     * this handle at construction) and for desktop tests that assert on raw
+     * mpv properties — it is a desktop-native accessor, deliberately NOT part
+     * of the commonMain engine contract (the type-erased
+     * `underlyingPlayer` escape hatch was retired from it). Returns null
+     * post-[release] like [aliveCtx].
      */
-    protected fun liveMpvHandle(): Pointer? = aliveCtx()
+    fun liveMpvHandle(): Pointer? = aliveCtx()
 
     /**
      * Engine-variant hook: emits into the engine's [errorFlow]
@@ -653,20 +654,86 @@ open class MpvDesktopEngine(
     }
 
     // ── MediaEngine: volume/mute (RemotePlayableEngine, 0f..1f → mpv %) ────
+    //
+    // Choreography comes from the commonMain [PlaybackVolumePolicy] — the same
+    // pure decisions the Android reloadable engines apply via
+    // ReloadablePlayerEngine's final templates: clamp to the boost ceiling
+    // (MAX_BOOST_NOMINAL), remember the last audible level, snapshot it on
+    // mute, restore it on unmute. The desktop previously hand-rolled
+    // `coerceIn(0f,1f) * 100` + a bare mute flag, so unmuting never restored
+    // the remembered level. Desktop-owned is the APPLY step only: the policy
+    // works in normalized units (1.0 == nominal) and [applyVolumeLevel] is the
+    // single 0..1 → 0..100 conversion at the mpv `volume` property write.
+    // There is no Android system music stream to sync on desktop — the mpv
+    // volume property is the only volume surface — so the unmute plan writes
+    // its REMEMBERED_LEVEL restore straight into mpv (Android's mpv adapter
+    // instead pairs LEAVE_UNCHANGED with the system-stream sync).
+
+    /** Last audible normalized level; the restore target for unmute. */
+    @Volatile private var lastUnmuteVolume: Float = 1f
+
+    /** Same seam as ReloadablePlayerEngine's — remember only audible levels. */
+    private fun rememberUnmuteVolumeIfAudible(volume01: Float) {
+        if (volume01 > 0f) lastUnmuteVolume = volume01
+    }
 
     override fun setVolume(value: Float) {
         val context = aliveCtx() ?: return
-        volumePercent = (value.coerceIn(0f, 1f) * 100.0)
+        applyVolumePlan(context, value)
+    }
+
+    override fun increaseVolume(delta: Float) {
+        val context = aliveCtx() ?: return
+        // The cached percent IS the native level — this engine is the only
+        // writer of mpv's `volume`, so the mirror cannot drift (Android reads
+        // the property live because its handle can be touched elsewhere).
+        applyVolumePlan(context, (volumePercent / 100.0).toFloat() + delta)
+    }
+
+    override fun decreaseVolume(delta: Float) {
+        val context = aliveCtx() ?: return
+        applyVolumePlan(context, (volumePercent / 100.0).toFloat() - delta)
+    }
+
+    /** plan + remember + native write — the ReloadablePlayerEngine template body. */
+    private fun applyVolumePlan(context: Pointer, raw: Float) {
+        val plan = PlaybackVolumePolicy.planLevel(raw, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
+        rememberUnmuteVolumeIfAudible(plan.normalized)
+        applyVolumeLevel(context, plan.normalized)
+    }
+
+    /** The one normalized→percent boundary conversion for the mpv `volume` write. */
+    private fun applyVolumeLevel(context: Pointer, normalized: Float) {
+        volumePercent = normalized * 100.0
         MpvLib.setPropertyDouble(context, "volume", volumePercent)
     }
 
-    override fun increaseVolume(delta: Float) = setVolume(volume + delta)
-
-    override fun decreaseVolume(delta: Float) = setVolume(volume - delta)
-
     override fun setMuted(muted: Boolean) {
         val context = aliveCtx() ?: return
+        // mpv owns a real mute flag — the flag silences; the volume property is
+        // not the mute mechanism (Android template writes the flag first too).
         MpvLib.setPropertyFlag(context, "mute", muted)
+        if (muted) {
+            // LEAVE_UNCHANGED is mpv's mute vocabulary (plan.nativeVolume is
+            // null — the native level stays put). Remember the pre-mute level
+            // BEFORE any further write, mirroring the template's
+            // snapshot-before-apply ordering.
+            val plan = PlaybackVolumePolicy.planMute(
+                PlaybackVolumePolicy.NativeVolumeRestore.LEAVE_UNCHANGED,
+            )
+            rememberUnmuteVolumeIfAudible((volumePercent / 100.0).toFloat())
+            plan.nativeVolume?.let { applyVolumeLevel(context, it) }
+        } else {
+            // Desktop has no system stream, so the remembered level is restored
+            // into the mpv volume property itself — the level the user hears is
+            // whatever `volume` carries once the flag lifts (coerced by the
+            // policy into the audible 0.05..1 window).
+            val plan = PlaybackVolumePolicy.planUnmute(
+                lastUnmuteVolume,
+                PlaybackVolumePolicy.NativeVolumeRestore.REMEMBERED_LEVEL,
+            )
+            plan.nativeVolume?.let { applyVolumeLevel(context, it) }
+        }
     }
 
     // ── MediaEngine: tracks & subtitles ─────────────────────────────────────
@@ -708,22 +775,46 @@ open class MpvDesktopEngine(
         MpvLib.setPropertyString(context, "sub-visibility", if (visible) "yes" else "no")
     }
 
+    /**
+     * Applies [style] through the commonMain [MpvStyleMapping] — the same
+     * canonical `sub-*` key/value table the Android mpv engine applies
+     * (resolver-aware colors as mpv `#AARRGGBB`, the shared per-edge-type
+     * border/shadow table, `sub-ass-override` driven by
+     * [SubtitleStyle.assOverride]). The desktop's former private mirror
+     * (`argbCss` + an inline edge-type table + hardcoded override strings) is
+     * deleted. Engine-owned per platform, exactly as on Android: `sub-pos`
+     * (the mapping pins marginY=0 and leaves vertical placement to the
+     * engine's `sub-pos` write) and the font-size delivery — the desktop
+     * writes `sub-font-size` directly from the mapping's coerced value
+     * instead of Android's `sub-scale` indirection over a bundled font.
+     */
     override fun applySubtitleStyle(style: SubtitleStyle) {
         val context = aliveCtx() ?: return
         if (!style.applyCustomStyle) {
-            // Native ASS styling with the Android default override mode
-            // ("scale" keeps embedded layout/styling, only resizes).
-            MpvLib.setPropertyString(context, "sub-ass-override", "scale")
+            // Reset to mpv/libass native defaults — the tested reset pairs and
+            // magnitudes from the mapping's DEFAULTS table, so a custom→default
+            // switch mid-session cannot leave stale colors, edge sizes, or
+            // typeface toggles behind. The desktop previously flipped only
+            // sub-ass-override to "scale"; the canonical reset is "no"
+            // (embedded ASS styling fully honored), matching Android's
+            // default branch.
+            MpvStyleMapping.defaultEntries().forEach { (k, v) ->
+                MpvLib.setPropertyString(context, k, v)
+            }
+            MpvLib.setPropertyDouble(context, "sub-border-size", MpvStyleMapping.defaultBorderSize)
+            MpvLib.setPropertyDouble(context, "sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
             return
         }
-        MpvLib.setPropertyDouble(context, "sub-font-size", style.fontSize.toDouble())
-        MpvLib.setPropertyString(context, "sub-color", argbCss(style.fontColor, 1f))
-        MpvLib.setPropertyString(context, "sub-border-color", argbCss(style.edgeColor, 1f))
-        MpvLib.setPropertyString(
-            context,
-            "sub-back-color",
-            argbCss(style.backgroundColor, style.backgroundOpacity),
-        )
+        // Custom branch: string-typed pairs straight from the mapping, then the
+        // engine-applied numeric magnitudes (Android splits the same way
+        // between customStyleEntries and typed setters).
+        MpvStyleMapping.customStyleEntries(style).forEach { (k, v) ->
+            MpvLib.setPropertyString(context, k, v)
+        }
+        val values = MpvStyleMapping.computeValues(style)
+        MpvLib.setPropertyDouble(context, "sub-font-size", values.fontSize.toDouble())
+        MpvLib.setPropertyDouble(context, "sub-border-size", values.outlineSize)
+        MpvLib.setPropertyDouble(context, "sub-shadow-offset", values.shadowOffset)
         // sub-pos is measured bottom-up in percent; the app's verticalPosition
         // is top-down (0 = top edge).
         MpvLib.setPropertyDouble(
@@ -731,41 +822,6 @@ open class MpvDesktopEngine(
             "sub-pos",
             (100.0 - style.verticalPosition * 100.0).coerceIn(0.0, 100.0),
         )
-        when (style.edgeType) {
-            SubtitleEdgeType.OUTLINE,
-            SubtitleEdgeType.RAISED,
-            SubtitleEdgeType.DEPRESSED,
-            -> {
-                MpvLib.setPropertyDouble(context, "sub-border-size", 2.5)
-                MpvLib.setPropertyDouble(context, "sub-shadow-offset", 0.0)
-            }
-            SubtitleEdgeType.DROP_SHADOW -> {
-                MpvLib.setPropertyDouble(context, "sub-border-size", 0.0)
-                MpvLib.setPropertyDouble(context, "sub-shadow-offset", 1.5)
-            }
-            SubtitleEdgeType.NONE -> {
-                MpvLib.setPropertyDouble(context, "sub-border-size", 0.0)
-                MpvLib.setPropertyDouble(context, "sub-shadow-offset", 0.0)
-            }
-        }
-        // FORCE is libass's full-restyle mode — the equivalent of the Android
-        // engine's --ass-override=force handling of AssOverrideMode.FORCE.
-        MpvLib.setPropertyString(context, "sub-ass-override", "force")
-    }
-
-    private fun argbCss(color: SubtitleColor, opacity: Float): String {
-        val argb = color.value
-        val r = (argb ushr 16) and 0xFF
-        val g = (argb ushr 8) and 0xFF
-        val b = argb and 0xFF
-        val alpha = (opacity.coerceIn(0f, 1f) * 255).toInt()
-        // mpv's sub-* color props take #RRGGBBAA.
-        return stringHex(r, g, b, alpha)
-    }
-
-    private fun stringHex(r: Int, g: Int, b: Int, a: Int): String {
-        fun h(v: Int) = v.coerceIn(0, 255).toString(16).padStart(2, '0').uppercase()
-        return "#${h(r)}${h(g)}${h(b)}${h(a)}"
     }
 
     // ── MediaEngine: aspect ratio ───────────────────────────────────────────

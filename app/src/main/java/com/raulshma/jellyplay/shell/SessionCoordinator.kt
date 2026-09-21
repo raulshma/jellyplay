@@ -231,7 +231,8 @@ class SessionCoordinator(
                     // COORDINATOR'S OWN mirror — the flag the shell renders
                     // from — not the repository flow: resuming off the mirror
                     // write itself guarantees the release below cannot land
-                    // while the shell still composes AuthContent. (Measured
+                    // while the shell still composes the signed-out auth host
+                    // (SignedOutAuthHost). (Measured
                     // on device: the repository flow's flip resumed this
                     // coroutine up to ~10ms ahead of the mirror collector —
                     // a (isRestoring=false, isAuthenticated=false) frame that

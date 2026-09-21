@@ -30,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +70,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
@@ -97,7 +97,6 @@ import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remo
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_only
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_search
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_remove_selected_title
-import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_retry
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_select_all
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_selected_count
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_title
@@ -177,10 +176,9 @@ fun ArrQueueScreen(
                     JellyPlayCircularProgressIndicator(modifier = Modifier.size(48.dp))
                 }
 
-                state.error != null && state.queue.isEmpty() -> ErrorState(
+                state.error != null && state.queue.isEmpty() -> ErrorScreen(
                     message = state.error ?: stringResource(Res.string.arrqueue_unknown_error),
                     onRetry = { viewModel.refresh() },
-                    modifier = Modifier.fillMaxSize(),
                 )
 
                 state.queue.isEmpty() -> EmptyQueueState(modifier = Modifier.fillMaxSize())
@@ -530,21 +528,6 @@ private fun EmptyQueueState(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
-}
-
-@Composable
-private fun ErrorState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.error,
-            )
-            Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onRetry) { Text(stringResource(Res.string.arrqueue_retry)) }
         }
     }
 }

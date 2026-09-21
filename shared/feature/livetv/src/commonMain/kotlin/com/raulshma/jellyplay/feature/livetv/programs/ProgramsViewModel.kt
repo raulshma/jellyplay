@@ -8,8 +8,8 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.livetv.LIVE_TV_STALENESS_INTERVAL_MS
-import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
@@ -79,7 +79,7 @@ class ProgramsViewModel(
         launch {
             val now = timeSource.nowEpochMillis()
             val fullRender = now - lastFullRender > LIVE_TV_STALENESS_INTERVAL_MS
-            LiveTvLoad.load(
+            loadInto(
                 start = {
                     // The load flavour picks the flag: a full render raises
                     // isLoading, a throttled re-entry raises refreshing — both

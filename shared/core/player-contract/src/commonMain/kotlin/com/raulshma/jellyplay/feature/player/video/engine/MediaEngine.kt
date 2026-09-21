@@ -343,15 +343,6 @@ interface MediaEngine :
     override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
 
-    /**
-     * Opaque native player handle (re-declaration of the type-erased
-     * `RemotePlayableEngine.underlyingPlayer` with the contract-level null
-     * default). Android engines narrow it via val covariance — ExoPlayerEngine
-     * returns `androidx.media3.common.Player?`; consumers on Android cast.
-     * Desktop engines may expose the mpv handle; default is `null`.
-     */
-    override val underlyingPlayer: Any? get() = null
-
     // ── Identity ──
     /**
      * Stable, human-readable engine name for user-facing strings (the

@@ -22,8 +22,6 @@ import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.random.Random
 
 // This client keeps its org.json-based message routing verbatim.
@@ -34,8 +32,7 @@ import kotlin.random.Random
 // android.jar on the Android target and against the real org.json artifact
 // on the desktop target (see the module build script).
 
-@Singleton
-class JellyfinWebSocketClient @Inject constructor(
+class JellyfinWebSocketClient(
     private val okHttpClient: OkHttpClient,
 ) {
     private var webSocket: WebSocket? = null

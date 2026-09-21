@@ -13,16 +13,13 @@ import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
-import com.raulshma.jellyplay.core.database.dao.DownloadProgressRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
-import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
@@ -34,7 +31,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import kotlinx.coroutines.CancellationException
@@ -864,83 +860,11 @@ class DownloadRepositoryImpl(
         imagePreloader.preload(url)
     }
 
-    private fun MediaItem.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?) = OfflineMediaEntity(
-        id = id,
-        name = name,
-        mediaType = mediaType.name,
-        overview = overview,
-        year = year,
-        communityRating = communityRating,
-        officialRating = officialRating,
-        runTimeTicks = runTimeTicks,
-        parentId = parentId,
-        seriesId = seriesId,
-        seasonId = seasonId,
-        // Clear the series subtitle for top-level entities where it would just
-        // duplicate the title; only episodes carry a meaningful
-        // series name distinct from their own.
-        seriesName = if (mediaType == MediaType.EPISODE || mediaType == MediaType.SEASON) seriesName else null,
-        seasonName = if (mediaType == MediaType.EPISODE) seasonName else null,
-        episodeNumber = episodeNumber,
-        seasonNumber = seasonNumber,
-        indexNumber = indexNumber,
-        childCount = childCount,
-        posterPath = imageUrl,
-        backdropPath = backdropUrl,
-        blurHashPrimary = blurHashes.primary,
-        blurHashBackdrop = blurHashes.backdrop,
-        premiereDate = premiereDate,
-        genres = genres.joinToString(","),
-    )
-
-    /**
-     * Server `UserData` snapshot seeded at download time (and re-seeded on a
-     * metadata re-persist) into `playback_state`. Mirrors the playback fields
-     * the metadata row used to carry, so a freshly downloaded item shows its
-     * watched / resume state immediately.
-     */
-    private fun MediaItem.toPlaybackState(): PlaybackStateEntity = PlaybackStateEntity(
-        id = id,
-        playbackPositionTicks = playbackPositionTicks,
-        playedPercentage = PlayedStateSync.computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
-        isPlayed = isPlayed,
-        isFavorite = isFavorite,
-        lastPlayedDate = null,
-    )
-
-    /**
-     * Maps a [MediaDetail] (the rich server response) to an [OfflineMediaEntity],
-     * additionally persisting original title, critic rating, studios, tagline,
-     * the cast as a JSON blob, and the chapter list as a JSON blob (so chapter
-     * markers and the chapter sheet work offline). Falls back to the item-level
-     * values for the base fields so this stays consistent with
-     * [MediaItem.toOfflineMediaEntity].
-     */
-    private fun MediaDetail.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?): OfflineMediaEntity {
-        val base = item.toOfflineMediaEntity(imageUrl, backdropUrl)
-        val cast = people
-            .filter { it.type == "Actor" }
-            .map { person ->
-                OfflinePersonInfo(
-                    id = person.id,
-                    name = person.name,
-                    role = person.role,
-                    type = person.type,
-                    imageTag = person.primaryImageTag,
-                    blurHash = person.primaryBlurHash,
-                )
-            }
-        return base.copy(
-            originalTitle = item.originalTitle,
-            criticRating = criticRating,
-            studios = item.studios.joinToString(","),
-            tagline = taglines.firstOrNull(),
-            peopleJson = if (cast.isEmpty()) null else encodeCast(cast),
-            providerIdsJson = if (providerIds.isEmpty()) null else encodeProviderIds(providerIds),
-            externalUrlsJson = if (externalUrls.isEmpty()) null else encodeExternalUrls(externalUrls),
-            chaptersJson = if (chapters.isEmpty()) null else encodeChapters(chapters),
-        )
-    }
+    // The entity ⟷ domain mappers this class used to carry as private members
+    // (MediaItem/MediaDetail → OfflineMediaEntity, MediaItem → PlaybackStateEntity,
+    // DownloadEntity → DownloadItem, DownloadProgressRow → DownloadProgress) live
+    // in OfflineMediaMappers.kt — the single owner of the offline/download column
+    // semantics, shared with OfflineRepositoryImpl's read side.
 
     /**
      * Declared delta vs the former inline body, adopted from the majority
@@ -962,38 +886,6 @@ class DownloadRepositoryImpl(
             },
         )
     }
-
-    private fun DownloadEntity.toDownloadItem() = DownloadItem(
-        id = id,
-        mediaItemId = mediaItemId,
-        name = name,
-        mediaType = mediaType.toEnumOrNull() ?: MediaType.UNKNOWN,
-        downloadPath = downloadPath,
-        downloadUrl = downloadUrl,
-        totalSizeBytes = totalSizeBytes,
-        downloadedBytes = downloadedBytes,
-        status = status.toEnumOrNull() ?: DownloadStatus.FAILED,
-        speedBytesPerSec = speedBytesPerSec,
-        mediaSourceId = mediaSourceId,
-        imageUrl = imageUrl,
-        imageBlurHash = imageBlurHash,
-        seriesId = seriesId,
-        seasonId = seasonId,
-        seriesName = seriesName,
-        seasonName = seasonName,
-        episodeNumber = episodeNumber,
-        seasonNumber = seasonNumber,
-        errorMessage = errorMessage,
-        priority = priority,
-        container = container,
-    )
-
-    /** DAO progress projection → feature-facing [DownloadProgress] (repository boundary keeps DAO types in). */
-    private fun DownloadProgressRow.toDownloadProgress() = DownloadProgress(
-        id = id,
-        downloadedBytes = downloadedBytes,
-        speedBytesPerSec = speedBytesPerSec,
-    )
 
     /**
      * Maps a [DownloadQuality] preference to the max bitrate (bits/s) passed

@@ -22,7 +22,7 @@ import org.koin.dsl.module
  *    aliases it onto that single, same as the queue/effects pair) and the
  *    module-local AudioPlayerCast seam is bridged app-side
  *    (`androidAppInteropAdaptersModule` adapter over the Koin-owned
- *    CastManager — details DetailAudioPlayback precedent);
+ *    CastManager — the details DetailThemeMusic precedent);
  *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
  *    SleepTimerManager single),
  *    MediaRepository /

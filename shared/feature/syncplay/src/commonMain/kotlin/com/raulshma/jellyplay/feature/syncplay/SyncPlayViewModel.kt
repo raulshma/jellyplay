@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.Res
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_error_create_group
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_error_join_group
@@ -97,7 +98,7 @@ class SyncPlayViewModel(
 
     fun loadGroups() {
         launch {
-            SyncPlayLoad.load(
+            loadInto(
                 start = { _uiState.update { it.copy(isLoading = true, error = null) } },
                 fetch = { syncPlayRepository.getSyncPlayGroups() },
                 onSuccess = { result ->
@@ -168,8 +169,8 @@ class SyncPlayViewModel(
 
     fun joinGroup(groupId: String) {
         launch {
-            SyncPlayLoad.load(
-                // Flavour start (see SyncPlayLoad): a join raises BOTH the
+            loadInto(
+                // Flavour start (see loadInto): a join raises BOTH the
                 // confirm-dialog guard flag and the screen loading flag.
                 start = { _uiState.update { it.copy(isJoining = true, isLoading = true, error = null) } },
                 fetch = { syncPlaySession.joinGroup(groupId) },

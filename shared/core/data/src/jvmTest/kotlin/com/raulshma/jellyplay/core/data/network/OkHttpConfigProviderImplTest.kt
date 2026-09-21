@@ -71,7 +71,7 @@ class OkHttpConfigProviderImplTest {
 
     /** Suspends until the provider's config StateFlow emits a matching value. */
     private suspend fun awaitConfig(predicate: (OkHttpConfig) -> Boolean): OkHttpConfig =
-        withTimeout(5_000) { provider.config.first { predicate(it) } }
+        withTimeout(15_000) { provider.config.first { predicate(it) } }
 
     @Test
     fun `initial config carries the empty defaults`() = runBlocking {

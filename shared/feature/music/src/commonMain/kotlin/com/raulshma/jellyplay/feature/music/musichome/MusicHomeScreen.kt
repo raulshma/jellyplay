@@ -7,6 +7,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -39,20 +40,56 @@ import com.composables.icons.tabler.outline.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 
+/**
+ * Bundles the navigation actions passed into [MusicHomeScreen].
+ *
+ * Grouping them into a single `@Immutable` value lets the navigation call site
+ * `remember` one instance, so the music subtree is treated as skip-worthy by
+ * the Compose compiler instead of recomposing on every parent state change
+ * (each unstable lambda parameter would otherwise be a distinct stability
+ * key). Mirrors the [com.raulshma.jellyplay.feature.home.HomeCallbacks] /
+ * [com.raulshma.jellyplay.feature.settings.SettingsNavActions] pattern.
+ *
+ * Seven actions are plain navigator pushes (identical per shell, wired once in
+ * the shared section graph). [onNowPlayingClick] and [onAmbientClick] are the
+ * Now Playing / Ambient cards' host-supplied actions — each shell reads its
+ * own audio core at click time, so they arrive via the shell's
+ * `ShellHostHooks` rather than the shared graph.
+ *
+ * Callers should construct via `remember(...) { MusicNavActions(...) }` so
+ * the same instance is reused across recompositions.
+ */
+@Immutable
+data class MusicNavActions(
+    /** Open the generic media detail screen; also the Recently Played /
+     * Favorite Tracks row-leaf click (a track's detail). */
+    val onItemClick: (itemId: String) -> Unit = {},
+    val onAlbumClick: (albumId: String) -> Unit = {},
+    val onArtistsClick: () -> Unit = {},
+    val onAlbumsClick: () -> Unit = {},
+    val onTracksClick: () -> Unit = {},
+    val onGenresClick: () -> Unit = {},
+    val onPlaylistsClick: () -> Unit = {},
+    val onNowPlayingClick: () -> Unit = {},
+    val onAmbientClick: () -> Unit = {},
+)
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun MusicHomeScreen(
-    onItemClick: (String) -> Unit,
-    onAlbumClick: (String) -> Unit,
-    onArtistsClick: () -> Unit,
-    onAlbumsClick: () -> Unit,
-    onTracksClick: () -> Unit,
-    onGenresClick: () -> Unit,
-    onPlaylistsClick: () -> Unit,
-    onNowPlayingClick: () -> Unit = {},
-    onAmbientClick: () -> Unit = {},
+    navActions: MusicNavActions,
     viewModel: MusicHomeViewModel = koinViewModel(),
 ) {
+    val onItemClick = navActions.onItemClick
+    val onAlbumClick = navActions.onAlbumClick
+    val onArtistsClick = navActions.onArtistsClick
+    val onAlbumsClick = navActions.onAlbumsClick
+    val onTracksClick = navActions.onTracksClick
+    val onGenresClick = navActions.onGenresClick
+    val onPlaylistsClick = navActions.onPlaylistsClick
+    val onNowPlayingClick = navActions.onNowPlayingClick
+    val onAmbientClick = navActions.onAmbientClick
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sections = uiState.sections
     val isLoading = uiState.isLoading

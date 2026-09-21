@@ -6,8 +6,6 @@ import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -105,8 +103,7 @@ private fun AddressProbeResult.toProbeOutcome() = ProbeOutcome(
  *   `prober` seam stubbed) keep compiling; an empty-grants provider leaves
  *   platform trust behavior byte-identical.
  */
-@Singleton
-class ServerAddressRouter @Inject constructor(
+class ServerAddressRouter(
     private val okHttpConfigProvider: OkHttpConfigProvider = ServerAddressRouter.emptyConfigProvider,
 ) {
 

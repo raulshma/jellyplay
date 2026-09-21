@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.SectionHeader
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -131,7 +132,7 @@ fun RecordingsScreen(
                 ) {
                     if (uiState.recordings.isNotEmpty()) {
                         item {
-                            SectionTitle(stringResource(Res.string.livetv_section_latest_recordings), contentPad)
+                            SectionHeader(stringResource(Res.string.livetv_section_latest_recordings), contentPad)
                         }
                         // 2-column grid rendered as one lazy row per pair so the
                         // whole tab keeps a single vertical scroll (no nested
@@ -173,16 +174,6 @@ fun RecordingsScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SectionTitle(title: String, contentPad: androidx.compose.ui.unit.Dp) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(horizontal = contentPad, vertical = 6.dp),
-    )
 }
 
 @Composable

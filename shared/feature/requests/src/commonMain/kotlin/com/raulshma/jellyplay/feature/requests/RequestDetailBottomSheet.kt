@@ -47,9 +47,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
-import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
+import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -86,14 +86,6 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_down
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_fallback_title
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_radarr
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_sonarr
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_available
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_declined
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_deleted
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_failed
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_partially_available
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_pending
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_processing
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_unknown
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -146,23 +138,16 @@ fun RequestDetailBottomSheet(
             isConfirmingRemoveFromService = false
         }
     }
-    val effectiveMediaStatus = if (request.is4k) request.media.status4k else request.media.status
-    val mediaStatus = remember(effectiveMediaStatus) { SeerrMediaStatus.fromValue(effectiveMediaStatus) }
+    val mediaStatus = remember(request.is4k, request.media.status, request.media.status4k) {
+        request.effectiveMediaStatus()
+    }
     val displayTitle = mediaInfo?.title ?: stringResource(Res.string.requests_fallback_title, request.media.tmdbId)
 
-    val (statusLabelRes, statusColor) = when {
-        requestStatus == SeerrRequestStatus.DECLINED -> Res.string.requests_status_declined to StatusColors.error
-        requestStatus == SeerrRequestStatus.FAILED -> Res.string.requests_status_failed to StatusColors.error
-        requestStatus == SeerrRequestStatus.PENDING && mediaStatus == SeerrMediaStatus.DELETED -> Res.string.requests_status_pending to StatusColors.pending
-        else -> when (mediaStatus) {
-            SeerrMediaStatus.AVAILABLE -> Res.string.requests_status_available to StatusColors.available
-            SeerrMediaStatus.PROCESSING -> Res.string.requests_status_processing to StatusColors.info
-            SeerrMediaStatus.PARTIALLY_AVAILABLE -> Res.string.requests_status_partially_available to StatusColors.pendingLight
-            SeerrMediaStatus.PENDING -> Res.string.requests_status_pending to StatusColors.pending
-            SeerrMediaStatus.DELETED -> Res.string.requests_status_deleted to StatusColors.error
-            SeerrMediaStatus.UNKNOWN -> Res.string.requests_status_unknown to colorScheme.onSurfaceVariant
-        }
-    }
+    val (statusLabelRes, statusColor) = requestStatusPresentation(
+        requestStatus = requestStatus,
+        mediaStatus = mediaStatus,
+        unknownStatusColor = colorScheme.onSurfaceVariant,
+    )
     val statusLabel = stringResource(statusLabelRes)
 
     // The java.time read moved to the [formatRequestedDate] seam

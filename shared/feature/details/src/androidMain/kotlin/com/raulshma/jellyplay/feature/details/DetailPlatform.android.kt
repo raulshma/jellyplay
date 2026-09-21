@@ -77,7 +77,6 @@ fun androidDetailsModule(context: Context): Module = module {
             offlineRepository = get(),
             stores = get(),
             remoteDiscovery = get(),
-            audioPlaybackManager = get(),
             audioQueueFacade = get(),
             themeMusicPlayer = get(),
             actionFactories = get(),

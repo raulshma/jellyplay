@@ -1,43 +1,21 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.shell"
-        compileSdk = 37
-        minSdk = 28
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
         // appSections must see every *Section builder it registers —
         // detailsSection lives in :shared:feature:details' jvmShared source
         // set, invisible from a consumer's commonMain — so the shared shell
         // graph lives in this module's own jvmShared middle set (details'
-        // exact wiring), shared verbatim by the only two consumers: the
-        // Android and desktop shells.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // exact wiring, created by the convention plugin), shared verbatim by
+        // the only two consumers: the Android and desktop shells.
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             // HomeMode in the ShellHostHooks surface (not re-exported by
             // core:ui — implementation there).
             implementation(project(":shared:core:model"))
@@ -84,14 +62,12 @@ kotlin {
             implementation(compose.components.resources)
             // ShellHostHooks.surpriseRequests is Flow<Unit>.
             implementation(libs.kotlinx.coroutines.core)
-            // entryProvider / EntryProviderScope / NavEntry — runtime only:
-            // NavDisplay and the *Section builders' own nav3-ui imports stay
-            // in the consuming shells / feature modules.
+            // entryProvider / EntryProviderScope / NavEntry — runtime only.
             implementation(libs.navigation3.runtime)
         }
         // AdminRefreshGate policy pins (settings/core-data precedent).
+        // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
             // The session controller's arbitration/collect tests (runTest +
             // fake clock, the core-data jvmTest pattern).
             implementation(libs.coroutines.test)
@@ -102,6 +78,12 @@ kotlin {
         // aggregator declares the type it collects.
         getByName("jvmShared").dependencies {
             implementation(libs.koin.core)
+            // SignedOutAuthHost (the shared signed-out shell, beside
+            // ShellHostHooks/appSections) hosts the NavDisplay itself —
+            // nav3-ui, not just nav3-runtime. On desktop the google -ui
+            // artifact is jvm-stubbed; the desktop app's dependency
+            // substitution swaps the JetBrains fork in at runtime.
+            implementation(libs.navigation3.ui)
         }
     }
 }

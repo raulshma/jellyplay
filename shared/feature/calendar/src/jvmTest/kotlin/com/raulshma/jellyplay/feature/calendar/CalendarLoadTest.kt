@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.calendar
 
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -12,7 +13,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Coverage for the calendar feature's one load ladder ([CalendarLoad.load])
+ * Coverage for the calendar feature's one load ladder ([loadInto])
  * — the arms [UpcomingCalendarViewModel.refresh] folds onto. Pins the
  * dispatch contract the folded site relies on: start raises before the
  * fetch and clears the stale error, exactly one arm fires, the site's
@@ -45,7 +46,7 @@ class CalendarLoadTest {
         val events = mutableListOf<String>()
         var stateAtFetch: FakeCalendarState? = null
 
-        CalendarLoad.load(
+        loadInto(
             start = {
                 events += "start"
                 screen.update { it.copy(isLoading = true, error = null) }
@@ -71,7 +72,7 @@ class CalendarLoadTest {
         val screen = FakeCalendarScreen()
         val events = mutableListOf<String>()
 
-        CalendarLoad.load(
+        loadInto(
             start = { screen.update { it.copy(isLoading = true, error = null) } },
             fetch = { Result.failure<Unit>(RuntimeException("boom")) },
             onSuccess = { events += "onSuccess" },
@@ -92,7 +93,7 @@ class CalendarLoadTest {
         val screen = FakeCalendarScreen()
         val fetchGate = CompletableDeferred<Unit>()
         val job = launch {
-            CalendarLoad.load(
+            loadInto(
                 start = { screen.update { it.copy(isLoading = true, error = null) } },
                 fetch = {
                     fetchGate.await()

@@ -24,8 +24,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * OkHttp-backed implementation of [SonarrApiClient]. Mirrors
@@ -42,8 +40,7 @@ import javax.inject.Singleton
  *   attached via the `series` sub-object so a calendar row can carry stable
  *   identity even when the per-episode tmdbId is absent.
  */
-@Singleton
-class SonarrApiClientImpl @Inject constructor(
+class SonarrApiClientImpl(
     private val okHttpClient: OkHttpClient,
 ) : SonarrApiClient {
 

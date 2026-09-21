@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.PluginStatus
 import com.raulshma.jellyplay.core.model.PluginVersionInfo
 import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.delay
 
 data class PluginDetailState(
@@ -44,7 +44,7 @@ class PluginDetailViewModel(
 
     private fun loadPlugin(pluginId: String, pluginName: String) {
         launch {
-            AdminLoad.load(
+            loadInto(
                 // The start also drops any optimistic enable flip from a
                 // previous toggle (jellyfin-web's isEnabledOverride reset).
                 start = { _state.value = _state.value.copy(isLoading = true, error = null, isEnabledOverride = null) },

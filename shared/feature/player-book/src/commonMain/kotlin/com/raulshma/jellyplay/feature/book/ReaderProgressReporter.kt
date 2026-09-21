@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -79,7 +80,7 @@ internal class ReaderProgressReporter(
         }
         val report = buildReport(item) ?: return
         (if (final) flushScope else scope).launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 // The last-CFI write rides along so the exact-resume anchor
                 // survives even when the reader closed within the debounce
                 // window.

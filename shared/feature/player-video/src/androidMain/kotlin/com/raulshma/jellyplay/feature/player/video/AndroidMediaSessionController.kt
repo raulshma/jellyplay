@@ -11,6 +11,8 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
 
 /**
  * Owns the system [MediaSession] (now-playing / lock-screen / Bluetooth metadata)
@@ -21,7 +23,7 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
  * [MediaSessionController] seam interface took the old name; the ViewModel
  * constructs this class through [AndroidMediaSessionFactory].)
  *
- * Three entry points cover every prior call site:
+ * Four entry points cover every prior call site:
  *  - [createForItem]: builds a session around a [ForwardingPlayer] that pins the
  *    caller-supplied title/artwork at the MediaSession layer. ExoPlayer's HLS
  *    playlist parser resolves an empty MediaMetadata for Jellyfin transcode
@@ -31,9 +33,12 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
  *    and restarted seeks from 0 on transcoded media. Overriding
  *    `getMediaMetadata()` here is non-destructive: the underlying timeline and
  *    position are untouched.
- *  - [createForPlayer]: builds a bare session around an arbitrary [Player]
- *    (used by the background-cast detach/reattach path, which swaps the local
- *    engine player for the cast receiver's player).
+ *  - [createForPlayer]: builds a bare session around an engine's platform
+ *    player (the local-engine reattach path narrows via
+ *    [asMedia3Player][com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player]).
+ *  - [createForBackgroundCast]: builds a bare session around the cast
+ *    receiver's player (the background-cast detach/reattach path, which swaps
+ *    the local engine player for the cast receiver's player).
  *  - [release]: tears down the active session (idempotent).
  *
  * Both builders construct a [MediaLibrarySession] (not a plain [MediaSession]).
@@ -53,6 +58,7 @@ internal class AndroidMediaSessionController(
     private val context: Context,
     private val sessionManager: PlaybackSessionManager,
     private val getPlayer: () -> Player?,
+    private val getCastPlayer: () -> Player?,
     private val getImageUrl: (itemId: String, maxWidth: Int) -> String,
 ) : MediaSessionController {
 
@@ -99,20 +105,43 @@ internal class AndroidMediaSessionController(
     }
 
     /**
-     * Build + activate a bare session around [player] with the given [sessionId]
-     * (used by background-cast detach/reattach, which swap the player surface).
-     * [releaseSupersededSession] runs first — the caller's [sessionId] is stable
-     * across reattach, so a rebuild hits the same Media3 ID-uniqueness check as
-     * [createForItem]. Slot vacating stays atomic — see [createForItem].
+     * Build + activate a bare session around [engine]'s platform player with
+     * the given [sessionId] (local-engine reattach path).
+     * [releaseSupersededSession] runs first — the caller's [sessionId] is
+     * stable across reattach, so a rebuild hits the same Media3 ID-uniqueness
+     * check as [createForItem]. Slot vacating stays atomic — see
+     * [createForItem].
      *
-     * [videoItemId], when supplied (the local-engine reattach path), pins the
-     * session activity to [buildPlayerSessionActivity] so the notification still
-     * reopens the fullscreen video after a session rebuild. The background-cast
-     * detach path omits it — that session's notification falls back to the app
-     * launcher intent (browse UI), preserving prior behaviour.
+     * [videoItemId], when supplied, pins the session activity to
+     * [buildPlayerSessionActivity] so the notification still reopens the
+     * fullscreen video after a session rebuild. No-op when [engine] hosts no
+     * media3 player — [asMedia3Player] is the seam's single narrowing site.
      */
-    override fun createForPlayer(player: Any?, sessionId: String, videoItemId: String?) {
-        val platformPlayer = player as? Player ?: return
+    override fun createForPlayer(engine: MediaEngine?, sessionId: String, videoItemId: String?) {
+        activateBareSession(engine?.asMedia3Player() ?: return, sessionId, videoItemId)
+    }
+
+    /**
+     * Build + activate a bare session around the active cast receiver's player
+     * (background-cast detach path — the session follows the receiver's player
+     * handed over by [createForBackgroundCast]'s provider). No-op when no cast
+     * player is active.
+     */
+    override fun createForBackgroundCast(sessionId: String) {
+        activateBareSession(getCastPlayer() ?: return, sessionId, videoItemId = null)
+    }
+
+    /**
+     * Shared bare-session builder behind [createForPlayer] /
+     * [createForBackgroundCast]: releases the superseded session, then builds
+     * + activates a session without pinned metadata.
+     * [videoItemId], when supplied (the local-engine reattach path), pins the
+     * session activity to [buildPlayerSessionActivity] so the notification
+     * still reopens the fullscreen video after a session rebuild. The
+     * background-cast detach path omits it — that session's notification falls
+     * back to the app launcher intent (browse UI), preserving prior behaviour.
+     */
+    private fun activateBareSession(platformPlayer: Player, sessionId: String, videoItemId: String?) {
         releaseSupersededSession()
 
         val builder = MediaLibrarySession.Builder(context, platformPlayer, NO_OP_LIBRARY_CALLBACK)

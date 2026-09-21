@@ -121,7 +121,7 @@ class ExoPlayerEngine(
     // Nullable + defaulted so non-Hilt constructions (contract tests) compile
     // unchanged; a null cache simply disables byte caching (passthrough).
     private val videoStreamCache: VideoStreamCache? = null,
-) : ReloadablePlayerEngine(context), AndroidSurfaceProvider {
+) : ReloadablePlayerEngine(context), AndroidSurfaceProvider, Media3PlayerHost {
 
     @Volatile
     private var cachedVolume: Float = 1f
@@ -219,7 +219,7 @@ class ExoPlayerEngine(
     private val currentSubtitleConfigs =
         java.util.concurrent.CopyOnWriteArrayList<MediaItem.SubtitleConfiguration>()
 
-    override val underlyingPlayer: androidx.media3.common.Player? get() = player
+    override val media3Player: Player? get() = player
 
     /**
      * Per-track ReplayGain (dB) from the current [PlaybackRequest], used

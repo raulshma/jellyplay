@@ -1,54 +1,27 @@
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.livetv"
-        compileSdk = 37
-        minSdk = 28
-        // Compose-resources packaging (device-pass finding): with the
-        // AGP-9 KMP library plugin, android resources are OFF by default, so
-        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
-        // app APK ships this module's Res accessors with NO backing .cvr
-        // assets — runtime MissingResourceException on the first string read.
-        androidResources {
-            enable = true
-        }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    // The ViewModels' clock dep narrowed from the jvmShared TimeSource to
-    // its commonMain EpochMillisSource slice (the only read they ever
-    // made), so no core:data type crosses the seam.
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // The ViewModels' clock dep narrowed from the jvmShared TimeSource to
+        // its commonMain EpochMillisSource slice (the only read they ever
+        // made), so no core:data type crosses the seam.
+        //
         // jvmShared: the wall-clock/date-label formatters'
         // JVM actual resolves AM/PM and month/day names from the default
         // FORMAT locale via java.time. Desktop/android keep the localized
-        // output the java.time formatters always had.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // output the java.time formatters always had. (The jvmShared middle
+        // source set comes from the convention plugin.)
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
@@ -87,11 +60,8 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-        }
+        // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
         }

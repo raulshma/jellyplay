@@ -94,6 +94,7 @@ import com.raulshma.jellyplay.feature.shell.UserMessageHost
 import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
+import com.raulshma.jellyplay.feature.shell.navigation.SignedOutAuthHost
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
@@ -113,10 +114,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Desktop nav root ("desktop nav v1"): session-gated shell over the
- * shared feature conveyor. Signed-out users get [DesktopSignedOutAuthHost]
- * (the shared auth section; retired the legacy DesktopSignInPane
- * with its cut-list); a live session renders the NavigationRail + NavDisplay
- * scaffold below.
+ * shared feature conveyor. Signed-out users get the shared
+ * [SignedOutAuthHost] (the shared auth section; retired the legacy
+ * DesktopSignInPane with its cut-list); a live session renders the
+ * NavigationRail + NavDisplay scaffold below.
  *
  * What is deliberately NOT wired yet (each omission dead-ends in the
  * registration-ledger guard below, so a shared screen pushing the route sees
@@ -155,7 +156,7 @@ import java.util.concurrent.atomic.AtomicReference
  * cast/collection drill-ins), and [authSection] backs the settings
  * Server/UserManagement pushes (AddServer/ServerList/Login/QuickConnect/
  * UserSelection). Since the SAME section is the sign-in flow:
- * [DesktopSignedOutAuthHost] registers it while signed out, so desktop signs
+ * [SignedOutAuthHost] registers it while signed out, so desktop signs
  * in through the shared screens (Quick Connect, remembered-user picker,
  * add-server discovery included) — here the section only serves signed-in
  * server management.
@@ -261,10 +262,44 @@ internal fun DesktopAppRoot(
 
     when {
         !sessionRestoreDone -> SessionRestoreSplash()
-        // The signed-out gate is the shared auth flow now (see
-        // DesktopSignedOutAuthHost) — the legacy DesktopSignInPane pane is
-        // retired with its v1 cut-list.
-        !isAuthenticated -> DesktopSignedOutAuthHost()
+        // The signed-out gate is the SHARED SignedOutAuthHost now
+        // (shared/feature/shell) — the former DesktopSignedOutAuthHost
+        // hand-copy is retired with its v1 cut-list. The desktop-only chrome
+        // rides the shared host's content slot: Esc / Alt+Left pop the
+        // stack, refusing to pop below the ServerList root via
+        // desktopBackKeyDecision — the same pure fold (back key above the
+        // root, else refuse) DesktopNavScaffold's tab roots run. At the root
+        // the key event falls through unconsumed — it deliberately neither
+        // quits the app nor navigates; the window closes via the titlebar /
+        // tray Quit like everywhere else in the shell. The saved-state
+        // configuration stays desktop-supplied: the sealed Route serializer
+        // is registered as the polymorphic NavKey default (see
+        // desktopNavSavedStateConfiguration below).
+        !isAuthenticated -> {
+            SignedOutAuthHost(
+                savedStateConfiguration = desktopNavSavedStateConfiguration(),
+                content = { authNavigator, backStackDepth, display ->
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                if (desktopBackKeyDecision(event.key, event.isAltPressed, backStackDepth())) {
+                                    authNavigator.goBack()
+                                    true
+                                } else {
+                                    // Root-refusing pop: at the ServerList seed
+                                    // the event is not consumed (no quit-on-Esc
+                                    // convention in this shell).
+                                    false
+                                }
+                            },
+                    ) {
+                        display()
+                    }
+                },
+            )
+        }
         else -> DesktopNavScaffold(menuRefreshRequests = menuRefreshRequests)
     }
 
@@ -615,7 +650,8 @@ private fun DesktopNavScaffold(
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 // desktopBackKeyDecision folds the Esc/Alt+Left test AND the
-                // root-refuse; the same fold runs in DesktopSignedOutAuthHost.
+                // root-refuse; the same fold runs in the signed-out shell's
+                // shared SignedOutAuthHost frame.
                 if (desktopBackKeyDecision(event.key, event.isAltPressed, backStack.size)) {
                     guardedNavigator.goBack()
                     true
@@ -766,8 +802,8 @@ private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = DESKTOP_RAIL_ITEMS.map { it.r
  * The saved-state configuration every desktop NavDisplay shares: the sealed
  * Route serializer is registered as the polymorphic NavKey default so
  * saved-state lookups resolve any Route subclass without enumerating ~100
- * leaves per lookup. Two consumers today — [DesktopNavScaffold] and
- * [DesktopSignedOutAuthHost].
+ * leaves per lookup. Two consumers today — [DesktopNavScaffold] and the
+ * signed-out shell's shared SignedOutAuthHost (via its content slot).
  */
 internal fun desktopNavSavedStateConfiguration(): SavedStateConfiguration =
     SavedStateConfiguration {

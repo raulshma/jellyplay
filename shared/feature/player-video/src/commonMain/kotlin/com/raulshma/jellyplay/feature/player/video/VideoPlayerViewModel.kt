@@ -441,7 +441,7 @@ class VideoPlayerViewModel(
         },
     )
     private val mediaSessionController = mediaSessionFactory.create(
-        getPlayer = { playerSessionManager.engine?.underlyingPlayer },
+        getEngine = { playerSessionManager.engine },
         getImageUrl = { itemId, maxWidth -> playbackRepository.getImageUrl(itemId = itemId, maxWidth = maxWidth) },
     )
 
@@ -2426,10 +2426,9 @@ class VideoPlayerViewModel(
         castManager.markBackgroundCasting(true)
         castManager.softRelease()
 
-        val castPlayer = castManager.castPlayerForSession
-        if (castPlayer != null) {
-            mediaSessionController.createForPlayer(castPlayer, "jellyplay_cast_bg")
-        }
+        // The cast receiver's player is resolved behind the androidMain seam;
+        // the controller no-ops when no cast session is active.
+        mediaSessionController.createForBackgroundCast("jellyplay_cast_bg")
     }
 
     fun reattachFromBackgroundCast() {
@@ -2440,9 +2439,9 @@ class VideoPlayerViewModel(
         if (engine != null) {
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
-            // The `as? Player ?: return` guard the body used to run moved into
-            // the androidMain controller impl (createForPlayer narrows + no-ops).
-            mediaSessionController.createForPlayer(engine.underlyingPlayer, "jellyplay_video_$itemId", itemId)
+            // The controller narrows the engine to its media3 player via
+            // asMedia3Player and no-ops when the engine hosts none.
+            mediaSessionController.createForPlayer(engine, "jellyplay_video_$itemId", itemId)
         }
     }
 

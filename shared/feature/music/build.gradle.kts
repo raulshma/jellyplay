@@ -1,54 +1,27 @@
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.music"
-        compileSdk = 37
-        minSdk = 28
-        // Compose-resources packaging (device-pass finding): with the
-        // AGP-9 KMP library plugin, android resources are OFF by default, so
-        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
-        // app APK ships this module's Res accessors with NO backing .cvr
-        // assets — runtime MissingResourceException on the first string read.
-        androidResources {
-            enable = true
-        }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    // java.util.UUID (mood/smart playlist ids) ported to the stdlib
-    // kotlin.uuid.Uuid (same v4 string shape —'s outbox-id precedent).
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // java.util.UUID (mood/smart playlist ids) ported to the stdlib
+        // kotlin.uuid.Uuid (same v4 string shape —'s outbox-id precedent).
+        //
         // The JVM-side bindings (MusicQueuePlayer -> JvmMusicQueuePlayer over
         // the AudioQueueFacade single) — the player-audio jvmShared
         // platform-module pattern. The former MusicTrackDownloads binding
         // moved to core:data (TrackDownloadStatusWindow / ActiveDownloadCount)
-        // with the download-actions seam consolidation.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // with the download-actions seam consolidation. (The jvmShared middle
+        // source set comes from the convention plugin.)
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:designsystem"))
@@ -85,11 +58,8 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-        }
+        // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
         }

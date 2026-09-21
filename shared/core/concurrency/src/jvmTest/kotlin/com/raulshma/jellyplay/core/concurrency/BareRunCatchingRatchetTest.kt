@@ -44,7 +44,7 @@ import java.io.File
  * `suspend fun` declarations, so a bare `runCatching` inside a suspend
  * LAMBDA (e.g. a `fetch = { runCatching { … } }` argument) is invisible
  * to it. A later review pass converted the two sites
- * found this way (AdminDashboardViewModel's and LogsViewModel's AdminLoad
+ * found this way (AdminDashboardViewModel's and LogsViewModel's loadInto
  * fetch variants) — keep new suspend-lambda fetches on
  * [runCatchingRethrowingCancellation] by discipline; widening the
  * heuristic to suspend lambdas would need a fresh baseline census.

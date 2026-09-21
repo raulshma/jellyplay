@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.core.network.api
 
 import android.media.MediaCodecList
 import android.media.MediaFormat
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Android [DeviceCodecCapabilities]: enumerates the device's hardware decoders
@@ -12,8 +10,7 @@ import javax.inject.Singleton
  * codec-name map mirrors the Jellyfin naming convention used by the official
  * Android client's `CodecHelpers`.
  */
-@Singleton
-class AndroidDeviceCodecCapabilities @Inject constructor() : DeviceCodecCapabilities {
+class AndroidDeviceCodecCapabilities() : DeviceCodecCapabilities {
 
     /** Jellyfin video codec names the device decodes in hardware. */
     override val supportedVideoCodecs: Set<String> by lazy { collectCodecs().first }

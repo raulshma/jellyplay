@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.shell.navigation
 
+import androidx.compose.runtime.remember
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
@@ -18,6 +19,7 @@ import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
 import com.raulshma.jellyplay.feature.library.navigation.librarySection
 import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
 import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
+import com.raulshma.jellyplay.feature.music.musichome.MusicNavActions
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
@@ -37,8 +39,8 @@ import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
  * behaviour — the desktop order change is a structural delta only.)
  *
  * Shell-supplied inputs flow through [ShellHostHooks]; the MusicHomeScreen
- * wiring lives here because its seven navigate lambdas are identical per
- * shell, while the two audio-source lambdas come from the host. Routes that
+ * wiring lives here because its seven navigate actions are identical per
+ * shell, while the two audio-source actions come from the host. Routes that
  * cannot be registered from commonMain — the androidMain-only
  * livePlayerSection/subtitleTesterSection builders, the Android shell's
  * inline PlayOnCompanion entry, the desktop's conditional VideoPlayer entry —
@@ -56,17 +58,25 @@ fun EntryProviderScope<NavKey>.appSections(
         playOnStrategy = host.playOnRedirect,
         surpriseRequests = host.surpriseRequests,
         musicContent = {
-            MusicHomeScreen(
-                onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                onArtistsClick = { navigator.navigate(Route.Artists) },
-                onAlbumsClick = { navigator.navigate(Route.Albums) },
-                onTracksClick = { navigator.navigate(Route.Tracks) },
-                onGenresClick = { navigator.navigate(Route.Genres) },
-                onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                onNowPlayingClick = host.onNowPlayingClick,
-                onAmbientClick = host.onAmbientClick,
-            )
+            // Build the facade once per navigator/host lifetime so the music
+            // subtree sees a single stable MusicNavActions instance (treated
+            // as @Immutable by the Compose compiler) instead of fresh lambda
+            // allocations on every recomposition — the same deal as
+            // homeSection's HomeCallbacks above.
+            val navActions = remember(navigator, host) {
+                MusicNavActions(
+                    onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+                    onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
+                    onArtistsClick = { navigator.navigate(Route.Artists) },
+                    onAlbumsClick = { navigator.navigate(Route.Albums) },
+                    onTracksClick = { navigator.navigate(Route.Tracks) },
+                    onGenresClick = { navigator.navigate(Route.Genres) },
+                    onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+                    onNowPlayingClick = host.onNowPlayingClick,
+                    onAmbientClick = host.onAmbientClick,
+                )
+            }
+            MusicHomeScreen(navActions = navActions)
         },
     )
     librarySection(navigator)

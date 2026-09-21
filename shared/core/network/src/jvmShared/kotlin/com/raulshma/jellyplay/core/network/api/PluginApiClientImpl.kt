@@ -17,11 +17,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class PluginApiClientImpl @Inject constructor(
+class PluginApiClientImpl(
     private val engine: JellyfinApiEngine,
 ) : PluginApiClient {
 

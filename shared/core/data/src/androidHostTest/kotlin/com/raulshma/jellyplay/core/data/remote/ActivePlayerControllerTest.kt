@@ -31,7 +31,6 @@ class ActivePlayerControllerTest {
         val name = name
         override val currentPositionMs: Long = 0L
         override val isPlaying: MutableStateFlow<Boolean> = MutableStateFlow(initialPlaying)
-        override val underlyingPlayer: Any? = null
 
         // Backing field + val override: a `var` would generate a JVM
         // setVolume(Float) clashing with the interface method.

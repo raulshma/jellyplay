@@ -1,44 +1,15 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    id("jellyplay.kmp.library.base")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
-    // AGP 9 KMP library plugin: the Android target is configured inside the
-    // kotlin block (the top-level android {} block of com.android.library
-    // modules is not available here). Source sets follow the KMP layout:
-    // src/androidMain, src/androidHostTest, src/androidDeviceTest.
     android {
         namespace = "com.raulshma.jellyplay.shared.core.model"
-        compileSdk = 37
-        minSdk = 28
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // JVM-semantics code shared verbatim by android + desktop: TtlCache
-        // (synchronizedMap/LinkedHashMap access-order), BoundedCollections,
-        // CacheIdentity (@JvmInline), and the java.util.Locale-driven
-        // language-code tables.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
-
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             implementation(libs.kotlinx.serialization.json)
             // Annotation-only Compose usage (@Immutable/@Stable on models):
             // compose.runtime suffices, no compiler plugin needed — same pattern
@@ -48,7 +19,6 @@ kotlin {
             implementation(libs.compose.runtime)
         }
         getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
             implementation(libs.kotlinx.serialization.json)
         }
     }

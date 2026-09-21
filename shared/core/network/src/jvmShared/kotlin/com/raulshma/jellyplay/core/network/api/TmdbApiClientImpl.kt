@@ -13,8 +13,6 @@ import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Serializable
 private data class TmdbReviewsResponse(
@@ -25,8 +23,7 @@ private data class TmdbReviewsResponse(
 internal fun parseTmdbReviews(json: Json, text: String): List<TmdbReview> =
     json.decodeFromString<TmdbReviewsResponse>(text).results
 
-@Singleton
-class TmdbApiClientImpl @Inject constructor(
+class TmdbApiClientImpl(
     okHttpClient: OkHttpClient,
 ) : TmdbApiClient {
 

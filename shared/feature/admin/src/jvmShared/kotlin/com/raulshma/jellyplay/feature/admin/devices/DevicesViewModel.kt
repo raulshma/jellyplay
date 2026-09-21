@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 
 data class DevicesState(
     val isLoading: Boolean = true,
@@ -51,7 +51,7 @@ class DevicesViewModel(
 
     fun loadDevices() {
         launch {
-            AdminLoad.load(
+            loadInto(
                 start = { _state.value = _state.value.copy(isLoading = true, error = null) },
                 fetch = { adminRepository.getDevices() },
                 onSuccess = { devices ->

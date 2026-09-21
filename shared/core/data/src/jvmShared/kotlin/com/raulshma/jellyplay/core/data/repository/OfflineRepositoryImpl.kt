@@ -863,58 +863,11 @@ class OfflineRepositoryImpl constructor(
         return if (changed) resolved else cast
     }
 
-    private fun safeMediaTypeOf(name: String): MediaType =
-        name.toEnumOrNull() ?: MediaType.UNKNOWN
-
-    /**
-     * Maps a metadata + playback join row to the UI model. Playback fields come
-     * from the LEFT JOIN'd `playback_state` columns and fall back to the same
-     * "not started" defaults a missing row carried under the old single-table
-     * shape.
-     */
-    private fun OfflineMediaWithPlayback.toOfflineMediaItem(): OfflineMediaItem {
-        val m = media
-        return OfflineMediaItem(
-            id = m.id,
-            name = m.name,
-            mediaType = safeMediaTypeOf(m.mediaType),
-            overview = m.overview,
-            year = m.year,
-            communityRating = m.communityRating,
-            officialRating = m.officialRating,
-            runTimeTicks = m.runTimeTicks,
-            seriesId = m.seriesId,
-            seasonId = m.seasonId,
-            seriesName = m.seriesName,
-            seasonName = m.seasonName,
-            episodeNumber = m.episodeNumber,
-            seasonNumber = m.seasonNumber,
-            posterPath = m.posterPath,
-            backdropPath = m.backdropPath,
-            blurHashPrimary = m.blurHashPrimary,
-            blurHashBackdrop = m.blurHashBackdrop,
-            genres = m.genres?.split(",")
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() } ?: emptyList(),
-            childCount = m.childCount ?: 0,
-            playbackPositionTicks = playbackPositionTicks,
-            playedPercentage = playedPercentage ?: 0.0,
-            isPlayed = isPlayed ?: false,
-            isFavorite = isFavorite ?: false,
-            lastPlayedDate = lastPlayedDate,
-            originalTitle = m.originalTitle,
-            criticRating = m.criticRating,
-            studios = m.studios?.split(",")
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() } ?: emptyList(),
-            tagline = m.tagline,
-            cast = decodeCast(m.peopleJson),
-            providerIds = decodeProviderIds(m.providerIdsJson),
-            externalUrls = decodeExternalUrls(m.externalUrlsJson),
-            chapters = decodeChapters(m.chaptersJson),
-            createdAt = m.createdAt,
-        )
-    }
+    // The entity → domain read mapper this class used to carry as a private
+    // member (OfflineMediaWithPlayback → OfflineMediaItem) and its
+    // safeMediaTypeOf helper live in OfflineMediaMappers.kt — the single owner
+    // of the offline_media column semantics, shared with the write side in
+    // [DownloadRepositoryImpl].
 }
 
 /** Reusable lenient Json for (de)serializing the offline JSON-blob columns. */
@@ -974,7 +927,8 @@ public fun encodeProviderIds(providerIds: Map<String, String>): String =
     providerIdsCodec.encode(providerIds)
 
 /** Decodes a [providerIdsJson] blob into a map, tolerating null/garbage. */
-private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> =
+// Visibility: internal — OfflineMediaMappers' read side decodes the same column.
+internal fun decodeProviderIds(providerIdsJson: String?): Map<String, String> =
     providerIdsCodec.decode(providerIdsJson)
 
 /** Encodes external URLs into the persisted JSON column form. */
@@ -982,7 +936,8 @@ internal fun encodeExternalUrls(urls: List<ExternalUrl>): String =
     externalUrlsCodec.encode(urls)
 
 /** Decodes a [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
-private fun decodeExternalUrls(externalUrlsJson: String?): List<ExternalUrl> =
+// Visibility: internal — OfflineMediaMappers' read side decodes the same column.
+internal fun decodeExternalUrls(externalUrlsJson: String?): List<ExternalUrl> =
     externalUrlsCodec.decode(externalUrlsJson)
 
 /** Encodes a chapter list into the persisted JSON column form. */

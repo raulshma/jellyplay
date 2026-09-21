@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -11,7 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Coverage for the syncplay feature's one load ladder ([SyncPlayLoad.load])
+ * Coverage for the syncplay feature's one load ladder ([loadInto])
  * — the arms [SyncPlayViewModel.loadGroups] and
  * [SyncPlayViewModel.joinGroup] fold onto. Pins the dispatch contract the
  * folded sites rely on: start raises before the fetch and clears the stale
@@ -47,7 +48,7 @@ class SyncPlayLoadTest {
         val events = mutableListOf<String>()
         var stateAtFetch: FakeSyncPlayState? = null
 
-        SyncPlayLoad.load(
+        loadInto(
             start = {
                 events += "start"
                 screen.update { it.copy(isJoining = true, isLoading = true, error = null) }
@@ -78,7 +79,7 @@ class SyncPlayLoadTest {
         val screen = FakeSyncPlayScreen()
         val events = mutableListOf<String>()
 
-        SyncPlayLoad.load(
+        loadInto(
             start = { screen.update { it.copy(isLoading = true, error = null) } },
             fetch = { Result.failure<Unit>(RuntimeException("boom")) },
             onSuccess = { events += "onSuccess" },
@@ -101,7 +102,7 @@ class SyncPlayLoadTest {
         val armGate = CompletableDeferred<Unit>()
         val events = mutableListOf<String>()
         val job = launch {
-            SyncPlayLoad.load(
+            loadInto(
                 start = { screen.update { it.copy(isLoading = true, error = null) } },
                 fetch = { Result.success(listOf("g1")) },
                 onSuccess = { groups ->

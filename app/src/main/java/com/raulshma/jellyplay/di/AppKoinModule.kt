@@ -4,13 +4,11 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStoreOwner
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
@@ -18,7 +16,6 @@ import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
-import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
@@ -188,12 +185,15 @@ val androidAppViewModelsModule: Module = module {
 
 /**
  * Shared-feature seam adapters over the core data singletons (formerly the
- * HiltMusicMessageBus/HiltDetailAudioPlayback/HiltDetailThemeMusic/
+ * HiltMusicMessageBus/HiltDetailThemeMusic/
  * HiltAudioPlayerEngine/HiltAudioPlayerCast classes in the deleted
  * HiltInteropModule). Same adapter bodies, direct Koin resolution: the
- * AudioPlaybackManager/CastManager/UserMessageBus/ThemeMusicPlayer targets
+ * CastManager/UserMessageBus/ThemeMusicPlayer targets
  * are Koin-owned by the core graphs now, so no EntryPoint bridge
  * remains. Desktop halves are the no-op defs in each shared module's jvmMain.
+ * (DetailAudioPlayback is gone entirely — its only caller, the detail
+ * local-track play command, was production-unreachable and died with the
+ * DetailUiEvent fold.)
  *
  * AudioPlayerEngine is NOT bridged here anymore: the contract moved into
  * core/data (beside AudioQueueManager/AudioEffectsManager) and the media3
@@ -201,7 +201,6 @@ val androidAppViewModelsModule: Module = module {
  */
 fun androidAppInteropAdaptersModule(application: Application): Module = module {
     single<MusicMessageBus> { AppMusicMessageBus(bus = get()) }
-    single<DetailAudioPlayback> { AppDetailAudioPlayback(manager = get()) }
     single<DetailThemeMusic> { AppDetailThemeMusic(player = get()) }
     single<AudioPlayerCast> { AppAudioPlayerCast(castManager = get(), application = application) }
     // Dev v0.10.7 quick-action flow: core/data's download-outcome seam
@@ -229,13 +228,6 @@ private class AppDownloadOutcomeMessenger(
     override fun downloadStartFailed() {
         userMessageBus.error(UiText.Resource(R.string.data_download_start_failed))
     }
-}
-
-/** Details feature seam: per-item audio playback over the shared manager. */
-private class AppDetailAudioPlayback(
-    private val manager: AudioPlaybackManager,
-) : DetailAudioPlayback {
-    override fun play(itemId: String) = manager.play(itemId)
 }
 
 /** Details feature seam: ambient theme music over the shared player. */
@@ -308,12 +300,3 @@ object KoinViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         KoinPlatform.getKoin().get(modelClass.kotlin, null)
 }
-
-/**
- * Resolves the activity-scoped [MainViewModel] from a composable context.
- * Uses the plain ViewModelProvider default key, so the instance is the SAME
- * one MainActivity's `by viewModels` delegate holds (same store, same key) —
- * do not swap this for koinViewModel() without re-checking that identity.
- */
-fun mainViewModelFromKoin(owner: ViewModelStoreOwner): MainViewModel =
-    ViewModelProvider(owner, KoinViewModelFactory)[MainViewModel::class.java]

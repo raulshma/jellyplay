@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.network.playback
 
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.network.library.toMediaSource
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,10 +8,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pins the playback wire contract: PlaybackInfo response→model mapping (via
- * the shared library mappers), the progress-report request bodies,
- * transcode-reason name conversion, media-segment decode and the
- * server-time passthrough.
+ * Pins the playback wire contract: the PlaybackInfo response decode, the
+ * progress-report request bodies, transcode-reason name conversion,
+ * media-segment decode and the server-time passthrough. DTO→model mapping
+ * semantics are pinned jvmShared-side (`JellyfinDtoMappers` /
+ * `PlaybackApiClientImplTest`).
  */
 class PlaybackWireMapperTest {
 
@@ -22,7 +22,7 @@ class PlaybackWireMapperTest {
     }
 
     @Test
-    fun `playback info response maps play session id and media sources`() {
+    fun `playback info response decodes play session id and pascalCase media sources`() {
         val response = json.decodeFromString<PlaybackInfoResponseDtoWire>(
             """
             {
@@ -46,14 +46,19 @@ class PlaybackWireMapperTest {
             """.trimIndent(),
         )
         assertEquals("ps-1", response.playSessionId)
-        val source = response.mediaSources.single().toMediaSource()
+        // The wire decode pin: PascalCase fields land on the right members
+        // (DTO→model mapping semantics are pinned jvmShared-side).
+        val source = response.mediaSources.single()
         assertEquals("ms1", source.id)
-        assertTrue(source.supportsTranscoding)
-        assertFalse(source.supportsDirectPlay)
-        assertEquals("/videos/i/master.m3u8?MediaSourceId=ms1", source.transcodeUrl)
-        assertEquals(3, source.mediaStreams.size)
-        assertEquals("srt", source.mediaStreams[2].codec)
-        assertTrue(source.mediaStreams[2].isExternal)
+        assertEquals("1080p", source.name)
+        assertEquals("mp4", source.container)
+        assertTrue(source.supportsTranscoding == true)
+        assertFalse(source.supportsDirectPlay == true)
+        assertEquals("/videos/i/master.m3u8?MediaSourceId=ms1", source.transcodingUrl)
+        assertEquals(3, source.mediaStreams?.size)
+        assertEquals("srt", source.mediaStreams?.get(2)?.codec)
+        assertTrue(source.mediaStreams?.get(2)?.isExternal == true)
+        assertEquals("/Videos/i/ms1/Subtitles/2/Stream.srt", source.mediaStreams?.get(2)?.deliveryUrl)
     }
 
     @Test

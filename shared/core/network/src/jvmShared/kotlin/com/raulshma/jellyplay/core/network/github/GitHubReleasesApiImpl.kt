@@ -14,8 +14,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * A single downloadable asset attached to a GitHub release. Public so the
@@ -28,8 +26,7 @@ data class GitHubReleaseAsset(
     val size: Long,
 )
 
-@Singleton
-class GitHubReleasesApiImpl @Inject constructor(
+class GitHubReleasesApiImpl(
     private val okHttpClient: OkHttpClient,
     // Overridable only so unit tests can point at a MockWebServer; production
     // wiring leaves it as the GitHub Releases latest endpoint.

@@ -5,7 +5,8 @@ import androidx.compose.ui.input.key.Key
 /**
  * The one desktop back-key decision, folded out of the two handlers that
  * used to hand-copy it — DesktopAppRoot's scaffold Row (the signed-in shell)
- * and [DesktopSignedOutAuthHost]: **Esc**, or **Alt+Left**, pops the current
+ * and the signed-out shell's shared SignedOutAuthHost frame:
+ * **Esc**, or **Alt+Left**, pops the current
  * back stack, but only when there is anything to pop. Every stack is seeded
  * with its tab/seed root (NavigationState seeds each top-level back stack
  * with its route key), so `stackDepth > 1` is exactly "not at the root" and

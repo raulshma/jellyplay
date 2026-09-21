@@ -202,8 +202,8 @@ val sharedFeatureModules: List<Module> = listOf(
     // (desktopAuthPlatformModule) — the auth seam's fun-interface probe in
     // feature/auth (blames a connect failure on the Android 17+
     // local-network permission), NOT core/ui's same-named composition local.
-    // Unified sign-in on the desktop screens: the signed-out gate
-    // (DesktopSignedOutAuthHost) and the signed-in settings drill-ins
+    // Unified sign-in on the desktop screens: the signed-out gate (the
+    // shared SignedOutAuthHost) and the signed-in settings drill-ins
     // (DesktopAppRoot's authSection entries) both instantiate these
     // ViewModels; the legacy DesktopSignInPane pane is retired.
     authModule,

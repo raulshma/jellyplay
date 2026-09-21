@@ -180,11 +180,6 @@ koin-test = { group = "io.insert-koin", name = "koin-test", version.ref = "koin"
 koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = "koin" }
 koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
 
-# javax.inject — compile-only vestige of the pre-Koin Hilt graph: only the
-# @Singleton/@Inject annotations on a few shared classes remain (all Hilt
-# processing left with the Hilt extinction; Koin ignores them).
-javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
-
 # Jellyfin SDK
 jellyfin-core = { group = "org.jellyfin.sdk", name = "jellyfin-core", version.ref = "jellyfinSdk" }
 

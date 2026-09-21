@@ -90,6 +90,8 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
+import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
@@ -271,6 +273,14 @@ val dataJvmModule: Module = module {
     // The realtime-socket view of the same AuthRepositoryImpl singleton (the
     // legacy bindRealtimeConnection @Binds, one instance — not a second socket).
     single<RealtimeConnection> { get<AuthRepositoryImpl>() }
+
+    // Auth-cluster narrow seam (the AuthRepositorySurfaceTest ratchet's named
+    // escape hatch for a genuinely new auth capability): the self-signed
+    // trust DECISION the Server Management screen renders, delegating to
+    // core:network's matcher behind this module boundary. Stateless — the
+    // granted set arrives per call — so the impl single takes no deps.
+    single { SelfSignedTrustRepositoryImpl() }
+    single<SelfSignedTrustRepository> { get<SelfSignedTrustRepositoryImpl>() }
 
     single { ServerDiscoveryRepositoryImpl(get()) }
     single<ServerDiscoveryRepository> { get<ServerDiscoveryRepositoryImpl>() }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv
 
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -11,7 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Coverage for the Live-TV feature's one load ladder ([LiveTvLoad.load]) —
+ * Coverage for the Live-TV feature's one load ladder ([loadInto]) —
  * the `isLoading = true, error = null` suspend-guard choreography folded from
  * the tab ViewModels (Channels, Series, Recordings, Programs, Channel Detail).
  * Pins the dispatch contract the folded sites rely on: start raises before the
@@ -48,7 +49,7 @@ class LiveTvLoadTest {
         val events = mutableListOf<String>()
         var loadingAtFetch: Boolean? = null
 
-        val result = LiveTvLoad.load(
+        val result = loadInto(
             start = {
                 events += "start"
                 tab.update { it.copy(isLoading = true, error = null) }
@@ -82,7 +83,7 @@ class LiveTvLoadTest {
         val tab = FakeTab(FakeTabState(items = listOf("prior")))
         val events = mutableListOf<String>()
 
-        val result = LiveTvLoad.load(
+        val result = loadInto(
             start = {
                 events += "start"
                 tab.update { it.copy(isLoading = true, error = null) }
@@ -115,7 +116,7 @@ class LiveTvLoadTest {
         val tab = FakeTab(FakeTabState(error = "old failure"))
         val errorBeforeLoad: String? = tab.state.error
 
-        LiveTvLoad.load(
+        loadInto(
             start = { tab.update { it.copy(isLoading = true, error = null) } },
             fetch = {
                 // The ladder's whole point: the previous error is gone while
@@ -140,7 +141,7 @@ class LiveTvLoadTest {
         // stay at the call site precisely so this drift stays declarable.
         val tab = FakeTab(FakeTabState(items = listOf("prior")))
 
-        LiveTvLoad.load(
+        loadInto(
             start = { tab.update { it.copy(isLoading = true, error = null) } },
             fetch = { Result.failure<List<String>>(RuntimeException("boom")) },
             onSuccess = { items -> tab.update { it.copy(items = items, isLoading = false) } },
@@ -159,7 +160,7 @@ class LiveTvLoadTest {
         // Full render raises isLoading; refreshing stays untouched; both arms
         // clear BOTH flags on settle (the Programs settle copies).
         val fullTab = FakeTab(FakeTabState(error = "stale"))
-        LiveTvLoad.load(
+        loadInto(
             start = { fullTab.update { it.copy(isLoading = true, error = null) } },
             fetch = { Result.success(listOf("row")) },
             onSuccess = { rows ->
@@ -176,7 +177,7 @@ class LiveTvLoadTest {
         val throttledTab = FakeTab(FakeTabState(error = "stale"))
         val settleGate = CompletableDeferred<Unit>()
         val loadJob = launch {
-            LiveTvLoad.load(
+            loadInto(
                 start = { throttledTab.update { it.copy(refreshing = true, error = null) } },
                 fetch = {
                     settleGate.await()
@@ -207,13 +208,13 @@ class LiveTvLoadTest {
     fun the_fetch_result_is_returned_after_its_arm_ran_so_a_failure_skips_the_next_leg() = runTest {
         val ran = mutableListOf<String>()
 
-        val success = LiveTvLoad.load(
+        val success = loadInto(
             start = { },
             fetch = { Result.success("meta") },
             onSuccess = { ran += "success arm" },
             onFailure = { ran += "failure arm" },
         )
-        val failure = LiveTvLoad.load(
+        val failure = loadInto(
             start = { },
             fetch = { Result.failure<String>(RuntimeException("no channels")) },
             onSuccess = { ran += "success arm" },

@@ -1,27 +1,16 @@
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.ui"
-        compileSdk = 37
-        minSdk = 28
-        // Compose-resources packaging (device-pass finding): with the
-        // AGP-9 KMP library plugin, android resources are OFF by default, so
-        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
-        // app APK ships this module's Res accessors with NO backing .cvr
-        // assets — runtime MissingResourceException on the first string read.
-        androidResources {
-            enable = true
-        }
+        // Compose-resources packaging: androidResources.enable comes from the
+        // convention plugin (see its KDoc for the device-pass
+        // MissingResourceException story).
         // cutover: the legacy :core:ui module's Robolectric suites
         // moved here — withHostTest creates the androidUnitTest variant bound
         // to the Kotlin test tree (AGP-9 KMP library plugin). The two flags
@@ -31,29 +20,12 @@ kotlin {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // JVM-semantics code shared verbatim by android + desktop: the
-        // SimpleDateFormat pipeline, the markdown renderer body, the LRU lock
-        // actual, and the PlatformTime JVM actuals.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // The jvmShared middle source set comes from the convention plugin.
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             // DateLabels.kt's public seam shapes take/return kotlinx-datetime
@@ -96,14 +68,10 @@ kotlin {
             // UserMessageBus single (see di/CoreUiMessageModule.kt).
             implementation(libs.koin.core)
         }
-        getByName("jvmShared").dependencies {
-        }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-        }
         // BlurHashCache byte-budget regression tests construct real ImageBitmaps;
         // the skiko JVM artifacts on main are code-only, natives (dll.sha256)
         // ride compose.desktop.currentOs. Host-OS only: jvmTest runs on it.
+        // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
             implementation(compose.desktop.currentOs)
             // runTest/UnconfinedTestDispatcher for the Channel/StateFlow pure-logic tests.
@@ -154,4 +122,3 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.core.ui.generated.r
 // core strings (core_delete/core_cancel, ...) directly, which requires the
 // generated Res object + accessors to be public (internal by default).
 composeResources.publicResClass = true
-

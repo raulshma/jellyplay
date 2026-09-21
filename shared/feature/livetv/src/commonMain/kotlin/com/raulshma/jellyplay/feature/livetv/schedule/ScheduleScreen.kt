@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.SectionHeader
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -151,16 +152,6 @@ fun ScheduleScreen(
             onDismiss = { viewModel.dismissDetail() },
         )
     }
-}
-
-@Composable
-private fun SectionHeader(title: String, contentPad: androidx.compose.ui.unit.Dp) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(horizontal = contentPad, vertical = 6.dp),
-    )
 }
 
 @Composable

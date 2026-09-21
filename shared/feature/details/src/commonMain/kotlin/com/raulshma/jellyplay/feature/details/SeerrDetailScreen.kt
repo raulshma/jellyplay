@@ -98,6 +98,9 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrWatchProvider
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
+import com.raulshma.jellyplay.core.model.seerr.isAvailable
+import com.raulshma.jellyplay.core.model.seerr.isPending
+import com.raulshma.jellyplay.core.model.seerr.isProcessing
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -129,9 +132,7 @@ import com.composables.icons.tabler.outline.CalendarEvent
 import com.composables.icons.tabler.outline.Cash
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronDown
-import com.composables.icons.tabler.outline.Circle
 import com.composables.icons.tabler.outline.Clock
-import com.composables.icons.tabler.outline.CloudDownload
 import com.composables.icons.tabler.outline.Hourglass
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.Language
@@ -139,16 +140,14 @@ import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Plus
+import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Star
-import com.composables.icons.tabler.outline.Ticket
 import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.Wallet
 import com.composables.icons.tabler.outline.World
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_available
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_digital
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_physical
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_theatrical
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_imdb
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_tmdb
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_tvdb
@@ -807,9 +806,11 @@ private fun SeerrActionButtons(
     val mediaInfo = movieDetail?.mediaInfo ?: tvDetail?.mediaInfo
     val status = mediaInfo?.status ?: 0
     val mediaStatus = remember(status) { SeerrMediaStatus.fromValue(status) }
-    val isAvailable = mediaStatus == SeerrMediaStatus.AVAILABLE || mediaStatus == SeerrMediaStatus.PARTIALLY_AVAILABLE
-    val isPending = mediaStatus == SeerrMediaStatus.PENDING
-    val isProcessing = mediaStatus == SeerrMediaStatus.PROCESSING
+    // Availability predicates folded into core/model's SeerrStatusDecisions
+    // (beside the enum) — same decisions the requests list renders through.
+    val isAvailable = mediaStatus.isAvailable
+    val isPending = mediaStatus.isPending
+    val isProcessing = mediaStatus.isProcessing
     val hasRequest = mediaInfo?.requests?.isNotEmpty() == true
     val isRequested = isPending || isProcessing || hasRequest
     val buttonFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -2041,26 +2042,15 @@ private fun ReleaseDateRow(
 
 @Composable
 private fun ReleaseTypeIcon(type: Int) {
-    when (type) {
-        3 -> Icon(
-            imageVector = Tabler.Outline.Ticket,
-            contentDescription = stringResource(Res.string.detail_cd_release_theatrical),
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-        4 -> Icon(
-            imageVector = Tabler.Outline.CloudDownload,
-            contentDescription = stringResource(Res.string.detail_cd_release_digital),
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-        5 -> Icon(
-            imageVector = Tabler.Outline.Circle,
-            contentDescription = stringResource(Res.string.detail_cd_release_physical),
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-    }
+    // Mapping table lives in SeerrDetailUtils (releaseTypePresentation);
+    // only the Icon shell stays in composition.
+    val presentation = releaseTypePresentation(type) ?: return
+    Icon(
+        imageVector = presentation.icon,
+        contentDescription = stringResource(presentation.labelRes),
+        modifier = Modifier.size(16.dp),
+        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    )
 }
 
 @Composable
@@ -2154,43 +2144,4 @@ private fun MediaInfoRow(
             )
         }
     }
-}
-
-// ──  formatting seams ────────────────────────────────────────────────
-// These integer-math helpers replicate the Locale.US output shapes the two
-// replaced java.text.NumberFormat/String.format call sites produced. Same
-// body as core:ui's formatOneDecimal actual, which is `internal` to that
-// module — hence the private copies here.
-
-/**
- * "%.1f" formatting contract (the two former `String.format("%.1f", …)` /
- * `String.format(Locale.US, "%.1f", …)` sites): HALF_UP rounding at the first
- * decimal — computed as floor(|v|·10 + 0.5), i.e. ties round AWAY from zero,
- * the same rule java's Formatter applies to the same binary value — with the
- * decimal point always rendered and the sign applied symmetrically.
- *
- * Side benefit worth noting (review round): the episode-row site used
- * default-locale `String.format` at HEAD, so de/fr/ru/pt-BR JVM devices saw
- * "8,7" — this helper always renders the dot.
- *
- * Known-inert delta: -0.0f renders "0.0" (java emitted "-0.0"); unreachable
- * for Seerr ratings, kept documented for the next consumer.
- */
-private fun formatRatingOneDecimal(value: Float): String {
-    val magnitude = (kotlin.math.abs(value) * 10 + 0.5).toLong()
-    val rendered = "${magnitude / 10}.${magnitude % 10}"
-    return if (value < 0) "-$rendered" else rendered
-}
-
-/**
- * `NumberFormat.getCurrencyInstance(Locale.US)` output shape for whole-dollar
- * Longs ("$8.99" family: "$" prefix — "-" before the "$" for negatives —
- * comma-grouped thousands, exactly two decimals). Seerr budget/revenue are
- * whole dollar amounts, so the cents are always "00", exactly as
- * NumberFormat.format(Long) rendered them.
- */
-private fun formatUsCurrency(amount: Long): String {
-    val digits = if (amount < 0) amount.toString().removePrefix("-") else amount.toString()
-    val grouped = digits.reversed().chunked(3).joinToString(",").reversed()
-    return (if (amount < 0) "-$" else "$") + grouped + ".00"
 }

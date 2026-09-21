@@ -235,7 +235,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // updaters, DeepLinkHandler, FloatingPlayerState), the three
                 // former WidgetModule @Binds pairs, and the shared-feature seam
                 // adapters the deleted HiltInteropModule used to bridge
-                // (MusicMessageBus / DetailAudioPlayback / DetailThemeMusic /
+                // (MusicMessageBus / DetailThemeMusic /
                 // AudioPlayerCast — direct Koin resolution
                 // now, no EntryPoint; AudioPlayerEngine moved into core/data
                 // and androidCoreDataModule aliases it onto the manager).

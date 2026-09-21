@@ -18,11 +18,8 @@ import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class SeerrApiClientImpl @Inject constructor(
+class SeerrApiClientImpl(
     okHttpClient: OkHttpClient,
 ) : SeerrApiClient {
 

@@ -12,6 +12,9 @@ import java.util.Calendar
  * unchanged by construction and stay pinned by the jvmTest suites
  * (FormatFileSize/DurationFormatter/YearRangePresets).
  */
+/** The verbatim `String.format` body the settings/editor twins shipped (host locale). */
+actual fun formatIntPattern(pattern: String, value: Int): String = pattern.format(value)
+
 internal actual fun formatOneDecimal(value: Double): String = "%.1f".format(value)
 
 internal actual fun currentYear(): Int = Calendar.getInstance().get(Calendar.YEAR)

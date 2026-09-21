@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.di
 
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.data.cast.CastManager as LegacyCastManager
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.feature.player.video.ActivePlayerController
 import com.raulshma.jellyplay.feature.player.video.AndroidActivePlayerController
@@ -91,7 +92,17 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // media3 graph off the startKoin path
     // until first resolution.
     single<VideoPlayerPlatform> { AndroidVideoPlayerPlatform(context, get()) }
-    single<VideoMediaSessionFactory> { AndroidMediaSessionFactory(context, get()) }
+    single<VideoMediaSessionFactory> {
+        // The background-cast detach path resolves the cast receiver's player
+        // straight off the legacy media3-typed CastManager (Player?); the
+        // commonMain seam stays free of the platform handle.
+        val legacyCastManager: LegacyCastManager = get()
+        AndroidMediaSessionFactory(
+            context = context,
+            sessionManager = get(),
+            getCastPlayer = { legacyCastManager.castPlayerForSession },
+        )
+    }
     single<CastManager> { AndroidCastManager(get()) }
     single<JellyfinRemotePlayCastStrategy> { AndroidJellyfinRemotePlayCastStrategy(get()) }
     single<ActivePlayerController> { AndroidActivePlayerController(get()) }

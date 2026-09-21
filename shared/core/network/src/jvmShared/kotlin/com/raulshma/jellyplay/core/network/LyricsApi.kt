@@ -9,11 +9,8 @@ import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import org.jellyfin.sdk.model.api.LyricDto
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.lyricsApi
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class LyricsApi @Inject constructor(
+class LyricsApi(
     private val engine: JellyfinApiEngine,
 ) {
 

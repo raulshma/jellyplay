@@ -123,13 +123,14 @@ object NoOpPlayerEngineFactory : PlayerEngineFactory {
 
 internal object NoOpMediaSessionController : MediaSessionController {
     override fun createForItem(itemId: String, title: String, subtitle: String) {}
-    override fun createForPlayer(player: Any?, sessionId: String, videoItemId: String?) {}
+    override fun createForPlayer(engine: MediaEngine?, sessionId: String, videoItemId: String?) {}
+    override fun createForBackgroundCast(sessionId: String) {}
     override fun release() {}
 }
 
 internal object NoOpMediaSessionFactory : VideoMediaSessionFactory {
     override fun create(
-        getPlayer: () -> Any?,
+        getEngine: () -> MediaEngine?,
         getImageUrl: (itemId: String, maxWidth: Int) -> String,
     ): MediaSessionController = NoOpMediaSessionController
 }
@@ -140,7 +141,6 @@ internal object NoOpCastManager : CastManager {
     override fun markBackgroundCasting(casting: Boolean) {}
     override val isBackgroundCasting: Boolean get() = false
     override fun softRelease() {}
-    override val castPlayerForSession: Any? get() = null
 }
 
 internal object NoOpJellyfinRemotePlayCastStrategy : JellyfinRemotePlayCastStrategy {

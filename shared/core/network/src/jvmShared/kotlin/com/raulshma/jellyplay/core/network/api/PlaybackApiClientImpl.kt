@@ -22,11 +22,8 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.model.api.PlaybackInfoDto
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.*
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class PlaybackApiClientImpl @Inject constructor(
+class PlaybackApiClientImpl(
     private val engine: JellyfinApiEngine,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val playbackStore: PlaybackStore,
@@ -61,14 +58,14 @@ class PlaybackApiClientImpl @Inject constructor(
         sessionId: String,
         playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
     ): Result<Unit> =
-        engine.apiResultWithRetry {
+        engine.withApi { api ->
             val uuid = itemId.toUUID()
             val sdkPlayMethod = when (playMethod) {
                 com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY
                 com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_STREAM -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_STREAM
                 com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE -> org.jellyfin.sdk.model.api.PlayMethod.TRANSCODE
             }
-            engine.requireApi().playStateApi.reportPlaybackStart(
+            api.playStateApi.reportPlaybackStart(
                 org.jellyfin.sdk.model.api.PlaybackStartInfo(
                     canSeek = true,
                     itemId = uuid,
@@ -88,14 +85,14 @@ class PlaybackApiClientImpl @Inject constructor(
         positionTicks: Long,
         isPaused: Boolean,
         playMethod: com.raulshma.jellyplay.core.model.PlayMethod,
-    ): Result<Unit> = engine.apiResultWithRetry {
+    ): Result<Unit> = engine.withApi { api ->
         val uuid = itemId.toUUID()
         val sdkPlayMethod = when (playMethod) {
             com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_PLAY
             com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_STREAM -> org.jellyfin.sdk.model.api.PlayMethod.DIRECT_STREAM
             com.raulshma.jellyplay.core.model.PlayMethod.TRANSCODE -> org.jellyfin.sdk.model.api.PlayMethod.TRANSCODE
         }
-        engine.requireApi().playStateApi.reportPlaybackProgress(
+        api.playStateApi.reportPlaybackProgress(
             org.jellyfin.sdk.model.api.PlaybackProgressInfo(
                 canSeek = true,
                 itemId = uuid,
@@ -114,9 +111,9 @@ class PlaybackApiClientImpl @Inject constructor(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
-    ): Result<Unit> = engine.apiResultWithRetry {
+    ): Result<Unit> = engine.withApi { api ->
         val uuid = itemId.toUUID()
-        engine.requireApi().playStateApi.reportPlaybackStopped(
+        api.playStateApi.reportPlaybackStopped(
             org.jellyfin.sdk.model.api.PlaybackStopInfo(
                 itemId = uuid,
                 sessionId = sessionId,
@@ -192,8 +189,7 @@ class PlaybackApiClientImpl @Inject constructor(
         mode: PlaybackMode,
         playerType: PlayerType,
         liveStreamOption: LiveStreamOption?,
-    ): Result<PlaybackInfoResult> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<PlaybackInfoResult> = engine.withApi { api ->
         val uuid = itemId.toUUID()
 
         val flags = resolvePlaybackFlags(mode, liveStreamOption, maxStreamingBitrateBits)
@@ -237,8 +233,7 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): Result<List<String>> =
-        engine.apiResultWithRetry {
-            val api = engine.requireApi()
+        engine.withApi { api ->
             val uuid = itemId.toUUID()
             val sessions = api.sessionApi.getSessions().content
             // Match this device's session playing the item; the SDK client's
@@ -296,6 +291,10 @@ class PlaybackApiClientImpl @Inject constructor(
         JellyfinApiEngine.sharedJson.decodeFromString<CreditTimestamps>(body)
     }
 
+    // Not on withApi: the requireApi guard sits INSIDE the swallowing
+    // runCatching on purpose — a missing/unready session degrades segments
+    // to an empty list instead of failing playback start (pinned by
+    // PlaybackApiClientImplTest's non-success test).
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = engine.apiResultWithRetry {
         val segments = runCatchingRethrowingCancellation {
             engine.requireApi().mediaSegmentsApi.getItemSegments(itemId = itemId.toUUID()).content
@@ -319,8 +318,8 @@ class PlaybackApiClientImpl @Inject constructor(
         JellyfinApiEngine.sharedJson.decodeFromString<List<RemoteSubtitleInfo>>(body)
     }
 
-    override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().subtitleApi.downloadRemoteSubtitles(
+    override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> = engine.withApi { api ->
+        api.subtitleApi.downloadRemoteSubtitles(
             itemId = itemId.toUUID(),
             subtitleId = subtitleId,
         )
@@ -339,8 +338,8 @@ class PlaybackApiClientImpl @Inject constructor(
             null
         }
 
-    override suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse> = engine.apiResultWithRetry {
-        val response = engine.requireApi().timeSyncApi.getUtcTime().content
+    override suspend fun getServerTime(): Result<com.raulshma.jellyplay.core.model.UtcTimeResponse> = engine.withApi { api ->
+        val response = api.timeSyncApi.getUtcTime().content
         com.raulshma.jellyplay.core.model.UtcTimeResponse(
             requestReceptionTime = response.requestReceptionTime?.toString() ?: "",
             responseTransmissionTime = response.responseTransmissionTime?.toString() ?: "",

@@ -51,12 +51,13 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.SubtitleResultMetadata
+import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.editor.EditorPickedFile
+import com.raulshma.jellyplay.feature.editor.EditorUiEvent
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
-import com.raulshma.jellyplay.feature.editor.formatIntPattern
 import com.raulshma.jellyplay.feature.editor.formatOneDecimal
 import com.raulshma.jellyplay.feature.editor.formatStringPattern
 import com.raulshma.jellyplay.feature.editor.rememberSubtitleFilePicker
@@ -111,7 +112,7 @@ internal fun SubtitlesTab(
 
     // Load configured providers once so the search sheet knows whether to show
     // provider filter chips + the merged provider list.
-    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.loadConfiguredSubtitleProviders() }
+    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.onEvent(EditorUiEvent.LoadConfiguredSubtitleProviders) }
 
     if (state.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -207,7 +208,7 @@ internal fun SubtitlesTab(
                 TextButton(
                     onClick = {
                         val target = pendingDelete.confirm(inFlight = false) ?: return@TextButton
-                        viewModel.deleteSubtitle(target.index)
+                        viewModel.onEvent(EditorUiEvent.DeleteSubtitle(target.index))
                         // Settle: action-then-clear, as before.
                         pendingDelete = pendingDelete.clear()
                     },
@@ -224,7 +225,7 @@ internal fun SubtitlesTab(
             cultures = state.editorInfo?.cultures ?: emptyList(),
             onDismiss = { showUploadSheet = false },
             onUploadFile = { file, fileName, language, isForced, isHearingImpaired ->
-                viewModel.uploadSubtitleFromFile(file, fileName, language, isForced, isHearingImpaired)
+                viewModel.onEvent(EditorUiEvent.UploadSubtitleFromFile(file, fileName, language, isForced, isHearingImpaired))
                 showUploadSheet = false
             },
         )
@@ -240,19 +241,19 @@ internal fun SubtitlesTab(
                 // merged Jellyfin + external search in that case; otherwise the legacy
                 // Jellyfin-only path avoids a wasted external round-trip.
                 if (state.configuredSubtitleProviders.size > 1) {
-                    viewModel.searchAllSubtitleProviders(language)
+                    viewModel.onEvent(EditorUiEvent.SearchAllSubtitleProviders(language))
                 } else {
-                    viewModel.searchRemoteSubtitles(language)
+                    viewModel.onEvent(EditorUiEvent.SearchRemoteSubtitles(language))
                 }
             },
-            onDownload = { subtitleId -> viewModel.downloadRemoteSubtitle(subtitleId) },
+            onDownload = { subtitleId -> viewModel.onEvent(EditorUiEvent.DownloadRemoteSubtitle(subtitleId)) },
             onDismiss = { showSearchSheet = false },
             providerResults = state.providerSubtitleResults,
             providerErrors = state.providerSubtitleErrors,
             configuredProviders = state.configuredSubtitleProviders,
             isSearchingProviders = state.isSearchingProviderSubtitles,
             isDownloadingProvider = state.isDownloadingProviderSubtitle,
-            onDownloadProvider = { viewModel.downloadProviderSubtitle(it) },
+            onDownloadProvider = { viewModel.onEvent(EditorUiEvent.DownloadProviderSubtitle(it)) },
         )
     }
 }
