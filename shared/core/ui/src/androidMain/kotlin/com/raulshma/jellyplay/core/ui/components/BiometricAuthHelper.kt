@@ -7,6 +7,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.Composable
@@ -25,6 +26,7 @@ private const val TAG = "BiometricAuthHelper"
 
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
 private const val BIOMETRIC_KEY_ALIAS = "jellyplay_biometric_auth_v1"
+private const val DEVICE_CREDENTIAL_KEY_ALIAS = "jellyplay_device_credential_auth_v1"
 private const val CRYPTO_TRANSFORMATION = "AES/GCM/NoPadding"
 
 object BiometricAuthHelper {
@@ -93,22 +95,55 @@ object BiometricAuthHelper {
      * (PIN/pattern/password). This is the fallback path when biometric authentication is
      * unavailable or has been cancelled.
      *
-     * Unlike the crypto-bound biometric prompt, this intentionally does **not** bind a
-     * [BiometricPrompt.CryptoObject]: a CryptoObject cannot be combined with
-     * [BiometricManager.Authenticators.DEVICE_CREDENTIAL] (the call would throw at
-     * runtime). DEVICE_CREDENTIAL authentication is enforced by the framework — the user
-     * must genuinely enter their screen-lock credential — so it is not a mere UI gate.
-     * Additionally [BiometricPrompt.PromptInfo.Builder.setNegativeButtonText] must **not**
-     * be called for DEVICE_CREDENTIAL; the system supplies its own Cancel button.
+     * On Android 11 (API 30)+ this is crypto-bound exactly like [authenticate]: the prompt
+     * carries a [BiometricPrompt.CryptoObject] wrapping a Keystore key whose auth type is
+     * [KeyProperties.AUTH_DEVICE_CREDENTIAL], and the success callback must run `doFinal` on
+     * the cipher the framework hands back before access is granted — so the gate cannot be
+     * bypassed by hooking the callback.
+     *
+     * Below API 30 a CryptoObject genuinely cannot be combined with device credential:
+     * androidx rejects the combination in [BiometricPrompt.authenticate], and
+     * [BiometricPrompt.PromptInfo.Builder] additionally rejects DEVICE_CREDENTIAL as a sole
+     * authenticator prior to Android 11 (it is an unsupported combination — allowing
+     * BIOMETRIC_WEAK alongside is what makes the legacy prompt buildable at all). The legacy
+     * path therefore also accepts a Class 2 biometric where the framework requires it, and
+     * its success callback consumes [BiometricPrompt.AuthenticationResult.authenticationType]
+     * diagnostically instead of a cipher. Framework enforcement is unchanged in both cases:
+     * the user must genuinely present the screen-lock credential (or a biometric, on the
+     * legacy path) — this is not a mere UI gate.
+     *
+     * In both variants [BiometricPrompt.PromptInfo.Builder.setNegativeButtonText] must
+     * **not** be called; the system supplies its own Cancel button.
      *
      * Recoverable cancellations (user backed out, pressed the system Cancel button)
      * do **not** invoke [onError]: the user should be free to retry or pick another
      * method without a scary error message. Only genuine failures surface an error
      * string. (Wrong-credential retries for DEVICE_CREDENTIAL are handled inside
      * the system confirm-credentials dialog and never reach this callback — see
-     * the note on [onAuthenticationError].)
+     * the note on [handleCredentialPromptError].)
      */
     fun authenticateDeviceCredential(
+        activity: FragmentActivity,
+        title: String,
+        description: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            authenticateDeviceCredentialWithCrypto(activity, title, description, onSuccess, onError)
+        } else {
+            authenticateDeviceCredentialLegacy(activity, title, description, onSuccess, onError)
+        }
+    }
+
+    /**
+     * Crypto-bound device credential authentication for Android 11 (API 30)+. Mirrors
+     * [authenticate]: the key behind the [BiometricPrompt.CryptoObject] requires
+     * device-credential authentication, so `doFinal` can only succeed after the user
+     * genuinely entered their screen-lock credential.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun authenticateDeviceCredentialWithCrypto(
         activity: FragmentActivity,
         title: String,
         description: String,
@@ -122,34 +157,25 @@ object BiometricAuthHelper {
             executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    // Use the authentication result for its cryptographic operation; the
+                    // framework returns the credential-unlocked cipher.
+                    val cipher = result.cryptoObject?.cipher
+                    if (cipher == null) {
+                        onError("Device credential authentication was not crypto-bound")
+                        return
+                    }
+                    try {
+                        cipher.doFinal()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Crypto operation after device credential auth failed", e)
+                        onError(e.message ?: "Device credential crypto operation failed")
+                        return
+                    }
                     onSuccess()
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    when (errorCode) {
-                        // User-driven cancellations: the user chose not to authenticate
-                        // right now. Treat these as recoverable — let the caller keep the
-                        // user on the lock screen so they can retry or pick another method,
-                        // rather than surfacing an error string.
-                        //
-                        // Note on wrong credentials: the plan referenced
-                        // ERROR_CREDENTIAL_NOT_MATCHED, but that constant exists only on
-                        // the platform android.hardware.biometrics.BiometricPrompt
-                        // (Android 11+), not on this androidx.biometric.BiometricPrompt.
-                        // For DEVICE_CREDENTIAL the AndroidX library surfaces wrong-entry
-                        // retries inside the system confirm-credentials dialog and never
-                        // delivers them to this callback, so there is no additional error
-                        // code to handle here.
-                        BiometricPrompt.ERROR_USER_CANCELED,
-                        BiometricPrompt.ERROR_NEGATIVE_BUTTON,
-                        BiometricPrompt.ERROR_CANCELED -> {
-                            Log.d(TAG, "Device credential prompt cancelled by user ($errorCode)")
-                        }
-                        else -> {
-                            Log.w(TAG, "Device credential auth error: $errorCode ($errString)")
-                            onError(errString.toString())
-                        }
-                    }
+                    handleCredentialPromptError(errorCode, errString, onError)
                 }
             },
         )
@@ -164,7 +190,98 @@ object BiometricAuthHelper {
             // the framework provides its own cancel button.
             .build()
 
+        try {
+            val cipher = initDeviceCredentialCipher()
+            prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
+        } catch (e: Exception) {
+            // KeyPermanentlyInvalidatedException or a provider failure: surface it so
+            // the caller can fall back to another unlock method.
+            Log.e(TAG, "Could not initialize device credential crypto", e)
+            onError(e.message ?: "Device credential authentication unavailable")
+        }
+    }
+
+    /**
+     * Non-crypto device credential authentication for API 28-29, where androidx rejects
+     * combining a CryptoObject with DEVICE_CREDENTIAL authentication.
+     */
+    private fun authenticateDeviceCredentialLegacy(
+        activity: FragmentActivity,
+        title: String,
+        description: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        val executor = ContextCompat.getMainExecutor(activity)
+
+        val prompt = BiometricPrompt(
+            activity,
+            executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    // No cipher is available on this path, so consume the result
+                    // diagnostically: record which authenticator the framework actually
+                    // accepted. AUTHENTICATION_RESULT_TYPE_UNKNOWN can be reported on
+                    // these versions and does NOT imply a weaker method was used.
+                    Log.d(
+                        TAG,
+                        "Device credential auth succeeded (type=${result.authenticationType})"
+                    )
+                    onSuccess()
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    handleCredentialPromptError(errorCode, errString, onError)
+                }
+            },
+        )
+
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setDescription(description)
+            // DEVICE_CREDENTIAL alone is an unsupported combination below API 30 —
+            // PromptInfo.build() throws. Allowing BIOMETRIC_WEAK as well is supported on
+            // every API level and lets the framework substitute a Class 2 biometric where
+            // the platform requires it.
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            .build()
+
         prompt.authenticate(promptInfo)
+    }
+
+    /**
+     * Shared error handling for both device-credential prompt variants.
+     *
+     * User-driven cancellations: the user chose not to authenticate right now. Treat these
+     * as recoverable — let the caller keep the user on the lock screen so they can retry or
+     * pick another method, rather than surfacing an error string.
+     *
+     * Note on wrong credentials: the plan referenced ERROR_CREDENTIAL_NOT_MATCHED, but that
+     * constant exists only on the platform android.hardware.biometrics.BiometricPrompt
+     * (Android 11+), not on this androidx.biometric.BiometricPrompt. For DEVICE_CREDENTIAL
+     * the AndroidX library surfaces wrong-entry retries inside the system
+     * confirm-credentials dialog and never delivers them to this callback, so there is no
+     * additional error code to handle here.
+     */
+    private fun handleCredentialPromptError(
+        errorCode: Int,
+        errString: CharSequence,
+        onError: (String) -> Unit,
+    ) {
+        when (errorCode) {
+            BiometricPrompt.ERROR_USER_CANCELED,
+            BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+            BiometricPrompt.ERROR_CANCELED -> {
+                Log.d(TAG, "Device credential prompt cancelled by user ($errorCode)")
+            }
+            else -> {
+                Log.w(TAG, "Device credential auth error: $errorCode ($errString)")
+                onError(errString.toString())
+            }
+        }
     }
 
     fun authenticate(
@@ -290,6 +407,63 @@ object BiometricAuthHelper {
             builder.setInvalidatedByBiometricEnrollment(true)
         }
         keyGenerator.init(builder.build())
+        return keyGenerator.generateKey()
+    }
+
+    /**
+     * API 30+ counterpart of [initBiometricCipher]: loads (or creates on first use) an
+     * AES/GCM key from the Android Keystore that is bound to device-credential
+     * authentication, and returns a [Cipher] initialized for encryption with it. The cipher
+     * is what gets wrapped in the [BiometricPrompt]'s [BiometricPrompt.CryptoObject] by
+     * [authenticateDeviceCredentialWithCrypto]; its auth type makes the key — and therefore
+     * the cipher — unusable until the user enters their screen-lock credential.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun initDeviceCredentialCipher(): Cipher {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        val secretKey = (keyStore.getEntry(DEVICE_CREDENTIAL_KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey
+            ?: createDeviceCredentialKey()
+        return Cipher.getInstance(CRYPTO_TRANSFORMATION).apply {
+            try {
+                init(Cipher.ENCRYPT_MODE, secretKey)
+            } catch (e: KeyPermanentlyInvalidatedException) {
+                // The secure lock screen was removed since the key was created, killing
+                // the key. Drop the stale entry, mint a fresh key bound to the current
+                // credential, and retry the init once — otherwise credential login stays
+                // broken until app data is cleared. Recreating is safe: the new key still
+                // requires the (re-enabled) credential to be of any use.
+                Log.w(TAG, "Device credential key invalidated; recreating", e)
+                keyStore.deleteEntry(DEVICE_CREDENTIAL_KEY_ALIAS)
+                init(Cipher.ENCRYPT_MODE, createDeviceCredentialKey())
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun createDeviceCredentialKey(): SecretKey {
+        val keyGenerator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES,
+            ANDROID_KEYSTORE,
+        )
+        keyGenerator.init(
+            KeyGenParameterSpec.Builder(
+                DEVICE_CREDENTIAL_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                // The key can only be used after the user authenticates with their
+                // screen-lock credential (PIN/pattern/password), enforced by the
+                // framework. A timeout of 0 means per-use authentication through the
+                // BiometricPrompt CryptoObject rather than a time-bound grace period.
+                .setUserAuthenticationRequired(true)
+                .setUserAuthenticationParameters(
+                    0,
+                    KeyProperties.AUTH_DEVICE_CREDENTIAL,
+                )
+                .build()
+        )
         return keyGenerator.generateKey()
     }
 }
