@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
@@ -41,7 +40,6 @@ class ExperimentalSettingsViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var store: UserPreferencesStore
     private lateinit var projections: PreferenceProjections
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var editor: PreferencesEditor
@@ -51,7 +49,6 @@ class ExperimentalSettingsViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        store = mockk(relaxed = true)
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
@@ -75,7 +72,7 @@ class ExperimentalSettingsViewModelTest {
     }
 
     private fun viewModel() =
-        ExperimentalSettingsViewModel(store, projections, AdvancedSettingsGate(appearanceStore, editor), editor)
+        ExperimentalSettingsViewModel(projections, AdvancedSettingsGate(appearanceStore, editor), editor)
 
     @Test
     fun `preferences exposes the experimental projection flow`() = runTest {

@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.download.ContainerSniffer
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -27,6 +29,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
+import com.raulshma.jellyplay.core.ui.components.episodePlayerSubtitle
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_loading_media
@@ -86,11 +89,12 @@ class PlayerSessionManager(
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
-    /** commonMain PiP seam: androidMain adapter wraps the legacy singleton. */
+    /** The shared core:data PiP port (process singleton impl on Android). */
     private val pipController: PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
@@ -172,25 +176,21 @@ class PlayerSessionManager(
     /**
      * Builds the secondary line shown beneath the episode title in the player
      * chrome. For a series episode this renders the show name followed by the
-     * season/episode marker in `SXXEXX` form (e.g. "The Show · S01E05"). When
+     * season/episode marker in `SxxExx` form (e.g. "The Show · S1E5"). When
      * neither a series name nor season/episode data is available, falls back
      * to a trimmed overview — preserving the historical behaviour for movies
-     * and other non-episodic items.
+     * and other non-episodic items. The subtitle shape is core/ui's
+     * [episodePlayerSubtitle] — the ONE derivation the chrome and the
+     * next-episode overlay render (the two previously carried near-identical
+     * buildStrings and had split on the blank-series-name edge).
      */
     private fun buildEpisodeSubtitle(
         seriesName: String?,
         overview: String?,
         seasonNumber: Int?,
         episodeNumber: Int?,
-    ): String = buildString {
-        val hasSeries = !seriesName.isNullOrBlank()
-        if (hasSeries) append(seriesName)
-        if (seasonNumber != null && episodeNumber != null) {
-            if (isNotEmpty()) append(" \u00B7 ")
-            append("S${seasonNumber}E${episodeNumber}")
-        }
-        if (isEmpty()) append(overview?.take(60) ?: "")
-    }
+    ): String = episodePlayerSubtitle(seriesName, seasonNumber, episodeNumber)
+        ?: (overview?.take(60) ?: "")
 
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
         // Same stale-fetch hazard as loadMedia: a reclaimed engine for the
@@ -605,8 +605,8 @@ class PlayerSessionManager(
         val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
         
         val headers = mutableMapOf<String, String>()
-        val serverUrl = playbackRepository.getServerUrl()
-        val token = playbackRepository.getAccessToken()
+        val serverUrl = playbackIdentity.serverUrl()
+        val token = playbackIdentity.accessToken()
         if (!token.isNullOrBlank()) {
             headers += JellyfinAuthorizationHeader.tokenOnlyHeader(token)
         }

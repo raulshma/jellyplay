@@ -17,6 +17,10 @@ kotlin {
             api(project(":shared:core:model"))
             // Flow/StateFlow surface of the engine contract.
             implementation(libs.kotlinx.coroutines.core)
+            // TaskBundle — the EngineEventCoordinator's per-engine policy slot
+            // choreography (the same bundle the core:data session collaborators
+            // use). core:concurrency is a dependency leaf, so no cycle.
+            implementation(project(":shared:core:concurrency"))
             // core:model's @Serializable enums surface their generated
             // serializer companions in this module's when-expressions
             // (PlayerType, DecoderMode, MediaSegmentType, …); compiling against

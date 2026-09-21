@@ -49,9 +49,9 @@ import com.raulshma.jellyplay.widget.LibraryRecommendationsWidget
 import com.raulshma.jellyplay.widget.NowPlayingWidget
 import com.raulshma.jellyplay.widget.SeerrRecommendationsWidget
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
+import com.raulshma.jellyplay.widget.WidgetKoin
 import com.raulshma.jellyplay.di.KoinViewModelFactory
 import kotlinx.coroutines.launch
-import org.koin.mp.KoinPlatform
 
 /**
  * Shared scaffold for the per-kind widget configuration activities. The AOSP
@@ -149,7 +149,7 @@ abstract class BaseWidgetConfigActivity : ComponentActivity() {
  */
 class LibraryWidgetConfigActivity : BaseWidgetConfigActivity() {
 
-    private val widgetWorkScheduler: WidgetWorkScheduler by lazy { KoinPlatform.getKoin()!!.get() }
+    private val widgetWorkScheduler: WidgetWorkScheduler by lazy { WidgetKoin.widgetWorkScheduler }
 
     override val titleRes: Int = R.string.widget_library_recommendations_title
     override val kind: WidgetKind = WidgetKind.LIBRARY
@@ -169,7 +169,7 @@ class LibraryWidgetConfigActivity : BaseWidgetConfigActivity() {
  */
 class SeerrWidgetConfigActivity : BaseWidgetConfigActivity() {
 
-    private val widgetWorkScheduler: WidgetWorkScheduler by lazy { KoinPlatform.getKoin()!!.get() }
+    private val widgetWorkScheduler: WidgetWorkScheduler by lazy { WidgetKoin.widgetWorkScheduler }
 
     override val titleRes: Int = R.string.widget_seerr_recommendations_title
     override val kind: WidgetKind = WidgetKind.SEERR

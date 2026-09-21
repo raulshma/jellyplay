@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.toMediaItem
@@ -87,7 +88,11 @@ class EpisodeCatalogueImpl(
 
     private val cache = TtlCache<EpisodeCatalogueSnapshot>(
         maxSize = CACHE_MAX_ENTRIES,
-        ttlMs = CACHE_TTL_MS,
+        // Cites the named detail-cluster policy (FreshnessCeilings.DETAIL_TTL_MS,
+        // core:model) — the same home MediaRepositoryImpl's detail caches cite.
+        // The old hand-synced comment ("Matches MediaRepositoryImpl
+        // DETAIL_CACHE_TTL_MS") is replaced by the shared constant itself.
+        ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
     )
 
     init {
@@ -320,8 +325,6 @@ class EpisodeCatalogueImpl(
 
     companion object {
         private const val CACHE_MAX_ENTRIES = 30
-        /** Matches `MediaRepositoryImpl.DETAIL_CACHE_TTL_MS` (2 minutes). */
-        private const val CACHE_TTL_MS = 2 * 60 * 1000L
         /** Matches `DetailViewModel.MAX_PARALLEL_SEASON_FETCHES`. */
         private const val MAX_PARALLEL_SEASON_FETCHES = 5
     }

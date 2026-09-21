@@ -9,12 +9,96 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 
 /**
+ * The ONE plain-string `SxxExx` derivation — the core under
+ * [episodeContextLine] (which is [AnnotatedString]-typed and therefore could
+ * not serve plain-string consumers across the seam; eleven sites had
+ * re-derived the ladder by hand and drifted on padding and null-leg
+ * handling).
+ *
+ * Shape, by null-leg:
+ *  - both numbers present: `S{season}{separator}E{episode}` — [separator]
+ *    covers the house styles: the tight `S01E01` context line and the
+ *    spaced `S1 E01` card chip.
+ *  - episode only: `E{episode}`.
+ *  - season only: `S{season}`.
+ *  - neither: null.
+ *
+ * Padding is UNIFORM here — [padded] zero-pads both numbers (`S01E01`) or
+ * neither (`S1E1`). The card-chip family's MIXED style (bare season, padded
+ * episode: `S1 E01`) is its own derivation, [episodeCardCode], sharing this
+ * function's legs. Callers whose ladder skips a leg the core would render
+ * (e.g. the wide card's subtitle only shows a code when a season is
+ * present) keep their leg guard at the call site and call this with the
+ * guarded inputs.
+ */
+fun episodeCode(
+    seasonNumber: Int?,
+    episodeNumber: Int?,
+    padded: Boolean = true,
+    separator: String = "",
+): String? {
+    fun num(n: Int): String = if (padded) n.toString().padStart(2, '0') else n.toString()
+    return when {
+        seasonNumber != null && episodeNumber != null -> "S${num(seasonNumber)}${separator}E${num(episodeNumber)}"
+        episodeNumber != null -> "E${num(episodeNumber)}"
+        seasonNumber != null -> "S${num(seasonNumber)}"
+        else -> null
+    }
+}
+
+/**
+ * The card style of the SxxExx derivation: BARE season, PADDED episode
+ * (`S1 E01` spaced on the chip and poster footer, `S1E01` tight in the wide
+ * card's subtitle), with [episodeCode]'s single-number legs (`E01`, `S1`)
+ * — every leg of the former hand copies, byte for byte. [separator] goes
+ * between the season and episode parts of the pair.
+ */
+fun episodeCardCode(
+    seasonNumber: Int?,
+    episodeNumber: Int?,
+    separator: String = "",
+): String? = when {
+    seasonNumber != null && episodeNumber != null ->
+        "S${seasonNumber}${separator}E${episodeNumber.toString().padStart(2, '0')}"
+    episodeNumber != null -> "E${episodeNumber.toString().padStart(2, '0')}"
+    seasonNumber != null -> "S${seasonNumber}"
+    else -> null
+}
+
+/**
+ * The player chrome's episode subtitle — `Series · S1E5` (unpadded; a
+ * "Series" suffix alone when the episode numbers are absent, the code alone
+ * when the series name is missing/blank). The single derivation the player
+ * session's subtitle builder and the next-episode overlay both render;
+ * previously the VM and the overlay each carried a near-identical
+ * `buildString` and had already split on the blank-name edge (the VM
+ * suppressed blank names, the overlay rendered a stray separator after
+ * them). Null when neither a series name nor a full season+episode pair
+ * exists — callers fall back (the VM to a trimmed overview, the overlay to
+ * not rendering the line at all).
+ */
+fun episodePlayerSubtitle(
+    seriesName: String?,
+    seasonNumber: Int?,
+    episodeNumber: Int?,
+): String? {
+    val series = seriesName?.takeIf { it.isNotBlank() }
+    val code =
+        if (seasonNumber != null && episodeNumber != null) {
+            episodeCode(seasonNumber, episodeNumber, padded = false)
+        } else null
+    return listOfNotNull(series, code).joinToString(" · ").ifEmpty { null }
+}
+
+/**
  * Single source of truth for the `SxxExx · Series` context line shown under
  * episode titles in list-style rows (downloads list, library list view, etc.).
  *
  * For non-episodes this returns `null` so callers can fall back to their own
  * type-specific subtitle. The SxxExx tag is bold to draw the eye to the index,
- * matching the downloads list and the library list view.
+ * matching the downloads list and the library list view. The tag itself is
+ * [episodeCode]'s padded tight form — this function is the styled wrapper,
+ * the string shape lives in the plain core.
  *
  * Used by the downloads list, the resync sheets, and the library list view so a
  * format change edits one place.
@@ -26,11 +110,10 @@ fun episodeContextLine(
     episodeNumber: Int?,
 ): AnnotatedString? {
     if (mediaType != MediaType.EPISODE) return null
-    val tag = seasonNumber?.let { s ->
-        episodeNumber?.let { e ->
-            "S${s.toString().padStart(2, '0')}E${e.toString().padStart(2, '0')}"
-        }
-    }
+    val tag =
+        if (seasonNumber != null && episodeNumber != null) {
+            episodeCode(seasonNumber, episodeNumber, padded = true)
+        } else null
     val series = seriesName?.takeIf { it.isNotBlank() } ?: return tag?.let { plainTag ->
         buildAnnotatedString { withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(plainTag) } }
     }

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -388,7 +389,7 @@ internal class HomeRefresher(
                         // still swaps Continue Watching / Next Up to the
                         // locally derived rows instead of freezing the
                         // pre-offline server snapshot.
-                        _state.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
+                        _state.update { s -> s.copy(error = UserErrorMessages.resolve(throwable, "${throwable::class.simpleName}")) }
                         _state.update { it.copy(partialLoadError = false) }
                     }
 

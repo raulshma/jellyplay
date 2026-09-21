@@ -11,13 +11,25 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_about_vers
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_about_version_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object AboutScreenIds {
+    const val ABOUT_VERSION = "about_version"
+}
+
+/**
  * Settings-search items for the "About" group of the old core/ui
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to AboutScreen. Aggregated in [SettingsSearchCatalog].
  */
 internal val AboutSearchItems = listOf(
     SettingsSearchItem(
-        id = "about_version",
+        id = AboutScreenIds.ABOUT_VERSION,
         titleRes = Res.string.ss_about_version_title,
         subtitleRes = Res.string.ss_about_version_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_about,

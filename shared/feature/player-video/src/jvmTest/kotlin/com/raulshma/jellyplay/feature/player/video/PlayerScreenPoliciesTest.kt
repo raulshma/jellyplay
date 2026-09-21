@@ -404,12 +404,9 @@ class ControlsAutoHidePolicyTest {
         )
     }
 
-    @Test
-    fun timeout_tvIsDoubleTheBase() {
-        assertEquals(5_000L, controlsAutoHideTimeoutMs(baseTimeoutMs = 5_000L, isTv = false))
-        assertEquals(10_000L, controlsAutoHideTimeoutMs(baseTimeoutMs = 5_000L, isTv = true))
-        assertEquals(0L, controlsAutoHideTimeoutMs(baseTimeoutMs = 0L, isTv = true))
-    }
+    // The `timeout_tvIsDoubleTheBase` pin moved with the fold itself to
+    // player-contract's PlayerChromePoliciesTest — the TV-doubling policy is
+    // now shared with the live player's screen and pinned at its new home.
 }
 
 class UserFontGateTest {

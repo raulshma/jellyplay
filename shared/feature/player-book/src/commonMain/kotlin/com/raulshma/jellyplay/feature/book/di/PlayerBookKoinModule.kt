@@ -34,6 +34,7 @@ val playerBookModule: Module = module {
         BookReaderViewModel(
             mediaRepository = get(),
             playbackRepository = get(),
+            playbackIdentity = get(),
             preferences = ReaderPreferences(store = get(), scope = get(DatastoreQualifiers.applicationScope)),
             annotationsRepository = get(),
             contentResolver = get(),

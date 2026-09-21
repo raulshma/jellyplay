@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.PendingConfirmation
@@ -163,7 +164,7 @@ class AdminDashboardViewModel(
                 _uiState.update {
                     it.copy(
                         isRestarting = false,
-                        error = "Restart failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                        error = "Restart failed: ${UserErrorMessages.resolve(result, "unknown error")}",
                     )
                 }
             }
@@ -180,7 +181,7 @@ class AdminDashboardViewModel(
                 _uiState.update {
                     it.copy(
                         isShuttingDown = false,
-                        error = "Shutdown failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                        error = "Shutdown failed: ${UserErrorMessages.resolve(result, "unknown error")}",
                     )
                 }
             }
@@ -226,7 +227,7 @@ class AdminDashboardViewModel(
                 _uiState.update {
                     it.copy(
                         isStoppingSession = false,
-                        error = "Stop failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                        error = "Stop failed: ${UserErrorMessages.resolve(result, "unknown error")}",
                     )
                 }
             }

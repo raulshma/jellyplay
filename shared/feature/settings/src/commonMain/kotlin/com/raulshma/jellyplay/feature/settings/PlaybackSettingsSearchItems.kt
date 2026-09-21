@@ -175,6 +175,100 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_output_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object PlaybackSettingsIds {
+    const val PLAYER_ENGINE = "player_engine"
+    const val SEEK_DURATION = "seek_duration"
+    const val ORIENTATION = "orientation"
+    const val GESTURES = "gestures"
+    const val GESTURE_INDICATOR_SIDE = "gesture_indicator_side"
+    const val DEFAULT_SPEED = "default_speed"
+    const val DEFAULT_ASPECT = "default_aspect"
+    const val VIDEO_AUTOPLAY_NEXT = "video_autoplay_next"
+    const val AUTOPLAY_COUNTDOWN = "autoplay_countdown"
+    const val CONTROLS_TIMEOUT = "controls_timeout"
+    const val SKIP_BACK_ON_RESUME = "skip_back_on_resume"
+    const val SHOW_CLOCK_PLAYER = "show_clock_player"
+    const val PASS_OUT_PROTECTION = "pass_out_protection"
+    const val DUCK_ON_TRANSIENT_FOCUS_LOSS = "duck_on_transient_focus_loss"
+    const val AUTOPLAY_TRAILERS = "autoplay_trailers"
+    const val CINEMA_MODE = "cinema_mode"
+    const val EPISODE_BROWSER = "episode_browser"
+    const val PLAYBACK_METADATA = "playback_metadata"
+    const val SWIPE_SEEK_RANGE = "swipe_seek_range"
+    const val REMEMBER_BRIGHTNESS = "remember_brightness"
+    const val TRICKPLAY_PREVIEW = "trickplay_preview"
+    const val PRELOAD_BUFFER = "preload_buffer"
+    const val VIDEO_CACHE_SIZE = "video_cache_size"
+    const val BACKGROUND_AUDIO = "background_audio"
+    const val KEEP_SCREEN_ON = "keep_screen_on"
+    const val INCOGNITO_MODE = "incognito_mode"
+    const val HOLD_SPEED_MULTIPLIER = "hold_speed_multiplier"
+    const val ANDROID_TV_WATCH_NEXT = "android_tv_watch_next"
+    const val TV_ZOOM_MODE = "tv_zoom_mode"
+    const val DEFAULT_BRIGHTNESS_LEVEL = "default_brightness_level"
+    const val TRICKPLAY_ON_GESTURES = "trickplay_on_gestures"
+    const val SHOW_TIME_REMAINING = "show_time_remaining"
+    const val PAUSE_ON_FOCUS_LOSS = "pause_on_focus_loss"
+    const val DIALOGUE_BOOST = "dialogue_boost"
+    const val DIALOGUE_BOOST_STRENGTH = "dialogue_boost_strength"
+    const val DECODER = "decoder"
+    const val AUDIO_PASSTHROUGH = "audio_passthrough"
+    const val FRAME_RATE_MATCHING = "frame_rate_matching"
+    const val STREAMING_QUALITY = "streaming_quality"
+    const val AUDIO_DELAY = "audio_delay"
+    const val LIVE_STREAM_OPTION = "live_stream_option"
+    const val MPV_VIDEO_OUTPUT = "mpv_video_output"
+    const val MPV_SCALER = "mpv_scaler"
+    const val MPV_DEBANDING = "mpv_debanding"
+    const val MPV_INTERPOLATION = "mpv_interpolation"
+    const val MPV_AUDIO_OUTPUT = "mpv_audio_output"
+    const val MPV_AUDIO_FALLBACK = "mpv_audio_fallback"
+    const val MPV_BUFFER_SIZE = "mpv_buffer_size"
+    const val MPV_HWDEC_OVERRIDE = "mpv_hwdec_override"
+    const val MPV_SKIP_LOOP_FILTER = "mpv_skip_loop_filter"
+    const val MPV_FRAME_DROP = "mpv_frame_drop"
+    const val MPV_EXTRA_CONFIG = "mpv_extra_config"
+    const val RESET_ENGINE_DEFAULTS = "reset_engine_defaults"
+    const val VLC_AUDIO_OUTPUT = "vlc_audio_output"
+    const val VLC_AUDIO_TIME_STRETCH = "vlc_audio_time_stretch"
+    const val VLC_VIDEO_OUTPUT = "vlc_video_output"
+    const val VLC_NETWORK_CACHING = "vlc_network_caching"
+    const val VLC_SKIP_LOOP_FILTER = "vlc_skip_loop_filter"
+    const val VLC_SKIP_FRAMES = "vlc_skip_frames"
+    const val VLC_DECODER_THREADS = "vlc_decoder_threads"
+    const val VLC_DROP_LATE_FRAMES = "vlc_drop_late_frames"
+    const val EXO_VIDEO_SCALING = "exo_video_scaling"
+    const val EXO_FRAME_RATE_STRATEGY = "exo_frame_rate_strategy"
+    const val EXO_SKIP_SILENCE = "exo_skip_silence"
+    const val EXO_AUDIO_OFFLOAD = "exo_audio_offload"
+    const val EXO_DECODER_FALLBACK = "exo_decoder_fallback"
+    const val EXO_BACK_BUFFER = "exo_back_buffer"
+    const val EXO_PREFERRED_CODECS = "exo_preferred_codecs"
+    const val SYNCPLAY_JOIN_BEHAVIOR = "syncplay_join_behavior"
+    const val SYNCPLAY_TOLERANCE = "syncplay_tolerance"
+    const val SYNCPLAY_AUTO_ACCEPT_INVITES = "syncplay_auto_accept_invites"
+    const val CASTING_STRATEGY = "casting_strategy"
+    const val BACKGROUND_CASTING = "background_casting"
+    const val PREFERRED_RENDERER = "preferred_renderer"
+    const val DVR_PRE_PADDING = "dvr_pre_padding"
+    const val DVR_POST_PADDING = "dvr_post_padding"
+    const val DVR_RECORDING_QUALITY = "dvr_recording_quality"
+    const val MEDIA_SEGMENT_INTRO = "media_segment_intro"
+    const val MEDIA_SEGMENT_OUTRO = "media_segment_outro"
+    const val MEDIA_SEGMENT_PREVIEW = "media_segment_preview"
+    const val MEDIA_SEGMENT_RECAP = "media_segment_recap"
+    const val MEDIA_SEGMENT_COMMERCIAL = "media_segment_commercial"
+    const val MEDIA_SEGMENT_UNKNOWN = "media_segment_unknown"
+}
+
+/**
  * Settings-search items for the "Video Player" group of PlaybackSettingsScreen
  * (player defaults: engine picker, transport, autoplay, player UX). The list is
  * the group declaration: SettingsScreenGroups.playbackPlayer decorates it, and
@@ -183,16 +277,17 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_
  */
 internal val PlaybackSettingsSearchItems = listOf(
     SettingsSearchItem(
-        id = "player_engine",
+        id = PlaybackSettingsIds.PLAYER_ENGINE,
         titleRes = Res.string.ss_player_engine_title,
         subtitleRes = Res.string.ss_player_engine_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("player", "engine", "mpv", "exoplayer", "vlc", "playback"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.PlayerPlay
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "seek_duration",
+        id = PlaybackSettingsIds.SEEK_DURATION,
         titleRes = Res.string.ss_seek_duration_title,
         subtitleRes = Res.string.ss_seek_duration_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -200,9 +295,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.PlayerTrackNext,
         platforms = ANDROID_ONLY_PLATFORMS,
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "orientation",
+        id = PlaybackSettingsIds.ORIENTATION,
         titleRes = Res.string.ss_orientation_title,
         subtitleRes = Res.string.ss_orientation_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -210,9 +306,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.DeviceMobileRotated,
         platforms = platformsForCapability(settingsCapabilities.supportsScreenOrientation),
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "gestures",
+        id = PlaybackSettingsIds.GESTURES,
         titleRes = Res.string.ss_gestures_title,
         subtitleRes = Res.string.ss_gestures_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -220,9 +317,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.HandMove,
         platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "gesture_indicator_side",
+        id = PlaybackSettingsIds.GESTURE_INDICATOR_SIDE,
         titleRes = Res.string.ss_gesture_indicator_side_title,
         subtitleRes = Res.string.ss_gesture_indicator_side_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -230,45 +328,50 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.ArrowsHorizontal,
         platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "default_speed",
+        id = PlaybackSettingsIds.DEFAULT_SPEED,
         titleRes = Res.string.ss_default_speed_title,
         subtitleRes = Res.string.ss_default_speed_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("speed", "rate", "fast", "slow", "playback speed"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Gauge
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "default_aspect",
+        id = PlaybackSettingsIds.DEFAULT_ASPECT,
         titleRes = Res.string.ss_default_aspect_title,
         subtitleRes = Res.string.ss_default_aspect_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("aspect", "ratio", "stretch", "zoom", "fit", "fill"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.ArrowAutofitHeight
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "video_autoplay_next",
+        id = PlaybackSettingsIds.VIDEO_AUTOPLAY_NEXT,
         titleRes = Res.string.ss_video_autoplay_next_title,
         subtitleRes = Res.string.ss_video_autoplay_next_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("autoplay", "next", "continuous", "episode", "sequence"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.PlayerSkipForward
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "autoplay_countdown",
+        id = PlaybackSettingsIds.AUTOPLAY_COUNTDOWN,
         titleRes = Res.string.ss_autoplay_countdown_title,
         subtitleRes = Res.string.ss_autoplay_countdown_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("countdown", "timer", "autoplay", "next"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Clock
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "controls_timeout",
+        id = PlaybackSettingsIds.CONTROLS_TIMEOUT,
         titleRes = Res.string.ss_controls_timeout_title,
         subtitleRes = Res.string.ss_controls_timeout_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -276,9 +379,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Clock,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "skip_back_on_resume",
+        id = PlaybackSettingsIds.SKIP_BACK_ON_RESUME,
         titleRes = Res.string.ss_skip_back_on_resume_title,
         subtitleRes = Res.string.ss_skip_back_on_resume_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -286,9 +390,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.History,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "show_clock_player",
+        id = PlaybackSettingsIds.SHOW_CLOCK_PLAYER,
         titleRes = Res.string.ss_show_clock_player_title,
         subtitleRes = Res.string.ss_show_clock_player_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -296,9 +401,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Clock,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "pass_out_protection",
+        id = PlaybackSettingsIds.PASS_OUT_PROTECTION,
         titleRes = Res.string.ss_pass_out_protection_title,
         subtitleRes = Res.string.ss_pass_out_protection_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -306,9 +412,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Moon,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "duck_on_transient_focus_loss",
+        id = PlaybackSettingsIds.DUCK_ON_TRANSIENT_FOCUS_LOSS,
         titleRes = Res.string.ss_duck_on_transient_focus_loss_title,
         subtitleRes = Res.string.ss_duck_on_transient_focus_loss_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -316,9 +423,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Phone,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "autoplay_trailers",
+        id = PlaybackSettingsIds.AUTOPLAY_TRAILERS,
         titleRes = Res.string.ss_autoplay_trailers_title,
         subtitleRes = Res.string.ss_autoplay_trailers_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -326,9 +434,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Clipboard,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "cinema_mode",
+        id = PlaybackSettingsIds.CINEMA_MODE,
         titleRes = Res.string.ss_cinema_mode_title,
         subtitleRes = Res.string.ss_cinema_mode_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -336,9 +445,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Video,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "episode_browser",
+        id = PlaybackSettingsIds.EPISODE_BROWSER,
         titleRes = Res.string.ss_episode_browser_title,
         subtitleRes = Res.string.ss_episode_browser_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -346,9 +456,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.List,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "playback_metadata",
+        id = PlaybackSettingsIds.PLAYBACK_METADATA,
         titleRes = Res.string.ss_playback_metadata_title,
         subtitleRes = Res.string.ss_playback_metadata_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -356,9 +467,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.InfoCircle,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "swipe_seek_range",
+        id = PlaybackSettingsIds.SWIPE_SEEK_RANGE,
         titleRes = Res.string.ss_swipe_seek_range_title,
         subtitleRes = Res.string.ss_swipe_seek_range_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -366,9 +478,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.ArrowBarRight,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "remember_brightness",
+        id = PlaybackSettingsIds.REMEMBER_BRIGHTNESS,
         titleRes = Res.string.ss_remember_brightness_title,
         subtitleRes = Res.string.ss_remember_brightness_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -376,9 +489,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.BrightnessHalf,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "trickplay_preview",
+        id = PlaybackSettingsIds.TRICKPLAY_PREVIEW,
         titleRes = Res.string.ss_trickplay_preview_title,
         subtitleRes = Res.string.ss_trickplay_preview_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -386,9 +500,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Photo,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "preload_buffer",
+        id = PlaybackSettingsIds.PRELOAD_BUFFER,
         titleRes = Res.string.ss_preload_buffer_title,
         subtitleRes = Res.string.ss_preload_buffer_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -396,9 +511,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Refresh,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "video_cache_size",
+        id = PlaybackSettingsIds.VIDEO_CACHE_SIZE,
         titleRes = Res.string.ss_video_cache_size_title,
         subtitleRes = Res.string.ss_video_cache_size_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -406,9 +522,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Database,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "background_audio",
+        id = PlaybackSettingsIds.BACKGROUND_AUDIO,
         titleRes = Res.string.ss_background_audio_title,
         subtitleRes = Res.string.ss_background_audio_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -416,9 +533,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Music,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "keep_screen_on",
+        id = PlaybackSettingsIds.KEEP_SCREEN_ON,
         titleRes = Res.string.ss_keep_screen_on_title,
         subtitleRes = Res.string.ss_keep_screen_on_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -426,9 +544,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Eye,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "incognito_mode",
+        id = PlaybackSettingsIds.INCOGNITO_MODE,
         titleRes = Res.string.ss_incognito_mode_title,
         subtitleRes = Res.string.ss_incognito_mode_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -436,18 +555,20 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Ghost,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "hold_speed_multiplier",
+        id = PlaybackSettingsIds.HOLD_SPEED_MULTIPLIER,
         titleRes = Res.string.ss_hold_speed_multiplier_title,
         subtitleRes = Res.string.ss_hold_speed_multiplier_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("hold", "seek", "speed", "multiplier", "fast", "fast forward", "rewind", "long press", "off", "disable"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Rocket
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "android_tv_watch_next",
+        id = PlaybackSettingsIds.ANDROID_TV_WATCH_NEXT,
         titleRes = Res.string.ss_android_tv_watch_next_title,
         subtitleRes = Res.string.ss_android_tv_watch_next_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -456,9 +577,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         icon = Tabler.Outline.DeviceTv,
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "tv_zoom_mode",
+        id = PlaybackSettingsIds.TV_ZOOM_MODE,
         titleRes = Res.string.ss_tv_zoom_mode_title,
         subtitleRes = Res.string.ss_tv_zoom_mode_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -467,9 +589,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         icon = Tabler.Outline.Crop,
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "default_brightness_level",
+        id = PlaybackSettingsIds.DEFAULT_BRIGHTNESS_LEVEL,
         titleRes = Res.string.ss_default_brightness_level_title,
         subtitleRes = Res.string.ss_default_brightness_level_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -477,9 +600,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Sun,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "trickplay_on_gestures",
+        id = PlaybackSettingsIds.TRICKPLAY_ON_GESTURES,
         titleRes = Res.string.ss_trickplay_on_gestures_title,
         subtitleRes = Res.string.ss_trickplay_on_gestures_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -487,9 +611,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.HandMove,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "show_time_remaining",
+        id = PlaybackSettingsIds.SHOW_TIME_REMAINING,
         titleRes = Res.string.ss_show_time_remaining_title,
         subtitleRes = Res.string.ss_show_time_remaining_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -497,9 +622,10 @@ internal val PlaybackSettingsSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Clock,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "pause_on_focus_loss",
+        id = PlaybackSettingsIds.PAUSE_ON_FOCUS_LOSS,
         titleRes = Res.string.ss_pause_on_focus_loss_title,
         subtitleRes = Res.string.ss_pause_on_focus_loss_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -520,12 +646,12 @@ internal val PlaybackSettingsSearchItems = listOf(
  * semantics, preserved verbatim).
  */
 internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> = mapOf(
-    "seek_duration" to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
-    "orientation" to RowAdmission.Platform(RowAdmissionCapability.ScreenOrientation),
-    "gestures" to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
-    "gesture_indicator_side" to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
-    "android_tv_watch_next" to RowAdmission.Tv,
-    "tv_zoom_mode" to RowAdmission.Tv,
+    PlaybackSettingsIds.SEEK_DURATION to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    PlaybackSettingsIds.ORIENTATION to RowAdmission.Platform(RowAdmissionCapability.ScreenOrientation),
+    PlaybackSettingsIds.GESTURES to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    PlaybackSettingsIds.GESTURE_INDICATOR_SIDE to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    PlaybackSettingsIds.ANDROID_TV_WATCH_NEXT to RowAdmission.Tv,
+    PlaybackSettingsIds.TV_ZOOM_MODE to RowAdmission.Tv,
 )
 
 /**
@@ -537,7 +663,7 @@ internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> = mapOf(
  */
 internal val PlaybackAdvancedVideoSearchItems = listOf(
     SettingsSearchItem(
-        id = "dialogue_boost",
+        id = PlaybackSettingsIds.DIALOGUE_BOOST,
         titleRes = Res.string.ss_dialogue_boost_title,
         subtitleRes = Res.string.ss_dialogue_boost_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -545,9 +671,10 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Microphone2,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "dialogue_boost_strength",
+        id = PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH,
         titleRes = Res.string.ss_dialogue_boost_strength_title,
         subtitleRes = Res.string.ss_dialogue_boost_strength_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -555,9 +682,10 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Microphone2,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "decoder",
+        id = PlaybackSettingsIds.DECODER,
         titleRes = Res.string.ss_decoder_title,
         subtitleRes = Res.string.ss_decoder_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -565,9 +693,10 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.BadgeHd,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "audio_passthrough",
+        id = PlaybackSettingsIds.AUDIO_PASSTHROUGH,
         titleRes = Res.string.ss_audio_passthrough_title,
         subtitleRes = Res.string.ss_audio_passthrough_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -575,9 +704,10 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Movie,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "frame_rate_matching",
+        id = PlaybackSettingsIds.FRAME_RATE_MATCHING,
         titleRes = Res.string.ss_frame_rate_matching_title,
         subtitleRes = Res.string.ss_frame_rate_matching_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -585,9 +715,10 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Maximize,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "streaming_quality",
+        id = PlaybackSettingsIds.STREAMING_QUALITY,
         titleRes = Res.string.ss_streaming_quality_title,
         subtitleRes = Res.string.ss_streaming_quality_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -595,9 +726,10 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.BadgeHd,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "audio_delay",
+        id = PlaybackSettingsIds.AUDIO_DELAY,
         titleRes = Res.string.ss_audio_delay_title,
         subtitleRes = Res.string.ss_audio_delay_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -605,9 +737,10 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Music,
         isAdvanced = true
-    ),
+    )
+,
     SettingsSearchItem(
-        id = "live_stream_option",
+        id = PlaybackSettingsIds.LIVE_STREAM_OPTION,
         titleRes = Res.string.ss_live_stream_option_title,
         subtitleRes = Res.string.ss_live_stream_option_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -624,7 +757,7 @@ internal val PlaybackAdvancedVideoSearchItems = listOf(
  * ScreenRowTotal` and both screens' emission `if`s read this one gate).
  */
 internal val PlaybackAdvancedVideoRowAdmissions: Map<String, RowAdmission> = mapOf(
-    "dialogue_boost_strength" to RowAdmission.WhenOn("dialogue_boost"),
+    PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH to RowAdmission.WhenOn(PlaybackSettingsIds.DIALOGUE_BOOST),
 )
 
 /**
@@ -634,7 +767,7 @@ internal val PlaybackAdvancedVideoRowAdmissions: Map<String, RowAdmission> = map
  */
 internal val MpvEngineSearchItems = listOf(
     SettingsSearchItem(
-        id = "mpv_video_output",
+        id = PlaybackSettingsIds.MPV_VIDEO_OUTPUT,
         titleRes = Res.string.ss_mpv_video_output_title,
         subtitleRes = Res.string.ss_mpv_video_output_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -644,7 +777,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_scaler",
+        id = PlaybackSettingsIds.MPV_SCALER,
         titleRes = Res.string.ss_mpv_scaler_title,
         subtitleRes = Res.string.ss_mpv_scaler_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -654,7 +787,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_debanding",
+        id = PlaybackSettingsIds.MPV_DEBANDING,
         titleRes = Res.string.ss_mpv_debanding_title,
         subtitleRes = Res.string.ss_mpv_debanding_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -664,7 +797,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_interpolation",
+        id = PlaybackSettingsIds.MPV_INTERPOLATION,
         titleRes = Res.string.ss_mpv_interpolation_title,
         subtitleRes = Res.string.ss_mpv_interpolation_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -674,7 +807,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_audio_output",
+        id = PlaybackSettingsIds.MPV_AUDIO_OUTPUT,
         titleRes = Res.string.ss_mpv_audio_output_title,
         subtitleRes = Res.string.ss_mpv_audio_output_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -684,7 +817,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_audio_fallback",
+        id = PlaybackSettingsIds.MPV_AUDIO_FALLBACK,
         titleRes = Res.string.ss_mpv_audio_fallback_title,
         subtitleRes = Res.string.ss_mpv_audio_fallback_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -694,7 +827,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_buffer_size",
+        id = PlaybackSettingsIds.MPV_BUFFER_SIZE,
         titleRes = Res.string.ss_mpv_buffer_size_title,
         subtitleRes = Res.string.ss_mpv_buffer_size_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -704,7 +837,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_hwdec_override",
+        id = PlaybackSettingsIds.MPV_HWDEC_OVERRIDE,
         titleRes = Res.string.ss_mpv_hwdec_override_title,
         subtitleRes = Res.string.ss_mpv_hwdec_override_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -714,7 +847,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_skip_loop_filter",
+        id = PlaybackSettingsIds.MPV_SKIP_LOOP_FILTER,
         titleRes = Res.string.ss_mpv_skip_loop_filter_title,
         subtitleRes = Res.string.ss_mpv_skip_loop_filter_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -724,7 +857,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_frame_drop",
+        id = PlaybackSettingsIds.MPV_FRAME_DROP,
         titleRes = Res.string.ss_mpv_frame_drop_title,
         subtitleRes = Res.string.ss_mpv_frame_drop_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -734,7 +867,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "mpv_extra_config",
+        id = PlaybackSettingsIds.MPV_EXTRA_CONFIG,
         titleRes = Res.string.ss_mpv_extra_config_title,
         subtitleRes = Res.string.ss_mpv_extra_config_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -744,7 +877,7 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "reset_engine_defaults",
+        id = PlaybackSettingsIds.RESET_ENGINE_DEFAULTS,
         titleRes = Res.string.ss_reset_engine_defaults_title,
         subtitleRes = Res.string.ss_reset_engine_defaults_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -762,7 +895,7 @@ internal val MpvEngineSearchItems = listOf(
  */
 internal val VlcEngineSearchItems = listOf(
     SettingsSearchItem(
-        id = "vlc_audio_output",
+        id = PlaybackSettingsIds.VLC_AUDIO_OUTPUT,
         titleRes = Res.string.ss_vlc_audio_output_title,
         subtitleRes = Res.string.ss_vlc_audio_output_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -772,7 +905,7 @@ internal val VlcEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "vlc_audio_time_stretch",
+        id = PlaybackSettingsIds.VLC_AUDIO_TIME_STRETCH,
         titleRes = Res.string.ss_vlc_audio_time_stretch_title,
         subtitleRes = Res.string.ss_vlc_audio_time_stretch_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -782,7 +915,7 @@ internal val VlcEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "vlc_video_output",
+        id = PlaybackSettingsIds.VLC_VIDEO_OUTPUT,
         titleRes = Res.string.ss_vlc_video_output_title,
         subtitleRes = Res.string.ss_vlc_video_output_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -792,7 +925,7 @@ internal val VlcEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "vlc_network_caching",
+        id = PlaybackSettingsIds.VLC_NETWORK_CACHING,
         titleRes = Res.string.ss_vlc_network_caching_title,
         subtitleRes = Res.string.ss_vlc_network_caching_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -802,7 +935,7 @@ internal val VlcEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "vlc_skip_loop_filter",
+        id = PlaybackSettingsIds.VLC_SKIP_LOOP_FILTER,
         titleRes = Res.string.ss_vlc_skip_loop_filter_title,
         subtitleRes = Res.string.ss_vlc_skip_loop_filter_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -812,7 +945,7 @@ internal val VlcEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "vlc_skip_frames",
+        id = PlaybackSettingsIds.VLC_SKIP_FRAMES,
         titleRes = Res.string.ss_vlc_skip_frames_title,
         subtitleRes = Res.string.ss_vlc_skip_frames_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -822,7 +955,7 @@ internal val VlcEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "vlc_decoder_threads",
+        id = PlaybackSettingsIds.VLC_DECODER_THREADS,
         titleRes = Res.string.ss_vlc_decoder_threads_title,
         subtitleRes = Res.string.ss_vlc_decoder_threads_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -832,7 +965,7 @@ internal val VlcEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "vlc_drop_late_frames",
+        id = PlaybackSettingsIds.VLC_DROP_LATE_FRAMES,
         titleRes = Res.string.ss_vlc_drop_late_frames_title,
         subtitleRes = Res.string.ss_vlc_drop_late_frames_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -850,7 +983,7 @@ internal val VlcEngineSearchItems = listOf(
  */
 internal val ExoPlayerEngineSearchItems = listOf(
     SettingsSearchItem(
-        id = "exo_video_scaling",
+        id = PlaybackSettingsIds.EXO_VIDEO_SCALING,
         titleRes = Res.string.ss_exo_video_scaling_title,
         subtitleRes = Res.string.ss_exo_video_scaling_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -860,7 +993,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "exo_frame_rate_strategy",
+        id = PlaybackSettingsIds.EXO_FRAME_RATE_STRATEGY,
         titleRes = Res.string.ss_exo_frame_rate_strategy_title,
         subtitleRes = Res.string.ss_exo_frame_rate_strategy_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -870,7 +1003,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "exo_skip_silence",
+        id = PlaybackSettingsIds.EXO_SKIP_SILENCE,
         titleRes = Res.string.ss_exo_skip_silence_title,
         subtitleRes = Res.string.ss_exo_skip_silence_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -880,7 +1013,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "exo_audio_offload",
+        id = PlaybackSettingsIds.EXO_AUDIO_OFFLOAD,
         titleRes = Res.string.ss_exo_audio_offload_title,
         subtitleRes = Res.string.ss_exo_audio_offload_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -890,7 +1023,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "exo_decoder_fallback",
+        id = PlaybackSettingsIds.EXO_DECODER_FALLBACK,
         titleRes = Res.string.ss_exo_decoder_fallback_title,
         subtitleRes = Res.string.ss_exo_decoder_fallback_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -900,7 +1033,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "exo_back_buffer",
+        id = PlaybackSettingsIds.EXO_BACK_BUFFER,
         titleRes = Res.string.ss_exo_back_buffer_title,
         subtitleRes = Res.string.ss_exo_back_buffer_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -910,7 +1043,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "exo_preferred_codecs",
+        id = PlaybackSettingsIds.EXO_PREFERRED_CODECS,
         titleRes = Res.string.ss_exo_preferred_codecs_title,
         subtitleRes = Res.string.ss_exo_preferred_codecs_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -928,7 +1061,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
  */
 internal val SyncPlaySearchItems = listOf(
     SettingsSearchItem(
-        id = "syncplay_join_behavior",
+        id = PlaybackSettingsIds.SYNCPLAY_JOIN_BEHAVIOR,
         titleRes = Res.string.ss_syncplay_join_behavior_title,
         subtitleRes = Res.string.ss_syncplay_join_behavior_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -937,7 +1070,7 @@ internal val SyncPlaySearchItems = listOf(
         icon = Tabler.Outline.MessageQuestion
     ),
     SettingsSearchItem(
-        id = "syncplay_tolerance",
+        id = PlaybackSettingsIds.SYNCPLAY_TOLERANCE,
         titleRes = Res.string.ss_syncplay_tolerance_title,
         subtitleRes = Res.string.ss_syncplay_tolerance_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -946,7 +1079,7 @@ internal val SyncPlaySearchItems = listOf(
         icon = Tabler.Outline.WaveSine
     ),
     SettingsSearchItem(
-        id = "syncplay_auto_accept_invites",
+        id = PlaybackSettingsIds.SYNCPLAY_AUTO_ACCEPT_INVITES,
         titleRes = Res.string.ss_syncplay_auto_accept_invites_title,
         subtitleRes = Res.string.ss_syncplay_auto_accept_invites_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -963,7 +1096,7 @@ internal val SyncPlaySearchItems = listOf(
  */
 internal val CastingSearchItems = listOf(
     SettingsSearchItem(
-        id = "casting_strategy",
+        id = PlaybackSettingsIds.CASTING_STRATEGY,
         titleRes = Res.string.ss_casting_strategy_title,
         subtitleRes = Res.string.ss_casting_strategy_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -972,7 +1105,7 @@ internal val CastingSearchItems = listOf(
         icon = Tabler.Outline.Cast
     ),
     SettingsSearchItem(
-        id = "background_casting",
+        id = PlaybackSettingsIds.BACKGROUND_CASTING,
         titleRes = Res.string.ss_background_casting_title,
         subtitleRes = Res.string.ss_background_casting_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -981,7 +1114,7 @@ internal val CastingSearchItems = listOf(
         icon = Tabler.Outline.Settings
     ),
     SettingsSearchItem(
-        id = "preferred_renderer",
+        id = PlaybackSettingsIds.PREFERRED_RENDERER,
         titleRes = Res.string.ss_preferred_renderer_title,
         subtitleRes = Res.string.ss_preferred_renderer_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -998,7 +1131,7 @@ internal val CastingSearchItems = listOf(
  */
 internal val LiveTvSearchItems = listOf(
     SettingsSearchItem(
-        id = "dvr_pre_padding",
+        id = PlaybackSettingsIds.DVR_PRE_PADDING,
         titleRes = Res.string.ss_dvr_pre_padding_title,
         subtitleRes = Res.string.ss_dvr_pre_padding_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1007,7 +1140,7 @@ internal val LiveTvSearchItems = listOf(
         icon = Tabler.Outline.Clock
     ),
     SettingsSearchItem(
-        id = "dvr_post_padding",
+        id = PlaybackSettingsIds.DVR_POST_PADDING,
         titleRes = Res.string.ss_dvr_post_padding_title,
         subtitleRes = Res.string.ss_dvr_post_padding_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1016,7 +1149,7 @@ internal val LiveTvSearchItems = listOf(
         icon = Tabler.Outline.Clock
     ),
     SettingsSearchItem(
-        id = "dvr_recording_quality",
+        id = PlaybackSettingsIds.DVR_RECORDING_QUALITY,
         titleRes = Res.string.ss_dvr_recording_quality_title,
         subtitleRes = Res.string.ss_dvr_recording_quality_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1026,7 +1159,7 @@ internal val LiveTvSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "media_segment_intro",
+        id = PlaybackSettingsIds.MEDIA_SEGMENT_INTRO,
         titleRes = CoreUiRes.string.core_segment_intro,
         subtitleRes = CoreUiRes.string.core_segment_intro_desc,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1036,7 +1169,7 @@ internal val LiveTvSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "media_segment_outro",
+        id = PlaybackSettingsIds.MEDIA_SEGMENT_OUTRO,
         titleRes = CoreUiRes.string.core_segment_outro,
         subtitleRes = CoreUiRes.string.core_segment_outro_desc,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1046,7 +1179,7 @@ internal val LiveTvSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "media_segment_preview",
+        id = PlaybackSettingsIds.MEDIA_SEGMENT_PREVIEW,
         titleRes = CoreUiRes.string.core_segment_preview,
         subtitleRes = CoreUiRes.string.core_segment_preview_desc,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1056,7 +1189,7 @@ internal val LiveTvSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "media_segment_recap",
+        id = PlaybackSettingsIds.MEDIA_SEGMENT_RECAP,
         titleRes = CoreUiRes.string.core_segment_recap,
         subtitleRes = CoreUiRes.string.core_segment_recap_desc,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1066,7 +1199,7 @@ internal val LiveTvSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "media_segment_commercial",
+        id = PlaybackSettingsIds.MEDIA_SEGMENT_COMMERCIAL,
         titleRes = CoreUiRes.string.core_segment_commercial,
         subtitleRes = CoreUiRes.string.core_segment_commercial_desc,
         categoryRes = CoreUiRes.string.ss_cat_playback,
@@ -1076,7 +1209,7 @@ internal val LiveTvSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "media_segment_unknown",
+        id = PlaybackSettingsIds.MEDIA_SEGMENT_UNKNOWN,
         titleRes = CoreUiRes.string.core_segment_unknown,
         subtitleRes = CoreUiRes.string.core_segment_unknown_desc,
         categoryRes = CoreUiRes.string.ss_cat_playback,

@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -70,6 +71,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
+import com.raulshma.jellyplay.core.ui.components.MediaCardProgressOverlay
+import com.raulshma.jellyplay.core.ui.components.clickModifier
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
@@ -77,12 +80,14 @@ import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.preview.MediaPreview
 import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
 import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberCardChrome
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_season_options
@@ -573,12 +578,37 @@ internal fun EpisodeCard(
     /** On-disk thumbnail path; preferred over [getImageUrl] when non-null. */
     localImagePath: String? = null,
 ) {
-    val cardInteractionSource = remember { MutableInteractionSource() }
-    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
-    val cardScale by animateFloatAsState(
-        targetValue = if (isCardPressed) 0.96f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "episodeCardScale",
+    // Build the episode image URL once per episode instead of 3× per recomposition.
+    // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
+    // image) before the server [getImageUrl] fallback — matches the offline card.
+    val episodeImageUrl = remember(episode.id, localImagePath) {
+        localImagePath ?: getImageUrl(episode.id)
+    }
+
+    // Card chrome — press scale, focus tracking, click, peek wiring — seats on
+    // core/ui's shared CardChrome layer (the implementation MediaCardScaffold
+    // consumes). This file keeps its own horizontal thumbnail+metadata layout
+    // and its historical chrome values: 0.96 press scale on the fast effects
+    // spec, scaling even under reduced motion, 1.03 nominal focus scale, and
+    // the smooth16 focus indicator. Long-press keeps resolving to the caller's
+    // handler before the peek's.
+    val episodePreviewFactory = remember(episode, episodeImageUrl) {
+        { sourceBounds: Rect? ->
+            MediaPreview(
+                item = episode,
+                posterUrl = episodeImageUrl,
+                backdropUrl = episodeImageUrl,
+                blurHash = episode.blurHashes.primary,
+                sourceBounds = sourceBounds,
+            )
+        }
+    }
+    val chrome = rememberCardChrome(
+        previewFactory = episodePreviewFactory,
+        focusedScale = 1.03f,
+        pressScaleValue = 0.96f,
+        pressScaleSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        pressScaleOverridesReducedMotion = true,
     )
     val playInteractionSource = remember { MutableInteractionSource() }
     val isPlayPressed by playInteractionSource.collectIsPressedAsState()
@@ -588,27 +618,10 @@ internal fun EpisodeCard(
         label = "episodePlayScale",
     )
 
-    val cardFocusState = rememberTvFocusState(focusedScale = 1.03f)
     // Episode cards are wide (thumbnail + metadata), scaling ~1.5× the adaptive poster width.
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.5f).coerceAtLeast(260.dp)
-
-    // Build the episode image URL once per episode instead of 3× per recomposition.
-    // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
-    // image) before the server [getImageUrl] fallback — matches the offline card.
-    val episodeImageUrl = remember(episode.id, localImagePath) {
-        localImagePath ?: getImageUrl(episode.id)
-    }
-
-    // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.
-    val peek = rememberMediaPeek(
-        item = episode,
-        posterUrl = episodeImageUrl,
-        backdropUrl = episodeImageUrl,
-        blurHash = episode.blurHashes.primary,
-    )
-    rememberReleaseDismiss(isCardPressed)
 
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
@@ -650,15 +663,16 @@ internal fun EpisodeCard(
                 if (isCurrentEpisode) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
                 else Modifier
             )
-            .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
-            .then(cardFocusState.focusModifier)
-            .then(peek.boundsModifier)
-            .then(Modifier.tvFocusIndicator(cardFocusState, ShapeCache.smooth16))
-            .combinedClickable(
-                interactionSource = cardInteractionSource,
-                indication = null,
-                onClick = onDetailClick,
-                onLongClick = onLongPress ?: peek.onLongClick,
+            .then(chrome.pressScale)
+            .then(chrome.focus.modifier)
+            .then(chrome.peek?.boundsModifier ?: Modifier)
+            .then(Modifier.tvFocusIndicator(chrome.focus.focusState, ShapeCache.smooth16))
+            .then(
+                chrome.clickModifier(
+                    onClick = onDetailClick,
+                    onLongPress = onLongPress,
+                    useReducedMotionIndication = false,
+                )
             )
     ) {
         Box(
@@ -722,12 +736,12 @@ internal fun EpisodeCard(
 
             if (episode.hasWatchProgress) {
                 val progress = episode.progressFraction() ?: 0f
-                Box(
+                MediaCardProgressOverlay(
+                    progressFraction = progress,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .fillMaxWidth(progress)
-                        .height(4.dp)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .fillMaxWidth(progress),
+                    trackColor = null,
                 )
             } else if (episode.isPlayed) {
                 Box(

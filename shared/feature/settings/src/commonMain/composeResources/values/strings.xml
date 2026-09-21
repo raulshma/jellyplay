@@ -1708,4 +1708,45 @@
     <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
     <string name="ss_MEDIA_CARD_PEEK_title">Press-and-Hold Preview</string>
     <string name="ss_MEDIA_CARD_PEEK_subtitle">Long-press a media card to peek a blurred detail preview; release to dismiss</string>
+    <!-- Factory-reset / import-preview diff rows with no existing search-item
+         title (the review screens reuse the settings-search titles for all
+         other rows). Default locale only — other locales fall back. -->
+    <string name="diff_synthwave_mode">Synthwave Mode</string>
+    <string name="diff_soothing_mode">Soothing Mode</string>
+    <string name="diff_monochrome_mode">Monochrome Mode</string>
+    <string name="diff_playback_mode">Playback Mode</string>
+    <string name="diff_hold_to_speed">Hold-To-Speed</string>
+    <string name="diff_auto_skip_intro">Auto Skip Intro</string>
+    <string name="diff_auto_skip_outro">Auto Skip Outro</string>
+    <string name="diff_remember_muted">Remember Muted</string>
+    <string name="diff_default_muted">Default Muted</string>
+    <string name="diff_segment_behaviors">Segment Behaviors</string>
+    <string name="diff_audio_normalization_mode">Normalization Mode</string>
+    <string name="diff_equalizer_settings">Equalizer Settings</string>
+    <string name="diff_sleep_timer_end_of_episode">Sleep Timer End Of Episode</string>
+    <string name="diff_lyrics_visible">Lyrics Visible</string>
+    <string name="diff_subtitle_preview">Subtitle Preview In Settings</string>
+    <string name="diff_subtitle_style">Subtitle Style</string>
+    <string name="diff_hdr_subtitle_style">HDR Subtitle Style</string>
+    <string name="diff_enabled_home_sections">Enabled Home Sections</string>
+    <string name="diff_home_section_order">Home Section Order</string>
+    <string name="diff_library_home_overrides">Library Home Overrides</string>
+    <string name="diff_nav_item_order">Nav Item Order</string>
+    <string name="diff_hidden_nav_items">Hidden Nav Items</string>
+    <string name="diff_next_up_excluded_series">Next Up Excluded Series</string>
+    <string name="diff_hidden_cw_items">Hidden CW Items</string>
+    <string name="diff_library_sort_overrides">Library Sort Overrides</string>
+    <string name="diff_library_view_overrides">Library View Overrides</string>
+    <string name="diff_library_filter_overrides">Library Filter Overrides</string>
+    <string name="diff_episodes_descending">Episodes Descending</string>
+    <string name="diff_audio_cache_cellular_cap">Cellular Monthly Cap (MB)</string>
+    <string name="diff_pin_set">PIN Set</string>
+    <string name="diff_newsletter_section_order">Section Order</string>
+    <string name="diff_newsletter_last_viewed">Last Viewed</string>
+    <string name="diff_experimental_enabled_features">Enabled Experimental Features</string>
+    <string name="diff_show_advanced_settings">Show Advanced Settings</string>
+    <string name="diff_self_update_check">Self-Update Check</string>
+    <string name="diff_self_update_download">Self-Update Auto Download</string>
+    <string name="diff_update_dismiss_period">Update Dismiss Period</string>
+    <string name="diff_vlc_skip_frame">LibVLC Skip Frame</string>
 </resources>

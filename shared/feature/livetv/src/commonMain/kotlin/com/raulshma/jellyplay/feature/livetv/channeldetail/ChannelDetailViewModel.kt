@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -67,7 +68,7 @@ class ChannelDetailViewModel(
                     }
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load channel") }
+                    _uiState.update { it.copy(isLoading = false, error = UserErrorMessages.resolve(e, "Failed to load channel")) }
                 },
             )
             if (meta.isFailure) return@launch
@@ -126,7 +127,7 @@ class ChannelDetailViewModel(
             }
             .onFailure { e ->
                 if (isInitialLoad) {
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load programs") }
+                    _uiState.update { it.copy(isLoading = false, error = UserErrorMessages.resolve(e, "Failed to load programs")) }
                 }
             }
     }

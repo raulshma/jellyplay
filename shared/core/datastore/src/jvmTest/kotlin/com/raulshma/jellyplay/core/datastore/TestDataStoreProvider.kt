@@ -171,7 +171,6 @@ fun createUserPreferencesStore(
     return UserPreferencesStore(
         scope,
         dataStore,
-        g.projections,
         g.playbackStore,
         g.appearanceStore,
         g.videoPlayerStore,

@@ -126,7 +126,7 @@ fun BackupSettingsScreen(
                         title = stringResource(Res.string.settings_export_settings),
                         subtitle = stringResource(Res.string.settings_export_settings_subtitle),
                         index = 0, count = 3,
-                        highlighted = highlightSettingId == "backup_export",
+                        highlighted = highlightSettingId == BackupSettingsIds.BACKUP_EXPORT,
                         onClick = {
                             backupPicker?.launchCreateExport("jellyplay-settings.json")
                         },
@@ -136,7 +136,7 @@ fun BackupSettingsScreen(
                         title = stringResource(Res.string.settings_import_settings),
                         subtitle = stringResource(Res.string.settings_import_settings_subtitle),
                         index = 1, count = 3,
-                        highlighted = highlightSettingId == "backup_import",
+                        highlighted = highlightSettingId == BackupSettingsIds.BACKUP_IMPORT,
                         onClick = {
                             backupPicker?.launchOpenImport()
                         },
@@ -147,7 +147,7 @@ fun BackupSettingsScreen(
                         subtitle = stringResource(Res.string.settings_factory_reset_subtitle),
                         index = 2, count = 3,
                         isDestructive = true,
-                        highlighted = highlightSettingId == "factory_reset",
+                        highlighted = highlightSettingId == BackupSettingsIds.FACTORY_RESET,
                         onClick = onFactoryReset,
                     )
                 }

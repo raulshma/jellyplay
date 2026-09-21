@@ -15,6 +15,7 @@ import android.view.PixelCopy
 import android.view.View
 import android.view.Window
 import androidx.core.view.drawToBitmap
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import java.io.OutputStream
 
 /**
@@ -87,7 +88,7 @@ object ScreenshotSaver {
             )
         } catch (e: Exception) {
             Log.w(TAG, "PixelCopy request threw", e)
-            onComplete(Result.Failed(e.message ?: "PixelCopy exception"))
+            onComplete(Result.Failed(UserErrorMessages.resolve(e, "PixelCopy exception")))
         }
     }
 
@@ -125,7 +126,7 @@ object ScreenshotSaver {
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to save screenshot", e)
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    onComplete(Result.Failed(e.message ?: "Save failed"))
+                    onComplete(Result.Failed(UserErrorMessages.resolve(e, "Save failed")))
                 }
             }
         }.also { it.isDaemon = true; it.name = "screenshot-saver" }.start()

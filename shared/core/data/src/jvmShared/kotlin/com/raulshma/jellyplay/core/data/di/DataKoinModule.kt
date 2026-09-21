@@ -20,6 +20,8 @@ import com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
+import com.raulshma.jellyplay.core.data.playback.DefaultPlaybackIdentity
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
@@ -108,6 +110,7 @@ import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
@@ -309,7 +312,16 @@ val dataJvmModule: Module = module {
     single { BookTocCacheRepositoryImpl(dao = get(), timeSource = get()) }
     single<BookTocCacheRepository> { get<BookTocCacheRepositoryImpl>() }
 
-    single { WatchHistoryRepositoryImpl(get()) }
+    // ONE owner of the Playback Reporting plugin status — the admin
+    // statistics half and the watch-history (insights heatmap) half used to
+    // each hold their own StateFlow + refresh of the same server check (two
+    // independently stale answers to one question). Both repositories now
+    // inject this single. Registered with SessionCacheRegistry inside the
+    // store (owner "playback-reporting-status") so identity transitions
+    // reset it. Declared BEFORE both consumer singles below.
+    single { PlaybackReportingStatusStore(get(), get()) }
+
+    single { WatchHistoryRepositoryImpl(get(), get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
     single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }
@@ -684,6 +696,7 @@ val dataJvmModule: Module = module {
             mediaRepository = get<MediaRepositoryAccess>(),
             episodeCatalogue = get(),
             playbackRepository = get(),
+            playbackIdentity = get(),
             httpClient = get(),
             downloadsStore = get(),
             json = get(),
@@ -803,6 +816,11 @@ val dataJvmModule: Module = module {
     }
     single<PlaybackRepository> { get<PlaybackRepositoryImpl>() }
 
+    // The playback session-identity reads (token + base URL) — the narrow
+    // module the former PlaybackRepository.getServerUrl/getAccessToken members
+    // were retired into. Bound to the same AuthApiClient the impl reads.
+    single<PlaybackIdentity> { DefaultPlaybackIdentity(apiClient = get()) }
+
     single {
         SubtitleProviderRepositoryImpl(
             preferencesStore = get(),
@@ -864,6 +882,7 @@ val dataJvmModule: Module = module {
             scope = get(DatastoreQualifiers.applicationScope),
             labels = get<AdminStatisticsLabelProvider>(),
             timeSource = get(),
+            playbackReportingStatusStore = get(),
         )
     }
     single<AdminStatisticsRepository> { get<AdminStatisticsRepositoryImpl>() }

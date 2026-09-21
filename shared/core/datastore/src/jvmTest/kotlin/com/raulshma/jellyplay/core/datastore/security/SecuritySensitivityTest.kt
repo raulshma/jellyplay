@@ -6,10 +6,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Exercises the centralised [hasSecuritySensitive] predicate: for both
- * extension overloads ([SecuritySlice] and legacy [UserPreferences]) every one
+ * Exercises the centralised [hasSecuritySensitive] predicate: on the
+ * [SecuritySlice] extension every one
  * of the four lock fields must flip the predicate on its own, and the bare
- * 4-argument overload must agree with them.
+ * 4-argument overload must agree with it.
  */
 class SecuritySensitivityTest {
 

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.StreakInfo
@@ -151,7 +152,11 @@ class WatchProgressHeatmapViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            error = e.localizedMessage ?: e.message ?: "",
+                            // UserErrorMessages fold (message ?: fallback); the
+                            // former ladder preferred localizedMessage, which on
+                            // both JVM and Android defaults to message unless a
+                            // subclass overrides it — the fold expresses this.
+                            error = UserErrorMessages.resolve(e, ""),
                         )
                     }
                 },

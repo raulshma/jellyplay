@@ -15,8 +15,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.hasWatchProgress
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -36,8 +34,9 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
  * @param surfaceScrimBrush bottom scrim brush — hoisted and shared across every
  *  card in the row to avoid allocating a [Brush] per scrolling card.
  * @param bookProgressFractionOverride TOC-accurate book fraction for the
- *  footer's "% complete" label (the [PosterCard] parity param; admission and
- *  percent math live in [bookFooterPercent]).
+ *  footer's "% complete" label (the [PosterCard] parity param; the whole
+ *  book-vs-time meta decision — admission, percent math, remaining/total
+ *  ladder — lives in [mediaCardFooterMeta]).
  */
 @Composable
 fun WideMediaCard(
@@ -95,11 +94,14 @@ fun WideMediaCard(
         aspectRatio = 16f / 9f,
         clipToShape = clipToShape,
         cardWidth = cardWidth,
-        onPlayClick = onPlayClick,
-        playButtonDominantColor = dominantColor,
-        playButtonSize = playButtonSize,
-        scrimBrush = surfaceScrimBrush,
-        scrimHeight = 50.dp,
+        play = onPlayClick?.let { onPlay ->
+            PlayAffordance(
+                onClick = onPlay,
+                dominantColor = dominantColor,
+                buttonSize = playButtonSize,
+            )
+        },
+        scrim = CardScrim(brush = surfaceScrimBrush, height = 50.dp),
         onLongPress = onQuickActionsLongPress,
         titleColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
         showProgress = progressPercent > 0f,
@@ -115,39 +117,23 @@ fun WideMediaCard(
             }
         },
         footer = {
-            val isSeries = item.mediaType == MediaType.SERIES
-            // Books never render runtime/time-left meta — their position ticks
-            // encode reading progress, not time, so the video runtime math
-            // produced bogus "0m left". A book in progress shows "% complete";
-            // an unstarted book shows nothing.
-            val isBook = item.mediaType == MediaType.BOOK
-            val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries && !isBook
-            val hasWatchProgress = item.hasWatchProgress
-            val remainingTime =
-                remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
-                    if (hasWatchProgress && hasValidDuration) {
-                        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-                    } else null
-                }
-            val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
-                if (hasValidDuration && !hasWatchProgress) {
-                    formatRuntimeLabelFromTicks(item.runTimeTicks)
-                } else null
+            // The whole book-vs-time meta decision is [mediaCardFooterMeta]'s
+            // (see MediaCardFooters.kt); this shell only renders it — with the
+            // wide card's "•"-only-after-leading-text rule and labelSmall style.
+            val footerMeta = remember(item, bookProgressFractionOverride) {
+                mediaCardFooterMeta(item, bookProgressFractionOverride)
             }
-            val bookPercent = bookFooterPercent(item, bookProgressFractionOverride)
-
-            val timeText = remainingTime ?: totalTime
 
             val subtitleText = remember(item.seriesName, item.seasonNumber, item.episodeNumber) {
                 val parts = mutableListOf<String>()
                 item.seriesName?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
                 item.seasonNumber?.let { season ->
-                    item.episodeNumber?.let { ep ->
-                        parts.add("S${season}E${ep.toString().padStart(2, '0')}")
-                    } ?: parts.add("S$season")
+                    episodeCardCode(season, item.episodeNumber)?.let { parts.add(it) }
                 }
                 parts.joinToString(" · ")
             }
+
+            val hasLeadingText = subtitleText.isNotEmpty() || item.year != null
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -170,32 +156,31 @@ fun WideMediaCard(
                     )
                 }
 
-                if (bookPercent != null) {
-                    if (subtitleText.isNotEmpty() || item.year != null) {
+                if (footerMeta != null) {
+                    if (hasLeadingText) {
                         Text(
                             text = "•",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
-                    Text(
-                        text = "$bookPercent% complete",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else if (timeText != null) {
-                    if (subtitleText.isNotEmpty() || item.year != null) {
-                        Text(
-                            text = "•",
+                    when (footerMeta) {
+                        is MediaCardFooterMeta.BookProgress -> Text(
+                            text = "${footerMeta.percent}% complete",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outlineVariant,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        is MediaCardFooterMeta.TimeLeft -> Text(
+                            text = "${footerMeta.label} left",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        is MediaCardFooterMeta.Runtime -> Text(
+                            text = footerMeta.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text(
-                        text = if (remainingTime != null) "$timeText left" else timeText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         },

@@ -15,13 +15,27 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_factory_re
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_factory_reset_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object BackupSettingsIds {
+    const val BACKUP_EXPORT = "backup_export"
+    const val BACKUP_IMPORT = "backup_import"
+    const val FACTORY_RESET = "factory_reset"
+}
+
+/**
  * Settings-search items for the "Backup" group of the old core/ui
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to BackupSettingsScreen. Aggregated in [SettingsSearchCatalog].
  */
 internal val BackupSettingsSearchItems = listOf(
     SettingsSearchItem(
-        id = "backup_export",
+        id = BackupSettingsIds.BACKUP_EXPORT,
         titleRes = Res.string.ss_backup_export_title,
         subtitleRes = Res.string.ss_backup_export_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_backup_restore,
@@ -30,7 +44,7 @@ internal val BackupSettingsSearchItems = listOf(
         icon = Tabler.Outline.DatabaseExport
     ),
     SettingsSearchItem(
-        id = "backup_import",
+        id = BackupSettingsIds.BACKUP_IMPORT,
         titleRes = Res.string.ss_backup_import_title,
         subtitleRes = Res.string.ss_backup_import_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_backup_restore,
@@ -39,7 +53,7 @@ internal val BackupSettingsSearchItems = listOf(
         icon = Tabler.Outline.DatabaseImport
     ),
     SettingsSearchItem(
-        id = "factory_reset",
+        id = BackupSettingsIds.FACTORY_RESET,
         titleRes = Res.string.ss_factory_reset_title,
         subtitleRes = Res.string.ss_factory_reset_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_backup_restore,

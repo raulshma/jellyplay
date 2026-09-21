@@ -11,8 +11,8 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
  * this class delegates directly to the active engine via [activeCallbacks] —
  * no StateFlow indirection for pause/resume.
  *
- * PiP state lives in [PipController]; this class is concerned only with the
- * engine lifecycle.
+ * PiP state lives in [AndroidPipController] (the [PipController] port's impl);
+ * this class is concerned only with the engine lifecycle.
  *
  * [PlayerLifecycleCallbacks] itself (same package) moved to
  * shared:core:player-contract commonMain; this manager stayed behind in core:data.

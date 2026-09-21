@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
@@ -86,7 +87,7 @@ internal class ResyncActions(
                     )
                 }
             } catch (e: Exception) {
-                ResyncUiState.Error(e.message ?: "Resync failed")
+                ResyncUiState.Error(UserErrorMessages.resolve(e, "Resync failed"))
             }
             _state.value = newState
         }
@@ -129,7 +130,7 @@ internal class ResyncActions(
                     }
                 }
             } catch (e: Exception) {
-                ResyncUiState.Error(e.message ?: "Re-download failed")
+                ResyncUiState.Error(UserErrorMessages.resolve(e, "Re-download failed"))
             }
             _state.value = newState
         }

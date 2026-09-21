@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -136,7 +137,7 @@ class AuthViewModel(
             if (enabledResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        enabledResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                        UserErrorMessages.rawOrNull(enabledResult)?.let { AuthMessage.Raw(it) }
                             ?: AuthMessage.Resource(Res.string.auth_qc_error_check_availability)
                     )
                 )
@@ -155,7 +156,7 @@ class AuthViewModel(
             if (initiateResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        initiateResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                        UserErrorMessages.rawOrNull(initiateResult)?.let { AuthMessage.Raw(it) }
                             ?: AuthMessage.Resource(Res.string.auth_qc_error_initiate)
                     )
                 )
@@ -181,7 +182,7 @@ class AuthViewModel(
                     if (pollResult.isFailure) {
                         _quickConnectState.set(
                             QuickConnectUiState.Error(
-                                pollResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                                UserErrorMessages.rawOrNull(pollResult)?.let { AuthMessage.Raw(it) }
                                     ?: AuthMessage.Resource(Res.string.auth_qc_error_polling)
                             )
                         )
@@ -199,7 +200,7 @@ class AuthViewModel(
                         } else {
                             _quickConnectState.set(
                                 QuickConnectUiState.Error(
-                                    loginResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                                    UserErrorMessages.rawOrNull(loginResult)?.let { AuthMessage.Raw(it) }
                                         ?: AuthMessage.Resource(Res.string.auth_qc_error_auth)
                                 )
                             )

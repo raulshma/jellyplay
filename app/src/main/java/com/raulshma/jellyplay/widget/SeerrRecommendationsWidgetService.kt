@@ -14,7 +14,6 @@ import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.widget.skeleton.WidgetGridFactory
 import com.raulshma.jellyplay.widget.skeleton.seerrRatingText
 import com.raulshma.jellyplay.widget.skeleton.seerrRowSubtitle
-import org.koin.mp.KoinPlatform
 
 /**
  * Backs the Seerr Recommendations widget's `GridView` with a
@@ -38,9 +37,7 @@ import org.koin.mp.KoinPlatform
 class SeerrRecommendationsWidgetService : RemoteViewsService() {
 
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        // Koin accessor (Hilt removal): resolved straight from the
-        // application container, same shape the EntryPoint call used.
-        val store: WidgetDataStore = KoinPlatform.getKoin()!!.get()
+        val store: WidgetDataStore = WidgetKoin.get()
         val appWidgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID

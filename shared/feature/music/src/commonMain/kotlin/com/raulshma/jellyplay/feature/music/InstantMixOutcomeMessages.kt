@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music
 
 import androidx.compose.runtime.Composable
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.playback.InstantMixError
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
@@ -27,7 +28,7 @@ sealed interface MixErrorMessage {
 
 fun MusicQueueOutcome.toMixErrorMessage(): MixErrorMessage? = when (this) {
     MusicQueueOutcome.Empty -> MixErrorMessage.Resource(Res.string.music_mix_unavailable)
-    is MusicQueueOutcome.Failed -> MixErrorMessage.Raw(cause.message ?: FAILED_TO_START_MIX)
+    is MusicQueueOutcome.Failed -> MixErrorMessage.Raw(UserErrorMessages.resolve(cause, FAILED_TO_START_MIX))
     else -> null
 }
 

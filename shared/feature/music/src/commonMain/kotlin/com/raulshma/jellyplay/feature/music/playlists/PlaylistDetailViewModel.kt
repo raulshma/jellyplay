@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
@@ -89,7 +90,7 @@ class PlaylistDetailViewModel(
             runPlaylistMutation(
                 guard = _isMutating,
                 errorState = _error,
-                errorOf = { it.message ?: "Failed to remove from playlist" },
+                errorOf = { UserErrorMessages.resolve(it, "Failed to remove from playlist") },
                 failurePolicy = PlaylistMutationFailurePolicy.KeepOptimistic,
                 onSuccess = {
                     _undoActions.trySend(
@@ -113,7 +114,7 @@ class PlaylistDetailViewModel(
             runPlaylistMutation(
                 guard = _isMutating,
                 errorState = _error,
-                errorOf = { it.message ?: "Failed to restore to playlist" },
+                errorOf = { UserErrorMessages.resolve(it, "Failed to restore to playlist") },
                 // Nothing new was applied optimistically here, but the list may
                 // still reflect an earlier optimistic drop — a failed restore
                 // leaves that local state standing rather than reloading.
@@ -151,7 +152,7 @@ class PlaylistDetailViewModel(
             runPlaylistMutation(
                 guard = _isMutating,
                 errorState = _error,
-                errorOf = { it.message ?: "Failed to reorder playlist" },
+                errorOf = { UserErrorMessages.resolve(it, "Failed to reorder playlist") },
                 // Roll back to the server's authoritative order.
                 failurePolicy = PlaylistMutationFailurePolicy.Reload { load(currentId, playlistName) },
                 command = { playlistRepository.movePlaylistItem(currentId, entryId, newIndex) },

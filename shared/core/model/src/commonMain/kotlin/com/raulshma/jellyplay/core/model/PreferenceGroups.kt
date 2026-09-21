@@ -162,9 +162,9 @@ data class AppearancePreferences(
 // + DVR + syncplay + video settings; the Appearance screen shows theme + home
 // layout + newsletter settings). Each slice below is the *exact* set of fields
 // one settings sub-screen reads, so collecting it recomposes only when one of
-// that screen's fields changes. Field names are identical to [UserPreferences]
-// on purpose: that keeps the screen bodies (`preferences.X`) untouched when a
-// screen swaps from the whole [UserPreferences] to its slice.
+// that screen's fields changes. Field names deliberately match the legacy
+// `UserPreferences` aggregate these slices were carved from: that keeps the
+// screen bodies (`preferences.X`) untouched by the carve-up.
 //
 // A field that two screens both display (e.g. `dialogueBoostEnabled` appears on
 // both Playback and Audio) is projected into both slices. A write to such a

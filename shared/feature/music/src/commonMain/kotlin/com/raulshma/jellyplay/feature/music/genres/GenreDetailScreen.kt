@@ -21,6 +21,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
@@ -85,7 +86,7 @@ fun GenreDetailScreen(
                 }
                 is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.message ?: stringResource(Res.string.music_failed_load_tracks),
+                        message = UserErrorMessages.resolve(refreshState.error, stringResource(Res.string.music_failed_load_tracks)),
                         onRetry = { tracks.refresh() },
                     )
                 }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.newsletter
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -110,7 +111,7 @@ class NewsletterViewModel(
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            error = e.message ?: "Failed to load newsletter",
+                            error = UserErrorMessages.resolve(e, "Failed to load newsletter"),
                         )
                     }
                 }

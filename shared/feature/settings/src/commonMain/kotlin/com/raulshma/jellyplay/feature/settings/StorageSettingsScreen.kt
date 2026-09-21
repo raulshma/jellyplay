@@ -174,7 +174,7 @@ fun StorageSettingsScreen(
     // items (SettingsSearchItemGroup.rowAdmitted).
     val rowFlags = RowAdmissionFlags(
         showAdvanced = showAdvanced,
-        parentsOn = rowParentsOn("download_schedule" to preferences.downloadScheduleEnabled),
+        parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to preferences.downloadScheduleEnabled),
     )
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -311,14 +311,14 @@ fun StorageSettingsScreen(
                             icon = Tabler.Outline.Trash,
                             title = stringResource(Res.string.settings_clear_cache),
                             subtitle = stringResource(Res.string.settings_clear_cache_subtitle),
-                            highlighted = highlightSettingId == "clear_cache",
+                            highlighted = highlightSettingId == StorageSettingsIds.CLEAR_CACHE,
                             onClick = { viewModel.clearCache() },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Photo,
                             title = stringResource(Res.string.settings_clear_image_cache),
                             subtitle = stringResource(Res.string.settings_clear_image_cache_subtitle),
-                            highlighted = highlightSettingId == "clear_image_cache",
+                            highlighted = highlightSettingId == StorageSettingsIds.CLEAR_IMAGE_CACHE,
                             onClick = { viewModel.clearImageCache() },
                         )
                         if (showAdvanced) {
@@ -327,7 +327,7 @@ fun StorageSettingsScreen(
                                 title = stringResource(Res.string.settings_wifi_only),
                                 subtitle = if (preferences.wifiOnlyDownloads) stringResource(Res.string.settings_wifi_only_on) else stringResource(Res.string.settings_wifi_only_off),
                                 checked = preferences.wifiOnlyDownloads,
-                                highlighted = highlightSettingId == "wifi_only_downloads",
+                                highlighted = highlightSettingId == StorageSettingsIds.WIFI_ONLY_DOWNLOADS,
                                 onCheckedChange = { viewModel.edit { scope -> scope.downloads.setWifiOnlyDownloads(it) } },
                             )
                             val connectionsTitle = stringResource(Res.string.settings_connections_per_download)
@@ -336,7 +336,7 @@ fun StorageSettingsScreen(
                                 title = connectionsTitle,
                                 subtitle = stringResource(Res.string.settings_connections_per_download_subtitle),
                                 trailingText = "${preferences.downloadConnections}",
-                                highlighted = highlightSettingId == "download_connections",
+                                highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_CONNECTIONS,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = connectionsTitle,
@@ -353,7 +353,7 @@ fun StorageSettingsScreen(
                                 title = concurrentDownloadsTitle,
                                 subtitle = stringResource(Res.string.settings_max_simultaneous_downloads_subtitle),
                                 trailingText = "${preferences.maxConcurrentDownloads}",
-                                highlighted = highlightSettingId == "max_concurrent_downloads",
+                                highlighted = highlightSettingId == StorageSettingsIds.MAX_CONCURRENT_DOWNLOADS,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = concurrentDownloadsTitle,
@@ -369,7 +369,7 @@ fun StorageSettingsScreen(
                                 title = stringResource(Res.string.settings_auto_delete_cache),
                                 subtitle = if (preferences.autoDeleteCache) stringResource(Res.string.settings_auto_delete_on) else stringResource(Res.string.settings_auto_delete_off),
                                 checked = preferences.autoDeleteCache,
-                                highlighted = highlightSettingId == "auto_delete_cache",
+                                highlighted = highlightSettingId == StorageSettingsIds.AUTO_DELETE_CACHE,
                                 onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAutoDeleteCache(it) } },
                             )
                             val maxCacheSizeTitle = stringResource(Res.string.settings_max_cache_size)
@@ -379,7 +379,7 @@ fun StorageSettingsScreen(
                                 title = maxCacheSizeTitle,
                                 subtitle = stringResource(Res.string.settings_max_cache_size_subtitle),
                                 trailingText = if (preferences.maxCacheSizeMb == 0) maxCacheUnlimited else "${preferences.maxCacheSizeMb} MB",
-                                highlighted = highlightSettingId == "max_cache_size",
+                                highlighted = highlightSettingId == StorageSettingsIds.MAX_CACHE_SIZE,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = maxCacheSizeTitle,
@@ -412,7 +412,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_offline_mode),
                         subtitle = stringResource(Res.string.settings_offline_mode_subtitle),
                         checked = preferences.manualOfflineEnabled,
-                        highlighted = highlightSettingId == "offline_mode",
+                        highlighted = highlightSettingId == StorageSettingsIds.OFFLINE_MODE,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setManualOffline(it) } },
                     )
 
@@ -421,7 +421,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_auto_offline),
                         subtitle = stringResource(Res.string.settings_auto_offline_subtitle),
                         checked = preferences.autoOfflineEnabled,
-                        highlighted = highlightSettingId == "auto_offline",
+                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_OFFLINE,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAutoOfflineEnabled(it) } },
                     )
 
@@ -430,7 +430,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_adaptive_bitrate),
                         subtitle = stringResource(Res.string.settings_adaptive_bitrate_subtitle),
                         checked = preferences.adaptiveBitrateEnabled,
-                        highlighted = highlightSettingId == "adaptive_bitrate",
+                        highlighted = highlightSettingId == StorageSettingsIds.ADAPTIVE_BITRATE,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAdaptiveBitrateEnabled(it) } },
                     )
 
@@ -444,7 +444,7 @@ fun StorageSettingsScreen(
                         title = bandwidthCapTitle,
                         subtitle = stringResource(Res.string.settings_manual_bandwidth_cap_subtitle),
                         trailingText = capLabel,
-                        highlighted = highlightSettingId == "bandwidth_cap",
+                        highlighted = highlightSettingId == StorageSettingsIds.BANDWIDTH_CAP,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = bandwidthCapTitle,
@@ -462,7 +462,7 @@ fun StorageSettingsScreen(
                         title = meteredTitle,
                         subtitle = stringResource(Res.string.settings_metered_network_behavior_subtitle),
                         trailingText = preferences.meteredNetworkBehavior.displayName,
-                        highlighted = highlightSettingId == "metered_network_behavior",
+                        highlighted = highlightSettingId == StorageSettingsIds.METERED_NETWORK_BEHAVIOR,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = meteredTitle,
@@ -481,7 +481,7 @@ fun StorageSettingsScreen(
                         title = cellularQualityTitle,
                         subtitle = stringResource(Res.string.settings_cellular_streaming_quality_subtitle),
                         trailingText = qualityLabels[preferences.cellularStreamingQuality] ?: preferences.cellularStreamingQuality.name,
-                        highlighted = highlightSettingId == "cellular_streaming_quality",
+                        highlighted = highlightSettingId == StorageSettingsIds.CELLULAR_STREAMING_QUALITY,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = cellularQualityTitle,
@@ -501,7 +501,7 @@ fun StorageSettingsScreen(
                         title = downloadWarningTitle,
                         subtitle = stringResource(Res.string.settings_cellular_download_warning_subtitle),
                         trailingText = downloadWarningLabel,
-                        highlighted = highlightSettingId == "cellular_download_warning",
+                        highlighted = highlightSettingId == StorageSettingsIds.CELLULAR_DOWNLOAD_WARNING,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = downloadWarningTitle,
@@ -518,7 +518,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_data_saver_mode),
                         subtitle = stringResource(Res.string.settings_data_saver_mode_subtitle),
                         checked = preferences.dataSaverEnabled,
-                        highlighted = highlightSettingId == "data_saver",
+                        highlighted = highlightSettingId == StorageSettingsIds.DATA_SAVER,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setDataSaverEnabled(it) } },
                     )
                     val networkTimeoutsTitle = stringResource(Res.string.settings_network_timeouts)
@@ -527,7 +527,7 @@ fun StorageSettingsScreen(
                         title = networkTimeoutsTitle,
                         subtitle = stringResource(Res.string.settings_network_timeouts_subtitle),
                         trailingText = preferences.networkTimeoutPreset.displayName.substringBefore(" ("),
-                        highlighted = highlightSettingId == "network_timeout",
+                        highlighted = highlightSettingId == StorageSettingsIds.NETWORK_TIMEOUT,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = networkTimeoutsTitle,
@@ -543,7 +543,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_verbose_logging),
                         subtitle = if (preferences.verboseNetworkLogging) stringResource(Res.string.settings_verbose_logging_on) else stringResource(Res.string.settings_verbose_logging_off),
                         checked = preferences.verboseNetworkLogging,
-                        highlighted = highlightSettingId == "verbose_logging",
+                        highlighted = highlightSettingId == StorageSettingsIds.VERBOSE_LOGGING,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setVerboseNetworkLogging(it) } },
                     )
                     SettingToggleItem(
@@ -551,7 +551,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_background_sync),
                         subtitle = if (preferences.userDataSyncEnabled) stringResource(Res.string.settings_background_sync_on) else stringResource(Res.string.settings_background_sync_off),
                         checked = preferences.userDataSyncEnabled,
-                        highlighted = highlightSettingId == "user_data_sync",
+                        highlighted = highlightSettingId == StorageSettingsIds.USER_DATA_SYNC,
                         onCheckedChange = { viewModel.edit { scope -> scope.playback.setUserDataSyncEnabled(it) } },
                     )
                     }
@@ -579,7 +579,7 @@ fun StorageSettingsScreen(
                         title = downloadQualityTitle,
                         subtitle = stringResource(Res.string.settings_download_quality_subtitle),
                         trailingText = preferences.downloadQuality.displayName,
-                        highlighted = highlightSettingId == "download_quality",
+                        highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_QUALITY,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = downloadQualityTitle,
@@ -596,7 +596,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_smart_downloads),
                         subtitle = stringResource(Res.string.settings_smart_downloads_subtitle),
                         checked = preferences.smartDownloadsEnabled,
-                        highlighted = highlightSettingId == "smart_downloads",
+                        highlighted = highlightSettingId == StorageSettingsIds.SMART_DOWNLOADS,
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setSmartDownloadsEnabled(it) } }
                     )
 
@@ -605,7 +605,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_auto_download_new),
                         subtitle = stringResource(Res.string.settings_auto_download_new_subtitle),
                         checked = preferences.autoDownloadNewEpisodes,
-                        highlighted = highlightSettingId == "auto_download_new_episodes",
+                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES,
                         onCheckedChange = { viewModel.setAutoDownloadNewEpisodes(it) }
                     )
 
@@ -614,18 +614,18 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.settings_download_schedule),
                         subtitle = stringResource(Res.string.settings_download_schedule_subtitle),
                         checked = preferences.downloadScheduleEnabled,
-                        highlighted = highlightSettingId == "download_schedule",
+                        highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE,
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setDownloadScheduleEnabled(it) } }
                     )
 
-                    if (SettingsScreenGroups.storageDownloads.rowAdmitted("download_schedule_start", rowFlags)) {
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.DOWNLOAD_SCHEDULE_START, rowFlags)) {
                         val scheduleStartTitle = stringResource(Res.string.settings_schedule_start)
                         SettingListItem(
                             icon = Tabler.Outline.Sun,
                             title = scheduleStartTitle,
                             subtitle = stringResource(Res.string.settings_schedule_start_subtitle),
                             trailingText = "${preferences.downloadScheduleWindow.startHour}:00",
-                            highlighted = highlightSettingId == "download_schedule_start",
+                            highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE_START,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
                                 activePicker = PickerState.List(
@@ -644,7 +644,7 @@ fun StorageSettingsScreen(
                             title = scheduleEndTitle,
                             subtitle = stringResource(Res.string.settings_schedule_end_subtitle),
                             trailingText = "${preferences.downloadScheduleWindow.endHour}:00",
-                            highlighted = highlightSettingId == "download_schedule_end",
+                            highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE_END,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
                                 activePicker = PickerState.List(
@@ -662,7 +662,7 @@ fun StorageSettingsScreen(
                             title = stringResource(Res.string.settings_download_schedule_wifi_only),
                             subtitle = stringResource(Res.string.settings_download_schedule_wifi_only_subtitle),
                             checked = preferences.downloadScheduleWindow.wifiOnly,
-                            highlighted = highlightSettingId == "download_schedule_wifi_only",
+                            highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY,
                             onCheckedChange = {
                                 val current = preferences.downloadScheduleWindow
                                 viewModel.edit { scope -> scope.downloads.setDownloadScheduleWindow(current.copy(wifiOnly = it)) }
@@ -677,7 +677,7 @@ fun StorageSettingsScreen(
                         title = maxDownloadStorageTitle,
                         subtitle = stringResource(Res.string.settings_max_download_storage_subtitle),
                         trailingText = if (preferences.maxDownloadStorageGb == 0) unlimitedLabel else "${preferences.maxDownloadStorageGb} GB",
-                        highlighted = highlightSettingId == "max_download_storage_limit",
+                        highlighted = highlightSettingId == StorageSettingsIds.MAX_DOWNLOAD_STORAGE_LIMIT,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = maxDownloadStorageTitle,
@@ -718,7 +718,7 @@ fun StorageSettingsScreen(
                         title = storageLocationTitle,
                         subtitle = stringResource(Res.string.settings_download_storage_location_subtitle),
                         trailingText = selectedMountLabel,
-                        highlighted = highlightSettingId == "download_storage_location",
+                        highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_STORAGE_LOCATION,
                         onClick = {
                             val items = if (mounts.isNotEmpty()) mounts else emptyList()
                             activePicker = PickerState.List(
@@ -743,7 +743,7 @@ fun StorageSettingsScreen(
                         title = stringResource(Res.string.downloads_auto_delete_after_watch),
                         subtitle = stringResource(Res.string.downloads_auto_delete_after_watch_subtitle),
                         checked = preferences.autoDeleteAfterWatch,
-                        highlighted = highlightSettingId == "auto_delete_after_watch",
+                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setAutoDeleteAfterWatch(it) } }
                     )
                     }

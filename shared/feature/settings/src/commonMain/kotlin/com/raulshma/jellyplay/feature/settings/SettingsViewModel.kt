@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -12,7 +11,6 @@ import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -37,9 +35,9 @@ class SettingsViewModel(
     private val authRepository: AuthRepository,
     private val seerrRepository: SeerrRepository,
     private val serverAdminActions: ServerAdminActions,
-    private val editor: PreferencesEditor,
+    editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
-) : JellyPlayViewModel() {
+) : SettingsEditorViewModel(editor) {
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
         projections.settingsScreenPreferences
@@ -236,13 +234,6 @@ class SettingsViewModel(
     private fun refreshPendingRequestCount() {
         launch { seerrRepository.getRequestCount() }
     }
-
-    /**
-     * Single write command for this screen: `edit { it.screensaver.setDreamShowTitle(enabled) }`
-     * (the advanced toggle is `edit { it.appearance.setShowAdvancedSettings(enabled) }`).
-     * Fire-and-forget on the same application scope [PreferencesEditor.edit] uses.
-     */
-    fun edit(transform: suspend (PreferencesEditScope) -> Unit) = editor.edit { transform(this) }
 
     /**
      * Records that the setting with [id] was opened from search. Destructive

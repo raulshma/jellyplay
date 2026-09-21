@@ -353,9 +353,8 @@ class CastManager(
 
     /**
      * Watches discovered devices and auto-connects to the user's
-     * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.preferredRenderer]
-     * when it appears, so frequently-used renderers are selected without
-     * manual intervention.
+     * `preferredRenderer` when it appears, so frequently-used renderers are
+     * selected without manual intervention.
      */
     private fun startPreferredRendererWatcher() {
         preferredRendererJob?.cancel()

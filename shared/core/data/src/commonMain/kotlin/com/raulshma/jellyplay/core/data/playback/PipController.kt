@@ -1,31 +1,42 @@
-package com.raulshma.jellyplay.feature.player.video
+package com.raulshma.jellyplay.core.data.playback
 
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * PiP control seam for the video player: the member set the
- * commonMain [VideoPlayerViewModel], [PlayerSessionManager] and the screen
- * actually use on the legacy `core:data` `PipController` singleton. Pure-data
- * [PipAction]/[PipTransport] mirror the legacy declarations one-to-one so the
- * ViewModel body keeps the exact `when` dispatch it had.
+ * THE Picture-in-Picture port: the one member set every player feature
+ * (`player-video`, `player-live`) drives on the PiP state owner, promoted
+ * here from the two module-local interface copies it used to be forked into
+ * (one per player, each with its own androidMain adapter wrapping this
+ * module's process singleton). `PipAction`/`PipTransport` travel with it —
+ * the verbatim-duplicated twins are gone with the forks.
  *
- * The androidMain adapter ([AndroidPipController], module androidMain) wraps
- * the legacy Hilt-owned singleton (the same instance the app's PlayerActivity
- * injects — both sides observe one state), mapping [PipTransport] wrappers
- * and `(width, height)` aspect pairs onto `android.util.Rational` /
- * `android.graphics.Rect`. The jvmMain actual is a no-op stub.
+ * The production impl is the androidMain **`AndroidPipController`**
+ * singleton (this module) — the SAME instance the host PlayerActivity
+ * injects, so a player ViewModel's writes and the Activity's collectors
+ * observe one state; it also keeps the Android-typed extras the Activity
+ * needs (Rational aspect, Rect source hint, `notifyPipDismissed` /
+ * `setPipMode` / `shouldAutoEnterPip` / `autoExitPip`) which deliberately do
+ * NOT ride this common port. Desktop binds a no-op.
+ *
+ * `pipDismissed` / `consumeAutoExitPip` / `clearPipDismissed` are one-shot
+ * LATCHES on a process singleton (issue #145): the Activity's auto-exit
+ * collector translates `requestAutoExitPip` into `notifyPipDismissed`, the
+ * player VM reacts (pause + teardown + close) and re-clears the latch, and
+ * every fresh load defensively clears both latches before the session
+ * starts — a flag left set by an abnormally torn-down previous session must
+ * never greet the next load.
  */
 interface PipController {
 
     /** Whether the player is currently in a system PiP window. */
     val isInPipMode: StateFlow<Boolean>
 
-    /** One-shot latch set when the user dismisses the PiP window. */
+    /** One-shot latch set when the PiP window must close (auto-exit path). */
     val pipDismissed: StateFlow<Boolean>
 
     /**
-     * Remote-action bridge armed by the ViewModel (re-armed on every load —
-     * the Activity dispatches PiP remote actions through it).
+     * Remote-action bridge armed by the player ViewModel (re-armed on every
+     * load — the Activity dispatches PiP remote actions through it).
      */
     var pipTransport: PipTransport?
 
@@ -70,8 +81,9 @@ interface PipController {
 }
 
 /**
- * Transport bridge used by PiP remote actions (common twin of the legacy
- * core:data `PipTransport`; the androidMain adapter wraps one in the other).
+ * Transport bridge used by PiP remote actions. Implemented by the player
+ * ViewModel and registered on [PipController] so the Activity can dispatch
+ * play/pause/skip/next without a core→feature dependency.
  */
 fun interface PipTransport {
     /** Dispatched when the user taps a PiP remote action. */

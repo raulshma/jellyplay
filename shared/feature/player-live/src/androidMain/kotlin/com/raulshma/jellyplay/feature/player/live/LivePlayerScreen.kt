@@ -53,11 +53,12 @@ import com.raulshma.jellyplay.feature.player.live.components.LivePlayerTopBar
 import com.raulshma.jellyplay.feature.player.live.components.LiveRecordSheet
 import com.raulshma.jellyplay.feature.player.live.components.LiveStreamOptionSheet
 import com.raulshma.jellyplay.feature.player.live.engine.Media3LivePlayerEngine
+import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeoutMs
+import com.raulshma.jellyplay.feature.player.video.engine.liveWindowRefreshLoop
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.getString
 
 private const val ZAP_TOAST_MS = 3_000L
-private const val POSITION_TICK_MS = 500L
 
 /**
  * Which bottom sheet (if any) is open over the live player. The more-menu
@@ -83,17 +84,24 @@ fun LivePlayerScreen(
     // collapse to the localized string here, where LiveErrorBanner renders.
     val errorMessageText = state.errorMessage?.asText()
 
-    // One-shot record/cancel feedback (screen-forward seam, livetv's
-    // LiveTvUserMessage pattern): resolve Resource values with the collecting
-    // composition's locale and forward through the app-wide bus — the VM no
-    // longer touches the Android-only UserMessageBus/UiText machinery.
+    // One-shot screen events (the VOD SessionEvent collector shape): record/
+    // cancel feedback resolves Resource values with the collecting
+    // composition's locale and forwards through the app-wide bus — the VM no
+    // longer touches the Android-only UserMessageBus/UiText machinery — and
+    // the VM's PiP-dismiss collector fires ClosePlayer when the engine died
+    // inside the PiP window, so the player leaves instead of lingering
+    // behind the closing window.
     val messageBus = LocalUserMessageBus.current
     LaunchedEffect(messageBus) {
-        viewModel.messages.collect { message ->
-            when (message) {
-                is LivePlayerMessage.Resource ->
-                    messageBus.info(getString(message.res, *message.args.toTypedArray()))
-                is LivePlayerMessage.Raw -> messageBus.error(message.text)
+        viewModel.events.collect { event ->
+            when (event) {
+                is LivePlayerEvent.Message ->
+                    when (val message = event.message) {
+                        is LivePlayerMessage.Resource ->
+                            messageBus.info(getString(message.res, *message.args.toTypedArray()))
+                        is LivePlayerMessage.Raw -> messageBus.error(message.text)
+                    }
+                LivePlayerEvent.ClosePlayer -> onBack()
             }
         }
     }
@@ -176,23 +184,27 @@ fun LivePlayerScreen(
     }
 
     // Position ticker — drives the seek bar + at-live-edge while playing.
-    // Consumers of the refreshed flows all render inside the AnimatedVisibility
-    // chrome and leave composition when it hides, so only poll while the
-    // overlay is visible; isAtLiveEdge stays correct while hidden via the
-    // engine's playback-state listener.
+    // The live engine is media3's PULL model — it only republishes position/
+    // duration/live-edge when `refreshLiveWindow()` is called — so a poll
+    // cadence is required (no engine flow ticks on its own). The cadence and
+    // the loop's gating semantics are the shared player-contract
+    // `liveWindowRefreshLoop`; consumers of the refreshed flows all render
+    // inside the AnimatedVisibility chrome and leave composition when it
+    // hides, so only poll while the overlay is visible. isAtLiveEdge stays
+    // correct while hidden via the engine's playback-state listener.
     LaunchedEffect(state.isPlaying, overlayVisible) {
-        while (state.isPlaying && overlayVisible) {
+        liveWindowRefreshLoop(active = { state.isPlaying && overlayVisible }) {
             viewModel.refreshPosition()
-            delay(POSITION_TICK_MS)
         }
     }
 
     // Controls auto-hide: delay sourced from the user's
-    // `videoControlsTimeoutMs` preference (mirrors the VOD player), doubled on
-    // TV. Hidden while a sheet is open.
+    // `videoControlsTimeoutMs` preference (mirrors the VOD player), folded
+    // through the shared player-contract TV-doubling policy. Hidden while a
+    // sheet is open.
     LaunchedEffect(overlayVisible, state.currentIndex, state.controlsTimeoutMs) {
         if (overlayVisible && activeSheet == null) {
-            val timeout = if (isTv) state.controlsTimeoutMs * 2 else state.controlsTimeoutMs
+            val timeout = controlsAutoHideTimeoutMs(state.controlsTimeoutMs, isTv)
             delay(timeout)
             overlayVisible = false
         }

@@ -16,13 +16,27 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_p
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_provider_settings_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object IntegrationsScreenIds {
+    const val SEERR_SETTINGS = "seerr_settings"
+    const val INTEGRATIONS = "integrations"
+    const val SUBTITLE_PROVIDER_SETTINGS = "subtitle_provider_settings"
+}
+
+/**
  * Settings-search items for the "Account → integrations hub entries" group of the old core/ui
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to IntegrationsScreen and its Seerr / subtitle-provider drill-ins. Aggregated in [SettingsSearchCatalog].
  */
 internal val IntegrationsSearchItems = listOf(
     SettingsSearchItem(
-        id = "seerr_settings",
+        id = IntegrationsScreenIds.SEERR_SETTINGS,
         titleRes = Res.string.ss_seerr_settings_title,
         subtitleRes = Res.string.ss_seerr_settings_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_integrations,
@@ -31,7 +45,7 @@ internal val IntegrationsSearchItems = listOf(
         icon = Tabler.Outline.Puzzle
     ),
     SettingsSearchItem(
-        id = "integrations",
+        id = IntegrationsScreenIds.INTEGRATIONS,
         titleRes = Res.string.ss_integrations_title,
         subtitleRes = Res.string.ss_integrations_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_integrations,
@@ -40,7 +54,7 @@ internal val IntegrationsSearchItems = listOf(
         icon = Tabler.Outline.Plug
     ),
     SettingsSearchItem(
-        id = "subtitle_provider_settings",
+        id = IntegrationsScreenIds.SUBTITLE_PROVIDER_SETTINGS,
         titleRes = Res.string.ss_subtitle_provider_settings_title,
         subtitleRes = Res.string.ss_subtitle_provider_settings_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_integrations,

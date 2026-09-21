@@ -246,6 +246,7 @@ class ImportPreviewViewModelTest {
         experimentalStore = experimentalStore,
         appRuntimeStateStore = appRuntimeStateStore,
         pinRateLimiter = pinRateLimiter,
+        diffLabelResolver = { _ -> { res -> res.toString() } },
     )
 
     private suspend fun TestScope.loadedWith(json: String, uri: String = "backup:v2"): ImportPreviewViewModel {
@@ -264,8 +265,8 @@ class ImportPreviewViewModelTest {
         assertFalse(vm.isLoading, "loading must finish once the backup is parsed")
         assertEquals(2, vm.schemaVersion)
         assertFalse(vm.versionMismatch)
-        assertEquals(ThemeMode.DARK, vm.incomingPrefs?.themeMode, "incoming snapshot must mirror the backup slice")
-        assertEquals(ThemeMode.SYSTEM, vm.currentPrefs.themeMode, "current snapshot stays on the live stores")
+        assertEquals(ThemeMode.DARK, vm.incomingPrefs?.slices?.appearance?.themeMode, "incoming snapshot must mirror the backup slice")
+        assertEquals(ThemeMode.SYSTEM, vm.currentPrefs?.slices?.appearance?.themeMode, "current snapshot stays on the live stores")
         assertTrue(vm.rawBackup != null, "v2 keeps the raw envelope for importAll")
         assertNull(vm.error)
     }
@@ -329,7 +330,7 @@ class ImportPreviewViewModelTest {
 
         stubImport("backup:b", appearanceBackupJson(ThemeMode.LIGHT))
         vm.loadBackup("backup:b")
-        awaitUntil("the second file replaces the preview") { vm.incomingPrefs?.themeMode == ThemeMode.LIGHT }
+        awaitUntil("the second file replaces the preview") { vm.incomingPrefs?.slices?.appearance?.themeMode == ThemeMode.LIGHT }
 
         coVerify(exactly = 1) { settingsBackupIo.readImportPayload("backup:b") }
         assertEquals(2, vm.schemaVersion, "the second file replaces the preview")

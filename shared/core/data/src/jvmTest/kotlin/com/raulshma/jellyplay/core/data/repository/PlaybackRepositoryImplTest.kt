@@ -401,19 +401,8 @@ class PlaybackRepositoryImplTest {
         accessToken = null,
     )
 
-    @Test
-    fun `getServerUrl delegates to apiClient`() {
-        every { apiClient.getServerUrl() } returns "https://test.example.com"
-
-        assertEquals("https://test.example.com", repository.getServerUrl())
-    }
-
-    @Test
-    fun `getAccessToken delegates to apiClient`() {
-        every { apiClient.getAccessToken() } returns "token-123"
-
-        assertEquals("token-123", repository.getAccessToken())
-    }
+    // getServerUrl/getAccessToken delegate tests retired with the members: the
+    // identity reads moved to PlaybackIdentity (DefaultPlaybackIdentityTest).
 
     // ── resolvePlayback ───────────────────────────────────────────────
 

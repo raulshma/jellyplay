@@ -153,16 +153,16 @@ internal object SettingsScreenGroups {
     val languageGeneral = LanguageSettingsSearchItems.take(LANGUAGE_GENERAL_GROUP_SIZE)
         .asSearchGroup("language.general")
     val languageSubtitles = LanguageSettingsSearchItems.drop(LANGUAGE_GENERAL_GROUP_SIZE)
-        .asSearchGroup("language.subtitles")
+        .asSearchGroup("language.subtitles", LanguageSubtitlesRowAdmissions)
 
-    val notifications = NotificationSettingsSearchItems.asSearchGroup("notifications")
+    val notifications = NotificationSettingsSearchItems.asSearchGroup("notifications", NotificationRowAdmissions)
 
     // ── StorageSettingsScreen ───────────────────────────────────────────
     val storageCache = StorageCacheSearchItems.asSearchGroup("storage.cache")
     val storageNetwork = StorageNetworkSearchItems.asSearchGroup("storage.network")
     val storageDownloads = StorageDownloadsSearchItems.asSearchGroup("storage.downloads", StorageDownloadsRowAdmissions)
 
-    val security = SecuritySettingsSearchItems.asSearchGroup("security")
+    val security = SecuritySettingsSearchItems.asSearchGroup("security", SecurityRowAdmissions)
     val backup = BackupSettingsSearchItems.asSearchGroup("backup")
     val about = AboutSearchItems.asSearchGroup("about")
     val experimental = ExperimentalSettingsSearchItems.asSearchGroup("experimental")

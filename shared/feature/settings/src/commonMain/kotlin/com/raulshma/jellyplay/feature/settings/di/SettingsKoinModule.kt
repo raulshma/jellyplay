@@ -99,7 +99,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         AppearanceSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -108,7 +107,6 @@ val settingsModule: Module = module {
     viewModel {
         LanguageSettingsViewModel(
             appLocaleSetter = get(),
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -116,7 +114,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         PlaybackSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -125,7 +122,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         AudioSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -134,7 +130,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         ExperimentalSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -230,7 +225,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         SecuritySettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -282,7 +276,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         NotificationSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),

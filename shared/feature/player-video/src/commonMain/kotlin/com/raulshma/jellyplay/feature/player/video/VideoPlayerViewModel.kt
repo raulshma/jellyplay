@@ -8,6 +8,10 @@ import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PipTransport
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
@@ -20,7 +24,6 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -134,6 +137,7 @@ class VideoPlayerViewModel(
     private val mediaRepository: MediaRepository,
     private val lyricsRepository: LyricsRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     private val imageUrlProvider: ImageUrlProvider,
@@ -157,18 +161,12 @@ class VideoPlayerViewModel(
      */
     private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
-    private val aggregateStore: VideoPlayerAggregateStore,
-    private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
-    private val subtitleStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
-    private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
-    private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
-    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
-    private val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
-    private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
-    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
-    private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
-    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
+    /**
+     * The twelve datastore stores bundled at construction — see [PlayerStores]
+     * (home's HomeStores move: a new store dependency widens the bundle and the
+     * DI definitions, not this constructor).
+     */
+    private val stores: PlayerStores,
     /**
      * Media-session factory seam: replaces the former legacy
      * `PlaybackSessionManager` slot — that type is now captured inside the
@@ -275,9 +273,10 @@ class VideoPlayerViewModel(
         scope = scope,
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         downloadRepository = downloadRepository,
         offlineRepository = offlineRepository,
-        aggregateStore = aggregateStore,
+        aggregateStore = stores.aggregateStore,
         playerLifecycleManager = playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
         playerEngineFactory = playerEngineFactory,
@@ -376,7 +375,7 @@ class VideoPlayerViewModel(
     )
     internal val sleepTimer = SleepTimerController(
         sleepTimerManager = sleepTimerManager,
-        audioStore = audioStore,
+        audioStore = stores.audio,
         scope = scope,
         getEngine = { playerSessionManager.engine },
         isMuted = { _uiState.value.isMuted },
@@ -389,7 +388,7 @@ class VideoPlayerViewModel(
     internal val cast = platform.createCastController(
         playbackRepository = playbackRepository,
         adaptiveBitrateManager = adaptiveBitrateManager,
-        syncPlayCastStore = syncPlayCastStore,
+        syncPlayCastStore = stores.syncPlayCast,
         getEngine = { playerSessionManager.engine },
         getCurrentPlaybackMode = { _uiState.value.uiPrefs.playbackMode },
         getSessionState = { playerSessionManager.sessionState.value },
@@ -565,7 +564,7 @@ class VideoPlayerViewModel(
      * is declared at both (see [resumePlayback]).
      */
     private fun applyResumeSkip(engine: MediaEngine) {
-        val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
+        val skipMs = stores.aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
         if (skipMs <= 0L) return
         seekTo(resumeSkipTargetMs(currentPositionMs = engine.currentPositionMs, skipMs = skipMs))
     }
@@ -786,8 +785,8 @@ class VideoPlayerViewModel(
     private val sessionLoadPipeline: SessionLoadPipeline = SessionLoadPipeline(
         sessionManager = playerSessionManager,
         mediaRepository = mediaRepository,
-        aggregateStore = aggregateStore,
-        networkOfflineStore = networkOfflineStore,
+        aggregateStore = stores.aggregateStore,
+        networkOfflineStore = stores.networkOffline,
         outputs = sessionHost,
         hooks = SessionLoadHooks(
             reconcileSyncPlayQueue = { itemId, mediaSourceId, startPositionTicks ->
@@ -881,7 +880,8 @@ class VideoPlayerViewModel(
      * positions, play-session id, load/seek jobs, the release scope), as of
      * B1b the initialize sequence driving the hooks above and the
      * pipeline-start ownership ([PlaybackSession.initialize]), as of B2 the
-     * engine reload/retry paths plus the [EngineEventCoordinator]
+     * engine reload/retry paths plus the
+     * [com.raulshma.jellyplay.feature.player.video.engine.EngineEventCoordinator]
      * (construction, re-arm, decision execution), and as of B3 the reporting
      * + release surface (stop-reports, seek/position persistence through
      * [sessionPositionStore], the release split and the final stop-report on
@@ -904,7 +904,7 @@ class VideoPlayerViewModel(
         sessionLoadPipeline = sessionLoadPipeline,
         hooks = sessionHost,
         mediaSessionController = mediaSessionController,
-        playbackStore = playbackStore,
+        playbackStore = stores.playback,
         adaptiveBitrateManager = adaptiveBitrateManager,
         playbackRepository = playbackRepository,
         offlinePlaybackFacade = offlinePlaybackFacade,
@@ -1016,7 +1016,7 @@ class VideoPlayerViewModel(
 
     /**
      * Auto-removes a finished download when the user crosses the watched
-     * threshold, gated by [com.raulshma.jellyplay.core.model.legacy.UserPreferences.smartDownloadsEnabled].
+     * threshold, gated by the `smartDownloadsEnabled` preference.
      *
      * Guards against the two risks flagged in the architecture analysis:
      * - *Premature delete on misreported duration*: the reporter derives
@@ -1028,7 +1028,7 @@ class VideoPlayerViewModel(
      * user via [userMessageBus] instead of happening invisibly.
      */
     private fun handleSmartDownloadCleanup(itemId: String) {
-        if (!downloadsStore.downloads.value.smartDownloadsEnabled) return
+        if (!stores.downloads.downloads.value.smartDownloadsEnabled) return
         if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
         launch {
             if (!offlinePlaybackFacade.deleteDownload(itemId)) return@launch
@@ -1036,7 +1036,7 @@ class VideoPlayerViewModel(
         }
     }
 
-    val hapticsEnabled: Boolean get() = appearanceStore.appearance.value.hapticsEnabled
+    val hapticsEnabled: Boolean get() = stores.appearance.appearance.value.hapticsEnabled
 
     // Declared BEFORE the `init {}` block below because the engine-flow
     // collector launched from init calls `trackSelectionHelper.updateTracksFromEngine()`.
@@ -1051,8 +1051,8 @@ class VideoPlayerViewModel(
         scope = scope,
     )
     private val trackSelectionHelper = TrackSelectionHelper(
-        engineStore = engineStore,
-        subtitleStore = subtitleStore,
+        engineStore = stores.engine,
+        subtitleStore = stores.subtitleLanguage,
         getEngine = { playerSessionManager.engine },
         getMediaStreams = { _uiState.value.media.mediaStreams },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
@@ -1131,8 +1131,8 @@ class VideoPlayerViewModel(
         isDialogueBoostEnabled = { _uiState.value.dialogueBoostEnabled },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         getGlobalOffsetMs = { cachedAggregate.subtitle.subtitleStyle.offsetMs },
-        saveGlobalStyle = { style -> subtitleStore.setSubtitleStyle(style) },
-        saveItemDelay = { itemId, delayMs -> subtitleStore.setSubtitleDelayForItem(itemId, delayMs) },
+        saveGlobalStyle = { style -> stores.subtitleLanguage.setSubtitleStyle(style) },
+        saveItemDelay = { itemId, delayMs -> stores.subtitleLanguage.setSubtitleDelayForItem(itemId, delayMs) },
         saveDialogueBoost = { strength -> playbackPreferenceWriter.setDialogueBoostStrength(strength) },
         syncEngineConfig = { updateConfigWithUiState() },
         syncEngineConfigDebounced = { updateConfigWithUiStateDebounced() },
@@ -1149,9 +1149,9 @@ class VideoPlayerViewModel(
      */
     internal val effects = VideoEffectsController(
         scope = scope,
-        audioStore = audioStore,
-        audioEffectsStore = audioEffectsStore,
-        playbackStore = playbackStore,
+        audioStore = stores.audio,
+        audioEffectsStore = stores.audioEffects,
+        playbackStore = stores.playback,
         syncConfig = { updateConfigWithUiState() },
     )
 
@@ -1238,7 +1238,7 @@ class VideoPlayerViewModel(
             }
         }
         launch {
-            aggregateStore.aggregate.collect { agg ->
+            stores.aggregateStore.aggregate.collect { agg ->
                 val oldAggregate = cachedAggregate
                 cachedAggregate = agg
                 // Pure prefs → uiState projection (each field guarded so an
@@ -1712,7 +1712,7 @@ class VideoPlayerViewModel(
     }
 
     suspend fun verifyPlayerLockPin(pin: String): Boolean {
-        return securityStore.verifyPinOffMainThread(pin)
+        return stores.security.verifyPinOffMainThread(pin)
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -1970,7 +1970,7 @@ class VideoPlayerViewModel(
         applyPlaybackPrefChange(
             mode = mode,
             quality = quality,
-            persist = { playbackStore.setPlaybackMode(mode) },
+            persist = { stores.playback.setPlaybackMode(mode) },
         )
     }
 
@@ -1982,7 +1982,7 @@ class VideoPlayerViewModel(
         applyPlaybackPrefChange(
             mode = mode,
             quality = quality,
-            persist = { playbackStore.setStreamingQuality(quality) },
+            persist = { stores.playback.setStreamingQuality(quality) },
         )
     }
 
@@ -2005,7 +2005,7 @@ class VideoPlayerViewModel(
         applyPlaybackPrefChange(
             mode = mode,
             quality = quality,
-            persist = { networkOfflineStore.setAdaptiveBitrateEnabled(enabled) },
+            persist = { stores.networkOffline.setAdaptiveBitrateEnabled(enabled) },
         )
     }
 
@@ -2047,7 +2047,7 @@ class VideoPlayerViewModel(
         // client-side selection is re-armed separately (setPendingStreams inside
         // PlaybackSession.reloadForMode).
         val itemId = playerSessionManager.sessionState.value.currentItemId
-        val selection = itemId?.let { engineStore.playerEngine.value.mediaStreamSelections[it] }
+        val selection = itemId?.let { stores.engine.playerEngine.value.mediaStreamSelections[it] }
         playbackSession.reloadForMode(
             mode = mode,
             quality = quality,
@@ -2112,14 +2112,14 @@ class VideoPlayerViewModel(
     fun setFrameRateMatching(enabled: Boolean) {
         _uiState.update { it.copy(gestures = it.gestures.copy(frameRateMatching = enabled)) }
         launch {
-            playbackStore.setFrameRateMatching(enabled)
+            stores.playback.setFrameRateMatching(enabled)
         }
     }
 
     fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) {
         _uiState.update { it.copy(gestures = it.gestures.copy(refreshRateMode = mode, frameRateMatching = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF)) }
         launch {
-            playbackStore.setRefreshRateMode(mode)
+            stores.playback.setRefreshRateMode(mode)
         }
     }
 
@@ -2127,13 +2127,13 @@ class VideoPlayerViewModel(
         equalizerEnabled = !equalizerEnabled
         updateConfigWithUiState()
         launch {
-            audioEffectsStore.setEqualizerEnabled(equalizerEnabled)
+            stores.audioEffects.setEqualizerEnabled(equalizerEnabled)
         }
     }
 
     fun setEqualizerSettings(settings: com.raulshma.jellyplay.core.model.EqualizerSettings) {
         launch {
-            audioEffectsStore.setEqualizerSettings(settings)
+            stores.audioEffects.setEqualizerSettings(settings)
         }
     }
 
@@ -2145,7 +2145,7 @@ class VideoPlayerViewModel(
         val itemId = playerSessionManager.sessionState.value.currentItemId
         if (itemId != null && playbackSession.cinemaIntroContext == null) {
             launch {
-                engineStore.setVideoEffectsForItem(itemId, effects)
+                stores.engine.setVideoEffectsForItem(itemId, effects)
             }
         }
     }
@@ -2228,7 +2228,7 @@ class VideoPlayerViewModel(
         _uiState.update { it.copy(gestures = it.gestures.copy(brightnessLevel = level)) }
         if (_uiState.value.gestures.rememberBrightness) {
             launch {
-                videoPlayerStore.setVideoBrightnessLevel(level)
+                stores.videoPlayer.setVideoBrightnessLevel(level)
             }
         }
     }
@@ -2461,8 +2461,8 @@ class VideoPlayerViewModel(
         val nowMuted = !currentlyMuted
         engine.setMuted(nowMuted)
         _uiState.update { it.copy(isMuted = nowMuted) }
-        if (aggregateStore.aggregate.value.videoPlayer.videoRememberMuted) {
-            launch { videoPlayerStore.setVideoMuted(nowMuted) }
+        if (stores.aggregateStore.aggregate.value.videoPlayer.videoRememberMuted) {
+            launch { stores.videoPlayer.setVideoMuted(nowMuted) }
         }
     }
 
@@ -2474,7 +2474,7 @@ class VideoPlayerViewModel(
     fun setVideoAutoplayNext(enabled: Boolean) {
         _uiState.update { it.copy(autoplay = it.autoplay.copy(videoAutoplayNext = enabled)) }
         autoplayController.setEnabled(enabled)
-        launch { videoPlayerStore.setVideoAutoplayNext(enabled) }
+        launch { stores.videoPlayer.setVideoAutoplayNext(enabled) }
     }
 
     /**

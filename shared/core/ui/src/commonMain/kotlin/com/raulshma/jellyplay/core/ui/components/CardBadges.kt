@@ -202,7 +202,8 @@ fun UnwatchedCountBadge(
 /**
  * Bottom-left season/episode chip for episode cards in Latest Media rows.
  * Uses a primary-tinted glass so it reads as an accent while staying cohesive
- * with the other glass badges.
+ * with the other glass badges. The label is [episodeCardCode]'s spaced form
+ * (`S1 E01` / `E01` / `S1`) — the card style of the one SxxExx derivation.
  */
 @Composable
 fun EpisodeChip(
@@ -211,13 +212,7 @@ fun EpisodeChip(
     modifier: Modifier = Modifier,
 ) {
     val label = remember(seasonNumber, episodeNumber) {
-        when {
-            seasonNumber != null && episodeNumber != null ->
-                "S${seasonNumber} E${episodeNumber.toString().padStart(2, '0')}"
-            episodeNumber != null -> "E${episodeNumber.toString().padStart(2, '0')}"
-            seasonNumber != null -> "S$seasonNumber"
-            else -> null
-        }
+        episodeCardCode(seasonNumber, episodeNumber, separator = " ")
     }
     if (label == null) return
     val primary = MaterialTheme.colorScheme.primary

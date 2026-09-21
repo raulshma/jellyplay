@@ -233,24 +233,6 @@ class SecurityStore constructor(
     }
 
     /**
-     * Restores the security-sensitive lock config (PIN lock/hash, biometric,
-     * use-PIN-for-player-lock, auto-lock timer) from a decoded [UserPreferences].
-     * Called separately by the facade so an imported backup can never silently
-     * replace the device's lock config — only when the caller explicitly opts in.
-     */
-    internal suspend fun restoreSecuritySensitive(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.PIN_LOCK_ENABLED] = userPreferences.pinLockEnabled
-            userPreferences.pinHash?.let { prefs[Keys.PIN_HASH] = it }
-            prefs[Keys.BIOMETRIC_LOCK_ENABLED] = userPreferences.biometricLockEnabled
-            prefs[Keys.USE_PIN_FOR_PLAYER_LOCK] = userPreferences.usePinForPlayerLock
-            prefs[Keys.AUTO_LOCK_TIMER_MS] = userPreferences.autoLockTimerMs
-        }
-    }
-
-    /**
      * Slice inverse of [read] for the non-security-sensitive key: writes
      * [Keys.REMOTE_CONTROL_ENABLED] from [slice], mirroring [restorePreferences]
      * (the remote-control switch is independent of the lock config and restored

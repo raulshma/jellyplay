@@ -7,17 +7,23 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Deep module owning Picture-in-Picture state and the remote-action transport.
+ * The production impl of the commonMain [PipController] port (both player
+ * features resolve the port to this single) — a process-wide Koin singleton,
+ * the same instance the host PlayerActivity injects, so a player ViewModel's
+ * writes and the Activity's collectors observe one state.
  *
  * Split out of `PlayerLifecycleManager` so the Activity↔engine lifecycle bridge
  * and the PiP window state are two distinct modules, each deep on its own
- * responsibility. The Activity observes `isInPipMode` / `shouldAutoEnterPip` /
- * `pipDismissed` / `isPlaying` and dispatches `PipAction`s through `pipTransport`;
- * the ViewModel registers the transport and mirrors play state + hasNext.
+ * responsibility. The Activity reads the Android-typed extras that deliberately
+ * do not ride the common port — `shouldAutoEnterPip` / `pipAspectRatio`
+ * ([Rational]) / `pipSourceRect` ([android.graphics.Rect]) / `autoExitPip` /
+ * `isPlaying` — and drives `setPipMode` / `notifyPipDismissed`; the player
+ * ViewModels write through the [PipController] port.
  */
-class PipController() {
+class AndroidPipController() : PipController {
 
     private val _isInPipMode = MutableStateFlow(false)
-    val isInPipMode: StateFlow<Boolean> = _isInPipMode.asStateFlow()
+    override val isInPipMode: StateFlow<Boolean> = _isInPipMode.asStateFlow()
 
     private val _shouldAutoEnterPip = MutableStateFlow(false)
     val shouldAutoEnterPip: StateFlow<Boolean> = _shouldAutoEnterPip.asStateFlow()
@@ -28,7 +34,7 @@ class PipController() {
      * The UI layer must call [clearPipDismissed] after handling the event.
      */
     private val _pipDismissed = MutableStateFlow(false)
-    val pipDismissed: StateFlow<Boolean> = _pipDismissed.asStateFlow()
+    override val pipDismissed: StateFlow<Boolean> = _pipDismissed.asStateFlow()
 
     /**
      * Transport bridge for PiP remote actions. Registered by the player
@@ -36,7 +42,7 @@ class PipController() {
      * play/pause/skip/next without a core→feature dependency. Cleared on [reset].
      */
     @Volatile
-    var pipTransport: PipTransport? = null
+    override var pipTransport: PipTransport? = null
 
     /** The current play state, mirrored so PiP can toggle its play/pause icon. */
     private val _isPlaying = MutableStateFlow(false)
@@ -44,7 +50,7 @@ class PipController() {
 
     /** Whether a "next" action is available (e.g. next episode in a series). */
     @Volatile
-    var pipHasNext: Boolean = false
+    override var pipHasNext: Boolean = false
 
     /**
      * Whether the player controls are currently locked (screen-lock overlay up).
@@ -55,16 +61,13 @@ class PipController() {
     var isControlsLocked: Boolean = false
         private set
 
-    fun setControlsLocked(locked: Boolean) {
-        isControlsLocked = locked
-    }
-
     /**
      * The video's aspect ratio as a `Rational` (width:height), derived from the
      * server-reported [com.raulshma.jellyplay.core.model.MediaStream] width/height.
      * `null` until media streams are known; the Activity falls back to 16:9.
-     * Surfed as a flow so the Activity can re-apply params when it changes while
-     * already in PiP (resolution/track swap).
+     * Surfaced as a flow so the Activity can re-apply params when it changes while
+     * already in PiP (resolution/track swap). The port's `(width, height)` pair
+     * setter writes it.
      */
     private val _pipAspectRatio = MutableStateFlow<Rational?>(null)
     val pipAspectRatio: StateFlow<Rational?> = _pipAspectRatio.asStateFlow()
@@ -92,17 +95,12 @@ class PipController() {
     }
 
     /** Mirrors the engine play state so PiP can reflect it in its action icons. */
-    fun setPlaying(playing: Boolean) {
+    override fun setPlaying(playing: Boolean) {
         _isPlaying.value = playing
     }
 
-    fun requestAutoEnterPip(shouldEnter: Boolean) {
+    override fun requestAutoEnterPip(shouldEnter: Boolean) {
         _shouldAutoEnterPip.value = shouldEnter
-    }
-
-    /** Updates the PiP aspect ratio; `null` clears it (Activity falls back to 16:9). */
-    fun setPipAspectRatio(ratio: Rational?) {
-        _pipAspectRatio.value = ratio
     }
 
     /** Updates the source-rect hint; `null` clears it. */
@@ -115,11 +113,11 @@ class PipController() {
      * into [notifyPipDismissed] so the existing dismiss machinery (pause +
      * navigate back) handles the exit uniformly.
      */
-    fun requestAutoExitPip() {
+    override fun requestAutoExitPip() {
         _autoExitPip.value = true
     }
 
-    fun consumeAutoExitPip() {
+    override fun consumeAutoExitPip() {
         _autoExitPip.value = false
     }
 
@@ -127,12 +125,12 @@ class PipController() {
         _pipDismissed.value = true
     }
 
-    fun clearPipDismissed() {
+    override fun clearPipDismissed() {
         _pipDismissed.value = false
     }
 
     /** Clears all PiP state. Called when playback ends. */
-    fun reset() {
+    override fun reset() {
         pipTransport = null
         _isPlaying.value = false
         pipHasNext = false
@@ -144,23 +142,19 @@ class PipController() {
         pipSourceRect = null
         _autoExitPip.value = false
     }
-}
 
-/**
- * Transport bridge used by PiP remote actions. Implemented by the player
- * ViewModel and registered on [PipController] so the Activity can dispatch
- * play/pause/skip/next without a core→feature dependency.
- */
-fun interface PipTransport {
-    /** Dispatched when the user taps a PiP remote action. */
-    fun handle(action: PipAction)
-}
+    // ── PipController port: platform-typed members ──────────────────────────
 
-/** The set of PiP remote actions exposed on the PiP window. */
-enum class PipAction {
-    PLAY,
-    PAUSE,
-    SKIP_FORWARD,
-    SKIP_BACKWARD,
-    NEXT,
+    override fun setControlsLocked(locked: Boolean) {
+        isControlsLocked = locked
+    }
+
+    /** Updates the PiP aspect ratio; `null` clears it (Activity falls back to 16:9). */
+    override fun setPipAspectRatio(aspect: Pair<Int, Int>?) {
+        _pipAspectRatio.value = aspect?.let { Rational(it.first, it.second) }
+    }
+
+    override fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {
+        updatePipSourceRect(android.graphics.Rect(left, top, right, bottom))
+    }
 }

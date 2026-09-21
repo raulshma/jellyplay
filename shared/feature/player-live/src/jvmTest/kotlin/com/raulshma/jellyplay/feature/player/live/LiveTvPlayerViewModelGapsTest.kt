@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.player.live
 
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
@@ -86,6 +88,7 @@ class LiveTvPlayerViewModelGapsTest {
 
     private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
+    private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
     private lateinit var aggregateStore: VideoPlayerAggregateStore
@@ -111,6 +114,7 @@ class LiveTvPlayerViewModelGapsTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(scheduler))
         liveTvRepo = mockk(relaxed = true)
         playbackRepo = mockk(relaxed = true)
+        playbackIdentity = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
         aggregateStore = mockk(relaxed = true)
@@ -122,7 +126,7 @@ class LiveTvPlayerViewModelGapsTest {
         every { lastChannelStore.observeLastChannelId() } returns flowOf(null)
         every { appRuntimeStateStore.state } returns appRuntimeFlow
         every { playbackStore.playback } returns playbackFlow
-        every { playbackRepo.getAccessToken() } returns "tok"
+        every { playbackIdentity.accessToken() } returns "tok"
         every { fakeEngine.state } returns engineStateFlow
         every { fakeEngine.isPlaying } returns engineIsPlayingFlow
         every { fakeEngine.isAtLiveEdge } returns MutableStateFlow(true)
@@ -167,6 +171,7 @@ class LiveTvPlayerViewModelGapsTest {
     ): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
         liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
+        playbackIdentity = playbackIdentity,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,
         aggregateStore = aggregateStore,
@@ -534,7 +539,9 @@ class LiveTvPlayerViewModelGapsTest {
 
     private fun TestScope.backgroundCollectMessages(vm: LiveTvPlayerViewModel, into: MutableList<LivePlayerMessage>) {
         backgroundScope.launch(UnconfinedTestDispatcher(scheduler)) {
-            vm.messages.collect { into.add(it) }
+            vm.events.collect { event ->
+                if (event is LivePlayerEvent.Message) into.add(event.message)
+            }
         }
         scheduler.runCurrent()
     }

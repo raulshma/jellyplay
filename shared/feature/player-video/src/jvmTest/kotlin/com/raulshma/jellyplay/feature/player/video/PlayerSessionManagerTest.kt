@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -128,6 +129,7 @@ class PlayerSessionManagerTest {
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
+            playbackIdentity = mockk(relaxed = true),
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             aggregateStore = aggregateStore,

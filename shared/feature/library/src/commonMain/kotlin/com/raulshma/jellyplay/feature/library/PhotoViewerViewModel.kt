@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -70,7 +71,7 @@ class PhotoViewerViewModel(
             val item = detail?.item
             if (item == null) {
                 _state.value = _state.value.copy(
-                    error = detailResult.exceptionOrNull()?.message ?: "Failed to load photo",
+                    error = UserErrorMessages.resolve(detailResult, "Failed to load photo"),
                     isLoading = false,
                 )
                 return@launch
@@ -207,7 +208,7 @@ class PhotoViewerViewModel(
                 )
                 _saveResult.value = SaveResult.Success
             } catch (e: Exception) {
-                _saveResult.value = SaveResult.Error(e.message ?: "Failed to save photo")
+                _saveResult.value = SaveResult.Error(UserErrorMessages.resolve(e, "Failed to save photo"))
             } finally {
                 _isSaving.value = false
             }
@@ -234,7 +235,7 @@ class PhotoViewerViewModel(
                     displayName = photo.name,
                 )
             } catch (e: Exception) {
-                onError(e.message ?: "Failed to share photo")
+                onError(UserErrorMessages.resolve(e, "Failed to share photo"))
             }
         }
     }

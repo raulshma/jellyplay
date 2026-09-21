@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.live.di
 
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -23,8 +24,8 @@ import org.koin.dsl.module
  *  - LastChannelStore is a plain single over AppRuntimeStateStore.
  *
  * The record/cancel feedback no longer goes through the Android-only
- * UserMessageBus: the VM emits LivePlayerMessage values on a messages Flow
- * that LivePlayerScreen renders via the app bus (livetv conveyor's
+ * UserMessageBus: the VM emits LivePlayerEvent.Message values on an events
+ * Flow that LivePlayerScreen renders via the app bus (livetv conveyor's
  * LiveTvUserMessage seam shape).
  *
  * Live PiP: the VM's `pip` seam is a fourth platform slot —
@@ -39,6 +40,7 @@ val playerLiveModule: Module = module {
         LiveTvPlayerViewModel(
             liveTvRepository = get(),
             playbackRepository = get(),
+            playbackIdentity = get(),
             appRuntimeStateStore = get(),
             playbackStore = get(),
             aggregateStore = get(),

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -55,7 +56,7 @@ class CollectionDetailViewModel constructor(
     private fun DeferredFetchState<CollectionDetailContent>.toUiState(): CollectionDetailUiState =
         wholeScreenPhase(
             loading = { CollectionDetailUiState.Loading },
-            error = { CollectionDetailUiState.Error(it.message ?: "Failed to load collection") },
+            error = { CollectionDetailUiState.Error(UserErrorMessages.resolve(it, "Failed to load collection")) },
             content = { CollectionDetailUiState.Success(detail = it.detail, items = it.items) },
         )
 

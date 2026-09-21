@@ -41,6 +41,7 @@ class DownloadRepositoryStatusWindowTest {
         mediaRepository = mockk(relaxed = true),
         episodeCatalogue = mockk(relaxed = true),
         playbackRepository = mockk(relaxed = true),
+        playbackIdentity = mockk(relaxed = true),
         httpClient = mockk(relaxed = true),
         downloadsStore = mockk(relaxed = true),
         json = mockk(relaxed = true),

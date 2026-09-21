@@ -25,7 +25,7 @@ data class HomeSection(
      * home UI uses this to apply per-library visibility overrides via the
      * inline section-config sheet — matching the Settings → Configure Libraries
      * screen semantics. See [HomeSectionType.isConfigurable] and
-     * `libraryHomeSectionOverrides` in `UserPreferences`.
+     * `libraryHomeSectionOverrides` in `AppearanceScreenPreferences`.
      */
     val libraryId: String? = null,
     /**

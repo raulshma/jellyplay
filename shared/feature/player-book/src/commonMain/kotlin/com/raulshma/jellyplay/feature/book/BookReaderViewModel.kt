@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
 import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
@@ -83,6 +84,7 @@ import kotlin.math.roundToInt
 class BookReaderViewModel(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     /**
      * The reader preference choreography ([ReaderPreferences] — snapshot +
      * commands + write-through). Every pref write routes through it; the VM
@@ -347,6 +349,7 @@ class BookReaderViewModel(
         scope = scope,
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         contentResolver = contentResolver,
         documentOpener = documentOpener,
         formatProbe = formatProbe,

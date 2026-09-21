@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.musichome
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -74,7 +75,7 @@ class MusicHomeViewModel(
             // swap to the full ErrorScreen when there's nothing to show. A
             // failed refresh after data has loaded surfaces as a transient
             // toast instead of wiping the screen.
-            val message = e.message ?: "Failed to load music"
+            val message = UserErrorMessages.resolve(e, "Failed to load music")
             if (_uiState.value.sections.isEmpty()) {
                 _uiState.update { it.copy(error = message) }
             } else {

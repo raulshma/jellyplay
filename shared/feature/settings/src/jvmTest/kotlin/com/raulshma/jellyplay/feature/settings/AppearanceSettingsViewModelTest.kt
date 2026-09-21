@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -64,7 +63,6 @@ class AppearanceSettingsViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var store: UserPreferencesStore
     private lateinit var projections: PreferenceProjections
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var editor: PreferencesEditor
@@ -87,7 +85,6 @@ class AppearanceSettingsViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        store = mockk(relaxed = true)
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
@@ -122,7 +119,7 @@ class AppearanceSettingsViewModelTest {
     private suspend fun replayEdits() = editBlocks.forEach { it.invoke(editScope) }
 
     private fun viewModel() =
-        AppearanceSettingsViewModel(store, projections, AdvancedSettingsGate(appearanceStore, editor), editor)
+        AppearanceSettingsViewModel(projections, AdvancedSettingsGate(appearanceStore, editor), editor)
 
     // ---------------------------------------------------------------- state
 

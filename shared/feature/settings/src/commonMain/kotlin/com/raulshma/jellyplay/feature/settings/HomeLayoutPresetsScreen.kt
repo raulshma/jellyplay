@@ -108,6 +108,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_shar
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_share_preset
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+/**
+ * The pass-through highlight id Appearance's home-layout-presets row bakes
+ * into `Route.HomeLayoutPresets` to land on this screen's preset list — a
+ * screen-local row with no search entry, so it lives here, not in a
+ * search-ids holder.
+ */
+internal const val PRESET_LIST_HIGHLIGHT_ID = "preset_list"
+
 @Composable
 fun HomeLayoutPresetsScreen(
     onBack: () -> Unit,
@@ -219,7 +227,7 @@ fun HomeLayoutPresetsScreen(
                         title = stringResource(Res.string.settings_saved_presets),
                         summary = { stringResource(Res.string.settings_saved_presets_summary) },
                         modifier = Modifier.padding(vertical = 8.dp),
-                        initiallyExpanded = highlightSettingId == "preset_list",
+                        initiallyExpanded = highlightSettingId == PRESET_LIST_HIGHLIGHT_ID,
                     ) {
                         val totalCount = presets.size
                         presets.forEachIndexed { index, preset ->

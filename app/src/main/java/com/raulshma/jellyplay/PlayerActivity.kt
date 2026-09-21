@@ -34,7 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.AndroidPipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
@@ -72,10 +72,10 @@ import org.koin.mp.KoinPlatform
  * folds, [PipActionSet] owns the remote-action decision tables (the action-set
  * fold and the broadcast id codec); this class keeps only Android wiring.
  * Both hosts feed it
- * through the same legacy `core:data` PipController singleton — VOD's VM via
- * the player-video seam, live's VM via the player-live seam
- * (SKIP remote actions map to channel zap for live) — so every collector below
- * serves both variants unchanged.
+ * through the same `core:data` PiP state singleton ([AndroidPipController],
+ * the `PipController` port's impl) — VOD's VM and live's VM both resolve the
+ * port, live's transport mapping SKIP remote actions to channel zap — so every
+ * collector below serves both variants unchanged.
  *
  * Each screen creates its engine fresh via its ViewModel (scoped to this
  * Activity) — there is no cross-Activity engine handoff in the normal
@@ -100,7 +100,7 @@ class PlayerActivity : FragmentActivity() {
     // Resolved from the Koin container (Hilt removal).
     private val playerLifecycleManager: PlayerLifecycleManager by lazy { KoinPlatform.getKoin()!!.get() }
 
-    private val pipController: PipController by lazy { KoinPlatform.getKoin()!!.get() }
+    private val pipController: AndroidPipController by lazy { KoinPlatform.getKoin()!!.get() }
 
     private val preferenceProjections: PreferenceProjections by lazy { KoinPlatform.getKoin()!!.get() }
 

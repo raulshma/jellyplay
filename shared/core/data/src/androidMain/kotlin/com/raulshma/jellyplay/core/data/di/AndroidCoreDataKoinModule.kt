@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
+import com.raulshma.jellyplay.core.data.playback.AndroidPipController
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
@@ -145,7 +146,11 @@ fun androidCoreDataModule(context: Context): Module = module {
             appearanceStore = get(),
         )
     }
-    single { PipController() }
+    // The PiP state owner: concrete single (PlayerActivity injects the class)
+    // plus the commonMain PipController port bound to the SAME instance —
+    // both players resolve the port key, the Activity the concrete one.
+    single { AndroidPipController() }
+    single<PipController> { get<AndroidPipController>() }
 
     // Former provideAudioQueueFacade direct construction (the only real
     // provider left in the deleted DataModule): queue seam, never the manager.

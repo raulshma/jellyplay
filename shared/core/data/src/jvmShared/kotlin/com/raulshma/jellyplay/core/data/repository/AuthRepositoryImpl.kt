@@ -309,11 +309,7 @@ class AuthRepositoryImpl constructor(
                         canDeleteContent = userEntity.canDeleteContent,
                         maxParentalAgeRating = userEntity.maxParentalAgeRating,
                         primaryImageTag = userEntity.primaryImageTag,
-                        enabledFolderIds = userEntity.enabledFolderIds?.let {
-                            try {
-                                json.decodeFromString<List<String>>(it)
-                            } catch (_: Exception) { emptyList() }
-                        } ?: emptyList(),
+                        enabledFolderIds = decodeEnabledFolderIds(userEntity.enabledFolderIds),
                     )
                 )
                 // The token check is a live authenticated GET — bound it
@@ -708,10 +704,23 @@ class AuthRepositoryImpl constructor(
         canDeleteContent = canDeleteContent,
         maxParentalAgeRating = maxParentalAgeRating,
         primaryImageTag = primaryImageTag,
-        enabledFolderIds = enabledFolderIds?.let { raw ->
-            folderIdsCache[raw] ?: try {
-                json.decodeFromString<List<String>>(raw).also { folderIdsCache.put(raw, it) }
-            } catch (_: Exception) { emptyList() }
-        } ?: emptyList(),
+        enabledFolderIds = decodeEnabledFolderIds(enabledFolderIds),
     )
+
+    /**
+     * The `enabledFolderIds` JSON column's ONE decode home: every reader of
+     * the column (the [toUserInfo] mapper and [restoreSession]'s
+     * token-gated hand-setUser path) routes through here, so the
+     * memoisation (`folderIdsCache`, a 16-entry LRU keyed on the raw
+     * column text) and the unparseable→empty-list fallback exist exactly
+     * once. The former bare try/catch copy in the restore path is gone —
+     * its output was identical, it just never memoised.
+     */
+    private fun decodeEnabledFolderIds(raw: String?): List<String> = raw?.let { column ->
+        folderIdsCache[column] ?: try {
+            json.decodeFromString<List<String>>(column).also { folderIdsCache.put(column, it) }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    } ?: emptyList()
 }

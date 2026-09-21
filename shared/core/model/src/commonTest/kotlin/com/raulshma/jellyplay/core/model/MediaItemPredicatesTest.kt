@@ -68,6 +68,43 @@ class MediaItemPredicatesTest {
         assertFalse(item(playbackPositionTicks = 0L, isPlayed = false).hasWatchProgress)
     }
 
+    // ── hasMeaningfulRuntime ─────────────────────────────────────────────────
+
+    private fun timed(
+        runTimeTicks: Long?,
+        mediaType: MediaType = MediaType.MOVIE,
+    ) = MediaItem(
+        id = "t",
+        name = "n",
+        mediaType = mediaType,
+        runTimeTicks = runTimeTicks,
+    )
+
+    @Test
+    fun `a positive runtime on a playable type is meaningful`() {
+        assertTrue(timed(1L).hasMeaningfulRuntime)
+        assertTrue(timed(90L * 600_000_000, MediaType.EPISODE).hasMeaningfulRuntime)
+    }
+
+    @Test
+    fun `null zero and negative runtimes are never meaningful`() {
+        assertFalse(timed(null).hasMeaningfulRuntime)
+        assertFalse(timed(0L).hasMeaningfulRuntime)
+        assertFalse(timed(-5L).hasMeaningfulRuntime)
+    }
+
+    @Test
+    fun `series containers never report a meaningful runtime`() {
+        assertFalse(timed(90L * 600_000_000, MediaType.SERIES).hasMeaningfulRuntime)
+    }
+
+    @Test
+    fun `books never report a meaningful runtime`() {
+        // Books' position ticks encode reading progress, not time — the
+        // runtime ladder must not fire on them no matter what ticks say.
+        assertFalse(timed(90L * 600_000_000, MediaType.BOOK).hasMeaningfulRuntime)
+    }
+
     // ── MediaType classification helpers ─────────────────────────────────────
 
     @Test

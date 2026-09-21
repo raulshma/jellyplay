@@ -93,10 +93,6 @@ import kotlinx.serialization.json.Json
 class UserPreferencesStore constructor(
     private val externalScope: CoroutineScope,
     private val dataStore: DataStore<Preferences>,
-    // Read-layer that projects the store slices into the per-domain / per-screen
-    // preference types. The slice flows below delegate here so consumers keep
-    // the same call sites while the aggregate read path is being retired.
-    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
     // Domain stores: the facade forwards invariant-bearing setters to these so
     // the cross-key mutex / coerce / LRU / migration logic has a single owner.
     // All stores share the same `"user_prefs"` DataStore, so writes are
@@ -208,9 +204,6 @@ class UserPreferencesStore constructor(
             ),
         )
     }
-
-    private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean =
-        PreferenceCodec.readBool(prefs, key, name, default)
 
     // ----------------------------------------------------------------------
     // Backup v2 — per-slice export / import (no aggregate round-trip)

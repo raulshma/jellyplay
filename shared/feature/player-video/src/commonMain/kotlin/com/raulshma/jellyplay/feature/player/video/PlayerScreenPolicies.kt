@@ -149,9 +149,11 @@ internal fun shouldScheduleControlsAutoHide(
     showControls && !isSeeking && !isSheetOpen && !isOverflowMenuOpen &&
         (isTv || !controlsHasFocus)
 
-/** TV keeps controls twice as long as touch form factors. */
-internal fun controlsAutoHideTimeoutMs(baseTimeoutMs: Long, isTv: Boolean): Long =
-    if (isTv) baseTimeoutMs * 2 else baseTimeoutMs
+// The TV-doubling fold (`controlsAutoHideTimeoutMs`) moved to the shared
+// player-contract home
+// (com.raulshma.jellyplay.feature.player.video.engine.PlayerChromePolicies)
+// so the live player's screen cites the same ONE policy instead of a
+// byte-identical copy.
 
 /**
  * User-supplied font gate: the picked file must be TrueType or OpenType

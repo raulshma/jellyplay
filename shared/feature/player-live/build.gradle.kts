@@ -14,6 +14,11 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // EngineEventCoordinator (the shared engine-event policy core the
+            // live VM consumes) + PlayerChromePolicies (the TV controls-timeout
+            // fold and the DVR-window refresh tick). Explicit edge — also
+            // reachable transitively through core:data's api(player-contract).
+            implementation(project(":shared:core:player-contract"))
             // AppRuntimeStateStore/PlaybackStore/VideoPlayerAggregateStore.
             implementation(project(":shared:core:datastore"))
             // Cancellation-safe suspend wrappers — the live player VM's

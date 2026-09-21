@@ -24,16 +24,17 @@ import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.security.hasSecuritySensitive
-import com.raulshma.jellyplay.core.datastore.settings.buildUserPreferencesFromBackup
-import com.raulshma.jellyplay.core.datastore.settings.buildUserPreferencesSnapshot
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
+import com.raulshma.jellyplay.core.datastore.settings.buildPreferenceSliceSnapshotFromBackup
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * Full-screen import preview. Mirrors `FactoryResetViewModel`'s one-shot
@@ -44,7 +45,10 @@ import kotlinx.coroutines.withContext
  * The backup file is loaded from the `uri` passed via navigation. Only the v2
  * per-slice shape (and forward-compatible future versions) import; the parser
  * rejects legacy v0/v1 backups with a clear message (sunset in v0.11). The
- * `incomingPrefs` diff aggregate is produced via [buildUserPreferencesFromBackup].
+ * `incomingPrefs` diff snapshot is decoded per-slice via
+ * [buildPreferenceSliceSnapshotFromBackup] (missing/malformed slices fall back
+ * to defaults) and diffed against the live slices directly — no aggregate
+ * re-mapping in between.
  *
  * Security-sensitive lock fields are gated by the caller's
  * `restoreSecuritySensitive` flag (defaults false; UI exposes a checkbox).
@@ -72,11 +76,23 @@ class ImportPreviewViewModel(
     private val experimentalStore: ExperimentalStore,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     private val pinRateLimiter: PinRateLimiter,
+    private val diffLabelResolver: suspend (List<StringResource>) -> (StringResource) -> String = ::resolveDiffLabels,
 ) : JellyPlayViewModel() {
 
-    var currentPrefs by composeState(UserPreferences())
+    /** Resolved label lookup shared by both snapshots; swapped in once on entry. */
+    private var labels: (StringResource) -> String = { it.toString() }
+
+    private fun diffSnapshot(slices: PreferenceSliceSnapshot): PreferenceDiffSnapshot =
+        PreferenceDiffSnapshot(slices) { res -> labels(res) }
+
+    /**
+     * The live slices; non-null from construction (the screen renders the diff
+     * only once the incoming snapshot is staged) and rebuilt on entry and
+     * after every category import.
+     */
+    var currentPrefs by composeState(diffSnapshot(PreferenceSliceSnapshot.FACTORY))
         private set
-    var incomingPrefs by composeState<UserPreferences?>(null)
+    var incomingPrefs by composeState<PreferenceDiffSnapshot?>(null)
         private set
 
     var currentExtras by composeState(AppRuntimeState())
@@ -125,10 +141,11 @@ class ImportPreviewViewModel(
     init {
         launch {
             try {
+                labels = diffLabelResolver(PreferenceCategoryViews.flatMap { it.labelResources })
                 currentPrefs = buildCurrentSnapshot()
                 currentExtras = appRuntimeStateStore.state.first()
             } catch (e: Exception) {
-                error = e.message ?: "Failed to load current settings"
+                error = UserErrorMessages.resolve(e, "Failed to load current settings")
                 isLoading = false
             }
             // Incoming remains loading until `loadBackup` is called from the screen.
@@ -149,15 +166,14 @@ class ImportPreviewViewModel(
                 error = null
                 // Ensure current snapshot is ready (init may still be running).
                 // `buildCurrentSnapshot` is idempotent — re-reading the stores is cheap.
-                if (currentPrefs == UserPreferences() && currentExtras == AppRuntimeState()) {
-                    currentPrefs = buildCurrentSnapshot()
-                    currentExtras = appRuntimeStateStore.state.first()
-                }
+                labels = diffLabelResolver(PreferenceCategoryViews.flatMap { it.labelResources })
+                currentPrefs = buildCurrentSnapshot()
+                currentExtras = appRuntimeStateStore.state.first()
                 loadIncoming(uriString)
             } catch (e: Exception) {
                 // Allow retry with same uri after failure.
                 loadedUri = null
-                error = e.message ?: "Failed to load backup"
+                error = UserErrorMessages.resolve(e, "Failed to load backup")
             } finally {
                 isLoading = false
                 loadMutex.unlock()
@@ -165,28 +181,30 @@ class ImportPreviewViewModel(
         }
     }
 
-    private suspend fun buildCurrentSnapshot(): UserPreferences =
-        buildUserPreferencesSnapshot(
-            playback = playbackStore.playback.first(),
-            videoPlayer = videoPlayerStore.videoPlayer.first(),
-            engine = engineStore.playerEngine.first(),
-            subtitle = subtitleLanguageStore.subtitle.first(),
-            audio = audioStore.audio.first(),
-            audioEffects = audioEffectsStore.audioEffects.first(),
-            audioCache = audioCacheStore.audioCache.first(),
-            appearance = appearanceStore.appearance.first(),
-            homeDiscovery = homeDiscoveryStore.homeDiscovery.first(),
-            library = libraryStore.library.first(),
-            navigation = navigationStore.navigation.first(),
-            downloads = downloadsStore.downloads.first(),
-            networkOffline = networkOfflineStore.networkOffline.first(),
-            notification = notificationStore.notification.first(),
-            syncPlayCast = syncPlayCastStore.syncPlayCast.first(),
-            screensaver = screensaverStore.screensaver.first(),
-            security = securityStore.security.first(),
-            experimental = experimentalStore.experimental.first(),
-            runtime = appRuntimeStateStore.state.first(),
-            pinLockout = pinRateLimiter.getPinLockoutState(),
+    private suspend fun buildCurrentSnapshot(): PreferenceDiffSnapshot =
+        diffSnapshot(
+            PreferenceSliceSnapshot(
+                playback = playbackStore.playback.first(),
+                videoPlayer = videoPlayerStore.videoPlayer.first(),
+                engine = engineStore.playerEngine.first(),
+                subtitle = subtitleLanguageStore.subtitle.first(),
+                audio = audioStore.audio.first(),
+                audioEffects = audioEffectsStore.audioEffects.first(),
+                audioCache = audioCacheStore.audioCache.first(),
+                appearance = appearanceStore.appearance.first(),
+                homeDiscovery = homeDiscoveryStore.homeDiscovery.first(),
+                library = libraryStore.library.first(),
+                navigation = navigationStore.navigation.first(),
+                downloads = downloadsStore.downloads.first(),
+                networkOffline = networkOfflineStore.networkOffline.first(),
+                notification = notificationStore.notification.first(),
+                syncPlayCast = syncPlayCastStore.syncPlayCast.first(),
+                screensaver = screensaverStore.screensaver.first(),
+                security = securityStore.security.first(),
+                experimental = experimentalStore.experimental.first(),
+                runtime = appRuntimeStateStore.state.first(),
+                pinLockout = pinRateLimiter.getPinLockoutState(),
+            ),
         )
 
     private suspend fun loadIncoming(uriString: String) {
@@ -196,23 +214,18 @@ class ImportPreviewViewModel(
         val jsonString = settingsBackupIo.readImportPayload(uriString)
             ?: throw IllegalStateException("Cannot open backup file")
         when (val parsed = BackupParser.parse(jsonString)) {
-            is BackupParser.Parsed.V2 -> {
-                rawBackup = parsed.backup
-                schemaVersion = parsed.backup.schemaVersion
-                versionMismatch = false
-                incomingPrefs = buildUserPreferencesFromBackup(parsed.backup)
-                incomingExtras = parsed.backup.extras
-                hasSecuritySensitive = parsed.hasSecuritySensitive
-            }
-            is BackupParser.Parsed.Future -> {
-                rawBackup = parsed.backup
-                schemaVersion = parsed.backup.schemaVersion
-                versionMismatch = true
-                incomingPrefs = buildUserPreferencesFromBackup(parsed.backup)
-                incomingExtras = parsed.backup.extras
-                hasSecuritySensitive = parsed.hasSecuritySensitive
-            }
+            is BackupParser.Parsed.V2 -> stageIncoming(parsed.backup, parsed.hasSecuritySensitive, false)
+            is BackupParser.Parsed.Future -> stageIncoming(parsed.backup, parsed.hasSecuritySensitive, true)
         }
+    }
+
+    private fun stageIncoming(backup: SettingsBackup, securitySensitive: Boolean, mismatch: Boolean) {
+        rawBackup = backup
+        schemaVersion = backup.schemaVersion
+        versionMismatch = mismatch
+        incomingPrefs = diffSnapshot(buildPreferenceSliceSnapshotFromBackup(backup))
+        incomingExtras = backup.extras
+        hasSecuritySensitive = securitySensitive
     }
 
     /** Import every category plus extras. */
@@ -224,7 +237,7 @@ class ImportPreviewViewModel(
                 importEvent = ImportEvent.AllImported
                 onDone()
             } catch (e: Exception) {
-                importEvent = ImportEvent.Failed(e.message ?: "Unknown error")
+                importEvent = ImportEvent.Failed(UserErrorMessages.resolve(e, "Unknown error"))
             }
         }
     }
@@ -246,7 +259,7 @@ class ImportPreviewViewModel(
                 currentExtras = appRuntimeStateStore.state.first()
                 onDone()
             } catch (e: Exception) {
-                importEvent = ImportEvent.Failed(e.message ?: "Unknown error")
+                importEvent = ImportEvent.Failed(UserErrorMessages.resolve(e, "Unknown error"))
             }
         }
     }
@@ -261,7 +274,7 @@ class ImportPreviewViewModel(
                 currentExtras = appRuntimeStateStore.state.first()
                 onDone()
             } catch (e: Exception) {
-                importEvent = ImportEvent.Failed(e.message ?: "Unknown error")
+                importEvent = ImportEvent.Failed(UserErrorMessages.resolve(e, "Unknown error"))
             }
         }
     }

@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.feature.player.live
 
+import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PipTransport
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
@@ -31,7 +35,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -49,6 +55,7 @@ class LiveTvPlayerViewModelTest {
 
     private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
+    private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
     private lateinit var aggregateStore: VideoPlayerAggregateStore
@@ -67,6 +74,7 @@ class LiveTvPlayerViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         liveTvRepo = mockk<LiveTvRepository>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
+        playbackIdentity = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
         aggregateStore = mockk(relaxed = true)
@@ -82,7 +90,7 @@ class LiveTvPlayerViewModelTest {
             val newFavs = firstArg<Set<String>>()
             appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = newFavs)
         }
-        every { playbackRepo.getAccessToken() } returns "tok"
+        every { playbackIdentity.accessToken() } returns "tok"
         every { fakeEngine.state } returns engineStateFlow
         every { fakeEngine.isPlaying } returns engineIsPlayingFlow
         every { fakeEngine.isAtLiveEdge } returns MutableStateFlow(true)
@@ -565,16 +573,22 @@ class LiveTvPlayerViewModelTest {
      */
     private class FakePip : PipController {
         override val isInPipMode = MutableStateFlow(false)
+        override val pipDismissed = MutableStateFlow(false)
         override var pipTransport: PipTransport? = null
+        override var pipHasNext: Boolean = false
         val autoEnterRequests = mutableListOf<Boolean>()
         val playingMirrors = mutableListOf<Boolean>()
         val autoExits = mutableListOf<Unit>()
         val aspects = mutableListOf<Pair<Int, Int>?>()
+        val consumedAutoExits = mutableListOf<Unit>()
+        val clearedDismissals = mutableListOf<Unit>()
         var resetCount = 0
 
         override fun setPlaying(playing: Boolean) {
             playingMirrors.add(playing)
         }
+
+        override fun setControlsLocked(locked: Boolean) {}
 
         override fun requestAutoEnterPip(shouldEnter: Boolean) {
             autoEnterRequests.add(shouldEnter)
@@ -584,9 +598,19 @@ class LiveTvPlayerViewModelTest {
             autoExits.add(Unit)
         }
 
+        override fun consumeAutoExitPip() {
+            consumedAutoExits.add(Unit)
+        }
+
+        override fun clearPipDismissed() {
+            clearedDismissals.add(Unit)
+        }
+
         override fun setPipAspectRatio(aspect: Pair<Int, Int>?) {
             aspects.add(aspect)
         }
+
+        override fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {}
 
         override fun reset() {
             resetCount++
@@ -694,9 +718,74 @@ class LiveTvPlayerViewModelTest {
         assertNull(pip.pipTransport)
     }
 
+    @Test
+    fun `pip dismiss latch pauses, tears down and closes the screen`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+
+        val closeEvents = mutableListOf<LivePlayerEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.events.collect { closeEvents.add(it) }
+        }
+
+        // The host Activity's auto-exit path: the VM's requestAutoExitPip is
+        // translated by the Activity into notifyPipDismissed; the VM reacts
+        // by pausing, tearing the session down and closing the screen — the
+        // dead stream must not linger in the window.
+        pip.pipDismissed.value = true
+        kotlinx.coroutines.delay(50)
+
+        assertTrue(
+            closeEvents.any { it is LivePlayerEvent.ClosePlayer },
+            "the dismiss must surface a ClosePlayer screen event",
+        )
+        assertEquals(1, pip.resetCount)
+        assertNull(pip.pipTransport)
+        // TWO clears land: initialize's defensive clear (issue #145) plus the
+        // dismiss handler's re-clear after handling (defence against a reuse
+        // path that skipped the full reset).
+        assertEquals(2, pip.clearedDismissals.size)
+    }
+
+    @Test
+    fun `initialize defensively clears stale pip latches`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+        vm.stop()
+
+        // A one-shot flag survived teardown (the abnormal path reset()
+        // normally covers); the re-fired initialize on the reused,
+        // activity-scoped VM must clear both latches before tuning.
+        pip.pipDismissed.value = true
+        kotlinx.coroutines.delay(50)
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+
+        // The dismiss handler's re-clear + BOTH initializes' defensive clears.
+        assertEquals(3, pip.clearedDismissals.size)
+        // Every initialize consumes the auto-exit request defensively — the
+        // stale flag must never greet the next tune.
+        assertEquals(2, pip.consumedAutoExits.size)
+    }
+
     private fun createVm(pip: PipController? = null): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
         liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
+        playbackIdentity = playbackIdentity,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,
         aggregateStore = aggregateStore,

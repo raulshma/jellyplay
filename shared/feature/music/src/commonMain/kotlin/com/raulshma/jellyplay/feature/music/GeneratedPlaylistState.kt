@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.music
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.ui.viewmodel.MutableComposeState
@@ -83,7 +84,7 @@ class GeneratedPlaylistState<P : Any>(
                     _generatedItems.value = items
                 }
             }.onFailure { throwable ->
-                _error.value = throwable.message ?: DEFAULT_ERROR_MESSAGE
+                _error.value = UserErrorMessages.resolve(throwable, DEFAULT_ERROR_MESSAGE)
             }
             _isLoading.value = false
         }

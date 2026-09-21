@@ -44,7 +44,6 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.PinLockoutState
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -65,7 +64,8 @@ import kotlin.test.assertNotEquals
 
 /**
  * The factory-reset review screen: the one-shot current-vs-factory snapshot
- * (18 domain slices + runtime + PIN lockout → [UserPreferences]) and the two
+ * (18 domain slices + runtime + PIN lockout → `PreferenceSliceSnapshot`) and
+ * the two
  * destructive delegates (per-category reset, full clear) that must reach
  * [PreferencesEditor] — the single auditable write seam — unchanged.
  * Regression-critical: `resetAll` wipes every preference.
@@ -184,6 +184,7 @@ class FactoryResetViewModelTest {
         appRuntimeStateStore = appRuntimeStateStore,
         pinRateLimiter = pinRateLimiter,
         editor = editor,
+        diffLabelResolver = { _ -> { res -> res.toString() } },
     )
 
     // ---------------------------------------------------------------- snapshot
@@ -193,7 +194,7 @@ class FactoryResetViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        assertEquals(vm.factory, vm.preferences, "untouched stores must diff clean against the baseline")
+        assertEquals(vm.factory.slices, vm.preferences.slices, "untouched stores must diff clean against the baseline")
     }
 
     @Test
@@ -202,10 +203,10 @@ class FactoryResetViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        assertEquals(ThemeMode.DARK, vm.preferences.themeMode)
-        assertEquals(true, vm.preferences.oledMode)
-        assertNotEquals(vm.factory, vm.preferences, "a changed slice must diverge from the baseline")
-        assertEquals(ThemeMode.SYSTEM, vm.factory.themeMode, "the baseline itself stays immutable")
+        assertEquals(ThemeMode.DARK, vm.preferences.slices.appearance.themeMode)
+        assertEquals(true, vm.preferences.slices.appearance.oledMode)
+        assertNotEquals(vm.factory.slices, vm.preferences.slices, "a changed slice must diverge from the baseline")
+        assertEquals(ThemeMode.SYSTEM, vm.factory.slices.appearance.themeMode, "the baseline itself stays immutable")
     }
 
     // ---------------------------------------------------------------- destructive delegates

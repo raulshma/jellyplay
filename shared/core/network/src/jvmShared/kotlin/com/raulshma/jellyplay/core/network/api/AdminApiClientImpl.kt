@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.DeviceInfo
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
@@ -23,8 +24,13 @@ class AdminApiClientImpl(
     // near-static (server version / library counts) but the repository layer
     // does not memoise them here (unlike MediaRepositoryImpl). A short TTL
     // removes the redundant calls without observable staleness.
-    private val systemInfoCache = TtlCache<SystemInfo>(maxSize = 4, ttlMs = SYSTEM_INFO_TTL_MS)
-    private val itemCountsCache = TtlCache<ItemCounts>(maxSize = 4, ttlMs = ITEM_COUNTS_TTL_MS)
+    //
+    // Declared exception to the identity-keyed house idiom: the keys are bare
+    // server-scoped strings (no CacheIdentity composite), because this client
+    // is a process-lifetime single over the shared engine and core:network has
+    // no identity source to key with — see CONTEXT.md "Core data repositories".
+    private val systemInfoCache = TtlCache<SystemInfo>(maxSize = 4, ttlMs = FreshnessCeilings.ADMIN_SYSTEM_INFO_TTL_MS)
+    private val itemCountsCache = TtlCache<ItemCounts>(maxSize = 4, ttlMs = FreshnessCeilings.ADMIN_ITEM_COUNTS_TTL_MS)
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = engine.withApi { api ->
         systemInfoCache.getOrPut(KEY_SYSTEM_INFO) {
@@ -244,10 +250,8 @@ class AdminApiClientImpl(
     private companion object {
         const val KEY_SYSTEM_INFO = "systemInfo"
         const val KEY_ITEM_COUNTS = "itemCounts"
-        // 2 minutes — long enough to dedupe the parallel calls fired by
-        // loadDashboard() and the independent About-screen getSystemInfo(),
-        // short enough to reflect server version/count changes promptly.
-        const val SYSTEM_INFO_TTL_MS = 2 * 60 * 1000L
-        const val ITEM_COUNTS_TTL_MS = 2 * 60 * 1000L
+        // The two TTLs used to be private consts here (2 minutes each); both
+        // now cite FreshnessCeilings.ADMIN_SYSTEM_INFO_TTL_MS /
+        // ADMIN_ITEM_COUNTS_TTL_MS at the construction sites above.
     }
 }

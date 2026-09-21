@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -69,6 +70,7 @@ class DownloadRepositoryImplSubtitlesTest {
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val playbackIdentity: PlaybackIdentity = mockk(relaxed = true)
     private val httpClient: OkHttpClient = mockk()
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
     private val json: Json = Json
@@ -94,6 +96,7 @@ class DownloadRepositoryImplSubtitlesTest {
         mediaRepository = MediaRepositoryAccess { mediaRepository },
         episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         httpClient = testClient,
         downloadsStore = preferencesStore,
         json = json,
@@ -263,7 +266,7 @@ class DownloadRepositoryImplSubtitlesTest {
                 MockResponse().setResponseCode(200).setHeader("Content-Type", contentType).setBody(body),
             )
             server.start()
-            every { playbackRepository.getAccessToken() } returns accessToken
+            every { playbackIdentity.accessToken() } returns accessToken
             every { playbackRepository.buildSubtitleDeliveryUrl(itemId, "src-1", 0, "srt") } returns
                 server.url("/Videos/item/src-1/Subtitles/0/Stream.srt").toString()
 

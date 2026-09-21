@@ -143,6 +143,7 @@ class DataKoinModulesTest {
             // Representative set across the moved cluster — each resolution
             // walks the full ctor graph (DAOs, stores, API clients, scope).
             assertResolves<PlaybackRepository>(koin)
+            assertResolves<com.raulshma.jellyplay.core.data.playback.PlaybackIdentity>(koin)
             assertResolves<OfflineRepository>(koin)
             assertResolves<SeerrRepository>(koin)
             assertResolves<ArrRepository>(koin)

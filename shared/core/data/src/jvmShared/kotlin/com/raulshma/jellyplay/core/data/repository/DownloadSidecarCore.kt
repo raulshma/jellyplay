@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -54,6 +55,7 @@ import java.nio.file.StandardCopyOption
  */
 internal class DownloadSidecarCore(
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     private val downloadDao: DownloadDao,
     private val offlineMediaDao: OfflineMediaDao,
     private val syncBaselineDao: SyncBaselineDao,
@@ -427,7 +429,7 @@ internal class DownloadSidecarCore(
             // that reject or strip query-token auth (the same pairing
             // DownloadTransferClient uses for the video itself).
             val requestBuilder = Request.Builder().url(url)
-            playbackRepository.getAccessToken()?.takeIf { it.isNotBlank() }?.let {
+            playbackIdentity.accessToken()?.takeIf { it.isNotBlank() }?.let {
                 requestBuilder.tokenAuthHeader(it)
             }
             httpClient.newCall(requestBuilder.build()).awaitResponse().use { resp ->

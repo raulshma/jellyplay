@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.book
 
 import androidx.compose.ui.graphics.ImageBitmap
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -48,6 +49,7 @@ class BookSessionLoaderTest {
 
     private val mediaRepository = mockk<MediaRepository>()
     private val playbackRepository = mockk<PlaybackRepository>()
+    private val playbackIdentity = mockk<PlaybackIdentity>()
     private val contentResolver = FakeContentResolver()
     private val documentOpener = FakeDocumentOpener(pageCount = 3)
     private val pdfOutlineParser = mockk<PdfOutlineParser>()
@@ -75,6 +77,7 @@ class BookSessionLoaderTest {
         scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         contentResolver = contentResolver,
         documentOpener = documentOpener,
         formatProbe = { url, token ->
@@ -92,7 +95,7 @@ class BookSessionLoaderTest {
 
     private fun stubPlayback() {
         every { playbackRepository.getBookDownloadUrl("item-1") } returns "https://server/download"
-        every { playbackRepository.getAccessToken() } returns "token"
+        every { playbackIdentity.accessToken() } returns "token"
     }
 
     // ------------------------------------------------------------------

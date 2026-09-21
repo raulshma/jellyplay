@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.book
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -38,6 +39,7 @@ internal class BookSessionLoader(
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     private val contentResolver: BookContentResolver,
     private val documentOpener: BookDocumentOpener,
     /** Download-header format probe for items whose `Path` yields nothing. */
@@ -74,7 +76,7 @@ internal class BookSessionLoader(
         // legacy ?api_key= query param on data endpoints, so the token must
         // ride `Authorization: MediaBrowser` (the URL's capital ApiKey param
         // stays valid on every server since 10.8).
-        val accessToken = playbackRepository.getAccessToken()
+        val accessToken = playbackIdentity.accessToken()
         val format = BookFormat.fromPath(detail.path) ?: probeDownloadFormat(downloadUrl, accessToken)
             ?: return BookSessionOutcome.Failed(
                 BookOpenError.UnsupportedFormat(unsupportedFormatFileExtension(detail.path)),

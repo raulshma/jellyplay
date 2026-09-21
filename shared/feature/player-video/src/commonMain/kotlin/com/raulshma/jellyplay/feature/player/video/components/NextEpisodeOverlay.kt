@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.episodePlayerSubtitle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -270,16 +271,14 @@ fun NextEpisodeOverlay(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (!seriesName.isNullOrBlank() || (seasonNumber != null && episodeNumber != null)) {
+                    // Same derivation the session subtitle renders
+                    // (episodePlayerSubtitle) — the overlay used to carry its
+                    // own near-identical buildString and split from the VM on
+                    // the blank-series-name edge.
+                    episodePlayerSubtitle(seriesName, seasonNumber, episodeNumber)?.let { subtitle ->
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = buildString {
-                                if (seriesName != null) append(seriesName)
-                                if (seasonNumber != null && episodeNumber != null) {
-                                    if (isNotEmpty()) append(" \u00B7 ")
-                                    append("S${seasonNumber}E${episodeNumber}")
-                                }
-                            },
+                            text = subtitle,
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.Medium,
                             ),

@@ -26,6 +26,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.hasMeaningfulRuntime
+import com.raulshma.jellyplay.core.model.hasPlaybackPosition
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
@@ -141,8 +143,8 @@ private fun NewsletterGridCard(
                 imageUrl = imageUrl,
                 onClick = onClick,
                 modifier = modifier,
-                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                showProgress = item.hasPlaybackPosition,
+                progressPercent = if (item.hasMeaningfulRuntime) {
                     (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
                 } else 0f,
             )

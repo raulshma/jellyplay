@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.TimeSource
@@ -85,6 +86,7 @@ class DownloadRepositoryImpl(
      */
     private val episodeCatalogue: EpisodeCatalogue,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     private val httpClient: OkHttpClient,
     private val downloadsStore: DownloadsStore,
     private val json: Json,
@@ -150,6 +152,7 @@ class DownloadRepositoryImpl(
     // so the public constructor is unchanged.
     private val sidecarCore = DownloadSidecarCore(
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         downloadDao = downloadDao,
         offlineMediaDao = offlineMediaDao,
         syncBaselineDao = syncBaselineDao,

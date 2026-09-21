@@ -131,9 +131,11 @@ interface PlaybackRepository {
      */
     fun getBookDownloadUrl(itemId: String): String
 
-    fun getServerUrl(): String?
-
-    fun getAccessToken(): String?
+    // getServerUrl()/getAccessToken() were retired from this surface: the two
+    // session-credential reads moved to the narrow
+    // [com.raulshma.jellyplay.core.data.playback.PlaybackIdentity] module the
+    // actual readers inject (the interface-wide coupling this ratchet exists
+    // to prevent).
 
     fun buildSubtitleDeliveryUrl(
         itemId: String,

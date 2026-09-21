@@ -39,13 +39,39 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_v
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_vertical_position_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object LanguageSettingsIds {
+    const val APP_LANGUAGE = "app_language"
+    const val AUDIO_LANGUAGE = "audio_language"
+    const val SUBTITLE_LANGUAGE = "subtitle_language"
+    const val SUBTITLE_FONT_SIZE = "subtitle_font_size"
+    const val SUBTITLE_FORCED_ONLY = "subtitle_forced_only"
+    const val PGS_DIRECT_PLAY = "pgs_direct_play"
+    const val HDR_SUBTITLE_STYLE = "hdr_subtitle_style"
+    const val SUBTITLE_COLOR = "subtitle_color"
+    const val SUBTITLE_BACKGROUND = "subtitle_background"
+    const val SUBTITLE_EDGE_STYLE = "subtitle_edge_style"
+    const val SUBTITLE_SYNC_OFFSET = "subtitle_sync_offset"
+    const val SUBTITLE_VERTICAL_POSITION = "subtitle_vertical_position"
+    const val HIGH_CONTRAST_SUBTITLES = "high_contrast_subtitles"
+    const val SUBTITLE_TESTER = "subtitle_tester"
+    const val HDR_SUBTITLE_FONT_SIZE = "hdr_subtitle_font_size"
+}
+
+/**
  * Settings-search items for the "Language & Subtitles" group of the old core/ui
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to LanguageSettingsScreen. Aggregated in [SettingsSearchCatalog].
  */
 internal val LanguageSettingsSearchItems = listOf(
     SettingsSearchItem(
-        id = "app_language",
+        id = LanguageSettingsIds.APP_LANGUAGE,
         titleRes = Res.string.ss_app_language_title,
         subtitleRes = Res.string.ss_app_language_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -55,7 +81,7 @@ internal val LanguageSettingsSearchItems = listOf(
         platforms = platformsForCapability(settingsCapabilities.supportsAppLocaleOverride),
     ),
     SettingsSearchItem(
-        id = "audio_language",
+        id = LanguageSettingsIds.AUDIO_LANGUAGE,
         titleRes = Res.string.ss_audio_language_title,
         subtitleRes = Res.string.ss_audio_language_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -64,7 +90,7 @@ internal val LanguageSettingsSearchItems = listOf(
         icon = Tabler.Outline.Language
     ),
     SettingsSearchItem(
-        id = "subtitle_language",
+        id = LanguageSettingsIds.SUBTITLE_LANGUAGE,
         titleRes = Res.string.ss_subtitle_language_title,
         subtitleRes = Res.string.ss_subtitle_language_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -73,7 +99,7 @@ internal val LanguageSettingsSearchItems = listOf(
         icon = Tabler.Outline.Subtitles
     ),
     SettingsSearchItem(
-        id = "subtitle_font_size",
+        id = LanguageSettingsIds.SUBTITLE_FONT_SIZE,
         titleRes = Res.string.ss_subtitle_font_size_title,
         subtitleRes = Res.string.ss_subtitle_font_size_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -82,7 +108,7 @@ internal val LanguageSettingsSearchItems = listOf(
         icon = Tabler.Outline.Typography
     ),
     SettingsSearchItem(
-        id = "subtitle_forced_only",
+        id = LanguageSettingsIds.SUBTITLE_FORCED_ONLY,
         titleRes = Res.string.ss_subtitle_forced_only_title,
         subtitleRes = Res.string.ss_subtitle_forced_only_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -91,7 +117,7 @@ internal val LanguageSettingsSearchItems = listOf(
         icon = Tabler.Outline.TextSize
     ),
     SettingsSearchItem(
-        id = "pgs_direct_play",
+        id = LanguageSettingsIds.PGS_DIRECT_PLAY,
         titleRes = Res.string.ss_pgs_direct_play_title,
         subtitleRes = Res.string.ss_pgs_direct_play_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -101,7 +127,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "hdr_subtitle_style",
+        id = LanguageSettingsIds.HDR_SUBTITLE_STYLE,
         titleRes = Res.string.ss_hdr_subtitle_style_title,
         subtitleRes = Res.string.ss_hdr_subtitle_style_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -111,7 +137,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "subtitle_color",
+        id = LanguageSettingsIds.SUBTITLE_COLOR,
         titleRes = Res.string.ss_subtitle_color_title,
         subtitleRes = Res.string.ss_subtitle_color_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -121,7 +147,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "subtitle_background",
+        id = LanguageSettingsIds.SUBTITLE_BACKGROUND,
         titleRes = Res.string.ss_subtitle_background_title,
         subtitleRes = Res.string.ss_subtitle_background_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -131,7 +157,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "subtitle_edge_style",
+        id = LanguageSettingsIds.SUBTITLE_EDGE_STYLE,
         titleRes = Res.string.ss_subtitle_edge_style_title,
         subtitleRes = Res.string.ss_subtitle_edge_style_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -141,7 +167,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "subtitle_sync_offset",
+        id = LanguageSettingsIds.SUBTITLE_SYNC_OFFSET,
         titleRes = Res.string.ss_subtitle_sync_offset_title,
         subtitleRes = Res.string.ss_subtitle_sync_offset_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -151,7 +177,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "subtitle_vertical_position",
+        id = LanguageSettingsIds.SUBTITLE_VERTICAL_POSITION,
         titleRes = Res.string.ss_subtitle_vertical_position_title,
         subtitleRes = Res.string.ss_subtitle_vertical_position_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -161,7 +187,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "high_contrast_subtitles",
+        id = LanguageSettingsIds.HIGH_CONTRAST_SUBTITLES,
         titleRes = Res.string.ss_high_contrast_subtitles_title,
         subtitleRes = Res.string.ss_high_contrast_subtitles_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -171,7 +197,7 @@ internal val LanguageSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "subtitle_tester",
+        id = LanguageSettingsIds.SUBTITLE_TESTER,
         titleRes = Res.string.ss_subtitle_tester_title,
         subtitleRes = Res.string.ss_subtitle_tester_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -180,7 +206,7 @@ internal val LanguageSettingsSearchItems = listOf(
         icon = Tabler.Outline.EyeCheck
     ),
     SettingsSearchItem(
-        id = "hdr_subtitle_font_size",
+        id = LanguageSettingsIds.HDR_SUBTITLE_FONT_SIZE,
         titleRes = Res.string.ss_hdr_subtitle_font_size_title,
         subtitleRes = Res.string.ss_hdr_subtitle_font_size_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
@@ -188,5 +214,34 @@ internal val LanguageSettingsSearchItems = listOf(
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Typography,
         isAdvanced = true
+    ),
+)
+
+/**
+ * The subtitles group's per-id declared row admissions — the single gate both
+ * `languageSubtitlesScreenRowTotal` and LanguageSettingsScreen's emission `if`s
+ * read. Every id is declared, so the total counts strictly (the
+ * notifications/security `?: false` shape): the tester/font-size/forced-only
+ * trio always render ([RowAdmission.Always]) — as does high-contrast
+ * subtitles, declared `isAdvanced` yet shown in every mode (the shipped quirk,
+ * stated explicitly) — the seven style rows ride [RowAdmission.Advanced] (the
+ * screen's advanced structural block carries that gate), and the HDR font-size
+ * row additionally rides the HDR-style toggle ([RowAdmission.All]).
+ */
+internal val LanguageSubtitlesRowAdmissions: Map<String, RowAdmission> = mapOf(
+    LanguageSettingsIds.SUBTITLE_FONT_SIZE to RowAdmission.Always,
+    LanguageSettingsIds.SUBTITLE_FORCED_ONLY to RowAdmission.Always,
+    LanguageSettingsIds.PGS_DIRECT_PLAY to RowAdmission.Advanced,
+    LanguageSettingsIds.HDR_SUBTITLE_STYLE to RowAdmission.Advanced,
+    LanguageSettingsIds.SUBTITLE_COLOR to RowAdmission.Advanced,
+    LanguageSettingsIds.SUBTITLE_BACKGROUND to RowAdmission.Advanced,
+    LanguageSettingsIds.SUBTITLE_EDGE_STYLE to RowAdmission.Advanced,
+    LanguageSettingsIds.SUBTITLE_SYNC_OFFSET to RowAdmission.Advanced,
+    LanguageSettingsIds.SUBTITLE_VERTICAL_POSITION to RowAdmission.Advanced,
+    LanguageSettingsIds.HIGH_CONTRAST_SUBTITLES to RowAdmission.Always,
+    LanguageSettingsIds.SUBTITLE_TESTER to RowAdmission.Always,
+    LanguageSettingsIds.HDR_SUBTITLE_FONT_SIZE to RowAdmission.All(
+        RowAdmission.Advanced,
+        RowAdmission.WhenOn(LanguageSettingsIds.HDR_SUBTITLE_STYLE),
     ),
 )

@@ -20,26 +20,35 @@ import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
-import com.raulshma.jellyplay.core.datastore.settings.buildUserPreferencesSnapshot
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.first
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * Backs the Factory Reset review screen. Holds the live [preferences] (current)
- * alongside the immutable [factory] baseline (`UserPreferences()` with all
- * default args) so the UI can render a per-category current-vs-default diff and
- * changed-count without duplicating default values.
+ * alongside the immutable [factory] baseline ([PreferenceSliceSnapshot.FACTORY]
+ * — every slice at its default) so the UI can render a per-category
+ * current-vs-default diff and changed-count without duplicating default values.
+ *
+ * The diff carrier is the slice snapshot itself (see [PreferenceSliceSnapshot]):
+ * the review rows read the same slice fields the screens consume, so a new
+ * preference surfaces here by adding one declared diff row in
+ * [PreferenceCategoryPresentation] — no aggregate re-mapping to keep in sync.
  *
  * This is a rarely-opened screen, so [preferences] is built ONE-SHOT on entry
  * from the 18 domain-store slices + `AppRuntimeStateStore` + `PinRateLimiter`
- * (see [buildFromSlices]) instead of subscribing to an eager aggregate
- * `StateFlow`. All writes flow through [PreferencesEditor] (the single
- * auditable write seam) — no new mutation path is introduced.
+ * instead of subscribing to an eager aggregate `StateFlow`. All writes flow
+ * through [PreferencesEditor] (the single auditable write seam) — no new
+ * mutation path is introduced.
+ *
+ * The diff-row labels resolve ONCE per entry ([resolveDiffLabels] over the
+ * registry's declared resources) and are shared by both snapshots; `factory`
+ * and `preferences` therefore always speak the same locale.
  */
 class FactoryResetViewModel(
     private val playbackStore: PlaybackStore,
@@ -63,47 +72,57 @@ class FactoryResetViewModel(
     private val appRuntimeStateStore: AppRuntimeStateStore,
     private val pinRateLimiter: PinRateLimiter,
     private val editor: PreferencesEditor,
+    private val diffLabelResolver: suspend (List<StringResource>) -> (StringResource) -> String = ::resolveDiffLabels,
 ) : JellyPlayViewModel() {
 
-    /** Factory baseline — `UserPreferences` constructed with every default arg. */
-    val factory: UserPreferences = UserPreferences()
+    /** Resolved label lookup shared by both snapshots; swapped in once on entry. */
+    private var labels: (StringResource) -> String = { it.toString() }
 
-    var preferences by composeState(UserPreferences())
+    private fun diffSnapshot(slices: PreferenceSliceSnapshot): PreferenceDiffSnapshot =
+        PreferenceDiffSnapshot(slices) { res -> labels(res) }
+
+    /** Factory baseline — every slice at its default value. */
+    val factory: PreferenceDiffSnapshot = diffSnapshot(PreferenceSliceSnapshot.FACTORY)
+
+    var preferences by composeState(diffSnapshot(PreferenceSliceSnapshot.FACTORY))
         private set
 
     init {
-        launch { preferences = buildFromSlices() }
+        launch {
+            labels = diffLabelResolver(PreferenceCategoryViews.flatMap { it.labelResources })
+            preferences = buildFromSlices()
+        }
     }
 
     /**
-     * Builds the [UserPreferences] diff snapshot once from the 18 domain-store
-     * slices + runtime/PIN extras. Each slice is read via a single `.first()`;
-     * there is no live subscription. The field-by-field mapping lives in the
-     * pure [buildUserPreferencesSnapshot] builder so it is independently testable
-     * — this method only gathers the slices.
+     * Builds the live snapshot once from the 18 domain-store slices + runtime/
+     * PIN extras. Each slice is read via a single `.first()`; there is no live
+     * subscription.
      */
-    private suspend fun buildFromSlices(): UserPreferences =
-        buildUserPreferencesSnapshot(
-            playback = playbackStore.playback.first(),
-            videoPlayer = videoPlayerStore.videoPlayer.first(),
-            engine = engineStore.playerEngine.first(),
-            subtitle = subtitleLanguageStore.subtitle.first(),
-            audio = audioStore.audio.first(),
-            audioEffects = audioEffectsStore.audioEffects.first(),
-            audioCache = audioCacheStore.audioCache.first(),
-            appearance = appearanceStore.appearance.first(),
-            homeDiscovery = homeDiscoveryStore.homeDiscovery.first(),
-            library = libraryStore.library.first(),
-            navigation = navigationStore.navigation.first(),
-            downloads = downloadsStore.downloads.first(),
-            networkOffline = networkOfflineStore.networkOffline.first(),
-            notification = notificationStore.notification.first(),
-            syncPlayCast = syncPlayCastStore.syncPlayCast.first(),
-            screensaver = screensaverStore.screensaver.first(),
-            security = securityStore.security.first(),
-            experimental = experimentalStore.experimental.first(),
-            runtime = appRuntimeStateStore.state.first(),
-            pinLockout = pinRateLimiter.getPinLockoutState(),
+    private suspend fun buildFromSlices(): PreferenceDiffSnapshot =
+        diffSnapshot(
+            PreferenceSliceSnapshot(
+                playback = playbackStore.playback.first(),
+                videoPlayer = videoPlayerStore.videoPlayer.first(),
+                engine = engineStore.playerEngine.first(),
+                subtitle = subtitleLanguageStore.subtitle.first(),
+                audio = audioStore.audio.first(),
+                audioEffects = audioEffectsStore.audioEffects.first(),
+                audioCache = audioCacheStore.audioCache.first(),
+                appearance = appearanceStore.appearance.first(),
+                homeDiscovery = homeDiscoveryStore.homeDiscovery.first(),
+                library = libraryStore.library.first(),
+                navigation = navigationStore.navigation.first(),
+                downloads = downloadsStore.downloads.first(),
+                networkOffline = networkOfflineStore.networkOffline.first(),
+                notification = notificationStore.notification.first(),
+                syncPlayCast = syncPlayCastStore.syncPlayCast.first(),
+                screensaver = screensaverStore.screensaver.first(),
+                security = securityStore.security.first(),
+                experimental = experimentalStore.experimental.first(),
+                runtime = appRuntimeStateStore.state.first(),
+                pinLockout = pinRateLimiter.getPinLockoutState(),
+            ),
         )
 
     /** Resets every preference in [category] to its factory default. */

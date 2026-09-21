@@ -43,13 +43,40 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_watch_prog
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_watch_progress_heatmap_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object SettingsScreenIds {
+    const val LOGOUT = "logout"
+    const val SIGN_OUT_FROM_SERVER = "sign_out_from_server"
+    const val SERVER_MANAGEMENT = "server_management"
+    const val USER_MANAGEMENT = "user_management"
+    const val FAVORITES = "favorites"
+    const val WATCH_PROGRESS_HEATMAP = "watch_progress_heatmap"
+    const val ACTIVITY_QUEUE = "activity_queue"
+    const val UPCOMING = "upcoming"
+    const val REQUESTS = "requests"
+    const val ADMIN_DASHBOARD = "admin_dashboard"
+    const val SETUP_WIZARD = "setup_wizard"
+    const val SCREENSAVER_SHOW_TITLE = "screensaver_show_title"
+    const val SCREENSAVER_CATEGORIES = "screensaver_categories"
+    const val SCREENSAVER_SLIDESHOW_INTERVAL = "screensaver_slideshow_interval"
+    const val SCREENSAVER_KEN_BURNS = "screensaver_ken_burns"
+    const val SCREENSAVER_TRANSITION_STYLE = "screensaver_transition_style"
+}
+
+/**
  * Settings-search items for the "Account / Users / Servers" group of the old core/ui
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to the main SettingsScreen. Aggregated in [SettingsSearchCatalog].
  */
 internal val AccountSearchItems = listOf(
     SettingsSearchItem(
-        id = "logout",
+        id = SettingsScreenIds.LOGOUT,
         titleRes = Res.string.ss_logout_title,
         subtitleRes = Res.string.ss_logout_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_account,
@@ -58,7 +85,7 @@ internal val AccountSearchItems = listOf(
         icon = Tabler.Outline.Logout
     ),
     SettingsSearchItem(
-        id = "sign_out_from_server",
+        id = SettingsScreenIds.SIGN_OUT_FROM_SERVER,
         titleRes = Res.string.ss_sign_out_from_server_title,
         subtitleRes = Res.string.ss_sign_out_from_server_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_account,
@@ -67,7 +94,7 @@ internal val AccountSearchItems = listOf(
         icon = Tabler.Outline.Logout
     ),
     SettingsSearchItem(
-        id = "server_management",
+        id = SettingsScreenIds.SERVER_MANAGEMENT,
         titleRes = Res.string.ss_server_management_title,
         subtitleRes = Res.string.ss_server_management_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_account,
@@ -76,7 +103,7 @@ internal val AccountSearchItems = listOf(
         icon = Tabler.Outline.Server
     ),
     SettingsSearchItem(
-        id = "user_management",
+        id = SettingsScreenIds.USER_MANAGEMENT,
         titleRes = Res.string.ss_user_management_title,
         subtitleRes = Res.string.ss_user_management_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_account,
@@ -93,7 +120,7 @@ internal val AccountSearchItems = listOf(
  */
 internal val ActivityInsightsSearchItems = listOf(
     SettingsSearchItem(
-        id = "favorites",
+        id = SettingsScreenIds.FAVORITES,
         titleRes = Res.string.ss_favorites_title,
         subtitleRes = Res.string.ss_favorites_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_activity_insights,
@@ -102,7 +129,7 @@ internal val ActivityInsightsSearchItems = listOf(
         icon = Tabler.Outline.Heart
     ),
     SettingsSearchItem(
-        id = "watch_progress_heatmap",
+        id = SettingsScreenIds.WATCH_PROGRESS_HEATMAP,
         titleRes = Res.string.ss_watch_progress_heatmap_title,
         subtitleRes = Res.string.ss_watch_progress_heatmap_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_activity_insights,
@@ -111,7 +138,7 @@ internal val ActivityInsightsSearchItems = listOf(
         icon = Tabler.Outline.ChartBar
     ),
     SettingsSearchItem(
-        id = "activity_queue",
+        id = SettingsScreenIds.ACTIVITY_QUEUE,
         titleRes = Res.string.ss_activity_queue_title,
         subtitleRes = Res.string.ss_activity_queue_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_activity_insights,
@@ -120,7 +147,7 @@ internal val ActivityInsightsSearchItems = listOf(
         icon = Tabler.Outline.Database
     ),
     SettingsSearchItem(
-        id = "upcoming",
+        id = SettingsScreenIds.UPCOMING,
         titleRes = Res.string.ss_upcoming_title,
         subtitleRes = Res.string.ss_upcoming_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_activity_insights,
@@ -129,7 +156,7 @@ internal val ActivityInsightsSearchItems = listOf(
         icon = Tabler.Outline.CalendarEvent
     ),
     SettingsSearchItem(
-        id = "requests",
+        id = SettingsScreenIds.REQUESTS,
         titleRes = Res.string.ss_requests_title,
         subtitleRes = Res.string.ss_requests_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_activity_insights,
@@ -146,7 +173,7 @@ internal val ActivityInsightsSearchItems = listOf(
  */
 internal val SystemSearchItems = listOf(
     SettingsSearchItem(
-        id = "admin_dashboard",
+        id = SettingsScreenIds.ADMIN_DASHBOARD,
         titleRes = Res.string.ss_admin_dashboard_title,
         subtitleRes = Res.string.ss_admin_dashboard_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_system,
@@ -155,7 +182,7 @@ internal val SystemSearchItems = listOf(
         icon = Tabler.Outline.Shield
     ),
     SettingsSearchItem(
-        id = "setup_wizard",
+        id = SettingsScreenIds.SETUP_WIZARD,
         titleRes = Res.string.ss_setup_wizard_title,
         subtitleRes = Res.string.ss_setup_wizard_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_system,
@@ -164,7 +191,7 @@ internal val SystemSearchItems = listOf(
         icon = Tabler.Outline.Wand
     ),
     SettingsSearchItem(
-        id = "screensaver_show_title",
+        id = SettingsScreenIds.SCREENSAVER_SHOW_TITLE,
         titleRes = Res.string.ss_screensaver_show_title_title,
         subtitleRes = Res.string.ss_screensaver_show_title_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_system,
@@ -173,7 +200,7 @@ internal val SystemSearchItems = listOf(
         icon = Tabler.Outline.Typography
     ),
     SettingsSearchItem(
-        id = "screensaver_categories",
+        id = SettingsScreenIds.SCREENSAVER_CATEGORIES,
         titleRes = Res.string.ss_screensaver_categories_title,
         subtitleRes = Res.string.ss_screensaver_categories_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_system,
@@ -182,7 +209,7 @@ internal val SystemSearchItems = listOf(
         icon = Tabler.Outline.Folders
     ),
     SettingsSearchItem(
-        id = "screensaver_slideshow_interval",
+        id = SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL,
         titleRes = Res.string.ss_screensaver_slideshow_interval_title,
         subtitleRes = Res.string.ss_screensaver_slideshow_interval_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_system,
@@ -191,7 +218,7 @@ internal val SystemSearchItems = listOf(
         icon = Tabler.Outline.Clock
     ),
     SettingsSearchItem(
-        id = "screensaver_ken_burns",
+        id = SettingsScreenIds.SCREENSAVER_KEN_BURNS,
         titleRes = Res.string.ss_screensaver_ken_burns_title,
         subtitleRes = Res.string.ss_screensaver_ken_burns_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_system,
@@ -200,7 +227,7 @@ internal val SystemSearchItems = listOf(
         icon = Tabler.Outline.Movie
     ),
     SettingsSearchItem(
-        id = "screensaver_transition_style",
+        id = SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE,
         titleRes = Res.string.ss_screensaver_transition_style_title,
         subtitleRes = Res.string.ss_screensaver_transition_style_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_system,

@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
@@ -90,8 +91,7 @@ class SeerrRepositoryImpl(
     // StateFlow, so .value is warm from the moment the singleton is
     // materialised — no local cache layer needed here.
 
-    private val CACHE_TTL_MS = 60_000L
-    private val detailCache = TtlCache<Any>(ttlMs = CACHE_TTL_MS)
+    private val detailCache = TtlCache<Any>(ttlMs = FreshnessCeilings.SEERR_TTL_MS)
 
     init {
         sessionCacheRegistry.registerCaches("seerr", detailCache)

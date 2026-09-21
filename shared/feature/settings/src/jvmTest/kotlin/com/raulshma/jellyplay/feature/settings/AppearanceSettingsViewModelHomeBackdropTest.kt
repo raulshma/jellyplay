@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
@@ -38,7 +37,6 @@ class AppearanceSettingsViewModelHomeBackdropTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var store: UserPreferencesStore
     private lateinit var projections: PreferenceProjections
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var editor: PreferencesEditor
@@ -51,7 +49,6 @@ class AppearanceSettingsViewModelHomeBackdropTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        store = mockk(relaxed = true)
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
@@ -73,7 +70,7 @@ class AppearanceSettingsViewModelHomeBackdropTest {
 
     @Test
     fun `setHomeBackdropEnabled persists through the homeDiscovery store`() = runTest {
-        val viewModel = AppearanceSettingsViewModel(store, projections, AdvancedSettingsGate(appearanceStore, editor), editor)
+        val viewModel = AppearanceSettingsViewModel(projections, AdvancedSettingsGate(appearanceStore, editor), editor)
 
         viewModel.edit { it.homeDiscovery.setHomeBackdropEnabled(false) }
         editBlocks.forEach { it.invoke(editScope) }

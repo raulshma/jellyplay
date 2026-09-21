@@ -9,12 +9,11 @@ import com.raulshma.jellyplay.feature.player.video.AndroidActivePlayerController
 import com.raulshma.jellyplay.feature.player.video.AndroidCastManager
 import com.raulshma.jellyplay.feature.player.video.AndroidJellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.feature.player.video.AndroidMediaSessionFactory
-import com.raulshma.jellyplay.feature.player.video.AndroidPipController
 import com.raulshma.jellyplay.feature.player.video.AndroidUserMessageBridge
 import com.raulshma.jellyplay.feature.player.video.AndroidVideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.CastManager
 import com.raulshma.jellyplay.feature.player.video.JellyfinRemotePlayCastStrategy
-import com.raulshma.jellyplay.feature.player.video.PipController
+import com.raulshma.jellyplay.feature.player.video.PlayerStores
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
 import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerPlatform
@@ -56,10 +55,11 @@ import org.koin.dsl.module
  * CastManager, JellyfinRemotePlayCastStrategy, ActivePlayerController,
  * PipController, UserMessageBus) are seam slots now: the legacy
  * singletons are Koin-owned by the legacy :core:data's androidCoreDataModule
- * (since then) and are wrapped by the Android* adapters registered below —
- * the commonMain ViewModel never sees a legacy type. Every repository and
- * DataStore dep is Koin-native (dataJvmModule / datastoreCommonModule /
- * androidDataModule).
+ * (since then) and the four still-Android-coupled ones are wrapped by the
+ * Android* adapters registered below — PipController is the shared core:data
+ * port, bound there too (no adapter since the port promotion). Every
+ * repository and DataStore dep is Koin-native (dataJvmModule /
+ * datastoreCommonModule / androidDataModule).
  */
 fun androidPlayerVideoModule(context: Context): Module = module {
     // The FontProvider/SubtitlePreviewRepository/PlayerEngineFactory
@@ -106,7 +106,9 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     single<CastManager> { AndroidCastManager(get()) }
     single<JellyfinRemotePlayCastStrategy> { AndroidJellyfinRemotePlayCastStrategy(get()) }
     single<ActivePlayerController> { AndroidActivePlayerController(get()) }
-    single<PipController> { AndroidPipController(get()) }
+    // PipController is NOT bound here: both players resolve the shared
+    // core:data port, bound (to the AndroidPipController singleton the host
+    // PlayerActivity also injects) in androidCoreDataModule.
     single<PlayerVideoMessageBus> { AndroidUserMessageBridge(get()) }
     viewModel { params ->
         VideoPlayerViewModel(
@@ -114,6 +116,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             mediaRepository = get(),
             lyricsRepository = get(),
             playbackRepository = get(),
+            playbackIdentity = get(),
             subtitleProviderRepository = get(),
             streamingSubtitleStore = get(),
             imageUrlProvider = get(),
@@ -123,18 +126,20 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             playbackSourceResolver = get(),
             episodeCatalogue = get(),
             itemPlaybackPreferenceRepository = get(),
-            aggregateStore = get(),
-            engineStore = get(),
-            subtitleStore = get(),
-            playbackStore = get(),
-            audioStore = get(),
-            audioEffectsStore = get(),
-            videoPlayerStore = get(),
-            securityStore = get(),
-            syncPlayCastStore = get(),
-            downloadsStore = get(),
-            appearanceStore = get(),
-            networkOfflineStore = get(),
+            stores = PlayerStores(
+                aggregateStore = get(),
+                engine = get(),
+                subtitleLanguage = get(),
+                playback = get(),
+                audio = get(),
+                audioEffects = get(),
+                videoPlayer = get(),
+                security = get(),
+                syncPlayCast = get(),
+                downloads = get(),
+                appearance = get(),
+                networkOffline = get(),
+            ),
             mediaSessionFactory = get(),
             castManager = get(),
             jellyfinRemotePlayCastStrategy = get(),

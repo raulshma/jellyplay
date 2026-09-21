@@ -15,8 +15,11 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.feature.player.video.engine.EngineDecision
+import com.raulshma.jellyplay.feature.player.video.engine.EngineEventCoordinator
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.toEngineEventSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,6 +33,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -249,7 +253,10 @@ internal class PlaybackSession(
 
     private fun createEngineEventCoordinator() = EngineEventCoordinator(
         scope = scope,
-        engineFlow = playerSessionManager.engineFlow,
+        // The coordinator consumes the engine-agnostic EngineEventSource slice;
+        // each MediaEngine swap maps to a fresh source (same emission points as
+        // when the coordinator collected the engine flow directly).
+        engineSource = playerSessionManager.engineFlow.map { it?.toEngineEventSource() },
         getPlaybackMode = getPlaybackMode,
         directPlayFallbackNotice = directPlayFallbackNotice,
         passOutHours = passOutHours,

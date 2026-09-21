@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.users
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ManagedUser
@@ -123,7 +124,7 @@ class UsersViewModel(
             } else {
                 Log.e("Users", "Failed to create user", result.exceptionOrNull())
                 _state.value = _state.value.copy(
-                    error = result.exceptionOrNull()?.message ?: "Failed to create user",
+                    error = UserErrorMessages.resolve(result, "Failed to create user"),
                 )
             }
         }
@@ -164,7 +165,7 @@ class UsersViewModel(
                 Log.e("Users", "Failed to delete user", result.exceptionOrNull())
                 _state.value = _state.value.copy(
                     isDeleting = false,
-                    error = result.exceptionOrNull()?.message ?: "Failed to delete user",
+                    error = UserErrorMessages.resolve(result, "Failed to delete user"),
                 )
             }
         }

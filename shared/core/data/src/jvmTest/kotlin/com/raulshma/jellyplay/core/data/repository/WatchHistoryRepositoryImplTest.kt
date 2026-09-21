@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
@@ -9,7 +13,12 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -45,7 +54,23 @@ class WatchHistoryRepositoryImplTest {
 
     @BeforeTest
     fun setup() {
-        repository = WatchHistoryRepositoryImpl(apiClient)
+        // Real identity chain over the mocked client's (permanently null)
+        // session — this suite never switches identity, so the shared
+        // PlaybackReportingStatusStore behaves exactly as the plain
+        // StateFlow+refresh its former per-repository owner was.
+        every { apiClient.session } returns MutableStateFlow<ActiveSession?>(null)
+        val homeSession = HomeSession(
+            apiClient,
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        )
+        val sessionCacheRegistry = SessionCacheRegistry(
+            homeSession,
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        )
+        repository = WatchHistoryRepositoryImpl(
+            apiClient,
+            PlaybackReportingStatusStore(apiClient, sessionCacheRegistry),
+        )
         coEvery { apiClient.currentUser } returns flowOf(user)
     }
 

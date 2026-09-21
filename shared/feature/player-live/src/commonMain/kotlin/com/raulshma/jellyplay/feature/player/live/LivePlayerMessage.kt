@@ -16,12 +16,13 @@ import org.jetbrains.compose.resources.stringResource
  * Serves two flows:
  *  - the persistent [LiveTvPlayerUiState.errorMessage] (resolved by the
  *    screen with [asText] before [components.LiveErrorBanner] renders), and
- *  - the one-shot record/cancel feedback the ViewModel emits on
- *    [LiveTvPlayerViewModel.messages] (the screen-forward replacement for the
- *    legacy Android-only `UserMessageBus` + `UiText.Resource` posts; the
- *    collector resolves `Resource` values with the suspend
- *    `org.jetbrains.compose.resources.getString`, so the locale of the
- *    composition that collects wins — livetv's LiveTvUserMessage seam shape).
+ *  - the one-shot record/cancel feedback the ViewModel emits wrapped in
+ *    [LivePlayerEvent.Message] on [LiveTvPlayerViewModel.events] (the
+ *    screen-forward replacement for the legacy Android-only `UserMessageBus`
+ *    + `UiText.Resource` posts; the collector resolves `Resource` values
+ *    with the suspend `org.jetbrains.compose.resources.getString`, so the
+ *    locale of the composition that collects wins — livetv's
+ *    LiveTvUserMessage seam shape).
  */
 @Immutable
 sealed interface LivePlayerMessage {

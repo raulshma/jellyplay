@@ -131,6 +131,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalo
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeoutMs
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.core.model.MediaSegmentType

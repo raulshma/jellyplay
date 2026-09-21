@@ -305,7 +305,6 @@ val datastoreCommonModule = module {
         UserPreferencesStore(
             get(DatastoreQualifiers.applicationScope),
             get(DatastoreQualifiers.userPreferencesDataStore),
-            get<PreferenceProjections>(),
             get<PlaybackStore>(),
             get<AppearanceStore>(),
             get<VideoPlayerStore>(),

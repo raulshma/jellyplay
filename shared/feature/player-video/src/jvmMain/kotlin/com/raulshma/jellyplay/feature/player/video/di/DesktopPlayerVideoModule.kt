@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.di
 
+import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.feature.player.video.ActivePlayerController
 import com.raulshma.jellyplay.feature.player.video.CastManager
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoPlayerPlatform
@@ -12,7 +13,7 @@ import com.raulshma.jellyplay.feature.player.video.NoOpMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.NoOpPipController
 import com.raulshma.jellyplay.feature.player.video.NoOpPlayerVideoMessageBus
 import com.raulshma.jellyplay.feature.player.video.NoOpSubtitlePreviewRepository
-import com.raulshma.jellyplay.feature.player.video.PipController
+import com.raulshma.jellyplay.feature.player.video.PlayerStores
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
 import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerPlatform
@@ -59,6 +60,7 @@ val desktopPlayerVideoModule: Module = module {
             mediaRepository = get(),
             lyricsRepository = get(),
             playbackRepository = get(),
+            playbackIdentity = get(),
             subtitleProviderRepository = get(),
             streamingSubtitleStore = get(),
             imageUrlProvider = get(),
@@ -68,18 +70,20 @@ val desktopPlayerVideoModule: Module = module {
             playbackSourceResolver = get(),
             episodeCatalogue = get(),
             itemPlaybackPreferenceRepository = get(),
-            aggregateStore = get(),
-            engineStore = get(),
-            subtitleStore = get(),
-            playbackStore = get(),
-            audioStore = get(),
-            audioEffectsStore = get(),
-            videoPlayerStore = get(),
-            securityStore = get(),
-            syncPlayCastStore = get(),
-            downloadsStore = get(),
-            appearanceStore = get(),
-            networkOfflineStore = get(),
+            stores = PlayerStores(
+                aggregateStore = get(),
+                engine = get(),
+                subtitleLanguage = get(),
+                playback = get(),
+                audio = get(),
+                audioEffects = get(),
+                videoPlayer = get(),
+                security = get(),
+                syncPlayCast = get(),
+                downloads = get(),
+                appearance = get(),
+                networkOffline = get(),
+            ),
             mediaSessionFactory = get(),
             castManager = get(),
             jellyfinRemotePlayCastStrategy = get(),

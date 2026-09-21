@@ -80,6 +80,7 @@ class DownloadRepositoryImplResumeTest {
         mediaRepository = MediaRepositoryAccess { mediaRepository },
         episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
+        playbackIdentity = mockk(relaxed = true),
         httpClient = httpClient,
         downloadsStore = preferencesStore,
         json = json,

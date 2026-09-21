@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
@@ -23,8 +24,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -60,6 +60,15 @@ class AdminStatisticsRepositoryImpl constructor(
      * halves — the scan-side date math and this half's chart/streak windows).
      */
     private val timeSource: TimeSource,
+    /**
+     * The ONE owner of the Playback Reporting plugin status (a
+     * `StateFlow` + refresh, registered with `SessionCacheRegistry` for
+     * identity invalidation) — shared with `WatchHistoryRepositoryImpl`;
+     * see [PlaybackReportingStatusStore]. Replaces this repository's own
+     * `_pluginStatus` MutableStateFlow (one of the two independently stale
+     * owners the store folded).
+     */
+    private val playbackReportingStatusStore: PlaybackReportingStatusStore,
 ) : AdminStatisticsRepository {
 
     /**
@@ -88,11 +97,21 @@ class AdminStatisticsRepositoryImpl constructor(
      */
     private val statsSemaphore = Semaphore(4)
 
-    private val _pluginStatus = MutableStateFlow(PlaybackReportingStatus.UNKNOWN)
-    override fun getPlaybackReportingStatus() = _pluginStatus.asStateFlow()
+    /**
+     * The plugin status is owned by the shared [PlaybackReportingStatusStore]
+     * single — the ONE StateFlow + refresh for "is Playback Reporting
+     * installed", cited by this repository AND [WatchHistoryRepositoryImpl]
+     * (they used to be two independently stale flows). Delegates below read
+     * the store's flow; this repository's `refreshPlaybackReportingStatus`
+     * triggers the store's refresh and then keeps ITS OWN side effect (the
+     * 90-day audit-log prune), preserving the refresh-then-prune order.
+     */
+    private val pluginStatus: StateFlow<PlaybackReportingStatus> get() = playbackReportingStatusStore.status
+
+    override fun getPlaybackReportingStatus(): StateFlow<PlaybackReportingStatus> = pluginStatus
 
     override suspend fun refreshPlaybackReportingStatus() {
-        _pluginStatus.value = apiClient.checkPlaybackReportingPlugin().getOrDefault(PlaybackReportingStatus.UNAVAILABLE)
+        playbackReportingStatusStore.refresh()
         scanCore.cleanupOldAuditLogs()
     }
 
@@ -100,10 +119,10 @@ class AdminStatisticsRepositoryImpl constructor(
      * The plugin-gate fold shared by every plugin-derived list fetch —
      * `if (pluginAvailable) call().getOrDefault(emptyList()) else emptyList()`
      * used to appear inline at each site, hand-syncing the AVAILABLE check
-     * against [_pluginStatus]. Takes the CALLER-CAPTURED flag, not a live
+     * against the plugin-status flow. Takes the CALLER-CAPTURED flag, not a live
      * read: a page's gates must stay internally consistent — the detail
      * page's group gate and its member fetches see ONE status even if an
-     * admin refresh flips [_pluginStatus] mid-load (the captured-local
+     * admin refresh flips the status mid-load (the captured-local
      * semantics the inline ladders had). [call] is a plain (non-suspend)
      * lambda parameter invoked from the inline body, so suspend api calls
      * are legal at each call site.
@@ -117,7 +136,7 @@ class AdminStatisticsRepositoryImpl constructor(
 
     override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatchingRethrowingCancellation {
         // One capture for the whole page — see [whenPlugin]'s KDoc.
-        val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
+        val pluginAvailable = pluginStatus.value == PlaybackReportingStatus.AVAILABLE
         coroutineScope {
             val usersDeferred = async { apiClient.getUsers().getOrThrow() }
             val sessionsDeferred = async { apiClient.getSessions().getOrDefault(emptyList()) }
@@ -212,7 +231,7 @@ class AdminStatisticsRepositoryImpl constructor(
         // One capture for the whole page (every gate below reads it — the
         // group gate's non-null deferred bundle IS itself the downstream
         // gate, so the members must see the SAME flag; see [whenPlugin]).
-        val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
+        val pluginAvailable = pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
         // User lookup, played page, and plugin chart are independent round-trips
         // — run them concurrently (was: full getUsers() scan + sequential tail

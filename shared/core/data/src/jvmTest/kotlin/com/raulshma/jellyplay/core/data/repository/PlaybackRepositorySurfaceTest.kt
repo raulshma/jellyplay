@@ -13,9 +13,12 @@ import kotlin.test.assertTrue
  * matching the impl's override count), and pins that count so it can only
  * move DOWN.
  *
- * Baseline 27 is the count right after the dead intro/credit timestamp
- * readers (`getIntroTimestamps` / `getCreditTimestamps`) were retired from
- * the interface: they had zero external callers, and the impl kept the
+ * Baseline 25 is the count right after the session-credential readers
+ * (`getServerUrl` / `getAccessToken`) were retired from the interface into the
+ * narrow [com.raulshma.jellyplay.core.data.playback.PlaybackIdentity] module
+ * (their four readers inject that instead), which itself followed the dead
+ * intro/credit timestamp readers (`getIntroTimestamps` / `getCreditTimestamps`)
+ * retirement: those had zero external callers, and the impl kept the
  * getMediaSegments legacy fallback by calling [com.raulshma.jellyplay.core.network.api.PlaybackApiClient]
  * directly. They must stay retired — a re-added member under the count cap
  * would silently undo that retirement, so the second test pins their absence
@@ -29,10 +32,15 @@ import kotlin.test.assertTrue
 class PlaybackRepositorySurfaceTest {
 
     /** The maximum allowed member count of [PlaybackRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 27
+    private val maxInterfaceMembers = 25
 
     /** Members retired from the interface; their re-addition must fail this suite. */
-    private val retiredMembers = listOf("getIntroTimestamps", "getCreditTimestamps")
+    private val retiredMembers = listOf(
+        "getIntroTimestamps",
+        "getCreditTimestamps",
+        "getServerUrl",
+        "getAccessToken",
+    )
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

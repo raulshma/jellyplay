@@ -1,10 +1,8 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.model.StoragePreferences
-import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -37,12 +35,12 @@ data class StorageBreakdown(
  */
 class StorageSettingsViewModel(
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val advancedSettings: AdvancedSettingsGate,
-    private val editor: PreferencesEditor,
+    advancedSettings: AdvancedSettingsGate,
+    editor: PreferencesEditor,
     private val autoDownloadSync: AutoDownloadSync,
     private val storageAreas: StorageAreas,
     private val storageMountsProvider: StorageMountsProvider,
-) : JellyPlayViewModel() {
+) : SettingsSectionViewModel(advancedSettings, editor) {
 
     val preferences: StateFlow<StoragePreferences> = projections.storagePreferences
 
@@ -67,8 +65,6 @@ class StorageSettingsViewModel(
         }
     }
 
-    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
-
     var cacheSizeMb by composeState(0L)
         private set
 
@@ -77,14 +73,6 @@ class StorageSettingsViewModel(
 
     var cacheError by composeState<String?>(null)
         private set
-
-    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
-
-    /**
-     * Single write command for this screen: `edit { it.downloads.setDownloadQuality(quality) }`.
-     * Fire-and-forget on the same application scope [PreferencesEditor.edit] uses.
-     */
-    fun edit(transform: suspend (PreferencesEditScope) -> Unit) = editor.edit { transform(this) }
 
     /**
      * Recomputes the cache / downloads / image-cache sizes from disk via the

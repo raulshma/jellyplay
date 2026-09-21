@@ -250,7 +250,7 @@ private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 // one-off sign-out actions. Kept as a hand list on purpose: what makes these two
 // ids actions is semantics (a destructive confirm), not a derivable structural
 // property of their catalog declarations.
-private val ACTION_ONLY_IDS = setOf("logout", "sign_out_from_server")
+private val ACTION_ONLY_IDS = setOf(SettingsScreenIds.LOGOUT, SettingsScreenIds.SIGN_OUT_FROM_SERVER)
 
 // Dream-screen pickers (slideshow interval, transition style) flow through the shared
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
@@ -318,11 +318,11 @@ internal fun settingsResultClickAction(
     showAdvancedSettings: Boolean,
 ): SettingsSearchResultClick {
     val click = when {
-        id == "logout" -> SettingsSearchResultClick(
+        id == SettingsScreenIds.LOGOUT -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = false),
         )
         route == Route.Settings -> {
-            if (id == "sign_out_from_server") {
+            if (id == SettingsScreenIds.SIGN_OUT_FROM_SERVER) {
                 SettingsSearchResultClick(
                     action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = true),
                 )
@@ -335,7 +335,7 @@ internal fun settingsResultClickAction(
         }
         route == Route.Onboarding -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.OpenSetupWizard,
-            pendingHighlightId = "setup_wizard",
+            pendingHighlightId = SettingsScreenIds.SETUP_WIZARD,
         )
         else -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.NavigateToScreen(route.withHighlightSettingId(id)),
@@ -1378,14 +1378,14 @@ fun SettingsScreen(
                                     title = stringResource(Res.string.settings_server_management),
                                     subtitle = stringResource(Res.string.settings_server_management_subtitle),
                                     index = 0, count = accountCount,
-                                    onClick = { openSetting("server_management") { Route.ServerManagement(it) } },
+                                    onClick = { openSetting(SettingsScreenIds.SERVER_MANAGEMENT) { Route.ServerManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Users,
                                     title = stringResource(Res.string.settings_switch_user),
                                     subtitle = stringResource(Res.string.settings_switch_user_subtitle),
                                     index = 1, count = accountCount,
-                                    onClick = { openSetting("user_management") { Route.UserManagement(it) } },
+                                    onClick = { openSetting(SettingsScreenIds.USER_MANAGEMENT) { Route.UserManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Logout,
@@ -1445,28 +1445,28 @@ fun SettingsScreen(
                                     title = stringResource(Res.string.settings_browse_favorites),
                                     subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
                                     index = 0, count = insightsCount,
-                                    onClick = { openSetting("favorites") { Route.Favorites } },
+                                    onClick = { openSetting(SettingsScreenIds.FAVORITES) { Route.Favorites } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.ChartBar,
                                     title = stringResource(Res.string.settings_watch_history_heatmap),
                                     subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
                                     index = 1, count = insightsCount,
-                                    onClick = { openSetting("watch_progress_heatmap") { Route.WatchProgressHeatmap } },
+                                    onClick = { openSetting(SettingsScreenIds.WATCH_PROGRESS_HEATMAP) { Route.WatchProgressHeatmap } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Database,
                                     title = stringResource(Res.string.settings_activity_queue),
                                     subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
                                     index = 2, count = insightsCount,
-                                    onClick = { openSetting("activity_queue") { Route.ArrQueue } },
+                                    onClick = { openSetting(SettingsScreenIds.ACTIVITY_QUEUE) { Route.ArrQueue } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.CalendarEvent,
                                     title = stringResource(Res.string.settings_upcoming),
                                     subtitle = stringResource(Res.string.settings_upcoming_subtitle),
                                     index = 3, count = insightsCount,
-                                    onClick = { openSetting("upcoming") { Route.UpcomingCalendar } },
+                                    onClick = { openSetting(SettingsScreenIds.UPCOMING) { Route.UpcomingCalendar } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Inbox,
@@ -1474,7 +1474,7 @@ fun SettingsScreen(
                                     subtitle = stringResource(Res.string.settings_requests_subtitle),
                                     index = 4, count = insightsCount,
                                     trailingText = pendingCount.takeIf { it > 0 }?.toString(),
-                                    onClick = { openSetting("requests") { Route.Requests } },
+                                    onClick = { openSetting(SettingsScreenIds.REQUESTS) { Route.Requests } },
                                 )
                             }
                         }
@@ -1508,7 +1508,7 @@ fun SettingsScreen(
                                 // declaration: the admin-dashboard row drops for
                                 // non-admins, every other declared row renders.
                                 val systemCount = SettingsScreenGroups.systemCore.items.count { item ->
-                                    item.id != "admin_dashboard" || viewModel.currentUser?.isAdmin == true
+                                    item.id != SettingsScreenIds.ADMIN_DASHBOARD || viewModel.currentUser?.isAdmin == true
                                 }
                                 var systemIndex = 0
                                 if (viewModel.currentUser?.isAdmin == true) {
@@ -1517,7 +1517,7 @@ fun SettingsScreen(
                                         title = stringResource(Res.string.settings_admin_dashboard),
                                         subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
                                         index = systemIndex++, count = systemCount,
-                                        onClick = { openSetting("admin_dashboard") { Route.AdminDashboard } },
+                                        onClick = { openSetting(SettingsScreenIds.ADMIN_DASHBOARD) { Route.AdminDashboard } },
                                     )
                                 }
                                 SettingListItem(
@@ -1526,7 +1526,7 @@ fun SettingsScreen(
                                     subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
                                     index = systemIndex++, count = systemCount,
                                     onClick = {
-                                        lastClickedSettingId = "setup_wizard"
+                                        lastClickedSettingId = SettingsScreenIds.SETUP_WIZARD
                                         onSetupWizard()
                                     },
                                 )
@@ -1662,7 +1662,7 @@ fun SettingsScreen(
                                         subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
                                         checked = preferences.dreamShowTitle,
                                         index = 0, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_show_title",
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_SHOW_TITLE,
                                         onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamShowTitle(it) } },
                                     )
                                     val categoryMovies = stringResource(Res.string.settings_category_movies)
@@ -1682,7 +1682,7 @@ fun SettingsScreen(
                                             }
                                         },
                                         index = 1, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_categories",
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_CATEGORIES,
                                         onClick = {
                                             val allCats = DreamImageCategory.entries.toSet()
                                             val current = preferences.dreamImageCategories
@@ -1702,7 +1702,7 @@ fun SettingsScreen(
                                         subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
                                         trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                         index = 2, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_slideshow_interval",
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL,
                                         onClick = {
                                             activeDialog = PickerState.List(
                                                 title = slideshowIntervalTitle,
@@ -1719,7 +1719,7 @@ fun SettingsScreen(
                                         subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
                                         checked = preferences.dreamKenBurnsEnabled,
                                         index = 3, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_ken_burns",
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_KEN_BURNS,
                                         onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamKenBurnsEnabled(it) } },
                                     )
                                     SettingListItem(
@@ -1728,7 +1728,7 @@ fun SettingsScreen(
                                         subtitle = preferences.dreamTransitionStyle.name,
                                         trailingText = preferences.dreamTransitionStyle.name,
                                         index = 4, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_transition_style",
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE,
                                         onClick = {
                                             val labels = mapOf(
                                                 DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
@@ -1754,7 +1754,7 @@ fun SettingsScreen(
                                 title = stringResource(Res.string.settings_experimental),
                                 subtitle = experimentalSummarySubtitle(preferences),
                                 index = 0, count = 1,
-                                onClick = { openSetting("experimental") { Route.ExperimentalSettings(it) } },
+                                onClick = { openSetting(ExperimentalSettingsIds.EXPERIMENTAL) { Route.ExperimentalSettings(it) } },
                             )
                         }
 
@@ -1764,7 +1764,7 @@ fun SettingsScreen(
                                 title = stringResource(Res.string.settings_integrations),
                                 subtitle = stringResource(Res.string.settings_integrations_subtitle),
                                 index = 0, count = 1,
-                                onClick = { openSetting("integrations") { Route.Integrations(it) } },
+                                onClick = { openSetting(IntegrationsScreenIds.INTEGRATIONS) { Route.Integrations(it) } },
                             )
                         }
 

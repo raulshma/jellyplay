@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,8 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -118,6 +115,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.FocusRestoringItemRow
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -1099,34 +1097,32 @@ private fun SeerrHorizontalSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = uniqueItems,
+            key = { it.id },
+            contentType = { "seerrSearchItem" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(uniqueItems, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
-                SeerrMediaCard(
-                    item = item,
-                    imageUrl = item.posterUrl,
-                    isLoading = loadingState?.isLoading(item.id) == true,
-                    onClick = {
-                        if (loadingState != null && prefetch != null) {
-                            loadingState.startLoading(item.id)
-                            prefetch(item.id, item.mediaType) {
-                                loadingState.stopLoading(item.id)
-                                onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
-                            }
-                        } else {
+        ) { item ->
+            SeerrMediaCard(
+                item = item,
+                imageUrl = item.posterUrl,
+                isLoading = loadingState?.isLoading(item.id) == true,
+                onClick = {
+                    if (loadingState != null && prefetch != null) {
+                        loadingState.startLoading(item.id)
+                        prefetch(item.id, item.mediaType) {
+                            loadingState.stopLoading(item.id)
                             onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
                         }
-                    },
-                    modifier = Modifier.width(
-                        LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
-                    )
+                    } else {
+                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
+                    }
+                },
+                modifier = Modifier.width(
+                    LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
                 )
-            }
+            )
         }
     }
 }
@@ -1197,14 +1193,13 @@ private fun CastSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = uniqueCast,
+            key = { it.id },
+            contentType = { "castMember" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(uniqueCast, key = { it.id }, contentType = { "castMember" }) { member ->
+        ) { member ->
                 val name = member.name
                 val character = member.character
                 val profileUrl = member.profileUrl
@@ -1245,7 +1240,6 @@ private fun CastSection(
                         textAlign = TextAlign.Center
                     )
                 }
-            }
         }
     }
 }
@@ -1272,14 +1266,13 @@ private fun SeasonsSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = sortedSeasons,
+            key = { it.seasonNumber },
+            contentType = { "season" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(sortedSeasons, key = { it.seasonNumber }, contentType = { "season" }) { season ->
+        ) { season ->
                 val isSelected = selectedSeasonNumber == season.seasonNumber
                 val borderModifier = if (isSelected) {
                     Modifier.border(
@@ -1401,7 +1394,6 @@ private fun SeasonsSection(
                         }
                     }
                 }
-            }
         }
     }
 }
@@ -1671,14 +1663,13 @@ private fun VideosSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = uniqueVideos,
+            key = { it.key!! },
+            contentType = { "video" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(uniqueVideos, key = { it.key!! }, contentType = { "video" }) { video ->
+        ) { video ->
                 val thumbnailUrl = youTubeThumbnailUrl(video.site, video.key)
 
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -1738,7 +1729,6 @@ private fun VideosSection(
                         )
                     }
                 }
-            }
         }
     }
 }

@@ -33,13 +33,36 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_not
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_notification_settings_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object NotificationSettingsIds {
+    const val NOTIFICATIONS_ENABLE = "notifications_enable"
+    const val RESPECT_SYSTEM_DND = "respect_system_dnd"
+    const val SYSTEM_NOTIFICATION_SETTINGS = "system_notification_settings"
+    const val NOTIFICATION_CHECK_FREQUENCY = "notification_check_frequency"
+    const val QUIET_HOURS = "quiet_hours"
+    const val QUIET_START = "quiet_start"
+    const val QUIET_END = "quiet_end"
+    const val NOTIFICATION_SOUND = "notification_sound"
+    const val NOTIFICATION_VIBRATE = "notification_vibrate"
+    const val NOTIFICATION_LIGHTS = "notification_lights"
+    const val MAX_PER_CHECK = "max_per_check"
+    const val NOTIFICATION_LIBRARIES = "notification_libraries"
+}
+
+/**
  * Settings-search items for the "Notifications" group of the old core/ui
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to NotificationSettingsScreen. Aggregated in [SettingsSearchCatalog].
  */
 internal val NotificationSettingsSearchItems = listOf(
     SettingsSearchItem(
-        id = "notifications_enable",
+        id = NotificationSettingsIds.NOTIFICATIONS_ENABLE,
         titleRes = Res.string.ss_notifications_enable_title,
         subtitleRes = Res.string.ss_notifications_enable_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -48,7 +71,7 @@ internal val NotificationSettingsSearchItems = listOf(
         icon = Tabler.Outline.Bell
     ),
     SettingsSearchItem(
-        id = "respect_system_dnd",
+        id = NotificationSettingsIds.RESPECT_SYSTEM_DND,
         titleRes = Res.string.ss_respect_system_dnd_title,
         subtitleRes = Res.string.ss_respect_system_dnd_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -58,7 +81,7 @@ internal val NotificationSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "system_notification_settings",
+        id = NotificationSettingsIds.SYSTEM_NOTIFICATION_SETTINGS,
         titleRes = Res.string.ss_system_notification_settings_title,
         subtitleRes = Res.string.ss_system_notification_settings_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -68,7 +91,7 @@ internal val NotificationSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "notification_check_frequency",
+        id = NotificationSettingsIds.NOTIFICATION_CHECK_FREQUENCY,
         titleRes = Res.string.ss_notification_check_frequency_title,
         subtitleRes = Res.string.ss_notification_check_frequency_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -77,7 +100,7 @@ internal val NotificationSettingsSearchItems = listOf(
         icon = Tabler.Outline.Clock
     ),
     SettingsSearchItem(
-        id = "quiet_hours",
+        id = NotificationSettingsIds.QUIET_HOURS,
         titleRes = Res.string.ss_quiet_hours_title,
         subtitleRes = Res.string.ss_quiet_hours_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -87,7 +110,7 @@ internal val NotificationSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "quiet_start",
+        id = NotificationSettingsIds.QUIET_START,
         titleRes = Res.string.ss_quiet_start_title,
         subtitleRes = Res.string.ss_quiet_start_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -97,7 +120,7 @@ internal val NotificationSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "quiet_end",
+        id = NotificationSettingsIds.QUIET_END,
         titleRes = Res.string.ss_quiet_end_title,
         subtitleRes = Res.string.ss_quiet_end_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -107,7 +130,7 @@ internal val NotificationSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "notification_sound",
+        id = NotificationSettingsIds.NOTIFICATION_SOUND,
         titleRes = Res.string.ss_notification_sound_title,
         subtitleRes = Res.string.ss_notification_sound_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -116,7 +139,7 @@ internal val NotificationSettingsSearchItems = listOf(
         icon = Tabler.Outline.Volume
     ),
     SettingsSearchItem(
-        id = "notification_vibrate",
+        id = NotificationSettingsIds.NOTIFICATION_VIBRATE,
         titleRes = Res.string.ss_notification_vibrate_title,
         subtitleRes = Res.string.ss_notification_vibrate_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -125,7 +148,7 @@ internal val NotificationSettingsSearchItems = listOf(
         icon = Tabler.Outline.PhoneCall
     ),
     SettingsSearchItem(
-        id = "notification_lights",
+        id = NotificationSettingsIds.NOTIFICATION_LIGHTS,
         titleRes = Res.string.ss_notification_lights_title,
         subtitleRes = Res.string.ss_notification_lights_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -134,7 +157,7 @@ internal val NotificationSettingsSearchItems = listOf(
         icon = Tabler.Outline.Bulb
     ),
     SettingsSearchItem(
-        id = "max_per_check",
+        id = NotificationSettingsIds.MAX_PER_CHECK,
         titleRes = Res.string.ss_max_per_check_title,
         subtitleRes = Res.string.ss_max_per_check_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -144,7 +167,7 @@ internal val NotificationSettingsSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
-        id = "notification_libraries",
+        id = NotificationSettingsIds.NOTIFICATION_LIBRARIES,
         titleRes = Res.string.ss_notification_libraries_title,
         subtitleRes = Res.string.ss_notification_libraries_subtitle,
         categoryRes = CoreUiRes.string.ss_cat_notifications,
@@ -154,3 +177,55 @@ internal val NotificationSettingsSearchItems = listOf(
         isAdvanced = true
     ),
 ).androidOnly()
+
+/**
+ * The notification group's per-id declared row admissions — the single gate
+ * both `notificationScreenRowTotal` and NotificationSettingsScreen's emission
+ * `if`s read: the four rows behind the master toggle ride it, the quiet-hours
+ * trio additionally the quiet-hours toggle, the rest ride advanced mode, and
+ * the system-settings row the platform-intent capability. The master toggle
+ * declares [RowAdmission.Always] — the totals count strictly, so every
+ * declared id states its gate explicitly.
+ */
+internal val NotificationRowAdmissions: Map<String, RowAdmission> = mapOf(
+    NotificationSettingsIds.NOTIFICATIONS_ENABLE to RowAdmission.Always,
+    NotificationSettingsIds.NOTIFICATION_CHECK_FREQUENCY to
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+    NotificationSettingsIds.NOTIFICATION_SOUND to
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+    NotificationSettingsIds.NOTIFICATION_VIBRATE to
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+    NotificationSettingsIds.NOTIFICATION_LIGHTS to
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+    NotificationSettingsIds.QUIET_HOURS to RowAdmission.All(
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+        RowAdmission.Advanced,
+    ),
+    NotificationSettingsIds.QUIET_START to RowAdmission.All(
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+        RowAdmission.Advanced,
+        RowAdmission.WhenOn(NotificationSettingsIds.QUIET_HOURS),
+    ),
+    NotificationSettingsIds.QUIET_END to RowAdmission.All(
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+        RowAdmission.Advanced,
+        RowAdmission.WhenOn(NotificationSettingsIds.QUIET_HOURS),
+    ),
+    NotificationSettingsIds.RESPECT_SYSTEM_DND to RowAdmission.All(
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+        RowAdmission.Advanced,
+    ),
+    NotificationSettingsIds.MAX_PER_CHECK to RowAdmission.All(
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+        RowAdmission.Advanced,
+    ),
+    NotificationSettingsIds.NOTIFICATION_LIBRARIES to RowAdmission.All(
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+        RowAdmission.Advanced,
+    ),
+    NotificationSettingsIds.SYSTEM_NOTIFICATION_SETTINGS to RowAdmission.All(
+        RowAdmission.WhenOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
+        RowAdmission.Advanced,
+        RowAdmission.Platform(RowAdmissionCapability.SystemNotificationSettings),
+    ),
+)

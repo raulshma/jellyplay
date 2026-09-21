@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.downloads
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -165,7 +166,7 @@ class DownloadsViewModel(
             queue.allDownloads()
                 .catch { e ->
                     _uiState.update {
-                        it.copy(error = e.message ?: "Failed to load downloads", isLoading = false)
+                        it.copy(error = UserErrorMessages.resolve(e, "Failed to load downloads"), isLoading = false)
                     }
                 }
                 .distinctUntilChanged { old, new -> sameListStructure(old, new) }

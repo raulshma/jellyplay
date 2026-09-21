@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -142,10 +143,10 @@ class MediaRepositoryImpl internal constructor(
     // not a captured reference, so the sharing stays visible at every use.
     private val detailCaches get() = internals.detailCaches
 
-    private val libraryFoldersCache = TtlCache<List<LibraryFolder>>(ttlMs = FOLDERS_CACHE_TTL_MS)
-    private val genresCache = TtlCache<List<Genre>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
-    private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
-    private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = LATEST_CACHE_TTL_MS)
+    private val libraryFoldersCache = TtlCache<List<LibraryFolder>>(ttlMs = FreshnessCeilings.FOLDERS_TTL_MS)
+    private val genresCache = TtlCache<List<Genre>>(maxSize = 64, ttlMs = FreshnessCeilings.FOLDERS_TTL_MS)
+    private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FreshnessCeilings.FOLDERS_TTL_MS)
+    private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = FreshnessCeilings.LATEST_MEDIA_TTL_MS)
 
     // Series-scoped seasons/episodes caches used to live here; they've moved
     // into [episodeCatalogue], the single owner of the series snapshot. The
@@ -153,14 +154,14 @@ class MediaRepositoryImpl internal constructor(
     // (they co-evict with the detail cache through one epoch); the
     // collection-items cache stays — a plain page-shaped cache with no
     // detail-epoch coupling.
-    private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
 
     // Child-photo URLs for a photo folder (player backdrop fan-out); declared
     // with the other caches so the identity registration in the init block
     // below can enumerate every cache in one place.
     private val photoFolderChildUrlCache = TtlCache<List<String>>(
         maxSize = 200,
-        ttlMs = 5 * 60 * 1000L,
+        ttlMs = FreshnessCeilings.PHOTO_URLS_TTL_MS,
     )
 
     // Plan 08: private — the detail-cache group is repo-internal machinery;
@@ -1050,13 +1051,16 @@ class MediaRepositoryImpl internal constructor(
          * be pointless to tune. DROP_OLDEST keeps the tryEmit non-suspending.
          */
         private const val SYNTHETIC_CHANGES_BUFFER = 64
-        /** 10 minutes — library folders change rarely during a session. */
-        private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
+
+        // The cache TTLs this repository used to declare as private literals
+        // (FOLDERS_CACHE_TTL_MS 10 min, LATEST_CACHE_TTL_MS 2 min) now cite
+        // the named policies FreshnessCeilings.FOLDERS_TTL_MS /
+        // LATEST_MEDIA_TTL_MS / PHOTO_URLS_TTL_MS (plus DETAIL_TTL_MS via
+        // MediaRepositoryInternals) at their construction sites above — same
+        // values, one readable answer for "what is stale where".
 
         /** Window within which a byte-identical home SWR persist is skipped (foreground refresh cadence). */
         private const val HOME_PERSIST_DEDUP_WINDOW_MS = 60 * 1000L
-        /** 2 minutes — "latest" content should feel fresh on re-entry. */
-        private const val LATEST_CACHE_TTL_MS = 2 * 60 * 1000L
     }
 
     override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> =

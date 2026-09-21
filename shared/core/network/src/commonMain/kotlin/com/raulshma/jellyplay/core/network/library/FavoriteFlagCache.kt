@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.TtlCache
 
 /** LRU bound of the favorite-flag cache (the old `LruCache(200)` size). */
@@ -10,9 +11,11 @@ internal const val FAVORITE_CACHE_MAX_ENTRIES = 200
  * TTL of the favorite-flag cache — generous (the flags only seed a toggle's
  * "current" value until the first real read refreshes them), and the
  * identity-keyed composite key already guarantees a switched user never sees
- * the previous user's flags within any window.
+ * the previous user's flags within any window. Named by
+ * [com.raulshma.jellyplay.core.model.FreshnessCeilings.FAVORITE_FLAGS_TTL_MS];
+ * this alias keeps the file-private name the library clients already read.
  */
-internal const val FAVORITE_CACHE_TTL_MS = 15 * 60_000L
+internal val FAVORITE_CACHE_TTL_MS = FreshnessCeilings.FAVORITE_FLAGS_TTL_MS
 
 /**
  * The favorite-flag cache-aside choreography the library clients share:

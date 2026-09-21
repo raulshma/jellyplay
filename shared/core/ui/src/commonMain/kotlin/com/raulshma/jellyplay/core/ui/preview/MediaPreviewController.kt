@@ -88,7 +88,7 @@ val LocalMediaPreviewController = staticCompositionLocalOf<MediaPreviewControlle
 
 /**
  * Whether the press-and-hold "peek" preview is enabled. Bound at the root from
- * `UserPreferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK)`
+ * `MainPreferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK)`
  * (off by default — it is an experimental opt-in). Cards and the overlay both
  * read this so the feature is fully dormant (no gesture wiring, no overlay, no
  * backdrop blur) when the user hasn't turned it on.

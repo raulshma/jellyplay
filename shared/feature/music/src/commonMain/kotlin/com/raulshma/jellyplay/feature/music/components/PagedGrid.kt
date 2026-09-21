@@ -24,6 +24,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Search
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
@@ -331,7 +332,7 @@ fun <T : Any> SimpleCollectionGrid(
             when (simpleCollectionRung(isLoading, error, items.size)) {
                 PagedCollectionRung.InitialLoading -> ScreenLoadingState()
                 PagedCollectionRung.RefreshError -> ErrorScreen(
-                    message = error?.message ?: errorFallbackMessage,
+                    message = UserErrorMessages.resolve(error, errorFallbackMessage),
                     onRetry = onRefresh,
                 )
                 PagedCollectionRung.Empty -> ScreenEmptyState(

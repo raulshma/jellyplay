@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -44,7 +45,7 @@ class MediaInfoViewModel constructor(
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail -> _uiState.value = MediaInfoUiState.Success(detail) }
                 .onFailure { err ->
-                    _uiState.value = MediaInfoUiState.Error(err.message ?: "Failed to load media info")
+                    _uiState.value = MediaInfoUiState.Error(UserErrorMessages.resolve(err, "Failed to load media info"))
                 }
         }
     }

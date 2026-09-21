@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.model.PlaybackReportingActivity
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.StaleMediaItem
@@ -42,7 +43,11 @@ class MediaInfoApiClientImpl(
     // repository layer (which already caches library folders), so every
     // newsletter render previously bypassed the in-memory cache. Short TTL
     // keeps it fresh across server renames without per-render network calls.
-    private val serverNameCache = TtlCache<String>(maxSize = 4, ttlMs = 30 * 60 * 1000L)
+    // Like AdminApiClientImpl's dashboard caches, a declared exception to the
+    // identity-keyed house idiom: bare server-scoped key, no CacheIdentity
+    // composite (core:network has no identity source) — see CONTEXT.md
+    // "Core data repositories".
+    private val serverNameCache = TtlCache<String>(maxSize = 4, ttlMs = FreshnessCeilings.MEDIA_INFO_SERVER_NAME_TTL_MS)
 
     private suspend fun getCachedServerName(): String =
         runCatchingRethrowingCancellation {

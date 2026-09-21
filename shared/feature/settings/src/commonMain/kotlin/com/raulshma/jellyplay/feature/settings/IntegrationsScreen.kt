@@ -125,7 +125,7 @@ fun IntegrationsScreen(
                         subtitle = stringResource(Res.string.settings_seerr_integration_subtitle),
                         index = 0,
                         count = count,
-                        highlighted = highlightSettingId == "seerr_settings",
+                        highlighted = highlightSettingId == IntegrationsScreenIds.SEERR_SETTINGS,
                         onClick = onSeerrSettings,
                     )
                     SettingListItem(
@@ -134,7 +134,7 @@ fun IntegrationsScreen(
                         subtitle = stringResource(Res.string.settings_integrations_arr_subtitle),
                         index = 1,
                         count = count,
-                        highlighted = highlightSettingId == "arr_settings",
+                        highlighted = highlightSettingId == ExperimentalSettingsIds.ARR_SETTINGS,
                         onClick = onArrSettings,
                     )
                     SettingListItem(
@@ -143,7 +143,7 @@ fun IntegrationsScreen(
                         subtitle = stringResource(Res.string.settings_integrations_subtitles_subtitle),
                         index = 2,
                         count = count,
-                        highlighted = highlightSettingId == "subtitle_provider_settings",
+                        highlighted = highlightSettingId == IntegrationsScreenIds.SUBTITLE_PROVIDER_SETTINGS,
                         onClick = onSubtitleProviderSettings,
                     )
                 }

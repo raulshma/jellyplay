@@ -4,14 +4,10 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,7 +18,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +30,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPlay
 import org.jetbrains.compose.resources.stringResource
@@ -45,11 +40,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.rememberThemeCardBorder
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
-import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
-import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.preview.MediaPreview
-import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
-import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 
 /**
@@ -65,28 +56,70 @@ class AnimatedCardBorder(
 )
 
 /**
+ * The card's play (or, for books, read) affordance bundled into one value —
+ * the scaffold interface grows one slot per concern, not one per knob. The
+ * nullable knobs resolve to the scaffold's historical defaults at render time
+ * (they need composition to read the theme / string resources).
+ *
+ * @param onClick invoked when the affordance is tapped.
+ * @param dominantColor progress-ring color; null = [MaterialTheme.colorScheme.primary].
+ * @param buttonSize null = 36.dp.
+ * @param icon null = [Tabler.Outline.PlayerPlay].
+ * @param contentDescription null = the localized "Play" string.
+ */
+@Immutable
+data class PlayAffordance(
+    val onClick: () -> Unit,
+    val dominantColor: Color? = null,
+    val buttonSize: Dp? = null,
+    val icon: ImageVector? = null,
+    val contentDescription: String? = null,
+)
+
+/**
+ * The bottom legibility scrim inside the card's image box, bundled (brush +
+ * height always move together). Null [brush] = the scaffold's default
+ * transparent→surface gradient; [height] defaults to [DefaultCardScrimHeight].
+ */
+@Immutable
+data class CardScrim(
+    val brush: Brush? = null,
+    val height: Dp = DefaultCardScrimHeight,
+)
+
+internal val DefaultCardScrimHeight = 60.dp
+
+/**
  * The deep module behind the media-card family.
  *
  * Owns the card scaffold that every poster/wide card re-implemented by hand:
- * the [Card] container, the unified focus + press feedback ([rememberJellyFocusableInteraction]
- * + [pressScale] — the same system [PosterCard] used), the themed border
- * ([ThemeVariant.cardBorder]), the bottom scrim, the shared-element transition
- * wiring, the press-and-hold peek plumbing, the play button, and the progress
- * bar. Variant cards ([PosterCard], [WideMediaCard], [SeerrMediaCard]) are now
- * thin specializations that supply content via the slots and never touch this
- * chrome directly — so a visual change (scrim, border, focus treatment) is a
+ * the [Card] container, the themed border ([ThemeVariant.cardBorder]), the
+ * bottom scrim, the shared-element transition wiring, the play affordance,
+ * the progress bar, and the Column layout (image + title + footer). The
+ * interaction chrome itself — focus + press feedback, combined click, the
+ * press-and-hold peek plumbing — lives one layer down in [CardChrome]
+ * (see CardChrome.kt), so differently-shaped cards (the library ThumbCard,
+ * the details episode card) seat on the same chrome without inheriting this
+ * Column layout, and a visual change (scrim, border, focus treatment) is a
  * one-file edit instead of three.
+ *
+ * Variant cards ([PosterCard], [WideMediaCard], [SeerrMediaCard]) are thin
+ * specializations that supply content via the slots and never touch the
+ * chrome directly.
  *
  * @param image renders the poster/backdrop art, given an [imageModifier] that
  * already carries the [aspectRatio] and (when [sharedElementKey] is set) the
  * shared-element transition. The caller renders its [com.raulshma.jellyplay.core.ui.image.MediaImage]
  * / placeholder with that modifier.
  * @param aspectRatio image aspect ratio — 2:3 for posters, 16:9 for wide cards.
+ * @param play the card's primary affordance ([PlayAffordance]); null renders none.
  * @param previewFactory when non-null, wires the press-and-hold peek preview;
  * receives the card's captured bounds so it can populate
  * [MediaPreview.sourceBounds]. Pass `null` (the default) to disable peek.
  * @param onLongPress when non-null, long-press fires this instead of the peek
  * preview (e.g. a quick-action sheet wired by the host screen).
+ * @param scrim the bottom legibility scrim ([CardScrim]); null = default
+ * gradient at [DefaultCardScrimHeight].
  * @param overlays badges, chips, shimmer, brightness tints — anything drawn
  * on top of the image (z-order: image → scrim → overlays → play → progress).
  * @param footer the meta row beneath the title (year • runtime, series info…).
@@ -101,14 +134,9 @@ fun MediaCardScaffold(
     enabled: Boolean = true,
     clipToShape: Boolean = false,
     cardWidth: Dp? = null,
-    onPlayClick: (() -> Unit)? = null,
-    playButtonDominantColor: Color = MaterialTheme.colorScheme.primary,
-    playButtonSize: Dp = 36.dp,
-    playIcon: ImageVector = Tabler.Outline.PlayerPlay,
-    playIconContentDescription: String = stringResource(Res.string.core_ui_play),
+    play: PlayAffordance? = null,
     sharedElementKey: String? = null,
-    scrimBrush: Brush? = null,
-    scrimHeight: Dp = 60.dp,
+    scrim: CardScrim? = null,
     border: AnimatedCardBorder? = null,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     previewFactory: ((sourceBounds: Rect?) -> MediaPreview)? = null,
@@ -119,19 +147,12 @@ fun MediaCardScaffold(
     progressFraction: Float = 0f,
 ) {
     val isTv = LocalJellyPlayUi.current.isTv
-    val focusInteraction = rememberJellyFocusableInteraction()
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val focusScale = focusInteraction.scale
+    // Interaction chrome (focus tracking, press scale, peek wiring, click) is
+    // the shared layer; this scaffold is one of its layouts.
+    val chrome = rememberCardChrome(previewFactory = previewFactory)
+    val focusScale = chrome.focus.scale
     val themeVariant = LocalThemeVariant.current
     val cardShape = ShapeCache.smooth12
-
-    // Press-and-hold "peek" preview. The scaffold owns interactionSource, so it
-    // owns the peek wiring end-to-end — variants just supply the factory.
-    val peek = if (previewFactory != null) {
-        rememberMediaPeek(previewFactory = previewFactory)
-    } else null
-    if (previewFactory != null) rememberReleaseDismiss(isPressed)
 
     // Shared-element transition: wrap the image when a key and both scopes are
     // present. Only PosterCard participates today; Wide/Seerr gain it for free
@@ -161,7 +182,7 @@ fun MediaCardScaffold(
     val resolvedBorder = border?.stroke ?: rememberThemeCardBorder(themeVariant)
     val borderAlpha = border?.alpha
     val surfaceColor = MaterialTheme.colorScheme.surface
-    val resolvedScrimBrush = scrimBrush ?: remember(surfaceColor) {
+    val resolvedScrimBrush = scrim?.brush ?: remember(surfaceColor) {
         Brush.verticalGradient(
             colors = listOf(
                 Color.Transparent,
@@ -169,6 +190,7 @@ fun MediaCardScaffold(
             ),
         )
     }
+    val resolvedScrimHeight = scrim?.height ?: DefaultCardScrimHeight
 
     val columnModifier = if (cardWidth != null) modifier.width(cardWidth) else modifier
 
@@ -176,9 +198,9 @@ fun MediaCardScaffold(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(focusInteraction.modifier)
-                .then(peek?.boundsModifier ?: Modifier)
-                .pressScale(interactionSource = interactionSource)
+                .then(chrome.focus.modifier)
+                .then(chrome.peek?.boundsModifier ?: Modifier)
+                .then(chrome.pressScale)
                 .graphicsLayer {
                     scaleX = focusScale
                     scaleY = focusScale
@@ -193,18 +215,8 @@ fun MediaCardScaffold(
                             .border(resolvedBorder, cardShape)
                     } else Modifier
                 )
-                .jellyFocusIndicator(focusInteraction, cardShape)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = if (isReducedMotion()) {
-                        androidx.compose.foundation.LocalIndication.current
-                    } else {
-                        null
-                    },
-                    onClick = onClick,
-                    onLongClick = onLongPress ?: peek?.onLongClick,
-                    enabled = enabled,
-                ),
+                .jellyFocusIndicator(chrome.focus, cardShape)
+                .then(chrome.clickModifier(onClick = onClick, enabled = enabled, onLongPress = onLongPress)),
             shape = cardShape,
             border = if (borderAlpha != null) null else resolvedBorder,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -216,41 +228,34 @@ fun MediaCardScaffold(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(scrimHeight)
+                        .height(resolvedScrimHeight)
                         .background(resolvedScrimBrush)
                 )
 
                 overlays()
 
-                if (onPlayClick != null) {
+                play?.let {
                     PlayButtonWithProgress(
                         progressPercent = if (showProgress) progressFraction else 0f,
-                        dominantColor = playButtonDominantColor,
-                        onClick = onPlayClick,
-                        icon = playIcon,
-                        contentDescription = playIconContentDescription,
+                        dominantColor = it.dominantColor ?: MaterialTheme.colorScheme.primary,
+                        onClick = it.onClick,
+                        icon = it.icon ?: Tabler.Outline.PlayerPlay,
+                        contentDescription = it.contentDescription
+                            ?: stringResource(Res.string.core_ui_play),
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(end = 8.dp, bottom = 8.dp),
-                        buttonSize = playButtonSize,
+                        buttonSize = it.buttonSize ?: 36.dp,
                     )
                 }
 
                 if (showProgress && progressFraction > 0f) {
-                    Box(
+                    MediaCardProgressOverlay(
+                        progressFraction = progressFraction,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progressFraction)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                    }
+                            .fillMaxWidth(),
+                    )
                 }
             }
         }
@@ -268,10 +273,9 @@ fun MediaCardScaffold(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = titleColor,
-                modifier = Modifier.enableMarqueeOnFocus(focused = focusInteraction.isFocused),
+                modifier = Modifier.enableMarqueeOnFocus(focused = chrome.focus.isFocused),
             )
             footer()
         }
     }
 }
-

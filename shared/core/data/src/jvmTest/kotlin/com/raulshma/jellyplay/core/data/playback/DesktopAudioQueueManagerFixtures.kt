@@ -123,8 +123,6 @@ internal class FakePlaybackRepository : PlaybackRepository {
     ) = "stream://$itemId/$mediaSourceId"
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String) = deliveryUrl
-    override fun getServerUrl(): String? = null
-    override fun getAccessToken(): String? = null
     override fun buildSubtitleDeliveryUrl(itemId: String, mediaSourceId: String, index: Int, codec: String?) = ""
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> = emptyList()
