@@ -118,6 +118,9 @@ val settingsModule: Module = module {
             advancedSettings = get(),
             editor = get(),
             watchNextRefresher = get(),
+            // mpv audio-device enumeration: desktop-only — Android
+            // binds no enumerator and the row is capability-hidden there.
+            audioDeviceEnumerator = getOrNull(),
         )
     }
     viewModel {
@@ -216,6 +219,10 @@ val settingsModule: Module = module {
             // observed/written through the store above; matching happens
             // behind this repository so no core:network type reaches here.
             selfSignedTrustRepository = get(),
+            // the app-level client certificate (mTLS) import /
+            // toggle / remove seam — one Koin single shared with the
+            // handshake layer (applyTls).
+            clientCertificate = get(),
         )
     }
     viewModel {

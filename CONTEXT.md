@@ -2452,8 +2452,10 @@ with its own scope, Android's `MainViewModel` delegates, desktop's
 block used to be). `updateCheckMessage(Result<AppUpdateInfo>)` is the
 one shared update fact (a pure companion fold → `UpdateAvailable` /
 `UpToDate` / `Failed`); the update SURFACES stay per-shell (Android's
-`UpdateCoordinator` is structurally richer; the desktop inert sentinel
-per `docs/adr/desktop-auto-update.md` untouched). Android's rendered
+`UpdateCoordinator` is structurally richer; the desktop check follows
+`docs/adr/desktop-auto-update.md` — the inert sentinel was replaced by the
+channel-flag decorator, and the staged v0.11.1 hardening adds the repo
+allow-list + asset redirect gates). Android's rendered
 homeMode stays `MainPreferences`-derived (the ADR's "other duties stay"),
 so Android passes `homeModeChanges = null` while desktop feeds the store
 flow for its optimistic rail switch. Platform-conditional blocks (rail,
@@ -2492,8 +2494,12 @@ arbitrate through it, and the duplicated `ADMIN_REFRESH_INTERVAL_MS`
 constant is gone. The rendered in-flight/admin state stays per-shell as
 recorded. In `:app`, `RemoteNavigationRouting.kt` holds the remote-target
 decisions as pure functions: `routeForNavigationTarget(target)` (exhaustive
-`when` — a new server-emitted target is a compile-time decision, not a
-silent `Route.Home` fall-through) and `popPlayerRoutes(backStacks)` (the
+`when` over the ROUTED targets — a new server-emitted target is a
+compile-time decision, not a silent `Route.Home` fall-through; the v0.11.1
+companion-control navigation ladder added four deliberately NON-route targets —
+GoBack pops, MoveFocus/InvokeSelect/OpenContextMenu synthesize D-pad/
+center/menu keys — which `NavRequestCollector.collectRemoteNavigation`
+branches on directly before routing) and `popPlayerRoutes(backStacks)` (the
 Jellyfin-web "Stop" semantics: contiguous player entries popped off the top
 of every back stack). Pinned by `AdminRefreshGateTest` (shell jvmTest) and
 `RemoteNavigationRoutingTest` (app unit test); `ShellSectionRegistryTest`
@@ -4333,3 +4339,73 @@ re-derives the designs nor lands them casually.
   PlayerControls callback bundles; MediaDetailScreen dialog coordinator;
   signed-out auth shell; factory-reset field enumeration; settings
   row-twin rendering; `ss_*`/`settings_*` string merge.
+
+## v0.11.1 hardening wave (2026-09-22)
+
+The staged hardening wave — eight new architectural surfaces, each wired
+both shells and pinned:
+
+- **Update security**: `GitHubRepoAllowList` (core/network
+  jvmShared) is the compiled-in owner+repo pin; four fail-closed gates
+  (final post-redirect endpoint, html_url + per-asset, cached-info
+  re-verify + download-redirect landing, desktop browser handoff) throw
+  `UpdateSecurityException` before any feed-controlled URL drives a
+  download or browse. Amends `docs/adr/desktop-auto-update.md`
+  (implementation addendum there; design: `scratch/mpv-shim-implementation-plan.md`
+  — jvmShared, not the recorded commonMain, because every
+  enforcement point is JVM). Pinned by `GitHubRepoAllowListTest` +
+  `GitHubReleasesApiImplTest` fail-closed arms.
+- **Client certificates (mTLS)**:
+  `ClientCertificateManager`/`ClientCertificateProvider`/`ClientCertificateFacade`
+  (core/network jvmShared) own the installed cert/key/CA triple in the
+  app-private cert dir — import normalizes PKCS#12 vs PEM pairs, the
+  key-manager cache stamps (mtime,length,content) and fails closed when
+  enabled-but-missing, `SelfSignedTrustManager` merges the custom-CA
+  anchoring with the self-signed grant short-circuit. The settings
+  surface is `ServerManagementScreen` + `ServerManagementViewModel`
+  (certificate messages are the typed `CertificateUserMessage`, resolved
+  to resources by the screen — the `PrivacyUserMessage` pattern) over the
+  `CertificateFilePicker` expect/actuals (SAF on Android, AWT on
+  desktop). Pinned by `ClientCertificateManagerTest` +
+  `SelfSignedTrustClientAuthTest`.
+- **Render profile + Anime4K**: `MpvConfigMapping`
+  (feature/player-video commonMain, public for the desktop adapter) is
+  the ONE ordered mpv pair list both engines apply — runtime transitions
+  are diff-then-write over `lastApplied` maps, and EVERY owned key is
+  explicit (tone-mapping AUTO and interpolation-off write mpv defaults
+  so preset→AUTO / on→off transitions reach the core instead of sticking
+  until restart). `RenderProfileResolver` + `SessionRenderState` fold the
+  per-item/series override (`ItemPlaybackPreference.renderProfile`,
+  migration 56→57) over the global slice; the sheet is
+  `components/RenderSheet`. Desktop installs the Anime4K v4.0.1 pack at
+  startup (`Anime4KShaderInstaller`, third-party notices in packaging).
+  Pinned by `MpvConfigMappingTest`, `RenderProfileResolverTest`,
+  `Anime4KShaderInstallerTest`.
+- **Track-language rules + remembered codec (56→57)**:
+  `TrackResolutionEngine`/`TrackSelectionPolicy`/`TrackSelectionHelper`
+  resolve audio/subtitle picks through the ordered `LanguageRuleSet`
+  (`SubtitleLanguageStore`, `TrackSelectionSettings` editor sheets in
+  the language settings screen), with the cross-episode remembered track
+  now carrying its container codec (`rememberedAudioCodec`/
+  `rememberedSubtitleCodec` columns — the label-churn re-match rung).
+  Pinned by `TrackResolutionEngineTest` + `TrackSelectionHelperTest`.
+- **Volume memory**: `VolumeProfileStore`
+  (core/datastore `volume/`) keeps per-`VolumeBucket` normalized levels
+  + the master toggle; `VolumeMemoryPolicy` (feature/player-video)
+  restores at session start and captures user changes (desktop mpv +
+  audio players; Android video stays on STREAM_MUSIC). Backup key rides
+  `SettingsBackup`.
+- **Companion control expansion**: `RemoteControlReceiver` (core/data
+  jvmShared) grew the General-command ladder — DisplayContent is
+  idle-gated + consent-gated through `firstPersistedSecurity` (never the
+  seeded StateFlow read), the nav ladder (GoBack/MoveFocus/InvokeSelect/
+  OpenContextMenu) feeds `RemoteNavigationBridge`, and both platforms'
+  dispatchers (`DesktopRemoteControlDispatchers` new) share the sealed
+  `RemoteControlRequests` vocabulary with a capability mirror test
+  against the server's `SUPPORTED_REMOTE_COMMANDS` list.
+- **Desktop session surface**: `DesktopIdleMonitor`/`DesktopIdleOverlay`
+  (AWT-idle detection + the screensaver-consenting dim blanket),
+  `DesktopKeySynthesizer` (the ladder's robot key events),
+  `DesktopSessionCoordinator` (Jellyfin session caps), and
+  `DesktopAudioDeviceEnumerator` (mpv `audio-device` list for the
+  playback settings row).

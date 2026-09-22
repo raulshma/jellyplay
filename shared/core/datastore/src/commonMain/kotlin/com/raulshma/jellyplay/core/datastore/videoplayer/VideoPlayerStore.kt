@@ -99,6 +99,7 @@ class VideoPlayerStore constructor(
         val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
         val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
+        val SKIP_SEGMENTS_ON_SEEK = booleanPreferencesKey("skip_segments_on_seek")
     }
 
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> =
@@ -150,6 +151,7 @@ class VideoPlayerStore constructor(
         tvZoomModePercent = PreferenceCodec.readFloat(prefs, Keys.TV_ZOOM_MODE_PERCENT, "tv_zoom_mode_percent", 0f),
         incognitoModeEnabled = PreferenceCodec.readBool(prefs, Keys.INCOGNITO_MODE_ENABLED, "incognito_mode_enabled", false),
         segmentBehaviors = readSegmentBehaviorsCached(prefs),
+        skipSegmentsOnSeek = PreferenceCodec.readBool(prefs, Keys.SKIP_SEGMENTS_ON_SEEK, "skip_segments_on_seek", false),
     )
 
     /**
@@ -365,6 +367,16 @@ class VideoPlayerStore constructor(
         dataStore.edit { it[Keys.INCOGNITO_MODE_ENABLED] = enabled }
     }
 
+    /**
+     * Skip-on-forward-seek: when on, a user-initiated seek that lands
+     * strictly inside an AUTO_SKIP segment is pulled to the segment's end
+     * (with a "Skipped …" confirmation). Internal, app-driven seeks are never
+     * affected — the gate rides the ViewModel's `seekTo(userInitiated)`.
+     */
+    suspend fun setSkipSegmentsOnSeek(enabled: Boolean) {
+        dataStore.edit { it[Keys.SKIP_SEGMENTS_ON_SEEK] = enabled }
+    }
+
     suspend fun setSegmentBehaviors(behaviors: Map<MediaSegmentType, SegmentBehavior>) {
         dataStore.edit { prefs ->
             prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.json.encodeToString(
@@ -443,6 +455,7 @@ class VideoPlayerStore constructor(
             Keys.SKIP_OUTRO_ENABLED,
             Keys.AUTO_SKIP_INTRO,
             Keys.AUTO_SKIP_OUTRO,
+            Keys.SKIP_SEGMENTS_ON_SEEK,
         )
         else -> emptyList()
     }
@@ -489,6 +502,7 @@ class VideoPlayerStore constructor(
             prefs[Keys.SHOW_TIME_REMAINING] = slice.showTimeRemaining
             prefs[Keys.TV_ZOOM_MODE_PERCENT] = slice.tvZoomModePercent
             prefs[Keys.INCOGNITO_MODE_ENABLED] = slice.incognitoModeEnabled
+            prefs[Keys.SKIP_SEGMENTS_ON_SEEK] = slice.skipSegmentsOnSeek
         }
     }
 }
@@ -534,4 +548,9 @@ data class VideoPlayerSlice(
     val tvZoomModePercent: Float = 0f,
     val incognitoModeEnabled: Boolean = false,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    /**
+     * Skip-on-forward-seek. Default **off**: opt-in, because silently
+     * remapping a user's seek target is a behavior change they must ask for.
+     */
+    val skipSegmentsOnSeek: Boolean = false,
 )

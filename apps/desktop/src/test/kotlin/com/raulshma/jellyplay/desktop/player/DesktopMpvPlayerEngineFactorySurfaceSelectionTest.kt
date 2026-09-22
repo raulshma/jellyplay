@@ -168,4 +168,31 @@ class DesktopMpvPlayerEngineFactorySurfaceSelectionTest {
             recorder.dispose()
         }
     }
+
+    @Test
+    fun hdrPassthrough_beatsTheSoftwarePath_andSelectsTheHwndEngine() = runBlocking {
+        // HDR passthrough REQUIRES the wid/HWND-embed vo=gpu-next
+        // output — the software renderer composites CPU RGB bitmaps and
+        // cannot pass HDR through. With the setting on, the sw-first
+        // precedence inverts even when the probe passes.
+        assumeTrue(DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported)
+        assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
+        val recorder = EngineActivityRecorder()
+        val provider: () -> Long? = { 0x12345678L }
+        DesktopVideoSurfaceBridge.register(provider)
+        try {
+            withSoftwareProbe(probe = { true }) {
+                val factory = DesktopMpvPlayerEngineFactory(
+                    recorder = recorder,
+                    hdrPassthroughProvider = { true },
+                )
+                val engine = factory.create(PlayerType.MPV)
+                assertIs<MpvDesktopEngine>(engine)
+                assertEquals(SURFACE_HWND, recorder.latestVideoEngine().surface)
+            }
+        } finally {
+            DesktopVideoSurfaceBridge.clear(provider)
+            recorder.dispose()
+        }
+    }
 }

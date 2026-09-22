@@ -25,6 +25,14 @@ import kotlinx.coroutines.flow.StateFlow
  * gates onCreate (and the auth/onboarding branches skip NetworkMonitor and
  * the remote-control objects entirely, the same deferral
  * [audioPlaybackManagerLazy] always had for the playback engine).
+ *
+ * @param keyDispatcher the activity's key-event synthesis seam:
+ *   feeds one Android keycode through the activity's key dispatch (down +
+ *   up) and reports whether anything consumed it. The remote navigation
+ *   ladder (MoveFocus/InvokeSelect/OpenContextMenu) drives Compose's
+ *   existing D-pad handling through it — no focus plumbing of our own.
+ *   Eager (not lazy): it closes over the activity's window, which exists
+ *   for the whole of onCreate.
  */
 class ShellInfra(
     val userMessageBusLazy: Lazy<UserMessageBus>,
@@ -32,4 +40,5 @@ class ShellInfra(
     val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
     val remoteNavigationBridgeLazy: Lazy<RemoteNavigationBridge>,
     val remoteControlReceiverLazy: Lazy<RemoteControlReceiver>,
+    val keyDispatcher: (Int) -> Boolean,
 )

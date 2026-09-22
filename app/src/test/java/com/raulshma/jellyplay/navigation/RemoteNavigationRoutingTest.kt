@@ -73,6 +73,59 @@ class RemoteNavigationRoutingTest {
         assertEquals(null, routeForNavigationTarget(NavigationTarget.ClosePlayer))
     }
 
+    // ── The navigation-ladder targets ─────────────────────────────
+
+    @Test
+    fun `top-level destinations fold onto their tab routes`() {
+        assertEquals(
+            Route.Home,
+            routeForNavigationTarget(
+                NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.data.remote.RemoteTopLevelDestination.HOME),
+            ),
+        )
+        assertEquals(
+            Route.Search,
+            routeForNavigationTarget(
+                NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.data.remote.RemoteTopLevelDestination.SEARCH),
+            ),
+        )
+        assertEquals(
+            Route.Settings,
+            routeForNavigationTarget(
+                NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.data.remote.RemoteTopLevelDestination.SETTINGS),
+            ),
+        )
+    }
+
+    @Test
+    fun `ladder targets are not routes`() {
+        // The collector branches on these directly (back pop / synthesized
+        // key events / context-menu fallback message).
+        assertEquals(null, routeForNavigationTarget(NavigationTarget.GoBack))
+        assertEquals(
+            null,
+            routeForNavigationTarget(
+                NavigationTarget.MoveFocus(com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.UP),
+            ),
+        )
+        assertEquals(null, routeForNavigationTarget(NavigationTarget.InvokeSelect))
+        assertEquals(null, routeForNavigationTarget(NavigationTarget.OpenContextMenu))
+    }
+
+    @Test
+    fun `focus directions map onto the d-pad keycodes`() {
+        assertEquals(android.view.KeyEvent.KEYCODE_DPAD_UP, keyCodeForFocusDirection(com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.UP))
+        assertEquals(android.view.KeyEvent.KEYCODE_DPAD_DOWN, keyCodeForFocusDirection(com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.DOWN))
+        assertEquals(android.view.KeyEvent.KEYCODE_DPAD_LEFT, keyCodeForFocusDirection(com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.LEFT))
+        assertEquals(android.view.KeyEvent.KEYCODE_DPAD_RIGHT, keyCodeForFocusDirection(com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.RIGHT))
+    }
+
+    @Test
+    fun `select and context menu synthesize the center and menu keycodes`() {
+        assertEquals(android.view.KeyEvent.KEYCODE_DPAD_CENTER, REMOTE_SELECT_KEYCODE)
+        assertEquals(android.view.KeyEvent.KEYCODE_MENU, REMOTE_CONTEXT_MENU_KEYCODE)
+    }
+
     // ── popPlayerRoutes: Jellyfin-web "Stop" semantics ──────────────────
 
     @Test

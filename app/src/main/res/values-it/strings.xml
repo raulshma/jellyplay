@@ -178,6 +178,7 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">In riproduzione: %1$s</string>
+    <string name="snackbar_context_menu_unavailable">Menu contestuale non disponibile qui</string>
 
     <!-- Player speed-picker custom-value labels (§2.3). -->
     <string name="player_speed_custom">Velocità personalizzata</string>

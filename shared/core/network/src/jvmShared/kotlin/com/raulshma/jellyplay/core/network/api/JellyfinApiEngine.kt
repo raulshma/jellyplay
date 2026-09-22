@@ -271,7 +271,13 @@ class JellyfinApiEngine(
         /** Minimum spacing between failure-triggered address re-selections. */
         private const val RESELECT_THROTTLE_MS = 5_000L
 
-        private val SUPPORTED_REMOTE_COMMANDS = listOf(
+        // The command vocabulary this client advertises to the server —
+        // server-side remote UIs (jellyfin-web's d-pad, the official apps'
+        // remote sheet) render exactly these. MUST stay in lockstep with the
+        // serial-name mirror in core/network's AuthWireDto
+        // (SUPPORTED_REMOTE_COMMANDS) — a jvmTest pins the two sets equal.
+        // Internal (not private) so that mirror test can read it.
+        internal val SUPPORTED_REMOTE_COMMANDS = listOf(
             GeneralCommandType.SET_VOLUME,
             GeneralCommandType.VOLUME_UP,
             GeneralCommandType.VOLUME_DOWN,
@@ -287,6 +293,19 @@ class JellyfinApiEngine(
             GeneralCommandType.TOGGLE_FULLSCREEN,
             GeneralCommandType.DISPLAY_MESSAGE,
             GeneralCommandType.PLAY,
+            // Navigation ladder + DisplayContent + TakeScreenshot.
+            GeneralCommandType.BACK,
+            GeneralCommandType.SELECT,
+            GeneralCommandType.MOVE_UP,
+            GeneralCommandType.MOVE_DOWN,
+            GeneralCommandType.MOVE_LEFT,
+            GeneralCommandType.MOVE_RIGHT,
+            GeneralCommandType.GO_HOME,
+            GeneralCommandType.GO_TO_SETTINGS,
+            GeneralCommandType.GO_TO_SEARCH,
+            GeneralCommandType.TOGGLE_CONTEXT_MENU,
+            GeneralCommandType.DISPLAY_CONTENT,
+            GeneralCommandType.TAKE_SCREENSHOT,
         )
     }
 }

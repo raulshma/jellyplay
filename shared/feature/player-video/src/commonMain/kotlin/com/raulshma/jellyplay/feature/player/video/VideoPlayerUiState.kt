@@ -105,6 +105,21 @@ data class SegmentOverlayState(
 )
 
 /**
+ * The payload of the player's ephemeral "Skipped …" caption: the
+ * segment type the skip belongs to, resolved to a localized string at render
+ * time (core:ui's `localizedDisplayName` — the ViewModel cannot touch
+ * resources), plus a monotonically increasing sequence so two consecutive
+ * skips of the SAME type still re-trigger the caption's visibility effect
+ * (an equal-content state write would be a no-op for the collector).
+ * Transient by design: the ViewModel clears it after ~2.5 s.
+ */
+@Immutable
+data class SkippedSegmentNotice(
+    val segmentType: MediaSegmentType,
+    val seq: Long,
+)
+
+/**
  * Session + prefs-mirror state for the video player, organized as seven stored
  * slices plus a small, deliberately flat remainder.
  *
@@ -282,6 +297,12 @@ data class VideoPlayerUiState(
      * gate — does NOT touch the engine or PlayerLifecycleManager.
      */
     val audioOnly: Boolean = false,
+    /**
+     * Ephemeral "Skipped Intro / …" confirmation, raised when an auto-skip
+     * fires or a skip-on-seek clamp lands. `null` = nothing showing;
+     * the ViewModel owns the ~2.5 s auto-clear.
+     */
+    val skippedSegmentNotice: SkippedSegmentNotice? = null,
 ) {
 
     // ── Segment math ────────────────────────────────────────────────────────

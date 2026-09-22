@@ -72,6 +72,8 @@ internal class NavRequestCollector(
     private val backStacks: () -> Collection<MutableList<NavKey>>,
     private val consumePendingRoute: () -> Unit,
     private val presentSnackbar: suspend (message: String) -> Unit,
+    private val goBack: () -> Unit,
+    private val dispatchKey: ((Int) -> Boolean)?,
 ) {
 
     /**
@@ -115,13 +117,41 @@ internal class NavRequestCollector(
      * Jellyfin-web "Stop" pop (`ClosePlayer` → player entries off the top of
      * EVERY back stack) are [RemoteNavigationRouting]'s pure folds; pushed
      * routes go through the filter-carrying [navigate] seam.
+     *
+     * Navigation ladder: [NavigationTarget.GoBack] pops via [goBack];
+     * [NavigationTarget.MoveFocus] / [NavigationTarget.InvokeSelect] /
+     * [NavigationTarget.OpenContextMenu] synthesize D-pad/center/menu key
+     * events through [dispatchKey] (Compose's own key handling interprets
+     * them); a context-menu key nothing consumed falls back to the standard
+     * user message; [NavigationTarget.GoToTopLevel] reuses the pure
+     * [pendingRouteDispatch] tab-vs-push fork.
      */
-    suspend fun collectRemoteNavigation(targets: Flow<NavigationTarget>) {
+    suspend fun collectRemoteNavigation(
+        targets: Flow<NavigationTarget>,
+        contextMenuUnavailableMessage: String,
+    ) {
         targets.collect { target ->
-            if (target is NavigationTarget.ClosePlayer) {
-                popPlayerRoutes(backStacks())
-            } else {
-                routeForNavigationTarget(target)?.let(navigate)
+            when (target) {
+                NavigationTarget.ClosePlayer -> popPlayerRoutes(backStacks())
+                NavigationTarget.GoBack -> goBack()
+                is NavigationTarget.MoveFocus -> dispatchKey?.invoke(keyCodeForFocusDirection(target.direction))
+                NavigationTarget.InvokeSelect -> dispatchKey?.invoke(REMOTE_SELECT_KEYCODE)
+                NavigationTarget.OpenContextMenu -> {
+                    val handled = dispatchKey?.invoke(REMOTE_CONTEXT_MENU_KEYCODE) == true
+                    if (!handled) presentSnackbar(contextMenuUnavailableMessage)
+                }
+                is NavigationTarget.GoToTopLevel,
+                is NavigationTarget.OpenVideoPlayer,
+                is NavigationTarget.OpenAudioPlayer,
+                is NavigationTarget.OpenMediaDetail -> {
+                    routeForNavigationTarget(target)?.let { route ->
+                        when (pendingRouteDispatch(route, topLevelKeys)) {
+                            is PendingRouteDispatch.SwitchTab -> selectTopLevelTab(route)
+                            is PendingRouteDispatch.Push -> navigate(route)
+                            PendingRouteDispatch.None -> Unit
+                        }
+                    }
+                }
             }
         }
     }

@@ -133,7 +133,7 @@ internal class AndroidVideoPlayerAudio(
                     volume = { engine.volume },
                     pause = { engine.pause() },
                     play = { engine.play() },
-                    setVolume = { engine.setVolume(it) },
+                    setVolume = { volume, isUserChange -> engine.setVolume(volume, isUserChange) },
                     setMuted = { engine.setMuted(it) },
                 )
             }

@@ -98,6 +98,7 @@
     <string name="update_up_to_date_title">You\'re up to date</string>
     <string name="update_up_to_date_body">JellyPlay is already the latest version.</string>
     <string name="snackbar_now_playing">Now playing: %1$s</string>
+    <string name="snackbar_context_menu_unavailable">Context menu not available here</string>
     <string name="update_view_notes">View release notes</string>
     <string name="update_hide_notes">Hide release notes</string>
     <string name="update_available_title">Update available — v%1$s</string>

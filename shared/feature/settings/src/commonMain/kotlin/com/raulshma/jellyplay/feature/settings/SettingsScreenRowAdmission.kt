@@ -42,6 +42,10 @@ internal sealed interface RowAdmission {
             RowAdmissionCapability.TouchGestures -> flags.supportsTouchGestures
             RowAdmissionCapability.SystemNotificationSettings -> flags.supportsSystemNotificationSettings
             RowAdmissionCapability.Biometric -> flags.supportsBiometric
+            RowAdmissionCapability.AudioDeviceSelection -> flags.supportsAudioDeviceSelection
+            RowAdmissionCapability.MpvRenderProfiles -> flags.supportsMpvRenderProfiles
+            RowAdmissionCapability.VolumeMemory -> flags.supportsVolumeMemory
+            RowAdmissionCapability.IdleAmbientScreen -> flags.supportsIdleAmbientScreen
         }
     }
 
@@ -77,7 +81,7 @@ internal sealed interface RowAdmission {
 }
 
 /** The [RowAdmission.Platform] capability vocabulary — one entry per gating flag. */
-internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures, SystemNotificationSettings, Biometric }
+internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures, SystemNotificationSettings, Biometric, AudioDeviceSelection, MpvRenderProfiles, VolumeMemory, IdleAmbientScreen }
 
 /**
  * The inputs a [RowAdmission] evaluates against. The capability flags default
@@ -93,6 +97,14 @@ internal data class RowAdmissionFlags(
     val supportsSystemNotificationSettings: Boolean = settingsCapabilities.supportsSystemNotificationSettings,
     /** The biometric row's capability flag — the screen passes its gate-aware computed value. */
     val supportsBiometric: Boolean = settingsCapabilities.supportsBiometric,
+    /** The desktop mpv audio-device rows' capability flag. */
+    val supportsAudioDeviceSelection: Boolean = settingsCapabilities.supportsAudioDeviceSelection,
+    /** The desktop mpv render rows' capability flag. */
+    val supportsMpvRenderProfiles: Boolean = settingsCapabilities.supportsMpvRenderProfiles,
+    /** The per-content-type volume-memory toggle's capability flag. */
+    val supportsVolumeMemory: Boolean = settingsCapabilities.supportsVolumeMemory,
+    /** The desktop idle ambient screen rows' capability flag. */
+    val supportsIdleAmbientScreen: Boolean = settingsCapabilities.supportsIdleAmbientScreen,
     /** Parent row ids whose toggle is currently on — [RowAdmission.WhenOn] resolution. */
     val parentsOn: Set<String> = emptySet(),
 )
@@ -170,12 +182,26 @@ internal fun playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled: Boolean):
 
 /**
  * The playback screen's engine-config branch for one engine: the branch's
- * declared rows (every id carrying [idPrefix], e.g. `"mpv_"`) plus the one
- * reset row — the declared `reset_engine_defaults` item renders as that row
- * in every engine branch.
+ * declared rows (every id carrying [idPrefix], e.g. `"mpv_"`) that their
+ * declared admissions admit — the desktop-gated mpv audio-device rows
+ * drop where the platform has no enumerator — plus the one reset row (the
+ * declared `reset_engine_defaults` item renders as that row in every engine
+ * branch).
  */
-internal fun playbackEngineScreenRowTotal(idPrefix: String): Int =
-    SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith(idPrefix) } + 1
+internal fun playbackEngineScreenRowTotal(
+    idPrefix: String,
+    supportsAudioDeviceSelection: Boolean = settingsCapabilities.supportsAudioDeviceSelection,
+    supportsMpvRenderProfiles: Boolean = settingsCapabilities.supportsMpvRenderProfiles,
+): Int {
+    val flags = RowAdmissionFlags(
+        supportsAudioDeviceSelection = supportsAudioDeviceSelection,
+        supportsMpvRenderProfiles = supportsMpvRenderProfiles,
+    )
+    return SettingsScreenGroups.playbackEngine.items.count { item ->
+        item.id.startsWith(idPrefix) &&
+            SettingsScreenGroups.playbackEngine.rowAdmitted(item.id, flags)
+    } + 1
+}
 
 // ── NotificationSettingsScreen ──────────────────────────────────────────
 
@@ -218,6 +244,18 @@ internal fun notificationScreenRowTotal(
 internal fun languageGeneralScreenRowTotal(showsAppLocaleRow: Boolean): Int =
     SettingsScreenGroups.languageGeneral.items.count { item ->
         showsAppLocaleRow || item.id != LanguageSettingsIds.APP_LANGUAGE
+    }
+
+/**
+ * The language screen's "Track Selection" group: every row declares
+ * [RowAdmission.Always], so the total is the declaration size — counted
+ * through the admissions function like its siblings so the strict-count
+ * contract stays uniform.
+ */
+internal fun languageTrackSelectionScreenRowTotal(): Int =
+    SettingsScreenGroups.languageTrackSelection.items.count { item ->
+        SettingsScreenGroups.languageTrackSelection.admissionOf(item.id)
+            ?.admitted(RowAdmissionFlags()) ?: false
     }
 
 /**

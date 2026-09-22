@@ -50,7 +50,7 @@ class PreferencesEditScopeTest {
                 graph.libraryStore, graph.navigationStore, graph.networkOfflineStore,
                 graph.notificationStore, graph.screensaverStore, graph.securityStore,
                 graph.subtitleLanguageStore, graph.syncPlayCastStore, graph.experimentalStore,
-                graph.appRuntimeStateStore,
+                graph.volumeProfileStore, graph.appRuntimeStateStore,
             )
             editor = PreferencesEditor(scope, editScope, store)
             // Drain cached slice flows so the cleared state is observed first.

@@ -204,6 +204,16 @@ class MainActivity : FragmentActivity() {
             audioPlaybackManagerLazy = audioPlaybackManagerLazy,
             remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
             remoteControlReceiverLazy = remoteControlReceiverLazy,
+            // Remote navigation ladder: synthesized D-pad/select/menu
+            // key events go through the activity's own dispatch (down + up),
+            // so Compose's existing key/focus handling interprets them —
+            // nothing here re-implements focus traversal. Returns whether
+            // anything consumed the pair, the fallback signal for the
+            // context-menu message.
+            keyDispatcher = { keyCode ->
+                dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)) ||
+                    dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+            },
         )
 
         // Pre-Android 13 per-app language: observe the saved language and apply

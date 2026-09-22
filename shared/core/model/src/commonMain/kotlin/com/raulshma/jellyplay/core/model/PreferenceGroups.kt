@@ -107,6 +107,8 @@ data class SecurityPreferences(
     val autoLockTimerMs: Long = 30_000L,
     val incognitoModeEnabled: Boolean = false,
     val remoteControlEnabled: Boolean = true,
+    /** Opt-in for remote "DisplayContent" (idle detail navigation). */
+    val remoteDisplayContentEnabled: Boolean = false,
 )
 
 @Immutable
@@ -206,6 +208,8 @@ data class PlaybackPreferences(
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    /** Skip-on-forward-seek. Default off — see `VideoPlayerSlice`. */
+    val skipSegmentsOnSeek: Boolean = false,
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
@@ -237,6 +241,14 @@ data class PlaybackPreferences(
     val dvrPostPaddingMinutes: Int = 0,
     val dvrRecordingQuality: String = "AUTO",
     val androidTvWatchNextEnabled: Boolean = true,
+    /**
+     * Per-content-type volume memory is on — one remembered level
+     * per bucket (video / music / audiobook), applied at item start and
+     * written on user-initiated changes. Desktop-video-backed (the app owns
+     * mpv's volume scalar there); the row is capability-hidden on Android,
+     * whose video volume is the system stream's.
+     */
+    val rememberVolumePerContentType: Boolean = true,
 )
 
 /** Fields read by `AudioSettingsScreen`. */
@@ -340,6 +352,8 @@ data class LanguagePreferences(
         edgeType = SubtitleEdgeType.OUTLINE,
     ),
     val appLanguage: String? = null,
+    /** The track-language rule set edited by the screen's track-selection group. */
+    val languageRules: LanguageRuleSet = LanguageRuleSet(),
 )
 
 /** Fields read by `ExperimentalSettingsScreen`. */

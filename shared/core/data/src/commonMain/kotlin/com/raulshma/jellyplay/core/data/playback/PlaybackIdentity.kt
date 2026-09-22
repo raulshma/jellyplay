@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls
 
 /**
  * The playback session-identity reads: the token + base-URL pair a playback
@@ -25,14 +26,26 @@ interface PlaybackIdentity {
 
     /** Access token of the signed-in user; `null` when no session is active. */
     fun accessToken(): String?
+
+    /**
+     * TLS client-certificate material for the active server: the
+     * mpv engines' file-path view of the app-level mTLS certificate, or
+     * `null` when none is enabled. Default `null` keeps fakes/test doubles
+     * unchanged; the production wiring hands the
+     * `ClientCertificateManager.playbackTlsPaths()` read through.
+     */
+    fun clientTls(): PlaybackTls? = null
 }
 
 /** Production impl: the network engine's session as surfaced by [AuthApiClient]. */
 class DefaultPlaybackIdentity(
     private val apiClient: AuthApiClient,
+    private val clientTlsReader: () -> PlaybackTls? = { null },
 ) : PlaybackIdentity {
 
     override fun serverUrl(): String? = apiClient.getServerUrl()
 
     override fun accessToken(): String? = apiClient.getAccessToken()
+
+    override fun clientTls(): PlaybackTls? = clientTlsReader()
 }

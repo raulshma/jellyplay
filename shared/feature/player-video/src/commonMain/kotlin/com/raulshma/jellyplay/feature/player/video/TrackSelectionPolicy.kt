@@ -50,6 +50,22 @@ internal fun offlineSubtitleTrackId(index: Int): String = "offline:$index"
  * mutating/ hydrating the remembered-track memory — remain the helper's job.
  * This module decides; [TrackSelectionHelper] enforces.
  *
+ * **The remembered-track re-matching ladder, end to end** — the order
+ * a previous episode's selection is re-applied for the next one, with every
+ * rung owning one key:
+ *
+ *  1. **Stored index** (validated) — the per-item `MediaStreamSelection`
+ *     stream index, trusted only when it still resolves to a stream matching
+ *     the recorded label/language (the helper revalidates).
+ *  2. **Language + indexWithinLanguage** — G5 scoring's layout-stability rung.
+ *  3. **Language + label** — G5 scoring's confident (≥3) label match.
+ *  4. **Language + codec** — the rung for label churn: same language,
+ *     remembered [RememberedTrack.codec] ([pickByScoring], after 2–3 miss).
+ *  5. **Language-first** — [SubtitleTrackMatcher]'s tiered same-language
+ *     relaxation (subtitles) / [pickPreferredAudioTrack]'s first same-language
+ *     track (audio).
+ *  6. **Default** — Off / Default placeholder (the caller's `null` handling).
+ *
  * [TrackScorer] and [SubtitleTrackMatcher] are composed, not merged: they solve
  * genuinely different problems (cross-episode continuity vs in-episode role
  * relaxation), and the win here is *naming the policy*, not collapsing the
@@ -79,7 +95,7 @@ internal class TrackSelectionPolicy {
         // take precedence for accessibility.
         val scored = if (!args.forcedOnly) {
             args.remembered?.let { remembered ->
-                pickByScoring(args.tracks, remembered)
+                pickByScoring(args.tracks, remembered, args.streams, StreamType.SUBTITLE)
             }
         } else {
             null
@@ -102,6 +118,8 @@ internal class TrackSelectionPolicy {
             lang = args.lang,
             forced = args.forced,
             hearingImpaired = args.hearingImpaired,
+            preferFull = args.preferFullSubtitle,
+            preferSigns = args.preferSignsSubtitle,
         )
     }
 
@@ -122,7 +140,7 @@ internal class TrackSelectionPolicy {
      */
     fun resolveAudio(args: AudioResolutionArgs): TrackOption? {
         val scored = args.remembered?.let { remembered ->
-            pickByScoring(args.tracks, remembered)
+            pickByScoring(args.tracks, remembered, args.streams, StreamType.AUDIO)
         }
         if (scored != null) return scored
         return pickPreferredAudioTrack(
@@ -234,30 +252,59 @@ internal class TrackSelectionPolicy {
     }
 
     /**
-     * Cross-episode scoring pre-pass (G5). Given the candidate [tracks] for a new
-     * episode and the previously-selected [remembered] track, returns the best-
-     * scoring candidate if one clears the confidence threshold, else null (the
-     * caller falls back to the language rule). Used for both audio and subtitle
-     * resolution. See [TrackScorer].
+     * Cross-episode scoring pre-pass (G5). Given the candidate [tracks] for a
+     * new episode and the previously-selected [remembered] track, returns the
+     * best-scoring candidate if one clears the confidence threshold, else null
+     * (the caller falls back to the language rule). Used for both audio and
+     * subtitle resolution. See [TrackScorer].
+     *
+     * Adds the **language + codec** rung after the label scorer: when
+     * scoring is not confident (or the label blank) but the remembered track
+     * carried a [RememberedTrack.codec], the first selectable candidate whose
+     * language matches AND whose underlying server stream still has that codec
+     * wins — the re-match that survives label churn ("English · 5.1 · EAC3" →
+     * "English (EAC3)") without hijacking a genuinely different pick.
      */
     private fun pickByScoring(
         tracks: List<TrackOption>,
         remembered: RememberedTrack,
+        streams: List<MediaStream>,
+        streamType: StreamType,
     ): TrackOption? {
-        if (remembered.label.isBlank()) return null
+        if (remembered.label.isBlank() && remembered.codec.isNullOrBlank()) return null
         val selectable = tracks.filter { it.index >= 0 }
         if (selectable.isEmpty()) return null
-        val candidates = selectable.mapIndexed { i, opt ->
-            TrackScorer.Candidate(
-                language = opt.language.orEmpty(),
-                label = opt.label,
-                indexWithinLanguage = remembered.indexWithinLanguage,
-                candidateIndexWithinLanguage = positionalIndexWithinLanguage(selectable, i),
-                optionId = i,
-            )
+        if (remembered.label.isNotBlank()) {
+            val candidates = selectable.mapIndexed { i, opt ->
+                TrackScorer.Candidate(
+                    language = opt.language.orEmpty(),
+                    label = opt.label,
+                    indexWithinLanguage = remembered.indexWithinLanguage,
+                    candidateIndexWithinLanguage = positionalIndexWithinLanguage(selectable, i),
+                    optionId = i,
+                )
+            }
+            TrackScorer.bestMatch(remembered.language, remembered.label, candidates = candidates)
+                ?.let { return selectable.getOrNull(it.optionId) }
         }
-        val winner = TrackScorer.bestMatch(remembered.language, remembered.label, candidates = candidates) ?: return null
-        return selectable.getOrNull(winner.optionId)
+        // Label scoring missed (or had no label): language + codec rung.
+        val codec = remembered.codec?.takeIf { it.isNotBlank() } ?: return null
+        val lang = remembered.language ?: return null
+        return selectable.firstOrNull { opt ->
+            isLanguageMatch(opt.language, lang) &&
+                streamCodecOf(opt, streams, streamType)?.equals(codec, ignoreCase = true) == true
+        }
+    }
+
+    /**
+     * The server stream's container codec for an engine [TrackOption], via the
+     * container stream index (mpv `ff-index` == server index). Null when the
+     * option exposes no stream index (side-loaded tracks) — the codec rung
+     * then skips the candidate rather than guessing.
+     */
+    private fun streamCodecOf(option: TrackOption, streams: List<MediaStream>, streamType: StreamType): String? {
+        val streamIndex = option.streamIndex ?: return null
+        return streams.firstOrNull { it.type == streamType && it.index == streamIndex }?.codec
     }
 
     /**
@@ -329,11 +376,16 @@ internal class TrackSelectionPolicy {
  * @param tracks the built/enriched/merged picker rows for the current load.
  * @param streams the server [MediaStream] list (empty offline).
  * @param lang ISO-639 language code the preference resolved to (per-item →
- *   per-series → global preferredSubtitleLanguage).
- * @param forcedOnly global `subtitlesForcedOnly` preference — pins forced subs.
+ *   per-series → rule engine → global preferredSubtitleLanguage).
+ * @param forcedOnly global `subtitlesForcedOnly` preference — pins forced subs
+ *   (also set by a rule resolving to [com.raulshma.jellyplay.core.model.SubtitleTrackMode.FORCED_ONLY]).
  * @param forced per-series forced-narrative pin, or null to not care.
  * @param hearingImpaired per-series SDH pin, or null to not care.
  * @param remembered the previous episode's selected subtitle (G5 memory), or null.
+ * @param preferFullSubtitle rule-engine full-dialogue bias — non-signs
+ *   same-language tracks win their tier.
+ * @param preferSignsSubtitle rule-engine signs/songs bias — signs
+ *   same-language tracks win their tier.
  */
 @Immutable
 data class SubtitleResolutionArgs(
@@ -344,13 +396,15 @@ data class SubtitleResolutionArgs(
     val forced: Boolean?,
     val hearingImpaired: Boolean?,
     val remembered: RememberedTrack?,
+    val preferFullSubtitle: Boolean = false,
+    val preferSignsSubtitle: Boolean = false,
 )
 
 /**
  * Inputs to [TrackSelectionPolicy.resolveAudio].
  *
  * @param resolvedLang the effective audio language (per-item → per-series →
- *   global preferredAudioLanguage) the policy should match against.
+ *   rule engine → global preferredAudioLanguage) the policy should match against.
  * @param preferAudioDescription global audio-description preference.
  * @param remembered the previous episode's selected audio track (G5 memory), or null.
  */

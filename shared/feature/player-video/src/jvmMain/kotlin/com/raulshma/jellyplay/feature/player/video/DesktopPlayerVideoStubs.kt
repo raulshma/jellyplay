@@ -99,7 +99,7 @@ internal class JvmNoOpEngine : MediaEngine {
     override fun updateConfig(config: EngineConfig) { /* no-op */ }
     override fun selectTrack(type: TrackType, index: Int) { /* no-op */ }
     override fun setMaxVideoBitrate(bps: Int?) { /* no-op */ }
-    override fun setVolume(value: Float) {
+    override fun setVolume(value: Float, isUserChange: Boolean) {
         volumeValue = value.coerceIn(0f, 1f)
     }
 
@@ -158,8 +158,32 @@ internal object NoOpJellyfinRemotePlayCastStrategy : JellyfinRemotePlayCastStrat
 
 internal object NoOpActivePlayerController : ActivePlayerController {
     override val engine: com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine? get() = null
+    override val screenshotRequests: kotlinx.coroutines.flow.SharedFlow<Unit> =
+        kotlinx.coroutines.flow.MutableSharedFlow<Unit>() // never emits — headless consumers see no requests
     override fun bindEngine(engine: com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine) {}
     override fun clearEngine() {}
+}
+/**
+ * Desktop adapter over the shared (core:data commonMain) ActivePlayerController
+ * registry — the replacement for the [NoOpActivePlayerController] binding
+ * the desktop receiver port introduced: the per-session mpv engine must
+ * register where the remote-control dispatchers can drive it, and the remote
+ * "TakeScreenshot" flow must reach the mounted player screen. The registry
+ * single itself is bound in dataJvmModule (both JVM shells share it).
+ */
+internal class DesktopActivePlayerController(
+    private val delegate: com.raulshma.jellyplay.core.data.remote.ActivePlayerController,
+) : ActivePlayerController {
+    override val engine: com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine?
+        get() = delegate.engine
+
+    override val screenshotRequests: kotlinx.coroutines.flow.SharedFlow<Unit>
+        get() = delegate.screenshotRequests
+
+    override fun bindEngine(engine: com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine) =
+        delegate.bindEngine(engine)
+
+    override fun clearEngine() = delegate.clearEngine()
 }
 
 internal class NoOpPipController : PipController {

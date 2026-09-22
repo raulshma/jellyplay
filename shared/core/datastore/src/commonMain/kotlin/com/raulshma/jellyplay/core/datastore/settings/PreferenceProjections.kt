@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 import com.raulshma.jellyplay.core.model.AppearancePreferences
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioPlayerPreferences
@@ -82,6 +83,8 @@ class PreferenceProjections constructor(
     private val securityStore: SecurityStore,
     private val experimentalStore: ExperimentalStore,
     private val screensaverStore: ScreensaverStore,
+    /** Per-content-type volume memory — feeds [playbackPreferences]'s toggle. */
+    private val volumeProfileStore: VolumeProfileStore,
 ) {
     // -------------------------------------------------------------------------
     // Per-domain projections.
@@ -169,6 +172,7 @@ class PreferenceProjections constructor(
                 autoLockTimerMs = security.autoLockTimerMs,
                 incognitoModeEnabled = video.incognitoModeEnabled,
                 remoteControlEnabled = security.remoteControlEnabled,
+                remoteDisplayContentEnabled = security.remoteDisplayContentEnabled,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SecurityPreferences())
@@ -222,8 +226,9 @@ class PreferenceProjections constructor(
 
     /**
      * Fields read by `PlaybackSettingsScreen`. The broadest slice — spans the
-     * video, playback, audio-effects, subtitle, audio, engine, and syncplay
-     * stores. Nested combines keep within Flow's 5-arg combine arity.
+     * video, playback, audio-effects, subtitle, audio, engine, syncplay and
+     * volume-profile stores. Nested combines keep within Flow's 5-arg combine
+     * arity.
      */
     val playbackPreferences: StateFlow<PlaybackPreferences> =
         combine(
@@ -237,8 +242,9 @@ class PreferenceProjections constructor(
                 PlaybackCoreBundle(playback, video, effects, subtitle, audio, engine)
             },
             syncPlayCastStore.syncPlayCast,
-        ) { g1, syncPlayCast ->
-            g1.toPlaybackPreferences(syncPlayCast)
+            volumeProfileStore.volumeProfile,
+        ) { g1, syncPlayCast, volumeProfile ->
+            g1.toPlaybackPreferences(syncPlayCast, volumeProfile)
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), PlaybackPreferences())
 
@@ -315,6 +321,7 @@ class PreferenceProjections constructor(
                 hdrSubtitleStyleEnabled = subtitle.hdrSubtitleStyleEnabled,
                 hdrSubtitleStyle = subtitle.hdrSubtitleStyle,
                 appLanguage = subtitle.appLanguage,
+                languageRules = subtitle.languageRules,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), LanguagePreferences())
@@ -495,6 +502,8 @@ class PreferenceProjections constructor(
             dreamShowTitle = g2.screensaver.dreamShowTitle,
             dreamKenBurnsEnabled = g2.screensaver.dreamKenBurnsEnabled,
             dreamTransitionStyle = g2.screensaver.dreamTransitionStyle,
+            idleAmbientEnabled = g2.screensaver.idleAmbientEnabled,
+            idleAmbientTimeoutMin = g2.screensaver.idleAmbientTimeoutMin,
             enabledExperimentalFeatures = g2.experimental.enabledExperimentalFeatures,
         )
     }.distinctUntilChanged()

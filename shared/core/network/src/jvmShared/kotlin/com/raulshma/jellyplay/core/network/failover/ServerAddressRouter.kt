@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.core.network.failover
 
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.network.config.ClientCertificateProvider
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
-import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
+import com.raulshma.jellyplay.core.network.config.ServerTrustConfig
+import com.raulshma.jellyplay.core.network.config.applyTls
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -102,9 +104,15 @@ private fun AddressProbeResult.toProbeOutcome() = ProbeOutcome(
  *   the many unit-test constructions (`ServerAddressRouter()` with the
  *   `prober` seam stubbed) keep compiling; an empty-grants provider leaves
  *   platform trust behavior byte-identical.
+ * @param clientCertificateProvider source of the app-level client certificate:
+ *   the probe client presents it through the same `applyTls` layer
+ *   as the app client, so a server that REQUIRES mTLS classifies its probes
+ *   as reachable. Defaults to [ClientCertificateProvider.NONE] for the
+ *   unit-test constructions.
  */
 class ServerAddressRouter(
     private val okHttpConfigProvider: OkHttpConfigProvider = ServerAddressRouter.emptyConfigProvider,
+    private val clientCertificateProvider: ClientCertificateProvider = ClientCertificateProvider.NONE,
 ) {
 
     data class Endpoint(
@@ -428,15 +436,21 @@ class ServerAddressRouter(
      * Probe client: deliberately NOT derived from the shared app client —
      * see the class KDoc. Fresh construction avoids the failover interceptor
      * (and its DI cycle), pins short timeouts (2s connect / 3s read / 5s
-     * call), and installs the same self-signed trust layer as the app client
-     * so granted servers probe as reachable.
+     * call), and installs the SAME TLS layer as the app client (self-signed
+     * grants + the client certificate, both read live at handshake time) so
+     * granted servers — and servers requiring mTLS — probe as reachable.
      */
     private val probeClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(2, TimeUnit.SECONDS)
             .readTimeout(3, TimeUnit.SECONDS)
             .callTimeout(5, TimeUnit.SECONDS)
-            .applySelfSignedTrust { okHttpConfigProvider.config.value.selfSignedTrustHosts }
+            .applyTls(
+                ServerTrustConfig(
+                    grantedHosts = { okHttpConfigProvider.config.value.selfSignedTrustHosts },
+                    clientCertificate = clientCertificateProvider,
+                ),
+            )
             .build()
     }
 }

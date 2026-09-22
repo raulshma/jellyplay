@@ -1455,6 +1455,15 @@ class ExoPlayerEngine(
                 if (buffered != _bufferedPositionMs.value) {
                     _bufferedPositionMs.value = buffered
                 }
+                // conservative single range [position, buffered] v1 —
+                // DefaultLoadControl's back-buffer extent is not exposed
+                // per-range, so the contiguous ahead-window is the honest
+                // band. Normalizes + dedups into the shared flow.
+                _bufferedRanges.value = BufferedRanges.contiguous(
+                    startMs = p.currentPosition,
+                    endMs = buffered,
+                    durationMs = durationMs,
+                )
                 if (_videoStatsEnabled.value) {
                     updateVideoStats()
                 }

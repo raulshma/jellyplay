@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.settings.mergeWith
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
@@ -117,9 +118,12 @@ class UserPreferencesStore constructor(
     private val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
     private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    // Per-content-type volume memory (two keys; rides PLAYBACK for
+    // reset and its own backup slice).
+    private val volumeProfileStore: com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore,
     // Owns the 5 app-runtime-state keys (favorite channels, last live-TV channel,
     // watch-later playlist, onboarding flag, recent DLNA devices). Injected here
-    // so backup export/import can fan out to it alongside the 18 domain stores.
+    // so backup export/import can fan out to it alongside the 19 domain stores.
     private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
 ) {
     private val scope = externalScope
@@ -127,7 +131,7 @@ class UserPreferencesStore constructor(
     /**
      * Keys the facade itself owns — runtime / per-account / one-time state that
      * has no domain store. Every other preference key has a single owner: one
-     * of the 18 domain-store `Keys` objects or `PinRateLimiter.Keys`. Those are
+     * of the 19 domain-store `Keys` objects or `PinRateLimiter.Keys`. Those are
      * not re-declared here; the JVM test-source reset-coverage guard
      * enumerates them reflectively (see `UserPreferencesStoreResetCoverageTest`).
      *
@@ -298,7 +302,7 @@ class UserPreferencesStore constructor(
     }
 
     /**
-     * The 18 domain slices in [BackupSliceKey] order — snapshot keys, restore
+     * The 19 domain slices in [BackupSliceKey] order — snapshot keys, restore
      * fan-out and reset-key flattening all follow this order. Adding a domain
      * store means adding one row here (plus its constructor parameter); every
      * fan-out below picks it up. Extras (`AppRuntimeState`) stay orthogonal:
@@ -459,6 +463,14 @@ class UserPreferencesStore constructor(
             restore = { experimentalStore.restore(it) },
             merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
             resetKeys = { experimentalStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.VOLUME_PROFILE,
+            categories = setOf(PreferenceResetCategory.PLAYBACK),
+            read = { volumeProfileStore.volumeProfile.first() },
+            serializer = VolumeProfileSlice.serializer(),
+            restore = { volumeProfileStore.restore(it) },
+            resetKeys = { volumeProfileStore.resetKeysFor(it) },
         ),
     )
 

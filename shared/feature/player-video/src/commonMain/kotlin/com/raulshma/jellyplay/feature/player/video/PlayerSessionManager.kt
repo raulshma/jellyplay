@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
+import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -603,13 +604,32 @@ class PlayerSessionManager(
         val externalSubtitles = buildExternalSubtitles(detail, source, playMethod)
 
         val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
-        
+
         val headers = mutableMapOf<String, String>()
         val serverUrl = playbackIdentity.serverUrl()
         val token = playbackIdentity.accessToken()
         if (!token.isNullOrBlank()) {
             headers += JellyfinAuthorizationHeader.tokenOnlyHeader(token)
         }
+
+        // When the language rule engine resolves languages for this
+        // item, seed the request's preferred languages so the engine's native
+        // track selection (ExoPlayer track-selection parameters) starts out in
+        // agreement with the helper's restore ladder. A null resolution axis
+        // falls back to the global preferred language — the exact precedence
+        // the ladder applies (per-item/series manual preferences are the
+        // helper's rung and outrank both).
+        val ruleResolution = TrackResolutionEngine.resolve(
+            agg.subtitle.languageRules,
+            TrackRuleContext(
+                contentType = mediaRuleContentType(detail.item.mediaType),
+                titles = listOfNotNull(
+                    detail.item.seriesName?.takeIf { it.isNotBlank() },
+                    detail.item.name?.takeIf { it.isNotBlank() },
+                ),
+                streams = _sessionState.value.mediaStreams,
+            ),
+        )
 
         val request = PlaybackRequest(
             uri = url,
@@ -618,8 +638,15 @@ class PlayerSessionManager(
             artworkUri = artworkUri,
             externalSubtitles = externalSubtitles,
             headers = headers,
-            preferredAudioLanguage = agg.subtitle.preferredAudioLanguage,
-            preferredSubtitleLanguage = agg.subtitle.preferredSubtitleLanguage,
+            preferredAudioLanguage = ruleResolution?.audioLanguage
+                ?: agg.subtitle.preferredAudioLanguage,
+            // A rule-driven OFF keeps the engine's native subtitle preference
+            // unset — the helper's ladder enforces the Off itself.
+            preferredSubtitleLanguage = if (ruleResolution?.subtitleDisabled == true) {
+                null
+            } else {
+                ruleResolution?.subtitleLanguage ?: agg.subtitle.preferredSubtitleLanguage
+            },
             maxVideoBitrate = if (agg.playback.playbackMode == PlaybackMode.AUTO)
                 adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
                 else null,
@@ -631,11 +658,38 @@ class PlayerSessionManager(
             normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
             serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
+            // Hand the engines that do their own TLS (mpv) the
+            // app-level client-certificate paths. Null when no certificate
+            // is enabled — OkHttp-backed engines (ExoPlayer) inherit it via
+            // the shared TLS layer instead.
+            tls = playbackIdentity.clientTls(),
         )
 
+        maybeNotifyVlcClientCertificateUnsupported(playerType)
         lastPlaybackRequest = request
         eng.load(request)
     }
+
+    /**
+     * LibVLC's Android TLS-client-cert support is unreliable, so a
+     * client certificate is DOCUMENTED-unsupported on the VLC engine. When
+     * one is active and VLC was selected, surface a one-time (per session
+     * manager) informational notice recommending ExoPlayer/mpv — playback is
+     * NOT blocked (the server decides whether the certificate-less
+     * connection lives).
+     */
+    private fun maybeNotifyVlcClientCertificateUnsupported(playerType: PlayerType) {
+        if (playerType != PlayerType.LIBVLC || vlcClientCertNoticeShown) return
+        if (playbackIdentity.clientTls() == null) return
+        vlcClientCertNoticeShown = true
+        userMessageBus.info(
+            "Client certificate not supported by the VLC engine — " +
+                "switch to ExoPlayer or mpv for mTLS servers",
+        )
+    }
+
+    /** See [maybeNotifyVlcClientCertificateUnsupported]. */
+    private var vlcClientCertNoticeShown = false
 
     private fun resolveEngineConfig(
         playerType: PlayerType,

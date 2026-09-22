@@ -138,7 +138,7 @@ class FakeMediaEngine : MediaEngine {
 
     @Volatile private var lastUnmuteVolume: Float = 1f
 
-    override fun setVolume(value: Float) {
+    override fun setVolume(value: Float, isUserChange: Boolean) {
         val clamped = value.coerceIn(0f, 1f)
         if (clamped > 0f) lastUnmuteVolume = clamped
         volumeValue = clamped

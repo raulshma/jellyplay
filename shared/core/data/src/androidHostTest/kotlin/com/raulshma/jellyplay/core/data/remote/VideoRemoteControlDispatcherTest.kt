@@ -52,7 +52,7 @@ class VideoRemoteControlDispatcherTest {
         override fun seekTo(positionMs: Long) { calls += "seekTo:$positionMs" }
         override fun selectTrack(type: TrackType, index: Int) { calls += "selectTrack:${type.name}:$index" }
         override fun setMaxVideoBitrate(bps: Int?) { calls += "setMaxVideoBitrate:$bps" }
-        override fun setVolume(value: Float) { volumeField = value; calls += "setVolume:$value" }
+        override fun setVolume(value: Float, isUserChange: Boolean) { volumeField = value; calls += "setVolume:$value" }
         override fun increaseVolume(delta: Float) { volumeField += delta; calls += "increaseVolume:$delta" }
         override fun decreaseVolume(delta: Float) { volumeField -= delta; calls += "decreaseVolume:$delta" }
         override fun setMuted(muted: Boolean) { calls += "setMuted:$muted" }
@@ -62,7 +62,7 @@ class VideoRemoteControlDispatcherTest {
     private val activePlayerController = ActivePlayerController()
     private val bridge = RemoteNavigationBridge()
 
-    private fun dispatcher() = VideoRemoteControlDispatcher(
+    private fun dispatcher() = AndroidVideoRemoteControlDispatcher(
         activePlayerController = activePlayerController,
         remoteNavigationBridge = bridge,
     )

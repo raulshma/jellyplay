@@ -111,6 +111,7 @@ class PlaybackApiClientImpl(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
+        failed: Boolean,
     ): Result<Unit> = engine.withApi { api ->
         val uuid = itemId.toUUID()
         api.playStateApi.reportPlaybackStopped(
@@ -118,7 +119,10 @@ class PlaybackApiClientImpl(
                 itemId = uuid,
                 sessionId = sessionId,
                 positionTicks = positionTicks,
-                failed = false,
+                // An error-aborted session reports failed so the
+                // server does not apply its own ">= X% = played" rule to
+                // the stop (spoiler protection for near-end crashes).
+                failed = failed,
             )
         )
     }

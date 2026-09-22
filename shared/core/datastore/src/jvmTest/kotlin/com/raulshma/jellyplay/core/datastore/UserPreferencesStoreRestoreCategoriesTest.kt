@@ -137,6 +137,8 @@ class UserPreferencesStoreRestoreCategoriesTest {
             PreferenceResetCategory.APPEARANCE to setOf(BackupSliceKey.APPEARANCE),
             PreferenceResetCategory.PLAYBACK to setOf(
                 BackupSliceKey.PLAYBACK, BackupSliceKey.VIDEO_PLAYER, BackupSliceKey.AUDIO,
+                // The volume-memory keys reset with the player prefs.
+                BackupSliceKey.VOLUME_PROFILE,
             ),
             PreferenceResetCategory.AUDIO to setOf(BackupSliceKey.AUDIO, BackupSliceKey.AUDIO_EFFECTS),
             PreferenceResetCategory.SUBTITLES_LANGUAGE to setOf(BackupSliceKey.SUBTITLE, BackupSliceKey.PLAYBACK),

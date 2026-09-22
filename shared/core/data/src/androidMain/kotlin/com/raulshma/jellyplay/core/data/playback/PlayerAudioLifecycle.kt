@@ -73,8 +73,12 @@ class PlayerAudioLifecycle(
         val pause: () -> Unit,
         /** Resume playback. */
         val play: () -> Unit,
-        /** Set the engine volume in its native range. */
-        val setVolume: (Float) -> Unit,
+        /**
+         * Set the engine volume in its native range. The Boolean is the
+         * user-vs-programmatic flag: duck/restore drives it `false` so engines
+         * with per-content-type volume memory never capture a fade.
+         */
+        val setVolume: (Float, Boolean) -> Unit,
         /** Re-assert the muted state (called on focus regain while muted). */
         val setMuted: (Boolean) -> Unit,
     )
@@ -111,7 +115,9 @@ class PlayerAudioLifecycle(
                         preDuckVolume = engine.volume()
                     }
                     wasPlayingBeforeTransientLoss = engine.isPlaying()
-                    if (!isMuted()) engine.setVolume(DUCK_VOLUME)
+                    // Programmatic: ducking is not a user volume
+                    // choice — engines with volume memory must not capture it.
+                    if (!isMuted()) engine.setVolume(DUCK_VOLUME, false)
                     // When muted, volume stays at 0f — ducking must not make
                     // muted audio audible (e.g. during a phone call).
                 }
@@ -121,7 +127,8 @@ class PlayerAudioLifecycle(
                     if (isMuted()) {
                         engine.setMuted(true)
                     } else {
-                        preDuckVolume?.let { engine.setVolume(it) }
+                        // Restore is programmatic too.
+                        preDuckVolume?.let { engine.setVolume(it, false) }
                     }
                     onRegain?.invoke()
                     if (wasPlayingBeforeTransientLoss) engine.play()

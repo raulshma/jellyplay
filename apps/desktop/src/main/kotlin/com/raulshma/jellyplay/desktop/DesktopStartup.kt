@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
+import com.raulshma.jellyplay.desktop.player.Anime4KShaderInstaller
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -80,6 +81,14 @@ internal fun launchDesktopStartup(
             // shared jvmShared — previously desktop staged outbox rows
             // that nothing ever drained.
             koinApp.koin.get<DesktopPlaybackSyncScheduler>().start()
+
+            // Extract the bundled Anime4K chains into the user's
+            // shaders dir (idempotent; re-runs only on a version bump).
+            // Off the critical path and never fatal — until it succeeds the
+            // shader-dir provider resolves null and packs are simply absent.
+            runCatchingRethrowingCancellation {
+                koinApp.koin.get<Anime4KShaderInstaller>().ensureInstalled()
+            }
         }
 
     // Runtime icon (title bar + tray), decoded OFF the pre-window

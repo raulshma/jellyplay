@@ -65,6 +65,7 @@ class SettingsCatalogScreenContractTest {
         SecuritySettingsIds,
         SettingsScreenIds,
         StorageSettingsIds,
+        TrackSelectionIds,
     )
 
     /** Every id a holder declares, via the holders' public const fields. */
@@ -167,6 +168,23 @@ class SettingsCatalogScreenContractTest {
                 PlaybackSettingsIds.ORIENTATION,
                 RowAdmissionFlags(supportsScreenOrientation = true),
             ),
+        )
+        // the volume-memory toggle is DESKTOP-backed — it admits on
+        // this JVM's default seam flags (the desktop binary backs the row)
+        // and drops where the capability is off (Android).
+        assertTrue(
+            SettingsScreenGroups.playbackPlayer.rowAdmitted(
+                PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
+                desktop,
+            ),
+            "the volume-memory row admits on the desktop seam",
+        )
+        assertFalse(
+            SettingsScreenGroups.playbackPlayer.rowAdmitted(
+                PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
+                RowAdmissionFlags(supportsVolumeMemory = false),
+            ),
+            "the volume-memory row must drop without its capability",
         )
     }
 
@@ -389,15 +407,19 @@ class SettingsCatalogScreenContractTest {
         // MediaSegmentType.entries (the accepted exception to the derivation).
         // The declaration side keeps the ids inside LiveTvSearchItems and must
         // keep following the media_segment_<enum-name> convention so the
-        // derived scroll set and the hand-built rows stay in lock-step.
-        val declared = SettingsScreenGroups.playbackMediaSegments.itemIds
+        // derived scroll set and the hand-built rows stay in lock-step. The
+        // group's skip-on-seek toggle is the one non-enum member — a
+        // hand-built row like the per-type rows.
+        val enumSegmentIds = MediaSegmentType.entries.map { "media_segment_${it.name.lowercase()}" }
         assertEquals(
-            MediaSegmentType.entries.map { "media_segment_${it.name.lowercase()}" },
-            declared,
-            "media_segment_* declarations drifted from MediaSegmentType.entries",
+            enumSegmentIds + PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK,
+            SettingsScreenGroups.playbackMediaSegments.itemIds,
+            "media-segment group declarations drifted from MediaSegmentType.entries + the skip-on-seek toggle",
         )
         assertTrue(
-            SettingsScreenGroups.playbackDvr.itemIds.none { it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) },
+            SettingsScreenGroups.playbackDvr.itemIds.none {
+                it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) || it == PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK
+            },
             "DVR group must not absorb media-segment ids",
         )
     }
@@ -432,7 +454,13 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.systemScreensaver.itemIds.all { it.startsWith(SettingsScreenGroups.SCREENSAVER_ID_PREFIX) },
             "system.screensaver must hold only screensaver ids",
         )
-        assertEquals(SystemSearchItems.size, SettingsScreenGroups.systemCore.items.size + SettingsScreenGroups.systemScreensaver.items.size)
+        // The idle-ambient (desktop) rows are split into their own group —
+        // the three groups together still partition SystemSearchItems exactly.
+        assertEquals(SystemSearchItems.size, SettingsScreenGroups.systemCore.items.size + SettingsScreenGroups.systemScreensaver.items.size + SettingsScreenGroups.systemIdleAmbient.items.size)
+        assertTrue(
+            SettingsScreenGroups.systemIdleAmbient.itemIds.all { it.startsWith(SettingsScreenGroups.IDLE_AMBIENT_ID_PREFIX) },
+            "system.idleAmbient must hold only idle-ambient ids",
+        )
     }
 
     @Test
@@ -554,16 +582,17 @@ class SettingsCatalogScreenContractTest {
         // Player: the six unconditional rows (player_engine, default_speed,
         // default_aspect, video_autoplay_next, autoplay_countdown,
         // hold_speed_multiplier) survive every gate off; each flag reveals
-        // exactly its own rows.
+        // exactly its own rows — plus the volume-memory toggle, whose
+        // Platform(VolumeMemory) admission rides this JVM's desktop seam (on).
         val allGatesOff = playbackPlayerScreenRowTotal(
             isTv = false,
             showAdvanced = false,
             supportsScreenOrientation = false,
             supportsTouchGestures = false,
         )
-        assertEquals(6, allGatesOff)
-        assertEquals(7, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = true, supportsTouchGestures = false))
-        assertEquals(9, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = false, supportsTouchGestures = true))
+        assertEquals(7, allGatesOff)
+        assertEquals(8, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = true, supportsTouchGestures = false))
+        assertEquals(10, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = false, supportsTouchGestures = true))
         // Every non-advanced declaration renders with caps on (isTv off: the
         // two TV rows ride isTv alone — shipped semantics, also without
         // advanced mode).
@@ -575,7 +604,7 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.playbackPlayer.items.size - 2, // minus the two TV rows
             playbackPlayerScreenRowTotal(false, true, supportsScreenOrientation = true, supportsTouchGestures = true),
         )
-        assertEquals(33, playbackPlayerScreenRowTotal(true, true, supportsScreenOrientation = true, supportsTouchGestures = true))
+        assertEquals(34, playbackPlayerScreenRowTotal(true, true, supportsScreenOrientation = true, supportsTouchGestures = true))
 
         // Advanced video: the dialogue-boost strength row rides its toggle.
         assertEquals(
@@ -587,14 +616,31 @@ class SettingsCatalogScreenContractTest {
             playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled = true),
         )
 
-        // Engine branches: declared prefix rows + the one reset row each.
-        assertEquals(12, playbackEngineScreenRowTotal("mpv_"))
+        // Engine branches: declared prefix rows (the mpv branch minus the
+        // desktop-gated audio-device trio and the render rows
+        // where the capabilities are off) + the one reset row each. Desktop
+        // JVM tests run with the capabilities ON (the desktop binary backs
+        // the rows), so the default-flag call sees all of them.
+        assertEquals(20, playbackEngineScreenRowTotal("mpv_"))
         assertEquals(9, playbackEngineScreenRowTotal("vlc_"))
         assertEquals(8, playbackEngineScreenRowTotal("exo_"))
+        assertEquals(
+            12,
+            playbackEngineScreenRowTotal(
+                "mpv_",
+                supportsAudioDeviceSelection = false,
+                supportsMpvRenderProfiles = false,
+            ),
+            "capabilities off: the mpv branch falls back to the base row set",
+        )
         for (prefix in listOf("mpv_", "vlc_", "exo_")) {
             assertEquals(
                 SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith(prefix) } + 1,
-                playbackEngineScreenRowTotal(prefix),
+                playbackEngineScreenRowTotal(
+                    prefix,
+                    supportsAudioDeviceSelection = true,
+                    supportsMpvRenderProfiles = true,
+                ),
                 "the $prefix branch's declared-row set changed — update this pin",
             )
         }

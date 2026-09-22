@@ -142,7 +142,7 @@ class AuthWireDtoMapperTest {
         val caps = defaultClientCapabilities()
         assertEquals(listOf("Video", "Audio"), caps.playableMediaTypes)
         assertEquals(SUPPORTED_REMOTE_COMMANDS, caps.supportedCommands)
-        assertEquals(15, caps.supportedCommands.size)
+        assertEquals(27, caps.supportedCommands.size)
         assertEquals(true, caps.supportsMediaControl)
         assertEquals(true, caps.supportsPersistentIdentifier)
         assertNull(caps.deviceProfile, "sends no DeviceProfile (documented cut)")

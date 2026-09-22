@@ -93,6 +93,8 @@ data class ClientCapabilitiesWireDto(
  * `JellyfinApiEngine.SUPPORTED_REMOTE_COMMANDS`, in the SAME order — the
  * capabilities payload posted here must match the JVM engine's
  * command-for-command (server-side remote-control UIs key off this list).
+ * A core/network jvmTest pins the two lists set-equal — never extend one
+ * without the other.
  */
 val SUPPORTED_REMOTE_COMMANDS: List<String> = listOf(
     "SetVolume",
@@ -110,6 +112,19 @@ val SUPPORTED_REMOTE_COMMANDS: List<String> = listOf(
     "ToggleFullscreen",
     "DisplayMessage",
     "Play",
+    // Navigation ladder + DisplayContent + TakeScreenshot.
+    "Back",
+    "Select",
+    "MoveUp",
+    "MoveDown",
+    "MoveLeft",
+    "MoveRight",
+    "GoHome",
+    "GoToSettings",
+    "GoToSearch",
+    "ToggleContextMenu",
+    "DisplayContent",
+    "TakeScreenshot",
 )
 
 /**

@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,6 +38,7 @@ import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.navigation3.runtime.NavKey
@@ -260,6 +262,32 @@ internal fun DesktopAppRoot(
         sessionRestoreDone = true
     }
 
+    // Desktop receiver port: realtime socket + capabilities + the
+    // remote-control receiver, driven off the auth state for the life of the
+    // composition (survives the sign-in → scaffold swap because it lives
+    // HERE, like the harness hosts above; torn down with the window).
+    val realtimeConnection: com.raulshma.jellyplay.core.data.repository.RealtimeConnection = koinInject()
+    val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore = koinInject()
+    val remoteControlReceiver: com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver = koinInject()
+    val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
+    val desktopSessionCoordinator = remember(
+        authRepository,
+        realtimeConnection,
+        serverIdentityStore,
+        remoteControlReceiver,
+    ) {
+        DesktopSessionCoordinator(
+            authRepository = authRepository,
+            realtimeConnection = realtimeConnection,
+            serverIdentityStore = serverIdentityStore,
+            remoteControlReceiver = remoteControlReceiver,
+        )
+    }
+    androidx.compose.runtime.DisposableEffect(desktopSessionCoordinator, sessionScope) {
+        desktopSessionCoordinator.start(sessionScope)
+        onDispose { desktopSessionCoordinator.stop() }
+    }
+
     when {
         !sessionRestoreDone -> SessionRestoreSplash()
         // The signed-out gate is the SHARED SignedOutAuthHost now
@@ -300,7 +328,10 @@ internal fun DesktopAppRoot(
                 },
             )
         }
-        else -> DesktopNavScaffold(menuRefreshRequests = menuRefreshRequests)
+        else -> DesktopNavScaffold(
+            menuRefreshRequests = menuRefreshRequests,
+            windowRef = windowRef,
+        )
     }
 
     if (showAbout) {
@@ -340,9 +371,13 @@ private fun SessionRestoreSplash() {
  * the dead-end guard. One back stack per top-level route (the phone app's
  * tab pattern), Esc / Alt+Left mapped to [Navigator.goBack].
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DesktopNavScaffold(
     menuRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+    // The ComposeWindow handle (Main.kt's AWT ref) — the remote
+    // navigation ladder's select synthesis posts AWT key events through it.
+    windowRef: AtomicReference<ComposeWindow?>? = null,
 ) {
     val navigation = rememberNavigationState(
         startRoute = Route.Home,
@@ -554,6 +589,95 @@ private fun DesktopNavScaffold(
         "no back stack for top-level route $currentTopLevel"
     }
 
+    // ── remote navigation bridge collector ─────────────────────────
+    // Desktop ignored RemoteNavigationBridge entirely before the receiver
+    // port — remote Play → desktop, SyncPlay-driven opens and ClosePlayer
+    // all dead-ended. The folds are DesktopRemoteNavigation's pure halves;
+    // this effect only dispatches: pushes through the guarded navigator
+    // (dead-end routes surface the guard's snackbar), ClosePlayer pops
+    // player routes off every tab's stack, GoBack pops one entry, MoveFocus
+    // drives the Compose FocusManager, and InvokeSelect synthesizes an AWT
+    // Enter pair posted through the system event queue — the exact route
+    // every real keystroke takes into the Compose preview-key chain (the
+    // player's media-key bridge included when a player route is on top).
+    val remoteNavigationBridge: com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge = koinInject()
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val desktopRemoteNavCollector = remember(
+        guardedNavigator,
+        focusManager,
+        snackbarHostState,
+        windowRef,
+    ) {
+        DesktopRemoteNavCollector(
+            navigate = guardedNavigator::navigate,
+            goBack = { guardedNavigator.goBack() },
+            backStacks = { navigation.backStacks.values },
+            moveFocus = { direction ->
+                focusManager.moveFocus(
+                    when (direction) {
+                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.UP -> androidx.compose.ui.focus.FocusDirection.Up
+                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.DOWN -> androidx.compose.ui.focus.FocusDirection.Down
+                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.LEFT -> androidx.compose.ui.focus.FocusDirection.Left
+                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.RIGHT -> androidx.compose.ui.focus.FocusDirection.Right
+                    },
+                )
+            },
+            invokeSelect = { DesktopKeySynthesizer.postEnterKey(windowRef?.get()) },
+            presentMessage = { message -> snackbarHostState.showSnackbar(message) },
+        )
+    }
+    LaunchedEffect(desktopRemoteNavCollector) {
+        desktopRemoteNavCollector.collect(remoteNavigationBridge.targets)
+    }
+
+    // ── idle "Ready to play" ambient screen ───────────────────────
+    // Monitors the same idle definition the plan pinned: nothing playing
+    // (audio queue + engine registry), window active, debounced timeout from
+    // the screensaver store's idle-ambient settings (0 = off). Any key or
+    // pointer input resets + dismisses (hooks at the scaffold root below and
+    // in the overlay itself); playback start clears it on the next 1 s tick.
+    val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore = koinInject()
+    val activePlayerRegistry: com.raulshma.jellyplay.core.data.remote.ActivePlayerController = koinInject()
+    val idleMonitor = remember(audioQueueManager, activePlayerRegistry, screensaverStore, windowRef) {
+        DesktopIdleMonitor(
+            settings = {
+                val slice = screensaverStore.screensaver.value
+                IdleAmbientSettings(
+                    enabled = slice.idleAmbientEnabled,
+                    timeoutMin = slice.idleAmbientTimeoutMin,
+                )
+            },
+            isAudioPlaying = { audioQueueManager.currentPlayingItemId.value != null },
+            isVideoActive = { activePlayerRegistry.engine != null },
+            isWindowActive = { windowRef?.get()?.let { it.isShowing && it.isActive } ?: false },
+        )
+    }
+    DisposableEffect(idleMonitor) {
+        idleMonitor.start(scope)
+        onDispose { idleMonitor.stop() }
+    }
+    val isIdle by idleMonitor.isIdle.collectAsState()
+
+    // The overlay's identity lines: current server + user, and the count of
+    // OTHER sessions currently playing something — the cheap "remote
+    // activity" signal off the Sessions WS push the receiver's socket
+    // already receives (parsed with the array-aware DTO, no org.json pass).
+    val currentUser by authRepository.currentUser.collectAsState(initial = null)
+    val servers by authRepository.servers.collectAsState(initial = emptyList())
+    val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient = koinInject()
+    var activeRemoteSessions by remember { mutableStateOf(0) }
+    LaunchedEffect(webSocketClient, isIdle) {
+        if (!isIdle) return@LaunchedEffect
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        webSocketClient.events.collect { event ->
+            if (event.type == "Sessions") {
+                activeRemoteSessions = runCatching {
+                    com.raulshma.jellyplay.core.network.websocket.parseSessionsMessage(json, event.rawText)
+                }.getOrDefault(emptyList()).count { it.nowPlayingItem != null }
+            }
+        }
+    }
+
     // Shell-supplied surface behind the shared section graph (ShellHostHooks):
     // the now-playing/ambient lambdas read the desktop audio core
     // (DesktopAudioQueueManager) at click time, and the session seams wrap the
@@ -629,6 +753,18 @@ private fun DesktopNavScaffold(
     Row(
         Modifier
             .fillMaxSize()
+            // Passive pointer observation — every pointer event of
+            // any kind feeds the idle monitor's debounce WITHOUT consuming
+            // or transforming the event (the gesture layers below see it
+            // unchanged).
+            .pointerInput(idleMonitor) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent()
+                        idleMonitor.onUserInput()
+                    }
+                }
+            }
             // Back handling: Esc and Alt+Left pop the current stack when
             // there is anything to pop (nav3's predictive back is
             // Android-only; this is the whole desktop story).
@@ -648,6 +784,9 @@ private fun DesktopNavScaffold(
             // to die in this Row's fallback; now it reaches the player
             // deterministically.
             .onPreviewKeyEvent { event ->
+                // Every key resets the idle debounce (and dismisses
+                // a shown overlay) before anything else runs.
+                idleMonitor.onUserInput()
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 // desktopBackKeyDecision folds the Esc/Alt+Left test AND the
                 // root-refuse; the same fold runs in the signed-out shell's
@@ -753,6 +892,27 @@ private fun DesktopNavScaffold(
                     hostState = snackbarHostState,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
                 )
+                // The idle ambient overlay — cross-faded over the
+                // whole content area with the SAME fade pair
+                // NavTransitionPolicy gives ambient routes (defaultFade in,
+                // fastFade out). NOT a route: an in-scaffold overlay keeps
+                // the desktop-only surface out of the shared NavKey contract.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isIdle,
+                    enter = androidx.compose.animation.fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                    exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+                ) {
+                    DesktopIdleOverlay(
+                        serverName = currentUser?.let { user ->
+                            servers.firstOrNull {
+                                it.id == user.serverId || it.address == user.serverAddress
+                            }?.name
+                        },
+                        userName = currentUser?.name,
+                        activeSessionCount = activeRemoteSessions,
+                        onAnyInput = idleMonitor::onUserInput,
+                    )
+                }
             }
         }
     }

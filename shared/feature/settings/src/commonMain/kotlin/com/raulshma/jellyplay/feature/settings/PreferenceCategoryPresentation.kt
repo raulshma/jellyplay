@@ -25,6 +25,7 @@ import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.ShieldLock
 import com.composables.icons.tabler.outline.Subtitles
 import com.composables.icons.tabler.outline.Volume
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -553,7 +554,7 @@ fun appRuntimeFields(
  */
 suspend fun resolveDiffLabels(resources: List<StringResource>): (StringResource) -> String {
     val resolved = resources.distinct().associateWith { res ->
-        runCatching { getString(res) }.getOrElse { res.toString() }
+        runCatchingRethrowingCancellation { getString(res) }.getOrElse { res.toString() }
     }
     return { res -> resolved[res] ?: res.toString() }
 }

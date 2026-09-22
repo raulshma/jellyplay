@@ -43,6 +43,9 @@ internal object EngineConfigBuilder {
         effects: AudioEffectsState,
         equalizerEnabled: Boolean,
         agg: VideoPlayerAggregate,
+        engineSpecific: EngineSpecificConfig? = null,
+        deinterlace: com.raulshma.jellyplay.core.model.DeinterlaceMode =
+            com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
     ): EngineConfig = EngineConfig(
         decoderMode = effects.decoderMode,
         audioPassthrough = effects.audioPassthrough,
@@ -68,7 +71,12 @@ internal object EngineConfigBuilder {
             audioSlice = agg.audio,
             audioEffectsSlice = agg.audioEffects,
         ),
+        engineSpecific = engineSpecific,
         pauseOnAudioFocusLoss = agg.playback.pauseOnAudioFocusLoss,
+        // the session-scoped deinterlace override + the per-item HDR
+        // gate ride every runtime build (the UI-state path has the streams).
+        deinterlace = deinterlace,
+        hdrSource = isHdrFromStreams(state.media.mediaStreams),
     )
 
     /**
@@ -119,6 +127,8 @@ internal object EngineConfigBuilder {
             ),
             engineSpecific = engineSpecific,
             pauseOnAudioFocusLoss = agg.playback.pauseOnAudioFocusLoss,
+            deinterlace = com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
+            hdrSource = isHdr,
         )
     }
 

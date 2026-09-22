@@ -93,7 +93,9 @@ class SleepTimerControllerTest {
         controller.cancelSleepTimer()
 
         verify { sleepTimerManager.cancel() }
-        verify { engine.setVolume(0.8f) }
+        // the restore is PROGRAMMATIC (isUserChange = false) — a
+        // cancelled fade must never overwrite the remembered volume bucket.
+        verify { engine.setVolume(0.8f, isUserChange = false) }
         assertFalse(controller.state.value.sleepTimerActive)
         assertFalse(controller.state.value.sleepTimerEndOfEpisode)
     }

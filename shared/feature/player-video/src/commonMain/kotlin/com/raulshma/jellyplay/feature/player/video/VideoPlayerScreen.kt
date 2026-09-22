@@ -93,6 +93,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
@@ -114,6 +115,8 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitle_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitles_off
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_skipped_segment
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 
 
@@ -165,6 +168,7 @@ import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayIndicator
 import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
+import com.raulshma.jellyplay.feature.player.video.components.RenderSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
@@ -1408,6 +1412,37 @@ fun VideoPlayerScreen(
                 }
             }
 
+            // "Skipped …" confirmation: raised by the VM when an
+            // auto-skip fires or a skip-on-seek clamp lands; the VM owns the
+            // ~2.5 s auto-clear, this is a pure AnimatedVisibility consumer.
+            // Co-located with the SegmentSkipOverlay placement so the two
+            // never overlap it (bottom-center, above the control chrome).
+            val skippedNotice = uiState.skippedSegmentNotice
+            AnimatedVisibility(
+                visible = skippedNotice != null,
+                enter = fadeIn(tween(150, easing = AlphaEasing)),
+                exit = fadeOut(tween(300, easing = AlphaEasing)),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 100.dp),
+            ) {
+                if (skippedNotice != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(ShapeCache.smoothPill)
+                            .background(playerScrimColor().copy(alpha = 0.7f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.player_video_skipped_segment, skippedNotice.segmentType.localizedDisplayName()),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        )
+                    }
+                }
+            }
+
             if (nextEpisode != null) {
                 NextEpisodeOverlay(
                     isVisible = shouldShowUpNext,
@@ -1488,6 +1523,9 @@ fun VideoPlayerScreen(
                 VideoStatsOverlay(
                     statsFlow = viewModel.videoStats,
                     currentPositionFlow = viewModel.currentPositionMs,
+                    // the ranges readout row's source, collected at
+                    // this leaf like statsFlow.
+                    bufferedRangesFlow = viewModel.bufferedRanges,
                     durationMs = duration,
                     playbackSpeed = playbackSpeed,
                     isPlaying = isPlaying,
@@ -1690,6 +1728,16 @@ fun VideoPlayerScreen(
             val onControlsFocusChange by remember { mutableStateOf({ hasFocus: Boolean -> controlsHasFocus = hasFocus }) }
             val onOverflowMenuChange by remember { mutableStateOf({ open: Boolean -> isOverflowMenuOpen = open }) }
 
+            // Remote "TakeScreenshot": the receiver emits through the
+            // active-engine registry while this screen's engine is bound;
+            // each request drives the SAME capture path as the overflow-menu
+            // screenshot button above (no separate remote code path to
+            // drift). Keyed on the remembered action so a recomposition that
+            // rebuilds the lambda re-subscribes with the current captures.
+            androidx.compose.runtime.LaunchedEffect(onScreenshotClick) {
+                viewModel.remoteScreenshotRequests.collect { onScreenshotClick() }
+            }
+
             // Transparent VLC-style subtitle-delay overlay. Sits over the video
             // (below the control chrome) so the user can watch subtitles shift.
             // Passes empty-space taps through to the host gesture layer.
@@ -1711,7 +1759,7 @@ fun VideoPlayerScreen(
                 isPlaying = isPlaying,
                 currentPositionFlow = viewModel.currentPositionMs,
                 duration = duration,
-                bufferedPositionFlow = viewModel.bufferedPositionMs,
+                bufferedRangesFlow = viewModel.bufferedRanges,
                 videoStatsFlow = viewModel.videoStats,
                 playbackSpeed = playbackSpeed,
                 chapters = uiState.chapters,
@@ -1784,6 +1832,21 @@ fun VideoPlayerScreen(
                 onAbRepeatClear = { viewModel.abRepeat.clear() },
                 audioOnly = uiState.audioOnly,
                 onToggleAudioOnly = { viewModel.toggleAudioOnly() },
+                incognitoModeEnabled = viewModel.incognitoModeEnabled,
+                onMarkWatchedAndSkip = { viewModel.markWatchedAndSkip() },
+                onMarkUnwatchedAndQuit = { viewModel.markUnwatchedAndQuit() },
+                // the Rendering sheet is an mpv surface (shader packs /
+                // tone mapping / quality); the deinterlace item gates on
+                // the engine capability matrix.
+                supportsRenderPanel = uiState.preferredPlayerType == PlayerType.MPV,
+                onRenderClick = { openSheet(PlayerSheet.Render) },
+                supportsDeinterlace = uiState.engineCapabilities.supportsDeinterlace,
+                deinterlaceMode = if (uiState.engineCapabilities.supportsDeinterlace) {
+                    viewModel.sessionRender.deinterlace
+                } else {
+                    null
+                },
+                onDeinterlaceCycle = { viewModel.cycleDeinterlace() },
                 onLockClick = onLockClick,
                 onControlsFocusChange = onControlsFocusChange,
                 onOverflowMenuChange = onOverflowMenuChange,
@@ -2165,6 +2228,9 @@ private fun PlayerSheetRouter(
     /** Clears the consumed [subtitleHubResetFirst] flag so it stays single-shot. */
     onSubtitleHubResetConsumed: () -> Unit,
 ) {
+    // the Render sheet's "save for this series" toggle — sheet-local
+    // UI state, defaults off (session-only edits).
+    var saveRenderForSeries by remember { mutableStateOf(false) }
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
             SpeedPickerSheet(
@@ -2465,6 +2531,34 @@ private fun PlayerSheetRouter(
             VideoFilterSheet(
                 currentEffects = uiState.videoFx.videoEffects,
                 onEffectsChange = { viewModel.setVideoEffects(it) },
+                onDismiss = dismissSheet,
+            )
+        }
+        is PlayerSheet.Render -> {
+            // mpv render surface. The session render state is the
+            // sheet's source of truth; picks apply to the running engine
+            // immediately and (with the toggle on) persist to the series row.
+            val sessionRender = viewModel.sessionRender
+            val global = viewModel.globalMpvConfig
+            val effective = sessionRender.effectiveMpvConfig(global)
+            val active = sessionRender.override
+            RenderSheet(
+                shaderPack = active?.shaderPack ?: global.shaderPack,
+                toneMapping = active?.toneMapping ?: global.toneMapping,
+                // The effective quality (the session lens may hold a pick the
+                // DataStore round-trip hasn't mirrored into the aggregate yet).
+                renderQuality = effective.renderQuality,
+                hasStoredOverride = active != null,
+                canSaveForSeries = uiState.media.seriesId != null || itemId != null,
+                saveForSeries = saveRenderForSeries,
+                onShaderPackSelect = { viewModel.setRenderShaderPack(it, saveRenderForSeries) },
+                onToneMappingSelect = { viewModel.setRenderToneMapping(it, saveRenderForSeries) },
+                onRenderQualitySelect = { viewModel.setRenderQuality(it) },
+                onSaveForSeriesChange = { saveRenderForSeries = it },
+                onInherit = {
+                    viewModel.clearRenderOverride()
+                    onSheetChange(PlayerSheet.None)
+                },
                 onDismiss = dismissSheet,
             )
         }

@@ -201,4 +201,55 @@ class SegmentCalculatorTest {
         )
         assertEquals(ticks(10_000), result)
     }
+
+    @Test
+    fun unknownType_pinsToIgnore_noAutoSkipNoOverlayButton() {
+        // Two sources produce UNKNOWN segments: an
+        // unmapped server `fromApiName` mapping, and… never the legacy
+        // intro/credits fallback (LegacySegmentFallback synthesizes INTRO/OUTRO
+        // only — verified at the repository, pinned here for the calculator's
+        // side of the contract). Either way UNKNOWN must behave exactly like
+        // IGNORE by default: no auto-skip, no overlay button, no end-ticks
+        // skip target.
+        val unknown = segment(MediaSegmentType.UNKNOWN, startMs = 1_000, endMs = 5_000)
+
+        // Default behaviors map UNKNOWN → IGNORE…
+        assertEquals(
+            SegmentBehavior.IGNORE,
+            SegmentCalculator.behaviorForType(
+                input(segments = listOf(unknown)),
+                type = MediaSegmentType.UNKNOWN,
+            ),
+        )
+        // …and an absent map entry falls back to IGNORE too, so a future
+        // DEFAULT_BEHAVIORS change can never silently re-admit it.
+        assertEquals(
+            SegmentBehavior.IGNORE,
+            SegmentCalculator.behaviorForType(
+                input(segments = listOf(unknown), segmentBehaviors = emptyMap()),
+                type = MediaSegmentType.UNKNOWN,
+            ),
+        )
+        // The active-segment scan still detects the segment (detection is
+        // orthogonal to behavior)…
+        assertEquals(
+            unknown.id,
+            SegmentCalculator.computeActiveSegment(
+                input(segments = listOf(unknown)),
+                positionMs = 2_000,
+            )?.id,
+        )
+        // …but the type gate treats it as IGNORE: no "in segment" verdict —
+        // the gate the overlay button's admission and the auto-skip's
+        // behavior check both read. (The auto-skip arm additionally gates on
+        // `behaviorForType == AUTO_SKIP` in PlaybackProgressReporter, which
+        // the two IGNORE pins above rule out.)
+        assertFalse(
+            SegmentCalculator.isInSegmentType(
+                input(segments = listOf(unknown)),
+                positionMs = 2_000,
+                type = MediaSegmentType.UNKNOWN,
+            ),
+        )
+    }
 }

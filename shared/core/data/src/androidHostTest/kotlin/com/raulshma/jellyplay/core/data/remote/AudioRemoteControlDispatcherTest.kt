@@ -54,7 +54,7 @@ class AudioRemoteControlDispatcherTest {
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val bridge = RemoteNavigationBridge()
 
-    private fun dispatcher() = AudioRemoteControlDispatcher(
+    private fun dispatcher() = AndroidAudioRemoteControlDispatcher(
         audioPlaybackManager = audioPlaybackManager,
         mediaRepository = mediaRepository,
         remoteNavigationBridge = bridge,

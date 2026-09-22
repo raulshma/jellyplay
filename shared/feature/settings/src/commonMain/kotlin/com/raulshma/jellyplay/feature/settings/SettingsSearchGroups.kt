@@ -84,10 +84,19 @@ internal object SettingsScreenGroups {
      * here, at the aggregation decoration (the Live TV media-segment
      * precedent: a prefix split, no second declaration list).
      */
-    val systemCore = SystemSearchItems.filter { !it.id.startsWith(SCREENSAVER_ID_PREFIX) }
-        .asSearchGroup("system.core")
+    val systemCore = SystemSearchItems.filter {
+        !it.id.startsWith(SCREENSAVER_ID_PREFIX) && !it.id.startsWith(IDLE_AMBIENT_ID_PREFIX)
+    }.asSearchGroup("system.core")
     val systemScreensaver = SystemSearchItems.filter { it.id.startsWith(SCREENSAVER_ID_PREFIX) }
         .asSearchGroup("system.screensaver")
+
+    /**
+     * the desktop idle "Ready to play" ambient screen rows — their own
+     * screen group (rendered by a capability-gated block beside the TV dream
+     * group, so neither group's row totals entangle).
+     */
+    val systemIdleAmbient = SystemSearchItems.filter { it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) }
+        .asSearchGroup("system.idleAmbient")
 
     // ── AppearanceSettingsScreen ────────────────────────────────────────
     val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme")
@@ -108,10 +117,13 @@ internal object SettingsScreenGroups {
     /**
      * One screen group fed by three adjacent engine declaration lists —
      * the screen renders a single "Engine Config" group whose rows depend
-     * on the preferred player.
+     * on the preferred player. The desktop-gated mpv audio-device rows
+     * declare their [RowAdmission.Platform] gate here — the same
+     * declaration `playbackEngineScreenRowTotal` and the screen's emission
+     * `if`s read.
      */
     val playbackEngine = (MpvEngineSearchItems + VlcEngineSearchItems + ExoPlayerEngineSearchItems)
-        .asSearchGroup("playback.engine")
+        .asSearchGroup("playback.engine", PlaybackEngineRowAdmissions)
 
     val playbackSyncPlay = SyncPlaySearchItems.asSearchGroup("playback.syncPlay")
     val playbackCasting = CastingSearchItems.asSearchGroup("playback.casting")
@@ -120,14 +132,17 @@ internal object SettingsScreenGroups {
      * The documented split of [LiveTvSearchItems]: the DVR rows derive from
      * the declaration list, while the `media_segment_*` ids render in their
      * own hand-built group enumerated from `MediaSegmentType.entries` (the
-     * accepted exception pinned in `SettingsCatalogScreenContractTest`).
-     * The list itself stays whole — the partition happens here, at the
-     * aggregation decoration.
+     * accepted exception pinned in `SettingsCatalogScreenContractTest`), plus
+     * the group's skip-on-seek toggle — a hand-built row like the
+     * per-type rows, so it rides the same partition. The list itself stays
+     * whole — the partition happens here, at the aggregation decoration.
      */
-    val playbackDvr = LiveTvSearchItems.filter { !it.id.startsWith(MEDIA_SEGMENT_ID_PREFIX) }
-        .asSearchGroup("playback.dvr")
-    val playbackMediaSegments = LiveTvSearchItems.filter { it.id.startsWith(MEDIA_SEGMENT_ID_PREFIX) }
-        .asSearchGroup("playback.mediaSegments")
+    val playbackDvr = LiveTvSearchItems.filter {
+        !it.id.startsWith(MEDIA_SEGMENT_ID_PREFIX) && it.id != PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK
+    }.asSearchGroup("playback.dvr")
+    val playbackMediaSegments = LiveTvSearchItems.filter {
+        it.id.startsWith(MEDIA_SEGMENT_ID_PREFIX) || it.id == PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK
+    }.asSearchGroup("playback.mediaSegments")
 
     // ── AudioSettingsScreen ─────────────────────────────────────────────
     val audio = AudioSettingsSearchItems.asSearchGroup("audio", AudioRowAdmissions)
@@ -155,6 +170,14 @@ internal object SettingsScreenGroups {
     val languageSubtitles = LanguageSettingsSearchItems.drop(LANGUAGE_GENERAL_GROUP_SIZE)
         .asSearchGroup("language.subtitles", LanguageSubtitlesRowAdmissions)
 
+    /**
+     * The language screen's "Track Selection" group — its own
+     * declaration list so the general/subtitles split line above is
+     * untouched. Every row always renders ([TrackSelectionRowAdmissions]).
+     */
+    val languageTrackSelection = TrackSelectionSearchItems
+        .asSearchGroup("language.trackSelection", TrackSelectionRowAdmissions)
+
     val notifications = NotificationSettingsSearchItems.asSearchGroup("notifications", NotificationRowAdmissions)
 
     // ── StorageSettingsScreen ───────────────────────────────────────────
@@ -178,6 +201,7 @@ internal object SettingsScreenGroups {
         activityInsights,
         systemCore,
         systemScreensaver,
+        systemIdleAmbient,
         appearanceTheme,
         appearanceNavigation,
         appearanceLibrary,
@@ -195,6 +219,7 @@ internal object SettingsScreenGroups {
         audio,
         audioCache,
         languageGeneral,
+        languageTrackSelection,
         languageSubtitles,
         notifications,
         storageCache,
@@ -215,6 +240,9 @@ internal object SettingsScreenGroups {
 
     /** Prefix shared by every screensaver (dream) id in [SystemSearchItems]. */
     internal const val SCREENSAVER_ID_PREFIX = "screensaver_"
+
+    /** Prefix shared by every idle-ambient id in [SystemSearchItems]. */
+    internal const val IDLE_AMBIENT_ID_PREFIX = "idle_ambient_"
 
     /**
      * The leading trio of [LanguageSettingsSearchItems] (app / audio /

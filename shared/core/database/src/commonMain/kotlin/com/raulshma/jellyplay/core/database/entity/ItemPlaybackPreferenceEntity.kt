@@ -34,6 +34,16 @@ import androidx.room3.PrimaryKey
  * remembered only in-process. All nullable: NULL means "no track remembered"
  * (preserves today's language-only behaviour for existing rows). Added in
  * migration 39→40.
+ *
+ * `rememberedAudioCodec` / `rememberedSubtitleCodec` persist the remembered
+ * track's container codec alongside the label/language/index triple — an
+ * extra re-match rung when a series' track layout churns between episodes
+ * (labels change, codecs don't). Added in migration 56→57.
+ *
+ * `renderProfile` stores an optional per-series/per-item rendering override
+ * blob (serialized `MpvRenderOverrides` — shader pack / tone mapping) for the
+ * desktop render-profile feature (`RenderProfileResolver`/`RenderSheet`).
+ * Added in migration 56→57.
  */
 @Entity(
     tableName = "item_playback_preferences",
@@ -55,8 +65,11 @@ data class ItemPlaybackPreferenceEntity(
     val rememberedAudioLabel: String? = null,
     val rememberedAudioLanguage: String? = null,
     val rememberedAudioIndex: Int? = null,
+    val rememberedAudioCodec: String? = null,
     val rememberedSubtitleLabel: String? = null,
     val rememberedSubtitleLanguage: String? = null,
     val rememberedSubtitleIndex: Int? = null,
+    val rememberedSubtitleCodec: String? = null,
+    val renderProfile: String? = null,
     val updatedAt: Long,
 )

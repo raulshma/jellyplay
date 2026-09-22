@@ -20,6 +20,16 @@ import kotlinx.coroutines.withContext
 internal val ANDROID_ONLY_PLATFORMS: Set<PlatformKind> = setOf(PlatformKind.ANDROID)
 
 /**
+ * The desktop-only counterpart (the mpv audio-device rows): rows whose
+ * backing surface exists only in the desktop binary's mpv stack are tagged so
+ * they never surface as search hits on Android — the reverse of the
+ * `platformsForCapability` shape, which exists for Android-backed rows and
+ * would tag an un-backed capability as Android-only (exactly backwards for a
+ * desktop-backed row).
+ */
+internal val DESKTOP_ONLY_PLATFORMS: Set<PlatformKind> = setOf(PlatformKind.DESKTOP)
+
+/**
  * Tags every receiver item as offered on Android only — the whole-list form
  * of `platforms = ANDROID_ONLY_PLATFORMS` for lists whose backing surface
  * is Android-only (notifications, the Exo/VLC engine configs).

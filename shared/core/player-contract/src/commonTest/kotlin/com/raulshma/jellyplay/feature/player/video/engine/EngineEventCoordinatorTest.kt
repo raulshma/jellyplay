@@ -605,7 +605,7 @@ class EngineEventCoordinatorTest {
         override fun seekTo(positionMs: Long) = Unit
         override fun selectTrack(type: com.raulshma.jellyplay.core.model.TrackType, index: Int) = Unit
         override fun setMaxVideoBitrate(bps: Int?) = Unit
-        override fun setVolume(value: Float) = Unit
+        override fun setVolume(value: Float, isUserChange: Boolean) = Unit
         override fun increaseVolume(delta: Float) = Unit
         override fun decreaseVolume(delta: Float) = Unit
         override fun setMuted(muted: Boolean) = Unit

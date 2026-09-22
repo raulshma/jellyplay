@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.NoOpPlayerEngineFactory
@@ -59,6 +60,20 @@ import kotlinx.coroutines.delay
  */
 class DesktopMpvPlayerEngineFactory(
     private val recorder: EngineActivityRecorder? = null,
+    /**
+     * The user's desktop HDR passthrough setting, read at engine
+     * creation time — `vo`/`wid` are ctor-time, so a mid-session toggle
+     * applies on next playback (the settings row documents this). `false` on
+     * any read failure (the safe, tone-mapped default). Tests inject a stub.
+     */
+    private val hdrPassthroughProvider: suspend () -> Boolean = { false },
+    /**
+     * The extracted shader-pack directory, resolved per creation so a
+     * first-run extraction that lands between sessions is picked up. `null`
+     * before extraction (or on failure) — the mapper then omits the
+     * `glsl-shaders` pair (no pack), never garbage paths.
+     */
+    private val shaderDirProvider: () -> String? = { null },
 ) : PlayerEngineFactory {
 
     override suspend fun create(playerType: PlayerType): MediaEngine {
@@ -74,15 +89,15 @@ class DesktopMpvPlayerEngineFactory(
             PlayerType.EXO_PLAYER,
             PlayerType.LIBVLC,
             -> {
-                if (DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported) {
-                    // Overlay fix: sw-first precedence — the software pane lives
-                    // inside the compose tree (controls above video, clicks
-                    // reach the gesture layer), the HWND embed does not. See
-                    // the class KDoc; the probe is cached per process, so this
-                    // check is free after the first read.
-                    engine = MpvSoftwareRenderEngine()
-                    surface = SURFACE_SOFTWARE
-                } else {
+                val shaderDir = shaderDirProvider()
+                val hdrPassthrough = runCatchingRethrowingCancellation { hdrPassthroughProvider() }.getOrDefault(false)
+                if (hdrPassthrough) {
+                    // HDR passthrough REQUIRES the wid/HWND-embed path —
+                    // the software renderer composites CPU RGB bitmaps and cannot
+                    // pass HDR through. The sw-first precedence is therefore
+                    // inverted: prefer the embedded window with `vo=gpu-next` and
+                    // `target-colorspace-hint=yes`; degrade to the historical
+                    // chain (audio-only) only when no handle materializes.
                     val windowed = if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
                         awaitSurfaceHandle()
                     } else {
@@ -90,26 +105,50 @@ class DesktopMpvPlayerEngineFactory(
                     }
                     when {
                         windowed != null -> {
-                            engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = windowed)
+                            engine = MpvDesktopEngine(
+                                extraOptions = mapOf("vo" to "gpu-next"),
+                                windowHandle = windowed,
+                                shaderDir = shaderDir,
+                                targetColorspaceHint = true,
+                            )
+                            surface = SURFACE_HWND
+                        }
+                        else -> {
+                            engine = degradeToWidNull(
+                                warn = DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported,
+                                shaderDir = shaderDir,
+                            )
+                            surface = SURFACE_WID_NULL
+                        }
+                    }
+                } else if (DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported) {
+                    // Overlay fix: sw-first precedence — the software pane lives
+                    // inside the compose tree (controls above video, clicks
+                    // reach the gesture layer), the HWND embed does not. See
+                    // the class KDoc; the probe is cached per process, so this
+                    // check is free after the first read.
+                    engine = MpvSoftwareRenderEngine(shaderDir = shaderDir)
+                    surface = SURFACE_SOFTWARE
+                } else if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
+                    val windowed = awaitSurfaceHandle()
+                    when {
+                        windowed != null -> {
+                            engine = MpvDesktopEngine(
+                                extraOptions = emptyMap(),
+                                windowHandle = windowed,
+                                shaderDir = shaderDir,
+                            )
                             surface = SURFACE_HWND
                         }
 
                         else -> {
-                            // Legacy degrade chain: engine without wid → empty-surface
-                            // audio-only playback, exactly the pre-12B behavior. On
-                            // Windows this also means AWT never realized the child
-                            // window inside the budget — worth a line of stderr
-                            // because the session silently loses video otherwise.
-                            if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
-                                System.err.println(
-                                    "[JellyPlay] video session: no embedded HWND available and sw " +
-                                        "probe failed — degrading to audio-only",
-                                )
-                            }
-                            engine = MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = null)
+                            engine = degradeToWidNull(warn = true, shaderDir = shaderDir)
                             surface = SURFACE_WID_NULL
                         }
                     }
+                } else {
+                    engine = degradeToWidNull(warn = false, shaderDir = shaderDir)
+                    surface = SURFACE_WID_NULL
                 }
             }
         }
@@ -126,6 +165,22 @@ class DesktopMpvPlayerEngineFactory(
             engine.onReleased = { rec.onEngineReleased(engine) }
         }
         return engine
+    }
+
+    /**
+     * Legacy degrade chain: engine without wid → empty-surface audio-only
+     * playback, exactly the pre-12B behavior. On Windows this also means AWT
+     * never realized the child window inside the budget — worth a line of
+     * stderr ([warn]) because the session silently loses video otherwise.
+     */
+    private fun degradeToWidNull(warn: Boolean, shaderDir: String?): MpvDesktopEngine {
+        if (warn) {
+            System.err.println(
+                "[JellyPlay] video session: no embedded HWND available and sw " +
+                    "probe failed — degrading to audio-only",
+            )
+        }
+        return MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = null, shaderDir = shaderDir)
     }
 
     /**

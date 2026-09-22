@@ -67,6 +67,14 @@ abstract class BasePlayerEngine : MediaEngine {
     protected val _bufferedPositionMs = MutableStateFlow(0L)
     override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
 
+    /**
+     * Multi-band buffered surface — the range-level generalization of
+     * [_bufferedPositionMs]. Maintained by each adapter alongside the scalar;
+     * both reset together in [resetItemScopedPublishedState].
+     */
+    protected val _bufferedRanges = MutableStateFlow<List<LongRange>>(emptyList())
+    override val bufferedRanges: StateFlow<List<LongRange>> = _bufferedRanges.asStateFlow()
+
     protected val _videoStats = MutableStateFlow(EngineVideoStats())
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
@@ -96,6 +104,7 @@ abstract class BasePlayerEngine : MediaEngine {
         _currentCues.value = emptyList()
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
+        _bufferedRanges.value = emptyList()
         _videoStats.value = EngineVideoStats()
         onResetItemScopedState()
     }

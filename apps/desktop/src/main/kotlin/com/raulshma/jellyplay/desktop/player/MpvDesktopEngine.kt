@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
@@ -23,6 +24,7 @@ import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.MpvEventEndFile
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.MpvEventProperty
 import com.raulshma.jellyplay.feature.player.video.DesktopFrameCaptureEngine
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.BufferedRanges
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
@@ -31,8 +33,10 @@ import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
+import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
 import com.raulshma.jellyplay.feature.player.video.engine.MpvStyleMapping
+import com.raulshma.jellyplay.feature.player.video.engine.MpvTlsOptions
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackVolumePolicy
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
@@ -111,6 +115,22 @@ open class MpvDesktopEngine(
      * therefore creates the heavyweight child window first, then the engine.
      */
     windowHandle: Long? = null,
+    /**
+     * The extracted GLSL shader-pack directory: absolute path of the
+     * folder the bundled Anime4K chains + user `*.glsl` files live in. `null`
+     * (or a not-yet-extracted dir) omits the `glsl-shaders` pair entirely —
+     * mpv needs real file paths, so no dir means no packs.
+     */
+    val shaderDir: String? = null,
+    /**
+     * Set `target-colorspace-hint=yes` post-init (HDR passthrough):
+     * the engine factory flips this only when the user's desktop HDR
+     * passthrough setting is on AND the HWND-embed `vo=gpu-next` path was
+     * taken (the software-render path renders RGB bitmaps and cannot pass
+     * HDR through). mpv then drives an HDR-capable display into its HDR
+     * transfer instead of tone mapping.
+     */
+    private val targetColorspaceHint: Boolean = false,
 ) : MediaEngine,
     DesktopFrameCaptureEngine {
 
@@ -141,6 +161,8 @@ open class MpvDesktopEngine(
         supportsBorderStyles = true,
         supportsSecondarySubtitles = true,
         supportsScreenshot = true,
+        // The `deinterlace` property is runtime-settable here.
+        supportsDeinterlace = true,
     )
 
     override val zoomSafeSubtitleStrategy: ZoomSafeSubtitleStrategy =
@@ -179,6 +201,14 @@ open class MpvDesktopEngine(
 
     private val _bufferedPositionMs = MutableStateFlow(0L)
     override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
+
+    /**
+     * Multi-band buffered surface, maintained from the observed
+     * `demuxer-cache-state` node alongside the scalar demuxer-cache-time
+     * observer — see [refreshBufferedRanges].
+     */
+    private val _bufferedRanges = MutableStateFlow<List<LongRange>>(emptyList())
+    override val bufferedRanges: StateFlow<List<LongRange>> = _bufferedRanges.asStateFlow()
 
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
@@ -257,6 +287,14 @@ open class MpvDesktopEngine(
         ctx?.let(::registerObservers)
         if (ctx != null) eventThread.start()
 
+        // HDR passthrough — mpv switches an HDR-capable display to its
+        // HDR transfer on the first HDR frame when the hint is set. Runtime
+        // property write (post-init): the option is meaningful per-output and
+        // this libmpv accepts the string write after mpv_initialize.
+        if (targetColorspaceHint) {
+            ctx?.let { MpvLib.setPropertyString(it, "target-colorspace-hint", "yes") }
+        }
+
         // Stats projector: polls while enabled, mirroring the Android engines'
         // videoStatsEnabled gating — high-churn properties are only read while
         // the stats overlay is open.
@@ -315,6 +353,11 @@ open class MpvDesktopEngine(
         observe("time-pos", FORMAT_DOUBLE)
         observe("duration", FORMAT_DOUBLE)
         observe("demuxer-cache-time", FORMAT_INT64)
+        // Range-level buffered surface. NODE observation arrives as a
+        // raw mpv_node pointer in the event; like the track-list observer the
+        // engine re-reads the property through [MpvLib.readNode] (parsed
+        // Kotlin tree) instead of decoding the event's node memory here.
+        observe("demuxer-cache-state", FORMAT_NODE)
         observe("sub-text", FORMAT_STRING)
         observe("track-list", FORMAT_NODE)
         // Live output channel layout — the balance (`pan`) af stage must know
@@ -346,6 +389,30 @@ open class MpvDesktopEngine(
     // config performs zero writes. `video-rotate` starts at mpv's own 0.
     @Volatile private var lastAppliedVfChain: String? = null
     @Volatile private var lastAppliedRotationDeg: Int = 0
+
+    // The structured [MpvEngineConfig] diff cache (shared MpvConfigMapping —
+    // the groundwork that makes the desktop engine read the config Android's
+    // mpv engine has always consumed): scale/deband/interpolation(+video-sync)/
+    // framedrop/skiploopfilter/demuxer budgets/audio-device/audio-exclusive/
+    // audio-spdif/extras. Starts empty so the first FILE_LOADED application
+    // writes every owned key once; subsequent applies (every FILE_LOADED, plus
+    // live `engineSpecific` changes) write only actual CHANGES. scaler/deband
+    // changes reconfigure the vo pipeline, `audio-device` re-opens the ao —
+    // both only ever written on a real change.
+    @Volatile private var lastAppliedEngineConfigProps: Map<String, String> = emptyMap()
+
+    // ── HDR passthrough state ───────────────────────────────────────
+    // The display-target probe: pending from FILE_LOADED until the first
+    // stats tick where mpv's `video-target-params/gamma` resolves (the target
+    // exists only after the first frame is rendered), then cached for the
+    // file. `hdrTargetIsHdr` gates the tone-mapping suppression in
+    // applyEngineConfig; the three hdrStats* fields feed the stats overlay's
+    // badge/notice rows and survive the per-tick stats rebuild.
+    @Volatile private var hdrProbePending = false
+    @Volatile private var hdrTargetIsHdr = false
+    @Volatile private var hdrStatsActive = false
+    @Volatile private var hdrStatsNotice: String? = null
+    @Volatile private var hdrStatsType: String? = null
 
     /**
      * The live mpv handle for member calls, or null after [release] — every
@@ -383,6 +450,13 @@ open class MpvDesktopEngine(
             EVENT_FILE_LOADED -> {
                 fileLoaded = true
                 positionMs = 0L
+                // New file → the display-target probe starts over (the target
+                // of the previous item must not leak into this one's stats).
+                hdrProbePending = true
+                hdrTargetIsHdr = false
+                hdrStatsActive = false
+                hdrStatsNotice = null
+                hdrStatsType = null
                 applyPendingSubtitles()
                 refreshTracks()
                 applyConfigToMpv(currentConfig)
@@ -462,6 +536,7 @@ open class MpvDesktopEngine(
             }
             "duration" -> data?.let { durationValue = (it.getDouble(0) * 1000).toLong() }
             "demuxer-cache-time" -> data?.let { _bufferedPositionMs.value = it.getLong(0) * 1000 }
+            "demuxer-cache-state" -> refreshBufferedRanges()
             // Contract: null when no line is active — mpv emits "" on clear.
             // Non-blank lines also fold into the currentCues history (G10,
             // same pairing as Android's accumulateMpvSubText).  fix:
@@ -491,6 +566,32 @@ open class MpvDesktopEngine(
 
     private fun eofReached(): Boolean = aliveCtx()?.let { propFlag(it, "eof-reached") } ?: false
 
+    /**
+     * Re-reads the `demuxer-cache-state` node and folds it into
+     * [_bufferedRanges] via the shared pure derivation. Per-range detail
+     * (`seekable-ranges`, libmpv >= 0.35) is taken directly; older libmpv
+     * derives the contiguous `[demuxer-start-time, cache-end]` window clamped
+     * to `[0, duration]`. Numbers arrive as Double/Long from [MpvLib.readNode]
+     * — doubles coerce through Number so either shape parses.
+     */
+    private fun refreshBufferedRanges() {
+        val context = aliveCtx() ?: return
+        val state = MpvLib.readNode(context, "demuxer-cache-state") as? Map<*, *> ?: return
+        fun double(key: String): Double? = (state[key] as? Number)?.toDouble()
+        val seekableRanges = (state["seekable-ranges"] as? List<*>)?.mapNotNull { entry ->
+            val range = entry as? Map<*, *> ?: return@mapNotNull null
+            val start = (range["start"] as? Number)?.toDouble()
+            val end = (range["end"] as? Number)?.toDouble()
+            if (start != null && end != null) start to end else null
+        }
+        _bufferedRanges.value = BufferedRanges.fromDemuxerCacheState(
+            demuxerStartTimeSec = double("demuxer-start-time"),
+            cacheEndSec = double("cache-end"),
+            seekableRangesSec = seekableRanges,
+            durationMs = durationMs,
+        )
+    }
+
     // ── MediaEngine: source loading & teardown ──────────────────────────────
 
     override fun load(request: PlaybackRequest) {
@@ -509,6 +610,7 @@ open class MpvDesktopEngine(
         durationValue = 0L
         serverDurationMs = request.serverDurationMs
         _bufferedPositionMs.value = 0L
+        _bufferedRanges.value = emptyList()
         _currentCues.value = emptyList()
 
         // Per-request options. http-header-fields is a list option that
@@ -519,6 +621,12 @@ open class MpvDesktopEngine(
         MpvLib.mpv.mpv_set_option_string(context, "http-header-fields", "")
         request.headers.forEach { (k, v) ->
             MpvLib.mpv.mpv_set_option_string(context, "http-header-fields-append", "$k: $v")
+        }
+        // mTLS: the tls-* file-path options persist the same way —
+        // write the reset trio when no certificate is active so the previous
+        // item's certificate/key is never presented to this item's server.
+        MpvTlsOptions.from(request.tls).forEach { (option, value) ->
+            MpvLib.mpv.mpv_set_option_string(context, option, value)
         }
         request.preferredAudioLanguage?.let {
             MpvLib.mpv.mpv_set_option_string(context, "alang", it)
@@ -639,6 +747,15 @@ open class MpvDesktopEngine(
         _availableTracks.value = emptyList()
         _liveSubtitleCue.value = null
         _currentCues.value = emptyList()
+        // The stopped file's buffer ranges die with it.
+        _bufferedRanges.value = emptyList()
+        // The HDR verdict belongs to the (now stopped) file — clear it with
+        // the rest of the per-item derived state.
+        hdrProbePending = false
+        hdrTargetIsHdr = false
+        hdrStatsActive = false
+        hdrStatsNotice = null
+        hdrStatsType = null
     }
 
     override fun seekTo(positionMs: Long) {
@@ -672,14 +789,26 @@ open class MpvDesktopEngine(
     /** Last audible normalized level; the restore target for unmute. */
     @Volatile private var lastUnmuteVolume: Float = 1f
 
+    /**
+     * Per-content-type volume-memory capture (the
+     * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] hook).
+     * Invoked from the volume apply path ONLY for user-initiated changes
+     * ([PlaybackVolumePolicy.LevelPlan.isUserChange]) — the session host
+     * assigns it with the active item's bucket, so a remembered level
+     * reflects what the user chose, never a sleep-timer fade. Same
+     * assignment-safety shape as [onReleased]: assigned by the host after
+     * construction.
+     */
+    @Volatile override var onUserVolumeChange: ((level: Float) -> Unit)? = null
+
     /** Same seam as ReloadablePlayerEngine's — remember only audible levels. */
     private fun rememberUnmuteVolumeIfAudible(volume01: Float) {
         if (volume01 > 0f) lastUnmuteVolume = volume01
     }
 
-    override fun setVolume(value: Float) {
+    override fun setVolume(value: Float, isUserChange: Boolean) {
         val context = aliveCtx() ?: return
-        applyVolumePlan(context, value)
+        applyVolumePlan(context, value, isUserChange)
     }
 
     override fun increaseVolume(delta: Float) {
@@ -687,18 +816,20 @@ open class MpvDesktopEngine(
         // The cached percent IS the native level — this engine is the only
         // writer of mpv's `volume`, so the mirror cannot drift (Android reads
         // the property live because its handle can be touched elsewhere).
-        applyVolumePlan(context, (volumePercent / 100.0).toFloat() + delta)
+        // Key/remote nudges are user-shaped for memory capture.
+        applyVolumePlan(context, (volumePercent / 100.0).toFloat() + delta, isUserChange = true)
     }
 
     override fun decreaseVolume(delta: Float) {
         val context = aliveCtx() ?: return
-        applyVolumePlan(context, (volumePercent / 100.0).toFloat() - delta)
+        applyVolumePlan(context, (volumePercent / 100.0).toFloat() - delta, isUserChange = true)
     }
 
-    /** plan + remember + native write — the ReloadablePlayerEngine template body. */
-    private fun applyVolumePlan(context: Pointer, raw: Float) {
-        val plan = PlaybackVolumePolicy.planLevel(raw, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
+    /** plan + remember + capture + native write — the ReloadablePlayerEngine template body. */
+    private fun applyVolumePlan(context: Pointer, raw: Float, isUserChange: Boolean) {
+        val plan = PlaybackVolumePolicy.planLevel(raw, PlaybackVolumePolicy.MAX_BOOST_NOMINAL, isUserChange)
         rememberUnmuteVolumeIfAudible(plan.normalized)
+        if (plan.isUserChange) onUserVolumeChange?.invoke(plan.normalized)
         applyVolumeLevel(context, plan.normalized)
     }
 
@@ -873,6 +1004,21 @@ open class MpvDesktopEngine(
         }
         if (oldConfig.engineSpecific != newConfig.engineSpecific && newConfig.engineSpecific != null) {
             applyConfigToMpv(newConfig)
+        } else if (oldConfig.audioPassthrough != newConfig.audioPassthrough ||
+            // The session-scoped deinterlace cycle rides the base
+            // config — it must re-run the pair diff even when the
+            // engine-specific slice didn't move.
+            oldConfig.deinterlace != newConfig.deinterlace ||
+            // An HDR-source change flips the tone-mapping suppression
+            // gate, so the shared pairs must be re-diffed for the new item.
+            oldConfig.hdrSource != newConfig.hdrSource
+        ) {
+            // Boolean-only change: the spdif list rides the SHARED
+            // EngineConfig.audioPassthrough on both platforms (the mapper's
+            // AUTO mode composes it), so it must reach the pair diff even
+            // when the engine-specific slice didn't move. (Previously the
+            // desktop never applied passthrough toggles at all.)
+            applyEngineConfig(newConfig)
         }
         if (oldConfig.audioEffects != newConfig.audioEffects) {
             // Live re-apply — mpv re-inits the af chain / audio-channels /
@@ -892,9 +1038,56 @@ open class MpvDesktopEngine(
         MpvLib.setPropertyDouble(context, "sub-delay", config.subtitleDelayMs / 1000.0)
         MpvLib.setPropertyString(context, "hwdec", hwdecFor(config.decoderMode))
         applySubtitleStyle(config.subtitleStyle)
+        applyEngineConfig(config)
         applyAudioEffects(config)
         applyVideoEffects(config)
     }
+
+    /**
+     * Applies the structured [MpvEngineConfig] through the shared
+     * [MpvConfigMapping] with the diff-then-write discipline above — the
+     * desktop half of the engine-config parity groundwork. Runs at every
+     * FILE_LOADED (fresh loads re-write nothing thanks to the cache) and on
+     * live `engineSpecific` changes, so the settings-surface knobs (scaler,
+     * deband, interpolation, framedrop, skip-loop-filter, demuxer budgets,
+     * audio device/exclusive/passthrough, shader pack, tone mapping, render
+     * quality, `mpvExtraConfig`) all reach the desktop mpv exactly as they
+     * reach Android's.
+     */
+    private fun applyEngineConfig(config: EngineConfig) {
+        val context = aliveCtx() ?: return
+        val mpvCfg = config.engineSpecific as? MpvEngineConfig ?: MpvEngineConfig()
+        val pairs = MpvConfigMapping.configPairs(
+            config = mpvCfg,
+            audioPassthrough = config.audioPassthrough,
+            // No low-RAM axis on desktop: the AUTO demuxer budget takes the
+            // normal pair (the mapper's device-dependent branch stays Android's).
+            lowRamDevice = false,
+            deinterlace = config.deinterlace,
+            shaderDir = shaderDir,
+            // While HDR passthrough is ACTIVE (setting on + HDR item +
+            // HDR display target) `tone-mapping` falls to mpv's `auto`
+            // default — HDR→HDR, the colorspace-hint path owns the output
+            // (and a stale preset from an SDR session is explicitly reset).
+            // Before the target probe lands the gate is open (the preset is
+            // written): the safe fallback for SDR displays.
+            toneMappingSuppressed = hdrPassthroughRequested(config) && hdrTargetIsHdr,
+        )
+        lastAppliedEngineConfigProps = MpvConfigMapping.applyChanged(pairs, lastAppliedEngineConfigProps) { key, value ->
+            MpvLib.setPropertyString(context, key, value)
+        }
+    }
+
+    /**
+     * The HDR-passthrough INTENT (not the active state): the user's setting
+     * is on AND the current item's streams are HDR (the config builder folds
+     * `isHdrFromStreams` into [EngineConfig.hdrSource]). Whether the OUTPUT is
+     * actually HDR additionally depends on the display target
+     * ([hdrTargetIsHdr], read from `video-target-params` after the first
+     * frame).
+     */
+    private fun hdrPassthroughRequested(config: EngineConfig): Boolean =
+        (config.engineSpecific as? MpvEngineConfig)?.hdrPassthrough == true && config.hdrSource
 
     /**
      * push the audio-effects config onto mpv — the `af` chain
@@ -907,7 +1100,15 @@ open class MpvDesktopEngine(
     private fun applyAudioEffects(config: EngineConfig) {
         val context = aliveCtx() ?: return
         val fx = config.audioEffects
-        val channels = DesktopAudioEffectChain.channelMixToAudioChannels(fx.channelMixMode, fx.channelMixEnabled)
+        // The output mode's STEREO forced downmix folds into the same
+        // audio-channels value — the effects chain stays this property's
+        // single writer (MpvConfigMapping.effectiveAudioChannels composes).
+        val mpvCfg = config.engineSpecific as? MpvEngineConfig ?: MpvEngineConfig()
+        val channels = MpvConfigMapping.effectiveAudioChannels(
+            mpvCfg.audioOutputMode,
+            fx.channelMixMode,
+            fx.channelMixEnabled,
+        )
         if (channels != lastAppliedAudioChannels) {
             MpvLib.setPropertyString(context, "audio-channels", channels)
             lastAppliedAudioChannels = channels
@@ -1068,6 +1269,7 @@ open class MpvDesktopEngine(
 
     private fun projectVideoStats() {
         val context = aliveCtx() ?: return
+        probeHdrTarget(context)
         _videoStats.value = EngineVideoStats(
             videoCodec = MpvLib.getPropertyString(context, "video-format"),
             videoDecoder = MpvLib.getPropertyString(context, "hwdec-current")?.takeIf { it != "no" },
@@ -1084,7 +1286,37 @@ open class MpvDesktopEngine(
             avsyncMs = propDouble(context, "total-avsync")?.toFloat(),
             displayFps = propDouble(context, "display-fps")?.toFloat(),
             voFrameDropCount = propDouble(context, "frame-drop-count")?.toLong(),
+            // The cached HDR-target verdict (badge + fallback notice).
+            videoHdrType = hdrStatsType,
+            hdrOutputActive = hdrStatsActive,
+            hdrOutputNotice = hdrStatsNotice,
         )
+    }
+
+    /**
+     * The display-capability probe: reads `video-target-params/gamma`
+     * (mpv exposes the ACTIVE output transfer there — pq/HLG on an HDR
+     * target) ONCE per file, at the first stats tick where the property
+     * resolves after FILE_LOADED, and caches the verdict. Re-reads would be
+     * harmless, but the plan's "poll once after first frame" keeps the
+     * badge stable against mid-file output switches.
+     */
+    private fun probeHdrTarget(context: Pointer) {
+        if (!hdrProbePending) return
+        val gamma = MpvLib.getPropertyString(context, "video-target-params/gamma") ?: return
+        hdrProbePending = false
+        hdrTargetIsHdr = gamma == TARGET_GAMMA_PQ || gamma == TARGET_GAMMA_HLG
+        hdrStatsType = when (gamma) {
+            TARGET_GAMMA_PQ -> "HDR10"
+            TARGET_GAMMA_HLG -> "HLG"
+            else -> null
+        }
+        val requested = hdrPassthroughRequested(currentConfig)
+        hdrStatsActive = requested && hdrTargetIsHdr
+        // Passthrough on but the display target stayed SDR: the tone
+        // mapping handles the HDR→SDR conversion — say so in one line.
+        hdrStatsNotice =
+            if (requested && !hdrTargetIsHdr) HDR_SDR_FALLBACK_NOTICE else null
     }
 
     private fun resolution(context: Pointer): String? {
@@ -1127,5 +1359,12 @@ open class MpvDesktopEngine(
 
         /** Temp-file prefix for screenshot-to-file captures. */
         private const val TEMP_SHOT_PREFIX = "jellyplay-frame-"
+
+        /** `video-target-params/gamma` values that mean an HDR output. */
+        private const val TARGET_GAMMA_PQ = "pq"
+        private const val TARGET_GAMMA_HLG = "hlg"
+
+        /** The one-line stats fallback notice when passthrough is on but the target stayed SDR. */
+        private const val HDR_SDR_FALLBACK_NOTICE = "SDR display - tone mapping active"
     }
 }

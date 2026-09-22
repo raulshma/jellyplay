@@ -161,6 +161,15 @@ class LibVlcPlayerEngine(
                 if (dur > 0) {
                     _bufferedPositionMs.value = ((bufPercent / 100f) * dur).toLong()
                 }
+                // libVLC exposes only a 0..100 buffering percentage —
+                // the fraction-ahead approximation bands [position, position +
+                // fraction * duration]. Full (100%) buffering shades through
+                // the end of the item.
+                _bufferedRanges.value = BufferedRanges.aheadOfPosition(
+                    positionMs = currentPositionMs,
+                    fraction = bufPercent / 100f,
+                    durationMs = dur,
+                )
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,

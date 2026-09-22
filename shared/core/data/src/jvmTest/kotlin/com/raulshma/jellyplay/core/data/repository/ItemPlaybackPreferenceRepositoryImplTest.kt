@@ -5,6 +5,9 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.MpvRenderOverrides
+import com.raulshma.jellyplay.core.model.MpvShaderPack
+import com.raulshma.jellyplay.core.model.MpvToneMapping
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.TrackType
@@ -12,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.Test
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -218,6 +222,22 @@ class ItemPlaybackPreferenceRepositoryImplTest {
     }
 
     @Test
+    fun `a language save keeps the remembered tracks and render profile`() = runTest {
+        // `save` is the language/boost surface; the remembered-track triples
+        // and the render-profile blob belong to their own writers and must
+        // survive it (a constructor rebuild of the row would null them).
+        repository.saveRememberedTrack(PlaybackPrefScope.SERIES, "series-1", TrackType.AUDIO, RememberedTrack("English · 5.1", "eng", 0, codec = "eac3"))
+        repository.setRenderProfile(PlaybackPrefScope.SERIES, "series-1", MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_A))
+
+        repository.save(PlaybackPrefScope.SERIES, "series-1", audioLanguage = "ger")
+
+        val pref = repository.get(PlaybackPrefScope.SERIES, "series-1")!!
+        assertEquals("ger", pref.audioLanguage)
+        assertEquals(RememberedTrack("English · 5.1", "eng", 0, codec = "eac3"), pref.rememberedAudioTrack)
+        assertEquals(MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_A), pref.renderProfile)
+    }
+
+    @Test
     fun `saveRememberedTrack null clears only that track type`() = runTest {
         repository.saveRememberedTrack(PlaybackPrefScope.SERIES, "series-1", TrackType.AUDIO, RememberedTrack("English", "eng"))
         repository.saveRememberedTrack(PlaybackPrefScope.SERIES, "series-1", TrackType.SUBTITLE, RememberedTrack("English SDH", "eng"))
@@ -242,6 +262,138 @@ class ItemPlaybackPreferenceRepositoryImplTest {
     fun `saveRememberedTrack null on an unknown key is a no-op`() = runTest {
         repository.saveRememberedTrack(PlaybackPrefScope.SERIES, "missing", TrackType.AUDIO, track = null)
         assertNull(repository.get(PlaybackPrefScope.SERIES, "missing"))
+    }
+
+    @Test
+    fun `saveRememberedTrack captures and clears the codec column`() = runTest {
+        // The codec rides alongside label/language/index and survives
+        // the DAO round-trip — the language+codec re-match rung's input.
+        repository.saveRememberedTrack(
+            PlaybackPrefScope.SERIES, "series-1", TrackType.AUDIO,
+            RememberedTrack("German 5.1", "ger", 0, codec = "eac3"),
+        )
+        val pref = repository.get(PlaybackPrefScope.SERIES, "series-1")!!
+        assertEquals("eac3", pref.rememberedAudioTrack?.codec)
+        assertEquals(RememberedTrack("German 5.1", "ger", 0, codec = "eac3"), pref.rememberedAudioTrack)
+
+        // A later selection without a codec (stream exposed none) keeps the
+        // previously remembered one instead of erasing it.
+        repository.saveRememberedTrack(
+            PlaybackPrefScope.SERIES, "series-1", TrackType.AUDIO,
+            RememberedTrack("German", "ger", 0, codec = null),
+        )
+        assertEquals("eac3", repository.get(PlaybackPrefScope.SERIES, "series-1")!!.rememberedAudioTrack?.codec)
+
+        // Clearing the remembered track drops its codec with it — and since
+        // nothing else is pinned on the row, the row itself is dropped (the
+        // `clearing the last remembered track drops the row entirely` pin).
+        repository.saveRememberedTrack(PlaybackPrefScope.SERIES, "series-1", TrackType.AUDIO, track = null)
+        assertNull(repository.get(PlaybackPrefScope.SERIES, "series-1"))
+    }
+
+    // ── Render profile ──────────────────────────────────────────
+
+    @Test
+    fun `setRenderProfile round-trips the override through the DAO`() = runTest {
+        val overrides = MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_B, toneMapping = MpvToneMapping.BT2390)
+        repository.setRenderProfile(PlaybackPrefScope.SERIES, "series-1", overrides)
+        assertEquals(overrides, repository.get(PlaybackPrefScope.SERIES, "series-1")!!.renderProfile)
+    }
+
+    @Test
+    fun `setRenderProfile null clears the override and keeps the other fields`() = runTest {
+        repository.save(PlaybackPrefScope.ITEM, "item-1", audioLanguage = "ger")
+        repository.setRenderProfile(PlaybackPrefScope.ITEM, "item-1", MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_A))
+        assertNotNull(repository.get(PlaybackPrefScope.ITEM, "item-1")!!.renderProfile)
+
+        // "Inherit": the override clears, the language rule survives.
+        repository.setRenderProfile(PlaybackPrefScope.ITEM, "item-1", null)
+        val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
+        assertNull(pref.renderProfile)
+        assertEquals("ger", pref.audioLanguage)
+    }
+
+    @Test
+    fun `clearing the render profile on a row with nothing else drops the row`() = runTest {
+        repository.setRenderProfile(PlaybackPrefScope.ITEM, "item-1", MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_C))
+        repository.setRenderProfile(PlaybackPrefScope.ITEM, "item-1", null)
+        assertNull(repository.get(PlaybackPrefScope.ITEM, "item-1"))
+    }
+
+    @Test
+    fun `setRenderProfile null on an unknown key is a no-op`() = runTest {
+        repository.setRenderProfile(PlaybackPrefScope.SERIES, "missing", null)
+        assertNull(repository.get(PlaybackPrefScope.SERIES, "missing"))
+    }
+
+    @Test
+    fun `a language-rule save preserves the render profile blob`() = runTest {
+        val overrides = MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_A, toneMapping = MpvToneMapping.HABLE)
+        repository.setRenderProfile(PlaybackPrefScope.ITEM, "item-1", overrides)
+        repository.save(PlaybackPrefScope.ITEM, "item-1", audioLanguage = "ger")
+        assertEquals(overrides, repository.get(PlaybackPrefScope.ITEM, "item-1")!!.renderProfile)
+        assertEquals("ger", repository.get(PlaybackPrefScope.ITEM, "item-1")!!.audioLanguage)
+    }
+
+    @Test
+    fun `an all-null save keeps a row that only holds a render profile`() = runTest {
+        val overrides = MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_B)
+        repository.setRenderProfile(PlaybackPrefScope.ITEM, "item-1", overrides)
+
+        // "Leave everything untouched" must not read as "no preference left":
+        // the row still remembers the render profile.
+        repository.save(PlaybackPrefScope.ITEM, "item-1", audioLanguage = null, subtitleLanguage = null, subtitleForced = null, subtitleHearingImpaired = null, dialogueBoostStrength = null)
+
+        assertEquals(overrides, repository.get(PlaybackPrefScope.ITEM, "item-1")!!.renderProfile)
+    }
+
+    @Test
+    fun `clearAudioLanguage keeps a row that only holds a remembered track`() = runTest {
+        repository.save(PlaybackPrefScope.SERIES, "series-1", audioLanguage = "ger", subtitleLanguage = null, subtitleForced = null, subtitleHearingImpaired = null, dialogueBoostStrength = null)
+        repository.saveRememberedTrack(
+            PlaybackPrefScope.SERIES, "series-1", TrackType.SUBTITLE,
+            RememberedTrack("English SDH", "eng", 1),
+        )
+
+        repository.clearAudioLanguage(PlaybackPrefScope.SERIES, "series-1")
+
+        val pref = repository.get(PlaybackPrefScope.SERIES, "series-1")!!
+        assertNull(pref.audioLanguage)
+        assertEquals(RememberedTrack("English SDH", "eng", 1), pref.rememberedSubtitleTrack)
+    }
+
+    @Test
+    fun `get with a corrupt stored renderProfile degrades to null instead of throwing`() = runTest {
+        database.itemPlaybackPreferenceDao().upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = PlaybackPrefScope.ITEM.name,
+                key = "item-1",
+                audioLanguage = "ger",
+                subtitleLanguage = null,
+                renderProfile = "{not json",
+                updatedAt = 1L,
+            )
+        )
+        val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
+        assertNull(pref.renderProfile)
+        assertEquals("ger", pref.audioLanguage)
+    }
+
+    @Test
+    fun `setRenderProfile overwrites a corrupt stored blob cleanly`() = runTest {
+        database.itemPlaybackPreferenceDao().upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = PlaybackPrefScope.ITEM.name,
+                key = "item-1",
+                audioLanguage = null,
+                subtitleLanguage = null,
+                renderProfile = "{corrupt",
+                updatedAt = 1L,
+            )
+        )
+        val overrides = MpvRenderOverrides(shaderPack = MpvShaderPack.CUSTOM, toneMapping = MpvToneMapping.CLIP)
+        repository.setRenderProfile(PlaybackPrefScope.ITEM, "item-1", overrides)
+        assertEquals(overrides, repository.get(PlaybackPrefScope.ITEM, "item-1")!!.renderProfile)
     }
 
     // ── Delete ──────────────────────────────────────────────────────────

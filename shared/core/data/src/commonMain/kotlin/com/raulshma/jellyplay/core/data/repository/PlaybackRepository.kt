@@ -17,7 +17,18 @@ interface PlaybackRepository {
 
     suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit>
 
-    suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit>
+    /**
+     * Reports the end of a playback session. [failed] marks an error-aborted
+     * session: the server then skips its own "≥X % = played" rule
+     * for the stop, so a crash near the end cannot mark the item watched.
+     * Defaults to `false` — every well-formed stop is a successful one.
+     */
+    suspend fun reportPlaybackStopped(
+        itemId: String,
+        sessionId: String,
+        positionTicks: Long,
+        failed: Boolean = false,
+    ): Result<Unit>
 
     /**
      * Reader page-position report for a book ([positionTicks] =

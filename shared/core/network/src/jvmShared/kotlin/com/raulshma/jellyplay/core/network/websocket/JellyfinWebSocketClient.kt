@@ -314,6 +314,12 @@ class JellyfinWebSocketClient(
                 "Play",
                 "Playstate",
                 "GeneralCommand",
+                // Older/alternative shape of the remote browse command: some
+                // clients send DisplayContent as its own message type with the
+                // item payload directly in Data (the modern shape rides
+                // GeneralCommand with Name=DisplayContent). The receiver
+                // normalizes both.
+                "DisplayContent",
                 "KeepAlive",
                 "GroupJoined",
                 "GroupLeft",

@@ -138,7 +138,7 @@ internal class FakeMediaEngine : MediaEngine {
     override val volume: Float get() = volumeValue
     override fun selectTrack(type: TrackType, index: Int) {}
     override fun setMaxVideoBitrate(bps: Int?) {}
-    override fun setVolume(value: Float) {
+    override fun setVolume(value: Float, isUserChange: Boolean) {
         volumeValue = value.coerceIn(0f, 1f)
     }
     override fun increaseVolume(delta: Float) {

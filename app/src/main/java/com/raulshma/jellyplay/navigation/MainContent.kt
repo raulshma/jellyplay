@@ -252,6 +252,8 @@ internal fun MainContent(
         presentSnackbar = { message ->
             snackbarHostState.showSnackbar(message = message, withDismissAction = true)
         },
+        goBack = { navigator.goBack() },
+        dispatchKey = infra.keyDispatcher,
     )
 
     // Deep links / launcher shortcuts / shared-text targets
@@ -269,8 +271,12 @@ internal fun MainContent(
     // pinned by RemoteNavigationRoutingTest). The bridge resolves
     // INSIDE the effect body — LaunchedEffect runs after the frame applies,
     // so its Koin construction no longer runs during any composition pass.
+    val contextMenuUnavailableMessage = stringResource(R.string.snackbar_context_menu_unavailable)
     LaunchedEffect(infra.remoteNavigationBridgeLazy) {
-        navRequests.collectRemoteNavigation(infra.remoteNavigationBridgeLazy.value.targets)
+        navRequests.collectRemoteNavigation(
+            targets = infra.remoteNavigationBridgeLazy.value.targets,
+            contextMenuUnavailableMessage = contextMenuUnavailableMessage,
+        )
     }
 
     // SyncPlay auto-open: a joined group started playing (or switched items)

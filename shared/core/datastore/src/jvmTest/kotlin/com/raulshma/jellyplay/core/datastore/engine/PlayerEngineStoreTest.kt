@@ -175,4 +175,52 @@ class PlayerEngineStoreTest {
         assertTrue(restored.containsKey("real"))
         assertFalse(restored.containsKey("empty"))
     }
+
+    @Test
+    fun `full-form setMediaStreamSelection round-trips descriptor fields`() = runTest {
+        // The restore ladder revalidates a stored index against the
+        // recorded label/language, so the full-form writer must persist them.
+        store.setMediaStreamSelection(
+            "item1",
+            com.raulshma.jellyplay.core.model.MediaStreamSelection(
+                audioStreamIndex = 1,
+                subtitleStreamIndex = 3,
+                audioLabel = "Japanese",
+                audioLanguage = "jpn",
+                subtitleLabel = "English",
+                subtitleLanguage = "eng",
+            ),
+        )
+        val stored = store.playerEngine.first().mediaStreamSelections.getValue("item1")
+        assertEquals(1, stored.audioStreamIndex)
+        assertEquals(3, stored.subtitleStreamIndex)
+        assertEquals("Japanese", stored.audioLabel)
+        assertEquals("jpn", stored.audioLanguage)
+        assertEquals("English", stored.subtitleLabel)
+        assertEquals("eng", stored.subtitleLanguage)
+    }
+
+    @Test
+    fun `index-form setMediaStreamSelection keeps clearing semantics`() = runTest {
+        store.setMediaStreamSelection(
+            "item1",
+            com.raulshma.jellyplay.core.model.MediaStreamSelection(
+                audioStreamIndex = 1,
+                subtitleStreamIndex = 3,
+                subtitleLabel = "English",
+                subtitleLanguage = "eng",
+            ),
+        )
+        // Clearing both indices through the index-form writer removes the entry…
+        store.setMediaStreamSelection("item1", audioStreamIndex = null, subtitleStreamIndex = null)
+        assertFalse(store.playerEngine.first().mediaStreamSelections.containsKey("item1"))
+
+        // …and a null selection through the full-form writer does the same.
+        store.setMediaStreamSelection(
+            "item2",
+            com.raulshma.jellyplay.core.model.MediaStreamSelection(audioStreamIndex = 2),
+        )
+        store.setMediaStreamSelection("item2", selection = null)
+        assertFalse(store.playerEngine.first().mediaStreamSelections.containsKey("item2"))
+    }
 }

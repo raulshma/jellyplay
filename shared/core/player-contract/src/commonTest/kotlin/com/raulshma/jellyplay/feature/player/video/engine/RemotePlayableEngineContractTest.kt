@@ -71,7 +71,7 @@ class RemotePlayableEngineContractTest {
             calls += "setMaxVideoBitrate($bps)"
         }
 
-        override fun setVolume(value: Float) {
+        override fun setVolume(value: Float, isUserChange: Boolean) {
             calls += "setVolume($value)"
             currentVolume = value
             volumeValues += value

@@ -178,6 +178,7 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">再生中: %1$s</string>
+    <string name="snackbar_context_menu_unavailable">ここではコンテキストメニューを使用できません</string>
 
     <!-- Player speed-picker custom-value labels (§2.3). -->
     <string name="player_speed_custom">再生速度を指定</string>

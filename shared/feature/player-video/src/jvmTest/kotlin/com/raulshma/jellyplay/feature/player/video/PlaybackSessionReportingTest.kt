@@ -59,6 +59,7 @@ class PlaybackSessionReportingTest {
     private lateinit var playerSessionManager: PlayerSessionManager
     private lateinit var sessionStateFlow: MutableStateFlow<PlayerSessionState>
     private lateinit var engine: FakeMediaEngine
+    private lateinit var progressReporter: PlaybackProgressReporter
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var offlinePlaybackFacade: OfflinePlaybackFacade
     private lateinit var hooks: RecordingHooks
@@ -104,11 +105,12 @@ class PlaybackSessionReportingTest {
         offlinePlaybackFacade = mockk(relaxed = true)
         hooks = RecordingHooks()
         positionStore = FakePositionStore()
+        progressReporter = mockk(relaxed = true)
 
         session = PlaybackSession(
             scope = sessionScope,
             playerSessionManager = playerSessionManager,
-            progressReporter = mockk(relaxed = true),
+            progressReporter = progressReporter,
             sessionLoadPipeline = mockk(relaxed = true),
             hooks = hooks,
             mediaSessionController = mockk(relaxed = true),
@@ -266,6 +268,72 @@ class PlaybackSessionReportingTest {
         // the latch stays open so a real position can still be reported later.
         coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any()) }
         assertNull(session.stopReportedForSession)
+    }
+
+    // ── Failed flag + stalled-finish stop dedup ────────────────────
+
+    @Test
+    fun reportCurrentPlaybackStopped_errorLatched_reportsFailedTrue() = runTest {
+        every { progressReporter.isErrorLatched() } returns true
+        engine.advanceTo(60_000L)
+
+        session.reportCurrentPlaybackStopped()
+
+        // An error-aborted session must carry failed=true so the server
+        // skips its own "≥X % = played" rule on the stop.
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L, true)
+        }
+    }
+
+    @Test
+    fun reportCurrentPlaybackStopped_errorLatchHeld_reportsFailedFalse() = runTest {
+        engine.advanceTo(60_000L)
+
+        session.reportCurrentPlaybackStopped()
+
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L, false)
+        }
+    }
+
+    @Test
+    fun reportCurrentPlaybackStopped_stalledFinishAlreadyReported_isSkippedAndLatched() = runTest {
+        every { progressReporter.hasReportedStopFor("server-1") } returns true
+        engine.advanceTo(60_000L)
+
+        session.reportCurrentPlaybackStopped()
+
+        // The reporter already stop-reported this session at the FULL
+        // duration (stalled-finish): a second stop at the stalled position
+        // would only downgrade it.
+        coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any(), any()) }
+        assertEquals("server-1", session.stopReportedForSession)
+    }
+
+    @Test
+    fun release_errorLatched_reportsFailedTrue() = runTest {
+        every { progressReporter.isErrorLatched() } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L, true)
+        }
+    }
+
+    @Test
+    fun release_stalledFinishAlreadyReported_doesNotDuplicateTheStop() = runTest {
+        every { progressReporter.hasReportedStopFor("server-1") } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 0) {
+            playbackRepository.reportPlaybackStopped(any(), any(), any(), any())
+        }
+        assertEquals("server-1", session.stopReportedForSession)
     }
 
     // ── reloadForMode: SessionEvent.InformUser notices ──────────────────────

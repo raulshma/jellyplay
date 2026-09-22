@@ -13,13 +13,17 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Android adapter over the Hilt-owned legacy `core:data`
  * ActivePlayerController singleton (seam): the registry remote-control
- * paths read to drive playback without a ViewModel reference.
+ * paths read to drive playback without a ViewModel reference. Forwards the
+ * screenshot-request flow to the mounted player screen.
  */
 internal class AndroidActivePlayerController(
     private val delegate: ActivePlayerController,
 ) : com.raulshma.jellyplay.feature.player.video.ActivePlayerController {
 
     override val engine: RemotePlayableEngine? get() = delegate.engine
+
+    override val screenshotRequests: kotlinx.coroutines.flow.SharedFlow<Unit>
+        get() = delegate.screenshotRequests
 
     override fun bindEngine(engine: RemotePlayableEngine) = delegate.bindEngine(engine)
 

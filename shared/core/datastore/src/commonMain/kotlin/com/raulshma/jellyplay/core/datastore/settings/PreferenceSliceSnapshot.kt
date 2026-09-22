@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileSlice
 import com.raulshma.jellyplay.core.model.PinLockoutState
 import kotlinx.serialization.json.JsonElement
 
@@ -58,6 +59,8 @@ data class PreferenceSliceSnapshot(
     val screensaver: ScreensaverSlice,
     val security: SecuritySlice,
     val experimental: ExperimentalSlice,
+    /** Per-content-type volume memory. */
+    val volumeProfile: VolumeProfileSlice = VolumeProfileSlice(),
     val runtime: AppRuntimeState,
     val pinLockout: PinLockoutState,
 ) {
@@ -136,6 +139,7 @@ fun buildPreferenceSliceSnapshotFromBackup(
         security = decodeOrDefault(BackupSliceKey.SECURITY, SecuritySlice.serializer(), SecuritySlice()),
         subtitle = decodeOrDefault(BackupSliceKey.SUBTITLE, SubtitleSlice.serializer(), SubtitleSlice()),
         experimental = decodeOrDefault(BackupSliceKey.EXPERIMENTAL, ExperimentalSlice.serializer(), ExperimentalSlice()),
+        volumeProfile = decodeOrDefault(BackupSliceKey.VOLUME_PROFILE, VolumeProfileSlice.serializer(), VolumeProfileSlice()),
         runtime = backup.extras,
         pinLockout = pinLockout,
     )

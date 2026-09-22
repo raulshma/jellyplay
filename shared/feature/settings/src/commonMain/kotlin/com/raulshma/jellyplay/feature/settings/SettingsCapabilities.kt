@@ -51,6 +51,43 @@ internal data class SettingsCapabilities(
     val supportsSystemNotificationSettings: Boolean,
     /** Mirrors `LogCollector` returning collected logs (null on desktop). */
     val supportsLogSharing: Boolean,
+    /**
+     * mpv audio-device enumeration exists: the ONLY desktop-backed
+     * flag in this surface (every other flag hides Android-backed rows on
+     * desktop, this one hides a desktop-backed row on Android). The seam is
+     * the real `AudioDeviceEnumerator` binding in the desktop composition
+     * root (`DesktopAudioDeviceEnumerator` over a throwaway idle mpv
+     * context); Android's mpv binding exposes no device-list surface, no
+     * binding exists, and `getOrNull()` resolves null — pinned in
+     * `DesktopPlatformActualsTest`.
+     */
+    val supportsAudioDeviceSelection: Boolean,
+    /**
+     * The desktop mpv render rows (shader pack, tone mapping,
+     * quality profile, HDR passthrough, `tscale`) exist — the twin of
+     * [supportsAudioDeviceSelection]: desktop-backed rows hidden on Android,
+     * where the Anime4K extraction surface and the HWND-embed `vo=gpu-next`
+     * HDR path do not exist. Pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsMpvRenderProfiles: Boolean,
+    /**
+     * Per-content-type volume memory exists — desktop-backed: the
+     * app owns mpv's `volume` scalar there (applied at item start, captured
+     * on user changes through the `PlaybackVolumePolicy` seam). Android video
+     * volume is deliberately the system `STREAM_MUSIC` stream and the audio
+     * player exposes no volume control, so the row is structurally absent
+     * there. Pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsVolumeMemory: Boolean,
+    /**
+     * The idle "Ready to play" ambient screen exists —
+     * desktop-backed: `DesktopIdleMonitor` + the in-scaffold overlay live in
+     * the desktop shell only (Android has its own lock-screen/screensaver
+     * story, and the window-focus premise is desktop-specific). Hides the
+     * idle timeout/toggle rows on Android; pinned in
+     * `DesktopPlatformActualsTest`.
+     */
+    val supportsIdleAmbientScreen: Boolean,
 )
 
 /**

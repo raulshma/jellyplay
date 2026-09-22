@@ -104,6 +104,16 @@ class VideoPlayerStoreTest {
     }
 
     @Test
+    fun `skip_segments_on_seek defaults off and toggles`() = runTest {
+        // Opt-in by default — a seek remap must be asked for.
+        assertFalse(store.videoPlayer.first().skipSegmentsOnSeek)
+        store.setSkipSegmentsOnSeek(true)
+        assertTrue(store.videoPlayer.first().skipSegmentsOnSeek)
+        store.setSkipSegmentsOnSeek(false)
+        assertFalse(store.videoPlayer.first().skipSegmentsOnSeek)
+    }
+
+    @Test
     fun `restore(slice) round-trips a fully-populated slice`() = runTest {
         val slice = VideoPlayerSlice(
             videoSeekDurationMs = 15_000L,
@@ -137,6 +147,7 @@ class VideoPlayerStoreTest {
             tvZoomModePercent = 110f,
             incognitoModeEnabled = true,
             segmentBehaviors = SegmentBehavior.DEFAULT_BEHAVIORS + (MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
+            skipSegmentsOnSeek = true,
         )
 
         store.restore(slice)

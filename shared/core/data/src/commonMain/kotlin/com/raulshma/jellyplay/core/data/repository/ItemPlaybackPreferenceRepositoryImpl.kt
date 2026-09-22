@@ -23,6 +23,25 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
     private val timeSource: EpochMillisSource,
 ) : ItemPlaybackPreferenceRepository {
 
+    /**
+     * A row carries no preference when every preference column is null — the
+     * single emptiness check every clear path funnels through. A new column
+     * extends this once; a stale per-site subset would drop rows that still
+     * remember that column (e.g. a render profile surviving a language clear).
+     * The remembered codec/language/index triples ride with their label
+     * column, so the label alone carries the "is something remembered" signal.
+     */
+    private fun ItemPlaybackPreferenceEntity.hasNoPreferences() =
+        audioLanguage == null &&
+            subtitleLanguage == null &&
+            subtitleForced == null &&
+            subtitleHearingImpaired == null &&
+            subtitleDisabled == null &&
+            dialogueBoostStrength == null &&
+            rememberedAudioLabel == null &&
+            rememberedSubtitleLabel == null &&
+            renderProfile == null
+
     override suspend fun get(scope: PlaybackPrefScope, key: String): ItemPlaybackPreference? =
         dao.getByKey(scope.name, key)?.toDomain()
 
@@ -56,60 +75,60 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             // can't both be set on one row.
             val mergedDisabled = if (mergedSub != null) null else existing?.subtitleDisabled
             // A row with nothing set carries no preference — drop it so the table
-            // stays tidy and `get` returns null (i.e. "inherit global"). Subtitle
-            // role fields only persist alongside a language, so they are never the
-            // sole occupants of a row.
-            if (mergedAudio == null && mergedSub == null && mergedBoost == null && mergedDisabled == null) {
+            // stays tidy and `get` returns null (i.e. "inherit global").
+            // Built as a `copy` of the existing row so every column `save`
+            // doesn't own rides along untouched (remembered-track triples,
+            // the render-profile blob) — a constructor rebuild would null
+            // them and a language-rule save would wipe a remembered track.
+            val row = (existing ?: ItemPlaybackPreferenceEntity(
+                scope = scope.name,
+                key = key,
+                audioLanguage = null,
+                subtitleLanguage = null,
+                updatedAt = timeSource.nowEpochMillis(),
+            )).copy(
+                audioLanguage = mergedAudio,
+                subtitleLanguage = mergedSub,
+                subtitleDisabled = mergedDisabled,
+                subtitleForced = mergedForced,
+                subtitleHearingImpaired = mergedSdh,
+                dialogueBoostStrength = mergedBoost?.name,
+                updatedAt = timeSource.nowEpochMillis(),
+            )
+            if (row.hasNoPreferences()) {
                 dao.deleteByKey(scope.name, key)
                 return@withTransaction
             }
-            dao.upsert(
-                ItemPlaybackPreferenceEntity(
-                    id = existing?.id ?: 0,
-                    scope = scope.name,
-                    key = key,
-                    audioLanguage = mergedAudio,
-                    subtitleLanguage = mergedSub,
-                    subtitleDisabled = mergedDisabled,
-                    subtitleForced = mergedForced,
-                    subtitleHearingImpaired = mergedSdh,
-                    dialogueBoostStrength = mergedBoost?.name,
-                    updatedAt = timeSource.nowEpochMillis(),
-                )
-            )
+            dao.upsert(row)
         }
     }
 
     override suspend fun clearAudioLanguage(scope: PlaybackPrefScope, key: String) {
         val existing = dao.getByKey(scope.name, key) ?: return
-        if (existing.subtitleLanguage == null && existing.subtitleDisabled == null &&
-            existing.dialogueBoostStrength == null
-        ) {
+        val cleared = existing.copy(audioLanguage = null, updatedAt = timeSource.nowEpochMillis())
+        if (cleared.hasNoPreferences()) {
             // Nothing left to remember — remove the row entirely.
             dao.deleteByKey(scope.name, key)
         } else {
-            dao.upsert(existing.copy(audioLanguage = null, updatedAt = timeSource.nowEpochMillis()))
+            dao.upsert(cleared)
         }
     }
 
     override suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String) {
         val existing = dao.getByKey(scope.name, key) ?: return
-        if (existing.audioLanguage == null && existing.subtitleDisabled == null &&
-            existing.dialogueBoostStrength == null
-        ) {
+        // Clear the subtitle language AND its pinned role together: the role
+        // is meaningless without a language to apply it to.
+        val cleared = existing.copy(
+            subtitleLanguage = null,
+            subtitleForced = null,
+            subtitleHearingImpaired = null,
+            updatedAt = timeSource.nowEpochMillis(),
+        )
+        if (cleared.hasNoPreferences()) {
             // Nothing left to remember — remove the row entirely.
             dao.deleteByKey(scope.name, key)
         } else {
-            // Clear the subtitle language AND its pinned role together: the role
-            // is meaningless without a language to apply it to.
-            dao.upsert(
-                existing.copy(
-                    subtitleLanguage = null,
-                    subtitleForced = null,
-                    subtitleHearingImpaired = null,
-                    updatedAt = timeSource.nowEpochMillis(),
-                )
-            )
+            dao.upsert(cleared)
         }
     }
 
@@ -138,10 +157,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                 // Clearing the disabled intent: drop the row if nothing else is set.
                 val row = existing ?: return@withTransaction
                 val cleared = row.copy(subtitleDisabled = null, updatedAt = timeSource.nowEpochMillis())
-                val hasNothingElse = cleared.audioLanguage == null &&
-                    cleared.subtitleLanguage == null &&
-                    cleared.dialogueBoostStrength == null
-                if (hasNothingElse) {
+                if (cleared.hasNoPreferences()) {
                     dao.deleteByKey(scope.name, key)
                 } else {
                     dao.upsert(cleared)
@@ -152,12 +168,11 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
 
     override suspend fun clearDialogueBoostStrength(scope: PlaybackPrefScope, key: String) {
         val existing = dao.getByKey(scope.name, key) ?: return
-        if (existing.audioLanguage == null && existing.subtitleLanguage == null &&
-            existing.subtitleDisabled == null
-        ) {
+        val cleared = existing.copy(dialogueBoostStrength = null, updatedAt = timeSource.nowEpochMillis())
+        if (cleared.hasNoPreferences()) {
             dao.deleteByKey(scope.name, key)
         } else {
-            dao.upsert(existing.copy(dialogueBoostStrength = null, updatedAt = timeSource.nowEpochMillis()))
+            dao.upsert(cleared)
         }
     }
 
@@ -177,20 +192,16 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                     rememberedAudioLabel = null,
                     rememberedAudioLanguage = null,
                     rememberedAudioIndex = null,
+                    rememberedAudioCodec = null,
                 )
                 TrackType.SUBTITLE -> row.copy(
                     rememberedSubtitleLabel = null,
                     rememberedSubtitleLanguage = null,
                     rememberedSubtitleIndex = null,
+                    rememberedSubtitleCodec = null,
                 )
             }
-            val hasNothingElse = cleared.audioLanguage == null &&
-                cleared.subtitleLanguage == null &&
-                cleared.subtitleDisabled == null &&
-                cleared.dialogueBoostStrength == null &&
-                cleared.rememberedAudioLabel == null &&
-                cleared.rememberedSubtitleLabel == null
-            if (hasNothingElse) {
+            if (cleared.hasNoPreferences()) {
                 dao.deleteByKey(scope.name, key)
             } else {
                 dao.upsert(cleared.copy(updatedAt = timeSource.nowEpochMillis()))
@@ -205,15 +216,21 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             updatedAt = timeSource.nowEpochMillis(),
         )
         val updated = when (type) {
+            // The codec rides along when the selected stream exposed one:
+            // the extra re-match rung for episodes whose track labels
+            // churned. A null codec never erases a previously-remembered one —
+            // clearing goes through the `track == null` branch above.
             TrackType.AUDIO -> base.copy(
                 rememberedAudioLabel = track.label,
                 rememberedAudioLanguage = track.language,
                 rememberedAudioIndex = track.indexWithinLanguage,
+                rememberedAudioCodec = track.codec ?: base.rememberedAudioCodec,
             )
             TrackType.SUBTITLE -> base.copy(
                 rememberedSubtitleLabel = track.label,
                 rememberedSubtitleLanguage = track.language,
                 rememberedSubtitleIndex = track.indexWithinLanguage,
+                rememberedSubtitleCodec = track.codec ?: base.rememberedSubtitleCodec,
             )
         }
         dao.upsert(updated.copy(updatedAt = timeSource.nowEpochMillis()))
@@ -221,6 +238,42 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
 
     override suspend fun delete(scope: PlaybackPrefScope, key: String) {
         dao.deleteByKey(scope.name, key)
+    }
+
+    override suspend fun setRenderProfile(
+        scope: PlaybackPrefScope,
+        key: String,
+        overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?,
+    ) {
+        val existing = dao.getByKey(scope.name, key)
+        if (overrides == null) {
+            // "Inherit": clear the override; drop the row when nothing else is
+            // remembered on it.
+            val row = existing ?: return
+            val cleared = row.copy(renderProfile = null, updatedAt = timeSource.nowEpochMillis())
+            if (cleared.hasNoPreferences()) {
+                dao.deleteByKey(scope.name, key)
+            } else {
+                dao.upsert(cleared)
+            }
+            return
+        }
+        val base = existing ?: ItemPlaybackPreferenceEntity(
+            scope = scope.name,
+            key = key,
+            audioLanguage = null,
+            subtitleLanguage = null,
+            updatedAt = timeSource.nowEpochMillis(),
+        )
+        dao.upsert(
+            base.copy(
+                renderProfile = renderProfileCodec.encodeToString(
+                    com.raulshma.jellyplay.core.model.MpvRenderOverrides.serializer(),
+                    overrides,
+                ),
+                updatedAt = timeSource.nowEpochMillis(),
+            )
+        )
     }
 
     // Parse the persisted enum columns through the repo-wide seam: a corrupt
@@ -242,6 +295,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                     label = it,
                     language = rememberedAudioLanguage,
                     indexWithinLanguage = rememberedAudioIndex ?: -1,
+                    codec = rememberedAudioCodec,
                 )
             },
             rememberedSubtitleTrack = rememberedSubtitleLabel?.let {
@@ -249,8 +303,36 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                     label = it,
                     language = rememberedSubtitleLanguage,
                     indexWithinLanguage = rememberedSubtitleIndex ?: -1,
+                    codec = rememberedSubtitleCodec,
                 )
             },
+            renderProfile = decodeRenderProfile(renderProfile),
             updatedAt = updatedAt,
         )
+
+    internal companion object {
+        /**
+         * The `renderProfile` blob codec: lenient + ignoreUnknownKeys
+         * so a profile written by a newer build still loads (unknown fields
+         * dropped) and a corrupt blob degrades to null ("inherit global")
+         * instead of failing every read of the row.
+         */
+        internal val renderProfileCodec: kotlinx.serialization.json.Json =
+            kotlinx.serialization.json.Json {
+                ignoreUnknownKeys = true
+                encodeDefaults = true
+            }
+
+        internal fun decodeRenderProfile(raw: String?): com.raulshma.jellyplay.core.model.MpvRenderOverrides? {
+            if (raw.isNullOrBlank()) return null
+            return try {
+                renderProfileCodec.decodeFromString(
+                    com.raulshma.jellyplay.core.model.MpvRenderOverrides.serializer(),
+                    raw,
+                )
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
 }

@@ -81,6 +81,7 @@ data class PreferenceSliceGraph(
     val subtitleLanguageStore: SubtitleLanguageStore,
     val syncPlayCastStore: SyncPlayCastStore,
     val experimentalStore: ExperimentalStore,
+    val volumeProfileStore: com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore,
     val appRuntimeStateStore: AppRuntimeStateStore,
     val projections: PreferenceProjections,
 )
@@ -115,6 +116,8 @@ fun createPreferenceSliceGraph(
     val subtitleLanguageStore = SubtitleLanguageStore(dataStore, scope)
     val syncPlayCastStore = SyncPlayCastStore(dataStore, scope)
     val experimentalStore = ExperimentalStore(dataStore, scope)
+    val volumeProfileStore =
+        com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore(dataStore, scope)
     val appRuntimeStateStore = AppRuntimeStateStore(dataStore, scope)
     val projections = PreferenceProjections(
         scope,
@@ -136,13 +139,14 @@ fun createPreferenceSliceGraph(
         securityStore,
         experimentalStore,
         screensaverStore,
+        volumeProfileStore,
     )
     return PreferenceSliceGraph(
         playbackStore, appearanceStore, videoPlayerStore, downloadsStore, engineStore,
         identityStore, homeDiscoveryStore, audioStore, audioEffectsStore, audioCacheStore, libraryStore,
         navigationStore, networkOfflineStore, notificationStore, screensaverStore,
         securityStore, subtitleLanguageStore, syncPlayCastStore, experimentalStore,
-        appRuntimeStateStore, projections,
+        volumeProfileStore, appRuntimeStateStore, projections,
     )
 }
 
@@ -189,6 +193,7 @@ fun createUserPreferencesStore(
         g.subtitleLanguageStore,
         g.syncPlayCastStore,
         g.experimentalStore,
+        g.volumeProfileStore,
         g.appRuntimeStateStore,
     )
 }

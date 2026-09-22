@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.TrackSelectionPreset
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -104,6 +105,22 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subt
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_vertical_position_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_audio_order
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_audio_order_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_custom_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_dubbed_all_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_dubbed_shows_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_manual_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_subbed_all_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_subbed_shows_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules_count
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_selection
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_selection_preset
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_selection_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_subtitle_order
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_subtitle_order_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ui_label
 
 /**
@@ -140,12 +157,13 @@ private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate
 /**
  * The declared screen groups in LazyColumn order — the derivation source the
  * deep-link scroll resolver consumes (see HighlightScroll.kt): the leading
- * language trio, then the subtitle rows. Both groups always compose (the
- * advanced rows hide inside the subtitle group), so no advanced adjustment
- * applies.
+ * language trio, then the track-selection group, then the subtitle
+ * rows. Both always groups compose (the advanced rows hide inside the
+ * subtitle group), so no advanced adjustment applies.
  */
 private val languageScreenGroups: List<Set<String>> = listOf(
     SettingsScreenGroups.languageGeneral.itemIdSet,
+    SettingsScreenGroups.languageTrackSelection.itemIdSet,
     SettingsScreenGroups.languageSubtitles.itemIdSet,
 )
 
@@ -297,6 +315,126 @@ fun LanguageSettingsScreen(
                             )
                         },
                     )
+                    }
+                }
+            }
+
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.AdjustmentsHorizontal,
+                    title = stringResource(Res.string.settings_track_selection),
+                    summary = { stringResource(Res.string.settings_track_selection_summary) },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    val rules = preferences.languageRules
+                    var showAudioOrderEditor by remember { mutableStateOf(false) }
+                    var showSubtitleOrderEditor by remember { mutableStateOf(false) }
+                    var showRulesEditor by remember { mutableStateOf(false) }
+                    val langDefaultFallback = stringResource(Res.string.settings_lang_default)
+                    SettingsItemList(total = languageTrackSelectionScreenRowTotal()) {
+                        // Preset picker — the headline knob; descriptions are
+                        // resolved here so the non-composable picker lambdas
+                        // only carry strings.
+                        val presetDescriptions = mapOf(
+                            TrackSelectionPreset.MANUAL to stringResource(Res.string.settings_track_preset_manual_desc),
+                            TrackSelectionPreset.SUBBED_SHOWS to stringResource(Res.string.settings_track_preset_subbed_shows_desc),
+                            TrackSelectionPreset.DUBBED_SHOWS to stringResource(Res.string.settings_track_preset_dubbed_shows_desc),
+                            TrackSelectionPreset.SUBBED_ALL to stringResource(Res.string.settings_track_preset_subbed_all_desc),
+                            TrackSelectionPreset.DUBBED_ALL to stringResource(Res.string.settings_track_preset_dubbed_all_desc),
+                            TrackSelectionPreset.CUSTOM to stringResource(Res.string.settings_track_preset_custom_desc),
+                        )
+                        val presetTitle = stringResource(Res.string.settings_track_selection_preset)
+                        SettingListItem(
+                            icon = Tabler.Outline.AdjustmentsHorizontal,
+                            title = presetTitle,
+                            subtitle = presetDescriptions[rules.preset].orEmpty(),
+                            trailingText = rules.preset.displayName,
+                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_SELECTION_PRESET,
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = presetTitle,
+                                    items = TrackSelectionPreset.entries,
+                                    label = { it.displayName },
+                                    subtitle = { presetDescriptions[it].orEmpty() },
+                                    isSelected = { it == rules.preset },
+                                    onSelect = { preset ->
+                                        viewModel.edit { scope ->
+                                            scope.subtitle.setTrackSelectionRules(rules.copy(preset = preset))
+                                        }
+                                    },
+                                )
+                            },
+                        )
+                        // Ordered audio/subtitle editors: up/down
+                        // reordering in a dedicated sheet; entries feed the
+                        // rule engine's global ordered language rung.
+                        SettingListItem(
+                            icon = Tabler.Outline.ListNumbers,
+                            title = stringResource(Res.string.settings_track_audio_order),
+                            subtitle = stringResource(Res.string.settings_track_audio_order_subtitle),
+                            trailingText = rules.audioLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
+                                .ifEmpty { langDefaultFallback },
+                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_AUDIO_LANGUAGES,
+                            onClick = { showAudioOrderEditor = true },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.ArrowsHorizontal,
+                            title = stringResource(Res.string.settings_track_subtitle_order),
+                            subtitle = stringResource(Res.string.settings_track_subtitle_order_subtitle),
+                            trailingText = rules.subtitleLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
+                                .ifEmpty { langDefaultFallback },
+                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_SUBTITLE_LANGUAGES,
+                            onClick = { showSubtitleOrderEditor = true },
+                        )
+                        // Advanced rules: applies-to / title-pattern /
+                        // language / mode cards, capped at 10.
+                        SettingListItem(
+                            icon = Tabler.Outline.Filter,
+                            title = stringResource(Res.string.settings_track_rules),
+                            subtitle = stringResource(Res.string.settings_track_rules_subtitle),
+                            trailingText = stringResource(Res.string.settings_track_rules_count, rules.rules.size),
+                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_RULES,
+                            onClick = { showRulesEditor = true },
+                        )
+                    }
+                    if (showAudioOrderEditor) {
+                        OrderedLanguagesEditorSheet(
+                            title = stringResource(Res.string.settings_track_audio_order),
+                            ordered = preferences.languageRules.audioLanguages,
+                            onDismiss = { showAudioOrderEditor = false },
+                            onChange = { ordered ->
+                                viewModel.edit { scope ->
+                                    scope.subtitle.setTrackSelectionRules(
+                                        preferences.languageRules.copy(audioLanguages = ordered),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    if (showSubtitleOrderEditor) {
+                        OrderedLanguagesEditorSheet(
+                            title = stringResource(Res.string.settings_track_subtitle_order),
+                            ordered = preferences.languageRules.subtitleLanguages,
+                            onDismiss = { showSubtitleOrderEditor = false },
+                            onChange = { ordered ->
+                                viewModel.edit { scope ->
+                                    scope.subtitle.setTrackSelectionRules(
+                                        preferences.languageRules.copy(subtitleLanguages = ordered),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    if (showRulesEditor) {
+                        TrackRulesEditorSheet(
+                            rules = preferences.languageRules,
+                            onDismiss = { showRulesEditor = false },
+                            onChange = { updated ->
+                                viewModel.edit { scope ->
+                                    scope.subtitle.setTrackSelectionRules(updated)
+                                }
+                            },
+                        )
                     }
                 }
             }

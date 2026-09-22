@@ -163,3 +163,54 @@ internal fun isSupportedUserFontFile(displayName: String?): Boolean {
     val name = displayName?.lowercase().orEmpty()
     return name.endsWith(".ttf") || name.endsWith(".otf")
 }
+
+// ── Mark-watched-and-skip / mark-unwatched-and-quit ────────────────
+
+/**
+ * How a played-mark reaches the item — the same two arms the watched-threshold
+ * callback uses (`PlaybackProgressReporter`'s `onWatchedThresholdReached`):
+ * the server round-trip through `UserDataMutator.setPlayed` (via
+ * `PlayedStateSync`, outbox when offline) or the local-only offline mark
+ * (`OfflinePlaybackFacade.recordPlayed`). `SeenMediaRepository` is notification
+ * de-dup — deliberately NOT one of these.
+ */
+internal enum class WatchedMarkPath { SERVER, OFFLINE_LOCAL }
+
+/**
+ * The mark-and-then decisions behind the two overflow actions, as data. The
+ * ViewModel keeps only the effect shells (the mark dispatch, the
+ * advance-vs-close verbs) and reduces each press to the fields here:
+ *
+ *  - [watchedMarkPath] — incognito routes "mark watched" to the offline-local
+ *    mark exactly like the threshold callback (never the server, never an
+ *    outbox row);
+ *  - [watchedAdvancesToNext] — "mark watched & skip" advances to the next
+ *    episode when one is known. A SyncPlay session advances even without a
+ *    locally-resolved sibling: `EpisodeNavigator.next` resolves the sibling
+ *    itself and routes through the group queue when it holds the item, so
+ *    reusing the verb keeps the group in step (an absent sibling is the
+ *    navigator's no-op, not a close);
+ *  - [unwatchedMarkApplied] — "mark unwatched & exit" is a no-op mark in
+ *    incognito (the whole point of incognito is leaving no watch state); the
+ *    exit still happens on both paths.
+ */
+internal data class WatchedActionDecision(
+    val watchedMarkPath: WatchedMarkPath,
+    val watchedAdvancesToNext: Boolean,
+    val unwatchedMarkApplied: Boolean,
+)
+
+/**
+ * The decision matrix for the two mark-and-exit overflow actions. Pure so the
+ * incognito/SyncPlay/has-next combinations stay pinned by the JVM matrix test
+ * instead of living inline in the ViewModel.
+ */
+internal fun decideWatchedActions(
+    hasNext: Boolean,
+    incognito: Boolean,
+    isInSyncPlay: Boolean,
+): WatchedActionDecision = WatchedActionDecision(
+    watchedMarkPath = if (incognito) WatchedMarkPath.OFFLINE_LOCAL else WatchedMarkPath.SERVER,
+    watchedAdvancesToNext = hasNext || isInSyncPlay,
+    unwatchedMarkApplied = !incognito,
+)

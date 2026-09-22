@@ -13,11 +13,29 @@ interface HasDisplayName {
     val displayName: String
 }
 
+/**
+ * The per-item persisted audio/subtitle stream selection. The indices are the
+ * server `MediaStream.index` values (or the `-1` "off" placeholder).
+ *
+ * The four nullable descriptor fields (additive — `ignoreUnknownKeys`
+ * JSON and serializer defaults keep old blobs and old writers compatible)
+ * snapshot what the stored index pointed at when it was written. On restore
+ * the index is only trusted when it still resolves to a stream matching the
+ * recorded label/language (± codec); a mismatch (server-side reorder,
+ * transcode re-enumeration) demotes the load to remembered-track matching
+ * instead of blindly selecting the stale index. Absent fields (legacy
+ * entries) keep today's trust: the index only has to still point at a stream
+ * of the same type.
+ */
 @Immutable
 @Serializable
 data class MediaStreamSelection(
     val audioStreamIndex: Int? = null,
     val subtitleStreamIndex: Int? = null,
+    val audioLabel: String? = null,
+    val audioLanguage: String? = null,
+    val subtitleLabel: String? = null,
+    val subtitleLanguage: String? = null,
 )
 
 @Immutable

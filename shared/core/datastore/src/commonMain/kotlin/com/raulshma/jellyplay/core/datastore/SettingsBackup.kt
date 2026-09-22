@@ -68,4 +68,7 @@ object BackupSliceKey {
     const val SUBTITLE = "subtitle"
     const val SYNC_PLAY_CAST = "syncPlayCast"
     const val EXPERIMENTAL = "experimental"
+
+    /** Per-content-type volume memory (levels map + master toggle). */
+    const val VOLUME_PROFILE = "volumeProfile"
 }

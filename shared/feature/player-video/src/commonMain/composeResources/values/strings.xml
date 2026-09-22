@@ -164,6 +164,8 @@
     <string name="player_video_playback_mode">Playback Mode</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 On</string>
     <string name="player_video_decoder">Decoder</string>
+    <string name="player_video_rendering">Rendering</string>
+    <string name="player_video_deinterlace">Deinterlace · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
     <string name="player_video_stats_for_nerds">Stats for Nerds</string>
     <string name="player_video_stats_for_nerds_on">Stats for Nerds \u00B7 On</string>
@@ -276,9 +278,11 @@
     <string name="player_video_stats_position">Position</string>
     <string name="player_video_stats_progress">Progress</string>
     <string name="player_video_stats_buffer_health">Buffer Health</string>
+    <string name="player_video_stats_buffered_ranges">Buffered ranges</string>
     <string name="player_video_stats_buffered">Buffered</string>
     <string name="player_video_stats_clock">Clock</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">HDR output active</string>
     <string name="player_video_stats_color_range">Color Range</string>
     <string name="player_video_stats_color_depth">Color Depth</string>
     <string name="player_video_stats_sample_rate">Sample Rate</string>
@@ -307,6 +311,10 @@
     <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>
     <string name="player_video_adaptive_bitrate_off">Off - full quality (direct play)</string>
     <string name="player_video_skip_intro">Skip Intro</string>
+    <string name="player_video_skipped_segment">Skipped %1$s</string>
+    <string name="player_video_mark_watched_and_skip">Mark watched &amp; skip</string>
+    <string name="player_video_mark_watched_and_exit">Mark watched &amp; exit</string>
+    <string name="player_video_mark_unwatched_and_exit">Mark unwatched &amp; exit</string>
     <string name="player_video_overview_tab">Overview</string>
     <string name="player_video_lyrics_subtitles_tab">Lyrics / Subtitles</string>
     <string name="player_video_synopsis">Synopsis</string>

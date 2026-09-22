@@ -6,6 +6,9 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.network.config.ClientCertificateFacade
+import com.raulshma.jellyplay.core.network.config.ClientCertificateImport
+import com.raulshma.jellyplay.core.network.config.ClientCertificateStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -13,6 +16,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -23,6 +27,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -82,7 +87,35 @@ class ServerManagementViewModelTest {
         // matcher) so these tests keep pinning genuine matching semantics
         // against the mocked store state — not a stubbed answer.
         selfSignedTrustRepository = SelfSignedTrustRepositoryImpl(),
+        clientCertificate = certificateFacade,
     )
+
+    /** In-memory seam double: status + recorded calls, no file IO. */
+    private class FakeClientCertificateFacade : ClientCertificateFacade {
+        val statusState = MutableStateFlow(ClientCertificateStatus())
+        override val status: StateFlow<ClientCertificateStatus> = statusState
+        var lastImport: ClientCertificateImport? = null
+        var importResult: Result<ClientCertificateStatus> = Result.success(
+            ClientCertificateStatus(enabled = true, materialPresent = true, subject = "CN=test"),
+        )
+        var enabledWrites: List<Boolean> = emptyList()
+        var removed = false
+
+        override suspend fun import(input: ClientCertificateImport): Result<ClientCertificateStatus> {
+            lastImport = input
+            return importResult
+        }
+
+        override fun setEnabled(enabled: Boolean) {
+            enabledWrites += enabled
+        }
+
+        override fun remove() {
+            removed = true
+        }
+    }
+
+    private val certificateFacade = FakeClientCertificateFacade()
 
     // ------------------------------------------------------- toggle semantics
 
@@ -336,5 +369,51 @@ class ServerManagementViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { networkOfflineStore.addSelfSignedTrustHost("https://media.example.com") }
+    }
+
+    // ---------------------------------------------- client certificate
+
+    @Test
+    fun `certificate status flows from the facade and import success surfaces a message`() =
+        runTest(testDispatcher) {
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.importClientCertificate(
+                ClientCertificateImport(pkcs12Bytes = byteArrayOf(1, 2, 3), passphrase = "secret".toCharArray()),
+            )
+            advanceUntilIdle()
+
+            val import = assertIs<ClientCertificateImport>(certificateFacade.lastImport)
+            assertEquals(3, import.pkcs12Bytes?.size)
+            assertIs<CertificateUserMessage.Imported>(vm.certificateMessage)
+            assertFalse(vm.isCertificateOperationInProgress)
+        }
+
+    @Test
+    fun `import failure surfaces the facade's user-presentable message`() = runTest(testDispatcher) {
+        certificateFacade.importResult = Result.failure(IllegalArgumentException("not a readable PKCS#12 file"))
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.importClientCertificate(ClientCertificateImport(pkcs12Bytes = byteArrayOf(9)))
+        advanceUntilIdle()
+
+        assertEquals("not a readable PKCS#12 file", assertIs<CertificateUserMessage.ImportFailed>(vm.certificateMessage).text)
+        assertFalse(vm.isCertificateOperationInProgress)
+    }
+
+    @Test
+    fun `toggle and remove route to the facade`() = runTest(testDispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.setClientCertificateEnabled(false)
+        vm.setClientCertificateEnabled(true)
+        vm.removeClientCertificate()
+        advanceUntilIdle()
+
+        assertEquals(listOf(false, true), certificateFacade.enabledWrites)
+        assertTrue(certificateFacade.removed)
     }
 }

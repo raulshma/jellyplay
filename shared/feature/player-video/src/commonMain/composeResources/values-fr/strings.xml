@@ -158,7 +158,9 @@
     <string name="player_video_av_sync">Sync A/V</string>
     <string name="player_video_playback_mode">Mode de lecture</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 Activé</string>
-    <string name="player_video_decoder">Décodeur</string>
+    <string name="player_video_decoder">Rendu</string>
+    <string name="player_video_rendering">Rendu</string>
+    <string name="player_video_deinterlace">Désentrelacement · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
     <string name="player_video_stats_for_nerds">Stats pour initiés</string>
     <string name="player_video_stats_for_nerds_on">Stats pour initiés \u00B7 Activé</string>
@@ -271,9 +273,11 @@
     <string name="player_video_stats_position">Position</string>
     <string name="player_video_stats_progress">Progression</string>
     <string name="player_video_stats_buffer_health">Memoire tampon</string>
+    <string name="player_video_stats_buffered_ranges">Plages en memoire tampon</string>
     <string name="player_video_stats_buffered">Mis en memoire tampon</string>
     <string name="player_video_stats_clock">Horloge</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">Sortie HDR active</string>
     <string name="player_video_stats_color_range">Plage de couleurs</string>
     <string name="player_video_stats_color_depth">Profondeur de couleur</string>
     <string name="player_video_stats_sample_rate">Taux d echantillonnage</string>
@@ -302,6 +306,10 @@
     <string name="player_video_adaptive_bitrate_on">Limite la qualite sur les reseaux limites</string>
     <string name="player_video_adaptive_bitrate_off">Desactive - qualite maximale (lecture directe)</string>
     <string name="player_video_skip_intro">Passer l intro</string>
+    <string name="player_video_skipped_segment">%1$s passé</string>
+    <string name="player_video_mark_watched_and_skip">Marquer comme vu et passer</string>
+    <string name="player_video_mark_watched_and_exit">Marquer comme vu et quitter</string>
+    <string name="player_video_mark_unwatched_and_exit">Marquer comme non vu et quitter</string>
     <string name="player_video_overview_tab">Apercu</string>
     <string name="player_video_lyrics_subtitles_tab">Paroles / Sous-titres</string>
     <string name="player_video_synopsis">Synopsis</string>

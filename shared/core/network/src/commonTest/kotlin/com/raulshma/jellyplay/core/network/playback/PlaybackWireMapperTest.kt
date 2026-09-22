@@ -90,6 +90,19 @@ class PlaybackWireMapperTest {
     }
 
     @Test
+    fun `failed stop body serializes the Failed flag on the wire`() {
+        // An error-aborted session's stop carries Failed=true so the
+        // server skips its own percentage-based played marking.
+        val stop = json.encodeToString(
+            PlaybackStopInfoDtoWire(itemId = "item-1", sessionId = "sess-1", positionTicks = 9000, failed = true),
+        )
+        assertEquals(
+            """{"ItemId":"item-1","SessionId":"sess-1","PositionTicks":9000,"Failed":true}""",
+            stop,
+        )
+    }
+
+    @Test
     fun `transcode reasons convert serial names to enum constant names`() {
         assertEquals("CONTAINER_NOT_SUPPORTED", transcodeReasonName("ContainerNotSupported"))
         assertEquals("VIDEO_RANGE_TYPE_NOT_SUPPORTED", transcodeReasonName("VideoRangeTypeNotSupported"))

@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 
 /**
  * Construction-time bundle of the twelve datastore stores the player feature
@@ -45,4 +46,6 @@ class PlayerStores(
     val downloads: DownloadsStore,
     val appearance: AppearanceStore,
     val networkOffline: NetworkOfflineStore,
+    /** per-content-type volume memory (desktop video apply/capture). */
+    val volumeProfile: VolumeProfileStore,
 )

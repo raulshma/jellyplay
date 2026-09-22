@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -238,6 +239,16 @@ val datastoreCommonModule = module {
         )
     }
 
+    // Per-content-type volume memory — shared by the desktop player
+    // wiring and both platforms' audio stacks; both platforms resolve it from
+    // this one common module.
+    single {
+        VolumeProfileStore(
+            get(DatastoreQualifiers.userPreferencesDataStore),
+            get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
     single {
         WidgetDataStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
@@ -298,6 +309,7 @@ val datastoreCommonModule = module {
             get<SecurityStore>(),
             get<ExperimentalStore>(),
             get<ScreensaverStore>(),
+            get<VolumeProfileStore>(),
         )
     }
 
@@ -323,6 +335,7 @@ val datastoreCommonModule = module {
             get<SubtitleLanguageStore>(),
             get<SyncPlayCastStore>(),
             get<ExperimentalStore>(),
+            get<VolumeProfileStore>(),
             get<AppRuntimeStateStore>(),
         )
     }
@@ -347,6 +360,7 @@ val datastoreCommonModule = module {
             get<SubtitleLanguageStore>(),
             get<SyncPlayCastStore>(),
             get<ExperimentalStore>(),
+            get<VolumeProfileStore>(),
             get<AppRuntimeStateStore>(),
         )
     }

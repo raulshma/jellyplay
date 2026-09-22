@@ -54,6 +54,8 @@ class NavRequestCollectorTest {
             backStacks = { stacks },
             consumePendingRoute = { events += "consume" },
             presentSnackbar = { message -> events += "snackbar:$message" },
+            goBack = { events += "goBack" },
+            dispatchKey = { keyCode -> events += "key:$keyCode"; true },
         )
     }
 
@@ -225,7 +227,7 @@ class NavRequestCollectorTest {
     fun `a navigation target is mapped and pushed`() = runTest {
         val shell = Shell(topLevelKeys)
         val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
-        launchCollector { shell.collector.collectRemoteNavigation(targets) }
+        launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
 
         targets.tryEmit(
             NavigationTarget.OpenVideoPlayer(
@@ -253,7 +255,7 @@ class NavRequestCollectorTest {
         shell.stacks += home
         shell.stacks += library
         val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
-        launchCollector { shell.collector.collectRemoteNavigation(targets) }
+        launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
 
         targets.tryEmit(NavigationTarget.ClosePlayer)
         advanceUntilIdle()
@@ -263,6 +265,102 @@ class NavRequestCollectorTest {
         assertEquals(listOf<NavKey>(Route.Home), home)
         assertEquals(listOf<NavKey>(Route.Library, Route.MediaDetail("item-1")), library)
         assertEquals(emptyList<String>(), shell.events)
+    }
+
+    // ── collectRemoteNavigation: the navigation ladder ─────────────
+
+    @Test
+    fun `goBack drives the back seam`() = runTest {
+        val shell = Shell(topLevelKeys)
+        val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
+        launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
+
+        targets.tryEmit(NavigationTarget.GoBack)
+        advanceUntilIdle()
+
+        assertEquals(listOf("goBack"), shell.events)
+    }
+
+    @Test
+    fun `moveFocus and invokeSelect synthesize their key events`() = runTest {
+        val shell = Shell(topLevelKeys)
+        val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
+        launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
+
+        targets.tryEmit(NavigationTarget.MoveFocus(com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.DOWN))
+        targets.tryEmit(NavigationTarget.InvokeSelect)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                "key:${android.view.KeyEvent.KEYCODE_DPAD_DOWN}",
+                "key:${android.view.KeyEvent.KEYCODE_DPAD_CENTER}",
+            ),
+            shell.events,
+        )
+    }
+
+    @Test
+    fun `an unhandled context menu surfaces the fallback message`() = runTest {
+        val shell = Shell(topLevelKeys)
+        val collector = NavRequestCollector(
+            topLevelKeys = topLevelKeys,
+            navigate = { route -> shell.events += "navigate:$route" },
+            selectTopLevelTab = { route -> shell.events += "tab:$route" },
+            backStacks = { shell.stacks },
+            consumePendingRoute = { shell.events += "consume" },
+            presentSnackbar = { message -> shell.events += "snackbar:$message" },
+            goBack = { shell.events += "goBack" },
+            dispatchKey = { _ -> false },
+        )
+        val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
+        launchCollector { collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "Context menu not available here") }
+
+        targets.tryEmit(NavigationTarget.OpenContextMenu)
+        advanceUntilIdle()
+
+        assertEquals(listOf("snackbar:Context menu not available here"), shell.events)
+    }
+
+    @Test
+    fun `a handled context menu key stays silent`() = runTest {
+        val shell = Shell(topLevelKeys)
+        val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
+        launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "Context menu not available here") }
+
+        targets.tryEmit(NavigationTarget.OpenContextMenu)
+        advanceUntilIdle()
+
+        // The Shell fake's dispatcher always reports handled → message only.
+        assertEquals(listOf("key:${android.view.KeyEvent.KEYCODE_MENU}"), shell.events)
+    }
+
+    @Test
+    fun `goHome switches the tab through the pendingRouteDispatch fork`() = runTest {
+        val shell = Shell(topLevelKeys)
+        val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
+        launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
+
+        targets.tryEmit(
+            NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.data.remote.RemoteTopLevelDestination.HOME),
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("tab:Home"), shell.events)
+    }
+
+    @Test
+    fun `goToSettings pushes when the destination is not a top-level key of this shell`() = runTest {
+        val shell = Shell(topLevelKeys) // Home + Search only — Settings pushes.
+        val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
+        launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
+
+        targets.tryEmit(
+            NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.data.remote.RemoteTopLevelDestination.SETTINGS),
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("navigate:Settings"), shell.events)
     }
 
     // ── collectSyncPlayOpens: the guard drives the push ─────────────────

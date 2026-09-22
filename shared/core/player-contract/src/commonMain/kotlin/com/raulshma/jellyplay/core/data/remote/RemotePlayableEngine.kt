@@ -38,10 +38,33 @@ interface RemotePlayableEngine {
     fun selectTrack(type: TrackType, index: Int)
     fun setMaxVideoBitrate(bps: Int?)
 
-    fun setVolume(value: Float)
+    /**
+     * Sets the engine's volume (normalized 0..1).
+     *
+     * [isUserChange] distinguishes USER-initiated changes (a slider,
+     * a key, a remote "SetVolume") from PROGRAMMATIC ones (sleep-timer fades,
+     * audio-focus duck/restore). Engines that remember the volume per content
+     * type capture ONLY user changes — a fade must never overwrite the
+     * remembered level. Defaults to `true`: every pre-existing call site is
+     * user-shaped, and the programmatic paths pass `false` explicitly.
+     */
+    fun setVolume(value: Float, isUserChange: Boolean = true)
     fun increaseVolume(delta: Float = 0.05f)
     fun decreaseVolume(delta: Float = 0.05f)
     fun setMuted(muted: Boolean)
+
+    /**
+     * Per-content-type volume-memory capture hook. Engines whose
+     * volume apply path distinguishes user changes (see [setVolume]'s
+     * [isUserChange]) invoke the handler for USER-initiated levels only —
+     * programmatic fades (sleep timer, duck/restore) never fire it. The
+     * session host assigns it with the active item's volume bucket; the
+     * default accessors are inert so engines without a memory surface (and
+     * every fake) need no override.
+     */
+    var onUserVolumeChange: ((level: Float) -> Unit)?
+        get() = null
+        set(value) {}
 
     /**
      * Releases all native resources held by this engine. After this call returns, the engine

@@ -19,6 +19,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quick_conn
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quick_connect_authorize_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_control_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_control_enabled_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_display_content_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_display_content_subtitle
 
 /**
  * The single-source row ids of this file's settings-search declarations.
@@ -34,6 +36,7 @@ internal object SecuritySettingsIds {
     const val PIN_FOR_PLAYER_LOCK = "pin_for_player_lock"
     const val QUICK_CONNECT_AUTHORIZE = "quick_connect_authorize"
     const val REMOTE_CONTROL_ENABLED = "remote_control_enabled"
+    const val REMOTE_DISPLAY_CONTENT_ENABLED = "remote_display_content_enabled"
     const val AUTO_LOCK_TIMER = "auto_lock_timer"
 }
 
@@ -88,6 +91,15 @@ internal val SecuritySettingsSearchItems = listOf(
         keywords = listOf("remote", "control", "cast", "play to", "external control", "receive commands"),
         route = Route.SecuritySettings(),
         icon = Tabler.Outline.Cast
+    ),
+    SettingsSearchItem(
+        id = SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED,
+        titleRes = Res.string.ss_remote_display_content_title,
+        subtitleRes = Res.string.ss_remote_display_content_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_security,
+        keywords = listOf("remote", "display content", "browse", "remote browse", "cast", "details"),
+        route = Route.SecuritySettings(),
+        icon = Tabler.Outline.DeviceTv
     ),
     SettingsSearchItem(
         id = SecuritySettingsIds.AUTO_LOCK_TIMER,

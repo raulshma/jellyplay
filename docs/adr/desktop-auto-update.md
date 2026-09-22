@@ -1,6 +1,6 @@
 # ADR: Desktop auto-update strategy for v1 (Windows msi / Linux deb / macOS dmg)
 
-- **Status:** Accepted (wave 10A release engineering); **amended 2026-09-12 — client half implemented** (see *Implementation* below; the sentinel mechanics described in the Decision are now replaced).
+- **Status:** Accepted (wave 10A release engineering); **amended 2026-09-12 — client half implemented** (see *Implementation* below; the sentinel mechanics described in the Decision are now replaced); **amended 2026-09-22 — update-security hardening (v0.11.1)**: a compiled-in repo allow-list + asset/redirect gates now sit in FRONT of the browser handoff, so the "browser + OS signature surface is the trust boundary" statement below is superseded by "the pinned repo identity PLUS the browser/OS surface".
 - **Date:** 2026-08-27
 - **Scope:** `:apps:desktop` packaged distributions; the About screen's update check.
 
@@ -126,6 +126,30 @@ lane publishes `prerelease: true`); installers attached as
 `jellyplay-desktop-<platform>-v<version>.<msi|deb|rpm|dmg>` (the
 kmp-release.yml naming). Unit tests pin the classification, suppression, and
 link-picking decisions (`apps/desktop/src/test/.../update/DesktopAppUpdateTest.kt`).
+
+## Implementation (2026-09-22, update-security hardening — v0.11.1)
+
+The update gates (design: `scratch/mpv-shim-implementation-plan.md`)
+close the gap the 2026-09-12 phase left: every URL the feed controls is now
+verified against a compiled-in allow-list before it can drive anything.
+
+- `GitHubRepoAllowList` (`core/network/github/`, jvmShared) pins the owner +
+  repo into the binary — deliberately not configurable, so neither a setting
+  nor a server-side redirect can move the pin. `isReleaseEndpoint` checks the
+  FINAL post-redirect URL of the releases call (OkHttp follows redirects
+  transparently; a repo transfer lands as a same-host 301 onto a different
+  owner path, which the host half alone cannot see — the owner path prefix is
+  what rejects it). `isAssetEndpoint` gates `html_url`, every asset's
+  `browser_download_url`, and the desktop releases-page fallback, with the
+  two legacy CDN hosts (opaque signed paths) covered by host + non-empty path.
+- Four enforcement points, all fail-closed with `UpdateSecurityException`:
+  the final endpoint URL (`GitHubReleasesApiImpl`), the html_url + asset
+  gates before the shared asset picker runs, cached-info re-verification +
+  the download-redirect landing check in `AppUpdateRepositoryImpl`
+  (defense-in-depth for the Android APK path), and the desktop browser
+  handoff (`DesktopUpdateLinks`).
+- Deviation from the recorded plan: the gates landed in jvmShared (every
+  enforcement point is JVM) rather than commonMain.
 
 ## Cutting a desktop release
 

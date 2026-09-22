@@ -26,9 +26,11 @@ import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
-import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
+import com.raulshma.jellyplay.core.data.remote.AndroidAudioRemoteControlDispatcher
+import com.raulshma.jellyplay.core.data.remote.AndroidVideoRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.remote.AudioRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.remote.RemotePlaybackReporter
 import com.raulshma.jellyplay.core.data.remote.VideoRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
@@ -165,17 +167,21 @@ fun androidCoreDataModule(context: Context): Module = module {
     single { CacheManager(context = context, networkOfflineStore = get(), appScope = get(DatastoreQualifiers.applicationScope)) }
 
     // ── Remote-control / cast helper graph ──────────────────────────────
-    single { ActivePlayerController() }
-    single {
-        AudioRemoteControlDispatcher(
-            audioPlaybackManager = get(),
-            mediaRepository = get(),
+    // The receiver itself is a jvmShared type; the dispatchers are
+    // bound through their commonMain interfaces (these Android impls marshal
+    // to the main looper for the ExoPlayer-backed surfaces); the
+    // ActivePlayerController registry single moved to dataJvmModule (both
+    // JVM shells share it).
+    single<VideoRemoteControlDispatcher> {
+        AndroidVideoRemoteControlDispatcher(
+            activePlayerController = get(),
             remoteNavigationBridge = get(),
         )
     }
-    single {
-        VideoRemoteControlDispatcher(
-            activePlayerController = get(),
+    single<AudioRemoteControlDispatcher> {
+        AndroidAudioRemoteControlDispatcher(
+            audioPlaybackManager = get(),
+            mediaRepository = get(),
             remoteNavigationBridge = get(),
         )
     }
@@ -197,6 +203,8 @@ fun androidCoreDataModule(context: Context): Module = module {
             uiDispatcher = get(),
             activePlayerController = get(),
             securityStore = get(),
+            remoteNavigationBridge = get<RemoteNavigationBridge>(),
+            audioQueueManager = get<AudioQueueManager>(),
         )
     }
 

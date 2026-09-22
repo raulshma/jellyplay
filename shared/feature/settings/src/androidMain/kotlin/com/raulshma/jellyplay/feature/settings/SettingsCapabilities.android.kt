@@ -12,4 +12,8 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsBiometric = true,
     supportsSystemNotificationSettings = true,
     supportsLogSharing = true,
+    supportsAudioDeviceSelection = false,
+    supportsMpvRenderProfiles = false,
+    supportsVolumeMemory = false,
+    supportsIdleAmbientScreen = false,
 )

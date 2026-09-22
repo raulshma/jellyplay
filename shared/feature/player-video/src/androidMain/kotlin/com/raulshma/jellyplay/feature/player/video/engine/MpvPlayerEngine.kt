@@ -16,7 +16,6 @@ import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.MpvAudioOutput
-import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvFrameDrop
 import com.raulshma.jellyplay.core.model.MpvHwdec
@@ -54,10 +53,6 @@ class MpvPlayerEngine(
         // Upper bound on how long the cheap-scalar guard in
         // updateVideoStatsOnly may skip the full property re-read.
         private const val FULL_STATS_REREAD_MS = 2_000L
-        private const val DEMUXER_MAX_BYTES_LOW = 32 * 1024 * 1024L
-        private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
-        private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
-        private const val DEMUXER_MAX_BACK_BYTES_NORMAL = 32 * 1024 * 1024L
         // mpv_end_file_reason — see mpv client.h handleEndFile().
         private const val MPV_END_FILE_REASON_EOF = 0
         private const val MPV_END_FILE_REASON_STOP = 1
@@ -297,6 +292,11 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: MPVNode) {
                 if (property == "track-list") {
                     refreshTracks("property:track-list")
+                } else if (property == "demuxer-cache-state") {
+                    // the range-level buffered surface. Node arrives
+                    // parsed; extraction + clamping is the shared pure
+                    // derivation (see updateBufferedRangesFromCacheState).
+                    updateBufferedRangesFromCacheState(value)
                 }
             }
             override fun event(eventId: Int, data: MPVNode) {
@@ -405,46 +405,38 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-use-margins", "no")
             mpv.setOptionString("sub-ass-force-margins", "no")
 
-            mpv.setOptionString("scale", mpvCfg.scaler.key)
-            // dscale (downscaler) is the hot path on phones (1080p/4K video
-            // downscaled to the display). High-order scalers (lanczos, spline*)
-            // there are costly per-frame GPU for a downscale where bilinear is
-            // visually indistinguishable at phone DPI. Leave it unset so mpv
-            // uses its default (bilinear / oversample) — matches mpvkt and
-            // upstream mpv-android. The user-chosen `scale` still drives the
-            // upscaler.
-            // (Previously mirrored `scale`, which forced e.g. lanczos on the
-            // downscale path — a steady GPU tax even on capable hardware.)
-            if (mpvCfg.deband) {
-                mpv.setOptionString("deband", "yes")
+            // The structured MpvEngineConfig → mpv mapping lives in the shared
+            // MpvConfigMapping (desktop parity — this engine is no longer the
+            // sole consumer): scale/deband/interpolation(+video-sync)/framedrop/
+            // skiploopfilter/demuxer budgets/audio trio/extras, in that order,
+            // with the user's mpvExtraConfig lines LAST (a raw line overrides
+            // its structured counterpart). Init seeds the runtime diff cache
+            // (see onConfigChanged) with exactly the pairs written here so a
+            // runtime push of an unchanged config performs zero writes.
+            val configPairs = MpvConfigMapping.configPairs(
+                config = mpvCfg,
+                audioPassthrough = currentConfig.audioPassthrough,
+                lowRamDevice = isLowRamDevice,
+                deinterlace = currentConfig.deinterlace,
+            )
+            for (option in configPairs) {
+                try {
+                    mpv.setOptionString(option.key, option.value)
+                } catch (e: Exception) {
+                    // One bad line must not abort init — only the free-form
+                    // extra-config lines can realistically land here (unknown
+                    // option / bad value throw from setOptionString).
+                    Log.w(TAG, "mpv config: rejected '${option.key}=${option.value}' (${e.message})")
+                }
             }
-            if (mpvCfg.interpolation) {
-                mpv.setOptionString("interpolation", "yes")
-                mpv.setOptionString("video-sync", "display-resample")
-            }
-            mpv.setOptionString("framedrop", mpvCfg.frameDrop.key)
-            mpv.setOptionString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
+            lastAppliedEngineConfigProps = configPairs.associate { it.key to it.value }
+
             // Force CPU-side AV1 film-grain synthesis. The GPU film-grain path
             // (default on hwdec) stalls on several drivers — frames back up and
             // playback stutters even though the decoder is keeping up. This is
             // the documented workaround for https://github.com/mpv-player/mpv/issues/14651
             // and is what mpvkt sets unconditionally.
             mpv.setOptionString("vd-lavc-film-grain", "cpu")
-
-            val demuxerMax = when (mpvCfg.demuxerMaxBytes) {
-                MpvDemuxerMaxBytes.AUTO -> {
-                    if (isLowRamDevice) DEMUXER_MAX_BYTES_LOW else DEMUXER_MAX_BYTES_NORMAL
-                }
-                else -> mpvCfg.demuxerMaxBytes.bytes
-            }
-            val demuxerMaxBack = when (mpvCfg.demuxerMaxBytes) {
-                MpvDemuxerMaxBytes.AUTO -> {
-                    if (isLowRamDevice) DEMUXER_MAX_BACK_BYTES_LOW else DEMUXER_MAX_BACK_BYTES_NORMAL
-                }
-                else -> mpvCfg.demuxerMaxBytes.bytes / 2
-            }
-            mpv.setOptionString("demuxer-max-bytes", demuxerMax.toString())
-            mpv.setOptionString("demuxer-max-back-bytes", demuxerMaxBack.toString())
 
             // Debug builds surface libass/vo/demuxer trace messages so subtitle
             // render/decode issues (font-provider death, empty bitmaps) are
@@ -465,17 +457,14 @@ class MpvPlayerEngine(
                 mpv.setOptionString("vf", "format=yuv420p")
             }
 
-            if (currentConfig.audioPassthrough) {
-                mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
-            }
-
             // Tag the output stream so Android routes it correctly (movie role →
             // speaker, ignores notifications).
             mpv.setOptionString("audio-set-media-role", "yes")
 
             mpv.setOptionString(
                 "audio-channels",
-                channelMixModeToAudioChannels(
+                MpvConfigMapping.effectiveAudioChannels(
+                    mpvCfg.audioOutputMode,
                     currentConfig.audioEffects.channelMixMode,
                     currentConfig.audioEffects.channelMixEnabled,
                 ),
@@ -526,6 +515,10 @@ class MpvPlayerEngine(
             mpv.observeProperty("duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("demuxer-cache-duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("demuxer-cache-time", MPV.mpvFormat.MPV_FORMAT_INT64)
+            // range-level buffered surface alongside the scalar
+            // demuxer-cache-time observer above. NODE delivery — the Android
+            // binding hands the parsed tree, no JNI re-read needed.
+            mpv.observeProperty("demuxer-cache-state", MPV.mpvFormat.MPV_FORMAT_NODE)
             mpv.observeProperty("sid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
@@ -740,6 +733,13 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (e: Exception) { Log.w(TAG, "setPlaybackSpeed failed", e) }
     }
 
+    // The structured-config runtime diff cache (MpvConfigMapping.applyChanged):
+    // seeded by initOptions with the pairs it wrote, so onConfigChanged writes
+    // only actual CHANGES. Same discipline as the desktop engine's
+    // lastApplied* caches — an unchanged re-write is at best noise and at
+    // worst (af/vf-class properties) a pipeline re-init.
+    @Volatile private var lastAppliedEngineConfigProps: Map<String, String> = emptyMap()
+
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
         val mpvCfg = (newConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
@@ -758,11 +758,28 @@ class MpvPlayerEngine(
                 mpv.setPropertyString("hwdec", hwdecValue)
             }
 
-            if (oldConfig.audioPassthrough != newConfig.audioPassthrough) {
-                if (newConfig.audioPassthrough) {
-                    mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
-                } else {
-                    mpv.setOptionString("audio-spdif", "")
+            // The shared mapping's runtime half: diff the new pair list against
+            // what init (or the previous change) wrote and push only the
+            // changed keys — covers scaler, deband, interpolation(+video-sync),
+            // framedrop, skiploopfilter, the demuxer budgets, the audio trio
+            // (audio-device / audio-exclusive / audio-spdif via the output
+            // mode + passthrough reconciliation) and the extra-config lines.
+            if (oldConfig.engineSpecific != newConfig.engineSpecific ||
+                oldConfig.audioPassthrough != newConfig.audioPassthrough ||
+                // the session-scoped deinterlace cycle and the
+                // per-item HDR gate ride the BASE config — re-diff the shared
+                // pairs when either flips.
+                oldConfig.deinterlace != newConfig.deinterlace ||
+                oldConfig.hdrSource != newConfig.hdrSource
+            ) {
+                val pairs = MpvConfigMapping.configPairs(
+                    config = mpvCfg,
+                    audioPassthrough = newConfig.audioPassthrough,
+                    lowRamDevice = isLowRamDevice,
+                    deinterlace = newConfig.deinterlace,
+                )
+                lastAppliedEngineConfigProps = MpvConfigMapping.applyChanged(pairs, lastAppliedEngineConfigProps) { key, value ->
+                    mpv.setPropertyString(key, value)
                 }
             }
 
@@ -775,38 +792,21 @@ class MpvPlayerEngine(
                 mpv.setPropertyString("ao", aoValue)
             }
 
-            if (oldMpvCfg?.scaler != mpvCfg.scaler) {
-                mpv.setPropertyString("scale", mpvCfg.scaler.key)
-                // dscale mirrors the upscaler at init (see initOptions), but at
-                // runtime we leave mpv's default downscaler — only the upscaler
-                // changes here.
-            }
-            if (oldMpvCfg?.deband != mpvCfg.deband) {
-                mpv.setPropertyString("deband", if (mpvCfg.deband) "yes" else "no")
-            }
-            if (oldMpvCfg?.interpolation != mpvCfg.interpolation) {
-                mpv.setPropertyString("interpolation", if (mpvCfg.interpolation) "yes" else "no")
-                if (mpvCfg.interpolation) {
-                    mpv.setPropertyString("video-sync", "display-resample")
-                }
-            }
-            if (oldMpvCfg?.frameDrop != mpvCfg.frameDrop) {
-                mpv.setPropertyString("framedrop", mpvCfg.frameDrop.key)
-            }
-            if (oldMpvCfg?.skipLoopFilter != mpvCfg.skipLoopFilter) {
-                mpv.setPropertyString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
-            }
-
             if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
                 applySubtitleStyleInternal(newConfig.subtitleStyle)
             }
 
             if (oldConfig.audioEffects.channelMixMode != newConfig.audioEffects.channelMixMode ||
-                oldConfig.audioEffects.channelMixEnabled != newConfig.audioEffects.channelMixEnabled
+                oldConfig.audioEffects.channelMixEnabled != newConfig.audioEffects.channelMixEnabled ||
+                oldMpvCfg?.audioOutputMode != mpvCfg.audioOutputMode
             ) {
+                // The output mode's STEREO forced downmix folds into the same
+                // audio-channels write (the effects chain stays the single
+                // writer of this pipeline-re-initing property).
                 mpv.setPropertyString(
                     "audio-channels",
-                    channelMixModeToAudioChannels(
+                    MpvConfigMapping.effectiveAudioChannels(
+                        mpvCfg.audioOutputMode,
                         newConfig.audioEffects.channelMixMode,
                         newConfig.audioEffects.channelMixEnabled,
                     ),
@@ -1117,6 +1117,32 @@ class MpvPlayerEngine(
         _currentCues.value = mergeAccumulatedCues(_currentCues.value, incoming)
     }
 
+    /**
+     * folds the observed `demuxer-cache-state` NODE into
+     * [_bufferedRanges]. mpv ships the per-range detail as
+     * `seekable-ranges` (start/end seconds) on libmpv >= 0.35 — taken
+     * directly when present; otherwise the contiguous window
+     * `[demuxer-start-time, cache-end]` is derived, clamped to the item
+     * bounds. All decisions live in the shared pure
+     * [BufferedRanges.fromDemuxerCacheState] (mirrored by the desktop engine).
+     */
+    private fun updateBufferedRangesFromCacheState(state: MPVNode) {
+        if (released) return
+        val map = state.asMap() ?: return
+        val seekableRanges = map["seekable-ranges"]?.asArray()?.mapNotNull { entry ->
+            val rangeMap = entry.asMap() ?: return@mapNotNull null
+            val start = rangeMap["start"]?.asDouble()
+            val end = rangeMap["end"]?.asDouble()
+            if (start != null && end != null) start to end else null
+        }
+        _bufferedRanges.value = BufferedRanges.fromDemuxerCacheState(
+            demuxerStartTimeSec = map["demuxer-start-time"]?.asDouble(),
+            cacheEndSec = map["cache-end"]?.asDouble(),
+            seekableRangesSec = seekableRanges,
+            durationMs = durationMs,
+        )
+    }
+
     override val durationMs: Long
         get() {
             // Prefer the mpv demuxer's duration when available; fall back to
@@ -1399,6 +1425,18 @@ class MpvPlayerEngine(
         MpvErrorTaxonomy.fromCodeString(errorCode)
 
     private fun configureMpvForRequest(view: PlayerMPVView, request: PlaybackRequest) {
+        // mTLS: the tls-* options are file-path options that
+        // PERSIST on the view's mpv handle across loads — write the reset
+        // trio when no certificate is active (same discipline as
+        // http-header-fields below) so the previous item's credentials are
+        // never inherited.
+        MpvTlsOptions.from(request.tls).forEach { (option, value) ->
+            try {
+                view.mpv.setOptionString(option, value)
+                view.mpv.setPropertyString(option, value)
+            } catch (_: Exception) {}
+        }
+
         if (request.startPositionMs > 0) {
             val startVal = "+${request.startPositionMs / 1000.0}"
             try { view.mpv.setOptionString("start", startVal) } catch (_: Exception) {}

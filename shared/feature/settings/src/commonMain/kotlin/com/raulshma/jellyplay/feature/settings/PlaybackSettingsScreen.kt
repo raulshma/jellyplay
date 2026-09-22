@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -28,8 +29,14 @@ import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.MpvAudioDevice
 import com.raulshma.jellyplay.core.model.MpvAudioOutput
+import com.raulshma.jellyplay.core.model.MpvAudioOutputMode
 import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
+import com.raulshma.jellyplay.core.model.MpvInterpolationTscale
+import com.raulshma.jellyplay.core.model.MpvRenderQuality
+import com.raulshma.jellyplay.core.model.MpvShaderPack
+import com.raulshma.jellyplay.core.model.MpvToneMapping
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvFrameDrop
 import com.raulshma.jellyplay.core.model.MpvHwdec
@@ -69,6 +76,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
+import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_config
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_mpv_config
@@ -78,6 +86,17 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_all_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_delay
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_delay_value
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_fallback
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_device
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_device_auto
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_device_none
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_exclusive
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_exclusive_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_exclusive_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_mode_auto
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_mode_hdmi
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_mode_optical
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_mode_stereo
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_offload
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_output
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_passthrough
@@ -143,6 +162,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_debanding
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_passthrough
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_passthrough_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_passthrough_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_interpolation_tscale
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_render_quality
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_shader_pack
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tone_mapping
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_debanding_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_debanding_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost
@@ -212,6 +238,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_tv_stream
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_media_segments
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_media_segments_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_helper_text
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_caching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_audio_delay
@@ -263,6 +292,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_exoplayer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_libvlc
@@ -419,6 +450,9 @@ fun PlaybackSettingsScreen(
         parentsOn = rowParentsOn(PlaybackSettingsIds.DIALOGUE_BOOST to preferences.dialogueBoostEnabled),
     )
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
+    // Picker payloads built off suspend work (the desktop audio-device
+    // enumeration) launch here.
+    val scope = rememberCoroutineScope()
     var showResetDialog by remember { mutableStateOf(false) }
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
@@ -673,6 +707,25 @@ fun PlaybackSettingsScreen(
                             )
                         },
                     )
+                    // per-content-type volume memory — desktop-only
+                    // (the app owns mpv's volume scalar there); the declared
+                    // Platform admission hides the row wholesale on Android.
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(
+                            PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
+                            rowFlags,
+                        )
+                    ) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Volume,
+                            title = stringResource(Res.string.ss_remember_volume_title),
+                            subtitle = stringResource(Res.string.ss_remember_volume_subtitle),
+                            checked = preferences.rememberVolumePerContentType,
+                            highlighted = highlightSettingId == PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.volumeProfile.setRememberVolumePerContentType(enabled) }
+                            },
+                        )
+                    }
                     if (showAdvanced) {
                         val controlsTimeoutTitle = stringResource(Res.string.settings_controls_timeout)
                         SettingListItem(
@@ -1231,6 +1284,198 @@ fun PlaybackSettingsScreen(
                                     )
                                 },
                             )
+                            // ── Desktop-only audio rows: the mpv audio
+                            // device picker / exclusive toggle / output mode —
+                            // gated by the declared Platform admission (the
+                            // Android mpv binding has no device-list surface).
+                            if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_AUDIO_DEVICE, rowFlags)) {
+                                val autoDeviceLabel = stringResource(Res.string.settings_audio_device_auto)
+                                val noDevicesLabel = stringResource(Res.string.settings_audio_device_none)
+                                val audioDeviceTitle = stringResource(Res.string.settings_audio_device)
+                                SettingListItem(
+                                    icon = Tabler.Outline.Speakerphone,
+                                    title = stringResource(Res.string.settings_audio_device),
+                                    subtitle = mpvCfg.audioDevice ?: autoDeviceLabel,
+                                    trailingText = mpvCfg.audioDevice ?: "auto",
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_AUDIO_DEVICE,
+                                    onClick = {
+                                        // Enumeration spins up a throwaway mpv
+                                        // context — fetched (and VM-cached) at
+                                        // pick time, not composition time.
+                                        scope.launch {
+                                            val devices = viewModel.audioDevices()
+                                            val options: List<MpvAudioDevice?> =
+                                                if (devices.isEmpty()) listOf(null) else listOf(null) + devices
+                                            activePicker = PickerState.List(
+                                                title = audioDeviceTitle,
+                                                items = options,
+                                                label = { it?.name ?: autoDeviceLabel },
+                                                subtitle = { device ->
+                                                    when {
+                                                        device == null -> autoDeviceLabel
+                                                        // Enumeration degraded (no libmpv):
+                                                        // say so instead of an empty line.
+                                                        devices.isEmpty() -> noDevicesLabel
+                                                        else -> device.description
+                                                    }
+                                                },
+                                                isSelected = { option ->
+                                                    (option == null && mpvCfg.audioDevice == null) ||
+                                                        (option != null && option.name == mpvCfg.audioDevice)
+                                                },
+                                                onSelect = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(audioDevice = it?.name)) } },
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                            if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE, rowFlags)) {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Lock,
+                                    title = stringResource(Res.string.settings_audio_exclusive),
+                                    subtitle = if (mpvCfg.audioExclusive) {
+                                        stringResource(Res.string.settings_audio_exclusive_on)
+                                    } else {
+                                        stringResource(Res.string.settings_audio_exclusive_off)
+                                    },
+                                    checked = mpvCfg.audioExclusive,
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(audioExclusive = it)) } },
+                                )
+                            }
+                            if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_AUDIO_MODE, rowFlags)) {
+                                // Pre-resolved (the picker's subtitle lambda is
+                                // not composable): the OPTICAL/HDMI descriptions
+                                // carry the documented fallback behavior.
+                                val modeDescriptions: Map<MpvAudioOutputMode, String> = mapOf(
+                                    MpvAudioOutputMode.AUTO to stringResource(Res.string.settings_audio_mode_auto),
+                                    MpvAudioOutputMode.STEREO to stringResource(Res.string.settings_audio_mode_stereo),
+                                    MpvAudioOutputMode.OPTICAL to stringResource(Res.string.settings_audio_mode_optical),
+                                    MpvAudioOutputMode.HDMI to stringResource(Res.string.settings_audio_mode_hdmi),
+                                )
+                                val audioModeTitle = stringResource(Res.string.settings_audio_mode)
+                                SettingListItem(
+                                    icon = Tabler.Outline.Transfer,
+                                    title = stringResource(Res.string.settings_audio_mode),
+                                    subtitle = modeDescriptions[mpvCfg.audioOutputMode].orEmpty(),
+                                    trailingText = mpvCfg.audioOutputMode.key,
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_AUDIO_MODE,
+                                    onClick = {
+                                        activePicker = PickerState.List(
+                                            title = audioModeTitle,
+                                            items = MpvAudioOutputMode.entries,
+                                            label = { it.displayName },
+                                            subtitle = { modeDescriptions[it].orEmpty() },
+                                            isSelected = { it == mpvCfg.audioOutputMode },
+                                            onSelect = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(audioOutputMode = it)) } },
+                                        )
+                                    },
+                                )
+                            }
+                            // ── Desktop-only render rows: shader
+                            // pack, tone mapping, quality profile, the
+                            // interpolation tscale preset, and the HDR
+                            // passthrough output — gated by the same platform
+                            // admission surface as the desktop audio rows (the
+                            // extraction + vo/gpu-next machinery is desktop's).
+                            if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_SHADER_PACK, rowFlags)) {
+                                val shaderPackTitle = stringResource(Res.string.settings_shader_pack)
+                                SettingListItem(
+                                    icon = Tabler.Outline.Wand,
+                                    title = stringResource(Res.string.settings_shader_pack),
+                                    subtitle = mpvCfg.shaderPack.displayName,
+                                    trailingText = mpvCfg.shaderPack.key,
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_SHADER_PACK,
+                                    onClick = {
+                                        activePicker = PickerState.List(
+                                            title = shaderPackTitle,
+                                            items = MpvShaderPack.entries,
+                                            label = { it.displayName },
+                                            subtitle = { it.key },
+                                            isSelected = { it == mpvCfg.shaderPack },
+                                            onSelect = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(shaderPack = it)) } },
+                                        )
+                                    },
+                                )
+                            }
+                            if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_TONE_MAPPING, rowFlags)) {
+                                val toneMappingTitle = stringResource(Res.string.settings_tone_mapping)
+                                SettingListItem(
+                                    icon = Tabler.Outline.Brightness,
+                                    title = stringResource(Res.string.settings_tone_mapping),
+                                    subtitle = mpvCfg.toneMapping.displayName,
+                                    trailingText = mpvCfg.toneMapping.key ?: "auto",
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_TONE_MAPPING,
+                                    onClick = {
+                                        activePicker = PickerState.List(
+                                            title = toneMappingTitle,
+                                            items = MpvToneMapping.entries,
+                                            label = { it.displayName },
+                                            subtitle = { it.key ?: "auto" },
+                                            isSelected = { it == mpvCfg.toneMapping },
+                                            onSelect = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(toneMapping = it)) } },
+                                        )
+                                    },
+                                )
+                            }
+                            if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_RENDER_QUALITY, rowFlags)) {
+                                val renderQualityTitle = stringResource(Res.string.settings_render_quality)
+                                SettingListItem(
+                                    icon = Tabler.Outline.Gauge,
+                                    title = stringResource(Res.string.settings_render_quality),
+                                    subtitle = mpvCfg.renderQuality.displayName,
+                                    trailingText = mpvCfg.renderQuality.key,
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_RENDER_QUALITY,
+                                    onClick = {
+                                        activePicker = PickerState.List(
+                                            title = renderQualityTitle,
+                                            items = MpvRenderQuality.entries,
+                                            label = { it.displayName },
+                                            subtitle = { it.key },
+                                            isSelected = { it == mpvCfg.renderQuality },
+                                            onSelect = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(renderQuality = it)) } },
+                                        )
+                                    },
+                                )
+                            }
+                            if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_HDR_PASSTHROUGH, rowFlags)) {
+                                // engine-creation-time — the row says so.
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.SunHigh,
+                                    title = stringResource(Res.string.settings_hdr_passthrough),
+                                    subtitle = if (mpvCfg.hdrPassthrough) {
+                                        stringResource(Res.string.settings_hdr_passthrough_on)
+                                    } else {
+                                        stringResource(Res.string.settings_hdr_passthrough_off)
+                                    },
+                                    checked = mpvCfg.hdrPassthrough,
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_HDR_PASSTHROUGH,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(hdrPassthrough = it)) } },
+                                )
+                            }
+                            if (mpvCfg.interpolation &&
+                                SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE, rowFlags)
+                            ) {
+                                // tscale only matters with interpolation on.
+                                val tscaleTitle = stringResource(Res.string.settings_interpolation_tscale)
+                                SettingListItem(
+                                    icon = Tabler.Outline.WaveSine,
+                                    title = stringResource(Res.string.settings_interpolation_tscale),
+                                    subtitle = mpvCfg.interpolationTscale.displayName,
+                                    trailingText = mpvCfg.interpolationTscale.key,
+                                    highlighted = highlightSettingId == PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE,
+                                    onClick = {
+                                        activePicker = PickerState.List(
+                                            title = tscaleTitle,
+                                            items = MpvInterpolationTscale.entries,
+                                            label = { it.displayName },
+                                            subtitle = { it.key },
+                                            isSelected = { it == mpvCfg.interpolationTscale },
+                                            onSelect = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(interpolationTscale = it)) } },
+                                        )
+                                    },
+                                )
+                            }
                             val bufferSizeTitle = stringResource(Res.string.settings_buffer_size)
                             SettingListItem(
                                 icon = Tabler.Outline.Database,
@@ -1634,8 +1879,19 @@ fun PlaybackSettingsScreen(
                         stringResource(Res.string.settings_media_segments_summary, autoCount, buttonCount)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId?.startsWith("media_segment_") == true,
+                    initiallyExpanded = highlightSettingId?.startsWith("media_segment_") == true ||
+                        highlightSettingId == PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK,
                 ) {
+                    val skipOnSeekOn = stringResource(Res.string.settings_skip_segments_on_seek_on)
+                    val skipOnSeekOff = stringResource(Res.string.settings_skip_segments_on_seek_off)
+                    SettingToggleItem(
+                        icon = Tabler.Outline.PlayerTrackNext,
+                        title = stringResource(Res.string.settings_skip_segments_on_seek),
+                        subtitle = if (preferences.skipSegmentsOnSeek) skipOnSeekOn else skipOnSeekOff,
+                        checked = preferences.skipSegmentsOnSeek,
+                        highlighted = highlightSettingId == PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK,
+                        onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setSkipSegmentsOnSeek(it) } },
+                    )
                     val segmentTypes = com.raulshma.jellyplay.core.model.MediaSegmentType.entries
                     val totalTypes = segmentTypes.size
                     segmentTypes.forEachIndexed { index, type ->

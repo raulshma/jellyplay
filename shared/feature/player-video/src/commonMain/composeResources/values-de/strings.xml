@@ -158,7 +158,9 @@
     <string name="player_video_av_sync">A/V-Sync</string>
     <string name="player_video_playback_mode">Wiedergabemodus</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 An</string>
-    <string name="player_video_decoder">Decoder</string>
+    <string name="player_video_decoder">Rendering</string>
+    <string name="player_video_rendering">Rendering</string>
+    <string name="player_video_deinterlace">Deinterlacing · %1$s</string>
     <string name="player_video_passthrough">Durchreichung</string>
     <string name="player_video_stats_for_nerds">Statistiken für Nerds</string>
     <string name="player_video_stats_for_nerds_on">Statistiken für Nerds \u00B7 An</string>
@@ -271,9 +273,11 @@
     <string name="player_video_stats_position">Position</string>
     <string name="player_video_stats_progress">Fortschritt</string>
     <string name="player_video_stats_buffer_health">Pufferstand</string>
+    <string name="player_video_stats_buffered_ranges">Gepufferte Bereiche</string>
     <string name="player_video_stats_buffered">Gepuffert</string>
     <string name="player_video_stats_clock">Uhr</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">HDR-Ausgabe aktiv</string>
     <string name="player_video_stats_color_range">Farbbereich</string>
     <string name="player_video_stats_color_depth">Farbtiefe</string>
     <string name="player_video_stats_sample_rate">Abtastrate</string>
@@ -302,6 +306,10 @@
     <string name="player_video_adaptive_bitrate_on">Begrenzt Qualitaet in getakteten Netzwerken</string>
     <string name="player_video_adaptive_bitrate_off">Aus - volle Qualitaet (Direct Play)</string>
     <string name="player_video_skip_intro">Intro ueberspringen</string>
+    <string name="player_video_skipped_segment">%1$s übersprungen</string>
+    <string name="player_video_mark_watched_and_skip">Als gesehen markieren &amp; weiter</string>
+    <string name="player_video_mark_watched_and_exit">Als gesehen markieren &amp; beenden</string>
+    <string name="player_video_mark_unwatched_and_exit">Als ungesehen markieren &amp; beenden</string>
     <string name="player_video_overview_tab">Uebersicht</string>
     <string name="player_video_lyrics_subtitles_tab">Songtexte / Untertitel</string>
     <string name="player_video_synopsis">Handlung</string>

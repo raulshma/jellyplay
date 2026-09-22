@@ -158,7 +158,9 @@
     <string name="player_video_av_sync">A/V 同步</string>
     <string name="player_video_playback_mode">播放模式</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 开启</string>
-    <string name="player_video_decoder">解码器</string>
+    <string name="player_video_decoder">渲染</string>
+    <string name="player_video_rendering">渲染</string>
+    <string name="player_video_deinterlace">去隔行扫描 · %1$s</string>
     <string name="player_video_passthrough">直通</string>
     <string name="player_video_stats_for_nerds">详细统计</string>
     <string name="player_video_stats_for_nerds_on">详细统计 \u00B7 开启</string>
@@ -270,9 +272,11 @@
     <string name="player_video_stats_position">位置</string>
     <string name="player_video_stats_progress">进度</string>
     <string name="player_video_stats_buffer_health">缓冲健康度</string>
+    <string name="player_video_stats_buffered_ranges">缓冲区间</string>
     <string name="player_video_stats_buffered">已缓冲</string>
     <string name="player_video_stats_clock">时钟</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">HDR 输出已激活</string>
     <string name="player_video_stats_color_range">色彩范围</string>
     <string name="player_video_stats_color_depth">色彩深度</string>
     <string name="player_video_stats_sample_rate">采样率</string>
@@ -301,6 +305,10 @@
     <string name="player_video_adaptive_bitrate_on">在按流量计费的网络中限制质量</string>
     <string name="player_video_adaptive_bitrate_off">关闭 - 完整质量（直接播放）</string>
     <string name="player_video_skip_intro">跳过片头</string>
+    <string name="player_video_skipped_segment">已跳过%1$s</string>
+    <string name="player_video_mark_watched_and_skip">标记已看并跳到下一集</string>
+    <string name="player_video_mark_watched_and_exit">标记已看并退出</string>
+    <string name="player_video_mark_unwatched_and_exit">标记未看并退出</string>
     <string name="player_video_overview_tab">概述</string>
     <string name="player_video_lyrics_subtitles_tab">歌词 / 字幕</string>
     <string name="player_video_synopsis">剧情简介</string>

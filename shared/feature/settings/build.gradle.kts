@@ -35,6 +35,8 @@ kotlin {
             implementation(project(":shared:core:data"))
             // Preference slice stores + PreferencesEditor + SettingsBackup.
             implementation(project(":shared:core:datastore"))
+            // runCatchingRethrowingCancellation (resolveDiffLabels' resource read).
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.

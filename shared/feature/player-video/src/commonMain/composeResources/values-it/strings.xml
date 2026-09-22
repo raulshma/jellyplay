@@ -158,7 +158,9 @@
     <string name="player_video_av_sync">Sincronia A/V</string>
     <string name="player_video_playback_mode">Modalità di riproduzione</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 Attivo</string>
-    <string name="player_video_decoder">Decoder</string>
+    <string name="player_video_decoder">Rendering</string>
+    <string name="player_video_rendering">Rendering</string>
+    <string name="player_video_deinterlace">Deinterlacing · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
     <string name="player_video_stats_for_nerds">Statistiche per esperti</string>
     <string name="player_video_stats_for_nerds_on">Statistiche per esperti \u00B7 Attivo</string>
@@ -271,9 +273,11 @@
     <string name="player_video_stats_position">Posizione</string>
     <string name="player_video_stats_progress">Avanzamento</string>
     <string name="player_video_stats_buffer_health">Salute buffer</string>
+    <string name="player_video_stats_buffered_ranges">Intervalli in buffer</string>
     <string name="player_video_stats_buffered">In buffer</string>
     <string name="player_video_stats_clock">Orologio</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">Uscita HDR attiva</string>
     <string name="player_video_stats_color_range">Gamma colori</string>
     <string name="player_video_stats_color_depth">Profondita colore</string>
     <string name="player_video_stats_sample_rate">Frequenza di campionamento</string>
@@ -302,6 +306,10 @@
     <string name="player_video_adaptive_bitrate_on">Limita la qualita su reti a consumo</string>
     <string name="player_video_adaptive_bitrate_off">Off - qualita completa (riproduzione diretta)</string>
     <string name="player_video_skip_intro">Salta intro</string>
+    <string name="player_video_skipped_segment">%1$s saltato</string>
+    <string name="player_video_mark_watched_and_skip">Segna come visto e salta</string>
+    <string name="player_video_mark_watched_and_exit">Segna come visto ed esci</string>
+    <string name="player_video_mark_unwatched_and_exit">Segna come non visto ed esci</string>
     <string name="player_video_overview_tab">Panoramica</string>
     <string name="player_video_lyrics_subtitles_tab">Testi / Sottotitoli</string>
     <string name="player_video_synopsis">Sinossi</string>

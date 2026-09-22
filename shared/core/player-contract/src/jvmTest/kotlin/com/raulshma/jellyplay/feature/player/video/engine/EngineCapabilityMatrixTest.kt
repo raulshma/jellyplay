@@ -51,6 +51,7 @@ class EngineCapabilityMatrixTest {
             caps.supportsFreeFormColors, caps.supportsBorderStyles,
             caps.supportsSecondarySubtitles, caps.supportsScreenshot,
             caps.supportsImageSubtitles,
+            caps.supportsDeinterlace,
         ).forEach { assertFalse(it, "EXTERNAL must advertise no capabilities") }
     }
 
@@ -166,6 +167,19 @@ class EngineCapabilityMatrixTest {
         assertFalse(EngineCapabilityMatrix.EXO_PLAYER.supportsImageSubtitles)
         assertFalse(EngineCapabilityMatrix.LIBVLC.supportsImageSubtitles)
         assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsImageSubtitles)
+    }
+
+    // ── Deinterlace capability flag ──
+
+    @Test
+    fun deinterlace_mpvOnly() {
+        // mpv's `deinterlace` property is runtime-settable on both mpv
+        // adapters; the other engines have no surface. Gates the gear-menu
+        // "Deinterlace" cycle item.
+        assertTrue(EngineCapabilityMatrix.MPV.supportsDeinterlace)
+        assertFalse(EngineCapabilityMatrix.EXO_PLAYER.supportsDeinterlace)
+        assertFalse(EngineCapabilityMatrix.LIBVLC.supportsDeinterlace)
+        assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsDeinterlace)
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -35,7 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 // SavedStateHandle keys for surviving process death. The in-stream
 // playback position, the item it belongs to, the server session id, and the
@@ -329,6 +330,10 @@ internal class PlaybackSession(
                 // verdict, so the dialog can offer same-engine retry
                 // (Network/Render) vs. switch-engine (Decoder/Drm).
                 if (released) return
+                // Any engine-error surface latches the reporter's
+                // watched-threshold suppression for the remainder of this
+                // item (and flags the teardown stop `failed`).
+                progressReporter.onEngineError()
                 _events.tryEmit(
                     SessionEvent.ShowError(
                         error = decision.error.message,
@@ -345,7 +350,12 @@ internal class PlaybackSession(
                 )
             }
             EngineDecision.PlaybackEnded -> {
-                if (!released) _events.tryEmit(SessionEvent.PlaybackEnded)
+                if (!released) {
+                    // A genuine EOF (engine ENDED, not an error)
+                    // counts as watched even below the 95 % threshold.
+                    progressReporter.onGenuineEof()
+                    _events.tryEmit(SessionEvent.PlaybackEnded)
+                }
             }
             EngineDecision.PassOutPause -> {
                 playerSessionManager.engine?.pause()
@@ -923,14 +933,27 @@ internal class PlaybackSession(
      * Stop-reports the *current* server playback session (skip on incognito,
      * dedup through [stopReportedForSession] so the two paths that can fire
      * for one session — this one and the final teardown in [release] — never
-     * double-report). Both write sites (here and in [release]) moved together
-     * from the VM at B3.
+     * double-report; the reporter's stalled-finish stop for the same session
+     * dedups through [PlaybackProgressReporter.hasReportedStopFor] the same
+     * way). The report carries `failed = true` when the reporter's error
+     * latch is held: an error-aborted session must not trip the
+     * server's own "≥X % = played" rule — the actual spoiler-protection fix.
+     * Both write sites (here and in [release]) moved together from the VM
+     * at B3.
      */
     fun reportCurrentPlaybackStopped() {
         if (getIncognitoModeEnabled()) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = currentPlaySessionId
         if (sessionId == stopReportedForSession) return
+        if (progressReporter.hasReportedStopFor(sessionId)) {
+            // The reporter already stop-reported this session at the FULL
+            // duration (stalled-finish): latch the dedup and skip the
+            // duplicate, which would only downgrade the position.
+            stopReportedForSession = sessionId
+            return
+        }
+        val failed = progressReporter.isErrorLatched()
         val positionMs = getReportPositionMs().takeIf { it > 0L }
             // Some engines report 0 right after STATE_ENDED; falling back to the
             // last persisted position keeps the stop telemetry (and with it the
@@ -945,7 +968,7 @@ internal class PlaybackSession(
         if (positionTicks > 0) {
             stopReportedForSession = sessionId
             scope.launch {
-                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks, failed = failed)
                 // No manual cache invalidation (plan 08): the end-of-item
                 // auto-advance path marks the episode played, which evicts
                 // inside the repository; a same-item reload re-reads through
@@ -1170,6 +1193,10 @@ internal class PlaybackSession(
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
+        // A latched error at teardown flags the final stop `failed`
+        // so the server does not apply its own "≥X % = played" rule to the
+        // aborted session. Snapshotted BEFORE the teardown statements below.
+        val failed = progressReporter.isErrorLatched()
 
         releaseInternalsSessionPart()
         hooks.releaseInternalsVmPart()
@@ -1187,24 +1214,35 @@ internal class PlaybackSession(
         }
         // Skip the second Stop if reportCurrentPlaybackStopped already
         // sent one for this session — duplicate Stop reports confuse the
-        // server's resume/progress bookkeeping.
+        // server's resume/progress bookkeeping. The reporter's
+        // stalled-finish stop (sent at the FULL duration) dedups the same
+        // way: a teardown stop at the stalled position would only downgrade
+        // the position the server already resolved.
         if (itemId != null && positionTicks > 0 && sessionId != stopReportedForSession) {
             stopReportedForSession = sessionId
-            releaseScope.launch(NonCancellable) {
-                runCatching {
-                    withTimeout(5_000) {
-                        playbackRepository.reportPlaybackStopped(
-                            itemId = itemId,
-                            sessionId = sessionId,
-                            positionTicks = positionTicks,
-                        )
+            if (!progressReporter.hasReportedStopFor(sessionId)) {
+                releaseScope.launch(NonCancellable) {
+                    // withTimeoutOrNull, not withTimeout: the timeout is an
+                    // expected give-up (best-effort final report), not a
+                    // failure — a rethrown TimeoutCancellationException would
+                    // escape this handler-less scope. Real cancellation still
+                    // propagates through the rethrowing variant.
+                    runCatchingRethrowingCancellation {
+                        withTimeoutOrNull(5_000) {
+                            playbackRepository.reportPlaybackStopped(
+                                itemId = itemId,
+                                sessionId = sessionId,
+                                positionTicks = positionTicks,
+                                failed = failed,
+                            )
+                        }
                     }
+                    // No manual cache invalidation here (plan 08): the detail
+                    // screen's re-entry freshness comes from the provider's forced
+                    // re-resolve (requestRevalidate) and the auto-advance path
+                    // already evicts via markPlayed inside the repository — the
+                    // old invalidateUserDataCaches call duplicated both.
                 }
-                // No manual cache invalidation here (plan 08): the detail
-                // screen's re-entry freshness comes from the provider's forced
-                // re-resolve (requestRevalidate) and the auto-advance path
-                // already evicts via markPlayed inside the repository — the
-                // old invalidateUserDataCaches call duplicated both.
             }
         }
     }

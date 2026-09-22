@@ -55,6 +55,23 @@ enum class MpvAudioOutput(val key: String, val displayName: String) {
     OPENSLES("opensles", "OpenSL ES (Legacy)"),
 }
 
+/**
+ * The digital-audio delivery mode: composes mpv's `audio-spdif`
+ * passthrough list and, for [STEREO], the forced `audio-channels=stereo`
+ * downmix. [MpvAudioOutput] above is the `ao` *backend* choice (AudioTrack /
+ * AAudio / OpenSL ES); this is what the output CARRIES. `AUTO` keeps the
+ * legacy behavior: the platform-wide `audioPassthrough` boolean drives the
+ * spdif list, so the existing Android toggle keeps working unchanged.
+ */
+@Immutable
+@Serializable
+enum class MpvAudioOutputMode(val key: String, val displayName: String) {
+    AUTO("auto", "Auto (Follow Passthrough Toggle)"),
+    STEREO("stereo", "Stereo Downmix"),
+    OPTICAL("optical", "Optical / S/PDIF (AC-3, DTS)"),
+    HDMI("hdmi", "HDMI (AC-3, E-AC-3, DTS, TrueHD)"),
+}
+
 @Immutable
 @Serializable
 enum class MpvFrameDrop(val key: String, val displayName: String) {
@@ -85,6 +102,105 @@ enum class MpvDemuxerMaxBytes(val displayName: String, val key: String, val byte
     MB_256("256 MB", "256MiB", 256 * 1024 * 1024L),
 }
 
+/**
+ * The bundled/user GLSL shader chain layered over mpv's scaler pipeline.
+ * `OFF` is the default (pure mpv scalers); the ANIME4K_* packs resolve to the
+ * official Anime4K v4.0.1 per-mode chains (A fast / B balanced / C quality)
+ * extracted to disk at desktop startup — mpv's `glsl-shaders` needs real file
+ * paths, so the mapping emits a path list, not a flag. [CUSTOM] plays the
+ * user-dropped `*.glsl` files listed in [MpvEngineConfig.customShaderFiles]
+ * verbatim (FSRCNNX / ArtCNN are intentionally not bundled — license/size).
+ */
+@Immutable
+@Serializable
+enum class MpvShaderPack(val key: String, val displayName: String) {
+    OFF("off", "Off"),
+    ANIME4K_A("anime4k_a", "Anime4K: Mode A (Fast)"),
+    ANIME4K_B("anime4k_b", "Anime4K: Mode B (Balanced)"),
+    ANIME4K_C("anime4k_c", "Anime4K: Mode C (Quality)"),
+    CUSTOM("custom", "Custom Shaders"),
+}
+
+/**
+ * mpv `tone-mapping` preset: the HDR→SDR transfer used whenever HDR
+ * passthrough is NOT active. [AUTO] maps to the mapper's explicit `auto`
+ * default write, so the runtime diff cache can express a preset→AUTO
+ * transition (an omitted pair cannot).
+ */
+@Immutable
+@Serializable
+enum class MpvToneMapping(val key: String?, val displayName: String) {
+    AUTO(null, "Auto (mpv default)"),
+    BT2390("bt.2390", "BT.2390"),
+    HABLE("hable", "Hable"),
+    REINHARD("reinhard", "Reinhard"),
+    MOBIUS("mobius", "Mobius"),
+    CLIP("clip", "Clip"),
+    GAMMA("gamma", "Gamma"),
+}
+
+/**
+ * The render-quality bundle: one dial over `scale`/`dscale`/`cscale`
+ * /`deband`. [BALANCED] is the neutral point — no bundle is written and the
+ * structured scaler/deband rows stand; [HIGH] forces the high-order chain with
+ * deband on; [PERFORMANCE] forces the bilinear chain with deband off.
+ */
+@Immutable
+@Serializable
+enum class MpvRenderQuality(val key: String, val displayName: String) {
+    PERFORMANCE("performance", "Performance"),
+    BALANCED("balanced", "Balanced"),
+    HIGH("high", "High Quality"),
+}
+
+/**
+ * mpv `tscale` — the temporal interpolation filter used when motion
+ * interpolation is on. [MITCHELL] is mpv's default and the app
+ * default; [OVERSAMPLE] avoids frame blending on 2x displays; [LINEAR] is the
+ * cheapest.
+ */
+@Immutable
+@Serializable
+enum class MpvInterpolationTscale(val key: String, val displayName: String) {
+    MITCHELL("mitchell", "Mitchell (Default)"),
+    OVERSAMPLE("oversample", "Oversample (No Blur)"),
+    LINEAR("linear", "Linear (Fastest)"),
+}
+
+/**
+ * The deinterlacing mode: mpv `deinterlace`. [AUTO] (the default)
+ * lets mpv/content-gating decide; [ON]/[OFF] force the field comb filter. On
+ * the player surface this is a SESSION-SCOPED override (gear-menu cycle,
+ * reverts on player exit) — never a persisted preference.
+ */
+@Immutable
+@Serializable
+enum class DeinterlaceMode(val key: String, val displayName: String) {
+    AUTO("auto", "Auto"),
+    ON("on", "On"),
+    OFF("off", "Off"),
+}
+
+/**
+ * The per-item / per-series rendering override: the small render
+ * slice a user can pin for one movie or a whole series from the player's
+ * "Rendering" sheet. Persisted as JSON in `item_playback_preferences`.
+ * `renderProfile`'s nullable column — a `null`/absent override means "follow
+ * the global settings"; "Inherit" clears the override, never writes OFF into
+ * it (an explicit OFF pack override IS meaningful: "this series looks wrong
+ * upscaled").
+ */
+@Immutable
+@Serializable
+data class MpvRenderOverrides(
+    val shaderPack: MpvShaderPack = MpvShaderPack.OFF,
+    val toneMapping: MpvToneMapping = MpvToneMapping.AUTO,
+) {
+    /** True when the override changes nothing relative to the global defaults. */
+    val isNeutral: Boolean
+        get() = shaderPack == MpvShaderPack.OFF && toneMapping == MpvToneMapping.AUTO
+}
+
 @Immutable
 @Serializable
 data class MpvEngineConfig(
@@ -102,6 +218,66 @@ data class MpvEngineConfig(
     val interpolation: Boolean = false,
     val audioOutput: MpvAudioOutput = MpvAudioOutput.AUDIOTRACK,
     val audioFallback: MpvAudioOutput? = MpvAudioOutput.AAUDIO,
+    /**
+     * The output device's mpv `audio-device` name. `null` (the
+     * default) is mpv's `auto` — the system default device. Values come from
+     * the enumerated `audio-device-list` (desktop's
+     * `DesktopAudioDeviceEnumerator`); the mapper writes the raw name so
+     * users can also paste a name their mpv knows.
+     */
+    val audioDevice: String? = null,
+    /**
+     * mpv `audio-exclusive`: open the device in exclusive mode,
+     * blocking other applications' audio for bit-perfect output. Cheap,
+     * runtime-settable — engines apply it through their diff caches.
+     */
+    val audioExclusive: Boolean = false,
+    /**
+     * Digital-audio delivery mode — composes `audio-spdif` (and the
+     * STEREO forced downmix). `AUTO` defers to the platform-wide
+     * `audioPassthrough` boolean so the existing Android toggle stays the
+     * single source when no explicit mode is chosen.
+     */
+    val audioOutputMode: MpvAudioOutputMode = MpvAudioOutputMode.AUTO,
+    /**
+     * GLSL shader pack layered over the scaler pipeline. [MpvShaderPack.OFF]
+     * by default; the Anime4K packs are resolved to ordered file paths by the
+     * engine layer (desktop extracts the bundled glsl to disk at startup).
+     */
+    val shaderPack: MpvShaderPack = MpvShaderPack.OFF,
+    /**
+     * Absolute paths of the user-selected `*.glsl` files played by
+     * [MpvShaderPack.CUSTOM] (user shaders — FSRCNNX / ArtCNN are
+     * deliberately not bundled). Empty elsewhere = nothing to play.
+     */
+    val customShaderFiles: List<String> = emptyList(),
+    /**
+     * mpv `tone-mapping` preset: the HDR→SDR transfer for direct-play
+     * HDR content on an SDR display. [MpvToneMapping.AUTO] omits the property
+     * entirely (mpv default stands).
+     */
+    val toneMapping: MpvToneMapping = MpvToneMapping.AUTO,
+    /**
+     * The scale/dscale/cscale/deband bundle dial.
+     * [MpvRenderQuality.BALANCED] writes no bundle — the structured
+     * [scaler]/[deband] rows stand.
+     */
+    val renderQuality: MpvRenderQuality = MpvRenderQuality.BALANCED,
+    /**
+     * Temporal interpolation filter for motion interpolation — mpv
+     * `tscale`, only written when [interpolation] is on.
+     */
+    val interpolationTscale: MpvInterpolationTscale = MpvInterpolationTscale.MITCHELL,
+    /**
+     * HDR passthrough (desktop): prefer the HWND-embed `vo=gpu-next`
+     * output and set `target-colorspace-hint=yes` so an HDR display switches
+     * to its HDR transfer instead of tone mapping. Engine-creation-time — a
+     * mid-session toggle applies on next playback. Whether passthrough is
+     * ACTIVE for the running session additionally depends on the item being
+     * HDR and the display reporting an HDR target (`video-target-params`);
+     * when it is not active, [toneMapping] handles HDR→SDR as usual.
+     */
+    val hdrPassthrough: Boolean = false,
     val demuxerMaxBytes: MpvDemuxerMaxBytes = MpvDemuxerMaxBytes.AUTO,
     // `default` matches mpv's built-in default and mpvkt — non-reference frames
     // skip the in-loop deblock, a real per-frame saving on H.264/HEVC. `none`
@@ -135,6 +311,16 @@ data class MpvEngineConfig(
  * raw `Pair<String, String>` it was before) so call sites read
  * `option.key` / `option.value` instead of the opaque `.first` / `.second`.
  */
+/**
+ * One entry of mpv's `audio-device-list`: the raw [name] mpv's
+ * `audio-device` option expects plus the human-readable [description] the
+ * picker shows beneath it. The synthetic `auto` entry (the device list's
+ * first row) carries mpv's own description.
+ */
+@Immutable
+@Serializable
+data class MpvAudioDevice(val name: String, val description: String)
+
 @Immutable
 @Serializable
 data class MpvOption(val key: String, val value: String)

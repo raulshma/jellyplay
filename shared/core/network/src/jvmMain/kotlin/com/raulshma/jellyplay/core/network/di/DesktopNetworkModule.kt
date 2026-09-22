@@ -6,6 +6,9 @@ import com.raulshma.jellyplay.core.network.DiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.NoopDiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.api.DesktopDeviceCodecCapabilities
 import com.raulshma.jellyplay.core.network.api.DeviceCodecCapabilities
+import com.raulshma.jellyplay.core.network.config.ClientCertificateFacade
+import com.raulshma.jellyplay.core.network.config.ClientCertificateManager
+import com.raulshma.jellyplay.core.network.config.ClientCertificateProvider
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.OkHttpClient
@@ -33,12 +36,28 @@ private const val DESKTOP_APP_VERSION = "1.0"
 private const val DESKTOP_DEVICE_NAME = "JellyPlay Desktop"
 
 fun desktopNetworkModule(configDir: Path): Module = module {
+    // mTLS: the app-level client certificate store, mirroring the
+    // Android pick. Files live under configDir ("certs/", POSIX hosts get
+    // 0600 on key material); the passphrase + enabled flag live in the
+    // OS-keyring service "JellyPlay/client_certificate_secure_prefs" (the
+    // credential stores' namespacing convention).
+    single {
+        ClientCertificateManager(
+            certsDir = (configDir / "certs").toFile(),
+            secureStorage = com.raulshma.jellyplay.core.datastore.DesktopSecureKeyValueStorage(
+                "JellyPlay/client_certificate_secure_prefs",
+            ),
+        )
+    }
+    single<ClientCertificateFacade> { get<ClientCertificateManager>() }
+    single<ClientCertificateProvider> { get<ClientCertificateManager>() }
     single {
         baseOkHttpClient(
             cacheDir = (configDir / "http-cache").toFile(),
             okHttpConfigProvider = get(),
             bandwidthInterceptor = get(),
             serverAddressRouter = get(),
+            clientCertificateProvider = get(),
         )
     }
     single(qualifier = NetworkQualifiers.streamingHttpClient) {

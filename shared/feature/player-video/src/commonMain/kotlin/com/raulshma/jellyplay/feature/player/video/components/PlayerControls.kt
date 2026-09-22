@@ -94,6 +94,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.feature.player.video.PlatformCastButton
+import com.raulshma.jellyplay.feature.player.video.SeekBarBufferBands
 import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
 import com.raulshma.jellyplay.feature.player.video.rememberIsPortraitOrientation
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
@@ -236,7 +237,10 @@ internal fun PlayerControls(
     // time labels recompose at 4 Hz without invalidating the whole screen.
     currentPositionFlow: StateFlow<Long>,
     duration: Long,
-    bufferedPositionFlow: StateFlow<Long>,
+    // the range-level buffered surface that drives the seek bar's
+    // shaded bands (replaces the single scalar band). Kept defaulted so
+    // previews/tests render without one; empty = no shading.
+    bufferedRangesFlow: StateFlow<List<LongRange>> = MutableStateFlow(emptyList()),
     videoStatsFlow: StateFlow<EngineVideoStats>,
     playbackSpeed: Float,
     chapters: List<ChapterInfo>,
@@ -290,6 +294,19 @@ internal fun PlayerControls(
     onAbRepeatClear: () -> Unit = {},
     audioOnly: Boolean = false,
     onToggleAudioOnly: () -> Unit = {},
+    // Mark-and-exit pair: forwarded to the overflow menu verbatim.
+    incognitoModeEnabled: Boolean = false,
+    onMarkWatchedAndSkip: () -> Unit = {},
+    onMarkUnwatchedAndQuit: () -> Unit = {},
+    // the Rendering sheet opener — shown for mpv engines only.
+    supportsRenderPanel: Boolean = false,
+    onRenderClick: () -> Unit = {},
+    // the session-scoped deinterlace cycle. The item shows when
+    // [supportsDeinterlace] is true AND a [deinterlaceMode] is provided; the
+    // label renders the current session mode.
+    supportsDeinterlace: Boolean = false,
+    deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
+    onDeinterlaceCycle: () -> Unit = {},
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
@@ -621,7 +638,7 @@ internal fun PlayerControls(
                     duration = duration,
                     chapters = chapters,
                     segments = segments,
-                    bufferedPositionFlow = bufferedPositionFlow,
+                    bufferedRangesFlow = bufferedRangesFlow,
                     trickplayBitmap = tvTrickplayBitmap,
                     playbackSpeed = playbackSpeed,
                     showTimeRemaining = showTimeRemaining,
@@ -888,6 +905,29 @@ internal fun PlayerControls(
                 showOverflow = false
                 onToggleAudioOnly()
             },
+            hasNextEpisode = hasNextEpisode,
+            incognitoModeEnabled = incognitoModeEnabled,
+            onMarkWatchedAndSkip = {
+                showOverflow = false
+                onMarkWatchedAndSkip()
+            },
+            onMarkUnwatchedAndQuit = {
+                showOverflow = false
+                onMarkUnwatchedAndQuit()
+            },
+            supportsRenderPanel = supportsRenderPanel,
+            onRenderClick = {
+                showOverflow = false
+                onRenderClick()
+            },
+            supportsDeinterlace = supportsDeinterlace,
+            deinterlaceMode = deinterlaceMode,
+            // The cycle closes the panel: the item's label reads the session
+            // mode, and reopening is the cheap way to re-derive it fresh.
+            onDeinterlaceCycle = {
+                showOverflow = false
+                onDeinterlaceCycle()
+            },
         )
     }
 }
@@ -1036,7 +1076,10 @@ private fun TvControllableSeekBar(
     duration: Long,
     chapters: List<ChapterInfo>,
     segments: List<MediaSegment> = emptyList(),
-    bufferedPositionFlow: StateFlow<Long> = MutableStateFlow(0L),
+    // each range shades its own band (multi-range buffered model);
+    // collected at this leaf like currentPositionFlow so only the seek bar
+    // recomposes when the engine republishes ranges. Empty = no shading.
+    bufferedRangesFlow: StateFlow<List<LongRange>> = MutableStateFlow(emptyList()),
     trickplayBitmap: PlatformBitmap? = null,
     playbackSpeed: Float = 1.0f,
     showTimeRemaining: Boolean = false,
@@ -1055,7 +1098,13 @@ private fun TvControllableSeekBar(
     tvDownFocusRequester: FocusRequester? = null,
 ) {
     val currentPosition by currentPositionFlow.collectAsStateWithLifecycle()
-    val bufferedPosition by bufferedPositionFlow.collectAsStateWithLifecycle()
+    // the band math (range→fraction coercion + degenerate pruning) is
+    // the pure [SeekBarBufferBands] ladder — the Canvas below only loops over
+    // the result.
+    val bufferedRanges by bufferedRangesFlow.collectAsStateWithLifecycle()
+    val bufferedBands = remember(bufferedRanges, duration) {
+        SeekBarBufferBands.bands(bufferedRanges, duration)
+    }
     val isTv = LocalTvMode.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1071,10 +1120,6 @@ private fun TvControllableSeekBar(
         if (isDragging) dragFraction
         else if (isTv && isSeekBarFocused) tvSeekPosition
         else currentPosition.toFloat() / duration
-    } else 0f
-
-    val bufferedFraction = if (duration > 0) {
-        (bufferedPosition.toFloat() / duration).coerceIn(0f, 1f)
     } else 0f
 
     val activeColor = MaterialTheme.colorScheme.primary
@@ -1286,14 +1331,25 @@ private fun TvControllableSeekBar(
                     }
                 }
 
-                if (bufferedFraction > 0f) {
+                // EACH buffered range shades its own band — the
+                // generalization of the former single 0..bufferedFraction
+                // draw. Bands come from the pure SeekBarBufferBands ladder;
+                // gaps between ranges stay unshaded (a forward seek drops the
+                // old window while the back-buffer survives behind the
+                // playhead).
+                if (bufferedBands.isNotEmpty()) {
                     val bufferColor = activeColor.copy(alpha = 0.25f)
-                    drawRoundRect(
-                        color = bufferColor,
-                        topLeft = androidx.compose.ui.geometry.Offset(0f, trackY),
-                        size = androidx.compose.ui.geometry.Size(trackWidth * bufferedFraction, trackHeight.toPx()),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
-                    )
+                    bufferedBands.forEach { band ->
+                        drawRoundRect(
+                            color = bufferColor,
+                            topLeft = androidx.compose.ui.geometry.Offset(band.startFraction * trackWidth, trackY),
+                            size = androidx.compose.ui.geometry.Size(
+                                (band.endFraction - band.startFraction) * trackWidth,
+                                trackHeight.toPx(),
+                            ),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight.toPx() / 2f),
+                        )
+                    }
                 }
 
                 drawRoundRect(

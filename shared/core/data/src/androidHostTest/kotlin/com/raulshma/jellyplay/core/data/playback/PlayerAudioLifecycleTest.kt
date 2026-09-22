@@ -58,7 +58,7 @@ class PlayerAudioLifecycleTest {
             volume = { engineVolume },
             pause = { recorded += "pause"; enginePlaying = false },
             play = { recorded += "play"; enginePlaying = true },
-            setVolume = { recorded += "volume:${it}"; engineVolume = it },
+            setVolume = { volume, _ -> recorded += "volume:${volume}"; engineVolume = volume },
             setMuted = { recorded += "mute:${it}"; engineMuted = it },
         )
     }

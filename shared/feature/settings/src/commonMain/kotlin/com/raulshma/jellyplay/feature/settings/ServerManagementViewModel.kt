@@ -1,21 +1,46 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
+import com.raulshma.jellyplay.core.network.config.ClientCertificateFacade
+import com.raulshma.jellyplay.core.network.config.ClientCertificateImport
+import com.raulshma.jellyplay.core.network.config.ClientCertificateStatus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+
+/**
+ * One-shot certificate-operation outcome emitted by
+ * [ServerManagementViewModel] and rendered by [ServerManagementScreen],
+ * which resolves the resource text (compose-resources) and posts it to the
+ * shared UserMessageBus — the [PrivacyUserMessage] pattern, so no
+ * hardcoded English leaks into shared code.
+ */
+@Immutable
+sealed interface CertificateUserMessage {
+    /** Import succeeded — `settings_client_certificate_imported[_expires]`. */
+    data class Imported(val notValidAfterMs: Long?) : CertificateUserMessage
+
+    /** The certificate was removed — `settings_client_certificate_removed`. */
+    data object Removed : CertificateUserMessage
+
+    /** Import failed — the facade's user-presentable text, or the generic
+     * `settings_client_certificate_import_failed` fallback when null. */
+    data class ImportFailed(val text: String?) : CertificateUserMessage
+}
 
 class ServerManagementViewModel(
     private val authRepository: AuthRepository,
     private val serverIdentityStore: ServerIdentityStore,
     private val networkOfflineStore: NetworkOfflineStore,
     private val selfSignedTrustRepository: SelfSignedTrustRepository,
+    private val clientCertificate: ClientCertificateFacade,
 ) : JellyPlayViewModel() {
 
     private val _servers = composeState<List<ServerInfo>>(emptyList())
@@ -37,6 +62,17 @@ class ServerManagementViewModel(
     private val _selfSignedTrustHosts = composeState<Set<String>>(emptySet())
     val selfSignedTrustHosts: Set<String> get() = _selfSignedTrustHosts.value
 
+    /** Live status of the app-level client certificate (mTLS). */
+    private val _clientCertificateStatus = composeState(ClientCertificateStatus())
+    val clientCertificateStatus: ClientCertificateStatus get() = _clientCertificateStatus.value
+
+    /** Ephemeral outcome of a certificate operation (surfaced via the message bus). */
+    private val _certificateMessage = composeState<CertificateUserMessage?>(null)
+    val certificateMessage: CertificateUserMessage? get() = _certificateMessage.value
+
+    private val _isCertificateOperationInProgress = composeState(false)
+    val isCertificateOperationInProgress: Boolean get() = _isCertificateOperationInProgress.value
+
     init {
         launch {
             authRepository.servers.collect { serverList ->
@@ -55,6 +91,11 @@ class ServerManagementViewModel(
                 .collect { hosts ->
                     _selfSignedTrustHosts.value = hosts
                 }
+        }
+        launch {
+            clientCertificate.status.collect { status ->
+                _clientCertificateStatus.value = status
+            }
         }
     }
 
@@ -180,5 +221,37 @@ class ServerManagementViewModel(
         (granted - stillCovering).forEach { grant ->
             networkOfflineStore.removeSelfSignedTrustHost(grant)
         }
+    }
+
+    // ------------------------------------------------- client certificate (mTLS)
+
+    /**
+     * Imports + enables a client certificate. The screen assembles
+     * the [ClientCertificateImport] from its picks; the parse/normalize
+     * failures come back as user-presentable messages through
+     * [certificateMessage], successes confirm with subject + expiry.
+     */
+    fun importClientCertificate(input: ClientCertificateImport) {
+        launch {
+            _isCertificateOperationInProgress.value = true
+            _certificateMessage.value = null
+            clientCertificate.import(input)
+                .onSuccess { status -> _certificateMessage.value = CertificateUserMessage.Imported(status.notValidAfterMs) }
+                .onFailure { _certificateMessage.value = CertificateUserMessage.ImportFailed(it.message) }
+            _isCertificateOperationInProgress.value = false
+        }
+    }
+
+    fun setClientCertificateEnabled(enabled: Boolean) {
+        clientCertificate.setEnabled(enabled)
+    }
+
+    fun removeClientCertificate() {
+        clientCertificate.remove()
+        _certificateMessage.value = CertificateUserMessage.Removed
+    }
+
+    fun clearCertificateMessage() {
+        _certificateMessage.value = null
     }
 }

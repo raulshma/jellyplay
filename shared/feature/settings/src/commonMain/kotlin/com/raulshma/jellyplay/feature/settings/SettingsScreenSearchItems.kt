@@ -28,6 +28,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensave
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_slideshow_interval_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_slideshow_interval_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_transition_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_enabled_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_timeout_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_transition_style_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_server_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_server_management_title
@@ -67,6 +71,8 @@ internal object SettingsScreenIds {
     const val SCREENSAVER_SLIDESHOW_INTERVAL = "screensaver_slideshow_interval"
     const val SCREENSAVER_KEN_BURNS = "screensaver_ken_burns"
     const val SCREENSAVER_TRANSITION_STYLE = "screensaver_transition_style"
+    const val IDLE_AMBIENT_ENABLED = "idle_ambient_enabled"
+    const val IDLE_AMBIENT_TIMEOUT = "idle_ambient_timeout"
 }
 
 /**
@@ -234,5 +240,25 @@ internal val SystemSearchItems = listOf(
         keywords = listOf("screensaver", "dream", "transition", "style", "crossfade", "slide", "tv"),
         route = Route.Settings,
         icon = Tabler.Outline.ArrowsHorizontal
+    ),
+    SettingsSearchItem(
+        id = SettingsScreenIds.IDLE_AMBIENT_ENABLED,
+        titleRes = Res.string.ss_idle_ambient_enabled_title,
+        subtitleRes = Res.string.ss_idle_ambient_enabled_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_system,
+        keywords = listOf("idle", "ambient", "ready to play", "screensaver", "desktop", "standby"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Moon,
+        platforms = platformsForCapability(settingsCapabilities.supportsIdleAmbientScreen),
+    ),
+    SettingsSearchItem(
+        id = SettingsScreenIds.IDLE_AMBIENT_TIMEOUT,
+        titleRes = Res.string.ss_idle_ambient_timeout_title,
+        subtitleRes = Res.string.ss_idle_ambient_timeout_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_system,
+        keywords = listOf("idle", "ambient", "timeout", "minutes", "screensaver", "desktop", "standby"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Stopwatch,
+        platforms = platformsForCapability(settingsCapabilities.supportsIdleAmbientScreen),
     ),
 )

@@ -49,6 +49,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.network.config.ClientCertificateStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
@@ -57,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.formatDate
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -84,6 +86,30 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_add_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_add_server_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authenticated
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_ca
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_ca_set
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_change
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_choose
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_import
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_import_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_import_hint
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_import_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_imported
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_imported_expires
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_issuer
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_none
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_passphrase
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_pick_ca
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_pick_certificate
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_pick_key
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_remove
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_removed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_subject
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_unreadable
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_use
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_validity
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_client_certificate_validity_range
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_collapse_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_manage_addresses_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_servers_configured
@@ -124,11 +150,29 @@ fun ServerManagementScreen(
 
     var expandedServerId by remember { mutableStateOf<String?>(null) }
     var showAddAddressFor by remember { mutableStateOf<String?>(null) }
+    var showCertificateImport by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel.addressOperationMessage) {
         viewModel.addressOperationMessage?.let { msg ->
             bus.info(msg)
             viewModel.clearAddressOperationMessage()
+        }
+    }
+    val certificateImportedText = stringResource(Res.string.settings_client_certificate_imported)
+    val certificateImportedExpiresText = stringResource(Res.string.settings_client_certificate_imported_expires)
+    val certificateRemovedText = stringResource(Res.string.settings_client_certificate_removed)
+    val certificateImportFailedText = stringResource(Res.string.settings_client_certificate_import_failed)
+    LaunchedEffect(viewModel.certificateMessage) {
+        viewModel.certificateMessage?.let { msg ->
+            val text = when (msg) {
+                is CertificateUserMessage.Imported -> msg.notValidAfterMs
+                    ?.let { certificateImportedExpiresText.format(formatDate(it)) }
+                    ?: certificateImportedText
+                CertificateUserMessage.Removed -> certificateRemovedText
+                is CertificateUserMessage.ImportFailed -> msg.text ?: certificateImportFailedText
+            }
+            bus.info(text)
+            viewModel.clearCertificateMessage()
         }
     }
 
@@ -217,6 +261,19 @@ fun ServerManagementScreen(
                         )
                     }
                 }
+
+                // App-level security group: the client certificate
+                // applies to every server connection (one active cert, the
+                // mpv-shim scope; per-server selection deferred).
+                item(key = "client-certificate") {
+                    ClientCertificateSection(
+                        status = viewModel.clientCertificateStatus,
+                        isOperationInProgress = viewModel.isCertificateOperationInProgress,
+                        onImport = { showCertificateImport = true },
+                        onToggle = viewModel::setClientCertificateEnabled,
+                        onRemove = viewModel::removeClientCertificate,
+                    )
+                }
             }
         }
     }
@@ -227,6 +284,16 @@ fun ServerManagementScreen(
             onAdd = { address ->
                 viewModel.addServerAddress(serverId, address)
                 showAddAddressFor = null
+            },
+        )
+    }
+
+    if (showCertificateImport) {
+        CertificateImportSheet(
+            onDismiss = { showCertificateImport = false },
+            onImport = { input ->
+                showCertificateImport = false
+                viewModel.importClientCertificate(input)
             },
         )
     }
@@ -577,6 +644,293 @@ private fun SelfSignedTrustRow(
             checked = granted,
             onCheckedChange = onCheckedChange,
         )
+    }
+}
+
+/**
+ * App-level "Client certificate (mTLS)" security group. When a
+ * certificate is imported the parsed subject/issuer/validity window is shown
+ * (the import flow's proof-of-parse) alongside the enable toggle and the
+ * remove action; otherwise a single import affordance carries the section.
+ * Orthogonal to the per-server self-signed grants: a CA override replaces
+ * the platform trust anchors, the certificate is PRESENTED to every TLS
+ * server that asks.
+ */
+@Composable
+private fun ClientCertificateSection(
+    status: ClientCertificateStatus,
+    isOperationInProgress: Boolean,
+    onImport: () -> Unit,
+    onToggle: (Boolean) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Tabler.Outline.Certificate,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = stringResource(Res.string.settings_client_certificate),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            if (status.isImported) {
+                Spacer(Modifier.height(8.dp))
+                ClientCertificateDetails(status)
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(Res.string.settings_client_certificate_use),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = status.enabled,
+                        onCheckedChange = onToggle,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        onClick = onRemove,
+                        enabled = !isOperationInProgress,
+                    ) { Text(stringResource(Res.string.settings_client_certificate_remove)) }
+                }
+            } else {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(Res.string.settings_client_certificate_none),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onImport) {
+                        Text(stringResource(Res.string.settings_client_certificate_import))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Subject / issuer / validity summary of the imported certificate (proof of parse). */
+@Composable
+private fun ClientCertificateDetails(status: ClientCertificateStatus) {
+    Column {
+        ClientCertificateDetailLine(
+            label = stringResource(Res.string.settings_client_certificate_subject),
+            value = status.subject ?: stringResource(Res.string.settings_client_certificate_unreadable),
+        )
+        status.issuer?.let {
+            ClientCertificateDetailLine(
+                label = stringResource(Res.string.settings_client_certificate_issuer),
+                value = it,
+            )
+        }
+        val notValidBefore = status.notValidBeforeMs
+        val notValidAfter = status.notValidAfterMs
+        if (notValidBefore != null && notValidAfter != null) {
+            ClientCertificateDetailLine(
+                label = stringResource(Res.string.settings_client_certificate_validity),
+                value = stringResource(
+                    Res.string.settings_client_certificate_validity_range,
+                    formatDate(notValidBefore),
+                    formatDate(notValidAfter),
+                ),
+            )
+        }
+        if (status.customCaConfigured) {
+            ClientCertificateDetailLine(
+                label = stringResource(Res.string.settings_client_certificate_ca),
+                value = stringResource(Res.string.settings_client_certificate_ca_set),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ClientCertificateDetailLine(label: String, value: String) {
+    Row(modifier = Modifier.padding(vertical = 2.dp)) {
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * The import sheet: certificate pick (.p12/.pfx bundle OR a PEM .crt — a
+ * PEM pick reveals the private-key row), optional passphrase for protected
+ * PKCS#12 bundles, and the optional server CA override. Import assembles the
+ * [com.raulshma.jellyplay.core.network.config.ClientCertificateImport]; the
+ * facade's parse failures land on the message bus.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CertificateImportSheet(
+    onDismiss: () -> Unit,
+    onImport: (com.raulshma.jellyplay.core.network.config.ClientCertificateImport) -> Unit,
+) {
+    val picker = rememberCertificateFilePicker()
+    var certificatePick by remember { mutableStateOf<CertificatePick?>(null) }
+    var keyPick by remember { mutableStateOf<CertificatePick?>(null) }
+    var caPick by remember { mutableStateOf<CertificatePick?>(null) }
+    var passphrase by remember { mutableStateOf("") }
+
+    // A PEM pick (vs a PKCS#12 bundle) is decided by content, not extension:
+    // PEM files carry the -----BEGIN CERTIFICATE header up front.
+    val certificateIsPem = certificatePick?.bytes?.let { bytes ->
+        bytes.copyOf(minOf(bytes.size, 128))
+            .toString(Charsets.US_ASCII)
+            .contains("-----BEGIN CERTIFICATE")
+    } ?: false
+
+    TvSafeSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            SheetHeader(
+                title = stringResource(Res.string.settings_client_certificate_import_title),
+                icon = Tabler.Outline.Certificate,
+            )
+            Text(
+                text = stringResource(Res.string.settings_client_certificate_import_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+
+            CertificatePickRow(
+                label = stringResource(Res.string.settings_client_certificate_pick_certificate),
+                pickedName = certificatePick?.displayName,
+                onLaunch = {
+                    picker?.launch(CertificatePickRole.CERTIFICATE_OR_BUNDLE) { pick ->
+                        certificatePick = pick
+                    }
+                },
+            )
+            if (certificateIsPem) {
+                CertificatePickRow(
+                    label = stringResource(Res.string.settings_client_certificate_pick_key),
+                    pickedName = keyPick?.displayName,
+                    onLaunch = {
+                        picker?.launch(CertificatePickRole.PRIVATE_KEY) { pick ->
+                            keyPick = pick
+                        }
+                    },
+                )
+            }
+            CertificatePickRow(
+                label = stringResource(Res.string.settings_client_certificate_pick_ca),
+                pickedName = caPick?.displayName,
+                onLaunch = {
+                    picker?.launch(CertificatePickRole.SERVER_CA) { pick ->
+                        caPick = pick
+                    }
+                },
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = passphrase,
+                onValueChange = { passphrase = it },
+                label = { Text(stringResource(Res.string.settings_client_certificate_passphrase)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.settings_cancel)) }
+                Spacer(Modifier.width(8.dp))
+                val canImport = certificatePick != null && (!certificateIsPem || keyPick != null)
+                androidx.compose.material3.Button(
+                    onClick = {
+                        val cert = checkNotNull(certificatePick)
+                        onImport(
+                            com.raulshma.jellyplay.core.network.config.ClientCertificateImport(
+                                pkcs12Bytes = if (certificateIsPem) null else cert.bytes,
+                                certificatePemBytes = if (certificateIsPem) cert.bytes else null,
+                                privateKeyPemBytes = keyPick?.bytes,
+                                serverCaPemBytes = caPick?.bytes,
+                                passphrase = passphrase.takeIf { it.isNotEmpty() }?.toCharArray(),
+                            ),
+                        )
+                    },
+                    enabled = canImport,
+                    shape = ShapeCache.smoothPill,
+                ) { Text(stringResource(Res.string.settings_client_certificate_import)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CertificatePickRow(
+    label: String,
+    pickedName: String?,
+    onLaunch: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (pickedName != null) {
+                Text(
+                    text = pickedName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        TextButton(onClick = onLaunch) {
+            Text(
+                stringResource(
+                    if (pickedName == null) Res.string.settings_client_certificate_choose
+                    else Res.string.settings_client_certificate_change,
+                ),
+            )
+        }
     }
 }
 

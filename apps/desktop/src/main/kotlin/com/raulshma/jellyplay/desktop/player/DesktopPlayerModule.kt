@@ -12,8 +12,12 @@ import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.desktop.DesktopPaths
+import com.raulshma.jellyplay.desktop.player.audio.DesktopAudioDeviceEnumerator
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import com.raulshma.jellyplay.feature.settings.AudioDeviceEnumerator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -75,7 +79,33 @@ val desktopPlayerModule: Module = module {
     // factory creates (engine + surface branch + state/position activity).
     // Observation only — see EngineActivityRecorder.
     single { EngineActivityRecorder() }
-    single<PlayerEngineFactory> { DesktopMpvPlayerEngineFactory(recorder = get()) }
+    // The factory reads the HDR passthrough setting per engine creation
+    // (`vo`/`wid` are ctor-time — a mid-session toggle applies on next
+    // playback) and the extracted shader-pack dir is resolved per creation
+    // so a first-run startup extraction is picked up on the next session.
+    single<PlayerEngineFactory> {
+        val engineStore = get<PlayerEngineStore>()
+        val paths = get<DesktopPaths>()
+        DesktopMpvPlayerEngineFactory(
+            recorder = get(),
+            hdrPassthroughProvider = { engineStore.playerEngine.first().mpvConfig.hdrPassthrough },
+            shaderDirProvider = { paths.shadersDirNio.toFile().takeIf { it.isDirectory }?.absolutePath },
+        )
+    }
+
+    // The versioned Anime4K extraction (classpath → shadersDir). Runs
+    // off the critical path from launchDesktopStartup; until it lands the
+    // factory's shaderDirProvider resolves null and no `glsl-shaders` pair is
+    // written (playback works, packs arrive on the next session).
+    single {
+        Anime4KShaderInstaller(targetDir = get<DesktopPaths>().shadersDirNio.toFile())
+    }
+
+    // The settings screen's mpv audio-device picker: enumerated from a
+    // throwaway idle mpv context on demand (the ViewModel caches). Android
+    // binds nothing — the row is SettingsCapabilities-hidden there, so the
+    // PlaybackSettingsViewModel's getOrNull() resolves null.
+    single<AudioDeviceEnumerator> { DesktopAudioDeviceEnumerator() }
 
     single<AudioTrackResolver> {
         val playbackStore = get<PlaybackStore>()

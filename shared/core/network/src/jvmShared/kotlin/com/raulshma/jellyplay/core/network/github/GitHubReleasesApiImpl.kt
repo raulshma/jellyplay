@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.github
 
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.compareVersions
+import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.api.HttpExecutor
 import com.raulshma.jellyplay.core.network.api.fromNetwork
@@ -92,11 +93,47 @@ class GitHubReleasesApiImpl(
         return try {
             withContext(Dispatchers.IO) {
                 http.execute(request) { response ->
+                    // Gate #1: response.request.url is the FINAL
+                    // post-redirect URL — OkHttp follows every redirect
+                    // transparently (including cross-host), and a moved repo
+                    // lands as a 301 onto a different /repos/<owner>/ path on
+                    // the SAME host, which the host half alone cannot see.
+                    // Fail closed before a byte of the body is trusted.
+                    // (Redirects are deliberately NOT disabled — verifying the
+                    // final URL is sufficient and keeps the client shared.)
+                    val finalUrl = response.request.url
+                    if (!GitHubRepoAllowList.isReleaseEndpoint(finalUrl)) {
+                        throw securityViolation(
+                            "GitHub releases endpoint left the pinned repo (final URL: $finalUrl)",
+                        )
+                    }
                     val stream = response.body?.byteStream()
                         ?: throw http.emptyBodyNetworkError()
                     // Stream-decode: release notes can be large and previously
                     // paid double (buffered String + decoded objects).
                     val release = json.decodeFromStream<GitHubRelease>(stream)
+                    // Gate #2: html_url and every asset's
+                    // browser_download_url are server-controlled strings that
+                    // later flow into AppUpdateRepositoryImpl.downloadUpdate /
+                    // the desktop browser handoff — verify each against the
+                    // asset allow-list before any of them can be published.
+                    release.htmlUrl?.takeIf { it.isNotBlank() }?.let { htmlUrl ->
+                        if (!GitHubRepoAllowList.isAssetEndpoint(htmlUrl)) {
+                            throw securityViolation(
+                                "GitHub release html_url left the pinned repo: $htmlUrl",
+                            )
+                        }
+                    }
+                    release.assets.forEach { asset ->
+                        val downloadUrl = asset.browserDownloadUrl
+                        if (!downloadUrl.isNullOrBlank() &&
+                            !GitHubRepoAllowList.isAssetEndpoint(downloadUrl)
+                        ) {
+                            throw securityViolation(
+                                "GitHub release asset left the pinned repo (${asset.name}): $downloadUrl",
+                            )
+                        }
+                    }
                     val tag = release.tagName.orEmpty().removePrefix("v")
                     val isUpdateAvailable = compareVersions(tag, currentVersionName) > 0
                     val chosen = selectAsset(
@@ -119,6 +156,11 @@ class GitHubReleasesApiImpl(
             }.let { Result.success(it) }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: UpdateSecurityException) {
+            // Fail closed WITHOUT the ApiException ladder: fromNetwork would
+            // classify an IOException as retryable, and a repo-move/redirect
+            // takeover must surface to the user, never be retried.
+            Result.failure(e)
         } catch (e: ApiException) {
             // Already classified by the chassis (HTTP status with Retry-After,
             // or the empty-body arm) — pass through, never re-classify.
@@ -128,7 +170,18 @@ class GitHubReleasesApiImpl(
         }
     }
 
+    /**
+     * Logs the allow-list violation at warn (the security breadcrumb) and
+     * shapes it as the fail-closed failure the callers surface.
+     */
+    private fun securityViolation(message: String): UpdateSecurityException {
+        NetworkLog.w(TAG, message)
+        return UpdateSecurityException(message)
+    }
+
     companion object {
+        private const val TAG = "GitHubReleases"
+
         const val LATEST_RELEASE_URL =
             "https://api.github.com/repos/raulshma/jellyplay/releases/latest"
 

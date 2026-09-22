@@ -217,6 +217,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screensaver
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_minutes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_signed_in_as_name
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_confirm_message
@@ -1635,8 +1644,7 @@ fun SettingsScreen(
                         }
 
                         if (isTv) {
-                            settingsSection("group_screensaver") {
-                                SettingsGroup(
+                            settingsSection("group_screensaver") {                                SettingsGroup(
                                     icon = Tabler.Outline.Moon,
                                     title = stringResource(Res.string.settings_screensaver),
                                     summary = {
@@ -1741,6 +1749,70 @@ fun SettingsScreen(
                                                 label = { labels[it] ?: it.name },
                                                 isSelected = { it == preferences.dreamTransitionStyle },
                                                 onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamTransitionStyle(it) } },
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        // the desktop idle "Ready to play" ambient
+                        // screen rows — capability-gated (structurally absent
+                        // on Android, whose lock-screen/screensaver story owns
+                        // idle display), rendered as their own group beside
+                        // the TV dream group so neither row total entangles.
+                        if (settingsCapabilities.supportsIdleAmbientScreen) {
+                            settingsSection("group_idle_ambient") {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.Moon,
+                                    title = stringResource(Res.string.settings_idle_ambient),
+                                    summary = {
+                                        if (preferences.idleAmbientEnabled) stringResource(Res.string.settings_idle_ambient_on)
+                                        else stringResource(Res.string.settings_idle_ambient_off)
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
+                                ) {
+                                    val idleTotal = SettingsScreenGroups.systemIdleAmbient.itemIds.size
+                                    val idleTimeoutTitle = stringResource(Res.string.settings_idle_ambient_timeout)
+                                    val idleTimeoutOffLabel = stringResource(Res.string.settings_idle_ambient_timeout_off)
+                                    val idleTimeoutOptions = listOf(0L, 1L, 5L, 10L, 15L, 30L)
+                                    // stringResource resolves in composition — pre-build the
+                                    // whole label column so the picker's plain label lambda only
+                                    // indexes (the auto-lock timer row's pattern).
+                                    val idleTimeoutLabels = idleTimeoutOptions.map { minutes ->
+                                        if (minutes == 0L) idleTimeoutOffLabel
+                                        else stringResource(Res.string.settings_idle_ambient_timeout_minutes, minutes)
+                                    }
+                                    SettingToggleItem(
+                                        icon = Tabler.Outline.Moon,
+                                        title = stringResource(Res.string.settings_idle_ambient_enabled),
+                                        subtitle = stringResource(Res.string.settings_idle_ambient_enabled_subtitle),
+                                        checked = preferences.idleAmbientEnabled,
+                                        index = 0, count = idleTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.IDLE_AMBIENT_ENABLED,
+                                        onCheckedChange = { enabled ->
+                                            viewModel.edit { scope -> scope.screensaver.setIdleAmbientEnabled(enabled) }
+                                        },
+                                    )
+                                    SettingListItem(
+                                        icon = Tabler.Outline.Stopwatch,
+                                        title = stringResource(Res.string.settings_idle_ambient_timeout),
+                                        subtitle = stringResource(Res.string.settings_idle_ambient_timeout_subtitle),
+                                        trailingText = idleTimeoutLabels[
+                                            idleTimeoutOptions.indexOf(preferences.idleAmbientTimeoutMin)
+                                                .coerceAtMost(idleTimeoutLabels.lastIndex),
+                                        ],
+                                        index = 1, count = idleTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.IDLE_AMBIENT_TIMEOUT,
+                                        onClick = {
+                                            activeDialog = PickerState.List(
+                                                title = idleTimeoutTitle,
+                                                items = idleTimeoutOptions,
+                                                label = { idleTimeoutLabels[idleTimeoutOptions.indexOf(it).coerceAtMost(idleTimeoutLabels.lastIndex)] },
+                                                isSelected = { it == preferences.idleAmbientTimeoutMin },
+                                                onSelect = { minutes ->
+                                                    viewModel.edit { scope -> scope.screensaver.setIdleAmbientTimeoutMin(minutes) }
+                                                },
                                             )
                                         },
                                     )

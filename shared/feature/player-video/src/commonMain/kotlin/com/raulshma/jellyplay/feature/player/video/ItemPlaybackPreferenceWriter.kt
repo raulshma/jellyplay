@@ -137,4 +137,35 @@ internal class ItemPlaybackPreferenceWriter(
             onPreferencesChanged()
         }
     }
+
+    /**
+     * Persists/clears the rendering override (shader pack + tone
+     * mapping) under [ScopePolicy.SERIES_THEN_ITEM] — a series row applies to
+     * every episode, a standalone movie pins its own row. `null` means
+     * "Inherit" (the global settings stand again).
+     */
+    fun setRenderProfile(overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?) {
+        val key = resolveKey(ScopePolicy.SERIES_THEN_ITEM) ?: return
+        scope.launch {
+            repository.setRenderProfile(scope = key.scope, key = key.key, overrides = overrides)
+            onPreferencesChanged()
+        }
+    }
+
+    /**
+     * The unambiguous "Inherit": clears the render override from BOTH the
+     * series and the item rows (the resolver's precedence means a leftover
+     * row of either scope would otherwise still win). No-ops per row when the
+     * row doesn't exist.
+     */
+    fun clearRenderProfile() {
+        val seriesId = getCurrentSeriesId()
+        val itemId = getCurrentItemId()
+        if (seriesId == null && itemId == null) return
+        scope.launch {
+            seriesId?.let { repository.setRenderProfile(PlaybackPrefScope.SERIES, it, null) }
+            itemId?.let { repository.setRenderProfile(PlaybackPrefScope.ITEM, it, null) }
+            onPreferencesChanged()
+        }
+    }
 }

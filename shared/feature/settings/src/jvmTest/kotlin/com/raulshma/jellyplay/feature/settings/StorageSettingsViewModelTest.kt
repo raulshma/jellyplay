@@ -156,6 +156,7 @@ class StorageSettingsViewModelTest {
             subtitle = subtitleLanguageStore,
             syncPlayCast = syncPlayCastStore,
             experimental = experimentalStore,
+            volumeProfile = mockk(relaxed = true),
             appRuntimeState = appRuntimeStateStore,
         ),
         store = userPreferencesStore,

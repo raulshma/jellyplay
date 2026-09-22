@@ -96,7 +96,7 @@ internal class NoOpEngine : MediaEngine, AndroidSurfaceProvider {
     override fun setMaxVideoBitrate(bps: Int?) { /* no-op */ }
 
     // Volume (RemotePlayableEngine)
-    override fun setVolume(value: Float) {
+    override fun setVolume(value: Float, isUserChange: Boolean) {
         volumeValue = value.coerceIn(0f, 1f)
     }
 

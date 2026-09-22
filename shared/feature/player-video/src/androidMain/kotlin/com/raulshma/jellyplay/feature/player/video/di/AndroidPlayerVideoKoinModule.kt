@@ -139,6 +139,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
                 downloads = get(),
                 appearance = get(),
                 networkOffline = get(),
+                volumeProfile = get(),
             ),
             mediaSessionFactory = get(),
             castManager = get(),

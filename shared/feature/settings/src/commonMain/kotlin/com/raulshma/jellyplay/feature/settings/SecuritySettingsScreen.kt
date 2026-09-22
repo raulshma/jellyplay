@@ -95,6 +95,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quic
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_control
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_control_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_control_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_require_pin_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_security
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_set_pin
@@ -176,7 +178,10 @@ val biometricGate = rememberBiometricGate()
                 SecuritySettingsIds.AUTO_LOCK_TIMER,
             ),
             setOf(SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE),
-            setOf(SecuritySettingsIds.REMOTE_CONTROL_ENABLED),
+            setOf(
+                SecuritySettingsIds.REMOTE_CONTROL_ENABLED,
+                SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED,
+            ),
         ),
     )
     HighlightScrollEffect(scrollState, scrollIndex)
@@ -350,9 +355,24 @@ val biometricGate = rememberBiometricGate()
                         subtitle = stringResource(Res.string.settings_allow_remote_control_subtitle),
                         checked = preferences.remoteControlEnabled,
                         highlighted = highlightSettingId == SecuritySettingsIds.REMOTE_CONTROL_ENABLED,
-                        index = 0, count = 1,
+                        index = 0, count = 2,
                         onCheckedChange = { enabled ->
                             viewModel.edit { scope -> scope.security.setRemoteControlEnabled(enabled) }
+                        },
+                    )
+                    // the DisplayContent opt-in — a remote may navigate
+                    // this device to an item's detail page while it is idle.
+                    // Sits beside the master switch it depends on (the
+                    // receiver gates on BOTH).
+                    SettingToggleItem(
+                        icon = Tabler.Outline.DeviceTv,
+                        title = stringResource(Res.string.settings_remote_display_content),
+                        subtitle = stringResource(Res.string.settings_remote_display_content_subtitle),
+                        checked = preferences.remoteDisplayContentEnabled,
+                        highlighted = highlightSettingId == SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED,
+                        index = 1, count = 2,
+                        onCheckedChange = { enabled ->
+                            viewModel.edit { scope -> scope.security.setRemoteDisplayContentEnabled(enabled) }
                         },
                     )
                 }

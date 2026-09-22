@@ -158,7 +158,9 @@
     <string name="player_video_av_sync">Sincronia A/V</string>
     <string name="player_video_playback_mode">Modo de reprodução</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 Ativado</string>
-    <string name="player_video_decoder">Descodificador</string>
+    <string name="player_video_decoder">Renderização</string>
+    <string name="player_video_rendering">Renderização</string>
+    <string name="player_video_deinterlace">Desentrelaçamento · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
     <string name="player_video_stats_for_nerds">Estatísticas para geeks</string>
     <string name="player_video_stats_for_nerds_on">Estatísticas para geeks \u00B7 Ativado</string>
@@ -271,9 +273,11 @@
     <string name="player_video_stats_position">Posicao</string>
     <string name="player_video_stats_progress">Progresso</string>
     <string name="player_video_stats_buffer_health">Integridade do buffer</string>
+    <string name="player_video_stats_buffered_ranges">Intervalos em buffer</string>
     <string name="player_video_stats_buffered">Em buffer</string>
     <string name="player_video_stats_clock">Relogio</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">Saída HDR ativa</string>
     <string name="player_video_stats_color_range">Intervallo de cores</string>
     <string name="player_video_stats_color_depth">Profundidade de cores</string>
     <string name="player_video_stats_sample_rate">Taxa de amostragem</string>
@@ -302,6 +306,10 @@
     <string name="player_video_adaptive_bitrate_on">Limita a qualidade em redes limitadas</string>
     <string name="player_video_adaptive_bitrate_off">Desativado - qualidade total (reproducao direta)</string>
     <string name="player_video_skip_intro">Pular introducao</string>
+    <string name="player_video_skipped_segment">%1$s saltado</string>
+    <string name="player_video_mark_watched_and_skip">Marcar como visto e avançar</string>
+    <string name="player_video_mark_watched_and_exit">Marcar como visto e sair</string>
+    <string name="player_video_mark_unwatched_and_exit">Marcar como não visto e sair</string>
     <string name="player_video_overview_tab">Visao geral</string>
     <string name="player_video_lyrics_subtitles_tab">Letras / Legendas</string>
     <string name="player_video_synopsis">Sinopse</string>

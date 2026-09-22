@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
+import com.raulshma.jellyplay.core.network.github.GitHubRepoAllowList
 import java.io.File
 import java.nio.file.Path
 import org.koin.core.module.Module
@@ -123,6 +124,13 @@ sealed interface DesktopInstalledVersion {
  * branch will happily attach an Android `-universal.apk` to a desktop result
  * (the exact false-attach the ADR calls out) — an APK must never become a
  * desktop download link.
+ *
+ * Whichever URL wins is verified against the compiled-in
+ * [GitHubRepoAllowList] before it can reach the browser (both surfaces are
+ * server-controlled strings). A violation fails CLOSED to null — never to
+ * the other branch — and the caller degrades to the compiled-in
+ * [RELEASES_PAGE_URL] snackbar, so a tampered feed can never open a
+ * non-GitHub page.
  */
 object DesktopUpdateLinks {
     /** Browser-fallback surface when no direct link can be chosen. */
@@ -132,10 +140,17 @@ object DesktopUpdateLinks {
 
     fun pick(info: AppUpdateInfo?): String? {
         if (info == null) return null
-        if (info.htmlUrl.isNotBlank()) return info.htmlUrl
+        if (info.htmlUrl.isNotBlank()) {
+            return info.htmlUrl.takeIf { GitHubRepoAllowList.isAssetEndpoint(it) }
+        }
         val isInstallerAsset = info.downloadAssetName?.lowercase()
             ?.let { name -> INSTALLER_EXTENSIONS.any(name::endsWith) } == true
-        return if (isInstallerAsset) info.downloadAssetUrl else null
+        val assetUrl = info.downloadAssetUrl
+        return if (isInstallerAsset && assetUrl != null && GitHubRepoAllowList.isAssetEndpoint(assetUrl)) {
+            assetUrl
+        } else {
+            null
+        }
     }
 }
 

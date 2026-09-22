@@ -6,7 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * Single auditable write seam over the 18 domain stores +
+ * Single auditable write seam over the 19 domain stores +
  * [AppRuntimeStateStore]. Every preference mutation from a ViewModel flows
  * through here so cross-cutting write concerns (logging, validation, batching)
  * have one place to live.

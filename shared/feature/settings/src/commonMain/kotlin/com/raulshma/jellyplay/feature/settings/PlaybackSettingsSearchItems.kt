@@ -91,6 +91,22 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_live_strea
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_live_stream_option_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_fallback_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_fallback_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_device_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_device_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_exclusive_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_exclusive_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_hdr_passthrough_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_hdr_passthrough_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_render_quality_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_render_quality_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_shader_pack_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_shader_pack_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tone_mapping_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tone_mapping_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tscale_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tscale_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_output_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_output_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_buffer_size_subtitle
@@ -129,6 +145,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_cach
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preload_buffer_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_brightness_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_brightness_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reset_engine_defaults_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reset_engine_defaults_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seek_duration_subtitle
@@ -139,6 +157,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_time_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_time_remaining_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_segments_on_seek_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_segments_on_seek_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_swipe_seek_range_subtitle
@@ -230,6 +250,14 @@ internal object PlaybackSettingsIds {
     const val MPV_INTERPOLATION = "mpv_interpolation"
     const val MPV_AUDIO_OUTPUT = "mpv_audio_output"
     const val MPV_AUDIO_FALLBACK = "mpv_audio_fallback"
+    const val MPV_AUDIO_DEVICE = "mpv_audio_device"
+    const val MPV_AUDIO_EXCLUSIVE = "mpv_audio_exclusive"
+    const val MPV_AUDIO_MODE = "mpv_audio_mode"
+    const val MPV_SHADER_PACK = "mpv_shader_pack"
+    const val MPV_TONE_MAPPING = "mpv_tone_mapping"
+    const val MPV_RENDER_QUALITY = "mpv_render_quality"
+    const val MPV_HDR_PASSTHROUGH = "mpv_hdr_passthrough"
+    const val MPV_INTERPOLATION_TSCALE = "mpv_interpolation_tscale"
     const val MPV_BUFFER_SIZE = "mpv_buffer_size"
     const val MPV_HWDEC_OVERRIDE = "mpv_hwdec_override"
     const val MPV_SKIP_LOOP_FILTER = "mpv_skip_loop_filter"
@@ -266,6 +294,8 @@ internal object PlaybackSettingsIds {
     const val MEDIA_SEGMENT_RECAP = "media_segment_recap"
     const val MEDIA_SEGMENT_COMMERCIAL = "media_segment_commercial"
     const val MEDIA_SEGMENT_UNKNOWN = "media_segment_unknown"
+    const val SKIP_SEGMENTS_ON_SEEK = "skip_segments_on_seek"
+    const val REMEMBER_VOLUME_PER_CONTENT_TYPE = "remember_volume_per_content_type"
 }
 
 /**
@@ -634,6 +664,20 @@ internal val PlaybackSettingsSearchItems = listOf(
         icon = Tabler.Outline.PlayerPause,
         isAdvanced = true
     ),
+    // ── Desktop-only volume-memory toggle: one remembered level per
+    // content type (video / music / audiobook), applied at item start on the
+    // surfaces where the app owns a volume scalar (desktop mpv). Android's
+    // video volume is the system stream's — the row is structurally absent.
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
+        titleRes = Res.string.ss_remember_volume_title,
+        subtitleRes = Res.string.ss_remember_volume_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("volume", "remember", "memory", "per content", "content type", "loudness", "level", "movies", "audiobooks"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Volume,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
 
 )
 
@@ -652,6 +696,7 @@ internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> = mapOf(
     PlaybackSettingsIds.GESTURE_INDICATOR_SIDE to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
     PlaybackSettingsIds.ANDROID_TV_WATCH_NEXT to RowAdmission.Tv,
     PlaybackSettingsIds.TV_ZOOM_MODE to RowAdmission.Tv,
+    PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE to RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
 )
 
 /**
@@ -827,6 +872,97 @@ internal val MpvEngineSearchItems = listOf(
         isAdvanced = true
     ),
     SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_AUDIO_DEVICE,
+        titleRes = Res.string.ss_mpv_audio_device_title,
+        subtitleRes = Res.string.ss_mpv_audio_device_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "audio device", "output device", "sound card", "speaker", "wasapi", "directsound"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Speakerphone,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE,
+        titleRes = Res.string.ss_mpv_audio_exclusive_title,
+        subtitleRes = Res.string.ss_mpv_audio_exclusive_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "exclusive", "bit-perfect", "bitperfect", "wasapi exclusive", "device lock"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Lock,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_AUDIO_MODE,
+        titleRes = Res.string.ss_mpv_audio_mode_title,
+        subtitleRes = Res.string.ss_mpv_audio_mode_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "passthrough", "spdif", "optical", "hdmi", "bitstream", "stereo downmix", "surround", "receiver"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Transfer,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    // ── Desktop-only render rows: the Anime4K extraction,
+    // tone-mapping, quality-profile and vo=gpu-next HDR machinery is
+    // desktop's (the HWND-embed path); Android's mpv hides all five.
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_SHADER_PACK,
+        titleRes = Res.string.ss_mpv_shader_pack_title,
+        subtitleRes = Res.string.ss_mpv_shader_pack_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "shader", "anime4k", "glsl", "upscale", "pack", "fsrcnnx", "artcnn"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Wand,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_TONE_MAPPING,
+        titleRes = Res.string.ss_mpv_tone_mapping_title,
+        subtitleRes = Res.string.ss_mpv_tone_mapping_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "tone mapping", "hdr", "sdr", "bt2390", "hable", "reinhard", "mobius", "brightness"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Brightness,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_RENDER_QUALITY,
+        titleRes = Res.string.ss_mpv_render_quality_title,
+        subtitleRes = Res.string.ss_mpv_render_quality_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "quality", "performance", "profile", "scaler", "deband", "high"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Gauge,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_HDR_PASSTHROUGH,
+        titleRes = Res.string.ss_mpv_hdr_passthrough_title,
+        subtitleRes = Res.string.ss_mpv_hdr_passthrough_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "hdr", "hdr10", "passthrough", "gpu-next", "colorspace", "tv"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.SunHigh,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE,
+        titleRes = Res.string.ss_mpv_tscale_title,
+        subtitleRes = Res.string.ss_mpv_tscale_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("mpv", "tscale", "interpolation", "motion", "temporal", "mitchell", "oversample"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.WaveSine,
+        isAdvanced = true,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsSearchItem(
         id = PlaybackSettingsIds.MPV_BUFFER_SIZE,
         titleRes = Res.string.ss_mpv_buffer_size_title,
         subtitleRes = Res.string.ss_mpv_buffer_size_subtitle,
@@ -886,6 +1022,23 @@ internal val MpvEngineSearchItems = listOf(
         icon = Tabler.Outline.Refresh,
         isAdvanced = true
     ),
+)
+
+/**
+ * The engine-config group's per-id declared row admissions: the three
+ * mpv audio-device rows are desktop-backed — [RowAdmission.Platform] hides
+ * them where no enumerator exists, and both `playbackEngineScreenRowTotal`
+ * and the screen's emission `if`s read this one gate.
+ */
+internal val PlaybackEngineRowAdmissions: Map<String, RowAdmission> = mapOf(
+    PlaybackSettingsIds.MPV_AUDIO_DEVICE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
+    PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
+    PlaybackSettingsIds.MPV_AUDIO_MODE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
+    PlaybackSettingsIds.MPV_SHADER_PACK to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+    PlaybackSettingsIds.MPV_TONE_MAPPING to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+    PlaybackSettingsIds.MPV_RENDER_QUALITY to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+    PlaybackSettingsIds.MPV_HDR_PASSTHROUGH to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+    PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
 )
 
 /**
@@ -1216,6 +1369,16 @@ internal val LiveTvSearchItems = listOf(
         keywords = listOf("segment", "unknown", "skip", "marker", "unidentified"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.SquareRounded,
+        isAdvanced = true
+    ),
+    SettingsSearchItem(
+        id = PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK,
+        titleRes = Res.string.ss_skip_segments_on_seek_title,
+        subtitleRes = Res.string.ss_skip_segments_on_seek_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_playback,
+        keywords = listOf("segment", "skip", "seek", "forward", "commercial", "auto"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.PlayerTrackNext,
         isAdvanced = true
     ),
 )

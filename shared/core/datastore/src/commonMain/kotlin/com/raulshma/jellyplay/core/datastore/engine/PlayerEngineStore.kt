@@ -183,15 +183,24 @@ class PlayerEngineStore constructor(
         audioStreamIndex: Int? = null,
         subtitleStreamIndex: Int? = null,
     ) {
+        setMediaStreamSelection(itemId, MediaStreamSelection(audioStreamIndex, subtitleStreamIndex))
+    }
+
+    /**
+     * Full-form writer: persists the whole [MediaStreamSelection] for [itemId]
+     * — indices plus the descriptor fields (label/language) the restore
+     * ladder revalidates a stored index against. `null` clears the entry.
+     * Callers that only need to write/clear one axis build the value from the
+     * currently-stored selection so the other axis's descriptors survive.
+     * Same 100-entry LRU cap as the index-form writer.
+     */
+    suspend fun setMediaStreamSelection(itemId: String, selection: MediaStreamSelection?) {
         dataStore.edit { prefs ->
             val current = readMediaStreamSelections(prefs).toMutableMap()
-            if (audioStreamIndex == null && subtitleStreamIndex == null) {
+            if (selection == null || (selection.audioStreamIndex == null && selection.subtitleStreamIndex == null)) {
                 current.remove(itemId)
             } else {
-                current[itemId] = MediaStreamSelection(
-                    audioStreamIndex = audioStreamIndex,
-                    subtitleStreamIndex = subtitleStreamIndex,
-                )
+                current[itemId] = selection
             }
             if (current.size > 100) {
                 val excess = current.size - 100

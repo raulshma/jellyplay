@@ -129,6 +129,7 @@ class PlaybackRepositoryImpl(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
+        failed: Boolean,
     ): Result<Unit> {
         // Pre-send purge pairs with the post-send one below — the same double
         // eviction the played/favorite wrapper runs around its write: a home
@@ -138,7 +139,7 @@ class PlaybackRepositoryImpl(
         val result = reportOrStage(
             stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
             send = {
-                playbackApiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
+                playbackApiClient.reportPlaybackStopped(itemId, sessionId, positionTicks, failed).onSuccess {
                     // A delivered STOP supersedes any pending START/PROGRESS/STOP for
                     // this item — the server now has the authoritative final position.
                     // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an

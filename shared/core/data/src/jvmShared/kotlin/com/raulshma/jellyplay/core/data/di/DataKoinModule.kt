@@ -140,7 +140,9 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
+import com.raulshma.jellyplay.core.network.config.ClientCertificateManager
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.core.network.subtitle.SubtitleProvider
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
@@ -249,6 +251,12 @@ val dataJvmModule: Module = module {
     single { RemoteNavigationBridge() }
 
     single { UiRemoteControlDispatcher() }
+
+    // The active-engine registry moved to commonMain with the desktop
+    // receiver port — both JVM shells bind the one shared single (the video
+    // player's platform adapters wrap it; the remote-control dispatchers and
+    // the receiver's screenshot/idle gates read it).
+    single { com.raulshma.jellyplay.core.data.remote.ActivePlayerController() }
 
     // NotificationStore resolves from :shared:core:datastore's Koin modules.
     single { NewsletterTriggerManager(get()) }
@@ -818,8 +826,25 @@ val dataJvmModule: Module = module {
 
     // The playback session-identity reads (token + base URL) — the narrow
     // module the former PlaybackRepository.getServerUrl/getAccessToken members
-    // were retired into. Bound to the same AuthApiClient the impl reads.
-    single<PlaybackIdentity> { DefaultPlaybackIdentity(apiClient = get()) }
+    // were retired into. Bound to the same AuthApiClient the impl reads. The
+    // client-TLS reader maps the app-level certificate manager's
+    // normalized file paths into the player-contract view (the mpv engines'
+    // tls-* options); no enabled certificate yields null (no TLS on the
+    // request) while the OkHttp side fail-closes on its own.
+    single<PlaybackIdentity> {
+        DefaultPlaybackIdentity(
+            apiClient = get(),
+            clientTlsReader = {
+                get<ClientCertificateManager>().playbackTlsPaths()?.let { paths ->
+                    PlaybackTls(
+                        clientCertificatePath = paths.certificatePath,
+                        clientKeyPath = paths.keyPath,
+                        caPath = paths.caPath,
+                    )
+                }
+            },
+        )
+    }
 
     single {
         SubtitleProviderRepositoryImpl(

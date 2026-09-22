@@ -153,8 +153,8 @@ abstract class ReloadablePlayerEngine(
         command()
     }
 
-    final override fun setVolume(value: Float) = dispatchVolumeCommand {
-        val plan = PlaybackVolumePolicy.planLevel(value, volumeBoostCeiling)
+    final override fun setVolume(value: Float, isUserChange: Boolean) = dispatchVolumeCommand {
+        val plan = PlaybackVolumePolicy.planLevel(value, volumeBoostCeiling, isUserChange)
         rememberUnmuteVolumeIfAudible(plan.normalized)
         applyNativeVolume(plan.normalized)
         MediaStreamVolume.setNormalized(appContext, plan.systemStream)

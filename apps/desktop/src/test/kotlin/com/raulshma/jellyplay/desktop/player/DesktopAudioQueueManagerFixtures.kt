@@ -88,7 +88,7 @@ internal class FakePlaybackRepository : PlaybackRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit> {
+    override suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long, failed: Boolean): Result<Unit> {
         stops += Triple(itemId, sessionId, positionTicks)
         return Result.success(Unit)
     }
