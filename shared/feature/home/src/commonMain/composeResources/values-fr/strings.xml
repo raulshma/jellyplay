@@ -97,4 +97,5 @@
     <string name="home_download_started">Téléchargement lancé</string>
     <string name="home_download_start_failed">Impossible de lancer le téléchargement</string>
     <string name="home_series_download_queued">Épisodes mis en file d'attente pour le téléchargement</string>
+    <string name="home_see_all">Tout voir</string>
 </resources>

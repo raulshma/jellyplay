@@ -41,4 +41,8 @@
     <string name="shortcuts_item_setup_wizard_description">Esegui il flusso di configurazione iniziale.</string>
     <string name="shortcuts_item_about_title">Informazioni</string>
     <string name="shortcuts_item_about_description">Versione, licenze e informazioni sull\'app.</string>
+    <string name="shortcuts_search_placeholder">Cerca scorciatoie…</string>
+    <string name="shortcuts_search_no_results">Nessuna scorciatoia corrisponde a «%1$s»</string>
+    <string name="shortcuts_search_clear">Cancella ricerca</string>
+    <string name="shortcuts_admin_badge">Admin</string>
 </resources>

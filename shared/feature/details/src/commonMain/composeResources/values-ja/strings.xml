@@ -429,4 +429,12 @@
     <plurals name="detail_book_highlights">
         <item quantity="other">ハイライト %1$d件</item>
     </plurals>
+    <string name="detail_book_download_only">ダウンロードのみ</string>
+    <string name="detail_cd_hide_up_next">「次に見る」セクションを隠す</string>
+    <string name="detail_option_hide_detail_up_next">「次に見る」セクションを非表示</string>
+    <string name="detail_option_show_detail_up_next">「次に見る」セクションを表示</string>
+    <string name="detail_download_advanced">詳細</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">すべての字幕</string>
+    <string name="detail_download_subtitles_none">字幕なし</string>
 </resources>

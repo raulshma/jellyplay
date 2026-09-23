@@ -438,4 +438,12 @@
         <item quantity="one">%1$d Markierung</item>
         <item quantity="other">%1$d Markierungen</item>
     </plurals>
+    <string name="detail_book_download_only">Nur herunterladen</string>
+    <string name="detail_cd_hide_up_next">„Als Nächstes“-Bereich ausblenden</string>
+    <string name="detail_option_hide_detail_up_next">„Als Nächstes“-Bereich ausblenden</string>
+    <string name="detail_option_show_detail_up_next">„Als Nächstes“-Bereich anzeigen</string>
+    <string name="detail_download_advanced">Erweitert</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">Alle Untertitel</string>
+    <string name="detail_download_subtitles_none">Keine Untertitel</string>
 </resources>

@@ -439,4 +439,12 @@
         <item quantity="one">%1$d evidenziazione</item>
         <item quantity="other">%1$d evidenziazioni</item>
     </plurals>
+    <string name="detail_book_download_only">Solo scarico</string>
+    <string name="detail_cd_hide_up_next">Nascondi sezione Prossimi</string>
+    <string name="detail_option_hide_detail_up_next">Nascondi sezione Prossimi</string>
+    <string name="detail_option_show_detail_up_next">Mostra sezione Prossimi</string>
+    <string name="detail_download_advanced">Avanzate</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">Tutti i sottotitoli</string>
+    <string name="detail_download_subtitles_none">Nessun sottotitolo</string>
 </resources>

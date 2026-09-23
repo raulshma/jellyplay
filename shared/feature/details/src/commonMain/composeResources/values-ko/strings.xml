@@ -429,4 +429,12 @@
     <plurals name="detail_book_highlights">
         <item quantity="other">밑줄 %1$d개</item>
     </plurals>
+    <string name="detail_book_download_only">다운로드만</string>
+    <string name="detail_cd_hide_up_next">\'다음 에피소드\' 섹션 숨기기</string>
+    <string name="detail_option_hide_detail_up_next">\'다음 에피소드\' 섹션 숨기기</string>
+    <string name="detail_option_show_detail_up_next">\'다음 에피소드\' 섹션 표시</string>
+    <string name="detail_download_advanced">고급</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">모든 자막</string>
+    <string name="detail_download_subtitles_none">자막 없음</string>
 </resources>

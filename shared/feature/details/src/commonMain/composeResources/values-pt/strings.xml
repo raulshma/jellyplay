@@ -439,4 +439,12 @@
         <item quantity="one">%1$d destaque</item>
         <item quantity="other">%1$d destaques</item>
     </plurals>
+    <string name="detail_book_download_only">Apenas transferir</string>
+    <string name="detail_cd_hide_up_next">Ocultar secção A seguir</string>
+    <string name="detail_option_hide_detail_up_next">Ocultar secção A seguir</string>
+    <string name="detail_option_show_detail_up_next">Mostrar secção A seguir</string>
+    <string name="detail_download_advanced">Avançado</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">Todas as legendas</string>
+    <string name="detail_download_subtitles_none">Sem legendas</string>
 </resources>

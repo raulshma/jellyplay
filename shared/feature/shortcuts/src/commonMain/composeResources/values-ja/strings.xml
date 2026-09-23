@@ -41,4 +41,8 @@
     <string name="shortcuts_item_setup_wizard_description">初期設定フローを実行。</string>
     <string name="shortcuts_item_about_title">アプリ情報</string>
     <string name="shortcuts_item_about_description">バージョン、ライセンス、アプリ情報。</string>
+    <string name="shortcuts_search_placeholder">ショートカットを検索…</string>
+    <string name="shortcuts_search_no_results">「%1$s」に一致するショートカットはありません</string>
+    <string name="shortcuts_search_clear">検索をクリア</string>
+    <string name="shortcuts_admin_badge">管理者</string>
 </resources>

@@ -251,4 +251,12 @@
     <string name="core_remove_download_confirm">Excluir</string>
     <string name="core_ui_read_more">Ler mais</string>
     <string name="core_ui_show_less">Mostrar menos</string>
+    <string name="core_media_folder">Pasta</string>
+    <string name="core_media_folder_plural">Pastas</string>
+    <string name="core_ui_auth_use_screen_lock">Usar bloqueio de ecrã</string>
+    <string name="core_ui_auth_unlock_screen_lock">Desbloquear com bloqueio de ecrã</string>
+    <string name="core_ui_auth_device_credential_prompt">Use o bloqueio de ecrã do dispositivo para desbloquear</string>
+    <string name="core_ui_read">Ler</string>
+    <string name="core_show_password">Mostrar palavra-passe</string>
+    <string name="core_hide_password">Ocultar palavra-passe</string>
 </resources>

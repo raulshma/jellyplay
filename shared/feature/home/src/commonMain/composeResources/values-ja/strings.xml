@@ -97,4 +97,5 @@
     <string name="home_download_started">ダウンロードを開始しました</string>
     <string name="home_download_start_failed">ダウンロードを開始できませんでした</string>
     <string name="home_series_download_queued">エピソードのダウンロードをキューに追加しました</string>
+    <string name="home_see_all">すべて見る</string>
 </resources>

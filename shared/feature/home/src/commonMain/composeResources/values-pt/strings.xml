@@ -97,4 +97,5 @@
     <string name="home_download_started">Download iniciado</string>
     <string name="home_download_start_failed">Não foi possível iniciar o download</string>
     <string name="home_series_download_queued">Episódios na fila para download</string>
+    <string name="home_see_all">Ver tudo</string>
 </resources>

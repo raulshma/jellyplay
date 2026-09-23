@@ -252,4 +252,11 @@
     <string name="core_remove_download_confirm">Supprimer</string>
     <string name="core_ui_read_more">Lire plus</string>
     <string name="core_ui_show_less">Afficher moins</string>
+    <string name="core_media_folder">Dossier</string>
+    <string name="core_media_folder_plural">Dossiers</string>
+    <string name="core_ui_auth_use_screen_lock">Utiliser le verrouillage d\'écran</string>
+    <string name="core_ui_auth_unlock_screen_lock">Déverrouiller avec le verrouillage d\'écran</string>
+    <string name="core_ui_auth_device_credential_prompt">Utilisez le verrouillage d\'écran de l\'appareil pour déverrouiller</string>
+    <string name="core_show_password">Afficher le mot de passe</string>
+    <string name="core_hide_password">Masquer le mot de passe</string>
 </resources>

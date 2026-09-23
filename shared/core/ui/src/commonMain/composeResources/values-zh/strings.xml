@@ -250,4 +250,12 @@
     <string name="core_remove_download_confirm">删除</string>
     <string name="core_ui_read_more">查看更多</string>
     <string name="core_ui_show_less">收起</string>
+    <string name="core_media_folder">文件夹</string>
+    <string name="core_media_folder_plural">文件夹</string>
+    <string name="core_ui_auth_use_screen_lock">使用屏幕锁</string>
+    <string name="core_ui_auth_unlock_screen_lock">通过屏幕锁解锁</string>
+    <string name="core_ui_auth_device_credential_prompt">使用设备屏幕锁解锁</string>
+    <string name="core_ui_read">阅读</string>
+    <string name="core_show_password">显示密码</string>
+    <string name="core_hide_password">隐藏密码</string>
 </resources>

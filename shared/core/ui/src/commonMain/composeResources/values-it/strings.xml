@@ -252,4 +252,11 @@
     <string name="core_remove_download_confirm">Elimina</string>
     <string name="core_ui_read_more">Leggi altro</string>
     <string name="core_ui_show_less">Mostra meno</string>
+    <string name="core_media_folder">Cartella</string>
+    <string name="core_media_folder_plural">Cartelle</string>
+    <string name="core_ui_auth_use_screen_lock">Usa blocco schermo</string>
+    <string name="core_ui_auth_unlock_screen_lock">Sblocca con blocco schermo</string>
+    <string name="core_ui_auth_device_credential_prompt">Usa il blocco schermo del dispositivo per sbloccare</string>
+    <string name="core_show_password">Mostra password</string>
+    <string name="core_hide_password">Nascondi password</string>
 </resources>

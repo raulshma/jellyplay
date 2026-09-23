@@ -97,4 +97,5 @@
     <string name="home_download_started">Download gestartet</string>
     <string name="home_download_start_failed">Download konnte nicht gestartet werden</string>
     <string name="home_series_download_queued">Folgen für den Download vorgemerkt</string>
+    <string name="home_see_all">Alle ansehen</string>
 </resources>

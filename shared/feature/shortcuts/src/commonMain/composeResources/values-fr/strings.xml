@@ -41,4 +41,8 @@
     <string name="shortcuts_item_setup_wizard_description">Exécuter le flux de configuration initial.</string>
     <string name="shortcuts_item_about_title">À propos</string>
     <string name="shortcuts_item_about_description">Version, licences et informations sur l\'app.</string>
+    <string name="shortcuts_search_placeholder">Rechercher des raccourcis…</string>
+    <string name="shortcuts_search_no_results">Aucun raccourci ne correspond à « %1$s »</string>
+    <string name="shortcuts_search_clear">Effacer la recherche</string>
+    <string name="shortcuts_admin_badge">Admin</string>
 </resources>

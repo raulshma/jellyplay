@@ -252,4 +252,11 @@
     <string name="core_remove_download_confirm">Löschen</string>
     <string name="core_ui_read_more">Mehr anzeigen</string>
     <string name="core_ui_show_less">Weniger anzeigen</string>
+    <string name="core_media_folder">Ordner</string>
+    <string name="core_media_folder_plural">Ordner</string>
+    <string name="core_ui_auth_use_screen_lock">Gerätesperre verwenden</string>
+    <string name="core_ui_auth_unlock_screen_lock">Mit Gerätesperre entsperren</string>
+    <string name="core_ui_auth_device_credential_prompt">Gerätesperre zum Entsperren verwenden</string>
+    <string name="core_show_password">Passwort anzeigen</string>
+    <string name="core_hide_password">Passwort ausblenden</string>
 </resources>
