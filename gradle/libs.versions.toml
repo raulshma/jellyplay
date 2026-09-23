@@ -122,6 +122,9 @@ pdfboxAndroid = "2.0.27.0"
 junrar = "8.1.1"
 composeWebviewMultiplatform = "2.0.3"
 aboutLibraries = "15.0.4"
+# LeakCanary — debug-only memory leak detection for the Android app.
+# 2.14 is the latest stable (3.0 still alpha as of 2026-09).
+leakcanary = "2.14"
 
 [libraries]
 # AndroidX Core
@@ -309,6 +312,11 @@ benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro
 
 # AboutLibraries (auto-collected open-source license metadata at build time)
 aboutlibraries-core = { group = "com.mikepenz", name = "aboutlibraries-core", version.ref = "aboutLibraries" }
+
+# LeakCanary — Android-only leak detection, wired as debugImplementation in
+# :app so it never reaches release builds (self-installs via a startup
+# ContentProvider; config hook lives in app/src/debug DebugLeakCanary.kt).
+leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -457,6 +457,12 @@ dependencies {
     androidTestImplementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.compose.ui.test.manifest)
 
+    // LeakCanary self-installs its watcher via a startup ContentProvider and
+    // auto-reports retained Activities/Fragments/ViewModels/Services. Debug
+    // builds only (phoneDebug + tvDebug); runtime tweaks live in
+    // app/src/debug .../DebugLeakCanary.kt next to installDebugStrictMode().
+    debugImplementation(libs.leakcanary.android)
+
     // Baseline profile producers are wired per flavor in the `baselineProfile`
     // extension block above (:baselineprofile for phone only — tv ships
     // without generated profiles) instead of a global `baselineProfile`

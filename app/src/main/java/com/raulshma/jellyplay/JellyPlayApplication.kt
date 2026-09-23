@@ -109,6 +109,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // backs installDebugStrictMode with real policies; the release source
         // set ships a no-op, so release builds compile none of it.
         installDebugStrictMode()
+        // LeakCanary self-installs via its own startup ContentProvider — this
+        // call is the debug-only seam for future config tweaks (twin-file
+        // idiom, no-op in release).
+        installLeakCanary()
     }
 
     override fun onCreate() {

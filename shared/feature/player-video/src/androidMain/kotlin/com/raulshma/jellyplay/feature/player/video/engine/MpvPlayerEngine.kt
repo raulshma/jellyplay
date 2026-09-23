@@ -959,6 +959,16 @@ class MpvPlayerEngine(
     }
 
     override fun createSurfaceView(context: Context): View {
+        // mpv-android-lib pins a JNI global ref to whatever Context flows
+        // through BaseMPVView.initialize() → MPV.create() → nativeCreate(),
+        // and that ref can outlive destroy() (MPV.destroy runs
+        // destroySession() before nativeDestroy(), so a throw from the former
+        // skips the ref cleanup). The Compose AndroidView factory hands us the
+        // Activity here — feeding it in pinned every destroyed PlayerActivity
+        // under "GC Root: Global variable in native code" (853 kB per close,
+        // LeakCanary-verified). The application context is process-lifetime,
+        // so a surviving native ref on it is harmless.
+        val viewContext = context.applicationContext
         val fontsDir = fontProvider.provideFontsDir()
         val configDir = java.io.File(context.filesDir, "mpv")
         if (!configDir.exists()) {
@@ -975,10 +985,10 @@ class MpvPlayerEngine(
         // sets neither env var.
 
         val view = try {
-            PlayerMPVView(context)
+            PlayerMPVView(viewContext)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create PlayerMPVView", e)
-            return View(context).apply {
+            return View(viewContext).apply {
                 setBackgroundColor(android.graphics.Color.BLACK)
             }
         }
