@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -124,7 +125,18 @@ internal class EditorViewModel(
 
     private fun loadEditorData(itemId: String) {
         launch {
-            EditorLoad.load(
+            // The editor's ONE load ladder (core/ui loadInto, ex-EditorLoad).
+            // Only the editor-data load is a genuine single-fetch ladder: the
+            // other fetches are declared non-ladders — `saveMetadata` raises
+            // `isSaving` (a save, not a load, and its success arm re-baselines
+            // the form session), `searchAllSubtitleProviders` streams partial
+            // provider results instead of dispatching one Result, the
+            // provider-subtitle download is a multi-leg choreography
+            // (download → persist → upload → reload → attribute), and the
+            // image/subtitle mutations use the bare `.onSuccess`/`.onFailure`
+            // idiom with no loading-flag guard at all — folding any of them
+            // would change behaviour, not centralize it.
+            loadInto(
                 start = { _uiState.update { it.copy(isLoading = true, error = null) } },
                 fetch = { fetchEditorData(itemId) },
                 onSuccess = { loaded ->

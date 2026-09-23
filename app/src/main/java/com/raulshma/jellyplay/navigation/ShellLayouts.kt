@@ -84,7 +84,7 @@ data class ShellNavParams(
     val navigationState: NavigationState,
     /** The selected top-level tab, read once per MainContent recomposition. */
     val currentTopLevel: NavKey,
-    /** Pure fold (VisibleTopLevelRoutes.kt): the active route→label map. */
+    /** Pure fold (core/ui VisibleTopLevelRoutes): the active route→label map. */
     val activeTopLevelRoutes: LinkedHashMap<Route, String>,
     val navigator: Navigator,
     /** ADR 0001: the revoke/plain sign-out fork into the session controller. */

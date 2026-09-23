@@ -27,7 +27,6 @@ val searchModule: Module = module {
             seerrRepository = get(),
             seerrRequestDelegate = get(),
             mediaSearchEngine = get(),
-            offlineRepository = get(),
             searchFiltersStore = get(),
             quickDownloadActions = get(),
         )

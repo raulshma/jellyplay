@@ -458,7 +458,7 @@ class AudioQueueStateCore(
      * shape, where a null player means the seek never happens, so no player
      * transition (and therefore no metadata reconciliation) fires either.
      */
-    private fun transitionTo(index: Int, startPositionMs: Long = 0L) {
+    private fun transitionTo(index: Int, startPositionMs: Long) {
         val item = _queue.value.getOrNull(index) ?: return
         _currentIndex.value = index
         if (!dispatch.isLive) return
@@ -466,8 +466,10 @@ class AudioQueueStateCore(
         val prevItemId = currentItemId
         val prevSessionId = playSessionId
         val prevPosTicks =
-            if (_currentPosition.value > 0) _currentPosition.value * 10_000
-            else _duration.value * 10_000
+            AudioQueuePolicy.finalStopPositionTicks(
+                positionMs = _currentPosition.value,
+                durationMs = _duration.value,
+            )
 
         currentItemId = item.id
         // Queue-item publish shape: five fields from the queue item, artistId

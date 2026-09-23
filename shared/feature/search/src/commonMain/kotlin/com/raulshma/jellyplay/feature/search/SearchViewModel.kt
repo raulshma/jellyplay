@@ -7,7 +7,6 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
@@ -27,7 +26,6 @@ import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,12 +40,6 @@ import kotlinx.coroutines.flow.stateIn
 import com.raulshma.jellyplay.core.data.util.FilterCodec
 import com.raulshma.jellyplay.core.data.util.loadListWithRetry
 
-/**
- * Maximum number of offline items to surface in the "On-device" search row.
- * Kept small because the row is supplementary to the paginated library grid.
- */
-private const val OFFLINE_SEARCH_RESULT_LIMIT: Int = 10
-
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 internal class SearchViewModel(
     private val mediaRepository: MediaRepository,
@@ -56,7 +48,6 @@ internal class SearchViewModel(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val mediaSearchEngine: MediaSearchEngine,
-    private val offlineRepository: OfflineRepository,
     private val searchFiltersStore: com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore,
     private val quickDownloadActions: QuickDownloadActions,
 ) : JellyPlayViewModel() {
@@ -106,6 +97,14 @@ internal class SearchViewModel(
         .debounce(mediaSearchEngine.debounceMs)
         .distinctUntilChanged()
 
+    // Retry re-kick for the side-search round: the engine re-runs a round per
+    // query emission, so bumping the tick re-emits the unchanged query into
+    // [sideSearchQueries] and the engine's cancel-and-replace does the rest.
+    private val _sideSearchRetryTick = stateFlow(0)
+
+    private val sideSearchQueries: Flow<String> =
+        combine(debouncedQuery, _sideSearchRetryTick.flow) { query, _ -> query }
+
     private val _suggestions = stateFlow<List<MediaItem>>(emptyList())
     val suggestions: StateFlow<List<MediaItem>> = _suggestions.flow
 
@@ -118,13 +117,6 @@ internal class SearchViewModel(
 
     private val _offlineResults = stateFlow<List<OfflineMediaItem>>(emptyList())
     val offlineResults: StateFlow<List<OfflineMediaItem>> = _offlineResults.flow
-
-    private var seerrSearchJob: Job? = null
-
-    // Tracked like seerrSearchJob: an untracked offline scan could complete
-    // after a newer query published its results and overwrite them with
-    // stale rows (plus a wasted duplicate DB scan per keystroke burst).
-    private var offlineSearchJob: Job? = null
 
     /**
      * Deferred-refresh generation counter for [pagedResults] — bumped by
@@ -232,38 +224,20 @@ internal class SearchViewModel(
     }
 
     /**
-     * Seerr + on-device side-searches for the current debounced query. Driven
-     * by the query alone — not the filters — so a sort/status tweak neither
-     * re-runs the network + local scans for an unchanged query nor flashes
-     * the Seerr row empty.
+     * Seerr + on-device side-searches for the current debounced query, ridden
+     * through the engine's [MediaSearchEngine.sideSearch] — the same kernel
+     * the home bar uses, so the gate, the take limit and the error semantics
+     * live in one place. Driven by the query alone — not the filters — so a
+     * sort/status tweak neither re-runs the network + local scans for an
+     * unchanged query nor flashes the Seerr row empty.
      */
     private fun loadSideSearches() {
         launch {
-            debouncedQuery.collect { currentQuery ->
-                seerrSearchJob?.cancel()
-                offlineSearchJob?.cancel()
-                _seerrResults.set(emptyList())
-                _seerrSearchError.set(false)
-                if (currentQuery.isBlank()) {
-                    _offlineResults.set(emptyList())
-                } else {
-                    seerrSearchJob = launch { searchSeerr(currentQuery) }
-                    offlineSearchJob = launch { searchOffline(currentQuery) }
-                }
+            mediaSearchEngine.sideSearch(sideSearchQueries).collect { side ->
+                _seerrResults.set(side.seerr)
+                _seerrSearchError.set(side.seerrError)
+                _offlineResults.set(side.offline)
             }
-        }
-    }
-
-    private suspend fun searchOffline(query: String) {
-        try {
-            val results = offlineRepository.searchOffline(query, limit = OFFLINE_SEARCH_RESULT_LIMIT)
-            _offlineResults.set(results)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // Offline search is best-effort; never surface errors to the user
-            // since the library/Seerr results may still be relevant.
-            _offlineResults.set(emptyList())
         }
     }
 
@@ -329,14 +303,11 @@ internal class SearchViewModel(
                 launch { mediaSearchEngine.recordHistory(event.query, jellyfinHadResults = true) }
             }
             is SearchUiEvent.RetrySeerrSearch -> {
-                val currentQuery = query
-                if (currentQuery.isNotBlank()) {
-                    seerrSearchJob?.cancel()
-                    seerrSearchJob = launch {
-                        _seerrSearchError.set(false)
-                        searchSeerr(currentQuery)
-                    }
-                }
+                // Re-kick the side-search round for the current query: the
+                // tick re-emits the unchanged query into the engine and its
+                // cancel-and-replace clears + re-fetches the Seerr row —
+                // identical visible behavior to the old manual relaunch.
+                if (query.isNotBlank()) _sideSearchRetryTick.update { it + 1 }
             }
             is SearchUiEvent.MarkItemPlayed -> launch {
                 // Intentionally silent (the mutator's default): the paged
@@ -385,33 +356,6 @@ internal class SearchViewModel(
 
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }
-
-    private suspend fun searchSeerr(query: String) {
-        try {
-            // The Seerr gate (connected + search-enabled + not on a Local
-            // network) is owned by the engine — the same gate the home bar's
-            // inline search uses. The error row below stays screen-local.
-            if (!mediaSearchEngine.isSeerrSearchAvailable()) {
-                _seerrResults.set(emptyList())
-                _seerrSearchError.set(false)
-                return
-            }
-            seerrRepository.search(query)
-                .onSuccess { response ->
-                    _seerrResults.set(response.results.take(10))
-                    _seerrSearchError.set(false)
-                }
-                .onFailure {
-                    _seerrResults.set(emptyList())
-                    _seerrSearchError.set(true)
-                }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            _seerrResults.set(emptyList())
-            _seerrSearchError.set(true)
-        }
-    }
 
     private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 

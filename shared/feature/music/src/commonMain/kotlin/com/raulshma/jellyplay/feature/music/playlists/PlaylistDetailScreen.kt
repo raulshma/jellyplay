@@ -1,10 +1,8 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
@@ -55,7 +52,8 @@ import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.animation.lessSpringySpec
+import com.raulshma.jellyplay.core.ui.animation.pressScale
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -90,6 +88,9 @@ fun PlaylistDetailScreen(
     LaunchedEffect(playlistId) {
         viewModel.load(playlistId, initialPlaylistName)
     }
+
+    DeferredRefreshEffect(viewModel.deferredRefresher)
+
     val resolvedPlaylistName = viewModel.playlistName
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = resolveHeaderStatus(
@@ -209,12 +210,6 @@ private fun PlaylistTrackRow(
     onMoveDown: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = lessSpringySpec(),
-        label = "trackScale",
-    )
 
     var showMenu by remember { mutableStateOf(false) }
     val menuFocusState = rememberTvFocusState()
@@ -223,7 +218,9 @@ private fun PlaylistTrackRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            // lessSpringySpec() resolved to the theme's default spatial spec —
+            // pressScale's default — so the motion is unchanged.
+            .pressScale(interactionSource = interactionSource, defaultScale = 0.97f)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,

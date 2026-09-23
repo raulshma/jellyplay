@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
@@ -36,7 +37,6 @@ import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -55,7 +55,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
-import kotlinx.coroutines.sync.withPermit
 import java.util.UUID
 import kotlin.math.pow
 
@@ -591,25 +590,18 @@ class AudioPlaybackManager(
 
     /**
      * Builds [MediaItem]s for a queue segment concurrently (bounded by
-     * [queuePreWarmPermits]) while preserving input order: deferreds are
-     * awaited in list order, so result order — and therefore the
-     * [mediaItemCache] insertion order — matches the sequential
-     * `mapNotNull { ... }` loops this replaces. Per-item failures resolve
-     * to null and are dropped, as before.
+     * [queuePreWarmPermits], via [Semaphore.mapConcurrent]) while preserving
+     * input order, so result order — and therefore the [mediaItemCache]
+     * insertion order — matches the sequential `mapNotNull { ... }` loops
+     * this replaces. Already-cached items short-circuit inside the transform
+     * (the old ladder skipped their permit acquire via a completed deferred);
+     * per-item failures cancel the siblings and propagate, exactly as the
+     * old `coroutineScope { ... }` did.
      */
     private suspend fun buildMediaItemsForQueueItems(queueItems: List<AudioQueueItem>): List<MediaItem> =
-        coroutineScope {
-            queueItems.map { qi ->
-                val cached = mediaItemCache.get(qi.id)
-                if (cached != null) {
-                    CompletableDeferred<MediaItem?>(cached)
-                } else {
-                    async { queuePreWarmPermits.withPermit { buildMediaItemForQueueItem(qi) } }
-                }
-            }.mapNotNull { deferred ->
-                deferred.await()?.also { mediaItemCache.put(it.mediaId, it) }
-            }
-        }
+        queuePreWarmPermits.mapConcurrent(queueItems) { qi ->
+            mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)
+        }.mapNotNull { it?.also { mediaItemCache.put(it.mediaId, it) } }
 
     override fun play(itemId: String) {
         assertMainThread("play")
@@ -691,18 +683,14 @@ class AudioPlaybackManager(
                 val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
 
                 if (!isInQueue) {
-                    val queueItem = AudioQueueItem(
-                        id = itemId,
-                        name = title.value,
-                        artist = artist.value,
+                    appendPlayedItem(
+                        itemId = itemId,
                         album = album.value,
                         imageUrl = albumArtUrl.value,
                         mediaSourceId = source?.id,
                         durationMs = detail.item.runTimeTicks?.let { it / 10_000 } ?: 0L,
                         normalizationGain = detail.item.normalizationGain,
                     )
-                    _queue.value = _queue.value + queueItem
-                    _currentIndex.value = _queue.value.lastIndex
                 }
 
                 val queueItems = _queue.value
@@ -786,16 +774,12 @@ class AudioPlaybackManager(
                     val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
 
                     if (!isInQueue) {
-                        val queueItem = AudioQueueItem(
-                            id = itemId,
-                            name = title.value,
-                            artist = artist.value,
+                        appendPlayedItem(
+                            itemId = itemId,
                             album = "",
                             imageUrl = null,
                             mediaSourceId = local.download.mediaSourceId,
                         )
-                        _queue.value = _queue.value + queueItem
-                        _currentIndex.value = _queue.value.lastIndex
                     }
 
                     val mediaItem = MediaItem.Builder()
@@ -818,6 +802,35 @@ class AudioPlaybackManager(
             _isLoadingItemFlag = false
             _isLoadingItem.value = false
         }
+    }
+
+    /**
+     * The out-of-queue play() append, both play() branches folded (the
+     * server-detail path and the offline fallback differ only in the five
+     * caller-supplied fields): appends [itemId] as a new tail row — title and
+     * artist come from the tracker flows the publish just refreshed, the rest
+     * from the caller — and jumps the cursor onto it. The manager-side twin
+     * of commonMain `AudioQueueStateCore.appendPlayedItem`'s shape.
+     */
+    private fun appendPlayedItem(
+        itemId: String,
+        album: String,
+        imageUrl: String?,
+        mediaSourceId: String?,
+        durationMs: Long = 0L,
+        normalizationGain: Float? = null,
+    ) {
+        _queue.value = _queue.value + AudioQueueItem(
+            id = itemId,
+            name = title.value,
+            artist = artist.value,
+            album = album,
+            imageUrl = imageUrl,
+            mediaSourceId = mediaSourceId,
+            durationMs = durationMs,
+            normalizationGain = normalizationGain,
+        )
+        _currentIndex.value = _queue.value.lastIndex
     }
 
     /**
@@ -1053,16 +1066,48 @@ class AudioPlaybackManager(
         if (queueLoadingJob != null) return
         _queue.value = snapshot.queue
         _currentIndex.value = snapshot.currentIndex
-        val player = exoPlayer
-        if (player == null || snapshot.queue.isEmpty()) return
+        rebuildPlaylist(
+            items = snapshot.queue,
+            targetIndex = snapshot.currentIndex,
+            positionMs = { snapshot.positionMs },
+        )
+    }
+
+    /**
+     * The ONE queue-rebuild write, folded from three verbatim copies
+     * ([applyQueueSnapshot] and both [toggleShuffle] arms): builds MediaItems
+     * for [items] off-main, then replaces the player's playlist with
+     * `setMediaItems(items, targetIndex, positionMs)` + prepare on Main.
+     *
+     * ONE canonical player-identity-check placement, chosen here: AFTER the
+     * async build, on the Main thread, immediately before the write — the
+     * check closest to the write is the only one that can actually close the
+     * swap window (a check before the build would still race the swap that
+     * happens while the build runs). Bail = no write, as in all three
+     * pre-fold copies (they only disagreed on where the check sat).
+     *
+     * [positionMs] is a provider evaluated at WRITE time on Main: the
+     * shuffle arms read `player.currentPosition` there so playback that
+     * continues during the build is not rewound, while snapshot callers pin
+     * the captured snapshot value. [targetIndex] is coerced into the BUILT
+     * list's bounds — a partial build must not crash the write.
+     */
+    private fun rebuildPlaylist(
+        items: List<AudioQueueItem>,
+        targetIndex: Int,
+        positionMs: () -> Long,
+    ) {
+        val player = exoPlayer ?: return
+        if (items.isEmpty()) return
         scope.launch(Dispatchers.IO) {
-            val mediaItems = buildMediaItemsForQueueItems(snapshot.queue)
+            val mediaItems = buildMediaItemsForQueueItems(items)
             launch(Dispatchers.Main) {
-                if (mediaItems.isEmpty()) return@launch
-                // Bail if the player was swapped/released during the async build.
-                if (exoPlayer != player) return@launch
-                val index = snapshot.currentIndex.coerceIn(0, mediaItems.lastIndex)
-                player.setMediaItems(mediaItems, index, snapshot.positionMs)
+                if (mediaItems.isEmpty() || exoPlayer != player) return@launch
+                player.setMediaItems(
+                    mediaItems,
+                    targetIndex.coerceIn(0, mediaItems.lastIndex),
+                    positionMs(),
+                )
                 player.prepare()
             }
         }
@@ -1109,16 +1154,11 @@ class AudioPlaybackManager(
             val newQueue = if (current != null) listOf(current) + others else others
             _queue.value = newQueue
             _currentIndex.value = 0
-            scope.launch(Dispatchers.IO) {
-                val mediaItems = buildMediaItemsForQueueItems(newQueue)
-                launch(Dispatchers.Main) {
-                    if (mediaItems.isNotEmpty() && exoPlayer == player) {
-                        val currentPos = player.currentPosition
-                        player.setMediaItems(mediaItems, 0, currentPos)
-                        player.prepare()
-                    }
-                }
-            }
+            rebuildPlaylist(
+                items = newQueue,
+                targetIndex = 0,
+                positionMs = { player.currentPosition },
+            )
         } else {
             val currentItemId = currentPlayingItemId.value
             val original = unshuffledQueue
@@ -1128,16 +1168,11 @@ class AudioPlaybackManager(
                 _currentIndex.value = restoreIndex
                 unshuffledQueue = emptyList()
                 unshuffledIndex = -1
-                scope.launch(Dispatchers.IO) {
-                    val mediaItems = buildMediaItemsForQueueItems(original)
-                    launch(Dispatchers.Main) {
-                        if (mediaItems.isNotEmpty() && exoPlayer == player) {
-                            val currentPos = player.currentPosition
-                            player.setMediaItems(mediaItems, restoreIndex, currentPos)
-                            player.prepare()
-                        }
-                    }
-                }
+                rebuildPlaylist(
+                    items = original,
+                    targetIndex = restoreIndex,
+                    positionMs = { player.currentPosition },
+                )
             }
         }
     }
@@ -1321,6 +1356,55 @@ class AudioPlaybackManager(
         sleepTimerManager.triggerEndOfEpisode()
     }
 
+    // ── Track handoff spine (shared by both transition sites) ──────────────
+
+    /**
+     * The ONE track-handoff reconcile block shared by the natural-transition
+     * path ([onTrackTransitioned]) and the crossfade swap
+     * ([onCrossfadeTransition]): moves the cursor to [nextIndex], rotates the
+     * current-item claim, publishes the row to the now-playing tracker and —
+     * on request — re-applies ReplayGain for the incoming row.
+     *
+     * DELIBERATELY NOT owned here: the stop/start report ORDERING. The two
+     * sites disagree where no single placement is faithful — the crossfade
+     * site reports stop(prev) SYNCHRONOUSLY BEFORE the swap/writes (load-
+     * bearing: state keeps showing the old track while the stop report is in
+     * flight), while the natural-transition site launches stop+start after
+     * the writes on the `Main.immediate` scope (so the launch body would run
+     * inline BEFORE the writes if enqueued any earlier). Capture
+     * (`prevItemId`/`prevSessionId`/`finalStopPositionTicks`) therefore also
+     * stays at the call sites, ordered by each site's own report placement.
+     *
+     * Micro-reorder at the crossfade site: it now calls this BEFORE
+     * `exoPlayer = secondary` (the pre-fold code swapped the player first).
+     * Unobservable — the runs are straight-line Main-confined with no
+     * suspension between these writes and the swap, so nothing can
+     * interleave between them.
+     */
+    private fun commitTrackTransition(
+        nextIndex: Int,
+        nextItem: AudioQueueItem,
+        reapplyReplayGain: Boolean,
+    ) {
+        _currentIndex.value = nextIndex
+        currentItemId = nextItem.id
+        nowPlayingTracker.publishQueueItem(nextItem)
+        if (reapplyReplayGain) {
+            effectsProcessor.applyReplayGain(nextItem.normalizationGain, _shuffleMode.value)
+        }
+    }
+
+    /**
+     * The start-report shape both transition sites send after the handoff
+     * (`play()` builds its own with a `startPositionTicks` resume field and a
+     * detail-source mediaSourceId, so it stays on its own construction).
+     */
+    private fun startReportFor(item: AudioQueueItem) = PlaybackStartInfo(
+        itemId = item.id,
+        sessionId = playSessionId,
+        mediaSourceId = item.mediaSourceId,
+    )
+
     private fun onTrackTransitioned() {
         val player = exoPlayer ?: return
         val currentMediaId = player.currentMediaItem?.mediaId
@@ -1328,7 +1412,7 @@ class AudioPlaybackManager(
         val matchIndex = if (currentMediaId != null) {
             queueItems.indexOfFirst { it.id == currentMediaId }
         } else -1
-        
+
         val targetIndex = if (matchIndex >= 0) matchIndex else {
             val idx = player.currentMediaItemIndex
             if (idx >= 0 && idx < queueItems.size) idx else -1
@@ -1337,14 +1421,17 @@ class AudioPlaybackManager(
         if (targetIndex >= 0) {
             val prevItemId = currentItemId
             val prevSessionId = playSessionId
-            val prevPosTicks = if (_currentPosition.value > 0) _currentPosition.value * 10_000 else _duration.value * 10_000
-
-            _currentIndex.value = targetIndex
+            val prevPosTicks = AudioQueuePolicy.finalStopPositionTicks(
+                positionMs = _currentPosition.value,
+                durationMs = _duration.value,
+            )
             val nextItem = queueItems[targetIndex]
-            currentItemId = nextItem.id
-            nowPlayingTracker.publishQueueItem(nextItem)
 
-            effectsProcessor.applyReplayGain(nextItem.normalizationGain, _shuffleMode.value)
+            commitTrackTransition(
+                nextIndex = targetIndex,
+                nextItem = nextItem,
+                reapplyReplayGain = true,
+            )
 
             scope.launch {
                 progressReporter.reportStopped(
@@ -1365,13 +1452,7 @@ class AudioPlaybackManager(
                 coroutineScope {
                     val detailJob = async { mediaRepository.getMediaDetail(nextItem.id) }
                     val startJob = async {
-                        playbackRepository.reportPlaybackStart(
-                            PlaybackStartInfo(
-                                itemId = nextItem.id,
-                                sessionId = playSessionId,
-                                mediaSourceId = nextItem.mediaSourceId,
-                            )
-                        )
+                        playbackRepository.reportPlaybackStart(startReportFor(nextItem))
                     }
                     detailJob.await().onSuccess { d ->
                         // Auto-EQ-by-genre: previously the pref toggle only
@@ -1390,19 +1471,29 @@ class AudioPlaybackManager(
     private suspend fun onCrossfadeTransition(secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) {
         val prevItemId = currentItemId
         val prevSessionId = playSessionId
-        val prevPosTicks = if (_currentPosition.value > 0) _currentPosition.value * 10_000 else _duration.value * 10_000
+        val prevPosTicks = AudioQueuePolicy.finalStopPositionTicks(
+            positionMs = _currentPosition.value,
+            durationMs = _duration.value,
+        )
 
+        // The crossfade site's load-bearing ordering: the stop report runs
+        // SYNCHRONOUSLY before the swap/writes below (see
+        // commitTrackTransition's KDoc for why this is not folded in).
         progressReporter.reportStopped(
             itemId = prevItemId,
             sessionId = prevSessionId,
             positionTicks = prevPosTicks,
         )
 
-        exoPlayer = secondary
+        commitTrackTransition(
+            nextIndex = nextIndex,
+            nextItem = nextItem,
+            // The wholesale effects re-attach below stands in for the
+            // single-row ReplayGain re-apply the natural-transition site does.
+            reapplyReplayGain = false,
+        )
 
-        _currentIndex.value = nextIndex
-        currentItemId = nextItem.id
-        nowPlayingTracker.publishQueueItem(nextItem)
+        exoPlayer = secondary
 
         mediaSession?.release()
         // Rebuild via the shared audio-session builder (AudioLibraryBrowser is
@@ -1450,13 +1541,7 @@ class AudioPlaybackManager(
             }
         }
 
-        playbackRepository.reportPlaybackStart(
-            PlaybackStartInfo(
-                itemId = nextItem.id,
-                sessionId = playSessionId,
-                mediaSourceId = nextItem.mediaSourceId,
-            )
-        )
+        playbackRepository.reportPlaybackStart(startReportFor(nextItem))
     }
 
     /**

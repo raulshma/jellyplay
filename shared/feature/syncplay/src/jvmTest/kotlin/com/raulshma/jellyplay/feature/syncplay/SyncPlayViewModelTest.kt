@@ -496,11 +496,14 @@ class SyncPlayViewModelTest {
     }
 
     // ── transport delegation ──────────────────────────────────────────────
+    // The ignored-Result repository transport twins were retired by the wire
+    // census; the VM fires these through SyncPlaySession (whose JVM adapter
+    // delegates to SyncPlayController.safe()).
 
     @Test
     fun togglePlayback_pauses_when_playing_unpauses_when_paused() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.syncPlayPause() } returns Result.success(Unit)
-        coEvery { mediaRepository.syncPlayUnpause() } returns Result.success(Unit)
+        coEvery { syncPlaySession.pause() } returns Unit
+        coEvery { syncPlaySession.unpause() } returns Unit
         joinActive("g1", isPlaying = true)
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -509,14 +512,14 @@ class SyncPlayViewModelTest {
 
         viewModel.togglePlayback()
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.syncPlayPause() }
-        coVerify(exactly = 0) { mediaRepository.syncPlayUnpause() }
+        coVerify(exactly = 1) { syncPlaySession.pause() }
+        coVerify(exactly = 0) { syncPlaySession.unpause() }
 
         eventsFlow.tryEmit(SyncPlaySessionEvent.StateUpdate(isPlaying = false, state = "Paused", reason = ""))
         advanceUntilIdle()
         viewModel.togglePlayback()
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.syncPlayUnpause() }
+        coVerify(exactly = 1) { syncPlaySession.unpause() }
     }
 
     @Test
@@ -527,17 +530,17 @@ class SyncPlayViewModelTest {
         viewModel.togglePlayback()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.syncPlayPause() }
-        coVerify(exactly = 0) { mediaRepository.syncPlayUnpause() }
+        coVerify(exactly = 0) { syncPlaySession.pause() }
+        coVerify(exactly = 0) { syncPlaySession.unpause() }
     }
 
     @Test
-    fun transport_actions_delegate_to_repository() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.syncPlaySeek(123L) } returns Result.success(Unit)
-        coEvery { mediaRepository.syncPlayStop() } returns Result.success(Unit)
-        coEvery { mediaRepository.syncPlaySetRepeatMode(SyncPlayRepeatMode.REPEAT_ALL) } returns Result.success(Unit)
-        coEvery { mediaRepository.syncPlaySetShuffleMode(SyncPlayShuffleMode.SHUFFLE) } returns Result.success(Unit)
-        coEvery { mediaRepository.syncPlaySetIgnoreWait(true) } returns Result.success(Unit)
+    fun transport_actions_delegate_to_session() = runTest(mainDispatcher) {
+        coEvery { syncPlaySession.seek(123L) } returns Unit
+        coEvery { syncPlaySession.stop() } returns Unit
+        coEvery { syncPlaySession.setRepeatMode(SyncPlayRepeatMode.REPEAT_ALL) } returns Unit
+        coEvery { syncPlaySession.setShuffleMode(SyncPlayShuffleMode.SHUFFLE) } returns Unit
+        coEvery { syncPlaySession.setIgnoreWait(true) } returns Unit
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -548,11 +551,11 @@ class SyncPlayViewModelTest {
         viewModel.setIgnoreWait(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.syncPlaySeek(123L) }
-        coVerify(exactly = 1) { mediaRepository.syncPlayStop() }
-        coVerify(exactly = 1) { mediaRepository.syncPlaySetRepeatMode(SyncPlayRepeatMode.REPEAT_ALL) }
-        coVerify(exactly = 1) { mediaRepository.syncPlaySetShuffleMode(SyncPlayShuffleMode.SHUFFLE) }
-        coVerify(exactly = 1) { mediaRepository.syncPlaySetIgnoreWait(true) }
+        coVerify(exactly = 1) { syncPlaySession.seek(123L) }
+        coVerify(exactly = 1) { syncPlaySession.stop() }
+        coVerify(exactly = 1) { syncPlaySession.setRepeatMode(SyncPlayRepeatMode.REPEAT_ALL) }
+        coVerify(exactly = 1) { syncPlaySession.setShuffleMode(SyncPlayShuffleMode.SHUFFLE) }
+        coVerify(exactly = 1) { syncPlaySession.setIgnoreWait(true) }
     }
 
     // ── misc state ────────────────────────────────────────────────────────

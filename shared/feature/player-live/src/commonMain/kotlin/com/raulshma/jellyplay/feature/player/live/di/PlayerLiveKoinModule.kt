@@ -34,6 +34,11 @@ import org.koin.dsl.module
  * has no jvm definition, so the desktop registration here stays
  * documented-latent for one more unresolvable dep — the live screen never
  * composes there (Route.LiveTvChannelPlayer stays guarded in DesktopAppRoot).
+ *
+ * LiveNowWindow: the VM's `epochMillisSource` seam (the livetv conveyor's
+ * inject-don't-create clock rule) resolves the dataJvmModule
+ * `EpochMillisSource -> TimeSource` single — the same binding livetv's own
+ * ViewModels resolve their `timeSource` through, one framework per clock.
  */
 val playerLiveModule: Module = module {
     viewModel {
@@ -45,6 +50,7 @@ val playerLiveModule: Module = module {
             playbackStore = get(),
             aggregateStore = get(),
             lastChannelStore = get(),
+            epochMillisSource = get(),
             engineFactory = get(),
             imageUrlProvider = get(),
             audio = get(),

@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
@@ -71,7 +70,6 @@ class SearchViewModelFilterPersistenceTest {
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
     private lateinit var mediaSearchEngine: MediaSearchEngine
-    private lateinit var offlineRepository: OfflineRepository
     private lateinit var searchFiltersStore: SearchFiltersStore
     private lateinit var quickDownloadActions: QuickDownloadActions
 
@@ -90,13 +88,12 @@ class SearchViewModelFilterPersistenceTest {
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
         mediaSearchEngine = mockk(relaxed = true)
-        offlineRepository = mockk(relaxed = true)
         searchFiltersStore = mockk(relaxed = true)
         quickDownloadActions = mockk(relaxed = true)
 
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
-        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns false
+        every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns persistedJson
         every { quickDownloadActions.downloadedIds } returns downloadedIds
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
@@ -105,7 +102,6 @@ class SearchViewModelFilterPersistenceTest {
         coEvery { mediaRepository.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
         )
-        coEvery { offlineRepository.searchOffline(any(), any()) } returns emptyList()
 
         viewModel = createViewModel()
     }
@@ -122,7 +118,6 @@ class SearchViewModelFilterPersistenceTest {
         seerrRepository,
         seerrRequestDelegate,
         mediaSearchEngine,
-        offlineRepository,
         searchFiltersStore,
         quickDownloadActions,
     )

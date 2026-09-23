@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay
 
 import android.content.Intent
-import android.net.Uri
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -17,9 +16,13 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
+import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
+import com.raulshma.jellyplay.navigation.playbackhost.externalPlayerLaunch
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
@@ -260,28 +263,25 @@ class MainViewModel(
         sessionController.refreshAdminStatusNow()
     }
 
-    fun handleShortcutIntent(intent: Intent) {
-        val route = when (intent.action) {
-            AppShortcutManager.ACTION_CONTINUE_WATCHING ->
-                Route.NewsletterSectionList("CONTINUE_WATCHING")
-            AppShortcutManager.ACTION_SEARCH -> Route.Search
-            AppShortcutManager.ACTION_PLAY_MUSIC -> Route.MusicBrowse
-            AppShortcutManager.ACTION_DOWNLOADS -> Route.Downloads
-            AppShortcutManager.ACTION_PLAY_AUDIO -> {
-                val itemId = intent.getStringExtra(AppShortcutManager.EXTRA_ITEM_ID)
-                if (!itemId.isNullOrBlank()) Route.AudioPlayer(itemId) else null
-            }
-            // Static launcher shortcuts
-            AppShortcutManager.ACTION_SETTINGS -> Route.Settings
-            AppShortcutManager.ACTION_SURPRISE_ME -> {
-                // Route home and arm the surprise signal the Home screen consumes.
-                _surpriseOnLaunch.set(true)
-                Route.Home
-            }
-            else -> null
+    /**
+     * Shell entry point for an already-classified launcher-shortcut
+     * disposition: MainActivity folds the raw [Intent] through the pure
+     * [com.raulshma.jellyplay.deeplink.IncomingIntentRequest] and hands the
+     * resulting [IncomingIntentDisposition.Shortcut] here — Android types
+     * never travel past that fold. The action→Route table lives in the same
+     * fold (deeplink package, the dispatch's single source of truth); this
+     * member only applies the classified outcome: arm the one-shot surprise
+     * signal first, then publish the route. A `null` route (an unknown
+     * shortcut action, or a PLAY_AUDIO without an item id) leaves the
+     * pending route untouched.
+     */
+    fun handleShortcutIntent(disposition: IncomingIntentDisposition.Shortcut) {
+        if (disposition.armsSurpriseOnLaunch) {
+            // Route home and arm the surprise signal the Home screen consumes.
+            _surpriseOnLaunch.set(true)
         }
-        if (route != null) {
-            _pendingRoute.set(route)
+        if (disposition.route != null) {
+            _pendingRoute.set(disposition.route)
         }
     }
 
@@ -351,10 +351,14 @@ class MainViewModel(
      * ([Route.LiveTvChannelPlayer]) since the underlying repository calls
      * handle channel ids identically to the internal-engine path.
      *
-     * The returned intent advertises `return_result`, so the app-level
+     * The launch advertises `return_result`, so the app-level
      * `ActivityResultLauncher` in [com.raulshma.jellyplay.navigation.JellyPlayApp]
      * can read the external player's final position and credit watched progress
-     * via [reportExternalPlaybackStopped].
+     * via [reportExternalPlaybackStopped]. The launch construction itself —
+     * the ACTION_VIEW intent, the extras vocabulary ("title"/"return_result"/
+     * "position") and the per-launch playSessionId — is the pure
+     * [externalPlayerLaunch] fold in navigation/playbackhost (beside
+     * [ExternalPlayerHost]); this member owns only the resolver injection.
      */
     suspend fun buildExternalPlayerLaunch(
         itemId: String,
@@ -373,25 +377,14 @@ class MainViewModel(
             startPositionTicks = startPositionTicks,
         ) ?: return null
 
-        val url = when (resolved) {
-            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Local -> resolved.uri
-            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Stream -> resolved.url
-        }
-        val title = resolved.title
-
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
-            putExtra("title", title)
-            putExtra("return_result", true)
-            val startMs = startPositionTicks / 10_000
-            if (startMs > 0) putExtra("position", startMs)
-        }
-
-        return ExternalPlayerLaunch(
-            intent = intent,
+        return externalPlayerLaunch(
             itemId = itemId,
+            resolvedUrl = when (resolved) {
+                is ResolvedPlaybackSource.Local -> resolved.uri
+                is ResolvedPlaybackSource.Stream -> resolved.url
+            },
+            title = resolved.title,
             startPositionTicks = startPositionTicks,
-            playSessionId = java.util.UUID.randomUUID().toString(),
         )
     }
 
@@ -429,10 +422,3 @@ class MainViewModel(
         val ANY_URL_REGEX = Regex("""https?://[^\s]+""")
     }
 }
-
-data class ExternalPlayerLaunch(
-    val intent: Intent,
-    val itemId: String,
-    val startPositionTicks: Long,
-    val playSessionId: String,
-)

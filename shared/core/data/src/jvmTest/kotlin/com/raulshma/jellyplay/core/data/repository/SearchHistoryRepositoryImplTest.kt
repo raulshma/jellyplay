@@ -10,9 +10,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertTrue
-import com.raulshma.jellyplay.core.data.util.TimeSource
-import java.time.LocalDate
-import java.time.ZoneId
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 
 /**
  * Exercises [SearchHistoryRepositoryImpl] against a real in-memory Room
@@ -36,7 +34,13 @@ class SearchHistoryRepositoryImplTest {
         database = Room.inMemoryDatabaseBuilder<JellyPlayDatabase>()
             .setDriver(BundledSQLiteDriver())
             .build()
-        repository = SearchHistoryRepositoryImpl(database.searchHistoryDao(), FakeTimeSource())
+        repository = SearchHistoryRepositoryImpl(
+            database.searchHistoryDao(),
+            // autoAdvance: 1 ms per read so repeated saves get distinct
+            // monotone stamps (the ordering the real `Thread.sleep` pauses
+            // used to buy) — the deleted local copy's behavior.
+            FakeTimeSource(autoAdvance = true),
+        )
     }
 
     @AfterTest
@@ -146,16 +150,5 @@ class SearchHistoryRepositoryImplTest {
         repository.deleteById(two.id)
 
         assertEquals(listOf("three", "one"), repository.getRecent("u1").first().map { it.query })
-    }
-
-    /**
-     * Controllable [TimeSource] that advances 1 ms per read, so repeated saves
-     * get distinct monotone stamps (the ordering the real `Thread.sleep`
-     * pauses used to buy).
-     */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
-        override fun nowEpochMillis(): Long = ++nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

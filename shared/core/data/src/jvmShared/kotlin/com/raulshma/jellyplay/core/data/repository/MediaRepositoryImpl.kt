@@ -30,8 +30,6 @@ import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
-import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
-import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
@@ -61,7 +59,8 @@ import kotlinx.coroutines.withContext
 // surfaces moved out to their own impls (LiveTvRepositoryImpl,
 // NewsletterRepositoryImpl, PlaylistRepositoryImpl — same package), each
 // over the narrow API family client (the PlaybackRepositoryImpl ctor
-// precedent). SyncPlayRepository STAYS here by decision: its eleven members
+// precedent). SyncPlayRepository STAYS here by decision: its members (four
+// after the transport-command census retired the ignored-Result twins)
 // interleave with the user-data channel's invalidation choreography, not
 // with any family boundary. The one piece of shared state an extracted
 // surface observes — the detail-cache cluster — moved to the
@@ -789,23 +788,12 @@ class MediaRepositoryImpl internal constructor(
     override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
         apiClient.getSyncPlayInfo(groupId)
 
-    override suspend fun syncPlayPause(): Result<Unit> =
-        apiClient.syncPlayPause()
-
-    override suspend fun syncPlayUnpause(): Result<Unit> =
-        apiClient.syncPlayUnpause()
-
-    override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> =
-        apiClient.syncPlaySeek(positionTicks)
-
-    override suspend fun syncPlayStop(): Result<Unit> =
-        apiClient.syncPlayStop()
-
-    override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> =
-        apiClient.syncPlaySetRepeatMode(mode)
-
-    override suspend fun syncPlaySetShuffleMode(mode: SyncPlayShuffleMode): Result<Unit> =
-        apiClient.syncPlaySetShuffleMode(mode)
+    // Transport commands (pause/unpause/seek/stop/setRepeat/setShuffle/
+    // setIgnoreWait) used to be one-line pass-throughs here; the second wire
+    // census retired them from the seam — their only repository-typed caller
+    // (SyncPlayViewModel) ignored the Result and now rides SyncPlaySession →
+    // SyncPlayController.safe(). setNewQueue stays: WatchPartyActions awaits
+    // and inspects its Result.
 
     override suspend fun syncPlaySetNewQueue(
         itemIds: List<String>,
@@ -814,9 +802,6 @@ class MediaRepositoryImpl internal constructor(
         startPositionTicks: Long,
     ): Result<Unit> =
         apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
-
-    override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> =
-        apiClient.syncPlaySetIgnoreWait(ignore)
 
     private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
         extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,

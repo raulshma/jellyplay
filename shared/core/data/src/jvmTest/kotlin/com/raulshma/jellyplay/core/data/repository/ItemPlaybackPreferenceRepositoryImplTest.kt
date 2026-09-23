@@ -19,9 +19,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.Test
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.raulshma.jellyplay.core.data.util.TimeSource
-import java.time.LocalDate
-import java.time.ZoneId
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 
 /**
  * Exercises [ItemPlaybackPreferenceRepositoryImpl] against a real in-memory
@@ -454,16 +452,5 @@ class ItemPlaybackPreferenceRepositoryImplTest {
         val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
         assertEquals("ger", pref.audioLanguage)
         assertNull(pref.dialogueBoostStrength)
-    }
-
-    /**
-     * Controllable [TimeSource] — same shape as the fake in
-     * LyricsRepositoryImplTest (core:data deliberately hosts no shared test
-     * fakes; see TimeSource's KDoc).
-     */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

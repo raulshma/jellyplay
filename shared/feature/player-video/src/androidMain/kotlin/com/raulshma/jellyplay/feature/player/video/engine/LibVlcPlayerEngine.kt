@@ -63,7 +63,6 @@ class LibVlcPlayerEngine(
     private var currentPlaybackRequest: PlaybackRequest? = null
 
     private var pendingPlay = false
-    private var wasPlayingBeforeActivityPause = false
     private var hasRenderer = false
     private var pendingRendererItem: RendererItem? = null
     private var cachedDurationMs: Long = 0L
@@ -111,23 +110,20 @@ class LibVlcPlayerEngine(
     @Volatile
     private var mediaGeneration = 0
 
-    override fun onActivityPause() {
-        wasPlayingBeforeActivityPause = _isPlaying.value
-        pause()
+    // Activity pause/resume: the remember-+pause / restore template is final in
+    // BasePlayerEngine; libVLC contributes only the view churn around it —
+    // detach after the pause, re-attach before the play restore.
+    override fun onPausedNative() {
         try { mediaPlayer?.detachViews() } catch (_: Exception) {}
     }
 
-    override fun onActivityResume() {
+    override fun onResumingNative() {
         videoLayout?.let { layout ->
             try {
                 mediaPlayer?.attachPreviewViews(layout)
             } catch (e: Exception) {
                 Log.e(TAG, "attachViews failed on resume", e)
             }
-        }
-        if (wasPlayingBeforeActivityPause) {
-            wasPlayingBeforeActivityPause = false
-            play()
         }
     }
 

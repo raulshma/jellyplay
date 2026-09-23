@@ -43,8 +43,8 @@ import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.util.TimeSource
-import java.time.ZoneId
 
 /**
  * Exercises [AdminStatisticsRepositoryImpl]'s real decision logic against a
@@ -79,7 +79,13 @@ class AdminStatisticsRepositoryImplTest {
     }
 
     private fun TestScope.buildRepository(
-        timeSource: TimeSource = FakeTimeSource(),
+        // Wall-clock default: the fixtures stamp audit rows with
+        // `System.currentTimeMillis()` deltas (100 vs 10 days ago), so the
+        // 90-day prune cutoff must compare against a now in the same
+        // epoch-millis regime. The fake's default `todayDate` is this suite's
+        // [PINNED_TODAY] — the date the date-window math (label ladder,
+        // 30-day watch windows, fallback chart, streaks) sees.
+        timeSource: TimeSource = FakeTimeSource(nowMs = System.currentTimeMillis()),
     ): AdminStatisticsRepositoryImpl {
         // Real identity chain over the mocked client's (permanently null)
         // session — this suite never switches identity, so the shared
@@ -430,25 +436,8 @@ class AdminStatisticsRepositoryImplTest {
         assertEquals(null, repository.getScanResultJson("missing"))
     }
 
-    /**
-     * Controllable [TimeSource] whose default NOW tracks the real wall clock
-     * (same shape as the fake in LyricsRepositoryImplTest): the fixtures stamp
-     * audit rows with `System.currentTimeMillis()` deltas (100 vs 10 days
-     * ago), so the 90-day prune cutoff must compare against a now in the same
-     * epoch-millis regime. [todayDate] pins the date the date-window math
-     * (label ladder, 30-day watch windows, fallback chart, streaks) sees.
-     */
-    private class FakeTimeSource(
-        var nowMs: Long = System.currentTimeMillis(),
-        val todayDate: LocalDate = PINNED_TODAY,
-    ) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = todayDate
-    }
-
     companion object {
-        /** The date [FakeTimeSource] pins `today` to; date fixtures key off it. */
+        /** The date the shared [FakeTimeSource] pins `today` to; date fixtures key off it. */
         private val PINNED_TODAY = LocalDate.of(2026, 1, 1)
     }
 }

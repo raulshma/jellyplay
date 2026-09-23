@@ -33,9 +33,12 @@ import kotlin.math.pow
  *
  * ## Declared divergences (encoded, never silently unified)
  *
- *  - **Out-of-range `setEqualizerBand` indices** — constructor flag
- *    [rejectOutOfRangeEqualizerBands]. Desktop historically no-ops them;
- *    the Android reference copy's unguarded list write throws.
+ * (A FORMER member of this list is retired: the out-of-range
+ * `setEqualizerBand` guard is unconditional now — desktop always no-oped
+ * bad indices, Android's deliberate cleanup flipped its historical
+ * IndexOutOfBoundsException to the same guarded no-op, and the
+ * constructor flag is gone.)
+ *
  *  - **Conditional vs unconditional reactions** — the core fires the
  *    strength/param hooks UNCONDITIONALLY; the Android half's overrides
  *    re-apply only while the effect is enabled (its historical `if`
@@ -60,18 +63,7 @@ import kotlin.math.pow
  * pitch push); desktop folds state into `AudioEffectsConfig` and pushes the
  * mpv `af` chain. Those are apply-hook differences and live in the halves.
  */
-abstract class AudioEffectsStateCore(
-    /**
-     * Declared divergence — out-of-range `setEqualizerBand` indices.
-     * `true` (desktop) makes the write a full no-op: no state flip, no
-     * hook, exactly the guarded historical behavior. `false` (Android)
-     * preserves the reference copy's unguarded `MutableList` indexing,
-     * which throws [IndexOutOfBoundsException] on a bad index — identical
-     * to the pre-extraction processor. In-range writes behave the same
-     * either way.
-     */
-    private val rejectOutOfRangeEqualizerBands: Boolean,
-) : AudioEffectsManager {
+abstract class AudioEffectsStateCore : AudioEffectsManager {
 
     // ── Shared state cells: initial values identical on both platforms ─────
 
@@ -389,9 +381,11 @@ abstract class AudioEffectsStateCore(
 
     override fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
         val newLevels = _equalizerSettings.value.bandLevels.toMutableList()
-        // Declared divergence: desktop's guard no-ops a bad index entirely
-        // (no flip, no hook); Android's historical unguarded write throws.
-        if (rejectOutOfRangeEqualizerBands && bandIndex !in newLevels.indices) return
+        // The guard is UNCONDITIONAL (the former declared divergence is
+        // retired — see the class KDoc): a bad index is a full no-op, no
+        // flip and no hook; the Android half's historical unguarded write
+        // threw until its deliberate cleanup adopted this guarded behavior.
+        if (bandIndex !in newLevels.indices) return
         newLevels[bandIndex] = levelDb
         _equalizerSettings.value = EqualizerSettings(newLevels)
         _equalizerPreset.value = EqualizerPreset.CUSTOM

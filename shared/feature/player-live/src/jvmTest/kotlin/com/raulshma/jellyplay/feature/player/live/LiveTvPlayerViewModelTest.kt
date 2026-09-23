@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.playback.PipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -42,6 +43,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlin.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -68,6 +70,13 @@ class LiveTvPlayerViewModelTest {
     private val playbackFlow = MutableStateFlow(PlaybackSlice())
     private val engineIsPlayingFlow = MutableStateFlow(false)
     private val engineStateFlow = MutableStateFlow(LiveEngineState.IDLE)
+
+    /**
+     * The VM's pinned wall clock (the injected [EpochMillisSource] seam —
+     * LiveNowWindow's inject-don't-create rule): the program-window fixtures
+     * below derive from the same now the VM reads.
+     */
+    private val fixedNowMs: Long = Instant.parse("2026-06-22T15:00:00Z").toEpochMilliseconds()
 
     @BeforeTest
     fun setUp() {
@@ -567,6 +576,42 @@ class LiveTvPlayerViewModelTest {
         io.mockk.verify { fakeEngine.seekTo(12_000L) }
     }
 
+    @Test
+    fun `programs surface through the canonical now next window`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+        // LiveNowWindow: the VM reads the injected clock (fixedNowMs =
+        // 2026-06-22T15:00:00Z) and picks via LiveTvProgramWindow — the
+        // airing program's OFFSET-LESS timestamps ride the canonical lenient
+        // parse (UTC read) that the former strict `Instant.parse` scan
+        // rejected, so it is current rather than invisible.
+        val airing = LiveTvProgram(
+            id = "prog-1",
+            name = "News",
+            channelId = "ch-0",
+            startDate = "2026-06-22T14:30:00",
+            endDate = "2026-06-22T16:30:00",
+        )
+        val next = LiveTvProgram(
+            id = "prog-2",
+            name = "Late",
+            channelId = "ch-0",
+            startDate = "2026-06-22T16:30:00Z",
+            endDate = "2026-06-22T17:30:00Z",
+        )
+        coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns
+            Result.success(listOf(airing, next))
+
+        val vm = createVm()
+        vm.initialize("ch-0", null, null)
+        kotlinx.coroutines.delay(50)
+
+        assertEquals("prog-1", vm.state.value.currentProgram?.id)
+        assertEquals("prog-2", vm.state.value.nextProgram?.id)
+    }
+
     /**
      * Recording fake of the live PiP seam: captures the calls the VM
      * makes so the seam assertions below read as plain list checks.
@@ -790,6 +835,7 @@ class LiveTvPlayerViewModelTest {
         playbackStore = playbackStore,
         aggregateStore = aggregateStore,
         lastChannelStore = lastChannelStore,
+        epochMillisSource = EpochMillisSource { fixedNowMs },
         engineFactory = LiveEngineFactory { _, _ -> fakeEngine },
         imageUrlProvider = imageUrlProvider,
         pip = pip,

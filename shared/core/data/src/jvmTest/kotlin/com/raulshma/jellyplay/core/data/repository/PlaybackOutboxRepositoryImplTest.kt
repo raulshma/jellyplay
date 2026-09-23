@@ -12,9 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import com.raulshma.jellyplay.core.data.util.TimeSource
-import java.time.LocalDate
-import java.time.ZoneId
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 
 /**
  * Exercises the outbox coalescence against a real in-memory Room database
@@ -404,16 +402,5 @@ class PlaybackOutboxRepositoryImplTest {
         val byType = pending.associateBy { it.eventType }
         assertEquals(PlaybackOutboxEventType.PROGRESS, byType[PlaybackOutboxEventType.PROGRESS]?.eventType)
         assertEquals(30_000L, byType[PlaybackOutboxEventType.BOOK_PROGRESS]?.positionTicks)
-    }
-
-    /**
-     * Controllable [TimeSource] — same shape as the fake in
-     * LyricsRepositoryImplTest (core:data deliberately hosts no shared test
-     * fakes; see TimeSource's KDoc).
-     */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

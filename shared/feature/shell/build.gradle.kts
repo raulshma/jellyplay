@@ -62,6 +62,9 @@ kotlin {
             implementation(compose.components.resources)
             // ShellHostHooks.surpriseRequests is Flow<Unit>.
             implementation(libs.kotlinx.coroutines.core)
+            // RealtimeSessionController's capabilities arm swallows a failed
+            // re-post without eating structured cancellation (house util).
+            implementation(project(":shared:core:concurrency"))
             // entryProvider / EntryProviderScope / NavEntry — runtime only.
             implementation(libs.navigation3.runtime)
         }

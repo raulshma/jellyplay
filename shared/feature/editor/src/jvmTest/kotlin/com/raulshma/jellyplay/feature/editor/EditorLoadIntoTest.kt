@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.editor
 
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -11,10 +12,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Coverage for the editor feature's one load ladder ([EditorLoad.load]) —
- * the `isLoading = true, error = null` suspend-guard choreography folded out
- * of the ViewModel's editor-data load (the LiveTvLoad precedent). Pins the
- * dispatch contract the folded site relies on: start raises isLoading and
+ * Coverage for the editor feature's one load ladder ([loadInto]) — the
+ * `isLoading = true, error = null` suspend-guard choreography behind
+ * [EditorViewModel]'s editor-data load (the LiveTvLoad precedent, riding the
+ * core:ui ladder per the recorded "can ride loadInto unchanged" note). Pins
+ * the dispatch contract the folded site relies on: start raises isLoading and
  * clears the error BEFORE the fetch, exactly one arm fires, the success arm
  * publishes the fetched payload and settles the flag, the failure arm
  * preserves the previously-loaded detail while surfacing the error, the
@@ -22,7 +24,7 @@ import kotlin.test.assertTrue
  * and the fetch Result is returned to the caller after its arm ran.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class EditorLoadTest {
+class EditorLoadIntoTest {
 
     /** Mirrors the EditorUiState fields the load ladder touches. */
     private data class FakeEditorState(
@@ -47,7 +49,7 @@ class EditorLoadTest {
         val events = mutableListOf<String>()
         var loadingAtFetch: Boolean? = null
 
-        val result = EditorLoad.load(
+        val result = loadInto(
             start = {
                 events += "start"
                 editor.update { it.copy(isLoading = true, error = null) }
@@ -84,7 +86,7 @@ class EditorLoadTest {
         val editor = FakeEditor(FakeEditorState(detail = "prior", isLoading = false))
         val events = mutableListOf<String>()
 
-        val result = EditorLoad.load(
+        val result = loadInto(
             start = {
                 events += "start"
                 editor.update { it.copy(isLoading = true, error = null) }
@@ -118,7 +120,7 @@ class EditorLoadTest {
         val editor = FakeEditor(FakeEditorState(isLoading = false, error = "stale"))
         val fetchGate = CompletableDeferred<Unit>()
         val loadJob = launch {
-            EditorLoad.load(
+            loadInto(
                 start = { editor.update { it.copy(isLoading = true, error = null) } },
                 fetch = {
                     fetchGate.await()

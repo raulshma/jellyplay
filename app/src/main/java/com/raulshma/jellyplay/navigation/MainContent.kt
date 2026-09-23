@@ -53,9 +53,12 @@ import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.resolve
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
+import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
+import com.raulshma.jellyplay.core.ui.navigation.visibleTopLevelRoutes
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
@@ -207,10 +210,14 @@ internal fun MainContent(
         isOffline,
     ) {
         derivedStateOf {
-            // Pure fold (VisibleTopLevelRoutes.kt): homeMode route set + the
-            // offline hide-set (LiveTv) + nav customization composition.
+            // Pure fold (core/ui VisibleTopLevelRoutes): the homeMode base
+            // set + the offline hide-set (LiveTv) + nav customization
+            // composition — the same policy the desktop rail renders through.
             visibleTopLevelRoutes(
-                homeMode = homeMode,
+                when (homeMode) {
+                    HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
+                    HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
+                },
                 hiddenNavItems = preferences.hiddenNavItems,
                 navItemOrder = preferences.navItemOrder,
                 isOffline = isOffline,
@@ -267,8 +274,9 @@ internal fun MainContent(
 
     // Remote "Play" / "Playstate" / "GeneralCommand" navigation requests
     // emitted by the WebSocket receiver; the target→route mapping and the
-    // multi-back-stack player pop live in RemoteNavigationRouting.kt (pure,
-    // pinned by RemoteNavigationRoutingTest). The bridge resolves
+    // multi-back-stack player pop are shared/feature/shell's pure folds
+    // (feature.shell.navigation.RemoteNavigationRouting, pinned by its
+    // jvmTest). The bridge resolves
     // INSIDE the effect body — LaunchedEffect runs after the frame applies,
     // so its Koin construction no longer runs during any composition pass.
     val contextMenuUnavailableMessage = stringResource(R.string.snackbar_context_menu_unavailable)

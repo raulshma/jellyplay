@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.feature.player.video.engine.EngineDecision
 import com.raulshma.jellyplay.feature.player.video.engine.EngineEventCoordinator
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
+import com.raulshma.jellyplay.feature.player.video.engine.EngineSessionShell
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.toEngineEventSource
 import kotlinx.coroutines.CoroutineScope
@@ -27,13 +28,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -163,7 +161,6 @@ internal fun resolveResumeTicks(
  */
 private const val LOAD = "PlaybackSession.load"
 private const val SEEK_PROGRESS = "PlaybackSession.seekProgress"
-private const val ENGINE_DECISIONS = "PlaybackSession.engineDecisions"
 
 internal class PlaybackSession(
     val scope: CoroutineScope,
@@ -227,10 +224,43 @@ internal class PlaybackSession(
     /** Direct alias of the session manager's engine flow — same instance, no re-publish. */
     val engineFlow: StateFlow<MediaEngine?> = playerSessionManager.engineFlow
 
-    private val _events = MutableSharedFlow<SessionEvent>(
-        extraBufferCapacity = 16,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    // ── Engine-event orchestration ──────────────────────────────────────────
+    // The player-contract EngineSessionShell owns the session-structural
+    // plumbing both players used to hand-roll: the EngineEventCoordinator's
+    // construction/re-arm/dispose, the engine-event intake wiring, the
+    // decision fan-out to the executor below and the one-shot SessionEvent
+    // pipe. The session keeps the DECISION EXECUTION (reload choreography,
+    // reporting, engine commands) and the `released` latch — the shell never
+    // sees them. VOD pins: the coordinator Config defaults
+    // (FallbackPolicy.FORCE_DIRECT_PLAY_ONE_SHOT +
+    // WatchdogScope.INITIAL_BUFFER_ONLY).
+    private val engineEventShell = EngineSessionShell<SessionEvent>(
+        scope = scope,
+        // The coordinator consumes the engine-agnostic EngineEventSource slice;
+        // each MediaEngine swap maps to a fresh source (same emission points as
+        // when the coordinator collected the engine flow directly).
+        engineSources = playerSessionManager.engineFlow.map { it?.toEngineEventSource() },
+        onDecision = ::executeEngineDecision,
+        config = EngineSessionShell.Config(
+            getPlaybackMode = getPlaybackMode,
+            directPlayFallbackNotice = directPlayFallbackNotice,
+            passOutHours = passOutHours,
+            onRearmed = onEngineEventCoordinatorRearmed,
+        ),
     )
+
+    /**
+     * The live coordinator (the shell's current instance). Exposed so the VM
+     * can drive the pieces that stay VM-owned: the mirror collectors
+     * ([isPlaying]/[isBuffering] ui-state writes), the latch resets
+     * ([EngineEventCoordinator.onNewItem] /
+     * [EngineEventCoordinator.onPlaybackModeChanged]), the interaction clock
+     * ([EngineEventCoordinator.onUserInteraction]) and the teardown-time
+     * [EngineEventCoordinator.dispose] — the shell re-arms a disposed
+     * instance on the next [initialize].
+     */
+    internal val engineEventCoordinator: EngineEventCoordinator
+        get() = engineEventShell.coordinator
 
     /**
      * Session-level outcomes (errors to surface, user notices, end of
@@ -240,79 +270,12 @@ internal class PlaybackSession(
      * mid-teardown emission never suspends (same contract as the
      * coordinator's decision stream).
      */
-    val events: SharedFlow<SessionEvent> = _events.asSharedFlow()
-
-    // ── Engine-event orchestration ──────────────────────────────────────────
-    // The coordinator owns the engine-event *policies* (guarded play/buffering
-    // mirrors, the FORCE_DIRECT_PLAY → transcode one-shot fallback latch, the
-    // initial-buffering watchdog, subtitle toasts, pass-out protection) and
-    // emits [EngineDecision]s; the session owns the coordinator's lifecycle
-    // (construction, re-arm on re-initialization) and executes the decisions.
-    // A `var` because the VM's performRelease() disposes it and the
-    // Activity-scoped VM is reused across media: every load re-arms it via
-    // [ensureEngineEventCoordinatorActive].
-
-    private fun createEngineEventCoordinator() = EngineEventCoordinator(
-        scope = scope,
-        // The coordinator consumes the engine-agnostic EngineEventSource slice;
-        // each MediaEngine swap maps to a fresh source (same emission points as
-        // when the coordinator collected the engine flow directly).
-        engineSource = playerSessionManager.engineFlow.map { it?.toEngineEventSource() },
-        getPlaybackMode = getPlaybackMode,
-        directPlayFallbackNotice = directPlayFallbackNotice,
-        passOutHours = passOutHours,
-    )
-
-    /**
-     * The live coordinator. Exposed so the VM can drive the pieces that stay
-     * VM-owned: the mirror collectors ([isPlaying]/[isBuffering] ui-state
-     * writes), the latch resets ([EngineEventCoordinator.onNewItem] /
-     * [EngineEventCoordinator.onPlaybackModeChanged]), the interaction clock
-     * ([EngineEventCoordinator.onUserInteraction]) and the teardown-time
-     * [EngineEventCoordinator.dispose]. Only this class reassigns it.
-     */
-    internal var engineEventCoordinator: EngineEventCoordinator = createEngineEventCoordinator()
-        private set
+    val events: SharedFlow<SessionEvent> = engineEventShell.events
 
     // Task slots for the session's cancel-and-replace choreographies. The
     // bundle owns only the slot bookkeeping; scope lifecycle (the injected VM
     // scope + releaseScope) stays exactly where it was.
     private val sessionTasks = TaskBundle(scope)
-
-    init {
-        startEngineDecisionFanOut()
-    }
-
-    /**
-     * Starts (or restarts, after a dispose/re-arm cycle) the decision
-     * executor. The mirror collectors stay VM-side — they write the ui state,
-     * which this class never touches.
-     */
-    private fun startEngineDecisionFanOut() {
-        sessionTasks.replace(ENGINE_DECISIONS) {
-            val coordinator = engineEventCoordinator
-            scope.launch {
-                coordinator.decisions.collect { decision ->
-                    executeEngineDecision(decision)
-                }
-            }
-        }
-    }
-
-    /**
-     * Re-creates the engine-event coordinator if a previous VM
-     * [com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel.release]
-     * disposed it (the Activity-scoped VM is reused across media, so every
-     * load must re-arm it exactly like the PiP transport). Also re-subscribes
-     * the decision fan-out and pokes [onEngineEventCoordinatorRearmed] so the
-     * VM re-arms its mirror collectors against the new instance.
-     */
-    private fun ensureEngineEventCoordinatorActive() {
-        if (!engineEventCoordinator.disposed) return
-        engineEventCoordinator = createEngineEventCoordinator()
-        startEngineDecisionFanOut()
-        onEngineEventCoordinatorRearmed()
-    }
 
     /**
      * Executes one [EngineDecision]: what a decision *does* (reload
@@ -334,7 +297,7 @@ internal class PlaybackSession(
                 // watched-threshold suppression for the remainder of this
                 // item (and flags the teardown stop `failed`).
                 progressReporter.onEngineError()
-                _events.tryEmit(
+                engineEventShell.emitEvent(
                     SessionEvent.ShowError(
                         error = decision.error.message,
                         retryable = decision.error.retryable,
@@ -354,14 +317,14 @@ internal class PlaybackSession(
                     // A genuine EOF (engine ENDED, not an error)
                     // counts as watched even below the 95 % threshold.
                     progressReporter.onGenuineEof()
-                    _events.tryEmit(SessionEvent.PlaybackEnded)
+                    engineEventShell.emitEvent(SessionEvent.PlaybackEnded)
                 }
             }
             EngineDecision.PassOutPause -> {
                 playerSessionManager.engine?.pause()
-                _events.tryEmit(SessionEvent.PassOutPause)
+                engineEventShell.emitEvent(SessionEvent.PassOutPause)
             }
-            is EngineDecision.InformUser -> _events.tryEmit(
+            is EngineDecision.InformUser -> engineEventShell.emitEvent(
                 SessionEvent.InformUser(decision.message)
             )
         }
@@ -449,7 +412,8 @@ internal class PlaybackSession(
      * 1. `released = false`;
      * 2. [SessionLifecycleHooks.rearmTransports] (PiP transport re-arm)
      *    followed by the session-owned engine-event coordinator re-arm
-     *    ([ensureEngineEventCoordinatorActive]);
+     *    ([EngineSessionShell.reArm] — a no-op unless a previous release
+     *    disposed the coordinator);
      * 3. [SessionLifecycleHooks.resetForNewItem] (autoplay reset,
      *    autoplay-cancelled clear, coordinator new-item latch, pending stream
      *    indices);
@@ -490,7 +454,7 @@ internal class PlaybackSession(
     fun initialize(request: LoadRequest): Job {
         released = false
         hooks.rearmTransports()
-        ensureEngineEventCoordinatorActive()
+        engineEventShell.reArm()
         hooks.resetForNewItem(
             MediaStreamSelection(
                 audioStreamIndex = request.audioStreamIndex,
@@ -628,12 +592,12 @@ internal class PlaybackSession(
         rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
 
         if (resolved.playMethod == PlayMethod.TRANSCODE) {
-            _events.tryEmit(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
+            engineEventShell.emitEvent(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
         }
         if (mode == PlaybackMode.FORCE_DIRECT_PLAY &&
             resolved.playMethod != PlayMethod.DIRECT_PLAY
         ) {
-            _events.tryEmit(
+            engineEventShell.emitEvent(
                 SessionEvent.InformUser("Direct Play unavailable for this item — falling back to transcode")
             )
             launchFallbackToTranscode(

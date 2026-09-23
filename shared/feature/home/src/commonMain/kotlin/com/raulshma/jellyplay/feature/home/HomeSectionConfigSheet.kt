@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +42,9 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberHomeSectionIcon
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.home.generated.resources.home_move_up
 import com.raulshma.jellyplay.feature.home.generated.resources.home_move_down
@@ -289,8 +290,10 @@ private fun VisibilityToggleRow(
 }
 
 /**
- * Reorder button with press feedback (scale + alpha) matching the settings row
- * interaction language. TV uses focus-indicator; touch uses the press scale.
+ * Reorder button with press feedback matching the settings row interaction
+ * language. TV uses focus-indicator; touch uses the shared [pressScale] —
+ * with a [snap] spec because the historical hand-roll stepped instantly (no
+ * animator), and that exact output is preserved.
  */
 @Composable
 private fun MoveButton(
@@ -301,17 +304,16 @@ private fun MoveButton(
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val tvFocusState = com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState()
-    val scale = if (isPressed) 0.97f else 1f
+    val tvFocusState = rememberTvFocusState()
     FilledTonalButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.97f,
+                spec = snap(),
+            )
             .tvFocusIndicator(tvFocusState, ShapeCache.smooth12),
         shape = ShapeCache.smooth12,
         interactionSource = interactionSource,

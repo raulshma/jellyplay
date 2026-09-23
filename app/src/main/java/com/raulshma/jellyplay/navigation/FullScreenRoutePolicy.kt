@@ -6,8 +6,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 /**
  * Pure predicate (extracted verbatim from MainContent's full-screen-layout
  * branch decision so the composition rule is JVM-testable, same pattern as
- * VisibleTopLevelRoutes.kt): `true` while *any* route on [backStack] is a
- * full-screen [Route].
+ * core/ui's VisibleTopLevelRoutes fold): `true` while *any* route on
+ * [backStack] is a full-screen [Route].
  *
  * A full-screen route may sit below the top of the back stack (e.g. the
  * video player with the subtitle tester pushed on top of it), so the shell

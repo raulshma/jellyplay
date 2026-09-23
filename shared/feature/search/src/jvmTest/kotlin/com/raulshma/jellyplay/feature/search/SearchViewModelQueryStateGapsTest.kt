@@ -2,19 +2,16 @@ package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
+import com.raulshma.jellyplay.core.data.search.MediaSideSearchState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -22,8 +19,10 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -51,11 +50,11 @@ import kotlin.test.assertTrue
  * 3. A failed discovery-suggestion fetch degrades to an empty list (the
  *    `getOrElse` fallback), never a crashed state.
  * 4. The debounce+distinctUntilChanged pipeline: identical query re-sets within
- *    the debounce window coalesce into ONE side-search execution (StateFlow
- *    conflation upstream of `distinctUntilChanged`).
- * 5. The offline side-search stale-job guard: a newer query cancels the older
- *    query's in-flight scan, and only the newest query's results land in
- *    [SearchViewModel.offlineResults].
+ *    the debounce window coalesce into ONE side-search emission reaching the
+ *    engine seam (StateFlow conflation upstream of `distinctUntilChanged`).
+ *
+ * (The offline side-search stale-job guard moved with the choreography into
+ * MediaSearchEngineImplTest — the VM now rides [MediaSearchEngine.sideSearch].)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelQueryStateGapsTest {
@@ -70,7 +69,6 @@ class SearchViewModelQueryStateGapsTest {
     private val seerrRepository: SeerrRepository = mockk(relaxed = true)
     private val seerrRequestDelegate: SeerrRequestDelegate = mockk(relaxed = true)
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
-    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val searchFiltersStore: SearchFiltersStore = mockk(relaxed = true)
     private val quickDownloadActions: QuickDownloadActions = mockk(relaxed = true)
 
@@ -83,7 +81,7 @@ class SearchViewModelQueryStateGapsTest {
 
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
-        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns false
+        every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
@@ -91,7 +89,6 @@ class SearchViewModelQueryStateGapsTest {
         coEvery { mediaRepository.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
         )
-        coEvery { offlineRepository.searchOffline(any(), any()) } returns emptyList()
 
         viewModel = createViewModel()
     }
@@ -108,7 +105,6 @@ class SearchViewModelQueryStateGapsTest {
         seerrRepository,
         seerrRequestDelegate,
         mediaSearchEngine,
-        offlineRepository,
         searchFiltersStore,
         quickDownloadActions,
     )
@@ -188,12 +184,18 @@ class SearchViewModelQueryStateGapsTest {
     }
 
     @Test
-    fun `identical query re-sets within the debounce window run the seerr search once`() =
+    fun `identical query re-sets within the debounce window reach the engine once`() =
         runTest(mainDispatcher) {
-            coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns true
-            coEvery { seerrRepository.search(any(), any()) } returns Result.success(
-                SeerrSearchResponse(results = listOf(SeerrSearchItem(id = 1, title = "X")))
-            )
+            // A stub that consumes the queries argument and records every
+            // emission that survived the debounce + distinct pipeline.
+            val seenQueries = mutableListOf<String>()
+            every { mediaSearchEngine.sideSearch(any()) } answers {
+                val queries: Flow<String> = firstArg()
+                queries.map { query ->
+                    seenQueries.add(query)
+                    MediaSideSearchState(query, emptyList(), seerrError = false, offline = emptyList())
+                }
+            }
             viewModel = createViewModel()
             val pagedJob = launch { viewModel.pagedResults.collect { } }
             try {
@@ -205,44 +207,8 @@ class SearchViewModelQueryStateGapsTest {
                 viewModel.onEvent(SearchUiEvent.Search("matrix"))
                 advanceUntilIdle()
 
-                coVerify(exactly = 1) { seerrRepository.search(any(), any()) }
-            } finally {
-                pagedJob.cancel()
-            }
-        }
-
-    @Test
-    fun `a newer query cancels the in-flight offline scan and its results never land`() =
-        runTest(mainDispatcher) {
-            val staleItem = OfflineMediaItem(id = "stale", name = "Stale", mediaType = MediaType.MOVIE)
-            val freshItem = OfflineMediaItem(id = "fresh", name = "Fresh", mediaType = MediaType.MOVIE)
-            // The stale scan parks on a gate: it would publish ONLY if its job
-            // were still alive when the gate opens.
-            val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
-            coEvery { offlineRepository.searchOffline("stale", any()) } coAnswers {
-                gate.await()
-                listOf(staleItem)
-            }
-            coEvery { offlineRepository.searchOffline("fresh", any()) } returns listOf(freshItem)
-            viewModel = createViewModel()
-            val pagedJob = launch { viewModel.pagedResults.collect { } }
-            try {
-                viewModel.onEvent(SearchUiEvent.Search("stale"))
-                advanceUntilIdle() // debounce fires; the stale scan suspends on the gate
-                assertTrue(viewModel.offlineResults.value.isEmpty())
-
-                viewModel.onEvent(SearchUiEvent.Search("fresh"))
-                advanceUntilIdle() // fresh scan completes; the stale job is cancelled
-
-                assertEquals(listOf(freshItem), viewModel.offlineResults.value)
-
-                // Opening the gate changes nothing — the stale scan is dead and
-                // its results can never overwrite the fresh ones.
-                gate.complete(Unit)
-                advanceUntilIdle()
-                assertEquals(listOf(freshItem), viewModel.offlineResults.value)
-                coVerify(exactly = 1) { offlineRepository.searchOffline("stale", any()) }
-                coVerify(exactly = 1) { offlineRepository.searchOffline("fresh", any()) }
+                // Exactly one non-blank emission reached the engine seam.
+                assertEquals(listOf("matrix"), seenQueries.filter { it.isNotBlank() })
             } finally {
                 pagedJob.cancel()
             }

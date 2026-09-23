@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
 import com.raulshma.jellyplay.core.model.remote.PlaybackDomain
 import com.raulshma.jellyplay.core.model.remote.PlaystateCommand

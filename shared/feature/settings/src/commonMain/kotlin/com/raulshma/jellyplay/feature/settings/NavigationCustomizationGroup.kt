@@ -100,7 +100,7 @@ fun NavigationCustomizationGroup(
 
     SettingsGroup(
         icon = Tabler.Outline.Menu2,
-        title = stringResource(Res.string.settings_nav_bar_title),
+        title = rowTitle(AppearanceSettingsIds.NAV_BAR_CUSTOMIZATION),
         summary = {
             val visible = navItems.count { it.key !in preferences.hiddenNavItems }
             val scroll = stringResource(
@@ -114,7 +114,7 @@ fun NavigationCustomizationGroup(
         SettingsItemList(total = navItems.size + 1) {
         SettingToggleItem(
             icon = Tabler.Outline.ArrowBarToDown,
-            title = stringResource(Res.string.settings_nav_hide_on_scroll),
+            title = rowTitle(AppearanceSettingsIds.NAV_HIDE_ON_SCROLL),
             subtitle = stringResource(
                 if (preferences.hideBottomNavOnScroll) Res.string.settings_nav_hide_on_scroll_on else Res.string.settings_nav_hide_on_scroll_off,
             ),

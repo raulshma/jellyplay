@@ -50,6 +50,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.di.KoinViewModelFactory
+import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
+import com.raulshma.jellyplay.deeplink.IncomingIntentRequest
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
@@ -412,34 +414,20 @@ class MainActivity : FragmentActivity() {
         handleIncomingIntent(intent)
     }
 
+    /**
+     * One dispatch line over the pure [IncomingIntentRequest] fold (deeplink
+     * package): the fold owns the action vocabulary and classifies the intent
+     * into the shell entry point; the string-literal when-chain used to live
+     * inline here.
+     */
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent == null) return
-        val action = intent.action ?: return
-        val isShortcutAction = action.startsWith("com.raulshma.jellyplay.action.")
-        if (isShortcutAction) {
-            viewModel.handleShortcutIntent(intent)
-            return
-        }
-        if (action == Intent.ACTION_VIEW && intent.data != null) {
-            viewModel.handleDeepLink(intent)
-        } else if (action == Intent.ACTION_SEND && intent.type == "text/plain") {
-            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-            if (sharedText != null) {
-                viewModel.handleSharedText(sharedText)
-            }
-        } else if (action == Intent.ACTION_SEARCH || action == "android.search.action.GLOBAL_SEARCH") {
-            val query = intent.getStringExtra(android.app.SearchManager.QUERY)
-            if (!query.isNullOrBlank()) {
-                viewModel.handleSearchQuery(query)
-            }
-        } else if (action == Intent.ACTION_ASSIST) {
-            // ACTION_ASSIST uses hidden extras (android.intent.extra.ASSIST_INPUT); fall back to
-            // SearchManager.QUERY for some launchers.
-            val query = intent.getStringExtra("android.intent.extra.ASSIST_INPUT")
-                ?: intent.getStringExtra(android.app.SearchManager.QUERY)
-            if (!query.isNullOrBlank()) {
-                viewModel.handleSearchQuery(query)
-            }
+        when (val disposition = IncomingIntentRequest.from(intent).classify()) {
+            is IncomingIntentDisposition.Shortcut -> viewModel.handleShortcutIntent(disposition)
+            IncomingIntentDisposition.DeepLink -> viewModel.handleDeepLink(intent)
+            is IncomingIntentDisposition.SharedText -> viewModel.handleSharedText(disposition.sharedText)
+            is IncomingIntentDisposition.Search -> viewModel.handleSearchQuery(disposition.query)
+            IncomingIntentDisposition.None -> Unit
         }
     }
 

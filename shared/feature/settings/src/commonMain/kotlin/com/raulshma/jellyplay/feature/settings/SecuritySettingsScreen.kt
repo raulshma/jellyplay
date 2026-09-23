@@ -234,7 +234,7 @@ val biometricGate = rememberBiometricGate()
                     SettingsItemList(total = securityScreenRowTotal(canShowBiometric, showAdvanced)) {
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
-                        title = stringResource(Res.string.settings_pin_lock),
+                        title = rowTitle(SecuritySettingsIds.PIN_LOCK),
                         subtitle = if (preferences.pinLockEnabled) stringResource(Res.string.settings_pin_locked) else stringResource(Res.string.settings_no_pin_set),
                         checked = preferences.pinLockEnabled,
                         highlighted = highlightSettingId == SecuritySettingsIds.PIN_LOCK,
@@ -250,7 +250,7 @@ val biometricGate = rememberBiometricGate()
                     if (SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.BIOMETRIC_LOCK, securityRowFlags) && biometricGate != null) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Fingerprint,
-                            title = stringResource(Res.string.settings_biometric_unlock),
+                            title = rowTitle(SecuritySettingsIds.BIOMETRIC_LOCK),
                             subtitle = if (preferences.biometricLockEnabled) stringResource(Res.string.settings_biometric_unlock_subtitle) else stringResource(Res.string.settings_disabled),
                             checked = preferences.biometricLockEnabled,
                             highlighted = highlightSettingId == SecuritySettingsIds.BIOMETRIC_LOCK,
@@ -272,7 +272,7 @@ val biometricGate = rememberBiometricGate()
                     if (preferences.pinLockEnabled) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Key,
-                            title = stringResource(Res.string.settings_pin_for_player_lock),
+                            title = rowTitle(SecuritySettingsIds.PIN_FOR_PLAYER_LOCK),
                             subtitle = if (preferences.usePinForPlayerLock) stringResource(Res.string.settings_require_pin_player) else stringResource(Res.string.settings_slide_to_unlock),
                             checked = preferences.usePinForPlayerLock,
                             highlighted = highlightSettingId == SecuritySettingsIds.PIN_FOR_PLAYER_LOCK,
@@ -290,10 +290,10 @@ val biometricGate = rememberBiometricGate()
                             stringResource(Res.string.settings_lock_5_minutes),
                             stringResource(Res.string.settings_lock_10_minutes),
                         )
-                        val autoLockTimerTitle = stringResource(Res.string.settings_auto_lock_timer)
+                        val autoLockTimerTitle = rowTitle(SecuritySettingsIds.AUTO_LOCK_TIMER)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
-                            title = stringResource(Res.string.settings_auto_lock_timer),
+                            title = rowTitle(SecuritySettingsIds.AUTO_LOCK_TIMER),
                             subtitle = stringResource(Res.string.settings_auto_lock_timer_subtitle),
                             trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
                             highlighted = highlightSettingId == SecuritySettingsIds.AUTO_LOCK_TIMER,
@@ -324,7 +324,7 @@ val biometricGate = rememberBiometricGate()
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.DeviceDesktop,
-                        title = stringResource(Res.string.settings_authorize_device),
+                        title = rowTitle(SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE),
                         subtitle = stringResource(Res.string.settings_authorize_device_subtitle),
                         trailingText = "",
                         highlighted = highlightSettingId == SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE,
@@ -351,7 +351,7 @@ val biometricGate = rememberBiometricGate()
                 ) {
                     SettingToggleItem(
                         icon = Tabler.Outline.Cast,
-                        title = stringResource(Res.string.settings_allow_remote_control),
+                        title = rowTitle(SecuritySettingsIds.REMOTE_CONTROL_ENABLED),
                         subtitle = stringResource(Res.string.settings_allow_remote_control_subtitle),
                         checked = preferences.remoteControlEnabled,
                         highlighted = highlightSettingId == SecuritySettingsIds.REMOTE_CONTROL_ENABLED,
@@ -366,7 +366,7 @@ val biometricGate = rememberBiometricGate()
                     // receiver gates on BOTH).
                     SettingToggleItem(
                         icon = Tabler.Outline.DeviceTv,
-                        title = stringResource(Res.string.settings_remote_display_content),
+                        title = rowTitle(SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED),
                         subtitle = stringResource(Res.string.settings_remote_display_content_subtitle),
                         checked = preferences.remoteDisplayContentEnabled,
                         highlighted = highlightSettingId == SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED,

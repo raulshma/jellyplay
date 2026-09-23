@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.model.StreamType
@@ -12,24 +11,17 @@ import com.raulshma.jellyplay.core.ui.harness.HarnessClickBridge
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.desktop.player.EngineActivityRecorder
 import java.awt.GraphicsEnvironment
-import java.awt.Robot
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
-import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.Timer
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
-import javax.imageio.ImageIO
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.system.exitProcess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 
 /**
  * Flows harness — the e2e lane closing the four native-dialog flows
@@ -88,6 +80,13 @@ import kotlinx.coroutines.withContext
  *  6. Report — `<logs>/flow-harness.json` (harness "desktop-native-dialog-flows"),
  *     screenshots per click step, then exitProcess(0).
  *
+ * The step ledger / poller / auto-exit / report chassis is the shared
+ * [HarnessRunner] (this lane wires the process exit code to the report's
+ * overallPass — CI reads the exit code directly); key injection and
+ * screenshots ride the shared [HarnessRobot] (the session lane's guarded
+ * injection, churn guard included). The click-reach driver below is this
+ * lane's own machinery.
+ *
  * Properties:
  *  - `jellyplay.flowpass.enabled`         — "true" arms the harness (required).
  *  - `jellyplay.flowpass.workspace`       — writable scratch dir (required; the
@@ -126,8 +125,8 @@ object DesktopFlowHarness {
 
     /**
      * Entry point from DesktopAppRoot's LaunchedEffect. No-op unless
-     * [requested]; a full run always ends in exitProcess(0) (report written
-     * best-effort even on the auto-exit deadline path).
+     * [requested]; a full run ends in exitProcess(0 on overallPass, else 1)
+     * (report written best-effort even on the auto-exit deadline path).
      */
     suspend fun runIfRequested(deps: FlowHarnessDeps) {
         if (!requested()) return
@@ -143,15 +142,16 @@ object DesktopFlowHarness {
         }
     }
 
+    /**
+     * One flows run's flow steps + lane config. The step ledger, awaitUntil
+     * poller, auto-exit timer and report writer are the shared
+     * [HarnessRunner]; key injection and screenshots are the shared
+     * [HarnessRobot] (screenshot best-effort: this lane's ride-along
+     * evidence must never fail a click step). This lane's own machinery —
+     * the click-reach bridge driver, window tracking and the server-side
+     * observables — lives below.
+     */
     private class Runner(private val deps: FlowHarnessDeps) {
-        private val startedAtMs = System.currentTimeMillis()
-        private val finished = AtomicBoolean(false)
-        private val lock = Any()
-        private val steps = ArrayList<StepResult>()
-        private var fatal: Throwable? = null
-        @Volatile
-        private var reportOverallPass: Boolean = false
-
         private val workspaceProp = System.getProperty(PROP_WORKSPACE)?.trim().orEmpty()
         private val serverUrl = System.getProperty(PROP_SERVER_URL)?.trim().orEmpty()
         private val username = System.getProperty(PROP_USERNAME)?.trim().orEmpty()
@@ -173,21 +173,46 @@ object DesktopFlowHarness {
         private val samplePng: File = workspace.resolve("sample.png").toFile()
         private val sampleSrt: File = workspace.resolve("sample.srt").toFile()
 
-        private var robot: Robot? = null
+        private val runner = HarnessRunner(
+            logTag = "flowpass",
+            harnessName = "desktop-native-dialog-flows",
+            reportFileName = REPORT_FILE_NAME,
+            logsDir = logsDir,
+            autoExitSeconds = autoExitSeconds,
+            pollIntervalMs = POLL_INTERVAL_MS,
+            exitCodeReflectsReport = true,
+            machineFacts = {
+                mapOf(
+                    "os.name" to System.getProperty("os.name"),
+                    "os.version" to System.getProperty("os.version"),
+                    "java.version" to System.getProperty("java.version"),
+                    "serverUrl" to serverUrl,
+                    "itemId" to itemId,
+                    "playerItemId" to playerItemId,
+                    "workspace" to workspace.toString(),
+                )
+            },
+        )
+        private val robot = HarnessRobot(
+            logTag = "flowpass",
+            startedAtMs = runner.startedAtMs,
+            screenshotDir = screenshotDir,
+            mainWindow = { deps.windowRef?.get() },
+        )
 
         init {
-            currentFatalHandler = { e -> finishWithFatal(e) }
+            currentFatalHandler = { e -> runner.finishWithFatal(e) }
         }
 
         suspend fun run() {
-            armAutoExit()
+            runner.armAutoExit()
             println(
                 "[JellyPlay][flowpass] enabled: workspace=$workspace server=$serverUrl " +
                     "item=$itemId playerItem=$playerItemId logs=$logsDir shots=$screenshotDir " +
                     "autoExit=${autoExitSeconds}s",
             )
 
-            val configOk = step("CONFIG") {
+            val configOk = runner.step("CONFIG") {
                 check(workspaceProp.isNotEmpty()) { "missing $PROP_WORKSPACE" }
                 check(!workspaceProp.contains(' ')) {
                     "workspace path contains a space; JAVA_TOOL_OPTIONS cannot carry it"
@@ -215,22 +240,22 @@ object DesktopFlowHarness {
             }
             var fatalStop = !configOk
 
-            val loginOk = !fatalStop && step("LOGIN") {
+            val loginOk = !fatalStop && runner.step("LOGIN") {
                 val user = deps.authRepository.login(serverUrl, username, password)
                     .getOrElse { error("login failed: ${it.message}") }
                 mapOf("user" to (user.name ?: username), "userId" to user.id)
             }
             fatalStop = fatalStop || !loginOk
 
-            val navOk = !fatalStop && step("NAV_READY") {
-                awaitUntil(30_000) { DesktopSessionHarness.currentBackStack() != null } ||
+            val navOk = !fatalStop && runner.step("NAV_READY") {
+                runner.awaitUntil(30_000) { DesktopSessionHarness.currentBackStack() != null } ||
                     error("nav scaffold never composed (back stack provider not attached)")
                 mapOf("backStackSize" to (backStack()?.size ?: -1).toString())
             }
             fatalStop = fatalStop || !navOk
 
             // ── Flow 3: editor image picker ─────────────────────────────────
-            val flow3Ok = !fatalStop && step("FLOW3_EDITOR_IMAGE_PICKER") {
+            val flow3Ok = !fatalStop && runner.step("FLOW3_EDITOR_IMAGE_PICKER") {
                 val tagBefore = primaryImageTag()
                 pushRoute(Route.MetadataEditor(itemId = itemId))
                 clickAwaiting("editor-tab-images") { "editor-images-upload" in targets() }
@@ -252,7 +277,7 @@ object DesktopFlowHarness {
                 screenshot("flow3-after-confirm")
                 // Server-side post-condition: the Primary image content
                 // changed (Jellyfin re-tags a replaced image).
-                awaitUntil(20_000) { primaryImageTag() != null && primaryImageTag() != tagBefore } ||
+                runner.awaitUntil(20_000) { primaryImageTag() != null && primaryImageTag() != tagBefore } ||
                     error("server Primary imageTag unchanged after upload ($tagBefore)")
                 mapOf(
                     "primaryTagBefore" to (tagBefore ?: "none"),
@@ -263,7 +288,7 @@ object DesktopFlowHarness {
             fatalStop = fatalStop || !flow3Ok
 
             // ── Flow 4: editor subtitle picker ──────────────────────────────
-            val flow4Ok = !fatalStop && step("FLOW4_EDITOR_SUBTITLE_PICKER") {
+            val flow4Ok = !fatalStop && runner.step("FLOW4_EDITOR_SUBTITLE_PICKER") {
                 val streamsBefore = subtitleStreams(itemId).size
                 clickAwaiting("editor-tab-subtitles") { "editor-subtitles-upload" in targets() }
                 screenshot("flow4-editor-subtitles-tab")
@@ -276,7 +301,7 @@ object DesktopFlowHarness {
                 awaitEnabled("editor-subtitles-upload-confirm", 15_000)
                 screenshot("flow4-picked")
                 clickAwaiting("editor-subtitles-upload-confirm") { "editor-subtitles-select-file" !in targets() }
-                awaitUntil(20_000) { subtitleStreams(itemId).size > streamsBefore } ||
+                runner.awaitUntil(20_000) { subtitleStreams(itemId).size > streamsBefore } ||
                     error(
                         "server subtitle stream count unchanged ($streamsBefore → " +
                             "${subtitleStreams(itemId).size}) after upload",
@@ -292,7 +317,7 @@ object DesktopFlowHarness {
             fatalStop = fatalStop || !flow4Ok
 
             // ── Flow 5: insights heatmap share ──────────────────────────────
-            val flow5Ok = !fatalStop && step("FLOW5_HEATMAP_SHARE") {
+            val flow5Ok = !fatalStop && runner.step("FLOW5_HEATMAP_SHARE") {
                 popRoute()
                 val tmpdir = Path.of(System.getProperty("java.io.tmpdir"))
                 pushRoute(Route.WatchProgressHeatmap)
@@ -303,7 +328,7 @@ object DesktopFlowHarness {
                 awaitTarget("insights-heatmap-share", 20_000)
                 screenshot("flow5-heatmap")
                 clickAwaiting("insights-heatmap-share") { true }
-                awaitUntil(15_000) { newestHeatmapPngSince(tmpdir) != null } || error(
+                runner.awaitUntil(15_000) { newestHeatmapPngSince(tmpdir) != null } || error(
                     "no watch_progress_heatmap_*.png appeared under $tmpdir after the share click",
                 )
                 val png = newestHeatmapPngSince(tmpdir)
@@ -326,12 +351,12 @@ object DesktopFlowHarness {
             fatalStop = fatalStop || !flow5Ok
 
             // ── Flow 6: player subtitle upload ──────────────────────────────
-            val flow6Ok = !fatalStop && step("FLOW6_PLAYER_SUBTITLE_UPLOAD") {
+            val flow6Ok = !fatalStop && runner.step("FLOW6_PLAYER_SUBTITLE_UPLOAD") {
                 popRoute()
                 val streamsBefore = subtitleStreams(playerItemId).size
                 val pushAtMs = System.currentTimeMillis()
                 pushRoute(Route.VideoPlayer(itemId = playerItemId))
-                awaitUntil(60_000) {
+                runner.awaitUntil(60_000) {
                     deps.engineRecorder.latestVideoEngine().let {
                         it.createdAtMs >= pushAtMs && it.surface.isNotEmpty() &&
                             it.positionSamples.any { s -> s.isPlaying }
@@ -340,7 +365,8 @@ object DesktopFlowHarness {
                 screenshot("flow6-playing")
                 // SPACE shows the controls overlay (and pauses — the
                 // session-harness finding); the trigger button composes with it.
-                injectKey(KeyEvent.VK_SPACE)
+                robot.injectKey(KeyEvent.VK_SPACE, "FLOW6 SPACE") ||
+                    error("SPACE injection failed (Robot)")
                 awaitTarget("player-subtitles-trigger", 10_000)
                 screenshot("flow6-controls")
                 clickAwaiting("player-subtitles-trigger") { "player-subtitle-hub-get-tab" in targets() }
@@ -353,7 +379,7 @@ object DesktopFlowHarness {
                 awaitEnabled("player-subtitle-upload-confirm", 15_000)
                 screenshot("flow6-picked")
                 clickAwaiting("player-subtitle-upload-confirm") { "player-subtitle-select-file" !in targets() }
-                awaitUntil(20_000) { subtitleStreams(playerItemId).size > streamsBefore } ||
+                runner.awaitUntil(20_000) { subtitleStreams(playerItemId).size > streamsBefore } ||
                     error(
                         "server subtitle stream count unchanged ($streamsBefore → " +
                             "${subtitleStreams(playerItemId).size}) after player upload",
@@ -366,7 +392,7 @@ object DesktopFlowHarness {
             }
             fatalStop = fatalStop || !flow6Ok
 
-            writeReportAndExit()
+            runner.writeReportAndExit()
         }
 
         // ── navigation (back-stack push primitive, shared provider) ─────────────────
@@ -376,7 +402,7 @@ object DesktopFlowHarness {
         private suspend fun pushRoute(route: Route) {
             val stack = backStack() ?: error("no back stack")
             stack.add(route)
-            awaitUntil(5_000) { backStack()?.lastOrNull() == route } ||
+            runner.awaitUntil(5_000) { backStack()?.lastOrNull() == route } ||
                 error("${route::class.simpleName} never reached the top of the back stack")
         }
 
@@ -407,7 +433,7 @@ object DesktopFlowHarness {
             timeoutMs: Long = 15_000,
             requireEnabled: Boolean = false,
         ): HarnessClickBridge.Target {
-            awaitUntil(timeoutMs) {
+            runner.awaitUntil(timeoutMs) {
                 val t = HarnessClickBridge.target(id)
                 t != null && (!requireEnabled || t.enabled)
             } || run {
@@ -423,7 +449,7 @@ object DesktopFlowHarness {
             }
             // Stability: sheets animate in — wait until two polls agree.
             var previous = HarnessClickBridge.target(id)?.bounds
-            awaitUntil(5_000) {
+            runner.awaitUntil(5_000) {
                 delay(150)
                 val current = HarnessClickBridge.target(id)?.bounds
                 val stable = current != null && current == previous
@@ -468,7 +494,7 @@ object DesktopFlowHarness {
             val scale = window.graphicsConfiguration?.defaultTransform?.scaleX ?: 1.0
             val x = (location.x + bounds.center.x / scale).toInt()
             val y = (location.y + bounds.center.y / scale).toInt()
-            val r = robotOrNull() ?: error("Robot unavailable")
+            val r = robot.robotOrNull() ?: error("Robot unavailable")
 
             var verified = false
             for (attempt in 1..MAX_CLICK_ATTEMPTS) {
@@ -557,11 +583,11 @@ object DesktopFlowHarness {
             var lastError: String = "effect never observed"
             for (attempt in 1..MAX_CLICK_ATTEMPTS) {
                 click(id)
-                if (awaitUntil(3_000) { effect() }) return
+                if (runner.awaitUntil(3_000) { effect() }) return
                 lastError = "attempt $attempt: no effect within 3s"
                 diag("clickAwaiting('$id') $lastError — retrying")
             }
-            awaitUntil((timeoutMs - 3_000L * MAX_CLICK_ATTEMPTS).coerceAtLeast(1_000)) { effect() } || run {
+            runner.awaitUntil((timeoutMs - 3_000L * MAX_CLICK_ATTEMPTS).coerceAtLeast(1_000)) { effect() } || run {
                 screenshot("clickfail-$id") // failure evidence before the step FAIL
                 error(
                     "click on '$id' had no observable effect ($lastError; " +
@@ -579,7 +605,7 @@ object DesktopFlowHarness {
         private suspend fun clickAwaitingDialog(id: String, pathToType: String, shotName: String) {
             coroutineScope {
                 val driver = async(Dispatchers.IO) {
-                    HarnessDialogDriver(screenshotDir, startedAtMs, tag = "flowpass")
+                    HarnessDialogDriver(screenshotDir, runner.startedAtMs, tag = "flowpass")
                         .drive(pathToType = pathToType, cancel = false, shotName = shotName)
                 }
                 click(id)
@@ -589,151 +615,36 @@ object DesktopFlowHarness {
 
         /** Types [text] into the currently focused Compose field (click first). */
         private fun typeFocused(text: String) {
-            HarnessDialogDriver(screenshotDir, startedAtMs, tag = "flowpass")
+            HarnessDialogDriver(screenshotDir, runner.startedAtMs, tag = "flowpass")
                 .typeIntoFocusedField(text)
         }
 
-        // ── evidence helpers ─────────────────────────────────────────────────
+        // ── evidence ─────────────────────────────────────────────────────────
 
-        private fun robotOrNull(): Robot? {
-            robot?.let { return it }
-            val r = runCatching { Robot() }.onFailure {
-                System.err.println("[JellyPlay][flowpass] Robot unavailable: $it")
-            }.getOrNull()
-            robot = r
-            return r
-        }
-
-        private suspend fun injectKey(keyCode: Int) {
-            val r = robotOrNull() ?: error("Robot unavailable")
-            val window = deps.windowRef?.get() ?: error("window unavailable")
-            window.toFront()
-            delay(200)
-            r.keyPress(keyCode)
-            delay(60)
-            r.keyRelease(keyCode)
-            delay(300)
-        }
-
+        /**
+         * Best-effort ride-along capture (must never fail a click step):
+         * the main window, or — while a modal sheet is open — the newest
+         * visible non-FileDialog AWT window. The Robot/skip mechanics are
+         * [HarnessRobot.screenshotWindow].
+         */
         private suspend fun screenshot(name: String) {
-            val r = robotOrNull() ?: run { diag("screenshot '$name' skipped: no Robot"); return }
-            val window: java.awt.Window = deps.windowRef?.get()
+            val window: java.awt.Window? = deps.windowRef?.get()
                 ?: createdWindows.toList()
                     .filter { it.isShowing && it !is java.awt.FileDialog }
                     .lastOrNull()
-                ?: run { diag("screenshot '$name' skipped: no window"); return }
-            runCatchingRethrowingCancellation {
-                window.toFront()
-                delay(250)
-                val image: BufferedImage = r.createScreenCapture(window.bounds)
-                Files.createDirectories(screenshotDir)
-                ImageIO.write(image, "png", File(screenshotDir.toFile(), "$name.png"))
-                diag("screenshot: $name.png (${window.bounds})")
-            }.onFailure { diag("screenshot '$name' failed: $it") }
+            robot.screenshotWindow(name, window)
         }
 
         private fun newestHeatmapPngSince(dir: Path): File? =
             runCatching {
                 dir.toFile()
                     .listFiles { f: File -> f.name.startsWith("watch_progress_heatmap_") && f.name.endsWith(".png") }
-                    ?.firstOrNull { it.lastModified() >= startedAtMs && it.length() > 0 }
+                    ?.firstOrNull { it.lastModified() >= runner.startedAtMs && it.length() > 0 }
             }.getOrNull()
 
         private fun diag(message: String) {
             println(
-                "[JellyPlay][flowpass] t=+${System.currentTimeMillis() - startedAtMs}ms $message",
-            )
-        }
-
-        // ── plumbing (session-harness twins) ─────────────────────────────────
-
-        private fun armAutoExit() {
-            Timer("jellyplay-flowpass", true).schedule(
-                object : java.util.TimerTask() {
-                    override fun run() {
-                        System.err.println(
-                            "[JellyPlay][flowpass] auto-exit deadline (${autoExitSeconds}s) reached",
-                        )
-                        finishWithFatal(IllegalStateException("auto-exit deadline reached"))
-                    }
-                },
-                autoExitSeconds * 1000L,
-            )
-        }
-
-        fun finishWithFatal(e: Throwable) {
-            if (!finished.compareAndSet(false, true)) return
-            synchronized(lock) { fatal = e }
-            runCatching { writeReport() }
-            exitProcess(1)
-        }
-
-        private fun writeReportAndExit() {
-            if (!finished.compareAndSet(false, true)) return
-            runCatching { writeReport() }
-            exitProcess(if (lastReportOverallPass()) 0 else 1)
-        }
-
-        /** Mirrors the report's overallPass so the process exit code can be wired to CI directly. */
-        private fun lastReportOverallPass(): Boolean = reportOverallPass
-
-        private suspend fun step(
-            name: String,
-            block: suspend () -> Map<String, String>,
-        ): Boolean {
-            val atMs = System.currentTimeMillis()
-            val result = try {
-                val details = block()
-                StepResult(name, pass = true, atMs, System.currentTimeMillis() - atMs, details, error = null)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                StepResult(name, pass = false, atMs, System.currentTimeMillis() - atMs, emptyMap(), "$e")
-            }
-            println(
-                "[JellyPlay][flowpass] step ${result.name}: " +
-                    (if (result.pass) "PASS" else "FAIL") +
-                    (result.error?.let { " — $it" } ?: "") +
-                    " (${result.durationMs}ms)",
-            )
-            synchronized(lock) { steps += result }
-            return result.pass
-        }
-
-        private suspend fun awaitUntil(timeoutMs: Long, poll: suspend () -> Boolean): Boolean {
-            val deadline = System.currentTimeMillis() + timeoutMs
-            while (System.currentTimeMillis() < deadline) {
-                if (poll()) return true
-                delay(150)
-            }
-            return poll()
-        }
-
-        private fun writeReport() {
-            val (stepList, fatalErr) = synchronized(lock) { steps.toList() to fatal }
-            val overallPass = stepList.isNotEmpty() && stepList.all { it.pass } && fatalErr == null
-            reportOverallPass = overallPass
-            val json = SessionHarnessReport(
-                startedAtMs = startedAtMs,
-                finishedAtMs = System.currentTimeMillis(),
-                overallPass = overallPass,
-                fatal = fatalErr?.toString(),
-                machine = mapOf(
-                    "os.name" to System.getProperty("os.name"),
-                    "os.version" to System.getProperty("os.version"),
-                    "java.version" to System.getProperty("java.version"),
-                    "serverUrl" to serverUrl,
-                    "itemId" to itemId,
-                    "playerItemId" to playerItemId,
-                    "workspace" to workspace.toString(),
-                ),
-                steps = stepList,
-                harness = "desktop-native-dialog-flows",
-            ).toJson()
-            Files.createDirectories(logsDir)
-            Files.writeString(logsDir.resolve(REPORT_FILE_NAME), json)
-            println(
-                "[JellyPlay][flowpass] report written: $logsDir${File.separatorChar}$REPORT_FILE_NAME",
+                "[JellyPlay][flowpass] t=+${System.currentTimeMillis() - runner.startedAtMs}ms $message",
             )
         }
 
@@ -743,6 +654,7 @@ object DesktopFlowHarness {
 
             private const val REPORT_FILE_NAME = "flow-harness.json"
             private const val DEFAULT_AUTO_EXIT_SECONDS = 300
+            private const val POLL_INTERVAL_MS = 150L
             private const val MAX_CLICK_ATTEMPTS = 3
 
             /** Heatmap PNGs are a few KB even for an empty grid. */

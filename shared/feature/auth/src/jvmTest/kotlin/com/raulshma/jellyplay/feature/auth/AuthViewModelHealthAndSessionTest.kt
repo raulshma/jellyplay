@@ -47,9 +47,7 @@ import kotlin.test.assertTrue
  *    - an empty list resets the health map to empty,
  *    - a re-entrant call cancels the in-flight batch so only the newest
  *      batch's results land.
- * 2. Session delegation: [AuthViewModel.addServer] toggles [AuthViewModel.isLoading]
- *    around the repository call and reports the result through the callback;
- *    [AuthViewModel.login], [AuthViewModel.switchUser],
+ * 2. Session delegation: [AuthViewModel.login], [AuthViewModel.switchUser],
  *    [AuthViewModel.removeUser], [AuthViewModel.removeServer] and
  *    [AuthViewModel.getUsersForServer] forward 1:1 to the repository.
  * 3. QuickConnect branches the legacy suite missed: the
@@ -193,27 +191,6 @@ class AuthViewModelHealthAndSessionTest {
     }
 
     // ── session delegation ────────────────────────────────────────────────
-
-    @Test
-    fun addServer_togglesIsLoading_andReportsTheResult() = runTest(testDispatcher) {
-        val info = mockk<ServerInfo>()
-        val gate = kotlinx.coroutines.CompletableDeferred<Result<ServerInfo>>()
-        coEvery { authRepository.addServer("http://a") } coAnswers { gate.await() }
-
-        var received: Result<ServerInfo>? = null
-        viewModel.addServer("http://a") { received = it }
-        advanceUntilIdle()
-
-        // In-flight: the spinner flag is up and the callback has not run yet.
-        assertTrue(viewModel.isLoading.value)
-        kotlin.test.assertNull(received)
-
-        gate.complete(Result.success(info))
-        advanceUntilIdle()
-
-        kotlin.test.assertFalse(viewModel.isLoading.value)
-        assertTrue(received?.isSuccess == true)
-    }
 
     @Test
     fun login_forwardsAddressUsernamePassword_andReportsTheResult() = runTest(testDispatcher) {

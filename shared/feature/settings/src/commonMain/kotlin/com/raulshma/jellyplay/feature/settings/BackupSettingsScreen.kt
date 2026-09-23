@@ -123,7 +123,7 @@ fun BackupSettingsScreen(
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.FileExport,
-                        title = stringResource(Res.string.settings_export_settings),
+                        title = rowTitle(BackupSettingsIds.BACKUP_EXPORT),
                         subtitle = stringResource(Res.string.settings_export_settings_subtitle),
                         index = 0, count = 3,
                         highlighted = highlightSettingId == BackupSettingsIds.BACKUP_EXPORT,
@@ -133,7 +133,7 @@ fun BackupSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.FileImport,
-                        title = stringResource(Res.string.settings_import_settings),
+                        title = rowTitle(BackupSettingsIds.BACKUP_IMPORT),
                         subtitle = stringResource(Res.string.settings_import_settings_subtitle),
                         index = 1, count = 3,
                         highlighted = highlightSettingId == BackupSettingsIds.BACKUP_IMPORT,
@@ -143,7 +143,7 @@ fun BackupSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
-                        title = stringResource(Res.string.settings_factory_reset),
+                        title = rowTitle(BackupSettingsIds.FACTORY_RESET),
                         subtitle = stringResource(Res.string.settings_factory_reset_subtitle),
                         index = 2, count = 3,
                         isDestructive = true,

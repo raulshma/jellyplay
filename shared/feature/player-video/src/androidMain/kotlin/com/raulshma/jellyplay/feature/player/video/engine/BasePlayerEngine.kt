@@ -88,6 +88,48 @@ abstract class BasePlayerEngine : MediaEngine {
     final override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
 
     // -------------------------------------------------------------------------------------------
+    // Activity pause/resume template. The three engines used to carry byte-
+    // identical bodies: remember isPlaying → pause on pause; restore play on
+    // resume only if the engine was playing before. ExoPlayer does not detach
+    // views here (PlayerView owns the surface lifecycle), mpv has no view
+    // churn either — only libVLC must detach/attach its preview views around
+    // the pause, which is what the [onPausedNative]/[onResumingNative] hooks
+    // exist for. The resume hook runs BEFORE the play restore (VLC's views
+    // must be re-attached before playback restarts).
+    // -------------------------------------------------------------------------------------------
+
+    // `var` (not private-set) because ExoPlayer's onResetItemScopedState clears
+    // it alongside the item-scoped residue — a stale latch must never survive
+    // into the next item's pause.
+    protected var wasPlayingBeforeActivityPause = false
+
+    final override fun onActivityPause() {
+        wasPlayingBeforeActivityPause = _isPlaying.value
+        pause()
+        onPausedNative()
+    }
+
+    final override fun onActivityResume() {
+        onResumingNative()
+        if (wasPlayingBeforeActivityPause) {
+            wasPlayingBeforeActivityPause = false
+            play()
+        }
+    }
+
+    /**
+     * Engine-specific work after the pause in [onActivityPause] — libVLC
+     * detaches its preview views. No-op by default (ExoPlayer / mpv).
+     */
+    protected open fun onPausedNative() {}
+
+    /**
+     * Engine-specific work before the play restore in [onActivityResume] —
+     * libVLC re-attaches its preview views. No-op by default (ExoPlayer / mpv).
+     */
+    protected open fun onResumingNative() {}
+
+    // -------------------------------------------------------------------------------------------
     // Published-state resets (C5). Each adapter's release() used to re-derive
     // its own reset list over these base-owned flows; the lists live here now
     // so a field can never be silently dropped from one engine's teardown.

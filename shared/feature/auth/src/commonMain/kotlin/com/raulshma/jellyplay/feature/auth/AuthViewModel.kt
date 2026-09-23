@@ -49,15 +49,6 @@ class AuthViewModel(
 
     private var quickConnectPollingJob: Job? = null
 
-    fun addServer(address: String, onResult: (Result<ServerInfo>) -> Unit) {
-        launch {
-            _isLoading.set(true)
-            val result = authRepository.addServer(address)
-            _isLoading.set(false)
-            onResult(result)
-        }
-    }
-
     fun removeServer(serverId: String) {
         launch {
             authRepository.removeServer(serverId)

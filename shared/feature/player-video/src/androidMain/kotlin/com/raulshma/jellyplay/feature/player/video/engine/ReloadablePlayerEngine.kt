@@ -70,20 +70,24 @@ abstract class ReloadablePlayerEngine(
         }
     }
 
-    // ── Volume / mute — templates over the policy ───────────────────────────
-    // The four MediaEngine volume/mute commands are FINAL templates over the
-    // adapter seams below; the clamp / remember / mute-unmute decisions live
-    // in the pure commonMain PlaybackVolumePolicy. The remember call is
-    // unified BEFORE the native write (the former Exo/Vlc order) — this fixes
-    // mpv's drift, where the delta bodies wrote the native handle first and
-    // remembered second. What genuinely diverges per engine stays a seam:
+    // ── Volume / mute — delegations to the common templates ────────────────
+    // The four MediaEngine volume/mute commands are FINAL delegations to the
+    // commonMain VolumeCommandTemplates (over PlaybackVolumePolicy) — the same
+    // choreography the desktop mpv adapter runs, so the two can no longer
+    // drift. The remember call is unified BEFORE the native write (the former
+    // Exo/Vlc order) — this fixed mpv's drift, where the delta bodies wrote
+    // the native handle first and remembered second. What genuinely diverges
+    // per engine stays a seam on VolumeCommandTemplates.NativeVolumeSurface,
+    // bridged to the protected members below by [volumeCommands]:
     //  - the native write mechanism (player.volume / setPropertyDouble /
     //    int-percent) — [applyNativeVolume],
     //  - the native current-level read (the delta base) — [readNativeVolume],
     //  - the boost ceiling — [volumeBoostCeiling] (libVLC amplifies to 2.0),
     //  - the mute-restore vocabulary — [nativeVolumeRestore],
     //  - the native mute FLAG (mpv only) — [applyNativeMuteFlag],
-    //  - dispatch containment/threading — [dispatchVolumeCommand].
+    //  - the mute-template gate — [muteTemplateEnabled],
+    //  - the system music-stream sync — the surface's syncSystemStream.
+    // Dispatch containment/threading stays here — [dispatchVolumeCommand].
 
     @Volatile
     protected var lastUnmuteVolume: Float = 1f
@@ -154,44 +158,43 @@ abstract class ReloadablePlayerEngine(
     }
 
     final override fun setVolume(value: Float, isUserChange: Boolean) = dispatchVolumeCommand {
-        val plan = PlaybackVolumePolicy.planLevel(value, volumeBoostCeiling, isUserChange)
-        rememberUnmuteVolumeIfAudible(plan.normalized)
-        applyNativeVolume(plan.normalized)
-        MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+        VolumeCommandTemplates.setVolume(volumeCommands, value, isUserChange)
     }
 
     final override fun increaseVolume(delta: Float) = dispatchVolumeCommand {
-        val current = readNativeVolume() ?: return@dispatchVolumeCommand
-        val plan = PlaybackVolumePolicy.planLevel(current + delta, volumeBoostCeiling)
-        rememberUnmuteVolumeIfAudible(plan.normalized)
-        applyNativeVolume(plan.normalized)
-        MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+        VolumeCommandTemplates.increaseVolume(volumeCommands, delta)
     }
 
     final override fun decreaseVolume(delta: Float) = dispatchVolumeCommand {
-        val current = readNativeVolume() ?: return@dispatchVolumeCommand
-        val plan = PlaybackVolumePolicy.planLevel(current - delta, volumeBoostCeiling)
-        rememberUnmuteVolumeIfAudible(plan.normalized)
-        applyNativeVolume(plan.normalized)
-        MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+        VolumeCommandTemplates.decreaseVolume(volumeCommands, delta)
     }
 
     final override fun setMuted(muted: Boolean) = dispatchVolumeCommand {
-        applyNativeMuteFlag(muted)
-        if (!muteTemplateEnabled()) return@dispatchVolumeCommand
-        if (muted) {
-            val plan = PlaybackVolumePolicy.planMute(nativeVolumeRestore(muted = true))
-            if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
-            plan.nativeVolume?.let { applyNativeVolume(it) }
-            MediaStreamVolume.setNormalized(appContext, plan.systemStream)
-        } else {
-            val plan = PlaybackVolumePolicy.planUnmute(
-                lastUnmuteVolume,
-                nativeVolumeRestore(muted = false),
-            )
-            plan.nativeVolume?.let { applyNativeVolume(it) }
-            MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+        VolumeCommandTemplates.setMuted(volumeCommands, muted)
+    }
+
+    /**
+     * Bridges the protected adapter seams (kept exactly as they were — see the
+     * member KDocs above) to the shared template surface. The system
+     * music-stream sync is the Android-only surface here; the user-change
+     * capture stays a no-op — Android video deliberately stays on the system
+     * STREAM_MUSIC model and never arms the per-content-type memory (see
+     * VideoPlayerViewModel's volume-memory wiring, desktop-only).
+     */
+    private val volumeCommands = object : VolumeCommandTemplates.NativeVolumeSurface {
+        override val volumeBoostCeiling: Float get() = this@ReloadablePlayerEngine.volumeBoostCeiling
+        override val rememberedUnmuteLevel: Float get() = this@ReloadablePlayerEngine.lastUnmuteVolume
+        override val muteTemplateEnabled: Boolean get() = this@ReloadablePlayerEngine.muteTemplateEnabled()
+        override fun readNativeVolume(): Float? = this@ReloadablePlayerEngine.readNativeVolume()
+        override fun applyNativeVolume(normalized: Float) = this@ReloadablePlayerEngine.applyNativeVolume(normalized)
+        override fun applyNativeMuteFlag(muted: Boolean) = this@ReloadablePlayerEngine.applyNativeMuteFlag(muted)
+        override fun nativeVolumeRestore(muted: Boolean) = this@ReloadablePlayerEngine.nativeVolumeRestore(muted)
+        override fun rememberUnmuteVolume(level: Float) = rememberUnmuteVolumeIfAudible(level)
+        override fun snapshotVolumeForMute() = snapshotSystemVolumeForMute()
+        override fun syncSystemStream(normalized: Float) {
+            MediaStreamVolume.setNormalized(appContext, normalized)
         }
+        override fun onUserVolumeChanged(level: Float) {}
     }
 
     // ── positionFlow shell ──────────────────────────────────────────────────

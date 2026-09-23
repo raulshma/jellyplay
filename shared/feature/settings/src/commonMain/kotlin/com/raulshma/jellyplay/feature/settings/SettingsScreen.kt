@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,7 +9,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,8 +54,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.graphicsLayer
-import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.text.font.FontWeight
@@ -1384,21 +1381,21 @@ fun SettingsScreen(
                                 val accountCount = SettingsScreenGroups.account.itemIds.size
                                 SettingListItem(
                                     icon = Tabler.Outline.Server,
-                                    title = stringResource(Res.string.settings_server_management),
+                                    title = rowTitle(SettingsScreenIds.SERVER_MANAGEMENT),
                                     subtitle = stringResource(Res.string.settings_server_management_subtitle),
                                     index = 0, count = accountCount,
                                     onClick = { openSetting(SettingsScreenIds.SERVER_MANAGEMENT) { Route.ServerManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Users,
-                                    title = stringResource(Res.string.settings_switch_user),
+                                    title = rowTitle(SettingsScreenIds.USER_MANAGEMENT),
                                     subtitle = stringResource(Res.string.settings_switch_user_subtitle),
                                     index = 1, count = accountCount,
                                     onClick = { openSetting(SettingsScreenIds.USER_MANAGEMENT) { Route.UserManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Logout,
-                                    title = stringResource(Res.string.settings_sign_out),
+                                    title = rowTitle(SettingsScreenIds.LOGOUT),
                                     subtitle = stringResource(Res.string.settings_sign_out_subtitle),
                                     index = 2, count = accountCount,
                                     isDestructive = true,
@@ -1409,7 +1406,7 @@ fun SettingsScreen(
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Logout,
-                                    title = stringResource(Res.string.settings_sign_out_from_server),
+                                    title = rowTitle(SettingsScreenIds.SIGN_OUT_FROM_SERVER),
                                     subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
                                     index = 3, count = accountCount,
                                     isDestructive = true,
@@ -1451,35 +1448,35 @@ fun SettingsScreen(
                                 val insightsCount = SettingsScreenGroups.activityInsights.itemIds.size
                                 SettingListItem(
                                     icon = Tabler.Outline.Heart,
-                                    title = stringResource(Res.string.settings_browse_favorites),
+                                    title = rowTitle(SettingsScreenIds.FAVORITES),
                                     subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
                                     index = 0, count = insightsCount,
                                     onClick = { openSetting(SettingsScreenIds.FAVORITES) { Route.Favorites } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.ChartBar,
-                                    title = stringResource(Res.string.settings_watch_history_heatmap),
+                                    title = rowTitle(SettingsScreenIds.WATCH_PROGRESS_HEATMAP),
                                     subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
                                     index = 1, count = insightsCount,
                                     onClick = { openSetting(SettingsScreenIds.WATCH_PROGRESS_HEATMAP) { Route.WatchProgressHeatmap } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Database,
-                                    title = stringResource(Res.string.settings_activity_queue),
+                                    title = rowTitle(SettingsScreenIds.ACTIVITY_QUEUE),
                                     subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
                                     index = 2, count = insightsCount,
                                     onClick = { openSetting(SettingsScreenIds.ACTIVITY_QUEUE) { Route.ArrQueue } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.CalendarEvent,
-                                    title = stringResource(Res.string.settings_upcoming),
+                                    title = rowTitle(SettingsScreenIds.UPCOMING),
                                     subtitle = stringResource(Res.string.settings_upcoming_subtitle),
                                     index = 3, count = insightsCount,
                                     onClick = { openSetting(SettingsScreenIds.UPCOMING) { Route.UpcomingCalendar } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Inbox,
-                                    title = stringResource(Res.string.settings_requests),
+                                    title = rowTitle(SettingsScreenIds.REQUESTS),
                                     subtitle = stringResource(Res.string.settings_requests_subtitle),
                                     index = 4, count = insightsCount,
                                     trailingText = pendingCount.takeIf { it > 0 }?.toString(),
@@ -1523,7 +1520,7 @@ fun SettingsScreen(
                                 if (viewModel.currentUser?.isAdmin == true) {
                                     SettingListItem(
                                         icon = Tabler.Outline.Shield,
-                                        title = stringResource(Res.string.settings_admin_dashboard),
+                                        title = rowTitle(SettingsScreenIds.ADMIN_DASHBOARD),
                                         subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
                                         index = systemIndex++, count = systemCount,
                                         onClick = { openSetting(SettingsScreenIds.ADMIN_DASHBOARD) { Route.AdminDashboard } },
@@ -1531,7 +1528,7 @@ fun SettingsScreen(
                                 }
                                 SettingListItem(
                                     icon = Tabler.Outline.Wand,
-                                    title = stringResource(Res.string.settings_setup_wizard),
+                                    title = rowTitle(SettingsScreenIds.SETUP_WIZARD),
                                     subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
                                     index = systemIndex++, count = systemCount,
                                     onClick = {
@@ -1659,14 +1656,14 @@ fun SettingsScreen(
                                     // declaration — the five declared dream rows are
                                     // exactly the rows rendered here.
                                     val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
-                                    val slideshowIntervalTitle = stringResource(Res.string.settings_slideshow_interval)
-                                    val transitionStyleTitle = stringResource(Res.string.settings_transition_style)
+                                    val slideshowIntervalTitle = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL)
+                                    val transitionStyleTitle = rowTitle(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE)
                                     val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)
                                     val transitionSlideLabel = stringResource(Res.string.settings_transition_slide)
                                     val transitionNoneLabel = stringResource(Res.string.settings_transition_none)
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Typography,
-                                        title = stringResource(Res.string.settings_show_title),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_SHOW_TITLE),
                                         subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
                                         checked = preferences.dreamShowTitle,
                                         index = 0, count = dreamTotal,
@@ -1678,7 +1675,7 @@ fun SettingsScreen(
                                     val categoryMusic = stringResource(Res.string.settings_category_music)
                                     SettingListItem(
                                         icon = Tabler.Outline.Movie,
-                                        title = stringResource(Res.string.settings_categories),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_CATEGORIES),
                                         subtitle = stringResource(Res.string.settings_categories_subtitle),
                                         trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
                                             preferences.dreamImageCategories.joinToString(", ") {
@@ -1706,7 +1703,7 @@ fun SettingsScreen(
                                     )
                                     SettingListItem(
                                         icon = Tabler.Outline.Stopwatch,
-                                        title = stringResource(Res.string.settings_slideshow_interval),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL),
                                         subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
                                         trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                         index = 2, count = dreamTotal,
@@ -1723,7 +1720,7 @@ fun SettingsScreen(
                                     )
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Wand,
-                                        title = stringResource(Res.string.settings_ken_burns),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_KEN_BURNS),
                                         subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
                                         checked = preferences.dreamKenBurnsEnabled,
                                         index = 3, count = dreamTotal,
@@ -1732,7 +1729,7 @@ fun SettingsScreen(
                                     )
                                     SettingListItem(
                                         icon = Tabler.Outline.ArrowRight,
-                                        title = stringResource(Res.string.settings_transition_style),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE),
                                         subtitle = preferences.dreamTransitionStyle.name,
                                         trailingText = preferences.dreamTransitionStyle.name,
                                         index = 4, count = dreamTotal,
@@ -1773,7 +1770,7 @@ fun SettingsScreen(
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
                                 ) {
                                     val idleTotal = SettingsScreenGroups.systemIdleAmbient.itemIds.size
-                                    val idleTimeoutTitle = stringResource(Res.string.settings_idle_ambient_timeout)
+                                    val idleTimeoutTitle = rowTitle(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT)
                                     val idleTimeoutOffLabel = stringResource(Res.string.settings_idle_ambient_timeout_off)
                                     val idleTimeoutOptions = listOf(0L, 1L, 5L, 10L, 15L, 30L)
                                     // stringResource resolves in composition — pre-build the
@@ -1785,7 +1782,7 @@ fun SettingsScreen(
                                     }
                                     SettingToggleItem(
                                         icon = Tabler.Outline.Moon,
-                                        title = stringResource(Res.string.settings_idle_ambient_enabled),
+                                        title = rowTitle(SettingsScreenIds.IDLE_AMBIENT_ENABLED),
                                         subtitle = stringResource(Res.string.settings_idle_ambient_enabled_subtitle),
                                         checked = preferences.idleAmbientEnabled,
                                         index = 0, count = idleTotal,
@@ -1796,7 +1793,7 @@ fun SettingsScreen(
                                     )
                                     SettingListItem(
                                         icon = Tabler.Outline.Stopwatch,
-                                        title = stringResource(Res.string.settings_idle_ambient_timeout),
+                                        title = rowTitle(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT),
                                         subtitle = stringResource(Res.string.settings_idle_ambient_timeout_subtitle),
                                         trailingText = idleTimeoutLabels[
                                             idleTimeoutOptions.indexOf(preferences.idleAmbientTimeoutMin)
@@ -1833,7 +1830,7 @@ fun SettingsScreen(
                         settingsSection("item_integrations") {
                             SettingListItem(
                                 icon = Tabler.Outline.PlugConnected,
-                                title = stringResource(Res.string.settings_integrations),
+                                title = rowTitle(IntegrationsScreenIds.INTEGRATIONS),
                                 subtitle = stringResource(Res.string.settings_integrations_subtitle),
                                 index = 0, count = 1,
                                 onClick = { openSetting(IntegrationsScreenIds.INTEGRATIONS) { Route.Integrations(it) } },
@@ -2118,12 +2115,6 @@ private fun PowerUserModeCard(
     val isLight = LocalIsLightTheme.current
     val tvFocusState = rememberTvFocusState(focusedScale = 1.02f)
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = pressScaleValue(isPressed, 0.98f),
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "powerUserPressScale",
-    )
     val confirmHaptic = rememberConfirmHaptic()
 
     val iconTint by animateColorAsState(
@@ -2143,10 +2134,11 @@ private fun PowerUserModeCard(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.98f,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            )
             .clip(ShapeCache.smooth24)
             .background(settingsGroupContainerColor())
             .lightModeHairlineBorder(ShapeCache.smooth24)

@@ -166,33 +166,53 @@ class ArrQueueViewModel(
     }
 
     /**
-     * Deletes a single queue row. [blocklist] adds the release to the *arr
-     * blocklist; [searchAgain] triggers a fresh search for a replacement.
-     *
-     * Confirm settle arm: clear-before-action — the pending dialog item is
-     * explicitly cleared at action start; failure surfaces via the message
-     * channel and never reopens it.
+     * The four queue commands' one guard ladder: raise
+     * [ArrQueueUiState.actionInProgress] and clear the pending confirmation
+     * BEFORE the repository call (clear-before-action — failure surfaces
+     * through the message channel and never reopens the dialog), run the
+     * single command, and dispatch its [Result] to EXACTLY ONE arm — the
+     * caller's success arm, or the collapsed failure arm (Raw when the
+     * exception carries a message, the unknown-error resource otherwise).
+     * The busy flag settles once after either arm.
      */
-    fun deleteItem(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean) {
+    private fun runQueueAction(
+        action: suspend () -> Result<Unit>,
+        onSuccess: suspend () -> Unit,
+    ) {
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
-            val options = ArrQueueDeleteOptions(
-                removeFromClient = true,
-                blocklist = blocklist,
-                skipRedownload = !searchAgain,
-            )
-            arrRepository.deleteQueueItem(item, options)
-                .onSuccess {
-                    if (searchAgain) {
-                        val tmdb = item.tmdbId
-                        if (tmdb != null) arrRepository.searchForTmdb(tmdb, item.serverKind)
-                    }
-                }
+            action()
+                .onSuccess { onSuccess() }
                 .onFailure { e ->
                     messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
                 }
             _state.value = _state.value.copy(actionInProgress = false)
         }
+    }
+
+    /**
+     * Deletes a single queue row. [blocklist] adds the release to the *arr
+     * blocklist; [searchAgain] triggers a fresh search for a replacement.
+     */
+    fun deleteItem(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean) {
+        runQueueAction(
+            action = {
+                arrRepository.deleteQueueItem(
+                    item,
+                    ArrQueueDeleteOptions(
+                        removeFromClient = true,
+                        blocklist = blocklist,
+                        skipRedownload = !searchAgain,
+                    ),
+                )
+            },
+            onSuccess = {
+                if (searchAgain) {
+                    val tmdb = item.tmdbId
+                    if (tmdb != null) arrRepository.searchForTmdb(tmdb, item.serverKind)
+                }
+            },
+        )
     }
 
     /**
@@ -206,69 +226,58 @@ class ArrQueueViewModel(
     fun deleteSelected(blocklist: Boolean, searchAgain: Boolean) {
         val selected = _state.value.queue.filter { it.rowKey in _state.value.selectedIds }
         if (selected.isEmpty()) return
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
-            val options = ArrQueueDeleteOptions(
-                removeFromClient = true,
-                blocklist = blocklist,
-                skipRedownload = !searchAgain,
-            )
-            arrRepository.deleteQueueItems(selected, options)
-                .onSuccess {
-                    if (searchAgain) {
-                        // Per-item searches at bounded parallelism — a
-                        // 30-row selection used to pay 30 sequential
-                        // round-trips while actionInProgress blocked
-                        // further actions. mapConcurrent awaits every
-                        // search before returning, so clearSelection()
-                        // stays behind the whole fan-out exactly like the
-                        // old forEach; each searchForTmdb Result is
-                        // discarded per item (a failed search never aborts
-                        // the rest) and rows without a tmdbId are skipped.
-                        // Grouped bulk search is not exposed by the repository.
-                        searchSemaphore.mapConcurrent(selected) { item ->
-                            item.tmdbId?.let { arrRepository.searchForTmdb(it, item.serverKind) }
-                        }
+        runQueueAction(
+            action = {
+                arrRepository.deleteQueueItems(
+                    selected,
+                    ArrQueueDeleteOptions(
+                        removeFromClient = true,
+                        blocklist = blocklist,
+                        skipRedownload = !searchAgain,
+                    ),
+                )
+            },
+            onSuccess = {
+                if (searchAgain) {
+                    // Per-item searches at bounded parallelism — a
+                    // 30-row selection used to pay 30 sequential
+                    // round-trips while actionInProgress blocked
+                    // further actions. mapConcurrent awaits every
+                    // search before returning, so clearSelection()
+                    // stays behind the whole fan-out exactly like the
+                    // old forEach; each searchForTmdb Result is
+                    // discarded per item (a failed search never aborts
+                    // the rest) and rows without a tmdbId are skipped.
+                    // Grouped bulk search is not exposed by the repository.
+                    searchSemaphore.mapConcurrent(selected) { item ->
+                        item.tmdbId?.let { arrRepository.searchForTmdb(it, item.serverKind) }
                     }
-                    clearSelection()
                 }
-                .onFailure { e ->
-                    messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
-                }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
+                clearSelection()
+            },
+        )
     }
 
     /** Grabs a failed queue row (same clear-before-action settle arm as [deleteItem]). */
     fun grabItem(item: ArrQueueItem) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
-            arrRepository.grabQueueItem(item)
-                .onSuccess {
-                    messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_grab_sent, listOf(item.title)))
-                    refresh()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
-                }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
+        runQueueAction(
+            action = { arrRepository.grabQueueItem(item) },
+            onSuccess = {
+                messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_grab_sent, listOf(item.title)))
+                refresh()
+            },
+        )
     }
 
     /** Imports a queue row (same clear-before-action settle arm as [deleteItem]). */
     fun importItem(item: ArrQueueItem) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
-            arrRepository.importQueueItem(item)
-                .onSuccess {
-                    messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_import_sent, listOf(item.title)))
-                    refresh()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(e.message?.let { ArrQueueMessage.Raw(it) } ?: ArrQueueMessage.Error(Res.string.arrqueue_unknown_error))
-                }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
+        runQueueAction(
+            action = { arrRepository.importQueueItem(item) },
+            onSuccess = {
+                messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_import_sent, listOf(item.title)))
+                refresh()
+            },
+        )
     }
 
     private val ArrQueueItem.rowKey: String

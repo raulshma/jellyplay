@@ -10,8 +10,8 @@ import com.raulshma.jellyplay.core.model.MpvRenderOverrides
  * The SESSION-SCOPED render state: what the "Rendering"
  * sheet and the deinterlace cycle toggle mean for the CURRENT playback
  * session, and how it folds into every [MpvEngineConfig] the config builder
- * produces. Pure state + pure folds — the ViewModel owns the repository /
- * DataStore writes and the engine re-apply, this class owns the semantics:
+ * produces. Pure state + pure folds — [RenderControls] owns the repository /
+ * DataStore writes and drives the engine re-apply, this class owns the semantics:
  *
  *  - [override] — the ACTIVE rendering override (shader pack + tone mapping):
  *    re-resolved per item from the stored item/series rows (item wins) and

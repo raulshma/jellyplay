@@ -295,44 +295,49 @@ class SyncPlayViewModel(
         }
     }
 
+    // ── transport commands ────────────────────────────────────────────────
+    // Fire-and-forget: the ignored-Result SyncPlayRepository.syncPlay* twins
+    // were retired by the wire census; these ride SyncPlaySession →
+    // SyncPlayController.safe(), which logs failures instead of throwing.
+
     fun togglePlayback() {
         launch {
             val group = _uiState.value.currentGroup ?: return@launch
             if (group.isPlaying) {
-                syncPlayRepository.syncPlayPause()
+                syncPlaySession.pause()
             } else {
-                syncPlayRepository.syncPlayUnpause()
+                syncPlaySession.unpause()
             }
         }
     }
 
     fun seekTo(positionTicks: Long) {
         launch {
-            syncPlayRepository.syncPlaySeek(positionTicks)
+            syncPlaySession.seek(positionTicks)
         }
     }
 
     fun stop() {
         launch {
-            syncPlayRepository.syncPlayStop()
+            syncPlaySession.stop()
         }
     }
 
     fun setRepeatMode(mode: SyncPlayRepeatMode) {
         launch {
-            syncPlayRepository.syncPlaySetRepeatMode(mode)
+            syncPlaySession.setRepeatMode(mode)
         }
     }
 
     fun setShuffleMode(mode: SyncPlayShuffleMode) {
         launch {
-            syncPlayRepository.syncPlaySetShuffleMode(mode)
+            syncPlaySession.setShuffleMode(mode)
         }
     }
 
     fun setIgnoreWait(ignore: Boolean) {
         launch {
-            syncPlayRepository.syncPlaySetIgnoreWait(ignore)
+            syncPlaySession.setIgnoreWait(ignore)
         }
     }
 

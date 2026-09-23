@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.live
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -155,6 +156,9 @@ class LiveTvPlayerEnginePolicyTest {
         playbackStore = playbackStore,
         aggregateStore = aggregateStore,
         lastChannelStore = lastChannelStore,
+        // The VM's injected wall clock (LiveNowWindow seam) — pinned; this
+        // suite never stubs programs, so any fixed value keeps the scan quiet.
+        epochMillisSource = EpochMillisSource { 0L },
         engineFactory = LiveEngineFactory { _, onFallback ->
             onTranscodeFallback = onFallback
             fakeEngine

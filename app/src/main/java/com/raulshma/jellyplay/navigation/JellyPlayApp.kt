@@ -24,9 +24,10 @@ import com.raulshma.jellyplay.shell.ShellInfra
  * The former 1.6k-line single file is split per concern, same package:
  * [MainContent] (MainContent.kt), the layout branches + [ShellNavParams]
  * (ShellLayouts.kt), [MainNavDisplay] (MainNavDisplay.kt), the shell overlays
- * (ShellOverlays.kt), and the pure folds (VisibleTopLevelRoutes.kt,
- * FullScreenRoutePolicy.kt, NavRequestCollector.kt,
- * RemoteNavigationRouting.kt).
+ * (ShellOverlays.kt), and the pure folds (FullScreenRoutePolicy.kt,
+ * NavRequestCollector.kt, the remote-navigation routing folds and
+ * VisibleTopLevelRoutes in their shared homes — shared/feature/shell and
+ * core/ui navigation).
  */
 @Composable
 fun JellyPlayApp(

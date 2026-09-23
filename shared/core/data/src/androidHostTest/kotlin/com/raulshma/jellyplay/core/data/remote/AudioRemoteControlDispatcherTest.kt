@@ -9,9 +9,10 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NameGuidPair
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
-import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
 import com.raulshma.jellyplay.core.model.remote.PlaybackDomain
+import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.Called
 import io.mockk.coEvery
@@ -20,6 +21,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifySequence
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +33,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import java.io.IOException
 
 /**
  * Pins the [AudioRemoteControlDispatcher] routing invariant: playstate and

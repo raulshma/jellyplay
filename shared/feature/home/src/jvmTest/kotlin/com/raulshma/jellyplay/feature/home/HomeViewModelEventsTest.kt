@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
@@ -594,13 +595,6 @@ class HomeViewModelEventsTest {
         sortedEpisodes = episodes,
         epoch = 1L,
     )
-
-    // HomeClock seam fake: the epoch-millis read drives the
-        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
-        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
-    }
 
     /**
      * Behavior fake for [UserDataMutator]: records mark-played/unplayed calls

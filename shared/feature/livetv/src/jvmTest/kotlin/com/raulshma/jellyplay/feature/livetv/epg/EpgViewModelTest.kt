@@ -3,11 +3,11 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
+import com.raulshma.jellyplay.feature.livetv.testutil.FakeTimeSource
 import androidx.lifecycle.viewModelScope
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -22,8 +22,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import java.time.LocalDate
-import java.time.ZoneId
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -368,17 +366,5 @@ class EpgViewModelTest {
     private companion object {
         /** Fixed boot instant: 2026-07-01T12:00:00Z. */
         const val BOOT_NOW_MS: Long = 1_782_907_200_000L
-    }
-
-    /**
-     * Controllable [TimeSource] on the fixed [BOOT_NOW_MS] epoch (the
-     * HomeRefresher fake idiom) — the VM's guide window, ticker seed and
-     * fetch stamps are all EXACT against it; tests move [nowMs] to prove a
-     * read re-happens.
-     */
-    private class FakeTimeSource(var nowMs: Long) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

@@ -13,9 +13,10 @@ import androidx.compose.runtime.Immutable
  *    dead stream, so the screen must leave instead of lingering behind the
  *    closing window (the VOD VM's `closePlayer` pattern).
  *
- * ONE intake ([LiveTvPlayerViewModel.events], a buffered channel behind
- * `receiveAsFlow` — trySend-only, so a mid-teardown emit never suspends)
- * carries both, replacing the former `messages` + `closePlayer` member pair.
+ * ONE intake ([LiveTvPlayerViewModel.events], the player-contract
+ * EngineSessionShell's one-shot event pipe — tryEmit-only, so a
+ * mid-teardown emit never suspends) carries both, replacing the former
+ * `messages` + `closePlayer` member pair.
  */
 @Immutable
 sealed interface LivePlayerEvent {

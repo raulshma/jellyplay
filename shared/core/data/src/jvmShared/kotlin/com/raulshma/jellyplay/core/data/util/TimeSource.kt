@@ -10,9 +10,9 @@ import java.time.ZoneId
  * refresh jitter, calendar windows) can be unit-tested by injecting a fake.
  *
  * The system implementation delegates to the platform seams in
- * `:shared:core:model` ([wallNowMillis] / [monotonicNowMillis]). There is no
- * test fake here — fakes live next to the tests that need them
- * (`feature/.../src/test`).
+ * `:shared:core:model` ([wallNowMillis] / [monotonicNowMillis]). The shared
+ * test fake lives in core:data's jvmTest `testutil` package; other modules
+ * keep their own next to their tests.
  *
  * split: the epoch-millis slice was promoted to the commonMain
  * [EpochMillisSource] seam (the promoted commonMain repository impls take

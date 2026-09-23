@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.websocket
 
 import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.network.NetworkLog
+import com.raulshma.jellyplay.core.network.WebSocketBackoffPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,7 +23,6 @@ import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.random.Random
 
 // This client keeps its org.json-based message routing verbatim.
 // Every emitted [WebSocketEvent] carries the `Data` payload as an
@@ -46,7 +46,15 @@ class JellyfinWebSocketClient(
     @Volatile private var deviceName: String? = null
     @Volatile private var clientName: String? = null
     private val reconnectAttempts = AtomicInteger(0)
-    private val maxReconnectAttempts = 5
+
+    /**
+     * The fast reconnect schedule (1s → 2s → 4s → 8s → 16s, +[0..1000]ms
+     * jitter, capped at 30s) — the module's one backoff law
+     * ([WebSocketBackoffPolicy]) with this client's jitter shape. Past
+     * [WebSocketBackoffPolicy.maxAttempts] attempts [scheduleReconnect]
+     * leaves the fast schedule for the slow background retry below.
+     */
+    private val fastBackoff = WebSocketBackoffPolicy(jitterMs = WebSocketBackoffPolicy.uniformJitter())
     private var backgroundRetryJob: Job? = null
     private var reconnectJob: Job? = null
 
@@ -233,8 +241,9 @@ class JellyfinWebSocketClient(
 
     private fun scheduleReconnect() {
         val attempts = reconnectAttempts.incrementAndGet()
-        if (attempts > maxReconnectAttempts) {
-            NetworkLog.w(TAG, "Max reconnect attempts ($maxReconnectAttempts) reached, scheduling slow background retry")
+        val fastDelayMs = fastBackoff.delayMs(attempts)
+        if (fastDelayMs == null) {
+            NetworkLog.w(TAG, "Max reconnect attempts (${fastBackoff.maxAttempts}) reached, scheduling slow background retry")
             backgroundRetryJob?.cancel()
             // Exponential backoff on the slow path: 60s → 2m → 4m → … → 15min
             // cap. Each failed retry cycle (the 5 fast attempts below, then
@@ -262,14 +271,13 @@ class JellyfinWebSocketClient(
             }
             return
         }
-        val delayMs = (1000L * (1L shl (attempts - 1).coerceAtMost(4)) + (0..1000L).random()).coerceAtMost(30_000L)
         // Cancel any in-flight reconnect attempt before scheduling a new one.
         // Without this, a rapid connect/disconnect cycle (e.g. user toggling
         // SyncPlay on a flaky network) could leak the deferred connectInternal()
         // call and end up with two WebSockets racing each other.
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            delay(delayMs)
+            delay(fastDelayMs)
             if (serverUrl != null && token != null) {
                 NetworkLog.d(TAG, "Reconnecting WebSocket (attempt $attempts)")
                 connectInternal()
@@ -283,7 +291,7 @@ class JellyfinWebSocketClient(
         deviceId = null
         backgroundRetryJob?.cancel()
         reconnectJob?.cancel()
-        reconnectAttempts.set(maxReconnectAttempts + 1)
+        reconnectAttempts.set(fastBackoff.maxAttempts + 1)
         _isConnected.value = false
         // The next explicit connect() starts a fresh logical session — its
         // first open is a first connect, not a reconnect (see [reconnects]).

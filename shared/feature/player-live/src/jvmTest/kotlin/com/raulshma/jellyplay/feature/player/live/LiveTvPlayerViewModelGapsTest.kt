@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -45,8 +46,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -105,6 +106,14 @@ class LiveTvPlayerViewModelGapsTest {
     private val engineDurationFlow = MutableStateFlow(-1L)
     private val engineErrorDetailFlow = MutableStateFlow<String?>(null)
     private val engineErrorMessageFlow = MutableStateFlow<String?>(null)
+
+    /**
+     * The VM's pinned wall clock (the injected [EpochMillisSource] seam —
+     * LiveNowWindow's inject-don't-create rule): the program-window fixtures
+     * below derive from the SAME now the VM reads, so "airing" stays airing.
+     */
+    private val fixedNow: Instant = Instant.parse("2026-06-22T15:00:00Z")
+    private val fixedNowMs: Long = fixedNow.toEpochMilliseconds()
 
     /** The engine-failure callback the VM hands the factory; invoked by tests. */
     private var onTranscodeFallback: (() -> Unit)? = null
@@ -176,6 +185,7 @@ class LiveTvPlayerViewModelGapsTest {
         playbackStore = playbackStore,
         aggregateStore = aggregateStore,
         lastChannelStore = lastChannelStore,
+        epochMillisSource = EpochMillisSource { fixedNowMs },
         engineFactory = LiveEngineFactory { config, onFallback ->
             assertEquals("tok", config.authToken, "auth token flows via the engine config")
             onTranscodeFallback = onFallback
@@ -357,12 +367,12 @@ class LiveTvPlayerViewModelGapsTest {
 
     // ── 3. In-player recording actions ───────────────────────────────────────
 
-    /** ISO instant ~1 h before now, for a program window that is airing. */
+    /** ISO instant ~1 h before the VM's pinned now — a program that is airing. */
     private fun hourBeforeNow(): String =
-        (Clock.System.now() - 1.hours).toString()
+        (fixedNow - 1.hours).toString()
 
     private fun hourAfterNow(): String =
-        (Clock.System.now() + 1.hours).toString()
+        (fixedNow + 1.hours).toString()
 
     private fun airingProgram(
         id: String = "prog-1",

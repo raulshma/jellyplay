@@ -140,26 +140,7 @@ val settingsModule: Module = module {
     }
     viewModel {
         FactoryResetViewModel(
-            playbackStore = get(),
-            appearanceStore = get(),
-            videoPlayerStore = get(),
-            downloadsStore = get(),
-            engineStore = get(),
-            homeDiscoveryStore = get(),
-            audioStore = get(),
-            audioEffectsStore = get(),
-            audioCacheStore = get(),
-            libraryStore = get(),
-            navigationStore = get(),
-            networkOfflineStore = get(),
-            notificationStore = get(),
-            screensaverStore = get(),
-            securityStore = get(),
-            subtitleLanguageStore = get(),
-            syncPlayCastStore = get(),
-            experimentalStore = get(),
-            appRuntimeStateStore = get(),
-            pinRateLimiter = get(),
+            snapshotReader = get(),
             editor = get(),
         )
     }

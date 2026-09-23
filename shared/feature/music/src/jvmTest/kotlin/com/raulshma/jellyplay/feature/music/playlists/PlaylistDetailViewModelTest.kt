@@ -8,13 +8,16 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import com.raulshma.jellyplay.core.model.UserDataChange
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -30,8 +33,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the playlist overloads (imageless mapper, `imageUrl = null`) that
- * PlaylistDetailViewModel delegates to (plan 04 sites 14–15).
+ * Pins the playlist detail contract on the [com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator]
+ * chassis (the album host's suite shape) plus the playlist-specific halves:
+ * the title hint fast path (a hinted load never fetches the name), the
+ * items-gated all-or-nothing load, the re-entry guard and its
+ * reload-after-failure re-arm, the mutation-error split (survives no-op
+ * re-entries, wiped when an accepted loud load starts), and the deferred
+ * silent regeneration (serve-stale, no flash).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaylistDetailViewModelTest {
@@ -46,6 +54,9 @@ class PlaylistDetailViewModelTest {
 
     private lateinit var viewModel: PlaylistDetailViewModel
 
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+
     private val items = listOf(
         PlaylistItem(id = "p1", playlistItemId = "e1", name = "Song 1", artist = "A"),
         PlaylistItem(id = "p2", playlistItemId = "e2", name = "Song 2", artist = "A"),
@@ -57,6 +68,8 @@ class PlaylistDetailViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         coEvery { audioQueueFacade.playPlaylist(any(), any()) } returns MusicQueueOutcome.Started(emptyList(), 0)
         coEvery { audioQueueFacade.enqueuePlaylistItem(any()) } just Runs
+        // The deferred refresher collects this for the whole VM lifetime.
+        every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = PlaylistDetailViewModel(
             mediaRepository = mediaRepository,
             playlistRepository = playlistRepository,
@@ -160,6 +173,123 @@ class PlaylistDetailViewModelTest {
         // …but the detail read (and its force flag) is unused there.
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
     }
+
+    // ── Re-entry guard + deferred refresh (the album host's fixture shape) ───
+
+    @Test
+    fun load_onAnAlreadyLoadedPlaylistIsANoOp() = runTest(mainDispatcher) {
+        loadPlaylist()
+        advanceUntilIdle()
+
+        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
+        // loud load must not refetch on top of the deferred refresh's silent
+        // regeneration.
+        viewModel.load("pl1", "My Playlist")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
+        assertFalse(viewModel.isLoading)
+    }
+
+    @Test
+    fun load_afterAFailedLoudLoadReloads() = runTest(mainDispatcher) {
+        // First loud load fails (items half): nothing on screen behind the
+        // error, so the re-entry guard must not skip.
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
+            Result.failure(RuntimeException("gone"))
+        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+            Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "X", mediaType = MediaType.MUSIC)))
+        viewModel.load("pl1")
+        advanceUntilIdle()
+        assertEquals("gone", viewModel.error)
+
+        // Re-entry retries the loud load and heals.
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
+        viewModel.load("pl1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
+        assertNull(viewModel.error)
+        assertEquals(items, viewModel.items)
+    }
+
+    @Test
+    fun load_nameFailure_failsTheWholeLoadWithoutPublishingItems() = runTest(mainDispatcher) {
+        // All-or-nothing: the failed name half fails the whole fetch, so the
+        // error owns the screen (the screen renders ErrorScreen whenever
+        // error != null && items.isEmpty()) and no half-pair is published.
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
+        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+            Result.failure(RuntimeException("no title"))
+
+        viewModel.load("pl1")
+        advanceUntilIdle()
+
+        assertEquals("no title", viewModel.error)
+        assertEquals(emptyList(), viewModel.items)
+        assertFalse(viewModel.isLoading)
+    }
+
+    @Test
+    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcher) {
+        loadPlaylist()
+        advanceUntilIdle()
+        assertFalse(viewModel.isLoading)
+
+        // A write confirmed while the playlist screen is NOT on screen only
+        // marks the playlist stale.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        val freshItems = listOf(items[0], items[2])
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(freshItems)
+        userDataEvents.emit(UserDataChange("user-1", listOf("p1")))
+        advanceUntilIdle()
+
+        // Re-entry fires the single deferred regeneration — force + silent:
+        // the fetch runs but never drops the content into a loading state,
+        // and the hinted title is kept (a silent regen must not blank it).
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        assertFalse(viewModel.isLoading)
+        assertNull(viewModel.error)
+        assertEquals(freshItems, viewModel.items)
+        assertEquals("My Playlist", viewModel.playlistName)
+    }
+
+    @Test
+    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcher) {
+        loadPlaylist()
+        advanceUntilIdle()
+
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
+            Result.failure(RuntimeException("offline blip"))
+        userDataEvents.emit(UserDataChange("user-1", listOf("p1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The silent refetch failed — serve-stale-while-revalidate keeps the
+        // last items/title on screen instead of flashing an error…
+        coVerify(exactly = 2) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
+        assertFalse(viewModel.isLoading)
+        assertNull(viewModel.error)
+        assertEquals(items, viewModel.items)
+
+        // …and the failed silent half re-arms: the next re-entry retries.
+        val freshItems = listOf(items[1])
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(freshItems)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        assertEquals(freshItems, viewModel.items)
+    }
+
+    // The no-stack/skip-re-arm choreography pair the album suite used to
+    // re-pin is module behaviour now — DeferredFetchCoordinatorTest owns that
+    // table; this suite pins the host adapter's own surfaces.
 
     // ── Remove-from-playlist + undo ──────────────────────────────────────────
 
@@ -283,6 +413,46 @@ class PlaylistDetailViewModelTest {
     }
 
     // ── Error lifecycle ──────────────────────────────────────────────────────
+
+    @Test
+    fun mutationError_survivesANoOpReEntry() = runTest(mainDispatcher) {
+        coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns
+            Result.failure(RuntimeException())
+        loadPlaylist()
+        advanceUntilIdle()
+        viewModel.removeFromPlaylist(items[1])
+        advanceUntilIdle()
+        assertEquals("Failed to remove from playlist", viewModel.error)
+
+        // Back-stack re-entry re-runs the screen's LaunchedEffect; the guard
+        // no-ops the loud load, so the standing mutation error survives it
+        // (the album host's failed-mix precedent — no flash reload to hide).
+        viewModel.load("pl1", "My Playlist")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
+        assertEquals("Failed to remove from playlist", viewModel.error)
+    }
+
+    @Test
+    fun mutationError_isWipedWhenAnAcceptedLoudLoadStarts() = runTest(mainDispatcher) {
+        coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns
+            Result.failure(RuntimeException())
+        loadPlaylist()
+        advanceUntilIdle()
+        viewModel.removeFromPlaylist(items[1])
+        advanceUntilIdle()
+        assertEquals("Failed to remove from playlist", viewModel.error)
+
+        // A forced (accepted) load wipes the surfaced mutation error — fresh
+        // content is arriving; the old ladder cleared its one error field at
+        // load start.
+        viewModel.refreshPlaylist("pl1")
+        advanceUntilIdle()
+
+        assertNull(viewModel.error)
+        assertFalse(viewModel.isLoading)
+    }
 
     @Test
     fun clearError_resetsTheErrorState() = runTest(mainDispatcher) {

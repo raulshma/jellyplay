@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.navigation
 
 import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.core.data.remote.NavigationTarget
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.data.remote.PlayEventPayload
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessage
@@ -287,7 +287,7 @@ class NavRequestCollectorTest {
         val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
         launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
 
-        targets.tryEmit(NavigationTarget.MoveFocus(com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.DOWN))
+        targets.tryEmit(NavigationTarget.MoveFocus(com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection.DOWN))
         targets.tryEmit(NavigationTarget.InvokeSelect)
         advanceUntilIdle()
 
@@ -342,7 +342,7 @@ class NavRequestCollectorTest {
         launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
 
         targets.tryEmit(
-            NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.data.remote.RemoteTopLevelDestination.HOME),
+            NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.model.remote.RemoteTopLevelDestination.HOME),
         )
         advanceUntilIdle()
 
@@ -356,7 +356,7 @@ class NavRequestCollectorTest {
         launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
 
         targets.tryEmit(
-            NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.data.remote.RemoteTopLevelDestination.SETTINGS),
+            NavigationTarget.GoToTopLevel(com.raulshma.jellyplay.core.model.remote.RemoteTopLevelDestination.SETTINGS),
         )
         advanceUntilIdle()
 

@@ -31,6 +31,8 @@ import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
@@ -288,28 +290,45 @@ val datastoreCommonModule = module {
     // Composites
     // ------------------------------------------------------------------
 
+    // The domain-store enumeration for the settings read lanes lives ONCE
+    // here: both PreferenceProjections (eager StateFlow projections) and
+    // PreferenceSnapshotReader (one-shot diff snapshot) consume the bundle.
+    single {
+        PreferenceStores(
+            playback = get<PlaybackStore>(),
+            videoPlayer = get<VideoPlayerStore>(),
+            engine = get<PlayerEngineStore>(),
+            subtitle = get<SubtitleLanguageStore>(),
+            audio = get<AudioStore>(),
+            audioEffects = get<AudioEffectsStore>(),
+            audioCache = get<AudioCacheStore>(),
+            appearance = get<AppearanceStore>(),
+            homeDiscovery = get<HomeDiscoveryStore>(),
+            library = get<LibraryStore>(),
+            navigation = get<NavigationStore>(),
+            downloads = get<DownloadsStore>(),
+            networkOffline = get<NetworkOfflineStore>(),
+            notification = get<NotificationStore>(),
+            syncPlayCast = get<SyncPlayCastStore>(),
+            security = get<SecurityStore>(),
+            experimental = get<ExperimentalStore>(),
+            screensaver = get<ScreensaverStore>(),
+            volumeProfile = get<VolumeProfileStore>(),
+        )
+    }
+
     single {
         PreferenceProjections(
             get(DatastoreQualifiers.applicationScope),
-            get<PlaybackStore>(),
-            get<VideoPlayerStore>(),
-            get<PlayerEngineStore>(),
-            get<SubtitleLanguageStore>(),
-            get<AudioStore>(),
-            get<AudioEffectsStore>(),
-            get<AudioCacheStore>(),
-            get<AppearanceStore>(),
-            get<HomeDiscoveryStore>(),
-            get<LibraryStore>(),
-            get<NavigationStore>(),
-            get<DownloadsStore>(),
-            get<NetworkOfflineStore>(),
-            get<NotificationStore>(),
-            get<SyncPlayCastStore>(),
-            get<SecurityStore>(),
-            get<ExperimentalStore>(),
-            get<ScreensaverStore>(),
-            get<VolumeProfileStore>(),
+            stores = get<PreferenceStores>(),
+        )
+    }
+
+    single {
+        PreferenceSnapshotReader(
+            stores = get<PreferenceStores>(),
+            appRuntimeStateStore = get<AppRuntimeStateStore>(),
+            pinRateLimiter = get<PinRateLimiter>(),
         )
     }
 

@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -31,8 +31,6 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.time.LocalDate
-import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -482,15 +480,4 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         userId = null,
         accessToken = null,
     )
-
-    /**
-     * Same shape as MediaRepositoryHomeSectionsCacheTest's fake: one clock
-     * drives the in-memory TTL (monotonic read) AND the SWR wall-clock reads
-     * (fetchedAt, the 24h ceiling). Starts at t=1000; tests advance it.
-     */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
-    }
 }

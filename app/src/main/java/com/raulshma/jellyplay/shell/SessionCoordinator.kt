@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.shell
 
 import android.content.Context
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -9,9 +8,9 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
-import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ServerHealth
+import com.raulshma.jellyplay.feature.shell.RealtimeSessionController
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
 import com.raulshma.jellyplay.widget.ContinueWatchingWidget
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
@@ -27,16 +26,20 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Owns the app-shell session lifecycle behind a small seam: session restore,
- * the authenticated-state fan-out (server health, WebSocket, remote control,
- * widgets, cache maintenance, library folders), capabilities re-posting on
- * every socket reconnect, and full teardown on logout / session revocation.
+ * the Android-only authenticated-state fan-out (server health, widgets,
+ * cache maintenance, library folders — hung off the shared controller's
+ * `onConnected` hook), and full teardown on logout / session revocation. The
+ * realtime core itself — WebSocket connect on the auth edge, remote-control
+ * receiver start/stop, endpoint selection, capabilities re-posting on every
+ * socket reconnect — is the shared [RealtimeSessionController]
+ * (shared/feature/shell), constructed per lifecycle with clientName
+ * "JellyPlay".
  *
  * Interface is one state triple plus start/stop commands —
  * [isRestoring], [isAuthenticated], [libraryFolders] and [serverHealth] are
  * the flows the shell renders; [start] begins the lifecycle on the caller's
  * scope (the activity-scoped ViewModel's), [logout] /
- * [revokeServerSession] end it. Everything else (endpoint selection,
- * capability ordering) stays private to this module.
+ * [revokeServerSession] end it. Everything else stays private to this module.
  */
 class SessionCoordinator(
     private val context: Context,
@@ -62,6 +65,16 @@ class SessionCoordinator(
     val serverHealth: StateFlow<ServerHealth> = serverHealthMonitor.serverHealth
 
     /**
+     * The shared realtime core (socket connect, receiver, capabilities
+     * re-arm), rebuilt per [start]: [RealtimeSessionController.stop] on the
+     * previous occupant first, so a lifecycle restart (activity-state loss
+     * rebuilt the ViewModel) never duplicates its collectors — the same
+     * cancel-then-replace discipline [RestartableJob] applies to the
+     * collectors below.
+     */
+    private var realtimeSession: RealtimeSessionController? = null
+
+    /**
      * Begins the session lifecycle on [scope]. [onSessionRestored] fires once
      * restore completes (success or not) so dependent launch-time work — e.g.
      * the self-update check — can run after the UI is up without this module
@@ -71,122 +84,68 @@ class SessionCoordinator(
      */
     fun start(scope: CoroutineScope, onSessionRestored: () -> Unit = {}) {
         _isRestoring.value = true
+        realtimeSession?.stop()
+        realtimeSession = RealtimeSessionController(
+            scope = scope,
+            isAuthenticated = authRepository.isAuthenticated,
+            currentServer = authRepository.currentServer,
+            currentUser = authRepository.currentUser,
+            clientName = "JellyPlay",
+            serverUrl = realtimeConnection::serverUrl,
+            isConnected = realtimeConnection.isConnected,
+            reconnects = realtimeConnection.reconnects,
+            connect = realtimeConnection::connect,
+            disconnect = realtimeConnection::disconnect,
+            startReceiver = remoteControlReceiver::start,
+            stopReceiver = remoteControlReceiver::stop,
+            ensureDeviceId = serverIdentityStore::ensureDeviceId,
+            onReconnect = { authRepository.postCapabilities() },
+            onConnected = { server, user ->
+                // The Android-only authenticated fan-out, delivered through
+                // the shared controller: fires on the controller's auth-true
+                // edge, after the connect + receiver arm, with the same
+                // resolved (server, user) pair the credentials used — the
+                // exact arm this class used to duplicate by re-reading the
+                // flows in the collector below. Auth-edge work only: socket
+                // reconnects re-post capabilities but never re-fire this.
+                serverHealthMonitor.startMonitoring(server.address)
+                scope.launch {
+                    widgetWorkScheduler.refreshLibraryNow()
+                }
+                scope.launch {
+                    widgetWorkScheduler.refreshSeerrNow()
+                }
+                // Force every placed widget to re-read its cached data
+                // from the store. The Continue Watching widget has no
+                // worker of its own (data is pushed by HomeViewModel),
+                // so this is what makes it pick up freshly restored
+                // state on cold start; for Library/Seerr it surfaces
+                // any cached items while the worker run completes.
+                ContinueWatchingWidget.triggerUpdate(context)
+                // Best-effort cache maintenance — runs once after the
+                // first successful auth instead of a fragile startup
+                // delay.
+                cacheMaintenanceInitializer.cleanupOnce()
+                // Fetch library folders for the TV navigation drawer
+                refreshLibraryFolders()
+            },
+        )
         lifecycleJob.launchIn(scope) {
             launch {
                 restoreSession()
                 onSessionRestored()
             }
             launch {
+                // Mirror + teardown only: everything authenticated-state
+                // positive rides the controller's onConnected above.
                 authRepository.isAuthenticated.collect { isAuth ->
                     _isAuthenticated.value = isAuth
-                    if (isAuth) {
-                        val server = authRepository.currentServer.first()
-                        val user = authRepository.currentUser.first()
-                        if (server != null && user != null) {
-                            serverHealthMonitor.startMonitoring(server.address)
-                            val deviceId = serverIdentityStore.ensureDeviceId()
-                            val deviceName = ConnectionCredentials.deviceNameFor(user.name)
-                            // Connect to the *active* endpoint — after address
-                            // selection this is the reachable address (primary
-                            // when available, else an alternate), avoiding a
-                            // doomed first handshake against a dead primary.
-                            realtimeConnection.connect(
-                                ConnectionCredentials(
-                                    serverAddress = realtimeConnection.serverUrl() ?: server.address,
-                                    accessToken = user.accessToken,
-                                    deviceId = deviceId,
-                                    deviceName = deviceName,
-                                    clientName = "JellyPlay",
-                                )
-                            )
-                            // Capabilities must be posted *after* the server has a
-                            // session for this device. The Jellyfin server computes
-                            // a session's SupportsRemoteControl as:
-                            // Capabilities?.SupportsMediaControl == true
-                            // && an attached SessionController (the WebSocket)
-                            // also reports SupportsMediaControl.
-                            // POST /Sessions/Capabilities/Full resolves the session
-                            // by deviceId and throws if none exists yet — which is
-                            // the case if it races ahead of the WebSocket handshake.
-                            // That exception was swallowed here, leaving Capabilities
-                            // null and the device absent from every other client's
-                            // "Play On" / cast list (incl. other JellyPlay clients).
-                            // Drive it off the WebSocket's connected state instead,
-                            // so it lands once the server session truly exists and
-                            // is re-sent on every reconnect (the controller is gone
-                            // after a socket drop and must be re-armed). The actual
-                            // (re)posting is done by the connection collector below,
-                            // which fires on every false→true transition for the
-                            // life of the auth session.
-                            remoteControlReceiver.start()
-                            launch {
-                                widgetWorkScheduler.refreshLibraryNow()
-                            }
-                            launch {
-                                widgetWorkScheduler.refreshSeerrNow()
-                            }
-                            // Force every placed widget to re-read its cached data
-                            // from the store. The Continue Watching widget has no
-                            // worker of its own (data is pushed by HomeViewModel),
-                            // so this is what makes it pick up freshly restored
-                            // state on cold start; for Library/Seerr it surfaces
-                            // any cached items while the worker run completes.
-                            ContinueWatchingWidget.triggerUpdate(context)
-                            // Best-effort cache maintenance — runs once after the
-                            // first successful auth instead of a fragile startup
-                            // delay.
-                            cacheMaintenanceInitializer.cleanupOnce()
-                            // Fetch library folders for the TV navigation drawer
-                            refreshLibraryFolders()
-                        }
-                    } else {
+                    if (!isAuth) {
                         serverHealthMonitor.stopMonitoring()
-                        realtimeConnection.disconnect()
-                        remoteControlReceiver.stop()
                         _libraryFolders.value = emptyList()
                     }
                 }
             }
-            launch {
-                // Post capabilities on every WebSocket (re)connect. The server
-                // drops the session's WebSocketController (and thus
-                // SupportsRemoteControl) when the socket closes, so after a drop
-                // the device disappears from other clients' "Play On" lists until
-                // capabilities are re-armed. Gated on isAuthenticated so a stray
-                // connect during teardown doesn't fire a stale POST.
-                //
-                // The former hand-rolled `lastConnected` edge also fired on the
-                // FIRST connect (the collector starts before the auth fan-out
-                // above connects), and that first post is load-bearing — it is
-                // what arms capabilities once the server session truly exists.
-                // That first-connect arm is kept explicitly here: the
-                // immediate [postCapabilitiesIfAuthenticated] covers BOTH the
-                // first connect and an already-up socket at collector start
-                // (RestartableJob cancels the old collector but the socket
-                // survives — the re-post is an idempotent re-assert, and
-                // [RealtimeConnection.reconnects] carries no replay, so this
-                // immediate post is the only already-up arm); every
-                // subsequent drop+reopen rides [RealtimeConnection.reconnects].
-                if (!realtimeConnection.isConnected.value) {
-                    realtimeConnection.isConnected.first { it }
-                }
-                postCapabilitiesIfAuthenticated()
-                realtimeConnection.reconnects.collect {
-                    postCapabilitiesIfAuthenticated()
-                }
-            }
-        }
-    }
-
-    /**
-     * Posts session capabilities on [this] scope, gated on the authenticated
-     * mirror — the shared body of the first-connect arm and every
-     * [RealtimeConnection.reconnects] re-arm in [start].
-     */
-    private fun CoroutineScope.postCapabilitiesIfAuthenticated() {
-        if (!_isAuthenticated.value) return
-        launch {
-            runCatchingRethrowingCancellation { authRepository.postCapabilities() }
         }
     }
 

@@ -1,11 +1,5 @@
 package com.raulshma.jellyplay.core.ui.animation
 
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
@@ -32,36 +26,3 @@ fun <T> slowEffectsSpec() = MaterialTheme.motionScheme.slowEffectsSpec<T>()
 
 @Composable
 inline fun <T> lessSpringySpec() = MaterialTheme.motionScheme.defaultSpatialSpec<T>()
-
-@Composable
-inline fun <T> springySpec() = MaterialTheme.motionScheme.slowSpatialSpec<T>()
-
-@Composable
-fun fancySlideTransition(
-    isForward: Boolean,
-    screenWidthPx: Int,
-): ContentTransform = if (isForward) {
-    slideInHorizontally(
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        initialOffsetX = { screenWidthPx }
-    ) + fadeIn(
-        MaterialTheme.motionScheme.defaultEffectsSpec()
-    ) togetherWith slideOutHorizontally(
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        targetOffsetX = { -screenWidthPx }
-    ) + fadeOut(
-        MaterialTheme.motionScheme.defaultEffectsSpec()
-    )
-} else {
-    slideInHorizontally(
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        initialOffsetX = { -screenWidthPx }
-    ) + fadeIn(
-        MaterialTheme.motionScheme.defaultEffectsSpec()
-    ) togetherWith slideOutHorizontally(
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        targetOffsetX = { screenWidthPx }
-    ) + fadeOut(
-        MaterialTheme.motionScheme.defaultEffectsSpec()
-    )
-}

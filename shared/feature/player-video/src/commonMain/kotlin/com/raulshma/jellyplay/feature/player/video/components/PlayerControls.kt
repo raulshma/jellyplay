@@ -228,11 +228,118 @@ internal data class SyncPlayIndicator(
     val isSyncing: Boolean = false,
 )
 
+/**
+ * Transport bundle for [PlayerControls]: the play/pause pair, the seek triple
+ * the seek bar dispatches, the episode-stepping pair (+ enablement), the
+ * seek-bar trickplay scrub preview, and the mute toggle — the playback
+ * transport surface the center cluster and the seek bar render.
+ */
+@Immutable
+internal data class TransportControls(
+    val isPlaying: Boolean = false,
+    val onPlayPause: () -> Unit = {},
+    val onSeekStart: () -> Unit = {},
+    val onSeekEnd: () -> Unit = {},
+    val onSeekPositionChange: (Long) -> Unit = {},
+    val hasPreviousEpisode: Boolean = false,
+    val hasNextEpisode: Boolean = false,
+    val onPreviousEpisode: () -> Unit = {},
+    val onNextEpisode: () -> Unit = {},
+    val tvTrickplayBitmap: PlatformBitmap? = null,
+    val isMuted: Boolean = false,
+    val onMuteClick: () -> Unit = {},
+)
+
+/**
+ * Chrome-interaction bundle for [PlayerControls]: the screen-observed
+ * interactions with the controls surface itself (control-row scroll → auto-hide
+ * reset, focus tracking, overflow open/close mirroring) plus the chrome
+ * actions that are neither transport nor sheet openers (back, lock, PiP,
+ * orientation toggle).
+ */
+@Immutable
+internal data class GestureControls(
+    val onBack: () -> Unit = {},
+    val onLockClick: () -> Unit = {},
+    val onPipClick: () -> Unit = {},
+    val onToggleOrientation: () -> Unit = {},
+    val onControlRowScrolled: () -> Unit = {},
+    val onControlsFocusChange: (Boolean) -> Unit = {},
+    val onOverflowMenuChange: (Boolean) -> Unit = {},
+)
+
+/**
+ * Sheet/overflow bundle for [PlayerControls]: the `openSheet` funnel plus every
+ * dedicated opener that carries side effects beyond the sheet id (the
+ * subtitle-hub pair, the subtitle-delay overlay, the render sheet), the
+ * overflow panel's toggle/state wiring (video stats, video filters,
+ * screenshot, A/B repeat actions, audio-only, incognito mark-and-exit,
+ * render/deinterlace), and the Episodes entry's gates. Everything here either
+ * opens a [PlayerSheet]-shaped surface or is dispatched from inside one.
+ *
+ * The [openSheet] funnel used to be the whole story: every control that opens
+ * a PlayerSheet and nothing else routes through it, because ~13 separate
+ * no-arg `on*Click` params each had to be remembered at the call site or
+ * PlayerControls' skippability broke (a fresh lambda per recomposition forced
+ * the ~1500-line controls tree to recompose on every position tick) — one
+ * remembered `(PlayerSheet) -> Unit` restores that guarantee structurally
+ * (now one remembered [SheetControls] carries it). Openers with side effects
+ * beyond the sheet id (the subtitle hub's reset-first flag) stay dedicated
+ * members.
+ */
+@Immutable
+internal data class SheetControls(
+    val openSheet: (PlayerSheet) -> Unit = {},
+    val onSubtitleClick: () -> Unit = {},
+    val onSubtitleHubClick: () -> Unit = {},
+    val onSubtitleDelayClick: () -> Unit = {},
+    val hasEpisodes: Boolean = false,
+    val episodeBrowserEnabled: Boolean = true,
+    val showVideoStats: Boolean = false,
+    val onVideoStatsClick: () -> Unit = {},
+    val videoFiltersActive: Boolean = false,
+    val onScreenshotClick: () -> Unit = {},
+    val onAbRepeatToggle: () -> Unit = {},
+    val onAbRepeatSetA: () -> Unit = {},
+    val onAbRepeatSetB: () -> Unit = {},
+    val onAbRepeatClear: () -> Unit = {},
+    val audioOnly: Boolean = false,
+    val onToggleAudioOnly: () -> Unit = {},
+    val incognitoModeEnabled: Boolean = false,
+    val onMarkWatchedAndSkip: () -> Unit = {},
+    val onMarkUnwatchedAndQuit: () -> Unit = {},
+    val supportsRenderPanel: Boolean = false,
+    val onRenderClick: () -> Unit = {},
+    val supportsDeinterlace: Boolean = false,
+    val deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
+    val onDeinterlaceCycle: () -> Unit = {},
+)
+
+/**
+ * Track/metadata bundle for [PlayerControls]: the stream/track facts the
+ * playback-metadata row and the quality/audio sheet entries render — stream
+ * list, audio tracks, play method (+ forced-direct flag), HDR type, metered
+ * connection, subtitle delay, streaming quality, playback mode, the row's
+ * visibility toggle.
+ */
+@Immutable
+internal data class TrackControls(
+    val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
+    val playMethod: String = "Direct Play",
+    val isDirectPlayForced: Boolean = false,
+    val hdrType: String? = null,
+    val mediaStreams: List<MediaStream> = emptyList(),
+    val audioTracks: List<TrackOption> = emptyList(),
+    val isConnectionMetered: Boolean = false,
+    val subtitleDelayMs: Long = 0L,
+    val showPlaybackMetadata: Boolean = true,
+)
+
 @Composable
 internal fun PlayerControls(
     title: String,
     subtitle: String,
-    isPlaying: Boolean,
     // High-frequency playback streams collected here so the seek bar /
     // time labels recompose at 4 Hz without invalidating the whole screen.
     currentPositionFlow: StateFlow<Long>,
@@ -246,6 +353,13 @@ internal fun PlayerControls(
     chapters: List<ChapterInfo>,
     effectsControls: PlayerEffectsControls = PlayerEffectsControls(),
     segments: List<MediaSegment> = emptyList(),
+    // The four callback/value families (the [PlayerEffectsControls] idiom):
+    // transport (play/seek/episodes/trickplay/mute), chrome gestures &
+    // interaction reporting, sheet/overflow wiring, and track/metadata facts.
+    transport: TransportControls = TransportControls(),
+    gestures: GestureControls = GestureControls(),
+    sheets: SheetControls = SheetControls(),
+    tracks: TrackControls = TrackControls(),
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
@@ -253,84 +367,19 @@ internal fun PlayerControls(
     // per-engine gates ride the @Immutable EngineCapabilities data class
     // instead of twelve supportsX booleans flattened at every call site.
     capabilities: EngineCapabilities = EngineCapabilities(),
-    hasEpisodes: Boolean = false,
-    episodeBrowserEnabled: Boolean = true,
-    onPlayPause: () -> Unit,
-    onSeekStart: () -> Unit,
-    onSeekEnd: () -> Unit,
-    onSeekPositionChange: (Long) -> Unit,
-    hasPreviousEpisode: Boolean = false,
-    hasNextEpisode: Boolean = false,
-    onPreviousEpisode: () -> Unit = {},
-    onNextEpisode: () -> Unit = {},
-    tvTrickplayBitmap: PlatformBitmap? = null,
-    onBack: () -> Unit,
-    // The single sheet-opener funnel: every control that opens a PlayerSheet
-    // and nothing else routes through here. This used to be ~13 separate
-    // no-arg `on*Click` params that each had to be remembered at the call
-    // site or PlayerControls' skippability broke (a fresh lambda per
-    // recomposition forced the ~1500-line controls tree to recompose on
-    // every position tick) — one remembered (PlayerSheet) -> Unit restores
-    // that guarantee structurally. Openers carrying side effects beyond the
-    // sheet id (the subtitle hub's reset-first flag) stay dedicated params.
-    openSheet: (PlayerSheet) -> Unit,
-    onSubtitleClick: () -> Unit,
-    onSubtitleHubClick: () -> Unit,
-    onPipClick: () -> Unit = {},
-    onMuteClick: () -> Unit = {},
-    isMuted: Boolean = false,
     syncPlay: SyncPlayIndicator = SyncPlayIndicator(),
-    showVideoStats: Boolean = false,
-    onVideoStatsClick: () -> Unit = {},
-    streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    playbackMode: PlaybackMode = PlaybackMode.AUTO,
     sleepTimer: SleepTimerControls = SleepTimerControls(),
-    videoFiltersActive: Boolean = false,
-    onScreenshotClick: () -> Unit = {},
     abRepeat: AbRepeatState = AbRepeatState(),
-    onAbRepeatToggle: () -> Unit = {},
-    onAbRepeatSetA: () -> Unit = {},
-    onAbRepeatSetB: () -> Unit = {},
-    onAbRepeatClear: () -> Unit = {},
-    audioOnly: Boolean = false,
-    onToggleAudioOnly: () -> Unit = {},
-    // Mark-and-exit pair: forwarded to the overflow menu verbatim.
-    incognitoModeEnabled: Boolean = false,
-    onMarkWatchedAndSkip: () -> Unit = {},
-    onMarkUnwatchedAndQuit: () -> Unit = {},
-    // the Rendering sheet opener — shown for mpv engines only.
-    supportsRenderPanel: Boolean = false,
-    onRenderClick: () -> Unit = {},
-    // the session-scoped deinterlace cycle. The item shows when
-    // [supportsDeinterlace] is true AND a [deinterlaceMode] is provided; the
-    // label renders the current session mode.
-    supportsDeinterlace: Boolean = false,
-    deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
-    onDeinterlaceCycle: () -> Unit = {},
-    onLockClick: () -> Unit = {},
-    onControlsFocusChange: (Boolean) -> Unit = {},
-    onOverflowMenuChange: (Boolean) -> Unit = {},
     // Opaque cast-manager handle (seam): the Android host passes the
     // legacy discovery/connect CastManager; desktop passes null and the cast
     // button hides. See VideoPlayerViewModel.platformCastManager.
     castManager: Any? = null,
-    playMethod: String = "Direct Play",
-    isDirectPlayForced: Boolean = false,
-    hdrType: String? = null,
-    mediaStreams: List<MediaStream> = emptyList(),
-    audioTracks: List<TrackOption> = emptyList(),
-    isConnectionMetered: Boolean = false,
-    subtitleDelayMs: Long = 0L,
-    onSubtitleDelayClick: () -> Unit = {},
-    showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
     showTimeRemaining: Boolean = false,
-    onToggleOrientation: () -> Unit = {},
     tvSkipSegmentFocusRequester: FocusRequester? = null,
     tvNextEpisodeFocusRequester: FocusRequester? = null,
     isSkipSegmentVisible: Boolean = false,
     isNextEpisodeVisible: Boolean = false,
-    onControlRowScrolled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // High-frequency position/buffered streams are collected in the leaf
@@ -377,7 +426,7 @@ internal fun PlayerControls(
     LaunchedEffect(bottomLeftScrollState) {
         snapshotFlow { bottomLeftScrollState.isScrollInProgress }
             .filter { it }
-            .collect { onControlRowScrolled() }
+            .collect { gestures.onControlRowScrolled() }
     }
 
     // Overflow menu open/close state. Hoisted to the PlayerControls scope (rather
@@ -386,7 +435,7 @@ internal fun PlayerControls(
     // anchored to TopEnd. Rendering it in-window (instead of a DropdownMenu popup)
     // keeps it in the player's immersive window so the system bars never appear.
     var showOverflow by remember { mutableStateOf(false) }
-    LaunchedEffect(showOverflow) { onOverflowMenuChange(showOverflow) }
+    LaunchedEffect(showOverflow) { gestures.onOverflowMenuChange(showOverflow) }
 
     LaunchedEffect(isVisible, isTv) {
         if (isTv && isVisible) {
@@ -398,7 +447,7 @@ internal fun PlayerControls(
         modifier = modifier
             .onFocusChanged { focusState ->
                 if (isTv) {
-                    onControlsFocusChange(focusState.hasFocus)
+                    gestures.onControlsFocusChange(focusState.hasFocus)
                 }
             }
     ) {
@@ -429,7 +478,7 @@ internal fun PlayerControls(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = onBack,
+                        onClick = gestures.onBack,
                         modifier = Modifier
                             .size(40.dp)
                             .then(tvBackFocusState.focusModifier)
@@ -510,7 +559,7 @@ internal fun PlayerControls(
                             participantCount = syncPlay.participantCount,
                             isSynced = syncPlay.isSynced,
                             isSyncing = syncPlay.isSyncing,
-                            onClick = { openSheet(PlayerSheet.SyncPlay) },
+                            onClick = { sheets.openSheet(PlayerSheet.SyncPlay) },
                         )
                     }
                     if (castManager != null) {
@@ -543,8 +592,8 @@ internal fun PlayerControls(
             ) {
                 val tvPreviousEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
-                    onClick = onPreviousEpisode,
-                    enabled = hasPreviousEpisode,
+                    onClick = transport.onPreviousEpisode,
+                    enabled = transport.hasPreviousEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
                         .then(tvPreviousEpisodeFocusState.focusModifier)
@@ -563,7 +612,7 @@ internal fun PlayerControls(
 
                 val tvPlayPauseFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledIconButton(
-                    onClick = onPlayPause,
+                    onClick = transport.onPlayPause,
                     modifier = Modifier
                         .size(80.dp)
                         .then(tvPlayPauseFocusState.focusModifier)
@@ -576,16 +625,16 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                        if (isPlaying) stringResource(Res.string.player_video_pause) else stringResource(Res.string.player_video_play),
+                        if (transport.isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                        if (transport.isPlaying) stringResource(Res.string.player_video_pause) else stringResource(Res.string.player_video_play),
                         modifier = Modifier.size(40.dp),
                     )
                 }
 
                 val tvNextEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
-                    onClick = onNextEpisode,
-                    enabled = hasNextEpisode,
+                    onClick = transport.onNextEpisode,
+                    enabled = transport.hasNextEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
                         .then(tvNextEpisodeFocusState.focusModifier)
@@ -617,18 +666,18 @@ internal fun PlayerControls(
                     .navigationBarsPadding()
                     .padding(start = 12.dp, end = 12.dp, top = 16.dp),
             ) {
-                if (showPlaybackMetadata) {
+                if (tracks.showPlaybackMetadata) {
                     PlaybackMetadataRow(
-                        playMethod = playMethod,
-                        isDirectPlayForced = isDirectPlayForced,
-                        hdrType = hdrType,
-                        mediaStreams = mediaStreams,
+                        playMethod = tracks.playMethod,
+                        isDirectPlayForced = tracks.isDirectPlayForced,
+                        hdrType = tracks.hdrType,
+                        mediaStreams = tracks.mediaStreams,
                         videoStats = playbackMetadata,
-                        audioTracks = audioTracks,
-                        isConnectionMetered = isConnectionMetered,
-                        subtitleDelayMs = subtitleDelayMs,
-                        onSubtitleDelayClick = onSubtitleDelayClick,
-                        onPlayMethodClick = { openSheet(PlayerSheet.PlaybackMode) },
+                        audioTracks = tracks.audioTracks,
+                        isConnectionMetered = tracks.isConnectionMetered,
+                        subtitleDelayMs = tracks.subtitleDelayMs,
+                        onSubtitleDelayClick = sheets.onSubtitleDelayClick,
+                        onPlayMethodClick = { sheets.openSheet(PlayerSheet.PlaybackMode) },
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
@@ -639,14 +688,14 @@ internal fun PlayerControls(
                     chapters = chapters,
                     segments = segments,
                     bufferedRangesFlow = bufferedRangesFlow,
-                    trickplayBitmap = tvTrickplayBitmap,
+                    trickplayBitmap = transport.tvTrickplayBitmap,
                     playbackSpeed = playbackSpeed,
                     showTimeRemaining = showTimeRemaining,
                     abRepeatStartMs = abRepeat.aMs,
                     abRepeatEndMs = abRepeat.bMs,
-                    onSeekStart = onSeekStart,
-                    onSeekEnd = onSeekEnd,
-                    onSeekPositionChange = onSeekPositionChange,
+                    onSeekStart = transport.onSeekStart,
+                    onSeekEnd = transport.onSeekEnd,
+                    onSeekPositionChange = transport.onSeekPositionChange,
                     tvFocusRequester = tvSeekbarFocusRequester,
                     tvUpFocusRequester = tvPlayPauseFocusRequester,
                     tvDownFocusRequester = tvBottomButtonsFocusRequester,
@@ -679,13 +728,13 @@ internal fun PlayerControls(
                     val primaryControls: @Composable () -> Unit = {
                         PrimaryMediaControls(
                             supportsLiveQualitySwitch = capabilities.supportsLiveQualitySwitch,
-                            streamingQuality = streamingQuality,
+                            streamingQuality = tracks.streamingQuality,
                             playbackSpeed = playbackSpeed,
-                            openSheet = openSheet,
-                            onSubtitleClick = onSubtitleClick,
+                            openSheet = sheets.openSheet,
+                            onSubtitleClick = sheets.onSubtitleClick,
                             chapters = chapters,
-                            hasEpisodes = hasEpisodes,
-                            episodeBrowserEnabled = episodeBrowserEnabled,
+                            hasEpisodes = sheets.hasEpisodes,
+                            episodeBrowserEnabled = sheets.episodeBrowserEnabled,
                             isInSyncPlaySession = syncPlay.inSession,
                             currentAspectRatio = currentAspectRatio,
                         )
@@ -707,17 +756,17 @@ internal fun PlayerControls(
                             PlayerIconButton(
                                 icon = Tabler.Outline.Lock,
                                 contentDescription = stringResource(Res.string.player_video_lock_screen),
-                                onClick = onLockClick,
+                                onClick = gestures.onLockClick,
                             )
-                            MuteButton(isMuted = isMuted, onClick = onMuteClick)
+                            MuteButton(isMuted = transport.isMuted, onClick = transport.onMuteClick)
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            PipButton(onClick = onPipClick)
+                            PipButton(onClick = gestures.onPipClick)
                             PlayerIconButton(
                                 icon = Tabler.Outline.Rotate,
                                 contentDescription = stringResource(Res.string.player_video_rotate_screen),
-                                onClick = onToggleOrientation,
+                                onClick = gestures.onToggleOrientation,
                             )
                             PlayerIconButton(
                                 icon = Tabler.Outline.DotsVertical,
@@ -750,20 +799,20 @@ internal fun PlayerControls(
                                 PlayerIconButton(
                                     icon = Tabler.Outline.Lock,
                                     contentDescription = stringResource(Res.string.player_video_lock_screen),
-                                    onClick = onLockClick,
+                                    onClick = gestures.onLockClick,
                                 )
                             }
                             if (!isTv) {
-                                MuteButton(isMuted = isMuted, onClick = onMuteClick)
+                                MuteButton(isMuted = transport.isMuted, onClick = transport.onMuteClick)
                             }
                             if (!isTv) {
-                                PipButton(onClick = onPipClick)
+                                PipButton(onClick = gestures.onPipClick)
                             }
                             if (!isTv) {
                                 PlayerIconButton(
                                     icon = Tabler.Outline.Rotate,
                                     contentDescription = stringResource(Res.string.player_video_rotate_screen),
-                                    onClick = onToggleOrientation,
+                                    onClick = gestures.onToggleOrientation,
                                 )
                             }
 
@@ -809,14 +858,14 @@ internal fun PlayerControls(
             nightModeEnabled = effectsControls.nightModeEnabled,
             nightModeStrength = effectsControls.nightModeStrength,
             audioPassthrough = effectsControls.audioPassthrough,
-            showVideoStats = showVideoStats,
+            showVideoStats = sheets.showVideoStats,
             audioNormalizationMode = effectsControls.audioNormalizationMode,
             audioNormalizationEnabled = effectsControls.audioNormalizationEnabled,
             channelMixMode = effectsControls.channelMixMode,
             channelMixEnabled = effectsControls.channelMixEnabled,
             onSubtitleHubClick = {
                 showOverflow = false
-                onSubtitleHubClick()
+                sheets.onSubtitleHubClick()
             },
             onDialogueBoostClick = {
                 showOverflow = false
@@ -830,16 +879,16 @@ internal fun PlayerControls(
             onNightModeStrengthChange = effectsControls.onNightModeStrengthChange,
             onAVSyncClick = {
                 showOverflow = false
-                openSheet(PlayerSheet.AVSync)
+                sheets.openSheet(PlayerSheet.AVSync)
             },
-            playbackMode = playbackMode,
+            playbackMode = tracks.playbackMode,
             onPlaybackModeClick = {
                 showOverflow = false
-                openSheet(PlayerSheet.PlaybackMode)
+                sheets.openSheet(PlayerSheet.PlaybackMode)
             },
             onDecoderClick = {
                 showOverflow = false
-                openSheet(PlayerSheet.Decoder)
+                sheets.openSheet(PlayerSheet.Decoder)
             },
             onPassthroughClick = {
                 showOverflow = false
@@ -847,7 +896,7 @@ internal fun PlayerControls(
             },
             onVideoStatsClick = {
                 showOverflow = false
-                onVideoStatsClick()
+                sheets.onVideoStatsClick()
             },
             onAudioNormalizationClick = {
                 showOverflow = false
@@ -870,63 +919,63 @@ internal fun PlayerControls(
             sleepTimerRemainingFlow = sleepTimer.remainingFlow,
             onSleepTimerClick = {
                 showOverflow = false
-                openSheet(PlayerSheet.SleepTimer)
+                sheets.openSheet(PlayerSheet.SleepTimer)
             },
             supportsVideoFilters = capabilities.supportsVideoFilters,
-            videoFiltersActive = videoFiltersActive,
+            videoFiltersActive = sheets.videoFiltersActive,
             onVideoFilterClick = {
                 showOverflow = false
-                openSheet(PlayerSheet.VideoFilter)
+                sheets.openSheet(PlayerSheet.VideoFilter)
             },
             supportsScreenshot = capabilities.supportsScreenshot,
             onScreenshotClick = {
                 showOverflow = false
-                onScreenshotClick()
+                sheets.onScreenshotClick()
             },
             abRepeat = abRepeat,
             onAbRepeatToggle = {
                 showOverflow = false
-                onAbRepeatToggle()
+                sheets.onAbRepeatToggle()
             },
             onAbRepeatSetA = {
                 showOverflow = false
-                onAbRepeatSetA()
+                sheets.onAbRepeatSetA()
             },
             onAbRepeatSetB = {
                 showOverflow = false
-                onAbRepeatSetB()
+                sheets.onAbRepeatSetB()
             },
             onAbRepeatClear = {
                 showOverflow = false
-                onAbRepeatClear()
+                sheets.onAbRepeatClear()
             },
-            audioOnly = audioOnly,
+            audioOnly = sheets.audioOnly,
             onToggleAudioOnly = {
                 showOverflow = false
-                onToggleAudioOnly()
+                sheets.onToggleAudioOnly()
             },
-            hasNextEpisode = hasNextEpisode,
-            incognitoModeEnabled = incognitoModeEnabled,
+            hasNextEpisode = transport.hasNextEpisode,
+            incognitoModeEnabled = sheets.incognitoModeEnabled,
             onMarkWatchedAndSkip = {
                 showOverflow = false
-                onMarkWatchedAndSkip()
+                sheets.onMarkWatchedAndSkip()
             },
             onMarkUnwatchedAndQuit = {
                 showOverflow = false
-                onMarkUnwatchedAndQuit()
+                sheets.onMarkUnwatchedAndQuit()
             },
-            supportsRenderPanel = supportsRenderPanel,
+            supportsRenderPanel = sheets.supportsRenderPanel,
             onRenderClick = {
                 showOverflow = false
-                onRenderClick()
+                sheets.onRenderClick()
             },
-            supportsDeinterlace = supportsDeinterlace,
-            deinterlaceMode = deinterlaceMode,
+            supportsDeinterlace = sheets.supportsDeinterlace,
+            deinterlaceMode = sheets.deinterlaceMode,
             // The cycle closes the panel: the item's label reads the session
             // mode, and reopening is the cheap way to re-derive it fresh.
             onDeinterlaceCycle = {
                 showOverflow = false
-                onDeinterlaceCycle()
+                sheets.onDeinterlaceCycle()
             },
         )
     }

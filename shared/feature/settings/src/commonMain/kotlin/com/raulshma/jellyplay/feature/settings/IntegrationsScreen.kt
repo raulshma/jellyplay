@@ -121,7 +121,7 @@ fun IntegrationsScreen(
                     val count = 3
                     SettingListItem(
                         icon = Tabler.Outline.Puzzle,
-                        title = stringResource(Res.string.settings_seerr_integration),
+                        title = rowTitle(IntegrationsScreenIds.SEERR_SETTINGS),
                         subtitle = stringResource(Res.string.settings_seerr_integration_subtitle),
                         index = 0,
                         count = count,
@@ -139,7 +139,7 @@ fun IntegrationsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
-                        title = stringResource(Res.string.settings_integrations_subtitles),
+                        title = rowTitle(IntegrationsScreenIds.SUBTITLE_PROVIDER_SETTINGS),
                         subtitle = stringResource(Res.string.settings_integrations_subtitles_subtitle),
                         index = 2,
                         count = count,

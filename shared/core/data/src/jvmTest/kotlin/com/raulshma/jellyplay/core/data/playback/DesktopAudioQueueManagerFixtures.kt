@@ -244,15 +244,15 @@ internal fun resolvedTrack(
 /**
  * State-core-backed [AudioEffectsSession] — the test twin of the app-side
  * `DesktopAudioEffectsManager`: the full [AudioEffectsStateCore] machine
- * (same guarded-band configuration) plus the port's three members, so the
- * suite drives the REAL state machine through the manager's effects seam.
+ * plus the port's three members, so the suite drives the REAL state
+ * machine through the manager's effects seam.
  * [snapshotConfig] folds exactly the fields the suite asserts reach the
  * engine config; the production fold (and its mpv `af` parity) stays
  * pinned app-side (DesktopAudioEffectsManagerTest + the real-engine
  * suite).
  */
 internal class FakeEffectsSession :
-    AudioEffectsStateCore(rejectOutOfRangeEqualizerBands = true),
+    AudioEffectsStateCore(),
     AudioEffectsSession {
 
     override var onEffectsChanged: (() -> Unit)? = null

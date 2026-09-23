@@ -10,7 +10,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -29,15 +28,15 @@ import kotlin.test.assertTrue
  *     ReplayGain math (the same golden values the desktop manager test and
  *     `DesktopAudioQueueManagerTest` pin reaching the engine).
  *
- * The ONE state-level platform divergence (out-of-range equalizer band
- * index) is parameterized over both constructor configurations: guarded
- * (desktop) no-ops, unguarded (Android) throws.
+ * The out-of-range equalizer band index (the FORMER state-level platform
+ * divergence, retired) is pinned as the unconditional guarded no-op —
+ * Android's `AudioEffectsProcessor` flipped off the historical unguarded
+ * throw and the core's constructor flag is gone with it.
  */
 class AudioEffectsStateCoreTest {
 
     /** Fake hook: counts coarse-funnel fires (the desktop half's only override). */
-    private class RecordingCore(rejectOutOfRangeEqualizerBands: Boolean) :
-        AudioEffectsStateCore(rejectOutOfRangeEqualizerBands) {
+    private class RecordingCore() : AudioEffectsStateCore() {
         var notifications = 0
             private set
 
@@ -47,8 +46,7 @@ class AudioEffectsStateCoreTest {
     }
 
     /** Fake hook: records the equalizer hook's `levelsRewritten` flag sequence. */
-    private class RecordingEqualizerHook(rejectOutOfRangeEqualizerBands: Boolean) :
-        AudioEffectsStateCore(rejectOutOfRangeEqualizerBands) {
+    private class RecordingEqualizerHook() : AudioEffectsStateCore() {
         val levelRewrites = mutableListOf<Boolean>()
 
         override fun onEqualizerSettingsChanged(levelsRewritten: Boolean) {
@@ -56,44 +54,42 @@ class AudioEffectsStateCoreTest {
         }
     }
 
-    private fun recordingCore(guardBands: Boolean = true) = RecordingCore(guardBands)
+    private fun recordingCore() = RecordingCore()
 
     // ── initial state: every cell, both platform configurations ────────────
 
     @Test
-    fun initialStatePinsEveryCellForBothConfigurations() {
-        for (guardBands in listOf(true, false)) {
-            val core = recordingCore(guardBands)
-            assertFalse(core.nightModeEnabled.value)
-            assertFalse(core.dialogueBoostEnabled.value)
-            assertFalse(core.equalizerEnabled.value)
-            assertEquals(EqualizerSettings(), core.equalizerSettings.value)
-            assertEquals(EqualizerPreset.FLAT, core.equalizerPreset.value)
-            assertFalse(core.bassBoostEnabled.value)
-            assertEquals(EffectStrength.MODERATE, core.bassBoostStrengthState)
-            assertEquals(EffectStrength.MODERATE, core.dialogueBoostStrengthState)
-            assertEquals(EffectStrength.MODERATE, core.nightModeStrengthState)
-            assertFalse(core.virtualizerEnabled.value)
-            assertEquals(500, core.virtualizerStrength.value)
-            assertEquals(ReverbPreset.NONE, core.reverbPresetState.value)
-            assertEquals(0f, core.lrBalance.value)
-            assertEquals(0f, core.pitchSemitones.value)
-            assertFalse(core.autoEqByGenre.value)
-            assertEquals(AudioNormalizationMode.NONE, core.replayGainMode.value)
-            assertEquals(0f, core.replayGainPreAmpDb.value)
-            assertEquals(ChannelMixMode.AUTO, core.channelMixMode.value)
-            assertFalse(core.channelMixEnabled.value)
-            // Runtime params default to Android's public-field values.
-            assertEquals(0.4f, core.nightModeVolume)
-            assertEquals(1200, core.nightModeGain)
-            // Fresh ReplayGain context: NONE mode → null, nothing active.
-            assertNull(core.replayGainContextEffectiveDb())
-            assertFalse(core.replayGainNormalizationActive)
-            // Visualizer taps start empty (desktop default; Android overrides).
-            assertEquals(0, core.fftData.value.size)
-            assertEquals(0, core.waveformData.value.size)
-            assertEquals(0, core.notifications, "a fresh core fires nothing")
-        }
+    fun initialStatePinsEveryCell() {
+        val core = recordingCore()
+        assertFalse(core.nightModeEnabled.value)
+        assertFalse(core.dialogueBoostEnabled.value)
+        assertFalse(core.equalizerEnabled.value)
+        assertEquals(EqualizerSettings(), core.equalizerSettings.value)
+        assertEquals(EqualizerPreset.FLAT, core.equalizerPreset.value)
+        assertFalse(core.bassBoostEnabled.value)
+        assertEquals(EffectStrength.MODERATE, core.bassBoostStrengthState)
+        assertEquals(EffectStrength.MODERATE, core.dialogueBoostStrengthState)
+        assertEquals(EffectStrength.MODERATE, core.nightModeStrengthState)
+        assertFalse(core.virtualizerEnabled.value)
+        assertEquals(500, core.virtualizerStrength.value)
+        assertEquals(ReverbPreset.NONE, core.reverbPresetState.value)
+        assertEquals(0f, core.lrBalance.value)
+        assertEquals(0f, core.pitchSemitones.value)
+        assertFalse(core.autoEqByGenre.value)
+        assertEquals(AudioNormalizationMode.NONE, core.replayGainMode.value)
+        assertEquals(0f, core.replayGainPreAmpDb.value)
+        assertEquals(ChannelMixMode.AUTO, core.channelMixMode.value)
+        assertFalse(core.channelMixEnabled.value)
+        // Runtime params default to Android's public-field values.
+        assertEquals(0.4f, core.nightModeVolume)
+        assertEquals(1200, core.nightModeGain)
+        // Fresh ReplayGain context: NONE mode → null, nothing active.
+        assertNull(core.replayGainContextEffectiveDb())
+        assertFalse(core.replayGainNormalizationActive)
+        // Visualizer taps start empty (desktop default; Android overrides).
+        assertEquals(0, core.fftData.value.size)
+        assertEquals(0, core.waveformData.value.size)
+        assertEquals(0, core.notifications, "a fresh core fires nothing")
     }
 
     // ── toggle interplay: flip + exactly one hook fire ──────────────────────
@@ -168,29 +164,25 @@ class AudioEffectsStateCoreTest {
 
     @Test
     fun setEqualizerBandRewritesTheBandAndMarksThePresetCustom() {
-        for (guardBands in listOf(true, false)) {
-            val core = recordingCore(guardBands)
-            core.setEqualizerBand(0, 600)
-            assertEquals(600, core.equalizerSettings.value.bandLevels[0])
-            assertEquals(EqualizerPreset.CUSTOM, core.equalizerPreset.value)
-            assertEquals(1, core.notifications)
-        }
+        val core = recordingCore()
+        core.setEqualizerBand(0, 600)
+        assertEquals(600, core.equalizerSettings.value.bandLevels[0])
+        assertEquals(EqualizerPreset.CUSTOM, core.equalizerPreset.value)
+        assertEquals(1, core.notifications)
     }
 
     @Test
-    fun outOfRangeBandIndexIsParameterizedBetweenThePlatforms() {
-        // Guarded (desktop): full no-op — no flip, no hook.
-        val guarded = recordingCore(guardBands = true)
-        guarded.setEqualizerBand(-1, 600)
-        guarded.setEqualizerBand(10, 600)
-        assertEquals(EqualizerSettings(), guarded.equalizerSettings.value)
-        assertEquals(EqualizerPreset.FLAT, guarded.equalizerPreset.value)
-        assertEquals(0, guarded.notifications, "out-of-range bands must not reach the platform hook")
-
-        // Unguarded (Android reference): the historical unguarded list write
-        // throws IndexOutOfBoundsException.
-        val unguarded = recordingCore(guardBands = false)
-        assertFailsWith<IndexOutOfBoundsException> { unguarded.setEqualizerBand(10, 600) }
+    fun outOfRangeBandIndexIsAFullNoOp() {
+        // The guard is unconditional (Android's AudioEffectsProcessor
+        // flipped off its historical unguarded list write and the core's
+        // constructor flag is gone): a bad index is a full no-op — no flip,
+        // no hook.
+        val core = recordingCore()
+        core.setEqualizerBand(-1, 600)
+        core.setEqualizerBand(10, 600)
+        assertEquals(EqualizerSettings(), core.equalizerSettings.value)
+        assertEquals(EqualizerPreset.FLAT, core.equalizerPreset.value)
+        assertEquals(0, core.notifications, "out-of-range bands must not reach the platform hook")
     }
 
     @Test
@@ -208,7 +200,7 @@ class AudioEffectsStateCoreTest {
 
     @Test
     fun equalizerHookCarriesTheLevelsRewrittenFlagForEveryEntry() {
-        val core = RecordingEqualizerHook(rejectOutOfRangeEqualizerBands = true)
+        val core = RecordingEqualizerHook()
         core.setEqualizerBand(0, 100) // band write: levels rewritten
         core.resetEqualizer() // reset: levels rewritten
         core.setEqualizerPreset(EqualizerPreset.ROCK) // concrete preset: rewritten

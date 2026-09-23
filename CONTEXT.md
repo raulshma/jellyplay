@@ -59,6 +59,12 @@ are relative to the repo root.
   machine decides WHEN a direct/direct-stream failure falls back and drives
   `onTranscodeFallbackRequested()` — unlatched; the engine owns the one-shot
   counting) and executes the resulting decisions itself.
+- **`EngineSessionShell`** (player-contract commonMain `engine/`) is the
+  session-structural plumbing both hosts construct instead of hand-wiring
+  the coordinator's lifecycle/event machinery: coordinator construction
+  over the host's hot engine-source stream, `dispose`/`reArm` and the
+  decision fan-out TaskBundle slot. Hosts: `PlaybackSession` (VOD) and
+  `LiveTvPlayerViewModel` (live). Pinned by `EngineSessionShellTest`.
 - **`PlayerChromePolicies`** (player-contract commonMain `engine/`) are the
   pure chrome-timing policies BOTH player screens cite — one home instead of
   byte-identical copies: `controlsAutoHideTimeoutMs` (the TV-doubling fold
@@ -79,14 +85,20 @@ are relative to the repo root.
   `onResetItemScopedState()` per-engine hook) and
   `resetPublishedEngineState()` (adds playbackState→IDLE, isPlaying→false) —
   adding a new published flow no longer requires editing three release
-  bodies. Each adapter still owns its native
-  player handle, track/subtitle logic, stats projection, volume/mute contract
+  bodies — and the Activity pause/resume template the three engines carried
+  byte-identical (`onActivityPause()`/`onActivityResume()`: remember
+  isPlaying → pause → conditional restore; the `onPausedNative()`/
+  `onResumingNative()` hooks absorb the per-engine native quirks). Each
+  adapter still owns its native
+  player handle, native track/subtitle application (the common fold rides
+  `MpvTrackCatalog`/`MpvSubtitleSideLoadPlan`), stats projection
   and `positionFlow` wiring — `NoOpEngine` does NOT extend this class.
 - **`ReloadablePlayerEngine`** (`shared/feature/player-video/src/androidMain/kotlin/com/raulshma/jellyplay/feature/player/video/engine/ReloadablePlayerEngine.kt`)
   is the second layer for the three reloadable engines (extends `BasePlayerEngine`).
   It hoists `PlaybackSnapshot` / `withPreservedPlayback` (position+speed+isPlaying
-  preservation across a rebuild), the four FINAL volume/mute command templates
-  over `PlaybackVolumePolicy` (see that bullet for the adapter seams), the
+  preservation across a rebuild), the volume/mute commands — delegated to
+  commonMain `VolumeCommandTemplates` over one `NativeVolumeSurface` seam
+  (see that bullet), the
   `callbackFlow + EnginePositionTicker` shell for
   `positionFlow`, and the `EngineVideoStats` change-guard. The single
   `snapshotIsPlaying()` hook covers both snapshot and current checks (ExoPlayer
@@ -114,18 +126,24 @@ are relative to the repo root.
   restores the remembered level (it previously computed the target and jumped
   to 100). `PlaybackVolumePolicyTest` / `AspectRatioMappingTest` /
   `EngineDurationFallbackTest` pin all three engines at once. The volume/mute
-  half is now ONE template, not twelve bodies: `ReloadablePlayerEngine` owns
-  the four `MediaEngine` commands as `final` templates (plan → remember →
-  native write → system-stream mirror) over small adapter seams —
-  `applyNativeVolume(normalized)`, `readNativeVolume()` (null aborts the
-  delta templates, the old `?: return`s), `volumeBoostCeiling`,
+  half is now ONE commonMain template, not twelve bodies:
+  `VolumeCommandTemplates` (player-video commonMain `engine/`) owns the four
+  `MediaEngine` commands as `final` templates (plan → remember → capture →
+  native write → system-stream mirror) over the `NativeVolumeSurface` seam —
+  `readNativeVolume()` (null aborts the delta templates, the old
+  `?: return`s), `applyNativeVolume`, `volumeBoostCeiling`,
   `nativeVolumeRestore(muted)` (the policy's `NativeVolumeRestore`
   vocabulary: Exo ZERO/FULL, mpv LEAVE_UNCHANGED, VLC
   ZERO/REMEMBERED_LEVEL), `applyNativeMuteFlag` (mpv's real flag),
-  `muteTemplateEnabled` (VLC's null-handle abort) and `dispatchVolumeCommand`
+  `muteTemplateEnabled` (VLC's null-handle abort), the Android-only
+  system-stream sync and the desktop-only user-change capture. BOTH the
+  Android `ReloadablePlayerEngine` finals and the desktop `MpvDesktopEngine`
+  delegate here (the desktop formerly hand-rolled the ordering in
+  parallel); the per-engine `dispatchVolumeCommand` shell stays adapter-side
   (Exo's player-thread post + null abort; mpv/VLC swallow-all). The remember
   call is unified BEFORE the native write — the former order in Exo/VLC;
-  mpv's increase/decrease had drifted to remember-after.
+  mpv's increase/decrease had drifted to remember-after. Pinned by
+  `VolumeCommandTemplatesTest`.
   `PlaybackVolumePolicy` itself is public (not internal) because the
   protected `nativeVolumeRestore` seam returns its nested enum — a protected
   member cannot expose an internal type; it is not a stable API surface.
@@ -142,6 +160,22 @@ are relative to the repo root.
   deleted. Declared divergence parameter: the Unknown arm's diagnostic —
   desktop passes `mpv_error_string(code)`, Android the raw handed-over
   string. Pinned by `MpvErrorTaxonomyTest`.
+- **`MpvEventFold`** (player-contract commonMain `engine/`) is the one
+  raw-mpv-event → engine-state fold both mpv engines apply: the
+  `MpvPlaybackLatches` latch set (isPlaying is fileLoaded/eof-gated — the
+  Android engine formerly wrote it unguarded from the pause observer; the
+  desktop ran a thinner set) and the decision enums for the fold-out
+  effects — cue clears (the desktop's clear-on-`sid`-switch arm), track
+  re-enumeration, the live-subtitle mirror, the END_FILE error signal.
+  Pinned by `MpvEventFoldTest`.
+- **`MpvTrackCatalog` + `MpvSubtitleSideLoadPlan`** (same `engine/`, next)
+  are the shared track-republish half: the pure track-list → `MediaTrack`
+  catalog both mpv engines funnel `buildTracks` through (the desktop
+  formerly re-parsed bare, so offline-restore ids never resolved there) and
+  the `sub-add` side-load plan whose registry stamps the caller's
+  `SubtitleSource.id` onto the republished tracks — the side-load id
+  contract pinned per platform by
+  `MpvTrackCatalogTrackSelectionContractTest`.
 - **`CueAccumulator`** merge rules are shared: `mergeAccumulatedCues` is
   public (desktop-engine adapter surface); `MpvDesktopEngine`'s private
   mirror is deleted — the desktop keeps only its `sub-start` read
@@ -320,6 +354,17 @@ the VM's three funs are a snapshot → policy → one-line effect dispatch, and
 Pinned by `SegmentSkipPolicyTest`, which replaced `PlaybackLogicTest`'s
 `SkipIntroCreditsTest` placebo (its assertions only re-derived
 `introEndTicks / 10_000` integer division and never executed a skip).
+
+**`RenderControls`** (player-video commonMain) is the render-slice carrier
+beside `PlayerScreenPolicies`: the Rendering-sheet + gear-menu deinterlace
+write choreography extracted from `VideoPlayerViewModel` over
+`SessionRenderState` (the VM's `sessionRender` alias kept; the engine
+re-apply stays VM-side via the dirty-config callback). Pinned by
+`RenderControlsTest`. **`PlayerWindowSessionEffects`**
+(`PlayerWindowSession.kt`) is the window-effect session: the eight
+host-window/lifecycle effects moved verbatim into ONE composable called at
+the same composition position, so effect dispatch order is preserved (the
+race-documented guards ride along unchanged).
 
 **`SubtitlePreviewController`** (beside the other player controllers) owns
 the subtitle cue-preview sheet: the EXTERNAL-vs-EMBEDDED source precedence,
@@ -531,15 +576,20 @@ byte-identical `estimateCurrentTicks` copies collapsed onto it and 12 raw
 conversion sites swapped. ONE site deliberately left: PlaybackCore's
 fractional `diffTicks / 10_000.0` feeding speed-to-sync (the truncating
 helper would change correction behavior). Pinned by
-`TimeSyncProjectionTest`. **Surface prune**: `SyncPlayRepository` 18→11
+`TimeSyncProjectionTest`. **Surface prune**: `SyncPlayRepository` 18→11→4
 and `SyncPlayController` 16→13 — the pruned members had zero
 repository-typed callers (join/leave call sites target `apiClient` or the
-controller); the controller is the ONE fire-and-forget wrapper home and
-its `reportReady`/`reportBuffering` KDoc pins the clock contract
+controller; a second census retired the seven ignored-Result transport
+commands — pause/unpause/seek/stop/setRepeat/setShuffle/setIgnoreWait —
+to `SyncPlayController` via the feature-local `SyncPlaySession`). The
+repository surface is now the four AWAITED members
+(`getSyncPlayGroups`/`createSyncPlayGroup`/`getSyncPlayInfo`/
+`syncPlaySetNewQueue`); the controller is the ONE fire-and-forget wrapper
+home and its `reportReady`/`reportBuffering` KDoc pins the clock contract
 (`whenMs` is `timeSyncManager.remoteNow()`, never wall clock — the api
 client's nullable-whenMs `LocalDateTime.now(UTC)` fallback is named as
 exactly the forbidden behavior). Ratcheted by
-`SyncPlayRepositorySurfaceTest` (baseline 11, "lower when the surface
+`SyncPlayRepositorySurfaceTest` (baseline 4, "lower when the surface
 shrinks, never raise" + a retired-names pin so re-addition fails even
 under the cap). **Bridge fold**: `SyncPlayUiState.from(group)` /
 `.cleared()` beside the model collapse the bridge's six populate/clear
@@ -1357,7 +1407,8 @@ month-label placement (ISO Mon–Sun week anchoring via
 `with(DayOfWeek)` — Sunday-first-of-month labels do NOT hop forward),
 `initialFocusedCellIndex`, the no-wrap `clampFocus`, and
 `scrollTargetForFocus`. `today` is a parameter, the screen keeps only
-dp/px + Canvas drawing. Pinned by `HeatmapGridModelTest` (leap-year
+dp/px + Canvas drawing, and cell lookup + grid membership are model-owned
+via `dayAt`/`isInsideGrid`. Pinned by `HeatmapGridModelTest` (leap-year
 coverage — a 2024 grid is 52 columns and Dec 30–31 fall beyond it —
 month-boundary labels, quartile edges, focus clamp).
 
@@ -1611,6 +1662,14 @@ HomeSession: history reads run on cold start before `restoreSession()` has
 established the engine session (and from the widget worker), where the
 persisted store has the user but the runtime session does not yet — the
 persisted identity is the stable source there, and logout clears both.
+
+The engine also grew the side-search kernel behind the search screen's
+Seerr/offline rows: `MediaSearchEngine.sideSearch()` (+ the pure
+`MediaSideSearchState`) gates the Seerr half behind the same gate the home
+preview uses, caps it at `seerrLimit` (the offline half stays independently
+capped), surfaces a failed gated round as `seerrError = true` where the
+preview swallows silently — the screen renders its retry row — and never
+throws.
 
 **`PlaybackIdentity`** (`shared/core/data/src/commonMain/kotlin/.../playback/PlaybackIdentity.kt`)
 is the playback-facing session-identity read: the token + base-URL pair a
@@ -1912,7 +1971,7 @@ local 900s (`SeenMediaRepositoryImpl`, `OfflineSyncManager`,
 
 **MediaRepository facade split**: `MediaRepositoryImpl` (1,071 lines)
 implements Media + SyncPlay + cache-invalidation only (SyncPlay stays BY
-DECISION — its 11 members interleave with the user-data channel).
+DECISION — its 4 members interleave with the user-data channel).
 `NewsletterRepositoryImpl` is a 3-forward adapter over
 `MediaInfoApiClient`; `LiveTvRepositoryImpl` (15 forwards over
 `LiveTvApiClient` + `MediaInfoApiClient`; `deleteRecording` →
@@ -2214,8 +2273,9 @@ one still cancels the caller). Every site keeps its own concurrency constant
 and post-processing; only the permit ladder is shared. Adopters:
 `HomeSectionsFetcher`'s three fan-outs, `MediaInfoApiClientImpl`,
 `PhotoFolderPrefetcher`, `AdminStatisticsRepositoryImpl`,
-`OfflineSyncManager`, `EpisodeCatalogueImpl` and `ArrRepositoryImpl` (whose
-private `fanOut` is deleted). Pinned by `MapConcurrentTest` (order under
+`OfflineSyncManager`, `EpisodeCatalogueImpl`, `ArrRepositoryImpl` (whose
+private `fanOut` is deleted) and `AudioPlaybackManager`'s queue-prewarm
+build. Pinned by `MapConcurrentTest` (order under
 randomized delays, permit bound, cancellation propagation both variants).
 Fire-and-forget `launch`-per-item sites (UpcomingCalendar, AlbumDetail
 downloads) deliberately stay off it — no awaited list, so `mapConcurrent`
@@ -2389,9 +2449,12 @@ previous open, with `@Volatile hadConnectedOnce` cleared ONLY in
 `disconnect()` (a declared divergence — clearing on failure would
 suppress the emission on the automatic reconnect's open, defeating the
 flow's purpose). The `RealtimeConnection` interface gains the flow and
-`AuthRepositoryImpl` forwards it. Consumers: SessionCoordinator keeps an
-explicit first-connect arm (its old tracker DID fire on first connect —
-including the already-up-at-start no-re-post subtlety);
+`AuthRepositoryImpl` forwards it. Consumers: RealtimeSessionController
+(the shells' shared realtime choreography, which absorbed
+SessionCoordinator's collectors) keeps an explicit first-connect arm —
+the `isConnected.first { it }` wait plus one immediate capability arm
+(the old tracker DID fire on first connect — including the
+already-up-at-start no-re-post subtlety);
 ScheduledTasksRealtimeChannel keeps its own first-connect Start arm
 (declared fix: the old deferred-job + edge pair double-sent Start on a
 first connect while down) and rides `reconnects` for re-subscribes;
@@ -2404,6 +2467,13 @@ upgrade dispatcher; the drop is a reflective server-socket FIN because
 OkHttp 5.4's server-side `cancel()` NPEs and a graceful close lands in
 `onClosed` — documented in the test). Background reconnect backoff is
 exponential (60 s doubling to 15 min, reset on connect).
+
+**`WebSocketBackoffPolicy`** (core/network commonMain) is the ONE
+reconnect-backoff law — base 1 s doubling ×2 toward the 30 s cap across
+5 attempts, the jitter source the only per-caller choice — consumed by
+both the shared client's fast reconnect schedule and the activity-log
+channel (deterministic there; past `maxAttempts` returns null, the
+caller's leave-the-schedule signal).
 
 ## Navigation destinations
 
@@ -2492,26 +2562,32 @@ own in-flight flag (read through a lambda) and a wall-clock lambda; Android's
 `MainViewModel.refreshAdminStatus` and the desktop scaffold's lambda both
 arbitrate through it, and the duplicated `ADMIN_REFRESH_INTERVAL_MS`
 constant is gone. The rendered in-flight/admin state stays per-shell as
-recorded. In `:app`, `RemoteNavigationRouting.kt` holds the remote-target
-decisions as pure functions: `routeForNavigationTarget(target)` (exhaustive
-`when` over the ROUTED targets — a new server-emitted target is a
-compile-time decision, not a silent `Route.Home` fall-through; the v0.11.1
-companion-control navigation ladder added four deliberately NON-route targets —
-GoBack pops, MoveFocus/InvokeSelect/OpenContextMenu synthesize D-pad/
-center/menu keys — which `NavRequestCollector.collectRemoteNavigation`
-branches on directly before routing) and `popPlayerRoutes(backStacks)` (the
-Jellyfin-web "Stop" semantics: contiguous player entries popped off the top
-of every back stack). Pinned by `AdminRefreshGateTest` (shell jvmTest) and
-`RemoteNavigationRoutingTest` (app unit test); `ShellSectionRegistryTest`
-pins the ledger mechanics — the sentinel contentKey identity for
-unregistered routes, replace-on-re-attach, and a non-null fallback entry.
+recorded. `RemoteNavigationRouting` moved to shared/feature/shell jvmShared
+(`feature.shell.navigation`) as the ONE remote-target fold both shells run:
+`routeForNavigationTarget(target)` (exhaustive `when` over the ROUTED
+targets — a new server-emitted target is a compile-time decision, not a
+silent `Route.Home` fall-through; the v0.11.1 companion-control navigation
+ladder's four deliberately NON-route targets — GoBack pops, MoveFocus/
+InvokeSelect/OpenContextMenu branch per-shell — return null) and
+`popPlayerRoutes(backStacks)` (the Jellyfin-web "Stop" semantics:
+contiguous player entries popped off the top of every back stack). Pinned
+by shell jvmTest `RemoteNavigationRoutingTest` + the desktop
+`DesktopRemoteNavigationTest`; `ShellSectionRegistryTest` pins the ledger
+mechanics — the sentinel contentKey identity for unregistered routes,
+replace-on-re-attach, and a non-null fallback entry. `:app`'s
+`RemoteNavigationRouting.kt` keeps only the Android keycode vocabulary
+(`keyCodeForFocusDirection`, `REMOTE_SELECT_KEYCODE`,
+`REMOTE_CONTEXT_MENU_KEYCODE`) feeding `NavRequestCollector.dispatchKey`;
+the NavigationTarget vocabulary lives in core/model remote
+(`RemoteNavigationTargets.kt`).
 
-**`NavRequestCollector`** (`:app` navigation, beside
-`RemoteNavigationRouting`) is the shell's one home for the five
+**`NavRequestCollector`** (`:app` navigation, beside the keycode half of
+`RemoteNavigationRouting`; the target→route folds live in feature/shell) is
+the shell's one home for the five
 collect-then-dispatch loops `MainContent` hand-rolled composable-inline:
 pendingRoute (tab-vs-nested fork + consume-once), remote navigation
 (ClosePlayer multi-stack pop / target routing — reuses the
-`RemoteNavigationRouting` folds), the remote-control now-playing
+feature/shell `RemoteNavigationRouting` folds), the remote-control now-playing
 snackbar (title fallback + template), the dual user-message-bus
 adaptation (severity projection; presentation POLICY stays in
 `UserMessageHost`), and SyncPlay auto-open (player-open-anywhere guard).
@@ -2540,9 +2616,11 @@ arbitrates drag-vs-server-push: the local mirror wins while the thumb is
 down, commit on release).
 
 Shell pure folds: `externalPlayerPositionTicks` (extras
-"position"/"positionMs" alias, Number coercion, ≥0 gate, ×10_000) and
-`visibleTopLevelRoutes` (homeMode set + offline LiveTv hide + nav
-customization) leave `JellyPlayApp` with tests;
+"position"/"positionMs" alias, Number coercion, ≥0 gate, ×10_000) leaves
+`JellyPlayApp` with a test; `visibleTopLevelRoutes` (homeMode set + offline
+LiveTv hide + nav customization) moved to core/ui navigation
+(`VisibleTopLevelRoutes.kt` + its jvmTest; `:app`'s copy deleted — both
+shells consume the one home);
 `OnboardingGate.onboardingGateRoute(authenticated, completed, isTv)`
 (shared/feature/shell) is the one gate behind both shells (desktop's
 `DesktopOnboardingGate` is a thin `isTv = false` wrapper; Android's TV
@@ -2607,6 +2685,13 @@ compile-pinned (row and declaration share the constant), and the test keeps
 the behavioral pins (scroll resolution, the aggregation splits, the totals,
 the declared admissions) instead of the noRowExceptions/derivation-usage
 string ratchets, which policed duplication that no longer exists.
+
+The row-twin render half is executed too: `SettingsRowRecord` (feature/
+settings commonMain) is one record per row naming every title face once —
+the screen row's `settings_*` title (rendered through `rowTitle`, so the
+resource is referenced from exactly one place in code), the `ss_*_title`
+search hit, and the deliberately-descriptive `ss_*_subtitle` marked by
+field name. Pinned by `SettingsRowRecordTest`.
 
 The same pass finished the declared-admissions ratchet: the notification,
 language-subtitles and security groups now declare per-id
@@ -3039,6 +3124,18 @@ seam/clock. The pure
 thin render adapter. Pinned by `PinGateControllerTest` (lockout race,
 failure accounting, boundaries).
 
+**`IncomingIntentRequest`** (app `deeplink/`): the pure classify step
+behind MainActivity's intent handling — an intent →
+`IncomingIntentDisposition` fold (launcher-shortcut arms, ACTION_VIEW
+deep link, ACTION_SEND shared text, the search arms, or `None`) over
+already-decoded values, owning the launcher-shortcut action → `Route`
+table and the action-literal vocabulary. Pinned by
+`IncomingIntentRequestTest`. **`OverlayDragPolicy`** (app `floating/`):
+the pure drag/tap state machine behind `FloatingPlayerService`'s overlay
+touch handler — slop threshold, drag-vs-tap, one-relayout-per-frame
+coalescing; the service keeps only the `updateViewLayout` effects. Pinned
+by `OverlayDragPolicyTest`.
+
 **`BackExitConfirmation`** (`shared/core/ui/components`, the
 `ScrollDirectionVisibility` precedent) is the double-back-to-exit policy both
 shells shared as a hand-copied `ExitConfirmationTimeoutMs = 2000L` pair:
@@ -3097,6 +3194,13 @@ KDoc'd). Ordering pinned by `ExternalPlayerHostTest` (Robolectric,
 fake-lambda choreography) — the pieces were tested before, the ORDERING
 was not. Its chooser arm rides `runCatchingRethrowingCancellation`.
 
+**`ExternalPlayerLaunch`** (navigation/playbackhost, beside the host): the
+outbound extras vocabulary + identity fields of one hand-off (launch
+`intent`, `itemId`, `startPositionTicks`, `playSessionId` for the
+report-start/report-stop pair) as one data class with its builder —
+formerly declared in the app root package beside its only construction
+site; the extras literals are pinned by `ExternalPlayerLaunchTest`.
+
 **Auto-lock**: `AppLockRedirect.shouldRelock(gate, timerMs,
 backgroundedAtMs, nowMs)` (the `backgroundedAt > 0` "never backgrounded"
 arm preserved) + `AppLockState.onBackgrounded/onResumed` move the timer
@@ -3105,9 +3209,10 @@ decision, previously the only untested one beside
 `PinGateController`/`AppLockRedirect`; truth-table pinned (incl.
 exact-equal and one-ms-short boundary arms). STA-8 prewarm:
 `PlayerActivity`'s persisted-security `runBlocking` keeps its
-fail-closed timeout, but the Application's IO prewarm hydrates the same
-slice off main at process start — the common case is an instant memory
-replay. MainActivity adopts `JellyPlayPreferenceTheme` (the wrapper's
+fail-closed timeout, but `AppStartupPrewarms.start()` (called from
+`JellyPlayApplication.onCreate`) hydrates the same slice off main at
+process start — the common case is an instant memory replay. MainActivity
+adopts `JellyPlayPreferenceTheme` (the wrapper's
 byte-identical ~98-line hand copy — 17 theme args, motion/performance
 locals, filter chain — is deleted).
 
@@ -3121,6 +3226,17 @@ the two adapters that justify it). `DesktopWindowStateStore` is NOT
 re-absorbed (persistence stays pinned by its own suite); `Main.kt` is
 wiring-only. All five rules pinned in the existing `:apps:desktop:test`
 lane, incl. a replay→restore→persist session sequence.
+
+**`DesktopAccelerator`** (apps/desktop, beside the placement controller):
+the accelerator rows Main.kt executes — the `requiresCtrl` semantics kept
+exactly (plain R/Q fall through, F11 ignores modifiers) plus the
+`DesktopTitleBar` display labels. Pinned by `DesktopAcceleratorTest`.
+
+**`HarnessRunner` + `HarnessRobot`** (apps/desktop): the one runner
+chassis behind the desktop E2E harness lanes — step ledger, poller,
+auto-exit deadline, report — extracted from byte-identical private Runner
+twins, with the robot issuing the input/state steps; desktop-main logic
+is now drivable on the JVM.
 
 **`desktopBackKeyDecision`** (apps/desktop `DesktopBackKey.kt`,
 internal, pure): the one desktop back-key decision the two handlers that
@@ -3397,7 +3513,10 @@ overlap). See docs/adr/0004-playback-focus.md.
   `nextIndex`/`previousIndex` advance-wrap rules per repeat mode,
   `planMove` (the `moveQueueItem` index remap + the moved row as undo
   payload), `skipsPreviousRestart` (the 3,000 ms strictly-greater
-  threshold), the `cycleAbLoop`/`markAbLoop*` marker machine, and
+  threshold), the `cycleAbLoop`/`markAbLoop*` marker machine,
+  `finalStopPositionTicks` (the end-of-stream stop position: the last
+  published position wins, the item's full duration stands in on a zero
+  position, 100-ns ticks), and
   `positionTickPlan` (A–B enforcement seek + the pre-seek position
   publish, publish dedup on coerced values, duration coercion, the
   lyric-index gate). Declared divergences encoded, not copied: repeat-ONE
@@ -3474,10 +3593,11 @@ overlap). See docs/adr/0004-playback-focus.md.
   context + math. Every command flips state then fires a fine-grained
   hook whose DEFAULT is one coarse `onEffectsStateChanged()` funnel —
   desktop overrides only the funnel (→ mpv snapshot push), Android
-  overrides the ~15 specific DSP hooks. Named state divergences:
-  `rejectOutOfRangeEqualizerBands` ctor flag (desktop no-op, pinned;
-  Android preserves the historical IndexOutOfBoundsException — flagged
-  for deliberate cleanup), `onEqualizerSettingsChanged(levelsRewritten)`
+  overrides the ~15 specific DSP hooks. The out-of-range equalizer-band
+  guard is unconditional in the core now — both halves construct guarded
+  and the Android half's historical IndexOutOfBoundsException is retired.
+  Named state divergences:
+  `onEqualizerSettingsChanged(levelsRewritten)`
   (Android's CUSTOM preset pushed nothing), the ReplayGain recompute
   split (Android re-applies with null context = pre-amp; desktop re-folds
   the stored context), and `onVisualizerEnabledChanged` deliberately
@@ -3710,6 +3830,14 @@ overlap). See docs/adr/0004-playback-focus.md.
   Diff equivalence is preserved field-for-field (same rows, same order,
   same formatted-value comparison); pinned by `PreferenceSliceSnapshotTest`,
   the rewritten `PreferenceCategoryPresentationTest` and the two VM tests.
+- **`PreferenceStores` + `PreferenceSnapshotReader`** (core:datastore
+  settings) are the store bundle the projections take and its read-side
+  twin: `PreferenceStores` bundles the NINETEEN domain stores, enumerated
+  once (here + the Koin single — the `PlayerStores`/`HomeStores`
+  construction-seam precedent), and `PreferenceSnapshotReader.snapshotOnce()`
+  builds the one-shot `PreferenceSliceSnapshot` behind the factory-reset
+  diff (`FactoryResetViewModel` takes reader + editor + label resolver —
+  three params). Pinned by `PreferenceSnapshotReaderTest`.
 - **Slice-derived, localized reset/import review** (`PreferenceCategoryPresentation.kt`):
   the ~246 hand-written English diff rows became declared `DiffField` rows —
   label resource + slice read + formatter — per category over the snapshot.
@@ -3765,12 +3893,24 @@ overlap). See docs/adr/0004-playback-focus.md.
   (expressible as `PendingConfirmation<Unit>`, no drift problem) and
   core/ui's `ConfirmState` (composition-scoped closure-payload machine),
   which COEXISTS with a corrected KDoc.
+- **`MediaFilterSheet` + `FilterSection` + `MediaFilterDraft`** (core/ui
+  components) is the shared filter-sheet apparatus: `FilterSection`
+  enumerates the sections and the per-host active sets (library vs
+  search), `MediaFilterDraft` is the pure draft record, and the
+  `MediaFilterSheet` composable renders both hosts' sheets over them.
+  Pinned by `MediaFilterSheetSectionsTest`.
+- **`InlineConfirmState` + `rememberInlineConfirm`** (core/ui components)
+  is the auto-reset inline confirm window — first tap arms ("Confirm?"),
+  second tap fires, arming auto-resets after the shared 3 s constant; the
+  button-flavored counterpart of `ConfirmState`. Pinned by
+  `InlineConfirmStateTest`.
 - **`SelectionState<T>`** (core/model, beside `LibraryFilters`) is the
   one list-selection algebra: `ids` + derived `active`, pure
   `toggled`/`cleared`/`selectAll` — the
   `selectionMode = next.isNotEmpty()` derivation lives once. ArrQueue
   (`String`), Downloads (`String`) and Requests (`Int`) ViewModels store
-  one in uiState with derived properties. Declared delta:
+  one in uiState with derived properties; ArrQueue's queue actions funnel
+  through one `runQueueAction`. Declared delta:
   `selectAll(empty)` stays inactive (the old VMs flipped
   `selectionMode = true`, showing a 0-count bar). The three screens'
   `SelectionActionBar` composables remain deliberately separate (their
@@ -4093,18 +4233,18 @@ re-derives the designs nor lands them casually.
   Deferred: ~15 composable-signature changes through a 2213-line file
   whose regressions are visual-only — deserves a session with screenshot
   verification.
-- **`SideloadedTrackIdRegistry`**: the side-load id grammar
-  (`external:`/`offline:`/`provider:`/`local:`) is constructed in
-  `PlayerSessionManager`/`SubtitleManager`, matched in
-  `TrackSelectionPolicy`, and "keep the caller id alive across the
-  engine's track republish" is implemented three times (mpv label-keyed
-  registry, VLC spu-diff + queue, Exo config-id scheme). Design: one
-  registry in commonMain (`register`/`resolve`), adapters supply their
-  native key. Deferred: the three implementations live in androidMain
-  where no unit test can reach them — land it together with an
-  engine-harness seam, tests first.
-- **Feature-VM load-ladder fold** (landed 2026-09-20, minus the editor
-  slice): the recorded `loadInto`-shaped helper shipped in core:ui next
+- **Side-load id contract** (the `SideloadedTrackIdRegistry` design,
+  executed in pieces): the id grammar (`external:`/`offline:`/`provider:`/
+  `local:`) is constructed in `TrackSelectionHelper`/`SubtitleManager` and
+  matched in `TrackSelectionPolicy`; "keep the caller id alive across the
+  engine's track republish" folded where it could — BOTH mpv engines run
+  the commonMain `MpvTrackCatalog`/`MpvSubtitleSideLoadPlan` pair
+  (player-contract `engine/`, pinned by player-video jvmTest
+  `MpvTrackCatalogTrackSelectionContractTest` + the pair's own commonTests)
+  and Exo keeps its commonMain `StableSideloadedTrackId` codec. VLC's
+  androidMain spu-diff + map is the one implementation no JVM test reaches.
+- **Feature-VM load-ladder fold** (landed 2026-09-20): the recorded
+  `loadInto`-shaped helper shipped in core:ui next
   to `JellyPlayViewModel` — one signature covering every folded shape
   (start → suspend fetch → exactly-one-arm fold, the fetch's own `Result`
   returned after its arm so a choreography can leg-gate, `suspend` arms
@@ -4131,9 +4271,9 @@ re-derives the designs nor lands them casually.
   with success-path failures, per-leg error text, or a null-item leg
   gate the Result cannot express). Pinned by `LoadIntoTest` (core:ui:
   guard sequence, settle modes, returned-Result gate, non-suspend
-  function-reference arms, cancellation transparency). Remaining: the
-  editor slice (`EditorLoad` — the `LiveTvLoad` shape) can ride
-  `loadInto` unchanged when its module lands.
+  function-reference arms, cancellation transparency). The editor slice
+  executed: `EditorLoad`/`EditorLoadTest` are deleted, `EditorViewModel`
+  rides `loadInto`, pinned by `EditorLoadIntoTest`.
 - **`DetailViewModel` intent fold** (landed 2026-09-21): sealed
   `DetailUiEvent` (jvmShared, beside the VM) + one `onEvent` funnel — the
   27 command funs went private behind it byte-identically, `MediaDetailScreen`
@@ -4336,9 +4476,7 @@ re-derives the designs nor lands them casually.
   recorded "VM holds no sheet state" ruling but still an ownership move.
   Land with the next reader behaviour change, design in hand.
 - **Unpicked candidates** (named during reviews, no design recorded):
-  PlayerControls callback bundles; MediaDetailScreen dialog coordinator;
-  signed-out auth shell; factory-reset field enumeration; settings
-  row-twin rendering; `ss_*`/`settings_*` string merge.
+  MediaDetailScreen dialog coordinator; signed-out auth shell.
 
 ## v0.11.1 hardening wave (2026-09-22)
 
@@ -4381,6 +4519,12 @@ both shells and pinned:
   startup (`Anime4KShaderInstaller`, third-party notices in packaging).
   Pinned by `MpvConfigMappingTest`, `RenderProfileResolverTest`,
   `Anime4KShaderInstallerTest`.
+- **`EngineConfigDelta`** (player-contract commonMain `engine/`, beside
+  `MpvConfigMapping`): the pure slice-diff between two `EngineConfig`
+  values — both mpv hosts switch on its flags in `onConfigChanged` and
+  write only what moved (the two hand-mirrored ladders had drifted), each
+  keeping its own `lastApplied*` diff caches and dispatch threading.
+  Pinned by `EngineConfigDeltaTest`.
 - **Track-language rules + remembered codec (56→57)**:
   `TrackResolutionEngine`/`TrackSelectionPolicy`/`TrackSelectionHelper`
   resolve audio/subtitle picks through the ordered `LanguageRuleSet`
@@ -4405,7 +4549,11 @@ both shells and pinned:
   against the server's `SUPPORTED_REMOTE_COMMANDS` list.
 - **Desktop session surface**: `DesktopIdleMonitor`/`DesktopIdleOverlay`
   (AWT-idle detection + the screensaver-consenting dim blanket),
-  `DesktopKeySynthesizer` (the ladder's robot key events),
-  `DesktopSessionCoordinator` (Jellyfin session caps), and
+  `DesktopKeySynthesizer` (the ladder's robot key events), and
   `DesktopAudioDeviceEnumerator` (mpv `audio-device` list for the
-  playback settings row).
+  playback settings row); the realtime session choreography lives in
+  shared/feature/shell's `RealtimeSessionController`, constructed in
+  `DesktopAppRoot` with clientName "JellyPlay Desktop" (Android's
+  `SessionCoordinator` delegates to it); `DesktopIdleAmbientController`
+  owns the idle "Ready-to-play" ambient seam the scaffold used to inline
+  (idle decision + active-remote-session count + overlay in one object).

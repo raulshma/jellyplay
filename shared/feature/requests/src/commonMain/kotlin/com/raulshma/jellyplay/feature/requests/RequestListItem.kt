@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +37,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberInlineConfirm
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_approve
@@ -58,7 +58,6 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_minutes_ago
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_months_ago
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_years_ago
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -78,15 +77,8 @@ fun RequestListItem(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
-    var isConfirmingDelete by remember(request.id) { mutableStateOf(false) }
     var pendingApproval by remember(request.id) { mutableStateOf<SeerrRequestStatus?>(null) }
-
-    LaunchedEffect(isConfirmingDelete) {
-        if (isConfirmingDelete) {
-            delay(3000)
-            isConfirmingDelete = false
-        }
-    }
+    val deleteConfirm = rememberInlineConfirm(request.id)
 
     val mediaStatus = remember(request.is4k, request.media.status, request.media.status4k) {
         request.effectiveMediaStatus()
@@ -300,12 +292,8 @@ fun RequestListItem(
                         else -> {
                             FilledTonalButton(
                                 onClick = {
-                                    if (isConfirmingDelete) {
-                                        onDelete()
-                                        isConfirmingDelete = false
-                                    } else {
-                                        isConfirmingDelete = true
-                                    }
+                                    if (deleteConfirm.isConfirming) deleteConfirm.confirm(onDelete)
+                                    else deleteConfirm.arm()
                                 },
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
@@ -318,7 +306,7 @@ fun RequestListItem(
                                 ),
                             ) {
                                 Text(
-                                    stringResource(if (isConfirmingDelete) Res.string.requests_action_delete_confirm else Res.string.requests_action_delete),
+                                    stringResource(if (deleteConfirm.isConfirming) Res.string.requests_action_delete_confirm else Res.string.requests_action_delete),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             }

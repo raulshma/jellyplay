@@ -14,7 +14,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
@@ -206,17 +205,26 @@ fun main() {
             onPreviewKeyEvent = { event ->
                 if (event.type != KeyEventType.KeyDown) {
                     false
-                } else if (event.isCtrlPressed && event.key == Key.R) {
-                    menuRefreshRequests.tryEmit(Unit)
-                    true
-                } else if (event.isCtrlPressed && event.key == Key.Q) {
-                    exitApplication()
-                    true
-                } else if (event.key == Key.F11) {
-                    toggleFullscreen()
-                    true
                 } else {
-                    false
+                    // Matching folds through the DesktopAccelerator table (the
+                    // same rows the title bar menus render); the effects stay
+                    // here. Non-owners decline so route-level handlers
+                    // (Esc/back, media keys in DesktopAppRoot) are unaffected.
+                    when (DesktopAccelerators.match(event.key, event.isCtrlPressed)?.action) {
+                        DesktopAcceleratorAction.Refresh -> {
+                            menuRefreshRequests.tryEmit(Unit)
+                            true
+                        }
+                        DesktopAcceleratorAction.Exit -> {
+                            exitApplication()
+                            true
+                        }
+                        DesktopAcceleratorAction.ToggleFullscreen -> {
+                            toggleFullscreen()
+                            true
+                        }
+                        null -> false
+                    }
                 }
             },
         ) {

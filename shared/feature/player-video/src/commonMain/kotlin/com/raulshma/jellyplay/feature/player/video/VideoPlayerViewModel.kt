@@ -1275,13 +1275,35 @@ class VideoPlayerViewModel(
     )
 
     /**
-     * The session-scoped render state (sheet + deinterlace
-     * cycle): the pure semantics live in [SessionRenderState]; this VM owns
-     * the repository/DataStore writes and the engine re-apply around it.
-     * Internal: the player screen reads it to render the Rendering sheet's
-     * pickers and the deinterlace menu label.
+     * Owns the "Rendering" sheet + deinterlace write choreography (the
+     * [SubtitleStyleController] shape): the pure session semantics live in
+     * [SessionRenderState] (composed as [RenderControls.state]); the
+     * controller composes them with the repository/DataStore writes around
+     * them — the global mpv slice persist, the per-item/series render-profile
+     * rows and the session item-change re-resolution. The save lambdas read
+     * [playbackPreferenceWriter] lazily (invoked long after construction, the
+     * trackSelectionHelper.persistRememberedTrack pattern). Engine-side
+     * application stays here: the controller only reports a dirty config
+     * through `onConfigDirty` → [updateConfigWithUiState].
      */
-    internal val sessionRender = SessionRenderState()
+    internal val render = RenderControls(
+        scope = scope,
+        getGlobalMpvConfig = { cachedAggregate.engine.mpvConfig },
+        saveGlobalMpvConfig = { config -> stores.engine.setMpvConfig(config) },
+        loadStoredRow = { prefScope, id -> itemPlaybackPreferenceRepository.get(prefScope, id) },
+        saveRenderProfile = { overrides -> playbackPreferenceWriter.setRenderProfile(overrides) },
+        clearStoredRenderProfile = { playbackPreferenceWriter.clearRenderProfile() },
+        onConfigDirty = { updateConfigWithUiState() },
+    )
+
+    /**
+     * The session-scoped render state (sheet + deinterlace cycle), read-only
+     * alias of [RenderControls.state]. Internal: the player screen reads it
+     * to render the Rendering sheet's pickers and the deinterlace menu label;
+     * every WRITE routes through [render] so the choreography has one owner.
+     */
+    internal val sessionRender: SessionRenderState
+        get() = render.state
 
     /**
      * Owns the AV-sync sheet's cue preview (external track load + embedded cue
@@ -1548,19 +1570,10 @@ class VideoPlayerViewModel(
                     // new item (item row > series row; null = global stands)
                     // and re-apply the config — the override lands a beat
                     // after the load, applied through the engine's diff cache.
+                    // The row fetch + re-resolution + config rebuild are the
+                    // controller's choreography.
                     launch {
-                        val itemRow = itemId?.let {
-                            itemPlaybackPreferenceRepository.get(
-                                com.raulshma.jellyplay.core.model.PlaybackPrefScope.ITEM, it,
-                            )
-                        }
-                        val seriesRow = seriesId?.let {
-                            itemPlaybackPreferenceRepository.get(
-                                com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES, it,
-                            )
-                        }
-                        sessionRender.onItemChanged(itemRow, seriesRow)
-                        updateConfigWithUiState()
+                        render.onSessionItemChanged(itemId, seriesId)
                     }
                 }
             }
@@ -2364,10 +2377,13 @@ class VideoPlayerViewModel(
     }
 
     // ── Rendering sheet + deinterlace ──────────────
+    // The write choreography lives in [render] (RenderControls); the funs
+    // below are the screen-facing funnels — one-line delegates that preserve
+    // the public names/signatures (the sheet router + gear menu call them).
 
     /** Effective global mpv slice for the sheet's pickers (before the session lens). */
     internal val globalMpvConfig: com.raulshma.jellyplay.core.model.MpvEngineConfig
-        get() = cachedAggregate.engine.mpvConfig
+        get() = render.globalMpvConfig
 
     /**
      * The "Rendering" sheet's shader-pack pick. Applies to the session
@@ -2376,33 +2392,18 @@ class VideoPlayerViewModel(
      * override to the series row (or the item row for standalone movies).
      */
     fun setRenderShaderPack(pack: com.raulshma.jellyplay.core.model.MpvShaderPack, persist: Boolean) =
-        setSessionRenderOverride(persist) { it.copy(shaderPack = pack) }
+        render.setRenderShaderPack(pack, persist)
 
     /** The sheet's tone-mapping pick — same session/persist choreography as [setRenderShaderPack]. */
     fun setRenderToneMapping(mapping: com.raulshma.jellyplay.core.model.MpvToneMapping, persist: Boolean) =
-        setSessionRenderOverride(persist) { it.copy(toneMapping = mapping) }
-
-    /** The shared choreography of the sheet's override-field picks (see the two callers above). */
-    private fun setSessionRenderOverride(
-        persist: Boolean,
-        field: (com.raulshma.jellyplay.core.model.MpvRenderOverrides) -> com.raulshma.jellyplay.core.model.MpvRenderOverrides,
-    ) {
-        val next = field(sessionRender.override ?: com.raulshma.jellyplay.core.model.MpvRenderOverrides())
-        sessionRender.applyOverride(next)
-        updateConfigWithUiState()
-        if (persist) playbackPreferenceWriter.setRenderProfile(next)
-    }
+        render.setRenderToneMapping(mapping, persist)
 
     /**
      * "Inherit (follow global)": clears the persisted override (both scopes)
      * and drops the session lens — the effective config is derived from the
      * global settings again.
      */
-    fun clearRenderOverride() {
-        sessionRender.applyOverride(null)
-        updateConfigWithUiState()
-        playbackPreferenceWriter.clearRenderProfile()
-    }
+    fun clearRenderOverride() = render.clearRenderOverride()
 
     /**
      * The sheet's render-quality pick: a GLOBAL preference (part of the mpv
@@ -2410,49 +2411,22 @@ class VideoPlayerViewModel(
      * the session lens mirrors it so the engine reflects the pick before the
      * DataStore round-trip lands.
      */
-    fun setRenderQuality(quality: com.raulshma.jellyplay.core.model.MpvRenderQuality) = setGlobalMpvField(
-        pending = { it.copy(renderQuality = quality) },
-        config = { it.copy(renderQuality = quality) },
-    )
+    fun setRenderQuality(quality: com.raulshma.jellyplay.core.model.MpvRenderQuality) =
+        render.setRenderQuality(quality)
 
     /** the interpolation `tscale` preset — global, beside the interpolation toggle. */
-    fun setInterpolationTscale(tscale: com.raulshma.jellyplay.core.model.MpvInterpolationTscale) = setGlobalMpvField(
-        pending = { it.copy(interpolationTscale = tscale) },
-        config = { it.copy(interpolationTscale = tscale) },
-    )
+    fun setInterpolationTscale(tscale: com.raulshma.jellyplay.core.model.MpvInterpolationTscale) =
+        render.setInterpolationTscale(tscale)
 
     /** the CUSTOM pack's user `*.glsl` selection (absolute paths) — global. */
-    fun setCustomShaderFiles(files: List<String>) = setGlobalMpvField(
-        pending = { it.copy(customShaderFiles = files) },
-        config = { it.copy(customShaderFiles = files) },
-    )
-
-    /**
-     * The shared choreography of the sheet's global-only picks: mirror into
-     * the session lens (so the engine reflects the pick before the DataStore
-     * round-trip lands), rebuild the config, then write the global slice.
-     */
-    private fun setGlobalMpvField(
-        pending: (SessionRenderState.PendingGlobalEdits) -> SessionRenderState.PendingGlobalEdits,
-        config: (com.raulshma.jellyplay.core.model.MpvEngineConfig) -> com.raulshma.jellyplay.core.model.MpvEngineConfig,
-    ) {
-        sessionRender.applyPending(pending)
-        updateConfigWithUiState()
-        val next = config(cachedAggregate.engine.mpvConfig)
-        launch {
-            stores.engine.setMpvConfig(next)
-        }
-    }
+    fun setCustomShaderFiles(files: List<String>) = render.setCustomShaderFiles(files)
 
     /**
      * cycle the session-scoped deinterlace override AUTO→ON→OFF→AUTO.
      * Held in [sessionRender] (survives next-episode advance, reverts on
      * player exit) — deliberately NOT persisted.
      */
-    fun cycleDeinterlace() {
-        sessionRender.cycleDeinterlace()
-        updateConfigWithUiState()
-    }
+    fun cycleDeinterlace() = render.cycleDeinterlace()
 
      private fun updateConfigWithUiState() {
         val config = EngineConfigBuilder.build(
@@ -3041,7 +3015,7 @@ class VideoPlayerViewModel(
             // the deinterlace cycle (and the render sheet's session
             // lenses) are session-scoped — they revert on player exit, while
             // the persisted override rows survive for the next playback.
-            sessionRender.onReleased()
+            render.onReleased()
             // drop the volume-memory capture hook with the engine it
             // was armed on (the lambda holds this VM through `launch`).
             playerSessionManager.engine?.onUserVolumeChange = null

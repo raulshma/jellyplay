@@ -23,11 +23,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +47,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberInlineConfirm
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res
@@ -86,7 +83,6 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_down
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_fallback_title
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_radarr
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_sonarr
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -122,22 +118,8 @@ fun RequestDetailBottomSheet(
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
-    var isConfirmingDelete by remember(request.id) { mutableStateOf(false) }
-    var isConfirmingRemoveFromService by remember(request.id) { mutableStateOf(false) }
-
-    LaunchedEffect(isConfirmingDelete) {
-        if (isConfirmingDelete) {
-            delay(3000)
-            isConfirmingDelete = false
-        }
-    }
-
-    LaunchedEffect(isConfirmingRemoveFromService) {
-        if (isConfirmingRemoveFromService) {
-            delay(3000)
-            isConfirmingRemoveFromService = false
-        }
-    }
+    val deleteConfirm = rememberInlineConfirm(request.id)
+    val removeFromServiceConfirm = rememberInlineConfirm(request.id)
     val mediaStatus = remember(request.is4k, request.media.status, request.media.status4k) {
         request.effectiveMediaStatus()
     }
@@ -396,12 +378,8 @@ fun RequestDetailBottomSheet(
                     if (requestStatus != SeerrRequestStatus.PENDING) {
                         OutlinedButton(
                             onClick = {
-                                if (isConfirmingDelete) {
-                                    onDelete()
-                                    isConfirmingDelete = false
-                                } else {
-                                    isConfirmingDelete = true
-                                }
+                                if (deleteConfirm.isConfirming) deleteConfirm.confirm(onDelete)
+                                else deleteConfirm.arm()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -415,7 +393,7 @@ fun RequestDetailBottomSheet(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 stringResource(
-                                    if (isConfirmingDelete) Res.string.requests_action_delete_confirm
+                                    if (deleteConfirm.isConfirming) Res.string.requests_action_delete_confirm
                                     else Res.string.requests_action_delete_request
                                 )
                             )
@@ -433,12 +411,8 @@ fun RequestDetailBottomSheet(
                         )
                         OutlinedButton(
                             onClick = {
-                                if (isConfirmingRemoveFromService) {
-                                    onRemoveFromService()
-                                    isConfirmingRemoveFromService = false
-                                } else {
-                                    isConfirmingRemoveFromService = true
-                                }
+                                if (removeFromServiceConfirm.isConfirming) removeFromServiceConfirm.confirm(onRemoveFromService)
+                                else removeFromServiceConfirm.arm()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -452,7 +426,7 @@ fun RequestDetailBottomSheet(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 stringResource(
-                                    if (isConfirmingRemoveFromService) Res.string.requests_action_delete_confirm
+                                    if (removeFromServiceConfirm.isConfirming) Res.string.requests_action_delete_confirm
                                     else Res.string.requests_action_remove_from_service,
                                     serviceLabel
                                 )

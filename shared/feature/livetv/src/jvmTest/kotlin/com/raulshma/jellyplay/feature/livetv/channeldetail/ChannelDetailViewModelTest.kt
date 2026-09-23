@@ -2,9 +2,9 @@ package com.raulshma.jellyplay.feature.livetv.channeldetail
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.feature.livetv.testutil.FakeTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -18,9 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.first
 import java.time.Instant
-import java.time.LocalDate
 import java.time.OffsetDateTime
-import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -427,17 +425,4 @@ class ChannelDetailViewModelTest {
     /** Offset-less ISO string whose lenient (UTC) reading equals [instant]. */
     private fun utcWallClock(instant: Instant): String =
         java.time.LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toString()
-
-    /**
-     * Controllable [TimeSource] on a fixed epoch (the HomeRefresher fake
-     * idiom) — the request window, ended-filter and airing verdicts are all
-     * EXACT against it. Fixed at 2026-07-01T12:00:00Z (mid-day UTC in every
-     * real zone, so the end-of-local-midnight request bound never lands on
-     * the fake "now").
-     */
-    private class FakeTimeSource(var nowMs: Long) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
-    }
 }

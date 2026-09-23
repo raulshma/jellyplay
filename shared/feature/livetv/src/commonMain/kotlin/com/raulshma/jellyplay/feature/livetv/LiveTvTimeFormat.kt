@@ -221,10 +221,13 @@ internal const val LIVE_TV_STALENESS_INTERVAL_MS: Long = 5 * 60 * 1000L
  * commonMain clock slice; the JVM graph binds it to the SystemTimeSource
  * single — fake-able in jvmTest) —
  * the Live-TV ViewModels' only Instant read, never a direct clock read.
+ * Public (the LiveNowWindow convergence) so player-live's
+ * LiveTvPlayerViewModel reads the same bridge instead of a raw
+ * `Clock.System.now()`; the livetv VMs consume it internally.
  *
  * the receiver narrowed from the jvmShared `TimeSource` to its
  * commonMain [EpochMillisSource] slice — the ViewModels only ever read
  * `nowEpochMillis` (the `today(zone)`/monotonic surface was unused here), so
  * no jvmShared core:data type crosses into the module's commonMain.
  */
-internal fun EpochMillisSource.nowInstant(): Instant = Instant.fromEpochMilliseconds(nowEpochMillis())
+fun EpochMillisSource.nowInstant(): Instant = Instant.fromEpochMilliseconds(nowEpochMillis())

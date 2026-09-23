@@ -27,6 +27,9 @@ import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
+import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
+import com.raulshma.jellyplay.deeplink.IncomingIntentRequest
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
@@ -171,25 +174,37 @@ class MainViewModelTest {
     fun `shortcut actions route to their pending routes`() = runTest(dispatcher) {
         val vm = createVm()
 
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_CONTINUE_WATCHING))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_CONTINUE_WATCHING)))
         assertEquals(Route.NewsletterSectionList("CONTINUE_WATCHING"), vm.pendingRoute.value)
         vm.consumePendingRoute()
 
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_SEARCH))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_SEARCH)))
         assertEquals(Route.Search, vm.pendingRoute.value)
         vm.consumePendingRoute()
 
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_PLAY_MUSIC))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_PLAY_MUSIC)))
         assertEquals(Route.MusicBrowse, vm.pendingRoute.value)
         vm.consumePendingRoute()
 
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_DOWNLOADS))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_DOWNLOADS)))
         assertEquals(Route.Downloads, vm.pendingRoute.value)
         vm.consumePendingRoute()
 
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_SETTINGS))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_SETTINGS)))
         assertEquals(Route.Settings, vm.pendingRoute.value)
         vm.consumePendingRoute()
+    }
+
+    @Test
+    fun `a shortcut disposition carrying a route publishes it as the pending route`() = runTest(dispatcher) {
+        val vm = createVm()
+
+        // The already-classified disposition MainActivity hands over — the
+        // VM must publish its route exactly like the former string-action
+        // path published the re-decoded route (ACTION_SEARCH → Route.Search).
+        vm.handleShortcutIntent(IncomingIntentDisposition.Shortcut(route = Route.Search))
+
+        assertEquals(Route.Search, vm.pendingRoute.value)
     }
 
     @Test
@@ -198,7 +213,7 @@ class MainViewModelTest {
         val intent = Intent(AppShortcutManager.ACTION_PLAY_AUDIO)
             .putExtra(AppShortcutManager.EXTRA_ITEM_ID, "track-7")
 
-        vm.handleShortcutIntent(intent)
+        vm.handleShortcutIntent(shortcut(intent))
 
         assertEquals(Route.AudioPlayer("track-7"), vm.pendingRoute.value)
     }
@@ -207,7 +222,7 @@ class MainViewModelTest {
     fun `play-audio shortcut without an item id is ignored`() = runTest(dispatcher) {
         val vm = createVm()
 
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_PLAY_AUDIO))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_PLAY_AUDIO)))
 
         assertNull(vm.pendingRoute.value)
     }
@@ -216,7 +231,7 @@ class MainViewModelTest {
     fun `unknown shortcut action is ignored`() = runTest(dispatcher) {
         val vm = createVm()
 
-        vm.handleShortcutIntent(Intent("com.raulshma.jellyplay.action.UNKNOWN"))
+        vm.handleShortcutIntent(shortcut(Intent("com.raulshma.jellyplay.action.UNKNOWN")))
 
         assertNull(vm.pendingRoute.value)
     }
@@ -225,7 +240,7 @@ class MainViewModelTest {
     fun `surprise-me shortcut routes home and arms the one-shot launch flag`() = runTest(dispatcher) {
         val vm = createVm()
 
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_SURPRISE_ME))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_SURPRISE_ME)))
 
         assertEquals(Route.Home, vm.pendingRoute.value)
         assertTrue(vm.surpriseOnLaunch.value)
@@ -236,7 +251,7 @@ class MainViewModelTest {
     @Test
     fun `consumePendingRoute clears the pending route`() = runTest(dispatcher) {
         val vm = createVm()
-        vm.handleShortcutIntent(Intent(AppShortcutManager.ACTION_SEARCH))
+        vm.handleShortcutIntent(shortcut(Intent(AppShortcutManager.ACTION_SEARCH)))
         assertEquals(Route.Search, vm.pendingRoute.value)
 
         vm.consumePendingRoute()
@@ -674,6 +689,14 @@ class MainViewModelTest {
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
+
+    /**
+     * Classifies a shortcut intent exactly the way MainActivity's dispatch
+     * does, so the tests hand the VM the already-classified
+     * [IncomingIntentDisposition.Shortcut] the production call site passes.
+     */
+    private fun shortcut(intent: Intent): IncomingIntentDisposition.Shortcut =
+        IncomingIntentRequest.from(intent).classify() as IncomingIntentDisposition.Shortcut
 
     private fun userInfo(isAdmin: Boolean) = UserInfo(
         id = "user-1",

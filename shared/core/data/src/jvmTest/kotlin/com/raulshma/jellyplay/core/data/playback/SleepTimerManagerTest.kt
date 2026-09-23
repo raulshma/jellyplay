@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.util.TimeSource
-import java.time.LocalDate
-import java.time.ZoneId
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -19,20 +17,15 @@ import kotlinx.coroutines.test.setMain
  * Moved from legacy `:core:data` JUnit4 to shared kotlin.test with the impl:
  * the monotonic clock now rides the [TimeSource] seam (the legacy build read
  * `SystemClock.elapsedRealtime`, which the old module's unit-test preset
- * stubbed to 0). The fake below pins elapsed time explicitly.
+ * stubbed to 0). The injected [FakeTimeSource] pins elapsed time explicitly.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SleepTimerManagerTest {
 
-    /** Hand fake: elapsed monotonic millis the manager will read. */
-    private class FakeTimeSource(var elapsedMillis: Long = 0L) : TimeSource {
-        override fun nowEpochMillis(): Long = elapsedMillis
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
-        override fun nowElapsedRealtimeMillis(): Long = elapsedMillis
-    }
-
     private val testDispatcher = StandardTestDispatcher()
-    private val timeSource = FakeTimeSource()
+
+    /** The shared fake; the deleted local copy defaulted elapsed time to 0. */
+    private val timeSource = FakeTimeSource(nowMs = 0L)
     private lateinit var manager: SleepTimerManager
 
     @BeforeTest

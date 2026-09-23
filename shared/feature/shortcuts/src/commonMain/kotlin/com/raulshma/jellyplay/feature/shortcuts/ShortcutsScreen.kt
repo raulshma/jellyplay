@@ -1,14 +1,12 @@
 package com.raulshma.jellyplay.feature.shortcuts
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +47,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,7 +73,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.settingsColumns
-import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -573,14 +570,7 @@ private fun ShortcutCard(
     val isTv = LocalTvMode.current
     val focusState = rememberTvFocusState(focusedScale = 1.025f)
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
     val shape = if (isTv) ShapeCache.smooth20 else ShapeCache.smooth16
-
-    val scale by animateFloatAsState(
-        targetValue = pressScaleValue(isPressed, 0.97f),
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "shortcutCardScale",
-    )
 
     Surface(
         onClick = onClick,
@@ -589,10 +579,11 @@ private fun ShortcutCard(
         interactionSource = interactionSource,
         modifier = modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale * focusState.scale
-                scaleY = scale * focusState.scale
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.97f,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            )
             .lightModeHairlineBorder(shape)
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, shape = shape, color = MaterialTheme.colorScheme.primary),

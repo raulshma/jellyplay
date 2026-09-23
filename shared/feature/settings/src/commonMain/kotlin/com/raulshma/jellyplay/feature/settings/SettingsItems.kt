@@ -1,11 +1,9 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,7 +40,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
 import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
-import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -102,17 +100,6 @@ internal fun SettingReorderableToggleItem(
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "reorderableToggleScale",
-    )
-    val pressAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "reorderableToggleAlpha",
-    )
     val iconColor by animateColorAsState(
         targetValue = if (checked) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -196,10 +183,17 @@ internal fun SettingReorderableToggleItem(
         modifier = Modifier
             .fillMaxWidth()
             .then(modifier)
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.97f,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                // While dragging the row dims to a flat 0.85f — press-dim must
+                // not compound with the drag dim, so the press alpha arm is
+                // neutralized (1f) and the drag layer below owns the dim.
+                pressedAlpha = if (isDragging) 1f else 0.7f,
+            )
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = if (isDragging) 0.85f else pressAlpha
+                alpha = if (isDragging) 0.85f else 1f
             }
             .clip(shape)
             .lightModeHairlineBorder(shape)

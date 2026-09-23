@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +30,6 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +41,7 @@ import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.AccentColorPicker
 import com.raulshma.jellyplay.core.ui.components.ColorStylePicker
 import com.raulshma.jellyplay.feature.onboarding.supportsDynamicColor
@@ -201,16 +200,6 @@ fun OnboardingOptionCard(
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = when {
-            isPressed -> AnimationTokens.CardPressScale
-            selected -> 1f
-            else -> 1f
-        },
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "optionCardScale",
-    )
     val selectionScale by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -238,10 +227,11 @@ fun OnboardingOptionCard(
     Box(
         modifier = modifier
             .height(72.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = AnimationTokens.CardPressScale,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            )
             .clip(ShapeCache.smooth16)
             .background(containerColor)
             .drawBehind {
@@ -298,12 +288,6 @@ fun OnboardingToggleRow(
     enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) AnimationTokens.CardPressScale else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "toggleRowScale",
-    )
     val backgroundColor by animateColorAsState(
         targetValue = if (checked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -314,10 +298,11 @@ fun OnboardingToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = AnimationTokens.CardPressScale,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            )
             .clip(ShapeCache.smooth16)
             .background(backgroundColor)
             .focusIndicator()

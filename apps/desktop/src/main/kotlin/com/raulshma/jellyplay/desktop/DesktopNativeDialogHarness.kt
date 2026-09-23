@@ -16,14 +16,10 @@ import com.raulshma.jellyplay.feature.settings.SettingsViewModel
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.Timer
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.system.exitProcess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -92,6 +88,10 @@ import kotlinx.serialization.json.jsonPrimitive
  * the `file:` URI delivery, the JDK-stream IO and the VM round trip) is what
  * this harness gates.
  *
+ * The step ledger / poller / auto-exit / report chassis is the shared
+ * [HarnessRunner]; this lane drives its dialogs through HarnessDialogDriver
+ * and needs no Robot evidence helpers of its own.
+ *
  * Properties:
  *  - `jellyplay.dialogpass.enabled`         — "true" arms the harness (required).
  *  - `jellyplay.dialogpass.workspace`       — writable scratch dir for the
@@ -148,13 +148,13 @@ object DesktopNativeDialogHarness {
         }
     }
 
+    /**
+     * One dialog pass's flow steps + lane config. The step ledger,
+     * awaitUntil poller, auto-exit timer and report writer are the shared
+     * [HarnessRunner] (the process always exits 0 — the report's overallPass
+     * is the verdict).
+     */
     private class Runner(private val deps: DialogPassDeps) {
-        private val startedAtMs = System.currentTimeMillis()
-        private val finished = AtomicBoolean(false)
-        private val lock = Any()
-        private val steps = ArrayList<StepResult>()
-        private var fatal: Throwable? = null
-
         private val workspaceProp = System.getProperty(PROP_WORKSPACE)?.trim().orEmpty()
         private val autoExitSeconds = System.getProperty(PROP_AUTO_EXIT_SECONDS)?.toIntOrNull()
             ?: DEFAULT_AUTO_EXIT_SECONDS
@@ -170,12 +170,30 @@ object DesktopNativeDialogHarness {
         private val vm: SettingsViewModel get() = deps.settingsViewModel
         private val preview: ImportPreviewViewModel get() = deps.importPreviewViewModel
 
+        private val runner = HarnessRunner(
+            logTag = "dialogpass",
+            harnessName = "desktop-native-dialog",
+            reportFileName = REPORT_FILE_NAME,
+            logsDir = logsDir,
+            autoExitSeconds = autoExitSeconds,
+            pollIntervalMs = POLL_INTERVAL_MS,
+            exitCodeReflectsReport = false,
+            machineFacts = {
+                mapOf(
+                    "os.name" to System.getProperty("os.name"),
+                    "os.version" to System.getProperty("os.version"),
+                    "java.version" to System.getProperty("java.version"),
+                    "workspace" to workspace.toString(),
+                )
+            },
+        )
+
         init {
-            currentFatalHandler = { e -> finishWithFatal(e) }
+            currentFatalHandler = { e -> runner.finishWithFatal(e) }
         }
 
         suspend fun run() {
-            armAutoExit()
+            runner.armAutoExit()
             println(
                 "[JellyPlay][dialogpass] enabled: workspace=$workspace shots=$screenshotDir " +
                     "logs=$logsDir autoExit=${autoExitSeconds}s",
@@ -183,7 +201,7 @@ object DesktopNativeDialogHarness {
 
             val exportTargetFile = workspace.resolve(PRODUCTION_PREFILL).toFile()
 
-            val configOk = step("CONFIG") {
+            val configOk = runner.step("CONFIG") {
                 check(workspaceProp.isNotEmpty()) { "missing $PROP_WORKSPACE" }
                 check(!workspaceProp.contains(' ')) {
                     "workspace path contains a space; JAVA_TOOL_OPTIONS cannot carry it"
@@ -205,7 +223,7 @@ object DesktopNativeDialogHarness {
             var fatalStop = !configOk
 
             // ── 1. SAVE dialog: Robot types the absolute export path + Enter ──
-            val dialogSaveOk = !fatalStop && step("DIALOG_EXPORT_SAVE") {
+            val dialogSaveOk = !fatalStop && runner.step("DIALOG_EXPORT_SAVE") {
                 val picked = driveAndPick(
                     title = "Export settings",
                     save = true,
@@ -227,10 +245,10 @@ object DesktopNativeDialogHarness {
             fatalStop = fatalStop || !dialogSaveOk
 
             // ── 2. the VM writes the file through the production callback ──
-            val exportVmOk = !fatalStop && step("EXPORT_VM_WRITES") {
+            val exportVmOk = !fatalStop && runner.step("EXPORT_VM_WRITES") {
                 val uri = exportTargetFile.toURI().toString()
                 vm.exportSettings(uri)
-                check(awaitUntil(15_000) { vm.backupRestoreStatus != null }) {
+                check(runner.awaitUntil(15_000) { vm.backupRestoreStatus != null }) {
                     "backupRestoreStatus never settled after exportSettings"
                 }
                 check(vm.backupRestoreStatus == "Settings exported successfully") {
@@ -258,7 +276,7 @@ object DesktopNativeDialogHarness {
             fatalStop = fatalStop || !exportVmOk
 
             // ── 3. LOAD dialog: Robot picks the file the export wrote ──
-            val dialogLoadOk = !fatalStop && step("DIALOG_IMPORT_LOAD") {
+            val dialogLoadOk = !fatalStop && runner.step("DIALOG_IMPORT_LOAD") {
                 val picked = driveAndPick(
                     title = "Import settings",
                     save = false,
@@ -279,10 +297,10 @@ object DesktopNativeDialogHarness {
             fatalStop = fatalStop || !dialogLoadOk
 
             // ── 4. staging + the surviving preview-VM import path ─────────────
-            val importVmOk = !fatalStop && step("IMPORT_VM_STAGE_CONFIRM") {
+            val importVmOk = !fatalStop && runner.step("IMPORT_VM_STAGE_CONFIRM") {
                 val uri = exportTargetFile.toURI().toString()
                 vm.importSettings(uri)
-                check(awaitUntil(15_000) { vm.stagedImportUri != null }) {
+                check(runner.awaitUntil(15_000) { vm.stagedImportUri != null }) {
                     "import uri never staged (status='${vm.backupRestoreStatus}')"
                 }
                 check(vm.stagedImportUri == uri) { "staged uri '${vm.stagedImportUri}' != dialog-picked '$uri'" }
@@ -291,7 +309,7 @@ object DesktopNativeDialogHarness {
                 // imports everything with the security gate off — the exact
                 // calls the import preview screen makes on a confirmed import.
                 preview.loadBackup(uri)
-                check(awaitUntil(15_000) { preview.incomingPrefs != null || preview.error != null }) {
+                check(runner.awaitUntil(15_000) { preview.incomingPrefs != null || preview.error != null }) {
                     "the export was never parsed by the import preview"
                 }
                 check(preview.error == null) { "import preview failed to load: ${preview.error}" }
@@ -299,7 +317,7 @@ object DesktopNativeDialogHarness {
                     "version mismatch on our own fresh export (schema ${preview.schemaVersion})"
                 }
                 preview.importAll(restoreSecuritySensitive = false) { }
-                check(awaitUntil(15_000) {
+                check(runner.awaitUntil(15_000) {
                     preview.importEvent is ImportPreviewViewModel.ImportEvent.AllImported
                 }) {
                     "import never completed (event='${preview.importEvent}')"
@@ -314,7 +332,7 @@ object DesktopNativeDialogHarness {
 
             // ── 5. the native cancel shape, live (ESC leaves VM untouched) ──
             if (!fatalStop) {
-                step("DIALOG_CANCEL_ESC") {
+                runner.step("DIALOG_CANCEL_ESC") {
                     val statusBefore = vm.backupRestoreStatus
                     val stagedBefore = vm.stagedImportUri
                     val picked = driveAndPick(
@@ -337,7 +355,7 @@ object DesktopNativeDialogHarness {
                 }
             }
 
-            writeReportAndExit()
+            runner.writeReportAndExit()
         }
 
         // ── the dialog drive: Robot driver thread + EDT-blocking pick ────────
@@ -359,7 +377,7 @@ object DesktopNativeDialogHarness {
             shotName: String,
         ): File? = coroutineScope {
             val driver = async(Dispatchers.IO) {
-                HarnessDialogDriver(screenshotDir, startedAtMs).drive(
+                HarnessDialogDriver(screenshotDir, runner.startedAtMs).drive(
                     pathToType = pathToType,
                     cancel = cancel,
                     shotName = shotName,
@@ -377,110 +395,12 @@ object DesktopNativeDialogHarness {
         private fun canonical(f: File?): String? =
             runCatching { f?.canonicalFile?.path }.getOrNull()
 
-        // ── plumbing (session-harness twins) ─────────────────────────────────
-
-        /** Deadline timer: write whatever exists, exit 0 (perf-harness twin). */
-        private fun armAutoExit() {
-            Timer("jellyplay-dialogpass", true).schedule(
-                object : java.util.TimerTask() {
-                    override fun run() {
-                        System.err.println(
-                            "[JellyPlay][dialogpass] auto-exit deadline (${autoExitSeconds}s) reached",
-                        )
-                        finishWithFatal(IllegalStateException("auto-exit deadline reached"))
-                    }
-                },
-                autoExitSeconds * 1000L,
-            )
-        }
-
-        fun finishWithFatal(e: Throwable) {
-            if (!finished.compareAndSet(false, true)) return
-            synchronized(lock) { fatal = e }
-            runCatching { writeReport() }
-            exitProcess(0)
-        }
-
-        private fun writeReportAndExit() {
-            if (!finished.compareAndSet(false, true)) return
-            runCatching { writeReport() }
-            exitProcess(0)
-        }
-
-        private suspend fun step(
-            name: String,
-            block: suspend () -> Map<String, String>,
-        ): Boolean {
-            val atMs = System.currentTimeMillis()
-            val result = try {
-                val details = block()
-                StepResult(
-                    name,
-                    pass = true,
-                    atMs,
-                    System.currentTimeMillis() - atMs,
-                    details,
-                    error = null,
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                StepResult(
-                    name,
-                    pass = false,
-                    atMs,
-                    System.currentTimeMillis() - atMs,
-                    emptyMap(),
-                    "$e",
-                )
-            }
-            println(
-                "[JellyPlay][dialogpass] step ${result.name}: " +
-                    (if (result.pass) "PASS" else "FAIL") +
-                    (result.error?.let { " — $it" } ?: "") +
-                    " (${result.durationMs}ms)",
-            )
-            synchronized(lock) { steps += result }
-            return result.pass
-        }
-
-        private suspend fun awaitUntil(timeoutMs: Long, poll: () -> Boolean): Boolean {
-            val deadline = System.currentTimeMillis() + timeoutMs
-            while (System.currentTimeMillis() < deadline) {
-                if (poll()) return true
-                delay(100)
-            }
-            return poll()
-        }
-
-        private fun writeReport() {
-            val (stepList, fatalErr) = synchronized(lock) { steps.toList() to fatal }
-            val json = SessionHarnessReport(
-                startedAtMs = startedAtMs,
-                finishedAtMs = System.currentTimeMillis(),
-                overallPass = stepList.isNotEmpty() && stepList.all { it.pass } && fatalErr == null,
-                fatal = fatalErr?.toString(),
-                machine = mapOf(
-                    "os.name" to System.getProperty("os.name"),
-                    "os.version" to System.getProperty("os.version"),
-                    "java.version" to System.getProperty("java.version"),
-                    "workspace" to workspace.toString(),
-                ),
-                steps = stepList,
-                harness = "desktop-native-dialog",
-            ).toJson()
-            Files.createDirectories(logsDir)
-            Files.writeString(logsDir.resolve(REPORT_FILE_NAME), json)
-            println(
-                "[JellyPlay][dialogpass] report written: $logsDir${File.separatorChar}$REPORT_FILE_NAME",
-            )
-        }
-
         companion object {
             @Volatile
             var currentFatalHandler: ((Throwable) -> Unit)? = null
 
             private const val REPORT_FILE_NAME = "dialog-harness.json"
+            private const val POLL_INTERVAL_MS = 100L
         }
     }
 }
@@ -488,8 +408,8 @@ object DesktopNativeDialogHarness {
 /**
  * Composition-site sugar so DesktopAppRoot hosts the dialog harness in one
  * call. Internal — only the desktop shell uses it. Gated by
- * [DesktopNativeDialogHarness.requested] at the call site so a normal boot
- * composes nothing here. The [SettingsViewModel] and [ImportPreviewViewModel]
+ * [DesktopNativeDialogHarness.requested] at the call site so a normal boot composes
+ * nothing here. The [SettingsViewModel] and [ImportPreviewViewModel]
  * are built from the same Koin singles the settings module's viewModel
  * definitions inject (harness-owned instances; no settings screen composes in
  * this mode) — plain `get()` on a viewModel definition is deliberately avoided

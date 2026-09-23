@@ -167,6 +167,10 @@ import com.raulshma.jellyplay.feature.player.video.components.SleepTimerControls
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayIndicator
+import com.raulshma.jellyplay.feature.player.video.components.TrackControls
+import com.raulshma.jellyplay.feature.player.video.components.TransportControls
+import com.raulshma.jellyplay.feature.player.video.components.GestureControls
+import com.raulshma.jellyplay.feature.player.video.components.SheetControls
 import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.components.RenderSheet
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
@@ -417,133 +421,37 @@ fun VideoPlayerScreen(
             viewModel.closePlayer.collect { currentOnBack() }
         }
     }
-    // Restore immersive mode when leaving PiP
-    LaunchedEffect(isInPipMode) {
-        if (!isInPipMode) {
-            windowOps.hideSystemBars()
-        }
-    }
-
-    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
-    val isWindowFocused = rememberUpdatedState(windowInfo.isWindowFocused)
-    LaunchedEffect(windowOps) {
-        snapshotFlow { isWindowFocused.value }.distinctUntilChanged().collect { focused ->
-            // Skip the immersive re-hide while in PiP (or mid-transition into
-            // it): PlayerActivity.onPipModeChanged shows the bars on PiP entry
-            // to force the relayout that anchors the gesture-nav handle at the
-            // bottom. Without this guard the window-focus flip during the PiP
-            // transition re-hides them here, defeating that fix and leaving the
-            // handle floating mid-screen. Uses the host's authoritative
-            // isInPictureInPictureMode flag (synchronously current, unlike the
-            // collected isInPipMode state which lags a frame).
-            if (focused && !windowOps.isInPipMode) {
-                windowOps.hideSystemBars()
-            }
-        }
-    }
-
-    // External-player handoff is handled centrally by the app-level
-    // ActivityResultLauncher in JellyPlayApp's navigateFilter, which reads the
-    // external player's returned position and credits watched progress. This
-    // screen is never composed for the EXTERNAL case (navigation is intercepted
-    // before reaching it), so no local launch logic is needed here.
-
-    // Guard against releasing the engine when the composable is torn down
-    // during a PiP transition. The engine must survive until PiP is dismissed.
-
-    DisposableEffect(Unit) {
-        windowOps.hideSystemBars()
-
-        onDispose {
-            val currentlyInPip = viewModel.pipController.isInPipMode.value
-            val isBgCasting = viewModel.cast.isCastConnected && viewModel.cast.castIsPlaying.value &&
-                viewModel.cast.backgroundCastingEnabled
-            val restoreOrientation = if (isTv)
-                PlayerOrientationLock.TV_LANDSCAPE
-            else PlayerOrientationLock.UNSPECIFIED
-            // restoreOnPlayerExit bundles the host-window teardown the screen
-            // used to do inline: unlock orientation, clear FLAG_KEEP_SCREEN_ON,
-            // restore OS-default brightness, re-show the system bars and hand
-            // the display mode back (all host-alive guarded on Android).
-            if (isBgCasting && !currentlyInPip) {
-                windowOps.restoreOnPlayerExit(restoreOrientation)
-                playerViewRef = null
-                viewModel.detachForBackgroundCast()
-            } else if (!currentlyInPip) {
-                windowOps.restoreOnPlayerExit(restoreOrientation)
-                playerViewRef = null
-                viewModel.release()
-            }
-        }
-    }
-
-    LaunchedEffect(uiState.isPlaying, uiState.uiPrefs.keepScreenOnDuringVideo) {
-        windowOps.setKeepScreenOn(uiState.isPlaying && uiState.uiPrefs.keepScreenOnDuringVideo)
-    }
-
-
-
-    LaunchedEffect(uiState.gestures.frameRateMatching, uiState.gestures.refreshRateMode, uiState.videoFrameRate) {
-        if (uiState.gestures.frameRateMatching && uiState.gestures.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
-            val videoStream = uiState.media.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
-            windowOps.matchFrameRate(
-                frameRate = uiState.videoFrameRate,
-                targetWidth = videoStream?.width,
-                targetHeight = videoStream?.height,
-                mode = uiState.gestures.refreshRateMode,
-            )
-        }
-    }
-
-    LaunchedEffect(uiState.gestures.rememberBrightness) {
-        // -1f (BRIGHTNESS_OVERRIDE_NONE) is the "user hasn't set a level" sentinel;
-        // 0.5f is a legitimate brightness a user can pick, so it must not be used
-        // as the guard. Re-applies the saved level on recreate/resume.
-        if (uiState.gestures.rememberBrightness && uiState.gestures.brightnessLevel >= 0f) {
-            windowOps.applyWindowBrightness(uiState.gestures.brightnessLevel)
-        }
-    }
-
-    // The system resets window.attributes.screenBrightness to the OS default on
-    // ON_PAUSE/ON_STOP (e.g. screen-off, app switch), and the LaunchedEffect above
-    // only re-fires when the rememberBrightness *flag* changes — not on plain
-    // foregrounding. Re-apply the saved level on every ON_RESUME so the user's
-    // chosen brightness survives navigation away and back.
-    val brightnessLevel = uiState.gestures.brightnessLevel
-    val rememberBrightness = uiState.gestures.rememberBrightness
-    // lifecycleOwner (LocalLifecycleOwner.current) is declared above with the
-    // Issue #145 programmatic-close observers — reused here, no re-declaration.
-    androidx.compose.runtime.DisposableEffect(windowOps, rememberBrightness, brightnessLevel, lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME &&
-                rememberBrightness && brightnessLevel >= 0f
-            ) {
-                windowOps.applyWindowBrightness(brightnessLevel)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    // Issue #145: uiState.isScreenLocked has no lifecycle reset anywhere, and
-    // its overlay is a transparent fillMaxSize layer that consumes every
-    // pointer event (LockScreenOverlay). If it stayed engaged across a system
-    // lock/unlock, the player silently swallowed all input after unlock.
-    // Leaving fullscreen entirely always disengages the lock; setScreenLocked
-    // also mirrors isControlsLocked for the PiP auto-entry gate.
-    // The observer reads the lock through rememberUpdatedState: keyed only on
-    // lifecycleOwner, a captured uiState would freeze at install time and the
-    // ON_STOP reset would silently no-op for any lock engaged afterwards.
-    val screenLockedAtStop by rememberUpdatedState(uiState.isScreenLocked)
-    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP && screenLockedAtStop) {
-                viewModel.setScreenLocked(false)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    // The eight window/lifecycle effects (PiP immersive restore, window-focus
+    // immersive re-hide, teardown, keep-screen-on, frame-rate match, brightness
+    // apply + ON_RESUME re-apply, ON_STOP lock reset) moved verbatim into ONE
+    // composable beside PlayerScreenPolicies. This single call sits at the
+    // SAME position in composition order the contiguous block occupied, so
+    // effect dispatch order — and the race guards documented in its bodies
+    // (PiP-transition focus flip, ON_RESUME brightness) — is unchanged.
+    PlayerWindowSessionEffects(
+        windowOps = windowOps,
+        isInPipMode = isInPipMode,
+        isTv = isTv,
+        // uiState.isPlaying (NOT the cast-aware local `isPlaying`, which is
+        // derived further down): the keep-screen-on gate reads the engine's
+        // local play state, exactly as the inline effect did.
+        isPlaying = uiState.isPlaying,
+        keepScreenOnDuringVideo = uiState.uiPrefs.keepScreenOnDuringVideo,
+        frameRateMatching = uiState.gestures.frameRateMatching,
+        refreshRateMode = uiState.gestures.refreshRateMode,
+        videoFrameRate = uiState.videoFrameRate,
+        mediaStreams = uiState.media.mediaStreams,
+        rememberBrightness = uiState.gestures.rememberBrightness,
+        brightnessLevel = uiState.gestures.brightnessLevel,
+        isScreenLocked = isScreenLocked,
+        lifecycleOwner = lifecycleOwner,
+        pipController = viewModel.pipController,
+        cast = viewModel.cast,
+        releasePlayer = { viewModel.release() },
+        detachForBackgroundCast = { viewModel.detachForBackgroundCast() },
+        setScreenLocked = { viewModel.setScreenLocked(it) },
+        clearPlayerView = { playerViewRef = null },
+    )
 
     // Always-on back interception (the seam's Android actual wires the system
     // back; the desktop actual is a no-op and Esc is the shell's concern).
@@ -1756,7 +1664,6 @@ fun VideoPlayerScreen(
             PlayerControls(
                 title = title,
                 subtitle = subtitle,
-                isPlaying = isPlaying,
                 currentPositionFlow = viewModel.currentPositionMs,
                 duration = duration,
                 bufferedRangesFlow = viewModel.bufferedRanges,
@@ -1765,48 +1672,81 @@ fun VideoPlayerScreen(
                 chapters = uiState.chapters,
                 effectsControls = effectsControls,
                 segments = uiState.segmentState.segments,
-                playMethod = uiState.media.playMethod,
-                isDirectPlayForced = uiState.media.isDirectPlayForced,
-                hdrType = uiState.hdrType,
-                mediaStreams = uiState.media.mediaStreams,
-                audioTracks = trackState.audioTracks,
-                isConnectionMetered = uiState.isConnectionMetered,
-                subtitleDelayMs = uiState.subtitleStyle.offsetMs,
-                onSubtitleDelayClick = { showDelayOverlay = true },
-                showPlaybackMetadata = uiState.uiPrefs.showPlaybackMetadata,
-                showClock = uiState.uiPrefs.showClock,
-                showTimeRemaining = uiState.uiPrefs.showTimeRemaining,
+                transport = TransportControls(
+                    isPlaying = isPlaying,
+                    onPlayPause = onPlayPause,
+                    onSeekStart = onSeekStart,
+                    onSeekEnd = onSeekEnd,
+                    onSeekPositionChange = onSeekPositionChange,
+                    hasPreviousEpisode = hasPreviousEpisode,
+                    hasNextEpisode = hasNextEpisode,
+                    onPreviousEpisode = onPreviousEpisode,
+                    onNextEpisode = onNextEpisode,
+                    tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
+                    isMuted = uiState.isMuted,
+                    onMuteClick = onMuteClick,
+                ),
+                gestures = GestureControls(
+                    onBack = onBack,
+                    onLockClick = onLockClick,
+                    onPipClick = onPipClick,
+                    onToggleOrientation = toggleOrientation,
+                    onControlRowScrolled = {
+                        userInteractionCount++
+                        viewModel.onUserInteraction()
+                    },
+                    onControlsFocusChange = onControlsFocusChange,
+                    onOverflowMenuChange = onOverflowMenuChange,
+                ),
+                sheets = SheetControls(
+                    openSheet = openSheet,
+                    onSubtitleClick = onSubtitleClick,
+                    onSubtitleHubClick = onSubtitleHubClick,
+                    onSubtitleDelayClick = { showDelayOverlay = true },
+                    hasEpisodes = hasEpisodes,
+                    episodeBrowserEnabled = episodeBrowserEnabled,
+                    showVideoStats = uiState.uiPrefs.showVideoStats,
+                    onVideoStatsClick = onVideoStatsClick,
+                    videoFiltersActive = !uiState.videoFx.videoEffects.isNeutral,
+                    onScreenshotClick = onScreenshotClick,
+                    onAbRepeatToggle = { viewModel.abRepeat.setEnabled(!abRepeat.enabled) },
+                    onAbRepeatSetA = { viewModel.abRepeat.setPointA() },
+                    onAbRepeatSetB = { viewModel.abRepeat.setPointB() },
+                    onAbRepeatClear = { viewModel.abRepeat.clear() },
+                    audioOnly = uiState.audioOnly,
+                    onToggleAudioOnly = { viewModel.toggleAudioOnly() },
+                    incognitoModeEnabled = viewModel.incognitoModeEnabled,
+                    onMarkWatchedAndSkip = { viewModel.markWatchedAndSkip() },
+                    onMarkUnwatchedAndQuit = { viewModel.markUnwatchedAndQuit() },
+                    // the Rendering sheet is an mpv surface (shader packs /
+                    // tone mapping / quality); the deinterlace item gates on
+                    // the engine capability matrix.
+                    supportsRenderPanel = uiState.preferredPlayerType == PlayerType.MPV,
+                    onRenderClick = { openSheet(PlayerSheet.Render) },
+                    supportsDeinterlace = uiState.engineCapabilities.supportsDeinterlace,
+                    deinterlaceMode = if (uiState.engineCapabilities.supportsDeinterlace) {
+                        viewModel.sessionRender.deinterlace
+                    } else {
+                        null
+                    },
+                    onDeinterlaceCycle = { viewModel.cycleDeinterlace() },
+                ),
+                tracks = TrackControls(
+                    streamingQuality = uiState.uiPrefs.streamingQuality,
+                    playbackMode = uiState.uiPrefs.playbackMode,
+                    playMethod = uiState.media.playMethod,
+                    isDirectPlayForced = uiState.media.isDirectPlayForced,
+                    hdrType = uiState.hdrType,
+                    mediaStreams = uiState.media.mediaStreams,
+                    audioTracks = trackState.audioTracks,
+                    isConnectionMetered = uiState.isConnectionMetered,
+                    subtitleDelayMs = uiState.subtitleStyle.offsetMs,
+                    showPlaybackMetadata = uiState.uiPrefs.showPlaybackMetadata,
+                ),
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
                 isVisible = showControls && !isInPipMode && !isScreenLocked,
-                tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
-                tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
-                isSkipSegmentVisible = isSkipSegmentVisible,
-                isNextEpisodeVisible = isNextEpisodeVisible,
-                onControlRowScrolled = {
-                    userInteractionCount++
-                    viewModel.onUserInteraction()
-                },
                 capabilities = uiState.engineCapabilities,
-                hasEpisodes = hasEpisodes,
-                episodeBrowserEnabled = episodeBrowserEnabled,
-                onPlayPause = onPlayPause,
-                hasPreviousEpisode = hasPreviousEpisode,
-                hasNextEpisode = hasNextEpisode,
-                onPreviousEpisode = onPreviousEpisode,
-                onNextEpisode = onNextEpisode,
-                onSeekStart = onSeekStart,
-                onSeekEnd = onSeekEnd,
-                onSeekPositionChange = onSeekPositionChange,
-                tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
-                onToggleOrientation = toggleOrientation,
-                onBack = onBack,
-                openSheet = openSheet,
-                onSubtitleClick = onSubtitleClick,
-                onSubtitleHubClick = onSubtitleHubClick,
-                onPipClick = onPipClick,
-                onMuteClick = onMuteClick,
-                isMuted = uiState.isMuted,
                 syncPlay = SyncPlayIndicator(
                     inSession = isInSyncPlaySession,
                     groupName = syncPlay.syncPlayGroupName,
@@ -1814,43 +1754,19 @@ fun VideoPlayerScreen(
                     isSynced = syncPlay.isSyncPlaySynced,
                     isSyncing = syncPlay.isSyncPlaySyncing,
                 ),
-                showVideoStats = uiState.uiPrefs.showVideoStats,
-                onVideoStatsClick = onVideoStatsClick,
-                streamingQuality = uiState.uiPrefs.streamingQuality,
-                playbackMode = uiState.uiPrefs.playbackMode,
                 sleepTimer = SleepTimerControls(
                     active = sleepTimer.sleepTimerActive,
                     endOfEpisode = sleepTimer.sleepTimerEndOfEpisode,
                     remainingFlow = viewModel.sleepTimer.remainingMs,
                 ),
-                videoFiltersActive = !uiState.videoFx.videoEffects.isNeutral,
-                onScreenshotClick = onScreenshotClick,
                 abRepeat = abRepeat,
-                onAbRepeatToggle = { viewModel.abRepeat.setEnabled(!abRepeat.enabled) },
-                onAbRepeatSetA = { viewModel.abRepeat.setPointA() },
-                onAbRepeatSetB = { viewModel.abRepeat.setPointB() },
-                onAbRepeatClear = { viewModel.abRepeat.clear() },
-                audioOnly = uiState.audioOnly,
-                onToggleAudioOnly = { viewModel.toggleAudioOnly() },
-                incognitoModeEnabled = viewModel.incognitoModeEnabled,
-                onMarkWatchedAndSkip = { viewModel.markWatchedAndSkip() },
-                onMarkUnwatchedAndQuit = { viewModel.markUnwatchedAndQuit() },
-                // the Rendering sheet is an mpv surface (shader packs /
-                // tone mapping / quality); the deinterlace item gates on
-                // the engine capability matrix.
-                supportsRenderPanel = uiState.preferredPlayerType == PlayerType.MPV,
-                onRenderClick = { openSheet(PlayerSheet.Render) },
-                supportsDeinterlace = uiState.engineCapabilities.supportsDeinterlace,
-                deinterlaceMode = if (uiState.engineCapabilities.supportsDeinterlace) {
-                    viewModel.sessionRender.deinterlace
-                } else {
-                    null
-                },
-                onDeinterlaceCycle = { viewModel.cycleDeinterlace() },
-                onLockClick = onLockClick,
-                onControlsFocusChange = onControlsFocusChange,
-                onOverflowMenuChange = onOverflowMenuChange,
                 castManager = viewModel.platformCastManager,
+                showClock = uiState.uiPrefs.showClock,
+                showTimeRemaining = uiState.uiPrefs.showTimeRemaining,
+                tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
+                tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
+                isSkipSegmentVisible = isSkipSegmentVisible,
+                isNextEpisodeVisible = isNextEpisodeVisible,
                 modifier = Modifier.fillMaxSize(),
             )
             } // end PlayerDarkTheme (control bars)

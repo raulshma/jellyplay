@@ -129,14 +129,6 @@ class ExoPlayerEngine(
     @Volatile
     private var lastAppliedAudioSessionId: Int = -1
 
-    // Mirrors MPV/LibVLC: remembers play state across Activity pause so the
-    // engine pauses on lock/home (unless background audio is enabled) and
-    // resumes only if it was actually playing. Without this override the
-    // inherited PlayerLifecycleCallbacks default is a no-op, so ExoPlayer
-    // would keep playing audio silently when the screen locks.
-    @Volatile
-    private var wasPlayingBeforeActivityPause = false
-
     private inline fun runOnPlayerThread(crossinline block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             block()
@@ -987,20 +979,10 @@ class ExoPlayerEngine(
     }
     override fun pause() = runOnPlayerThread { player?.pause() }
 
-    // Activity lifecycle bridge: unlike MPV/LibVLC, ExoPlayer does not detach
-    // views here (PlayerView handles the surface lifecycle). Pausing keeps the
-    // seek position; onActivityResume restores play only if it was active.
-    override fun onActivityPause() {
-        wasPlayingBeforeActivityPause = _isPlaying.value
-        pause()
-    }
-
-    override fun onActivityResume() {
-        if (wasPlayingBeforeActivityPause) {
-            wasPlayingBeforeActivityPause = false
-            play()
-        }
-    }
+    // Activity pause/resume rides the final BasePlayerEngine template
+    // (remember isPlaying → pause; restore-on-resume only if it was playing).
+    // ExoPlayer needs no [onPausedNative]/[onResumingNative] work — PlayerView
+    // handles the surface lifecycle itself, and pausing keeps the seek position.
 
     override fun stop() = runOnPlayerThread { player?.stop() }
     override fun seekTo(positionMs: Long) = runOnPlayerThread { player?.seekTo(positionMs) }

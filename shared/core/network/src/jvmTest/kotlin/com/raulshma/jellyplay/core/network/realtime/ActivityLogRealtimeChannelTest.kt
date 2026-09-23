@@ -148,14 +148,17 @@ class ActivityLogRealtimeChannelTest {
     @Test
     fun `reconnect backoff grows exponentially and caps at 16s`() {
         // 1s, 2s, 4s, 8s, 16s — the exponent saturates at 2^4 (the 30s outer
-        // cap is unreachable with MAX_RECONNECT_ATTEMPTS = 5; both constants
-        // mirror the previous in-ViewModel implementation).
-        assertEquals(1_000L, ActivityLogRealtimeChannel.reconnectDelayMs(1))
-        assertEquals(2_000L, ActivityLogRealtimeChannel.reconnectDelayMs(2))
-        assertEquals(4_000L, ActivityLogRealtimeChannel.reconnectDelayMs(3))
-        assertEquals(8_000L, ActivityLogRealtimeChannel.reconnectDelayMs(4))
-        assertEquals(16_000L, ActivityLogRealtimeChannel.reconnectDelayMs(5))
-        assertEquals(16_000L, ActivityLogRealtimeChannel.reconnectDelayMs(10))
+        // cap is unreachable with maxAttempts = 5; both constants mirror the
+        // previous in-ViewModel implementation). The law itself lives on
+        // WebSocketBackoffPolicy — this pins the channel's jitter-free
+        // instance; attempt 10 is past the budget → null (polling fallback).
+        val backoff = channel.backoff
+        assertEquals(1_000L, backoff.delayMs(1))
+        assertEquals(2_000L, backoff.delayMs(2))
+        assertEquals(4_000L, backoff.delayMs(3))
+        assertEquals(8_000L, backoff.delayMs(4))
+        assertEquals(16_000L, backoff.delayMs(5))
+        assertEquals(null, backoff.delayMs(10))
     }
 
     @Test

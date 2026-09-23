@@ -1,11 +1,9 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +43,7 @@ import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -347,12 +346,6 @@ internal fun MediaInfoSection(
                         items(options, key = { "${activePicker}_${it.index}_${it.label}" }, contentType = { "streamOption" }) { option ->
                             val isSelected = option.index == selectedIndex
                             val optionInteractionSource = remember { MutableInteractionSource() }
-                            val isOptionPressed by optionInteractionSource.collectIsPressedAsState()
-                            val optionScale by animateFloatAsState(
-                                targetValue = if (isOptionPressed) 0.97f else 1f,
-                                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                                label = "optionScale",
-                            )
                             val optionFocusState = rememberTvFocusState(focusedScale = 1.03f)
                             Row(
                                 modifier = Modifier
@@ -362,10 +355,11 @@ internal fun MediaInfoSection(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                     )
-                                    .graphicsLayer {
-                                        scaleX = optionScale
-                                        scaleY = optionScale
-                                    }
+                                    .pressScale(
+                                        interactionSource = optionInteractionSource,
+                                        defaultScale = 0.97f,
+                                        spec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                    )
                                     .then(optionFocusState.focusModifier)
                                     .then(Modifier.tvFocusIndicator(optionFocusState, ShapeCache.smooth12))
                                     .clickable(

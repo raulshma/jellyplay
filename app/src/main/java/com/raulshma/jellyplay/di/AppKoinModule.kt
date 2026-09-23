@@ -9,21 +9,36 @@ import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
+import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectListener
+import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
+import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.floating.FloatingPlayerState
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.startup.AppStartupPrewarms
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
 import com.raulshma.jellyplay.startup.DownloadRecoveryInitializer
 import com.raulshma.jellyplay.widget.ContinueWatchingBroadcasterImpl
@@ -115,6 +130,36 @@ fun androidAppModule(context: Context): Module = module {
             lyricsRepository = get(),
             offlineRepository = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    // Cold-start prewarm choreography (formerly ~15 inline `by lazyFromKoin`
+    // Application fields + the launch blocks in onCreate). Every collaborator
+    // arrives as a memoizing kotlin.Lazy over this container — `lazy { get() }`
+    // — so construction still defers to the IO launch block that first touches
+    // it, exactly like the former Application fields; only the DataStore
+    // application scope single resolves eagerly, and it was constructed at
+    // container start anyway.
+    single {
+        AppStartupPrewarms(
+            applicationScope = get(DatastoreQualifiers.applicationScope),
+            networkOfflineStore = lazy { get<NetworkOfflineStore>() },
+            serverIdentityStore = lazy { get<ServerIdentityStore>() },
+            securityStore = lazy { get<SecurityStore>() },
+            fontProvider = lazy { get<FontProvider>() },
+            videoStreamCache = lazy { get<VideoStreamCache>() },
+            audioPlaybackManager = lazy { get<AudioPlaybackManager>() },
+            nowPlayingWidgetUpdater = lazy { get<NowPlayingWidgetUpdater>() },
+            widgetWorkScheduler = lazy { get<WidgetWorkScheduler>() },
+            userDataSyncScheduler = lazy { get<UserDataSyncScheduler>() },
+            playbackSyncScheduler = lazy { get<PlaybackSyncScheduler>() },
+            playbackSyncReconnectListener = lazy { get<PlaybackSyncReconnectListener>() },
+            downloadReconnectListener = lazy { get<DownloadReconnectListener>() },
+            notificationReconnectListener = lazy { get<NotificationReconnectListener>() },
+            autoDownloadScheduler = lazy { get<AutoDownloadScheduler>() },
+            notificationScheduler = lazy { get<NotificationScheduler>() },
+            downloadRecoveryInitializer = lazy { get<DownloadRecoveryInitializer>() },
+            appUpdateRepository = lazy { get<AppUpdateRepository>() },
         )
     }
 

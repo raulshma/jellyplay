@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_more_optio
 import com.raulshma.jellyplay.feature.music.generated.resources.music_now_playing
 import com.raulshma.jellyplay.feature.music.generated.resources.music_unfavorite
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -77,13 +78,6 @@ fun TrackRow(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Expressive spring-based scale animation
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "itemScale",
-    )
-
     // Shape morphing animation for album art
     val artMorphScale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -101,9 +95,8 @@ fun TrackRow(
             .fillMaxWidth()
             .then(rowFocusState.focusModifier)
             .tvFocusIndicator(rowFocusState, ShapeCache.smooth8)
+            .pressScale(interactionSource = interactionSource, defaultScale = 0.97f)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
                 // Subtle rotation on press for expressive feel
                 rotationZ = if (isPressed) -0.5f else 0f
             }

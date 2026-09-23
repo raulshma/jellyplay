@@ -45,22 +45,6 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.savedstate.serialization.SavedStateConfiguration
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Bolt
-import com.composables.icons.tabler.outline.Calendar
-import com.composables.icons.tabler.outline.DeviceTv
-import com.composables.icons.tabler.outline.Disc
-import com.composables.icons.tabler.outline.Download
-import com.composables.icons.tabler.outline.Flame
-import com.composables.icons.tabler.outline.Home
-import com.composables.icons.tabler.outline.Library
-import com.composables.icons.tabler.outline.Mail
-import com.composables.icons.tabler.outline.Movie
-import com.composables.icons.tabler.outline.Search
-import com.composables.icons.tabler.outline.Settings
-import com.composables.icons.tabler.outline.Shield
-import com.composables.icons.tabler.outline.Stack
-import com.composables.icons.tabler.outline.Users
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
@@ -82,9 +66,9 @@ import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
 import com.raulshma.jellyplay.core.ui.navigation.NavDestination
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
 import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
+import com.raulshma.jellyplay.core.ui.navigation.visibleTopLevelRoutes
 import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
@@ -266,26 +250,42 @@ internal fun DesktopAppRoot(
     // remote-control receiver, driven off the auth state for the life of the
     // composition (survives the sign-in → scaffold swap because it lives
     // HERE, like the harness hosts above; torn down with the window).
+    // The choreography itself is the SHARED RealtimeSessionController now
+    // (shared/feature/shell) — the former DesktopSessionCoordinator held only
+    // this wiring and died with the fold; the per-shell share is the client
+    // name and this construction. Session restore stays above (recorded cut):
+    // a persisted session may already be authenticated when this composes, and
+    // the controller's auth collector picks that up off the StateFlow's
+    // current value on its first pass.
     val realtimeConnection: com.raulshma.jellyplay.core.data.repository.RealtimeConnection = koinInject()
     val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore = koinInject()
     val remoteControlReceiver: com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver = koinInject()
     val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
-    val desktopSessionCoordinator = remember(
+    val realtimeSession = remember(
         authRepository,
         realtimeConnection,
         serverIdentityStore,
         remoteControlReceiver,
     ) {
-        DesktopSessionCoordinator(
-            authRepository = authRepository,
-            realtimeConnection = realtimeConnection,
-            serverIdentityStore = serverIdentityStore,
-            remoteControlReceiver = remoteControlReceiver,
+        com.raulshma.jellyplay.feature.shell.RealtimeSessionController(
+            scope = sessionScope,
+            isAuthenticated = authRepository.isAuthenticated,
+            currentServer = authRepository.currentServer,
+            currentUser = authRepository.currentUser,
+            clientName = "JellyPlay Desktop",
+            serverUrl = realtimeConnection::serverUrl,
+            isConnected = realtimeConnection.isConnected,
+            reconnects = realtimeConnection.reconnects,
+            connect = realtimeConnection::connect,
+            disconnect = realtimeConnection::disconnect,
+            startReceiver = remoteControlReceiver::start,
+            stopReceiver = remoteControlReceiver::stop,
+            ensureDeviceId = { serverIdentityStore.ensureDeviceId() },
+            onReconnect = { authRepository.postCapabilities() },
         )
     }
-    androidx.compose.runtime.DisposableEffect(desktopSessionCoordinator, sessionScope) {
-        desktopSessionCoordinator.start(sessionScope)
-        onDispose { desktopSessionCoordinator.stop() }
+    androidx.compose.runtime.DisposableEffect(realtimeSession, sessionScope) {
+        onDispose { realtimeSession.stop() }
     }
 
     when {
@@ -615,10 +615,10 @@ private fun DesktopNavScaffold(
             moveFocus = { direction ->
                 focusManager.moveFocus(
                     when (direction) {
-                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.UP -> androidx.compose.ui.focus.FocusDirection.Up
-                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.DOWN -> androidx.compose.ui.focus.FocusDirection.Down
-                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.LEFT -> androidx.compose.ui.focus.FocusDirection.Left
-                        com.raulshma.jellyplay.core.data.remote.RemoteFocusDirection.RIGHT -> androidx.compose.ui.focus.FocusDirection.Right
+                        com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection.UP -> androidx.compose.ui.focus.FocusDirection.Up
+                        com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection.DOWN -> androidx.compose.ui.focus.FocusDirection.Down
+                        com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection.LEFT -> androidx.compose.ui.focus.FocusDirection.Left
+                        com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection.RIGHT -> androidx.compose.ui.focus.FocusDirection.Right
                     },
                 )
             },
@@ -631,15 +631,21 @@ private fun DesktopNavScaffold(
     }
 
     // ── idle "Ready to play" ambient screen ───────────────────────
-    // Monitors the same idle definition the plan pinned: nothing playing
-    // (audio queue + engine registry), window active, debounced timeout from
-    // the screensaver store's idle-ambient settings (0 = off). Any key or
-    // pointer input resets + dismisses (hooks at the scaffold root below and
-    // in the overlay itself); playback start clears it on the next 1 s tick.
+    // The whole seam (idle monitor + the idle-gated active-remote-session
+    // count off the receiver socket's Sessions push + the overlay's identity
+    // fold) lives in DesktopIdleAmbientController — the same
+    // extracted-controller idiom as DesktopUpdateCheckController. The
+    // scaffold keeps only the collect, the start/stop effect and the overlay
+    // call; input resets run through the controller's hook at the Row
+    // modifiers below. Idle definition unchanged: nothing playing (audio
+    // queue + engine registry), window active, debounced timeout from the
+    // screensaver store's idle-ambient settings (0 = off); playback start
+    // clears the overlay on the next 1 s tick.
     val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore = koinInject()
     val activePlayerRegistry: com.raulshma.jellyplay.core.data.remote.ActivePlayerController = koinInject()
-    val idleMonitor = remember(audioQueueManager, activePlayerRegistry, screensaverStore, windowRef) {
-        DesktopIdleMonitor(
+    val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient = koinInject()
+    val idleAmbientController = remember(audioQueueManager, activePlayerRegistry, screensaverStore, webSocketClient, windowRef) {
+        DesktopIdleAmbientController(
             settings = {
                 val slice = screensaverStore.screensaver.value
                 IdleAmbientSettings(
@@ -650,32 +656,22 @@ private fun DesktopNavScaffold(
             isAudioPlaying = { audioQueueManager.currentPlayingItemId.value != null },
             isVideoActive = { activePlayerRegistry.engine != null },
             isWindowActive = { windowRef?.get()?.let { it.isShowing && it.isActive } ?: false },
+            sessionsEvents = webSocketClient.events,
         )
     }
-    DisposableEffect(idleMonitor) {
-        idleMonitor.start(scope)
-        onDispose { idleMonitor.stop() }
+    DisposableEffect(idleAmbientController) {
+        idleAmbientController.start(scope)
+        onDispose { idleAmbientController.stop() }
     }
-    val isIdle by idleMonitor.isIdle.collectAsState()
+    val isIdle by idleAmbientController.isIdle.collectAsState()
+    val activeRemoteSessions by idleAmbientController.activeRemoteSessionCount.collectAsState()
 
-    // The overlay's identity lines: current server + user, and the count of
-    // OTHER sessions currently playing something — the cheap "remote
-    // activity" signal off the Sessions WS push the receiver's socket
-    // already receives (parsed with the array-aware DTO, no org.json pass).
+    // The overlay's identity lines: current server + user (the two-key
+    // server match folds in resolveIdleOverlayIdentity, pinned by its test).
     val currentUser by authRepository.currentUser.collectAsState(initial = null)
     val servers by authRepository.servers.collectAsState(initial = emptyList())
-    val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient = koinInject()
-    var activeRemoteSessions by remember { mutableStateOf(0) }
-    LaunchedEffect(webSocketClient, isIdle) {
-        if (!isIdle) return@LaunchedEffect
-        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-        webSocketClient.events.collect { event ->
-            if (event.type == "Sessions") {
-                activeRemoteSessions = runCatching {
-                    com.raulshma.jellyplay.core.network.websocket.parseSessionsMessage(json, event.rawText)
-                }.getOrDefault(emptyList()).count { it.nowPlayingItem != null }
-            }
-        }
+    val idleOverlayIdentity = remember(currentUser, servers) {
+        resolveIdleOverlayIdentity(currentUser, servers)
     }
 
     // Shell-supplied surface behind the shared section graph (ShellHostHooks):
@@ -754,14 +750,14 @@ private fun DesktopNavScaffold(
         Modifier
             .fillMaxSize()
             // Passive pointer observation — every pointer event of
-            // any kind feeds the idle monitor's debounce WITHOUT consuming
+            // any kind feeds the idle controller's debounce WITHOUT consuming
             // or transforming the event (the gesture layers below see it
             // unchanged).
-            .pointerInput(idleMonitor) {
+            .pointerInput(idleAmbientController) {
                 awaitPointerEventScope {
                     while (true) {
                         awaitPointerEvent()
-                        idleMonitor.onUserInput()
+                        idleAmbientController.onUserInput()
                     }
                 }
             }
@@ -786,7 +782,7 @@ private fun DesktopNavScaffold(
             .onPreviewKeyEvent { event ->
                 // Every key resets the idle debounce (and dismisses
                 // a shown overlay) before anything else runs.
-                idleMonitor.onUserInput()
+                idleAmbientController.onUserInput()
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 // desktopBackKeyDecision folds the Esc/Alt+Left test AND the
                 // root-refuse; the same fold runs in the signed-out shell's
@@ -826,18 +822,25 @@ private fun DesktopNavScaffold(
                 // own vertical padding is only 4dp) and under the last item
                 // when the list is scrolled to the bottom.
                 Spacer(Modifier.height(12.dp))
-                // Rail items come from the stored nav customization
-                // (Appearance → Navigation): hidden items drop off, custom
-                // order is honored, then the rest keep the default order.
+                // Rail items come from the shared composition policy (core/ui
+                // VisibleTopLevelRoutes — by construction the same rules the
+                // Android bar renders through): while offline the server-bound
+                // LiveTv destination drops off, then the stored nav
+                // customization (Appearance → Navigation) hides/reorders, the
+                // rest keeping the default order. The BASE SET — the rail's
+                // own full display order — stays this shell's policy (desktop
+                // has no homeMode set-selection).
                 // Group spacers are preserved between consecutive items whose
                 // group changes, so a custom order can interleave groups.
                 val navPrefs by navigationStore.navigation.collectAsState()
-                val railDescriptors = remember(navPrefs) {
-                    applyNavCustomization(
+                val networkStatus by networkMonitor.networkStatus.collectAsState()
+                val railDescriptors = remember(navPrefs, networkStatus) {
+                    visibleTopLevelRoutes(
                         DESKTOP_RAIL_ITEMS,
                         { it.route.navKey },
-                        navPrefs.hiddenNavItems,
-                        navPrefs.navItemOrder,
+                        hiddenNavItems = navPrefs.hiddenNavItems,
+                        navItemOrder = navPrefs.navItemOrder,
+                        isOffline = networkStatus.isOffline,
                     )
                 }
                 railDescriptors.forEachIndexed { index, descriptor ->
@@ -903,14 +906,10 @@ private fun DesktopNavScaffold(
                     exit = androidx.compose.animation.fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
                 ) {
                     DesktopIdleOverlay(
-                        serverName = currentUser?.let { user ->
-                            servers.firstOrNull {
-                                it.id == user.serverId || it.address == user.serverAddress
-                            }?.name
-                        },
-                        userName = currentUser?.name,
+                        serverName = idleOverlayIdentity.serverName,
+                        userName = idleOverlayIdentity.userName,
                         activeSessionCount = activeRemoteSessions,
-                        onAnyInput = idleMonitor::onUserInput,
+                        onAnyInput = idleAmbientController::onUserInput,
                     )
                 }
             }

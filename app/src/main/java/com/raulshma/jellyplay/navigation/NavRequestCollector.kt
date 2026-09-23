@@ -5,13 +5,15 @@ import android.widget.Toast
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.core.data.remote.NavigationTarget
 import com.raulshma.jellyplay.core.data.remote.PlayEventPayload
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.UserMessageHost
+import com.raulshma.jellyplay.feature.shell.navigation.popPlayerRoutes
+import com.raulshma.jellyplay.feature.shell.navigation.routeForNavigationTarget
 import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import kotlinx.coroutines.flow.Flow
@@ -26,7 +28,8 @@ import kotlinx.coroutines.flow.Flow
  * external request, apply one small policy fork, drive the navigator or the
  * snackbar host — and the forks are pure companion folds
  * ([pendingRouteDispatch], [syncPlayAutoOpenRoute],
- * [nowPlayingSnackbarMessage]) in the [RemoteNavigationRouting] style, so
+ * [nowPlayingSnackbarMessage]) in the shared pure-fold style (the
+ * `feature.shell.navigation.RemoteNavigationRouting` precedent), so
  * both halves are JVM-pinned through fake lambdas
  * (`NavRequestCollectorTest`; the PinGateController shape).
  *
@@ -115,7 +118,8 @@ internal class NavRequestCollector(
      * requests emitted by the WebSocket receiver
      * (`RemoteNavigationBridge.targets`). The target→route mapping and the
      * Jellyfin-web "Stop" pop (`ClosePlayer` → player entries off the top of
-     * EVERY back stack) are [RemoteNavigationRouting]'s pure folds; pushed
+     * EVERY back stack) are shared/feature/shell's pure folds
+     * (`feature.shell.navigation.RemoteNavigationRouting`); pushed
      * routes go through the filter-carrying [navigate] seam.
      *
      * Navigation ladder: [NavigationTarget.GoBack] pops via [goBack];

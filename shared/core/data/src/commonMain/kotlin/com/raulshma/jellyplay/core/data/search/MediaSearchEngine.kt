@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.search
 
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import kotlinx.coroutines.flow.Flow
 
@@ -22,6 +23,25 @@ data class MediaSearchPreviewState(
     val jellyfin: List<MediaItem>,
     val seerr: List<SeerrSearchItem>,
     val isSearching: Boolean,
+)
+
+/**
+ * Immutable snapshot of one side-search round, as rendered by the search
+ * screen's Seerr + "On-device" companion rows.
+ *
+ * @property query the query this state answers.
+ * @property seerr top Seerr matches; empty when the Seerr gate is closed or
+ * the round failed — [seerrError] tells the two apart.
+ * @property seerrError true when a gated Seerr round failed and the screen
+ * should render its retry row; false for a closed gate or a clean empty
+ * result.
+ * @property offline the on-device matches for the same query.
+ */
+data class MediaSideSearchState(
+    val query: String,
+    val seerr: List<SeerrSearchItem>,
+    val seerrError: Boolean,
+    val offline: List<OfflineMediaItem>,
 )
 
 /**
@@ -57,6 +77,27 @@ interface MediaSearchEngine {
     ): Flow<MediaSearchPreviewState>
 
     /**
+     * The search screen's side rows: gated Seerr companion results + the
+     * on-device library scan for one query. Driven by the caller's (already
+     * debounced) query flow — every emission runs one cancel-and-replace
+     * round, so dedupe and retry re-kicks are the caller's concern. Emits a
+     * cleared state when a round starts (the side rows never linger on the
+     * previous query's results) and the cleared state for a blank query
+     * without touching any source. Seerr rides [isSeerrSearchAvailable] — the
+     * same gate the home preview uses — and caps at `seerrLimit` results
+     * (`seerrLimit` caps the Seerr half only; the offline half is
+     * independently capped at [SIDE_SEARCH_LIMIT], matching the pre-fold
+     * behavior where both were 10). A failed gated round surfaces as
+     * `seerrError = true` where the preview swallows silently, so the screen
+     * can render its retry row. The offline scan keeps the preview's plain
+     * swallow: best-effort, its failure renders as an empty row. Never throws.
+     */
+    fun sideSearch(
+        queries: Flow<String>,
+        seerrLimit: Int = SIDE_SEARCH_LIMIT,
+    ): Flow<MediaSideSearchState>
+
+    /**
      * True when the Seerr companion should be consulted for search: connected,
      * search enabled, and not on a `NetworkStatus.Local` connection (Seerr is
      * internet-facing; on Local status the reachability assumption fails).
@@ -79,6 +120,10 @@ interface MediaSearchEngine {
 
     companion object {
         const val PREVIEW_LIMIT: Int = 8
+
+        /** The search screen's side-row cap — the Seerr take and the offline
+         * scan limit share it (both shipped at 10). */
+        const val SIDE_SEARCH_LIMIT: Int = 10
 
         /** The search screen's shipping value — the more keystroke-heavy surface. */
         const val DEFAULT_DEBOUNCE_MS: Long = 300

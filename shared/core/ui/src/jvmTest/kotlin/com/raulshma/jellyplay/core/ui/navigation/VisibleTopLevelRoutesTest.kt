@@ -1,22 +1,32 @@
-package com.raulshma.jellyplay.navigation
+package com.raulshma.jellyplay.core.ui.navigation
 
-import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.navKey
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
- * Pins [visibleTopLevelRoutes] — the active-top-level-routes fold that used to
- * live inline in JellyPlayApp's `activeTopLevelRoutes` remember block: the
- * home-mode route set, the offline hide-set (Live TV — no offline fallback),
- * and the user's nav customization (hidden items + stored order) composed in
- * that order.
+ * Pins [visibleTopLevelRoutes] — the top-level-route composition fold both
+ * shells render through (the former Android-shell-only test, retargeted):
+ * the offline hide-set (Live TV — no offline fallback), the user's nav
+ * customization (hidden items + stored order), and the three composed in that
+ * order. The base set is the caller's display-order policy — the tests pass
+ * the two published tables the way the Android shell does; the desktop rail
+ * passes its own.
  */
 class VisibleTopLevelRoutesTest {
 
     private val nothingHidden: Set<String> = emptySet()
     private val noOrder: List<String> = emptyList()
+
+    private fun videoRoutes(
+        hiddenNavItems: Set<String> = nothingHidden,
+        navItemOrder: List<String> = noOrder,
+        isOffline: Boolean = false,
+    ) = visibleTopLevelRoutes(
+        VIDEO_TOP_LEVEL_ROUTES,
+        hiddenNavItems,
+        navItemOrder,
+        isOffline,
+    )
 
     @Test
     fun `online video mode shows the full video route set in base order`() {
@@ -27,13 +37,13 @@ class VisibleTopLevelRoutesTest {
                 Route.Search to "Search",
                 Route.LiveTv to "Live TV",
             ),
-            visibleTopLevelRoutes(HomeMode.VIDEO, nothingHidden, noOrder, isOffline = false),
+            videoRoutes(isOffline = false),
         )
     }
 
     @Test
     fun `offline hides only Live TV — the server-bound destination without an offline fallback`() {
-        val routes = visibleTopLevelRoutes(HomeMode.VIDEO, nothingHidden, noOrder, isOffline = true)
+        val routes = videoRoutes(isOffline = true)
         assertEquals(
             listOf(Route.Home, Route.Library, Route.Search),
             routes.keys.toList(),
@@ -43,8 +53,8 @@ class VisibleTopLevelRoutesTest {
     }
 
     @Test
-    fun `music mode swaps the base set — and offline leaves it untouched`() {
-        val online = visibleTopLevelRoutes(HomeMode.MUSIC, nothingHidden, noOrder, isOffline = false)
+    fun `the music base set swaps the input — and offline leaves it untouched`() {
+        val online = visibleTopLevelRoutes(MUSIC_TOP_LEVEL_ROUTES, nothingHidden, noOrder, isOffline = false)
         assertEquals(
             listOf(Route.Home, Route.MusicBrowse, Route.Search),
             online.keys.toList(),
@@ -52,17 +62,14 @@ class VisibleTopLevelRoutesTest {
         // LiveTv is not in the music set, so the offline hide-set is a no-op.
         assertEquals(
             online.keys.toList(),
-            visibleTopLevelRoutes(HomeMode.MUSIC, nothingHidden, noOrder, isOffline = true).keys.toList(),
+            visibleTopLevelRoutes(MUSIC_TOP_LEVEL_ROUTES, nothingHidden, noOrder, isOffline = true).keys.toList(),
         )
     }
 
     @Test
     fun `user-hidden items are filtered by navKey`() {
-        val routes = visibleTopLevelRoutes(
-            HomeMode.VIDEO,
+        val routes = videoRoutes(
             hiddenNavItems = setOf(Route.Library.navKey),
-            navItemOrder = noOrder,
-            isOffline = false,
         )
         assertEquals(
             listOf(Route.Home, Route.Search, Route.LiveTv),
@@ -72,11 +79,8 @@ class VisibleTopLevelRoutesTest {
 
     @Test
     fun `stored nav order reorders while keeping unlisted routes in input order`() {
-        val routes = visibleTopLevelRoutes(
-            HomeMode.VIDEO,
-            hiddenNavItems = nothingHidden,
+        val routes = videoRoutes(
             navItemOrder = listOf("Search", "Home"),
-            isOffline = false,
         )
         // Search and Home follow the stored rank; Library/LiveTv were never
         // listed, so they keep their relative input order after them.
@@ -88,8 +92,7 @@ class VisibleTopLevelRoutesTest {
 
     @Test
     fun `offline + user-hidden + custom order compose`() {
-        val routes = visibleTopLevelRoutes(
-            homeMode = HomeMode.VIDEO,
+        val routes = videoRoutes(
             hiddenNavItems = setOf(Route.Search.navKey),
             navItemOrder = listOf("LiveTv", "Home"),
             isOffline = true,
@@ -107,6 +110,28 @@ class VisibleTopLevelRoutesTest {
                 Route.Library to "Library",
             ),
             routes,
+        )
+    }
+
+    @Test
+    fun `the list form applies the same offline-hide policy to descriptor items`() {
+        // The desktop rail's shape: items carry more than a label, so the
+        // list form filters/orders the items themselves. Offline drops ONLY
+        // the LiveTv descriptor; the rest keep their input order.
+        val rail = VIDEO_TOP_LEVEL_ROUTES.keys.map { route ->
+            NAV_DESTINATION_BY_ROUTE.getValue(route)
+        }
+        val descriptors = visibleTopLevelRoutes(
+            rail,
+            { it.route.navKey },
+            hiddenNavItems = nothingHidden,
+            navItemOrder = noOrder,
+            isOffline = true,
+        )
+
+        assertEquals(
+            listOf(Route.Home, Route.Library, Route.Search),
+            descriptors.map { it.route },
         )
     }
 }

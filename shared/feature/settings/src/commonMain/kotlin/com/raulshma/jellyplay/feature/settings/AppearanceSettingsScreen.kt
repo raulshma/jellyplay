@@ -448,7 +448,7 @@ fun AppearanceSettingsScreen(
                     appearanceItems.forEach { item ->
                         when (item) {
                             AppearanceSettingsIds.THEME_MODE -> {
-                                val themeTitle = stringResource(Res.string.settings_theme_mode)
+                                val themeTitle = rowTitle(AppearanceSettingsIds.THEME_MODE)
                                 val themeFollowSystem = stringResource(Res.string.settings_theme_follow_system)
                                 val themeAlwaysLight = stringResource(Res.string.settings_theme_always_light)
                                 val themeAlwaysDark = stringResource(Res.string.settings_theme_always_dark)
@@ -490,7 +490,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.THEME_STYLE -> {
-                                val styleTitle = stringResource(Res.string.settings_theme_style)
+                                val styleTitle = rowTitle(AppearanceSettingsIds.THEME_STYLE)
                                 val styleSubtitle = stringResource(Res.string.settings_theme_style_subtitle)
                                 SettingListItem(
                                     icon = Tabler.Outline.Palette,
@@ -538,7 +538,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.DYNAMIC_THEMING -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Video,
-                                    title = stringResource(Res.string.settings_dynamic_theming),
+                                    title = rowTitle(AppearanceSettingsIds.DYNAMIC_THEMING),
                                     subtitle = stringResource(Res.string.settings_dynamic_theming_subtitle),
                                     checked = preferences.dynamicTheming,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.DYNAMIC_THEMING,
@@ -548,7 +548,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.OLED_MODE -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.BrightnessHalf,
-                                    title = stringResource(Res.string.settings_oled_mode),
+                                    title = rowTitle(AppearanceSettingsIds.OLED_MODE),
                                     subtitle = stringResource(Res.string.settings_oled_mode_subtitle),
                                     checked = preferences.oledMode,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.OLED_MODE,
@@ -558,7 +558,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.CONTRAST -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.Adjustments,
-                                    title = stringResource(Res.string.settings_contrast),
+                                    title = rowTitle(AppearanceSettingsIds.CONTRAST),
                                     subtitle = when (preferences.contrastLevel) {
                                         ContrastLevel.DEFAULT -> stringResource(Res.string.settings_contrast_standard)
                                         ContrastLevel.MEDIUM -> stringResource(Res.string.settings_contrast_medium)
@@ -579,7 +579,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.LIBRARY_VIEW_MODE -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.LayoutGrid,
-                                    title = stringResource(Res.string.settings_library_view_mode),
+                                    title = rowTitle(AppearanceSettingsIds.LIBRARY_VIEW_MODE),
                                     subtitle = when (preferences.libraryViewMode) {
                                         LibraryViewMode.GRID -> stringResource(Res.string.settings_library_view_grid)
                                         LibraryViewMode.LIST -> stringResource(Res.string.settings_library_view_list)
@@ -596,7 +596,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.HOME_MODE -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.Home,
-                                    title = stringResource(Res.string.settings_home_mode),
+                                    title = rowTitle(AppearanceSettingsIds.HOME_MODE),
                                     subtitle = if (preferences.homeMode == HomeMode.VIDEO) stringResource(Res.string.settings_home_mode_video) else stringResource(Res.string.settings_home_mode_music),
                                     trailingText = preferences.homeMode.name,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.HOME_MODE,
@@ -609,7 +609,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.HERO_SECTION -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.LayersLinked,
-                                    title = stringResource(Res.string.settings_show_hero_section),
+                                    title = rowTitle(AppearanceSettingsIds.HERO_SECTION),
                                     subtitle = if (preferences.homeHeroEnabled) stringResource(Res.string.settings_show_hero_on) else stringResource(Res.string.settings_show_hero_off),
                                     checked = preferences.homeHeroEnabled,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.HERO_SECTION,
@@ -619,7 +619,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.HOME_BACKDROP -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Background,
-                                    title = stringResource(Res.string.settings_home_backdrop),
+                                    title = rowTitle(AppearanceSettingsIds.HOME_BACKDROP),
                                     subtitle = if (preferences.homeBackdropEnabled) stringResource(Res.string.settings_home_backdrop_on) else stringResource(Res.string.settings_home_backdrop_off),
                                     checked = preferences.homeBackdropEnabled,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.HOME_BACKDROP,
@@ -629,7 +629,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.CLOCK_HOME -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Clock,
-                                    title = stringResource(Res.string.settings_show_clock_home),
+                                    title = rowTitle(AppearanceSettingsIds.CLOCK_HOME),
                                     subtitle = if (preferences.showClockOnHome) stringResource(Res.string.settings_show_clock_on) else stringResource(Res.string.settings_show_clock_off),
                                     checked = preferences.showClockOnHome,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.CLOCK_HOME,
@@ -639,7 +639,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.HIDE_TOP_HEADER -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.ArrowBarToDown,
-                                    title = stringResource(Res.string.settings_hide_top_header_on_scroll),
+                                    title = rowTitle(AppearanceSettingsIds.HIDE_TOP_HEADER),
                                     subtitle = if (preferences.hideTopHeaderOnScroll) stringResource(Res.string.settings_hide_top_header_on_scroll_on) else stringResource(Res.string.settings_hide_top_header_on_scroll_off),
                                     checked = preferences.hideTopHeaderOnScroll,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.HIDE_TOP_HEADER,
@@ -649,7 +649,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.SETTINGS_IN_HOME_SEARCH -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Adjustments,
-                                    title = stringResource(Res.string.settings_show_settings_in_home_search),
+                                    title = rowTitle(AppearanceSettingsIds.SETTINGS_IN_HOME_SEARCH),
                                     subtitle = if (preferences.showSettingsInHomeSearch) stringResource(Res.string.settings_show_settings_in_home_search_on) else stringResource(Res.string.settings_show_settings_in_home_search_off),
                                     checked = preferences.showSettingsInHomeSearch,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.SETTINGS_IN_HOME_SEARCH,
@@ -657,7 +657,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.CONTINUE_WATCHING_CLICK -> {
-                                val cwTitle = stringResource(Res.string.settings_continue_watching_tap)
+                                val cwTitle = rowTitle(AppearanceSettingsIds.CONTINUE_WATCHING_CLICK)
                                 SettingListItem(
                                     icon = Tabler.Outline.PlayerPlay,
                                     title = cwTitle,
@@ -678,7 +678,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.UNHIDE_CW -> {
                                 SettingListItem(
                                     icon = Tabler.Outline.Eye,
-                                    title = stringResource(Res.string.settings_unhide_continue_watching),
+                                    title = rowTitle(AppearanceSettingsIds.UNHIDE_CW),
                                     subtitle = stringResource(Res.string.settings_unhide_continue_watching_subtitle, preferences.hiddenCwItemIds.size),
                                     highlighted = highlightSettingId == AppearanceSettingsIds.UNHIDE_CW,
                                     onClick = { viewModel.edit { it.homeDiscovery.unhideAllCwItems() } },
@@ -687,7 +687,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.MERGE_CONTINUE_NEXT_UP -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.LayersLinked,
-                                    title = stringResource(Res.string.settings_merge_continue_next_up),
+                                    title = rowTitle(AppearanceSettingsIds.MERGE_CONTINUE_NEXT_UP),
                                     subtitle = if (preferences.mergeContinueWatchingAndNextUp) stringResource(Res.string.settings_merge_continue_next_up_on) else stringResource(Res.string.settings_merge_continue_next_up_off),
                                     checked = preferences.mergeContinueWatchingAndNextUp,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.MERGE_CONTINUE_NEXT_UP,
@@ -695,7 +695,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.NEXT_UP_MAX_DAYS -> {
-                                val nextUpTitle = stringResource(Res.string.settings_next_up_time_window)
+                                val nextUpTitle = rowTitle(AppearanceSettingsIds.NEXT_UP_MAX_DAYS)
                                 val unlimitedLabel = stringResource(Res.string.settings_unlimited)
                                 val xDaysFormat = stringResource(Res.string.settings_x_days)
                                 val dayLabels = mapOf(
@@ -726,7 +726,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.NEXT_UP_REWATCHING -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.History,
-                                    title = stringResource(Res.string.settings_rewatching_next_up),
+                                    title = rowTitle(AppearanceSettingsIds.NEXT_UP_REWATCHING),
                                     subtitle = if (preferences.nextUpRewatching) stringResource(Res.string.settings_rewatching_next_up_on) else stringResource(Res.string.settings_rewatching_next_up_off),
                                     checked = preferences.nextUpRewatching,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.NEXT_UP_REWATCHING,
@@ -736,7 +736,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.THEME_MUSIC -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Music,
-                                    title = stringResource(Res.string.settings_backdrop_theme_music),
+                                    title = rowTitle(AppearanceSettingsIds.THEME_MUSIC),
                                     subtitle = if (preferences.backdropThemeMusicEnabled) stringResource(Res.string.settings_backdrop_theme_music_on) else stringResource(Res.string.settings_backdrop_theme_music_off),
                                     checked = preferences.backdropThemeMusicEnabled,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.THEME_MUSIC,
@@ -746,7 +746,7 @@ fun AppearanceSettingsScreen(
                             AppearanceSettingsIds.NAV_LABELS -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.TextSize,
-                                    title = stringResource(Res.string.settings_show_nav_labels),
+                                    title = rowTitle(AppearanceSettingsIds.NAV_LABELS),
                                     subtitle = if (preferences.navBarShowLabels) stringResource(Res.string.settings_nav_labels_on) else stringResource(Res.string.settings_nav_labels_off),
                                     checked = preferences.navBarShowLabels,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.NAV_LABELS,
@@ -754,7 +754,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.DATE_FORMAT -> {
-                                val dateFormatTitle = stringResource(Res.string.settings_date_format)
+                                val dateFormatTitle = rowTitle(AppearanceSettingsIds.DATE_FORMAT)
                                 SettingListItem(
                                     icon = Tabler.Outline.Calendar,
                                     title = dateFormatTitle,
@@ -773,7 +773,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.FONT_SCALE -> {
-                                val fontSizeTitle = stringResource(Res.string.settings_font_size_app)
+                                val fontSizeTitle = rowTitle(AppearanceSettingsIds.FONT_SCALE)
                                 SettingListItem(
                                     icon = Tabler.Outline.TextSize,
                                     title = fontSizeTitle,
@@ -792,7 +792,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.SCHEDULED_START -> {
-                                val nightStartsTitle = stringResource(Res.string.settings_night_starts_at)
+                                val nightStartsTitle = rowTitle(AppearanceSettingsIds.SCHEDULED_START)
                                 SettingListItem(
                                     icon = Tabler.Outline.Sun,
                                     title = nightStartsTitle,
@@ -811,7 +811,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.SCHEDULED_END -> {
-                                val morningStartsTitle = stringResource(Res.string.settings_morning_starts_at)
+                                val morningStartsTitle = rowTitle(AppearanceSettingsIds.SCHEDULED_END)
                                 SettingListItem(
                                     icon = Tabler.Outline.Moon,
                                     title = morningStartsTitle,
@@ -830,7 +830,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.COLOR_BLIND_MODE -> {
-                                val colorBlindTitle = stringResource(Res.string.settings_color_blind_mode)
+                                val colorBlindTitle = rowTitle(AppearanceSettingsIds.COLOR_BLIND_MODE)
                                 SettingListItem(
                                     icon = Tabler.Outline.Eye,
                                     title = colorBlindTitle,
@@ -849,7 +849,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             AppearanceSettingsIds.HAND_MODE -> {
-                                val handednessTitle = stringResource(Res.string.settings_handedness)
+                                val handednessTitle = rowTitle(AppearanceSettingsIds.HAND_MODE)
                                 SettingListItem(
                                     icon = Tabler.Outline.HandClick,
                                     title = handednessTitle,
@@ -908,7 +908,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Folder,
-                        title = stringResource(Res.string.settings_show_unwatched_badge),
+                        title = rowTitle(AppearanceSettingsIds.SHOW_UNWATCHED_BADGE),
                         subtitle = stringResource(Res.string.settings_show_unwatched_badge_subtitle),
                         checked = preferences.showUnwatchedBadge,
                         highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_UNWATCHED_BADGE,
@@ -917,7 +917,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.CircleCheck,
-                        title = stringResource(Res.string.settings_show_watched_checkmark),
+                        title = rowTitle(AppearanceSettingsIds.SHOW_WATCHED_CHECKMARK),
                         subtitle = stringResource(Res.string.settings_show_watched_checkmark_subtitle),
                         checked = preferences.showWatchedCheckmark,
                         highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_WATCHED_CHECKMARK,
@@ -926,7 +926,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.EyeOff,
-                        title = stringResource(Res.string.settings_hide_watched_items),
+                        title = rowTitle(AppearanceSettingsIds.HIDE_WATCHED_ITEMS),
                         subtitle = stringResource(Res.string.settings_hide_watched_items_subtitle),
                         checked = preferences.hideWatchedItems,
                         highlighted = highlightSettingId == AppearanceSettingsIds.HIDE_WATCHED_ITEMS,
@@ -935,7 +935,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.PhotoOff,
-                        title = stringResource(Res.string.settings_hide_episode_thumbnails),
+                        title = rowTitle(AppearanceSettingsIds.HIDE_EPISODE_THUMBNAILS),
                         subtitle = stringResource(Res.string.settings_hide_episode_thumbnails_subtitle),
                         checked = preferences.hideEpisodeThumbnails,
                         highlighted = highlightSettingId == AppearanceSettingsIds.HIDE_EPISODE_THUMBNAILS,
@@ -944,7 +944,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.List,
-                        title = stringResource(Res.string.settings_compact_episode_list),
+                        title = rowTitle(AppearanceSettingsIds.COMPACT_EPISODE_LIST),
                         subtitle = stringResource(Res.string.settings_compact_episode_list_subtitle),
                         checked = preferences.compactEpisodeList,
                         highlighted = highlightSettingId == AppearanceSettingsIds.COMPACT_EPISODE_LIST,
@@ -962,7 +962,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.PlayerSkipForward,
-                        title = stringResource(Res.string.settings_skip_special_episodes),
+                        title = rowTitle(AppearanceSettingsIds.SKIP_SPECIALS),
                         subtitle = stringResource(Res.string.settings_skip_special_episodes_subtitle),
                         checked = preferences.skipSpecials,
                         highlighted = highlightSettingId == AppearanceSettingsIds.SKIP_SPECIALS,
@@ -971,7 +971,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.DeviceMobileVibration,
-                        title = stringResource(Res.string.settings_haptic_feedback),
+                        title = rowTitle(AppearanceSettingsIds.HAPTICS_ENABLED),
                         subtitle = stringResource(Res.string.settings_haptic_feedback_subtitle),
                         checked = preferences.hapticsEnabled,
                         highlighted = highlightSettingId == AppearanceSettingsIds.HAPTICS_ENABLED,
@@ -980,7 +980,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Share,
-                        title = stringResource(Res.string.settings_show_share_media),
+                        title = rowTitle(AppearanceSettingsIds.SHOW_SHARE_MEDIA),
                         subtitle = stringResource(Res.string.settings_show_share_media_subtitle),
                         checked = preferences.showShareMediaOption,
                         highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_SHARE_MEDIA,
@@ -989,7 +989,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.EyeOff,
-                        title = stringResource(Res.string.settings_hide_search_history),
+                        title = rowTitle(AppearanceSettingsIds.HIDE_SEARCH_HISTORY),
                         subtitle = stringResource(Res.string.settings_hide_search_history_subtitle),
                         checked = preferences.hideSearchHistory,
                         highlighted = highlightSettingId == AppearanceSettingsIds.HIDE_SEARCH_HISTORY,
@@ -998,7 +998,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Star,
-                        title = stringResource(Res.string.settings_show_external_ratings),
+                        title = rowTitle(AppearanceSettingsIds.SHOW_EXTERNAL_RATINGS),
                         subtitle = stringResource(Res.string.settings_show_external_ratings_subtitle),
                         checked = preferences.showExternalRatings,
                         highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_EXTERNAL_RATINGS,
@@ -1021,7 +1021,7 @@ fun AppearanceSettingsScreen(
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Pinned,
-                        title = stringResource(Res.string.settings_pinned_home_sections),
+                        title = rowTitle(AppearanceSettingsIds.PINNED_HOME_SECTIONS),
                         subtitle = stringResource(Res.string.settings_pinned_home_sections_brief),
                         trailingText = if (preferences.pinnedHomeSections.isEmpty()) "" else "${preferences.pinnedHomeSections.size}",
                         highlighted = highlightSettingId == AppearanceSettingsIds.PINNED_HOME_SECTIONS,
@@ -1031,7 +1031,7 @@ fun AppearanceSettingsScreen(
 
                     SettingListItem(
                         icon = Tabler.Outline.Bookmarks,
-                        title = stringResource(Res.string.settings_home_layout_presets),
+                        title = rowTitle(AppearanceSettingsIds.HOME_LAYOUT_PRESETS),
                         subtitle = stringResource(Res.string.settings_home_layout_presets_brief),
                         trailingText = if (preferences.homeLayoutPresets.isEmpty()) "" else "${preferences.homeLayoutPresets.size}",
                         highlighted = highlightSettingId == AppearanceSettingsIds.HOME_LAYOUT_PRESETS,
@@ -1041,7 +1041,7 @@ fun AppearanceSettingsScreen(
 
                     SettingListItem(
                         icon = Tabler.Outline.Folders,
-                        title = stringResource(Res.string.settings_configure_libraries),
+                        title = rowTitle(AppearanceSettingsIds.CONFIGURE_LIBRARIES),
                         subtitle = stringResource(Res.string.settings_configure_libraries_desc),
                         trailingText = "",
                         highlighted = highlightSettingId == AppearanceSettingsIds.CONFIGURE_LIBRARIES,
@@ -1093,7 +1093,7 @@ fun AppearanceSettingsScreen(
                     val perfTotal = SettingsScreenGroups.appearancePerformance.items.size
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
-                        title = stringResource(Res.string.settings_performance_mode),
+                        title = rowTitle(AppearanceSettingsIds.PERFORMANCE_MODE),
                         subtitle = stringResource(Res.string.settings_performance_mode_subtitle),
                         checked = preferences.performanceMode,
                         highlighted = highlightSettingId == AppearanceSettingsIds.PERFORMANCE_MODE,
@@ -1102,7 +1102,7 @@ fun AppearanceSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Activity,
-                        title = stringResource(Res.string.settings_reduce_motion),
+                        title = rowTitle(AppearanceSettingsIds.REDUCE_MOTION),
                         subtitle = stringResource(Res.string.settings_reduce_motion_subtitle),
                         checked = preferences.reduceMotionEnabled,
                         highlighted = highlightSettingId == AppearanceSettingsIds.REDUCE_MOTION,
@@ -1129,7 +1129,7 @@ fun AppearanceSettingsScreen(
                     val eyeCareTotal = SettingsScreenGroups.appearanceEyeCare.items.size
                     SettingToggleItem(
                         icon = Tabler.Outline.Moon,
-                        title = stringResource(Res.string.settings_blue_light_filter),
+                        title = rowTitle(AppearanceSettingsIds.BLUE_LIGHT_FILTER),
                         subtitle = stringResource(Res.string.settings_blue_light_filter_subtitle),
                         checked = preferences.blueLightFilterEnabled,
                         highlighted = highlightSettingId == AppearanceSettingsIds.BLUE_LIGHT_FILTER,
@@ -1138,7 +1138,7 @@ fun AppearanceSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Adjustments,
-                        title = stringResource(Res.string.settings_blue_light_filter_strength),
+                        title = rowTitle(AppearanceSettingsIds.BLUE_LIGHT_STRENGTH),
                         subtitle = stringResource(Res.string.settings_blue_light_filter_strength_subtitle),
                         trailingText = "${(preferences.blueLightFilterStrength * 100).toInt()}%",
                         highlighted = highlightSettingId == AppearanceSettingsIds.BLUE_LIGHT_STRENGTH,
@@ -1178,7 +1178,7 @@ fun AppearanceSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Mail,
-                        title = stringResource(Res.string.settings_enable_newsletter),
+                        title = rowTitle(AppearanceSettingsIds.NEWSLETTER_ENABLED),
                         subtitle = stringResource(Res.string.settings_enable_newsletter_subtitle),
                         checked = preferences.newsletterEnabled,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.NEWSLETTER_ENABLED,
@@ -1202,7 +1202,7 @@ fun AppearanceSettingsScreen(
 
                     SettingListItem(
                         icon = Tabler.Outline.Calendar,
-                        title = stringResource(Res.string.settings_newsletter_delivery_day),
+                        title = rowTitle(AppearanceSettingsIds.NEWSLETTER_DELIVERY_DAY),
                         subtitle = stringResource(Res.string.settings_newsletter_delivery_day_subtitle),
                         trailingText = dayLabel,
                         highlighted = highlightSettingId == AppearanceSettingsIds.NEWSLETTER_DELIVERY_DAY,
@@ -1255,7 +1255,7 @@ fun AppearanceSettingsScreen(
 
     if (showBlueLightStrengthSheet) {
         SettingsSliderSheet(
-            title = stringResource(Res.string.settings_blue_light_filter_strength),
+            title = rowTitle(AppearanceSettingsIds.BLUE_LIGHT_STRENGTH),
             value = preferences.blueLightFilterStrength,
             valueRange = 0.1f..1f,
             steps = 8,

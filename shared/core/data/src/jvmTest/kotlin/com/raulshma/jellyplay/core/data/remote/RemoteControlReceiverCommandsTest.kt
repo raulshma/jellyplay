@@ -5,6 +5,9 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
+import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
+import com.raulshma.jellyplay.core.model.remote.RemoteTopLevelDestination
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.network.websocket.WebSocketEvent
 import io.mockk.coEvery
@@ -12,6 +15,11 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,11 +29,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
  * Pins the additions to the (now jvmShared) [RemoteControlReceiver]

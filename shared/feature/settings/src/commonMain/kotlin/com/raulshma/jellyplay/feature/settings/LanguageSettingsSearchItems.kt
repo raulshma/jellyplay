@@ -1,12 +1,27 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.composables.icons.tabler.Tabler
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_language_subtitles
+import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_high_contrast_subtitles
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_open_subtitle_tester
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_direct_play
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_background
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_edge_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_sync_offset
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_text_color
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_vertical_position
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_language_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_language_subtitle
@@ -69,153 +84,156 @@ internal object LanguageSettingsIds {
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to LanguageSettingsScreen. Aggregated in [SettingsSearchCatalog].
  */
-internal val LanguageSettingsSearchItems = listOf(
-    SettingsSearchItem(
+internal val LanguageSettingsRowRecords = listOf(
+    SettingsRowRecord(
         id = LanguageSettingsIds.APP_LANGUAGE,
-        titleRes = Res.string.ss_app_language_title,
-        subtitleRes = Res.string.ss_app_language_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_display_language,
+        searchTitleRes = Res.string.ss_app_language_title,
+        searchSubtitleRes = Res.string.ss_app_language_subtitle,
         keywords = listOf("language", "display", "interface", "locale", "ui language", "app language"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Language,
         platforms = platformsForCapability(settingsCapabilities.supportsAppLocaleOverride),
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.AUDIO_LANGUAGE,
-        titleRes = Res.string.ss_audio_language_title,
-        subtitleRes = Res.string.ss_audio_language_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_audio_language,
+        searchTitleRes = Res.string.ss_audio_language_title,
+        searchSubtitleRes = Res.string.ss_audio_language_subtitle,
         keywords = listOf("language", "audio track", "speech", "default language"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Language
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_LANGUAGE,
-        titleRes = Res.string.ss_subtitle_language_title,
-        subtitleRes = Res.string.ss_subtitle_language_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_subtitle_language,
+        searchTitleRes = Res.string.ss_subtitle_language_title,
+        searchSubtitleRes = Res.string.ss_subtitle_language_subtitle,
         keywords = listOf("subtitles", "language", "cc", "captions"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Subtitles
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_FONT_SIZE,
-        titleRes = Res.string.ss_subtitle_font_size_title,
-        subtitleRes = Res.string.ss_subtitle_font_size_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_font_size,
+        searchTitleRes = Res.string.ss_subtitle_font_size_title,
+        searchSubtitleRes = Res.string.ss_subtitle_font_size_subtitle,
         keywords = listOf("subtitle size", "font size", "text size", "bigger"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Typography
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_FORCED_ONLY,
-        titleRes = Res.string.ss_subtitle_forced_only_title,
-        subtitleRes = Res.string.ss_subtitle_forced_only_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_forced_subtitles,
+        searchTitleRes = Res.string.ss_subtitle_forced_only_title,
+        searchSubtitleRes = Res.string.ss_subtitle_forced_only_subtitle,
         keywords = listOf("forced", "subtitles", "foreign", "parts", "native"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.TextSize
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.PGS_DIRECT_PLAY,
-        titleRes = Res.string.ss_pgs_direct_play_title,
-        subtitleRes = Res.string.ss_pgs_direct_play_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_pgs_direct_play,
+        searchTitleRes = Res.string.ss_pgs_direct_play_title,
+        searchSubtitleRes = Res.string.ss_pgs_direct_play_subtitle,
         keywords = listOf("pgs", "subtitle", "direct play", "picture", "image subtitle", "bluray"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Photo,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.HDR_SUBTITLE_STYLE,
-        titleRes = Res.string.ss_hdr_subtitle_style_title,
-        subtitleRes = Res.string.ss_hdr_subtitle_style_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_hdr_subtitle_style,
+        searchTitleRes = Res.string.ss_hdr_subtitle_style_title,
+        searchSubtitleRes = Res.string.ss_hdr_subtitle_style_subtitle,
         keywords = listOf("hdr", "subtitle", "style", "dolby vision", "hdr10", "brightness"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Sun,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_COLOR,
-        titleRes = Res.string.ss_subtitle_color_title,
-        subtitleRes = Res.string.ss_subtitle_color_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_subtitle_text_color,
+        searchTitleRes = Res.string.ss_subtitle_color_title,
+        searchSubtitleRes = Res.string.ss_subtitle_color_subtitle,
         keywords = listOf("subtitle color", "text color", "yellow subtitles", "white"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Palette,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_BACKGROUND,
-        titleRes = Res.string.ss_subtitle_background_title,
-        subtitleRes = Res.string.ss_subtitle_background_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_subtitle_background,
+        searchTitleRes = Res.string.ss_subtitle_background_title,
+        searchSubtitleRes = Res.string.ss_subtitle_background_subtitle,
         keywords = listOf("subtitle background", "opacity", "transparency", "box"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Background,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_EDGE_STYLE,
-        titleRes = Res.string.ss_subtitle_edge_style_title,
-        subtitleRes = Res.string.ss_subtitle_edge_style_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_subtitle_edge_style,
+        searchTitleRes = Res.string.ss_subtitle_edge_style_title,
+        searchSubtitleRes = Res.string.ss_subtitle_edge_style_subtitle,
         keywords = listOf("edge style", "shadow", "outline", "border"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.BorderAll,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_SYNC_OFFSET,
-        titleRes = Res.string.ss_subtitle_sync_offset_title,
-        subtitleRes = Res.string.ss_subtitle_sync_offset_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_subtitle_sync_offset,
+        searchTitleRes = Res.string.ss_subtitle_sync_offset_title,
+        searchSubtitleRes = Res.string.ss_subtitle_sync_offset_subtitle,
         keywords = listOf("sync", "offset", "delay", "lagging subtitles"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Clock,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_VERTICAL_POSITION,
-        titleRes = Res.string.ss_subtitle_vertical_position_title,
-        subtitleRes = Res.string.ss_subtitle_vertical_position_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_subtitle_vertical_position,
+        searchTitleRes = Res.string.ss_subtitle_vertical_position_title,
+        searchSubtitleRes = Res.string.ss_subtitle_vertical_position_subtitle,
         keywords = listOf("position", "height", "vertical", "bottom", "margin"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.ArrowBarDown,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.HIGH_CONTRAST_SUBTITLES,
-        titleRes = Res.string.ss_high_contrast_subtitles_title,
-        subtitleRes = Res.string.ss_high_contrast_subtitles_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_high_contrast_subtitles,
+        searchTitleRes = Res.string.ss_high_contrast_subtitles_title,
+        searchSubtitleRes = Res.string.ss_high_contrast_subtitles_subtitle,
         keywords = listOf("subtitle", "high", "contrast", "accessibility", "visibility"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Contrast2,
         isAdvanced = true
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.SUBTITLE_TESTER,
-        titleRes = Res.string.ss_subtitle_tester_title,
-        subtitleRes = Res.string.ss_subtitle_tester_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_open_subtitle_tester,
+        searchTitleRes = Res.string.ss_subtitle_tester_title,
+        searchSubtitleRes = Res.string.ss_subtitle_tester_subtitle,
         keywords = listOf("subtitle", "tester", "preview", "sample", "test", "style"),
         route = Route.SubtitleTester,
         icon = Tabler.Outline.EyeCheck
     ),
-    SettingsSearchItem(
+    SettingsRowRecord(
         id = LanguageSettingsIds.HDR_SUBTITLE_FONT_SIZE,
-        titleRes = Res.string.ss_hdr_subtitle_font_size_title,
-        subtitleRes = Res.string.ss_hdr_subtitle_font_size_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
+        titleRes = Res.string.settings_hdr_font_size,
+        searchTitleRes = Res.string.ss_hdr_subtitle_font_size_title,
+        searchSubtitleRes = Res.string.ss_hdr_subtitle_font_size_subtitle,
         keywords = listOf("hdr", "subtitle", "font size", "text", "dolby vision"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Typography,
         isAdvanced = true
-    ),
-)
+    ))
+
+/** The catalog projection of `LanguageSettingsRowRecords`: the search faces + the shared category. */
+internal val LanguageSettingsSearchItems: List<SettingsSearchItem> = LanguageSettingsRowRecords.toSearchItems(CoreUiRes.string.ss_cat_language_subtitles)
+
 
 /**
  * The subtitles group's per-id declared row admissions — the single gate both

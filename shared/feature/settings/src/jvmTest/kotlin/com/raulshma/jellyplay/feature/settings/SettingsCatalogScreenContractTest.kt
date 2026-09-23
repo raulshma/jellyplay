@@ -82,7 +82,37 @@ class SettingsCatalogScreenContractTest {
 
     private val allHolderIds: List<String> by lazy { idsHolders.flatMap { holderIds(it) } }
 
-    // ── 1. Referential integrity: holders ↔ catalog ↔ groups ───────────
+    // ── 1. Referential integrity: holders ↔ records ↔ catalog ↔ groups ─
+
+    /**
+     * The row records (candidate B1) sit between the holders and the catalog:
+     * each record redeclares a holder id and carries the row's title faces,
+     * and the `*SearchItems` lists are projections of the records
+     * ([SettingsRowRecordTest] pins the projection faithfulness). The 5
+     * experimental ids stay on the ExperimentalPreferenceSpecs derivation —
+     * the records exception.
+     */
+    @Test
+    fun `row records cover the holders exactly minus the experimental derivation`() {
+        val recordIds = SettingsRowRecords.all.map { it.id }.toSet()
+        assertEquals(
+            emptyList(),
+            recordIds.filter { it !in allHolderIds },
+            "record ids declared outside the ids holders",
+        )
+        val experimental = setOf(
+            ExperimentalSettingsIds.EXPERIMENTAL,
+            ExperimentalSettingsIds.HOME_CARD_CLIPPING,
+            ExperimentalSettingsIds.MEDIA_CARD_PEEK,
+            ExperimentalSettingsIds.DIRECT_ARR_INTEGRATION,
+            ExperimentalSettingsIds.ARR_SETTINGS,
+        )
+        assertEquals(
+            emptyList(),
+            allHolderIds.filter { it !in recordIds && it !in experimental },
+            "holder ids without a row record (outside the experimental exception)",
+        )
+    }
 
     @Test
     fun `every settings row id resolves to exactly one catalog item`() {

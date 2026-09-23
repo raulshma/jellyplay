@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
@@ -920,16 +921,4 @@ class HomeRefresherTest {
     )
 
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)
-
-    /**
-     * Controllable [TimeSource] whose clock defaults to a fixed epoch so the
-     * periodic-refresh and TTL gates stay on one side of their thresholds;
-     * tests move [nowMs] to deliberately cross one.
-     */
-    // HomeClock seam fake: the epoch-millis read drives the
-        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
-        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
-    }
 }

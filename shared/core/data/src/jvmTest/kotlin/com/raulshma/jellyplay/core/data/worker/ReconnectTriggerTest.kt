@@ -1,11 +1,10 @@
 package com.raulshma.jellyplay.core.data.worker
 
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.testutil.FakeNetworkMonitor
+import com.raulshma.jellyplay.core.data.testutil.FakeOfflineModeManager
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -41,28 +40,6 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReconnectTriggerTest {
-
-    private class FakeNetworkMonitor(initial: NetworkStatus) : NetworkMonitor {
-        override val networkStatus = MutableStateFlow(initial)
-        override val isMetered = MutableStateFlow(false)
-    }
-
-    private class FakeOfflineModeManager(initial: OfflineMode) : OfflineModeManager {
-        override val offlineMode = MutableStateFlow(initial)
-        // The reconnect edge only watches the mode; the going-online flag is
-        // the manager-impls' choreography and stays parked here.
-        override val goingOnline = MutableStateFlow(false)
-        override val isOffline: Boolean get() = offlineMode.value != OfflineMode.ONLINE
-        override val networkStatus = MutableStateFlow(NetworkStatus.Online)
-        override fun toggleManualOffline() {
-            offlineMode.value = if (offlineMode.value == OfflineMode.ONLINE) {
-                OfflineMode.OFFLINE_MANUAL
-            } else {
-                OfflineMode.ONLINE
-            }
-        }
-        override fun checkNetworkAndAutoDetect() = Unit
-    }
 
     private fun TestScope.trigger(
         networkMonitor: FakeNetworkMonitor,

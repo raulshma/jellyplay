@@ -41,7 +41,6 @@ import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import org.koin.mp.KoinPlatform
-import kotlin.math.abs
 
 /**
  * Foreground service that renders a floating, draggable media-controller overlay
@@ -200,47 +199,44 @@ class FloatingPlayerService : Service() {
      * Attaches a touch listener that lets the user drag the overlay around
      * the screen. A tap (no significant movement) is treated as a click and
      * is allowed to pass through to the Compose UI.
+     *
+     * The drag/tap decision, the move arithmetic and the one-relayout-per-
+     * frame coalescing live in [OverlayDragPolicy] (pinned by
+     * OverlayDragPolicyTest); this handler keeps only the WindowManager
+     * effects and the `postOnAnimation` post.
      */
     private fun attachDragHandler(
         view: View,
         params: WindowManager.LayoutParams,
     ) {
-        var initialX = 0
-        var initialY = 0
-        var initialTouchX = 0f
-        var initialTouchY = 0f
-        var isDragging = false
-        var layoutFramePending = false
+        val policy = OverlayDragPolicy()
 
         view.setOnTouchListener { v, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = params.x
-                    initialY = params.y
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    isDragging = false
-                }
+                MotionEvent.ACTION_DOWN ->
+                    policy.onDown(
+                        windowX = params.x,
+                        windowY = params.y,
+                        touchRawX = event.rawX,
+                        touchRawY = event.rawY,
+                    )
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - initialTouchX
-                    val dy = event.rawY - initialTouchY
-                    if (abs(dx) > 10 || abs(dy) > 10) isDragging = true
-                    params.x = initialX + dx.toInt()
-                    params.y = initialY + dy.toInt()
-                    if (!layoutFramePending) {
-                        layoutFramePending = true
+                    val move = policy.onMove(touchRawX = event.rawX, touchRawY = event.rawY)
+                    params.x = move.x
+                    params.y = move.y
+                    if (move.armFrame) {
                         view.postOnAnimation {
-                            layoutFramePending = false
+                            policy.onFrameFlushed()
                             windowManager.updateViewLayout(view, params)
                         }
                     }
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (layoutFramePending) {
-                        layoutFramePending = false
+                    val up = policy.onUp()
+                    if (up.flushFrame) {
                         windowManager.updateViewLayout(view, params)
                     }
-                    if (!isDragging) {
+                    if (up.isTap) {
                         v.performClick()
                     }
                 }

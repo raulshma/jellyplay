@@ -29,9 +29,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
  * back to the store, silently undoing every toggle.
  *
  * Declared desktop divergences (state-level, encoded in the core):
- *  - out-of-range equalizer band indices no-op (the core's
- *    `rejectOutOfRangeEqualizerBands = true`; Android's unguarded write
- *    throws);
+ *  - out-of-range equalizer band indices no-op — the guard is now
+ *    unconditional in the core (both hosts construct guarded; the historical
+ *    Android IndexOutOfBoundsException is retired);
  *  - the visualizer stays fully inert — `fftData`/`waveformData` stay empty
  *    (mpv offers no in-sink PCM tap without a full render-API audio pull)
  *    and `enableVisualizer` neither notifies nor mutates.
@@ -39,7 +39,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
  * ReplayGain context turned out to be a mirror of the Android call-site
  * context and folded into the core as `setReplayGainContext`.
  */
-class DesktopAudioEffectsManager : AudioEffectsStateCore(rejectOutOfRangeEqualizerBands = true),
+class DesktopAudioEffectsManager : AudioEffectsStateCore(),
     AudioEffectsSession {
 
     override var onEffectsChanged: (() -> Unit)? = null

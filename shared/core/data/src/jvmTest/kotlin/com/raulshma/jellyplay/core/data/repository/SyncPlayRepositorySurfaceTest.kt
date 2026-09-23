@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * declarations, overloads counted separately — matching the impl's override
  * count), and pins that count so it can only move DOWN.
  *
- * Baseline 11 is the count right after the dead wire-command forwards were
+ * Baseline 11 was the count right after the dead wire-command forwards were
  * retired from the seam: `joinSyncPlayGroup`, `leaveSyncPlayGroup`,
  * `syncPlayReady`, `syncPlayNextItem`, `syncPlayPreviousItem`,
  * `syncPlayRemoveFromPlaylist`, and `syncPlayMovePlaylistItem` had zero
@@ -26,6 +26,17 @@ import kotlin.test.assertTrue
  * silently undo that retirement, so the second test pins their absence
  * explicitly.
  *
+ * Baseline 4 is the count after the second (transport command) census: the
+ * ignored-Result transport commands (`syncPlayPause`, `syncPlayUnpause`,
+ * `syncPlaySeek`, `syncPlayStop`, `syncPlaySetRepeatMode`,
+ * `syncPlaySetShuffleMode`, `syncPlaySetIgnoreWait` — their only
+ * repository-typed caller, `SyncPlayViewModel`, launched them and dropped
+ * the Result) retired from the seam and converged on SyncPlayController's
+ * `safe()` via the feature-local `SyncPlaySession` seam. The nuance the
+ * remaining surface records: the repository seam carries the commands its
+ * UI consumers AWAIT — `syncPlaySetNewQueue` stays because
+ * `WatchPartyActions.start` aborts its bootstrap on a failed Result.
+ *
  * Lower [maxInterfaceMembers] when another member retires; never raise it. A
  * new SyncPlay capability that player plumbing fires without awaiting should
  * land on SyncPlayController (the fire-and-forget wrapper home), not here.
@@ -33,7 +44,7 @@ import kotlin.test.assertTrue
 class SyncPlayRepositorySurfaceTest {
 
     /** The maximum allowed member count of [SyncPlayRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 11
+    private val maxInterfaceMembers = 4
 
     /** Members retired from the interface; their re-addition must fail this suite. */
     private val retiredMembers = listOf(
@@ -44,6 +55,13 @@ class SyncPlayRepositorySurfaceTest {
         "syncPlayPreviousItem",
         "syncPlayRemoveFromPlaylist",
         "syncPlayMovePlaylistItem",
+        "syncPlayPause",
+        "syncPlayUnpause",
+        "syncPlaySeek",
+        "syncPlayStop",
+        "syncPlaySetRepeatMode",
+        "syncPlaySetShuffleMode",
+        "syncPlaySetIgnoreWait",
     )
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
@@ -142,9 +160,9 @@ class SyncPlayRepositorySurfaceTest {
             assertFalse(
                 Regex("""\b$member\s*\(""").containsMatchIn(body),
                 "$member reappeared on the SyncPlayRepository surface — it was retired (zero " +
-                    "repository-typed callers; join/leave go through SyncPlayManager's api client, " +
-                    "fire-and-forget reports through SyncPlayController). Do not reintroduce it as " +
-                    "an interface member.",
+                    "awaiting repository-typed callers; join/leave go through SyncPlayManager's api " +
+                    "client, fire-and-forget reports and transport commands through " +
+                    "SyncPlayController's safe()). Do not reintroduce it as an interface member.",
             )
         }
         // Sanity: the parse actually sees declarations, so an empty/false
