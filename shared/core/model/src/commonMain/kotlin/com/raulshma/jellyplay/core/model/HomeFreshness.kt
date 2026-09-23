@@ -41,6 +41,14 @@ object HomeFreshness {
     const val DISCOVER_TTL_MS = 10 * 60_000L
 
     /**
+     * Custom discover-row sub-call cache TTL (network layer). Keeps a
+     * RANDOM-sorted row's items stable across the 60s periodic refresh so the
+     * row doesn't reshuffle every minute; the dice affordance and
+     * pull-to-refresh (forced fetch) re-roll on demand.
+     */
+    const val DISCOVER_ROW_TTL_MS = 10 * 60_000L
+
+    /**
      * Minimum spacing for `UserDataChanged`-driven refreshes. The server echoes
      * these to every session — including this device's own ~10s playback-position
      * saves — so the 30s [MIN_REFRESH_INTERVAL_MS] would force a cache-bypassing

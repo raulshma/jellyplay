@@ -167,6 +167,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_perf
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections_brief
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows_helper
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
@@ -1047,6 +1049,16 @@ fun AppearanceSettingsScreen(
                         highlighted = highlightSettingId == AppearanceSettingsIds.CONFIGURE_LIBRARIES,
                         index = 0, count = 1,
                         onClick = { navActions.onNavigate(Route.LibraryHomeSections(if (highlightSettingId == AppearanceSettingsIds.CONFIGURE_LIBRARIES) "configure_libraries" else null)) },
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.Compass,
+                        title = stringResource(Res.string.settings_discover_rows),
+                        subtitle = stringResource(Res.string.settings_discover_rows_helper),
+                        trailingText = if (preferences.discoverRows.isEmpty()) "" else "${preferences.discoverRows.size}",
+                        highlighted = false,
+                        index = 0, count = 1,
+                        onClick = { navActions.onNavigate(Route.DiscoverRows()) },
                     )
 
                     val homeSections = rememberReorderableOrderedList(

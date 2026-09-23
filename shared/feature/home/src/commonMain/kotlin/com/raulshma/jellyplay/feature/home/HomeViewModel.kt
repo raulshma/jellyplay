@@ -460,6 +460,7 @@ internal class HomeViewModel(
                         enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
                         homeSectionOrder = prefs.home.homeSectionOrder,
                         libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                        discoverRows = prefs.home.discoverRows,
                     ),
                     offlineSectionPrefs = OfflineHomeSectionPrefs(
                         continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
@@ -657,6 +658,7 @@ internal class HomeViewModel(
             is HomeUiEvent.SetSectionVisible -> setSectionVisible(event.type, event.visible)
             is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
+            is HomeUiEvent.RollDiscoverRow -> rollDiscoverRow(event.rowId)
             is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
@@ -926,6 +928,17 @@ internal class HomeViewModel(
      */
     private fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
         launch { prefs.homeDiscovery.setLibrarySectionVisible(libraryId, type, visible) }
+    }
+
+    /**
+     * The dice affordance: re-rolls one RANDOM-sorted discover row via the
+     * refresher's in-place patch (cache invalidation + fresh fetch + section
+     * item swap — no full refresh). The row config is read from the prefs
+     * mirror, so a roll for a since-deleted row is a no-op.
+     */
+    private fun rollDiscoverRow(rowId: String) {
+        val row = sectionPrefs.query.discoverRows.find { it.id == rowId } ?: return
+        refresher.rollDiscoverRow(row)
     }
 
     override fun onCleared() {

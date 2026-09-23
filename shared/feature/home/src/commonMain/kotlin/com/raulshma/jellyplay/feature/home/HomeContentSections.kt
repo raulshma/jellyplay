@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,6 +65,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.bookProgressFraction
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
@@ -150,6 +152,12 @@ internal data class HomeContentState(
     val allDiscoverItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     /**
+     * Row ids of the RANDOM-sorted custom discover rows — the only rows that
+     * render the dice affordance in their header (a non-random sort re-fetch
+     * would return the same order; pointless).
+     */
+    val randomDiscoverRowIds: Set<String> = emptySet(),
+    /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
@@ -203,6 +211,8 @@ internal data class HomeContentCallbacks(
     /** TV-only: reports the D-pad-focused item so the Menu key can open its
      * quick actions */
     val onFocusedMediaItem: (MediaItem) -> Unit = {},
+    /** Dice affordance: re-roll one RANDOM-sorted custom discover row (row id). */
+    val onRollDiscoverRow: (String) -> Unit = {},
 )
 
 /**
@@ -504,7 +514,32 @@ internal fun HomeContentList(
                 // wide-row source split live in one pure, pinned place, so
                 // this `when` is exhaustive and decides nothing. The branches
                 // render exactly what the former if/else chain rendered.
-                when (homeRowChassis(section, offlineContent != null)) {
+                //
+                // Seerr-sourced custom discover rows bypass the chassis
+                // entirely — they carry TMDB cards with request actions, not
+                // server MediaItems.
+                if (section.seerrItems.isNotEmpty()) {
+                    Column(modifier = sectionModifier) {
+                        HomeRowTitle(
+                            title = sectionTitle,
+                            contentPad = state.contentPad,
+                            onLongClick = sectionLongClick,
+                        )
+                        SeerrDiscoverRow(
+                            items = section.seerrItems,
+                            itemWidth = 120.dp,
+                            rowHorizontalPadding = state.contentPad,
+                            spacing = discoverSpacing,
+                            backgroundColor = state.backgroundColor,
+                            homeBackdropEnabled = state.homeBackdropEnabled,
+                            clippingEnabled = state.experimentalCardClippingEnabled,
+                            seerrCardLoadingState = seerrCardLoadingState,
+                            seerrPrefetch = callbacks.seerrPrefetch,
+                            onSeerrItemClick = callbacks.onSeerrItemClick,
+                            onSeerrRequest = callbacks.onSeerrRequest,
+                        )
+                    }
+                } else when (homeRowChassis(section, offlineContent != null)) {
                     is HomeRowChassis.OfflinePoster -> {
                         // Offline-derived section (see buildOfflineHomeSections):
                         // re-resolve the offline originals by id (shared lookup
@@ -683,6 +718,18 @@ internal fun HomeContentList(
                             showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
                             onSectionLongClick = sectionLongClick,
                             onSeeAllClick = seeAllClick,
+                            // Dice affordance: RANDOM-sorted custom discover rows only
+                            // (section id is `discover_<rowId>` — strip the prefix for
+                            // the row-id keyed callback).
+                            onShuffleClick = if (section.type == HomeSectionType.DISCOVER) {
+                                remember(section.id, state.randomDiscoverRowIds, callbacks) {
+                                    val prefix = HomeSectionType.DISCOVER.descriptor.idFor("")
+                                    val rowId = section.id.removePrefix(prefix)
+                                    if (rowId != section.id && rowId in state.randomDiscoverRowIds) {
+                                        { callbacks.onRollDiscoverRow(rowId) }
+                                    } else null
+                                }
+                            } else null,
                             onFocusedItemChange = callbacks.onFocusedMediaItem,
                             // Book progress bars: exact page fractions from the
                             // refresher's TOC-cache decodes, percent fallback for

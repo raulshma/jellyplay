@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
@@ -79,6 +80,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronRight
+import com.composables.icons.tabler.outline.Dice
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -486,6 +488,10 @@ fun HomeMediaRow(
     // no Primary image (common for freshly-added series whose library scan has
     // not yet generated a poster). See [EpisodePosterResolver].
     seriesBackdropResolver: (String) -> String = { "" },
+    // Dice affordance for RANDOM-sorted custom discover rows — renders in the
+    // row header next to the title.
+    onShuffleClick: (() -> Unit)? = null,
+    shuffleAccessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -521,6 +527,8 @@ fun HomeMediaRow(
             onLongClick = onSectionLongClick,
             onSeeAllClick = onSeeAllClick,
             seeAllFocusRequester = seeAllFocusRequester,
+            onShuffleClick = onShuffleClick,
+            accessibilityLabel = shuffleAccessibilityLabel,
         )
         HomeItemRow(
             items = effectiveItems,
@@ -659,6 +667,9 @@ internal fun HomeRowTitle(
     onLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
     seeAllFocusRequester: FocusRequester? = null,
+    /** Dice affordance for RANDOM-sorted custom discover rows: re-rolls the row's items. */
+    onShuffleClick: (() -> Unit)? = null,
+    accessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -696,6 +707,17 @@ internal fun HomeRowTitle(
                 .weight(1f)
                 .semantics { heading() },
         )
+        if (onShuffleClick != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            IconButton(onClick = onShuffleClick) {
+                Icon(
+                    imageVector = Tabler.Outline.Dice,
+                    contentDescription = accessibilityLabel,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
         if (onSeeAllClick != null) {
             Spacer(modifier = Modifier.width(12.dp))
             SeeAllPill(

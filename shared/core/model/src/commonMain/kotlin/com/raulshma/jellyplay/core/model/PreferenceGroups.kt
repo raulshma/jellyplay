@@ -405,6 +405,8 @@ data class AppearanceScreenPreferences(
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
+    /** The user's custom Discover rows (config order). */
+    val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val hiddenCwItemIds: Set<String> = emptySet(),

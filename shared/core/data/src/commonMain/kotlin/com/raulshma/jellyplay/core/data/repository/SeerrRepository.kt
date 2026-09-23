@@ -88,9 +88,17 @@ interface SeerrRepository {
 
     suspend fun getTrending(page: Int = 1): Result<SeerrSearchResponse>
 
-    suspend fun getDiscoverMovies(page: Int = 1, primaryReleaseDateGte: String? = null): Result<SeerrSearchResponse>
+    suspend fun getDiscoverMovies(
+        page: Int = 1,
+        primaryReleaseDateGte: String? = null,
+        params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams? = null,
+    ): Result<SeerrSearchResponse>
 
-    suspend fun getDiscoverTv(page: Int = 1, firstAirDateGte: String? = null): Result<SeerrSearchResponse>
+    suspend fun getDiscoverTv(
+        page: Int = 1,
+        firstAirDateGte: String? = null,
+        params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams? = null,
+    ): Result<SeerrSearchResponse>
 
     suspend fun getRequests(
         take: Int = 10,

@@ -62,11 +62,13 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
@@ -611,6 +613,11 @@ private fun MainHomeContent(
                                 discoverRows = discoverRows,
                                 allDiscoverItems = allDiscoverItems,
                                 recentlyGrabbed = state.recentlyGrabbed,
+                                randomDiscoverRowIds = remember(state.sectionConfig.discoverRows) {
+                                    state.sectionConfig.discoverRows
+                                        .filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN && it.filters.sortBy == SortOption.RANDOM }
+                                        .mapTo(mutableSetOf()) { it.id }
+                                },
                                 statusBanner = implicitOfflineBanner,
                             ),
                             callbacks = HomeContentCallbacks(
@@ -637,6 +644,7 @@ private fun MainHomeContent(
                                 onConfigureLibraries = onConfigureLibraries,
                                 onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
                                 onFocusedMediaItem = remember { { item: MediaItem -> tvFocusedItem = item } },
+                                onRollDiscoverRow = remember(viewModel) { { rowId: String -> viewModel.onEvent(HomeUiEvent.RollDiscoverRow(rowId)) } },
                             ),
                             listState = listState,
                             density = density,

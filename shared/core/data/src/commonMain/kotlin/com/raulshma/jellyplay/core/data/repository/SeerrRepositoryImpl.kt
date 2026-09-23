@@ -330,15 +330,23 @@ class SeerrRepositoryImpl(
             seerrApiClient.getTrending(url, credentials, page)
         }
 
-    override suspend fun getDiscoverMovies(page: Int, primaryReleaseDateGte: String?): Result<SeerrSearchResponse> =
+    override suspend fun getDiscoverMovies(
+        page: Int,
+        primaryReleaseDateGte: String?,
+        params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
+    ): Result<SeerrSearchResponse> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte)
+            seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte, params)
                 .map { response -> backfillMediaType(response, "movie") }
         }
 
-    override suspend fun getDiscoverTv(page: Int, firstAirDateGte: String?): Result<SeerrSearchResponse> =
+    override suspend fun getDiscoverTv(
+        page: Int,
+        firstAirDateGte: String?,
+        params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
+    ): Result<SeerrSearchResponse> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte)
+            seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte, params)
                 .map { response -> backfillMediaType(response, "tv") }
         }
 

@@ -260,29 +260,15 @@ class SeerrApiClientImpl(
 
     override suspend fun getDiscoverMovies(
         baseUrl: String, credentials: SeerrCredentials, page: Int, primaryReleaseDateGte: String?,
-    ): Result<SeerrSearchResponse> {
-        val path = buildString {
-            append("/discover/movies?page=$page")
-            if (primaryReleaseDateGte != null) {
-                append("&primaryReleaseDateGte=")
-                append(java.net.URLEncoder.encode(primaryReleaseDateGte, "UTF-8"))
-            }
-        }
-        return getAndParse(baseUrl, credentials, path)
-    }
+        params: SeerrDiscoverParams?,
+    ): Result<SeerrSearchResponse> =
+        getAndParse(baseUrl, credentials, seerrDiscoverMoviesPath(page, primaryReleaseDateGte, params))
 
     override suspend fun getDiscoverTv(
         baseUrl: String, credentials: SeerrCredentials, page: Int, firstAirDateGte: String?,
-    ): Result<SeerrSearchResponse> {
-        val path = buildString {
-            append("/discover/tv?page=$page")
-            if (firstAirDateGte != null) {
-                append("&firstAirDateGte=")
-                append(java.net.URLEncoder.encode(firstAirDateGte, "UTF-8"))
-            }
-        }
-        return getAndParse(baseUrl, credentials, path)
-    }
+        params: SeerrDiscoverParams?,
+    ): Result<SeerrSearchResponse> =
+        getAndParse(baseUrl, credentials, seerrDiscoverTvPath(page, firstAirDateGte, params))
 
     override suspend fun getRequests(
         baseUrl: String,

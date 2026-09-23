@@ -357,6 +357,7 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         enabledHomeSectionTypes = home.enabledHomeSectionTypes,
         homeSectionOrder = home.homeSectionOrder,
         pinnedHomeSections = home.pinnedHomeSections,
+        discoverRows = home.discoverRows,
         homeLayoutPresets = home.homeLayoutPresets,
         libraryHomeSectionOverrides = home.libraryHomeSectionOverrides,
         hiddenCwItemIds = home.hiddenCwItemIds,

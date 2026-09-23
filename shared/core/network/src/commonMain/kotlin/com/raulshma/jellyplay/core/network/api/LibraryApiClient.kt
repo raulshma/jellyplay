@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.CollectionSummary
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -11,6 +12,7 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
@@ -77,6 +79,27 @@ interface LibraryApiClient {
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Result<SearchResult>
 
+    /**
+     * Fetches one user-configured Discover row's items (JELLYFIN source): the
+     * shared [LibraryFilters] dimensions plus the row's discover-only
+     * dimensions (studios, people, relative date windows), scoped to
+     * [DiscoverRowConfig.libraryIds] — empty scope runs ONE catalog-wide
+     * query, otherwise one query per library merged, de-duplicated by id and
+     * capped at the row's limit. A library that errors is skipped, not fatal
+     * (same degrade policy as pinned sections). Always hits the server: the
+     * fetch-side per-row TTL cache that keeps RANDOM rows stable across the
+     * periodic refresh is consulted only by the home-sections path.
+     */
+    suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
+
+    /**
+     * Drops the home fetcher's memoised items for one discover row (the dice
+     * affordance): the next home fetch re-rolls a RANDOM row instead of
+     * replaying the cached set for the sub-call TTL. Best-effort and
+     * synchronous — a no-op when the row has not been memoised.
+     */
+    fun invalidateDiscoverRowCache(rowId: String)
+
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
 
     /**
@@ -136,6 +159,17 @@ interface LibraryApiClient {
         startIndex: Int = 0,
         limit: Int = 100,
     ): Result<List<Studio>>
+
+    /**
+     * Cast/crew person lookup for the discover-row editor's People picker —
+     * the `/Persons` endpoint narrowed by an optional [searchTerm]. Returns
+     * the id+name pair only: persons have no MediaItem surface (the item
+     * mappers drop them), and the picker needs nothing else.
+     */
+    suspend fun getPeople(
+        searchTerm: String? = null,
+        limit: Int = 50,
+    ): Result<List<PersonRef>>
 
     suspend fun getItemsByStudio(
         studioId: String,

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.library
 
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
@@ -68,6 +69,15 @@ internal data class LibraryItemsQuerySpec(
     val minCommunityRating: Double? = null,
     /** ItemFields serial names; null = server default projection. */
     val fields: List<String>? = null,
+    /** Discover rows only: personIds as raw server ids (cast/crew filter); null = unconstrained. */
+    val personIds: List<String>? = null,
+    /**
+     * Discover rows only: window lower bounds as epoch millis, resolved to the
+     * SDK's LocalDateTime date params by the JVM adapter (minDateLastSaved /
+     * minPremiereDate). null = no window.
+     */
+    val minDateLastSavedMs: Long? = null,
+    val minPremiereDateMs: Long? = null,
 )
 
 /**
@@ -131,6 +141,41 @@ internal fun buildMediaItemsQuerySpec(
         fields = LIST_PROJECTION_FIELDS + "Genres",
     )
 }
+
+/**
+ * The discover-row query: [buildMediaItemsQuerySpec] over the row's shared
+ * [LibraryFilters] dimensions, plus the discover-only dimensions (studios,
+ * people, relative date windows) and the row's own limit. Pure — [nowEpochMs]
+ * param keeps the relative-window arithmetic testable; the JVM adapter
+ * resolves the millis to the SDK's date params.
+ */
+internal fun buildDiscoverRowQuerySpec(
+    row: DiscoverRowConfig,
+    parentId: String?,
+    startIndex: Int,
+    limit: Int,
+    nowEpochMs: Long,
+): LibraryItemsQuerySpec {
+    val base = buildMediaItemsQuerySpec(
+        parentId = parentId,
+        filters = row.filters,
+        studioIds = row.studios.map { it.id }.takeIf { it.isNotEmpty() },
+        startIndex = startIndex,
+        limit = limit,
+        searchTerm = null,
+        kindFilter = ItemKindFilter.TOP_LEVEL,
+    )
+    return base.copy(
+        personIds = row.people.map { it.id }.takeIf { it.isNotEmpty() },
+        minDateLastSavedMs = row.addedWithinDays?.let { nowEpochMs - it * DAY_MS },
+        // Year windows measured in 365-day units — a leap-day skew is
+        // immaterial for a discovery filter.
+        minPremiereDateMs = row.premieredWithinYears?.let { nowEpochMs - it * YEAR_MS },
+    )
+}
+
+private const val DAY_MS = 24L * 60 * 60 * 1000
+private const val YEAR_MS = 365L * DAY_MS
 
 /** The search-hints query (getSearchHints): term + optional kind narrowing + paging. */
 internal fun buildSearchHintsQuerySpec(

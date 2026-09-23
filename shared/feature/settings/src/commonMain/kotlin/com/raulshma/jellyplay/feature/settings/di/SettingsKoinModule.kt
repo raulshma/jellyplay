@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.feature.settings.FactoryResetViewModel
 import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.LicensesViewModel
+import com.raulshma.jellyplay.feature.settings.DiscoverRowsViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
@@ -260,6 +261,13 @@ val settingsModule: Module = module {
             editor = get(),
             mediaRepository = get(),
             playlistRepository = get(),
+        )
+    }
+    viewModel {
+        DiscoverRowsViewModel(
+            homeDiscoveryStore = get(),
+            editor = get(),
+            mediaRepository = get(),
         )
     }
     viewModel {

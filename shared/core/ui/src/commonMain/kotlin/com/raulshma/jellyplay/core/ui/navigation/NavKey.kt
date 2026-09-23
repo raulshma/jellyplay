@@ -283,6 +283,15 @@ sealed class Route : NavKey {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
+    /** Discover Rows manage screen (list / reorder / toggle / templates). */
+    @Serializable data class DiscoverRows(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
+    /** Discover row editor; null [rowId] = new row. */
+    @Serializable data class DiscoverRowEditor(val rowId: String? = null) : Route()
+
     @Serializable data class PlaybackSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)

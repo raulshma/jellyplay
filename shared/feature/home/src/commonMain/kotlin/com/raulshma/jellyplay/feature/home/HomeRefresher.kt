@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
@@ -14,6 +15,8 @@ import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
@@ -22,7 +25,10 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.SeerrRowMedia
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
@@ -43,6 +49,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
@@ -192,6 +199,13 @@ internal class HomeRefresher(
     private var userDataRefreshJob: Job? = null
     // Discover-sections TTL gate (see HomeFreshness.DISCOVER_TTL_MS / fetchDiscoverSections).
     private val discoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
+    // Custom Seerr discover rows: same TTL policy as the fixed sections. The
+    // fetched rows are ALSO memoised in [customSeerrRowsCache] so a gated
+    // fetch (TTL still fresh) can still splice the last-known rows into the
+    // ordered section list — the splice needs values on EVERY main fetch,
+    // unlike the fixed grid which simply skips its state write.
+    private val customDiscoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
+    private var customSeerrRowsCache: List<HomeSection> = emptyList()
     private var lastContinueWatchingIds: Set<String> = emptySet()
     /**
      * Set when a fetch painted sections while the outbox drain was still
@@ -300,6 +314,18 @@ internal class HomeRefresher(
                 val discoverDeferred = if (discoverEnabledProvider()) {
                     async { runCatchingRethrowingCancellation { fetchDiscoverSections(seerrPreferencesProvider()) } }
                 } else null
+                // Custom Seerr discover rows — fetched whenever the DISCOVER
+                // section is enabled and Seerr is connected (independent of
+                // the legacy discover-grid toggle), spliced into the ordered
+                // section list at the DISCOVER block position below.
+                val customSeerrPrefs = seerrPreferencesProvider()
+                val customSeerrDeferred = if (
+                    customSeerrPrefs.enabled &&
+                    HomeSectionType.DISCOVER in sectionPrefs.query.enabledSections &&
+                    sectionPrefs.query.discoverRows.any { it.enabled && it.source == DiscoverRowSource.SEERR }
+                ) {
+                    async { runCatchingRethrowingCancellation { fetchCustomSeerrRows(customSeerrPrefs) } }
+                } else null
                 // Direct *arr "Recently Grabbed" calendar — gated by the
                 // DIRECT_ARR_INTEGRATION flag and the same TTL gate as
                 // discover sections so it never adds extra round-trips on
@@ -331,6 +357,15 @@ internal class HomeRefresher(
                             mergeContinueWatchingAndNextUp = sectionPrefs.mergeContinueWatchingAndNextUp,
                         )
 
+                        // Splice the custom Seerr rows into the DISCOVER block
+                        // (row-config order across BOTH sources is the single
+                        // ordering authority — see spliceDiscoverSeerrRows).
+                        val splicedSections = spliceDiscoverSeerrRows(
+                            sections = finalSections,
+                            seerrRows = customSeerrDeferred?.await()?.getOrNull().orEmpty(),
+                            prefs = sectionPrefs,
+                        )
+
                         // Continue Reading progress bars: books carry no
                         // runTimeTicks, so the video fraction math cannot serve
                         // the row — the shared TOC-cache decode (also the
@@ -342,10 +377,10 @@ internal class HomeRefresher(
                         // fractions land as ONE emission — a two-step write
                         // painted paged-book cards on the percent fallback
                         // until the second update arrived.
-                        val bookFractions = decodeBookProgressFractionsFor(finalSections)
-                        _state.update { it.copy(sections = finalSections, bookProgressFractions = bookFractions) }
+                        val bookFractions = decodeBookProgressFractionsFor(splicedSections)
+                        _state.update { it.copy(sections = splicedSections, bookProgressFractions = bookFractions) }
 
-                        val continueWatching = finalSections
+                        val continueWatching = splicedSections
                             .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                             ?.items ?: emptyList()
                         val currentIds = continueWatching.map { it.id }.toSet()
@@ -681,10 +716,12 @@ internal class HomeRefresher(
 
     /**
      * Resets the discover-sections TTL so the next [fetchDiscoverSections]
-     * actually hits the network. Called on user-initiated refresh.
+     * actually hits the network. Called on user-initiated refresh — the custom
+     * Seerr rows share the treatment (pull-to-refresh re-rolls them too).
      */
     private fun invalidateDiscoverCache() {
         discoverCache.invalidate()
+        customDiscoverCache.invalidate()
     }
 
     /**
@@ -698,6 +735,91 @@ internal class HomeRefresher(
     private fun fetchDiscover() {
         discoverJob?.cancel()
         discoverJob = scope.launch { fetchDiscoverSections(seerrPreferencesProvider()) }
+    }
+
+    /**
+     * The dice affordance for one RANDOM-sorted Jellyfin discover row: drops
+     * the network layer's memoised items for that row, re-fetches fresh from
+     * the server and patches the row's items in place — no full refresh, no
+     * spinner, sibling rows untouched. Failures degrade silently (row keeps
+     * its current items).
+     */
+    fun rollDiscoverRow(row: DiscoverRowConfig) {
+        scope.launch {
+            runCatchingRethrowingCancellation {
+                mediaRepository.invalidateDiscoverRowCache(row.id)
+                val items = mediaRepository.getDiscoverRowItems(row).getOrNull().orEmpty()
+                if (items.isEmpty()) return@runCatchingRethrowingCancellation
+                val rowSectionId = HomeSectionType.DISCOVER.descriptor.idFor(row.id)
+                _state.update { s ->
+                    s.copy(
+                        sections = s.sections.map { section ->
+                            if (section.id == rowSectionId && section.type == HomeSectionType.DISCOVER) {
+                                section.copy(items = items)
+                            } else section
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Fetches the enabled SEERR-sourced custom discover rows (TTL-gated,
+     * last-known-good via [customSeerrRowsCache] — see its KDoc). Failing
+     * rows are dropped (pin policy); an all-out Seerr failure keeps the
+     * previous rows rather than clearing them.
+     */
+    private suspend fun fetchCustomSeerrRows(prefs: SeerrPreferences): List<HomeSection> {
+        if (!prefs.enabled) return emptyList()
+        if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return emptyList()
+        val rows = sectionPrefsProvider().query.discoverRows
+            .filter { it.enabled && it.source == DiscoverRowSource.SEERR }
+        if (rows.isEmpty()) {
+            customSeerrRowsCache = emptyList()
+            return emptyList()
+        }
+        if (customDiscoverCache.shouldFetch(clock.nowEpochMillis())) {
+            val today = clock.today().toString()
+            // coroutineScope, not the VM scope: the fan-out must die with the
+            // calling refresh job (same contract as fetchDiscoverSections).
+            // R is explicitly nullable (an empty/failed row yields null) —
+            // mapConcurrentCatching drops those.
+            val fetched: List<HomeSection?> = coroutineScope {
+                Semaphore(3).mapConcurrentCatching(rows) { row ->
+                    fetchSeerrDiscoverRow(row, today)
+                }
+            }
+            customSeerrRowsCache = fetched.filterNotNull()
+            customDiscoverCache.markFetched(clock.nowEpochMillis())
+        }
+        return customSeerrRowsCache
+    }
+
+    /** One Seerr row: builds the discover query from the row's filters, maps to a request-capable section (or null when empty/failed). */
+    private suspend fun fetchSeerrDiscoverRow(row: DiscoverRowConfig, today: String): HomeSection? {
+        val filters = row.seerrFilters
+        val params = SeerrDiscoverParams(
+            genreIds = filters.genres.map { it.id },
+            yearFrom = filters.yearFrom,
+            yearTo = filters.yearTo,
+            minVoteAverage = filters.minVoteAverage,
+            sortBy = filters.sort.apiValueFor(filters.media),
+            releaseDateGte = if (filters.upcomingOnly) today else null,
+        )
+        val response = when (filters.media) {
+            SeerrRowMedia.MOVIE -> seerrRepository.getDiscoverMovies(params = params)
+            SeerrRowMedia.TV -> seerrRepository.getDiscoverTv(params = params)
+        }.getOrNull() ?: return null
+        val items = response.results.take(row.limit)
+        if (items.isEmpty()) return null
+        return HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),
+            title = row.title,
+            type = HomeSectionType.DISCOVER,
+            items = emptyList(),
+            seerrItems = items,
+        )
     }
 
     /**
@@ -1065,6 +1187,57 @@ internal class HomeRefresher(
 
         discoverCache.markFetched(clock.nowEpochMillis())
         _state.update { it.copy(discoverSections = newSections) }
+    }
+}
+
+/**
+ * Merges the feature-layer Seerr discover rows into the ordered section list
+ * at the DISCOVER block position. The user's row-config order (list position
+ * in [HomeSectionQuery.discoverRows]) is the single ordering authority across
+ * BOTH sources: the block is rebuilt as (Jellyfin rows fetched by the network
+ * layer + these Seerr rows) sorted by row-config index, then re-inserted
+ * where the block sits (or where the section order says it belongs when no
+ * Jellyfin row rendered — e.g. Jellyfin-only rows disabled or empty).
+ *
+ * A disabled DISCOVER section type returns [sections] untouched (the caller
+ * never fetches Seerr rows then, but the guard keeps the helper total).
+ * Pure — unit-testable without the refresher.
+ */
+internal fun spliceDiscoverSeerrRows(
+    sections: List<HomeSection>,
+    seerrRows: List<HomeSection>,
+    prefs: HomeSectionPrefs,
+): List<HomeSection> {
+    if (seerrRows.isEmpty()) return sections
+    if (HomeSectionType.DISCOVER !in prefs.query.enabledSections) return sections
+    val typeOrderIndex = prefs.homeSectionOrder.withIndex().associate { (index, type) -> type to index }
+    val discoverOrderIndex = typeOrderIndex[HomeSectionType.DISCOVER] ?: Int.MAX_VALUE
+    val rowConfigIndex = prefs.query.discoverRows.withIndex().associate { (index, row) ->
+        HomeSectionType.DISCOVER.descriptor.idFor(row.id) to index
+    }
+    fun rowOrderKey(section: HomeSection): Int = rowConfigIndex[section.id] ?: Int.MAX_VALUE
+
+    val existingDiscover = sections.filter { it.type == HomeSectionType.DISCOVER }
+    val mergedBlock = (existingDiscover + seerrRows)
+        .mapIndexed { stableIndex, section -> stableIndex to section }
+        .sortedWith(compareBy({ rowOrderKey(it.second) }, { it.first }))
+        .map { it.second }
+
+    val blockStart = sections.indexOfFirst { it.type == HomeSectionType.DISCOVER }
+        .takeIf { it >= 0 }
+        // No rendered Jellyfin discover row: insert ahead of the first section
+        // that sorts AFTER the DISCOVER type position (unknown types — e.g.
+        // pinned — count as +∞ and stay last).
+        ?: sections.indexOfFirst { section ->
+            (typeOrderIndex[section.type] ?: Int.MAX_VALUE) > discoverOrderIndex
+        }
+        .takeIf { it >= 0 }
+        ?: sections.size
+
+    return buildList {
+        addAll(sections.subList(0, blockStart))
+        addAll(mergedBlock)
+        addAll(sections.subList(blockStart, sections.size).filter { it.type != HomeSectionType.DISCOVER })
     }
 }
 

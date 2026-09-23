@@ -41,6 +41,8 @@ data class SectionConfigState(
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     /** Per-library DISABLED types keyed by library (folder) id. */
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+    /** The user's custom Discover rows (config order) — drives the dice affordance and inline row config. */
+    val discoverRows: List<com.raulshma.jellyplay.core.model.DiscoverRowConfig> = emptyList(),
 )
 
 @Immutable

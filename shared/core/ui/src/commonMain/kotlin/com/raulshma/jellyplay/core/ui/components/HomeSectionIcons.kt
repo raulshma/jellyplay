@@ -7,6 +7,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Book
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Clock
+import com.composables.icons.tabler.outline.Compass
 import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.LayersLinked
@@ -41,4 +42,5 @@ fun homeSectionIcon(type: HomeSectionType): ImageVector = when (type) {
     HomeSectionType.DOWNLOADED -> Tabler.Outline.Download
     HomeSectionType.RECOMMENDATIONS -> Tabler.Outline.Wand
     HomeSectionType.PINNED -> Tabler.Outline.Pinned
+    HomeSectionType.DISCOVER -> Tabler.Outline.Compass
 }

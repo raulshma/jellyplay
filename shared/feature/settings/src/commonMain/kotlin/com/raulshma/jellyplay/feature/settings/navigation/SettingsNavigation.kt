@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.feature.settings.IntegrationsScreen
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
 import com.raulshma.jellyplay.feature.settings.HomeLayoutPresetsScreen
+import com.raulshma.jellyplay.feature.settings.DiscoverRowsScreen
+import com.raulshma.jellyplay.feature.settings.DiscoverRowEditorScreen
 import com.raulshma.jellyplay.feature.settings.LibraryHomeSectionsScreen
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsScreen
 import com.raulshma.jellyplay.feature.settings.PinnedHomeSectionsScreen
@@ -114,6 +116,22 @@ fun EntryProviderScope<NavKey>.settingsSection(
         LibraryHomeSectionsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.DiscoverRows> { entry ->
+        DiscoverRowsScreen(
+            onBack = { navigator.goBack() },
+            onEditRow = { rowId -> navigator.navigate(Route.DiscoverRowEditor(rowId)) },
+            onAddRow = { navigator.navigate(Route.DiscoverRowEditor()) },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.DiscoverRowEditor> { entry ->
+        DiscoverRowEditorScreen(
+            onBack = { navigator.goBack() },
+            rowId = entry.rowId,
         )
     }
 

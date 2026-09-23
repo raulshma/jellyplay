@@ -28,8 +28,16 @@ import kotlin.test.assertTrue
  */
 class MediaRepositorySurfaceTest {
 
-    /** The maximum allowed member count of [MediaRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 42
+    /**
+     * The maximum allowed member count of [MediaRepository] (see class KDoc).
+     * 44 as of the custom Discover rows feature (getDiscoverRowItems +
+     * invalidateDiscoverRowCache — the home-sections family's row-scoped
+     * members; a collaborator would have to re-expose the identity/session
+     * seam the family already owns). 45 adds getPeople — same feature, same
+     * seam reasoning: the People picker rides the discover editor, which
+     * already reaches the catalog through this repository.
+     */
+    private val maxInterfaceMembers = 45
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

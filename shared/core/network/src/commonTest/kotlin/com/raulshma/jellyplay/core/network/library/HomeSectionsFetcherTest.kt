@@ -103,6 +103,11 @@ class HomeSectionsFetcherTest {
 
         override suspend fun getItemsByStudio(studioId: String, mediaTypes: List<MediaType>?, startIndex: Int, limit: Int): Result<SearchResult> =
             throw UnsupportedOperationException()
+
+        val discoverRowResults = ArrayDeque<Result<List<MediaItem>>>()
+
+        override suspend fun getDiscoverRowItems(row: com.raulshma.jellyplay.core.model.DiscoverRowConfig): Result<List<MediaItem>> =
+            resolve(discoverRowResults, "discover:${row.id}:${row.limit}") { emptyList() }
     }
 
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)

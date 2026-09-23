@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -50,6 +52,7 @@ internal interface HomeSectionSources {
     suspend fun getFavorites(mediaTypes: List<MediaType>?, limit: Int, startIndex: Int): Result<SearchResult>
     suspend fun getItemsByGenre(genreId: String, mediaTypes: List<MediaType>?, startIndex: Int, limit: Int): Result<SearchResult>
     suspend fun getItemsByStudio(studioId: String, mediaTypes: List<MediaType>?, startIndex: Int, limit: Int): Result<SearchResult>
+    suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
 }
 
 /**
@@ -109,8 +112,16 @@ internal class HomeSectionsFetcher(
     private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
     /**
-     * Drops both sub-call caches so the next home fetch re-hits the server for
-     * the latest/similar rows. The rows carry per-item UserData (played badge,
+     * Custom discover rows. Longer TTL than the latest/similar caches
+     * ([HomeFreshness.DISCOVER_ROW_TTL_MS]): a RANDOM-sorted row must stay
+     * stable across the 60s periodic refresh (no per-minute reshuffle); the
+     * dice affordance ([invalidateDiscoverRow]) and a forced fetch re-roll.
+     */
+    private val homeDiscoverRowCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.DISCOVER_ROW_TTL_MS)
+
+    /**
+     * Drops both sub-call caches so the next home fetch re-hits the server for the
+     * latest/similar rows. The rows carry per-item UserData (played badge,
      * favorite heart, resume bar), so a watched/favorite/progress write must
      * not let this TTL layer serve the pre-write rows — reached from the data
      * layer through [com.raulshma.jellyplay.core.network.api.LibraryApiClient.invalidateHomeSubcallCaches].
@@ -118,6 +129,18 @@ internal class HomeSectionsFetcher(
     fun invalidateCaches() {
         homeLatestMediaCache.clear()
         homeSimilarCache.clear()
+        homeDiscoverRowCache.clear()
+    }
+
+    /**
+     * Drops ONE discover row's memoised items (dice affordance): the next home
+     * fetch re-queries that row — re-rolling a RANDOM sort — while sibling
+     * rows keep their cached items. Identity-scoped like every entry, so the
+     * evict can never touch another user's row.
+     */
+    fun invalidateDiscoverRow(rowId: String) {
+        val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
+        homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
     }
 
     suspend fun fetch(query: HomeSectionQuery, force: Boolean = false): HomeSectionsResult = coroutineScope {
@@ -157,6 +180,18 @@ internal class HomeSectionsFetcher(
         // sections so they add no extra wall-clock latency to home loading.
         // Fetched ALWAYS — regardless of enabledSections.
         val pinnedDeferred = async { fetchPinnedSections(query.pinnedSections) }
+
+        // Custom discover rows (JELLYFIN sources only — Seerr rows are fetched
+        // by the feature layer and spliced in after ordering). Concurrent with
+        // everything else; a disabled DISCOVER section or zero enabled
+        // Jellyfin rows resolves locally with no port calls.
+        val discoverDeferred = async {
+            if (HomeSectionType.DISCOVER in enabledSections) {
+                fetchDiscoverRows(query.discoverRows, force = force, identity = identity)
+            } else {
+                emptyList()
+            }
+        }
 
         val continueWatchingResult = continueWatchingDeferred.await()
         val continueReadingResult = continueReadingDeferred.await()
@@ -217,12 +252,48 @@ internal class HomeSectionsFetcher(
                 recommendationsResult = recommendationsResult,
                 suggestions = suggestions,
                 pinnedSections = pinnedDeferred.await(),
+                discoverSections = discoverDeferred.await(),
             ),
         )
         if (output.result.sections.isEmpty() && output.firstError != null) {
             throw output.firstError!!
         }
         output.result
+    }
+
+    /**
+     * Fetches the enabled JELLYFIN discover rows: semaphore-bounded at 3,
+     * memoised per row in [homeDiscoverRowCache] (RANDOM stability — see its
+     * KDoc), degraded per row (a failing row is dropped, never fatal — the
+     * pinned-section policy). Emits sections in row-config order; the
+     * assembler/OrderHomeSectionsUseCase keep them in that relative order
+     * within the DISCOVER block.
+     */
+    private suspend fun fetchDiscoverRows(
+        rows: List<DiscoverRowConfig>,
+        force: Boolean,
+        identity: CacheIdentity,
+    ): List<HomeSection> {
+        val jellyfinRows = rows.filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN }
+        if (jellyfinRows.isEmpty()) return emptyList()
+        // R is explicitly nullable: the transform legitimately yields null for
+        // an empty/failed row, and mapConcurrentCatching drops those.
+        val sections: List<HomeSection?> = Semaphore(3).mapConcurrentCatching(jellyfinRows) { row ->
+            cachedHomeSubCall(homeDiscoverRowCache, "discover_${row.id}", row.limit, force, identity) {
+                sources.getDiscoverRowItems(row)
+            }
+                .getOrNull()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { items ->
+                    HomeSection(
+                        id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),
+                        title = row.title,
+                        type = HomeSectionType.DISCOVER,
+                        items = items,
+                    )
+                }
+        }
+        return sections.filterNotNull()
     }
 
     /**

@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -25,6 +26,7 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
@@ -375,6 +377,13 @@ class MediaRepositoryImpl internal constructor(
         }
     }
 
+    override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> =
+        apiClient.getDiscoverRowItems(row)
+
+    override fun invalidateDiscoverRowCache(rowId: String) {
+        apiClient.invalidateDiscoverRowCache(rowId)
+    }
+
     override suspend fun getCachedHomeSections(
         query: HomeSectionQuery,
     ): HomeSectionsResult? {
@@ -643,6 +652,11 @@ class MediaRepositoryImpl internal constructor(
         studiosCache.getOrFetch({ homeSession.cacheIdentity() }, "studios_${parentId ?: "root"}") {
             apiClient.getStudios(parentId)
         }
+
+    // Uncached by design: the People picker is a live search-as-you-type
+    // surface, so a TTL would only serve stale keystrokes.
+    override suspend fun getPeople(searchTerm: String?, limit: Int): Result<List<PersonRef>> =
+        apiClient.getPeople(searchTerm, limit)
 
     override suspend fun getItemsByStudio(
         studioId: String,

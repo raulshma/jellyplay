@@ -161,6 +161,14 @@ private val homeSectionDescriptors: Map<HomeSectionType, HomeSectionDescriptor> 
                 isConfigurable = false,
                 dynamicIdPrefix = "pinned_",
             )
+            HomeSectionType.DISCOVER -> HomeSectionDescriptor(
+                type = type,
+                id = null,
+                displayName = "Discover",
+                description = "Custom Jellyfin and Seerr discovery rows",
+                isConfigurable = true,
+                dynamicIdPrefix = "discover_",
+            )
         }
     }
 

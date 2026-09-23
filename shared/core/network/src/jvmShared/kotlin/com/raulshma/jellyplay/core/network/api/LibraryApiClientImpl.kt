@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
@@ -11,12 +12,14 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.library.ChildItemImageRow
 import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
@@ -28,6 +31,7 @@ import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
 import com.raulshma.jellyplay.core.network.library.buildChildItemImagesQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildDiscoverRowQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildItemsByGenreQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildItemsByStudioQuerySpec
@@ -48,6 +52,7 @@ import org.jellyfin.sdk.model.api.UpdatePlaylistDto
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
+import kotlinx.coroutines.sync.Semaphore
 import java.util.UUID
 
 /**
@@ -75,6 +80,11 @@ private val SEARCH_SUGGESTIONS_KINDS = SEARCH_SUGGESTIONS_ITEM_TYPES.map { token
 private val SEARCH_SUGGESTIONS_PROJECTION = SEARCH_SUGGESTIONS_FIELDS.map { token ->
     ItemFields.entries.firstOrNull { it.serialName == token }
         ?: error("ItemFields has no serial name '$token' — SDK drift vs the search-suggestions projection")
+}
+
+/** Discover-row window bound (epoch millis) → the SDK getItems date param type (java.time.LocalDateTime on the JVM). */
+private fun Long?.toSdkLocalDateTime(): java.time.LocalDateTime? = this?.let {
+    java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault())
 }
 
 /** ImageType resolved by serial name once — [ImageType.fromNameOrNull] linear-scans per call and Coil binds run per item. Keys lowercased: [fromNameOrNull] matches serial names case-insensitively, so callers passing server-JSON casing ("primary") must resolve too. */
@@ -151,6 +161,54 @@ class LibraryApiClientImpl(
 
     override fun invalidateHomeSubcallCaches() {
         homeSectionsFetcher.invalidateCaches()
+    }
+
+    override fun invalidateDiscoverRowCache(rowId: String) {
+        homeSectionsFetcher.invalidateDiscoverRow(rowId)
+    }
+
+    override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> = engine.withApi { api ->
+        // Query assembly (all shared + discover-only dimensions) lives in the
+        // commonMain [buildDiscoverRowQuerySpec]; this adapter resolves the
+        // spec against the SDK enums and the epoch-millis window bounds
+        // against java.time — same split as getMediaItems/getNextUp.
+        val nowEpochMs = System.currentTimeMillis()
+        // Empty scope = ONE catalog-wide query (null parentId); otherwise one
+        // query per library, merged in library order. mapConcurrentCatching
+        // drops a failing/deleted library instead of failing the whole row —
+        // the pinned-section degrade policy.
+        val parentIds: List<String?> = row.libraryIds.ifEmpty { listOf(null) }
+        val perLibrary = Semaphore(3).mapConcurrentCatching(parentIds) { parentId ->
+            val spec = buildDiscoverRowQuerySpec(
+                row = row,
+                parentId = parentId,
+                startIndex = 0,
+                limit = row.limit,
+                nowEpochMs = nowEpochMs,
+            )
+            val response = api.itemsApi.getItems(
+                parentId = spec.parentId?.toUUID(),
+                includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+                excludeItemTypes = spec.excludeKinds.toBaseItemKinds(),
+                genres = spec.genres,
+                years = spec.years,
+                studioIds = spec.studioIds?.map { it.toUUID() },
+                tags = spec.tags,
+                sortBy = spec.sortBy.toItemSortBys(),
+                sortOrder = spec.sortOrderDescending.toSortOrderList(),
+                startIndex = spec.startIndex,
+                limit = spec.limit,
+                recursive = spec.recursive,
+                filters = spec.itemFilters.toItemFilters(),
+                minCommunityRating = spec.minCommunityRating,
+                personIds = spec.personIds?.map { it.toUUID() },
+                minDateLastSaved = spec.minDateLastSavedMs.toSdkLocalDateTime(),
+                minPremiereDate = spec.minPremiereDateMs.toSdkLocalDateTime(),
+                fields = spec.fields.toItemFieldsList(),
+            ).content
+            (response.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
+        }
+        perLibrary.flatten().distinctBy { it.id }.take(row.limit)
     }
 
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
@@ -459,6 +517,21 @@ class LibraryApiClientImpl(
         ).content
         response.items.map { item ->
             Studio(id = item.id.toString(), name = item.name ?: "")
+        }
+    }
+
+    override suspend fun getPeople(
+        searchTerm: String?,
+        limit: Int,
+    ): Result<List<PersonRef>> = engine.withApi { api ->
+        val userId = engine.currentUserId()?.toUUID()
+        val response = api.personsApi.getPersons(
+            limit = limit,
+            searchTerm = searchTerm?.takeIf { it.isNotBlank() },
+            userId = userId,
+        ).content
+        response.items.map { item ->
+            PersonRef(id = item.id.toString(), name = item.name ?: "")
         }
     }
 

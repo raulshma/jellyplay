@@ -151,6 +151,7 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,
+                HomeSectionType.DISCOVER,
             ),
             slice().homeSectionOrder,
         )
@@ -174,6 +175,7 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.NEXT_UP,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
+                HomeSectionType.DISCOVER,
             ),
             slice().homeSectionOrder,
         )
@@ -457,6 +459,7 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,
+                HomeSectionType.DISCOVER,
             ),
             aSlice.homeSectionOrder,
         )

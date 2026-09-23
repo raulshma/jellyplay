@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.seerr
 
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -123,20 +124,84 @@ internal fun seerrRequestsPath(
     }
 }
 
-/** `getDiscoverMovies`' path: `page` always, `primaryReleaseDateGte` URLEncoder-encoded when present. */
-internal fun seerrDiscoverMoviesPath(page: Int, primaryReleaseDateGte: String?): String = buildString {
+/**
+ * `getDiscoverMovies`' path: `page` always; `primaryReleaseDateGte`
+ * URLEncoder-encoded when present; custom-row [params] (genre / vote floor /
+ * sort / year window folded into date bounds) appended after. Param names are
+ * Seerr/Overseerr's camelCase discover vocabulary.
+ */
+internal fun seerrDiscoverMoviesPath(
+    page: Int,
+    primaryReleaseDateGte: String?,
+    params: SeerrDiscoverParams? = null,
+): String = buildString {
     append("/discover/movies?page=$page")
     if (primaryReleaseDateGte != null) {
         append("&primaryReleaseDateGte=")
         append(urlFormEncode(primaryReleaseDateGte))
     }
+    appendSeerrDiscoverParams(
+        dateGteName = "primaryReleaseDateGte",
+        dateLteName = "primaryReleaseDateLte",
+        explicitGte = primaryReleaseDateGte,
+        params = params,
+    )
 }
 
-/** `getDiscoverTv`' path: `page` always, `firstAirDateGte` URLEncoder-encoded when present. */
-internal fun seerrDiscoverTvPath(page: Int, firstAirDateGte: String?): String = buildString {
+/** `getDiscoverTv`' path: the TV twin of [seerrDiscoverMoviesPath] (firstAirDate bounds). */
+internal fun seerrDiscoverTvPath(
+    page: Int,
+    firstAirDateGte: String?,
+    params: SeerrDiscoverParams? = null,
+): String = buildString {
     append("/discover/tv?page=$page")
     if (firstAirDateGte != null) {
         append("&firstAirDateGte=")
         append(urlFormEncode(firstAirDateGte))
+    }
+    appendSeerrDiscoverParams(
+        dateGteName = "firstAirDateGte",
+        dateLteName = "firstAirDateLte",
+        explicitGte = firstAirDateGte,
+        params = params,
+    )
+}
+
+/**
+ * Appends the custom-row discover params common to the movie/TV endpoints.
+ * The year window folds into the SAME date-bound params Seerr already
+ * understands (ISO yyyy-MM-dd compares lexicographically): the effective gte
+ * is the LATER of the explicit bound and Jan 1 of [SeerrDiscoverParams.yearFrom];
+ * the effective lte the EARLIER of the explicit bound and Dec 31 of yearTo.
+ */
+private fun StringBuilder.appendSeerrDiscoverParams(
+    dateGteName: String,
+    dateLteName: String,
+    explicitGte: String?,
+    params: SeerrDiscoverParams?,
+) {
+    if (params == null) return
+    val yearFromBound = params.yearFrom?.let { "$it-01-01" }
+    val yearToBounds = params.yearTo?.let { "$it-12-31" }
+    val effectiveGte = listOfNotNull(explicitGte ?: params.releaseDateGte, yearFromBound).maxOrNull()
+    val effectiveLte = listOfNotNull(params.releaseDateLte, yearToBounds).minOrNull()
+    // The explicit gte (if any) was already appended by the caller — only
+    // append when the fold changed it.
+    if (effectiveGte != null && effectiveGte != explicitGte) {
+        append('&').append(dateGteName).append('=').append(urlFormEncode(effectiveGte))
+    }
+    if (effectiveLte != null) {
+        append('&').append(dateLteName).append('=').append(urlFormEncode(effectiveLte))
+    }
+    if (params.genreIds.isNotEmpty()) {
+        append("&genre=")
+        append(urlFormEncode(params.genreIds.joinToString(",")))
+    }
+    if (params.minVoteAverage > 0f) {
+        append("&voteAverageGte=").append(params.minVoteAverage)
+    }
+    params.sortBy?.let {
+        append("&sortBy=")
+        append(urlFormEncode(it))
     }
 }

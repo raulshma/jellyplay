@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -10,6 +11,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
@@ -26,6 +28,22 @@ interface MediaRepository {
         query: HomeSectionQuery = HomeSectionQuery(),
         force: Boolean = false,
     ): Result<HomeSectionsResult>
+
+    /**
+     * Fetches one custom discover row's items fresh from the server (dice
+     * affordance + editor preview) — bypasses every cache by construction
+     * (direct client call, not the home-sections path). Pair with
+     * [invalidateDiscoverRowCache] before fetching when the roll must survive
+     * the next periodic home refresh.
+     */
+    suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
+
+    /**
+     * Drops the network layer's memoised items for one discover row so the
+     * next home-sections fetch re-queries it (re-rolling a RANDOM row) instead
+     * of replaying the cached set for the sub-call TTL.
+     */
+    fun invalidateDiscoverRowCache(rowId: String)
 
     /**
      * Returns the last persisted home-sections snapshot for the current
@@ -138,6 +156,14 @@ interface MediaRepository {
     suspend fun getGenres(parentId: String? = null, force: Boolean = false): Result<List<Genre>>
 
     suspend fun getStudios(parentId: String? = null): Result<List<Studio>>
+
+    /**
+     * Cast/crew person lookup for the discover-row editor's People picker,
+     * narrowed server-side by [searchTerm]. Deliberately returns the bare
+     * id+name pair: persons have no playable detail surface in the app, so a
+     * MediaItem projection would be dead weight.
+     */
+    suspend fun getPeople(searchTerm: String? = null, limit: Int = 50): Result<List<PersonRef>>
 
     suspend fun getItemsByStudio(
         studioId: String,
