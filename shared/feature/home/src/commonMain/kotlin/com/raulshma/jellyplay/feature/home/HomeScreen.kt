@@ -618,6 +618,9 @@ private fun MainHomeContent(
                                         .filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN && it.filters.sortBy == SortOption.RANDOM }
                                         .mapTo(mutableSetOf()) { it.id }
                                 },
+                                // The dice-roll in-flight mirror: tumbles the
+                                // matching row's dice icon while the re-fetch runs.
+                                rollingDiscoverRowIds = state.rollingDiscoverRowIds,
                                 statusBanner = implicitOfflineBanner,
                             ),
                             callbacks = HomeContentCallbacks(

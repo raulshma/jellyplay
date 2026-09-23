@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.network.failover.ServerFailoverInterceptor
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
+import com.raulshma.jellyplay.core.network.interceptor.RandomSortCacheBusterInterceptor
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
@@ -281,6 +282,11 @@ internal fun baseOkHttpClient(
         .readTimeout(initialTimeout.readSec, TimeUnit.SECONDS)
         .writeTimeout(initialTimeout.writeSec, TimeUnit.SECONDS)
         .cache(Cache(cacheDir, cacheSize))
+        // RANDOM-sorted /Items queries (dice re-roll, Random library sort) must
+        // never be served from the response cache above: the query is
+        // byte-identical every time and the shuffle happens server-side, so a
+        // cache hit replays the previous shuffle — see the interceptor's KDoc.
+        .addInterceptor(RandomSortCacheBusterInterceptor())
         .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
         .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
         .retryOnConnectionFailure(true)

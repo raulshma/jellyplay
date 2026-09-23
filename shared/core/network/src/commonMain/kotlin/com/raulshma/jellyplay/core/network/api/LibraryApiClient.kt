@@ -100,6 +100,15 @@ interface LibraryApiClient {
      */
     fun invalidateDiscoverRowCache(rowId: String)
 
+    /**
+     * Memoises one discover row's freshly fetched items in the home fetcher's
+     * per-row sub-call cache (the dice roll's commit step): the next home
+     * fetch serves the rolled items instead of re-querying the server, so a
+     * roll survives the periodic refresh. No-op on an empty list; the key
+     * derivation matches the fetch path's.
+     */
+    fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>)
+
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
 
     /**

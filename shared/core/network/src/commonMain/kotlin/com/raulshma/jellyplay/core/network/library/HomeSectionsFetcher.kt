@@ -143,6 +143,27 @@ internal class HomeSectionsFetcher(
         homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
     }
 
+    /**
+     * The discover-row sub-call cache key (minus identity scoping, which
+     * [TtlCache] applies): the fetch path composes it as
+     * `"<keyPart>_<limit>"` inside [cachedHomeSubCall]; [seedDiscoverRow]
+     * resolves the same string directly so the two writers can't drift.
+     */
+    private fun discoverRowCacheKey(rowId: String, limit: Int): String = "discover_${rowId}_$limit"
+
+    /**
+     * Memoises a discover row's freshly fetched items as if the fetcher had
+     * fetched them (the dice roll's commit): the next home fetch serves the
+     * rolled items from this cache instead of re-querying the server, so the
+     * row the user sees survives the next periodic refresh rather than
+     * reverting to the pre-roll payload (or silently re-rolling again).
+     */
+    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
+        homeDiscoverRowCache.put(identity, discoverRowCacheKey(row.id, row.limit), items)
+    }
+
     suspend fun fetch(query: HomeSectionQuery, force: Boolean = false): HomeSectionsResult = coroutineScope {
         // Only enabledSections earns a local (gates every deferred launch
         // below); everything else the query bundles is read at its single
@@ -320,7 +341,6 @@ internal class HomeSectionsFetcher(
             result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
         }
     }
-
     /**
      * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
      * consults [homeLatestMediaCache] first. Only the home path uses this —

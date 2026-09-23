@@ -1,5 +1,10 @@
 package com.raulshma.jellyplay.feature.home
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +33,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +45,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -62,6 +69,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
 import com.raulshma.jellyplay.core.ui.components.mouseScroll
+import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -489,8 +497,10 @@ fun HomeMediaRow(
     // not yet generated a poster). See [EpisodePosterResolver].
     seriesBackdropResolver: (String) -> String = { "" },
     // Dice affordance for RANDOM-sorted custom discover rows — renders in the
-    // row header next to the title.
+    // row header next to the title. While the re-fetch is in flight the icon
+    // tumbles and further taps are ignored.
     onShuffleClick: (() -> Unit)? = null,
+    shuffleInProgress: Boolean = false,
     shuffleAccessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
@@ -528,6 +538,7 @@ fun HomeMediaRow(
             onSeeAllClick = onSeeAllClick,
             seeAllFocusRequester = seeAllFocusRequester,
             onShuffleClick = onShuffleClick,
+            shuffleInProgress = shuffleInProgress,
             accessibilityLabel = shuffleAccessibilityLabel,
         )
         HomeItemRow(
@@ -669,6 +680,8 @@ internal fun HomeRowTitle(
     seeAllFocusRequester: FocusRequester? = null,
     /** Dice affordance for RANDOM-sorted custom discover rows: re-rolls the row's items. */
     onShuffleClick: (() -> Unit)? = null,
+    /** True while that re-roll's fetch is in flight — tumbles the dice icon and absorbs taps. */
+    shuffleInProgress: Boolean = false,
     accessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
@@ -709,11 +722,32 @@ internal fun HomeRowTitle(
         )
         if (onShuffleClick != null) {
             Spacer(modifier = Modifier.width(12.dp))
-            IconButton(onClick = onShuffleClick) {
+            // The dice tumbles while the re-fetch runs — the only affordance
+            // feedback a roll gets (no spinner, content stays). Reduced-motion
+            // users keep the static icon; the tap guard below still applies.
+            val diceRotation = if (shuffleInProgress && !isReducedMotion()) {
+                val transition = rememberInfiniteTransition(label = "diceRoll")
+                transition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 900, easing = LinearEasing),
+                    ),
+                    label = "diceTumble",
+                ).value
+            } else {
+                0f
+            }
+            IconButton(
+                onClick = onShuffleClick,
+                enabled = !shuffleInProgress,
+            ) {
                 Icon(
                     imageVector = Tabler.Outline.Dice,
                     contentDescription = accessibilityLabel,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(diceRotation),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }

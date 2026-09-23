@@ -75,6 +75,13 @@ data class HomeUiState(
     val error: String? = null,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
+    /**
+     * Custom discover rows with a dice roll in flight (row ids) — drives the
+     * dice icon's tumbling animation on the matching row header. Mirrored
+     * from [HomeRefreshState.rollingDiscoverRowIds] (the refresher's roll
+     * choreography owns it).
+     */
+    val rollingDiscoverRowIds: Set<String> = emptySet(),
     val homeMode: HomeMode = HomeMode.VIDEO,
     /** The appearance/theme quintet — see [AppearanceUiState]. */
     val appearance: AppearanceUiState = AppearanceUiState(),

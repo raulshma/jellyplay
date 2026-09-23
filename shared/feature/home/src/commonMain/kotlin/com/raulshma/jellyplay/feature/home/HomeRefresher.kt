@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -40,6 +41,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,9 +53,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
+import kotlin.time.TimeSource
 
 /**
  * Deep module: the Home screen's entire refresh policy behind one small
@@ -144,7 +149,7 @@ internal class HomeRefresher(
     // All cadence/TTL constants live in core:model's HomeFreshness — the one
     // seam for the home freshness policy shared with the cache layers below.
 
-    private companion object {
+    internal companion object {
         /**
          * Hard deadline on the offline→online fetch. There is no withTimeout
          * anywhere down the getHomeSections / fetchDiscoverSections /
@@ -161,6 +166,19 @@ internal class HomeRefresher(
          * is capped and the finally clears the loader on every exit path.
          */
         private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
+
+        /** Logcat/console tag for the dice roll's degraded-outcome logs. */
+        private const val TAG = "HomeRefresher"
+
+        /**
+         * Minimum time the rolling flag stays up per roll — the dice spin's
+         * display floor. A sub-100ms local-server roll must still show
+         * perceptible feedback or the affordance reads as dead.
+         */
+        private const val ROLL_MIN_SPIN_MS = 700L
+
+        /** Test-visible mirror of [ROLL_MIN_SPIN_MS] (private const can't be read from tests). */
+        internal const val ROLL_MIN_SPIN_FOR_TEST = ROLL_MIN_SPIN_MS
     }
 
     private val _state = MutableStateFlow(HomeRefreshState())
@@ -739,27 +757,92 @@ internal class HomeRefresher(
 
     /**
      * The dice affordance for one RANDOM-sorted Jellyfin discover row: drops
-     * the network layer's memoised items for that row, re-fetches fresh from
-     * the server and patches the row's items in place — no full refresh, no
-     * spinner, sibling rows untouched. Failures degrade silently (row keeps
-     * its current items).
+     * the cached payloads that still carry the row's pre-roll items, re-fetches
+     * fresh from the server, commits the rolled set back into the network
+     * layer's per-row cache (so the next periodic refresh serves it instead of
+     * reverting or re-rolling) and patches the row's items in place — no full
+     * refresh, no spinner, sibling rows untouched. Failures degrade silently
+     * (row keeps its current items; the rolling flag still clears). One
+     * in-flight roll per row — a tap while that row's dice is already
+     * animating ([HomeRefreshState.rollingDiscoverRowIds]) is ignored.
      */
-    fun rollDiscoverRow(row: DiscoverRowConfig) {
+    fun rollDiscoverRow(row: DiscoverRowConfig, onResult: (Boolean) -> Unit = {}) {
+        // Check-and-set inside _state.update's CAS loop so a concurrent state
+        // writer can't slip a second roll for the same row between the check
+        // and the set (double fetch + a patch racing its own finally-clear).
+        var accepted = false
+        _state.update { state ->
+            if (row.id in state.rollingDiscoverRowIds) {
+                state
+            } else {
+                accepted = true
+                state.copy(rollingDiscoverRowIds = state.rollingDiscoverRowIds + row.id)
+            }
+        }
+        if (!accepted) return
+        val rollStartedAt = TimeSource.Monotonic.markNow()
+        Log.d(TAG, "roll ${row.id}: accepted, flag up")
         scope.launch {
-            runCatchingRethrowingCancellation {
-                mediaRepository.invalidateDiscoverRowCache(row.id)
-                val items = mediaRepository.getDiscoverRowItems(row).getOrNull().orEmpty()
-                if (items.isEmpty()) return@runCatchingRethrowingCancellation
-                val rowSectionId = HomeSectionType.DISCOVER.descriptor.idFor(row.id)
-                _state.update { s ->
-                    s.copy(
-                        sections = s.sections.map { section ->
-                            if (section.id == rowSectionId && section.type == HomeSectionType.DISCOVER) {
-                                section.copy(items = items)
-                            } else section
-                        },
+            // The roll's outcome for the caller: true when the row's items
+            // were swapped, false when the fetch failed/returned nothing
+            // (the row keeps its current items — reported, not silent).
+            // Declared outside try so the finally's diagnostic log can read it.
+            var rolled = false
+            try {
+                runCatchingRethrowingCancellation {
+                    // Invalidate FIRST: the network row memo AND the repo's
+                    // assembled home payload both still hold the pre-roll items —
+                    // the latter would replay them on the next TTL-served
+                    // periodic read and revert the on-screen roll.
+                    mediaRepository.invalidateDiscoverRowCache(row.id)
+                    val result = mediaRepository.getDiscoverRowItems(row)
+                    val items = result.getOrNull().orEmpty()
+                    if (items.isEmpty()) {
+                        // A silent skip here reads as a dead button on the
+                        // screen — log the cause so the failure is diagnosable.
+                        result.exceptionOrNull()?.let { e ->
+                            Log.w(TAG, "Discover row roll failed for ${row.id}: ${e.message}", e)
+                        }
+                        return@runCatchingRethrowingCancellation
+                    }
+                    rolled = true
+                    // Commit the rolled set where the next home fetch reads it,
+                    // so the periodic refresh replays THIS roll rather than
+                    // re-querying the server (yet another reshuffle).
+                    mediaRepository.seedDiscoverRowCache(row, items)
+                    Log.d(
+                        TAG,
+                        "roll ${row.id}: patched ${items.size} items, first=${items.firstOrNull()?.id} " +
+                            "(on-screen first=${_state.value.sections
+                                .firstOrNull { it.id == HomeSectionType.DISCOVER.descriptor.idFor(row.id) }
+                                ?.items?.firstOrNull()?.id})",
                     )
+                    val rowSectionId = HomeSectionType.DISCOVER.descriptor.idFor(row.id)
+                    _state.update { s ->
+                        s.copy(
+                            sections = s.sections.map { section ->
+                                if (section.id == rowSectionId && section.type == HomeSectionType.DISCOVER) {
+                                    section.copy(items = items)
+                                } else section
+                            },
+                        )
+                    }
                 }
+                onResult(rolled)
+            } finally {
+                // Keep the flag up for a minimum window: a fast local server
+                // answers in tens of milliseconds, and a spin that flashes for
+                // one frame reads as no feedback at all (the on-device report
+                // behind the dice feature). NonCancellable so a cancelled roll
+                // (stop()/user switch) still clears the flag — a stuck flag
+                // would disable the dice forever.
+                withContext(NonCancellable) {
+                    val remainingMs = ROLL_MIN_SPIN_MS - rollStartedAt.elapsedNow().inWholeMilliseconds
+                    Log.d(TAG, "roll ${row.id}: done in ${ROLL_MIN_SPIN_MS - remainingMs}ms, rolled=$rolled, holding flag ${remainingMs}ms more")
+                    if (remainingMs > 0) delay(remainingMs)
+                }
+                Log.d(TAG, "roll ${row.id}: flag cleared")
+                _state.update { it.copy(rollingDiscoverRowIds = it.rollingDiscoverRowIds - row.id) }
             }
         }
     }
@@ -1296,6 +1379,12 @@ internal data class HomeRefreshState(
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     /** Direct *arr "Recently Grabbed / Coming Soon" calendar row. */
     val recentlyGrabbed: List<SeerrSearchItem> = emptyList(),
+    /**
+     * Custom discover rows with a dice roll in flight (row ids) — drives the
+     * dice icon's tumbling animation and the one-roll-per-row tap guard.
+     * Cleared on completion AND failure (the finally in [rollDiscoverRow]).
+     */
+    val rollingDiscoverRowIds: Set<String> = emptySet(),
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
 ) {

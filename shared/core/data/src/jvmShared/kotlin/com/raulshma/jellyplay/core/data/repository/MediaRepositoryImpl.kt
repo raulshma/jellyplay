@@ -382,6 +382,21 @@ class MediaRepositoryImpl internal constructor(
 
     override fun invalidateDiscoverRowCache(rowId: String) {
         apiClient.invalidateDiscoverRowCache(rowId)
+        // The assembled home payload still carries the row's pre-roll items;
+        // without this drop the next TTL-served periodic read would replay
+        // them and revert the on-screen roll. maxSize is 1, so the clear is
+        // exactly the one cached payload — nothing else pays for the roll.
+        homeSectionsCache.clear()
+    }
+
+    override fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        apiClient.seedDiscoverRowCache(row, items)
+        // Drop the assembled payload again at COMMIT time: a periodic fetch
+        // that raced the roll (started before the pre-fetch invalidate, wrote
+        // after it) would have re-cached the pre-roll sections, and the next
+        // TTL-served read would still revert the roll. Cheap (maxSize 1).
+        homeSectionsCache.clear()
     }
 
     override suspend fun getCachedHomeSections(

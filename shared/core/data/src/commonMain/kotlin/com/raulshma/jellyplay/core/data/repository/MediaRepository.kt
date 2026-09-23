@@ -41,9 +41,24 @@ interface MediaRepository {
     /**
      * Drops the network layer's memoised items for one discover row so the
      * next home-sections fetch re-queries it (re-rolling a RANDOM row) instead
-     * of replaying the cached set for the sub-call TTL.
+     * of replaying the cached set for the sub-call TTL. Also drops the
+     * repo-level home-sections payload: it still holds the row's pre-roll
+     * items, and the next non-forced periodic read would serve them and
+     * revert the roll on screen.
      */
     fun invalidateDiscoverRowCache(rowId: String)
+
+    /**
+     * Commits a discover row's freshly rolled items (dice affordance):
+     * memoises them in the network layer's per-row sub-call cache so the
+     * next home-sections fetch serves the rolled set instead of re-querying
+     * the server — the roll survives the periodic refresh. Also drops the
+     * repo-level home payload at commit time (a fetch racing the roll could
+     * have re-cached the pre-roll sections after the pre-fetch invalidate).
+     * No-op on an empty list. Call AFTER [invalidateDiscoverRowCache] +
+     * [getDiscoverRowItems] produced the new items.
+     */
+    fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>)
 
     /**
      * Returns the last persisted home-sections snapshot for the current

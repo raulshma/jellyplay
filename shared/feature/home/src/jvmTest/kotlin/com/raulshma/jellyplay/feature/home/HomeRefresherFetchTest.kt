@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -20,6 +21,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -37,6 +39,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
@@ -389,6 +392,119 @@ class HomeRefresherFetchTest {
         } finally {
             refresher.stop()
         }
+    }
+
+    // ── rollDiscoverRow(): the dice affordance ──────────────────────────────
+
+    @Test
+    fun rollDiscoverRow_reRollsTheRowsItems_inPlaceWithoutTouchingSiblings() = runTest {
+        val discoverRow = HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor("dr_x"),
+            title = "Surprise Me",
+            type = HomeSectionType.DISCOVER,
+            items = listOf(item("m1"), item("m2")),
+        )
+        val sibling = section(HomeSectionType.LATEST_MEDIA, listOf(item("s1")))
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+            Result.success(HomeSectionsResult(sections = listOf(sibling, discoverRow)))
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+
+        val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+        val reRolled = listOf(item("r5"), item("r9"), item("r1"))
+        coEvery { mediaRepository.getDiscoverRowItems(any()) } returns Result.success(reRolled)
+
+        refresher.rollDiscoverRow(rolledRow)
+        runCurrent()
+
+        // The rolled set is committed where the next home fetch reads it, so
+        // the periodic refresh replays THIS roll instead of reverting it.
+        coVerify(exactly = 1) { mediaRepository.seedDiscoverRowCache(rolledRow, reRolled) }
+        assertEquals(
+            reRolled,
+            refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
+            "the rolled row swaps its items for the fresh fetch",
+        )
+        assertEquals(
+            listOf(item("s1")),
+            refresher.state.value.sections.first { it.type == HomeSectionType.LATEST_MEDIA }.items,
+            "sibling rows keep their items",
+        )
+        advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+        runCurrent()
+        assertTrue(
+            "dr_x" !in refresher.state.value.rollingDiscoverRowIds,
+            "the rolling flag clears after the min-spin floor",
+        )
+    }
+
+    @Test
+    fun rollDiscoverRow_failureOrEmptyFetch_keepsCurrentItems_andClearsTheFlag() = runTest {
+        val discoverRow = HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor("dr_x"),
+            title = "Surprise Me",
+            type = HomeSectionType.DISCOVER,
+            items = listOf(item("m1")),
+        )
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+            Result.success(HomeSectionsResult(sections = listOf(discoverRow)))
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+
+        val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+        coEvery { mediaRepository.getDiscoverRowItems(any()) } returns
+            Result.failure(RuntimeException("flaky"))
+
+        refresher.rollDiscoverRow(rolledRow)
+        runCurrent()
+
+        assertEquals(
+            listOf(item("m1")),
+            refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
+            "a failed roll degrades silently — the row keeps its items",
+        )
+        assertNull(refresher.state.value.error, "a failed roll never raises the error surface")
+        coVerify(exactly = 0) { mediaRepository.seedDiscoverRowCache(any(), any()) }
+        advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+        runCurrent()
+        assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
+    }
+
+    @Test
+    fun rollDiscoverRow_secondTapWhileInFlight_isIgnored() = runTest {
+        val discoverRow = HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor("dr_x"),
+            title = "Surprise Me",
+            type = HomeSectionType.DISCOVER,
+            items = listOf(item("m1")),
+        )
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+            Result.success(HomeSectionsResult(sections = listOf(discoverRow)))
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+
+        val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+        val fetchGate = CompletableDeferred<Result<List<MediaItem>>>()
+        coEvery { mediaRepository.getDiscoverRowItems(any()) } coAnswers { fetchGate.await() }
+
+        refresher.rollDiscoverRow(rolledRow)
+        runCurrent()
+        assertTrue("dr_x" in refresher.state.value.rollingDiscoverRowIds, "the flag is up while the fetch runs")
+
+        // The second tap lands while the first roll is still in flight.
+        refresher.rollDiscoverRow(rolledRow)
+        runCurrent()
+
+        fetchGate.complete(Result.success(listOf(item("r2"))))
+        runCurrent()
+
+        coVerify(exactly = 1) { mediaRepository.getDiscoverRowItems(rolledRow) }
+        advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+        runCurrent()
+        assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
     }
 
     // ── HomeRefreshState.fetchFailed boundary ──────────────────────────────

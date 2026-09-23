@@ -47,6 +47,8 @@
     <!-- Home section headers. -->
     <string name="home_because_you_watched">Parce que vous avez regardé %1$s</string>
     <string name="home_discover">Découvrir</string>
+    <string name="home_discover_reroll">Mélanger cette rangée</string>
+    <string name="home_discover_reroll_failed">Impossible de mélanger cette rangée</string>
     <string name="home_coming_soon">Bientôt disponible</string>
     <string name="home_continue_watching">Reprendre le visionnage</string>
     <string name="home_continue_reading">Continuer la lecture</string>

@@ -35,9 +35,11 @@ class MediaRepositorySurfaceTest {
      * members; a collaborator would have to re-expose the identity/session
      * seam the family already owns). 45 adds getPeople — same feature, same
      * seam reasoning: the People picker rides the discover editor, which
-     * already reaches the catalog through this repository.
+     * already reaches the catalog through this repository. 46 adds
+     * seedDiscoverRowCache — the dice roll's commit half of the same
+     * row-scoped pair (invalidate drops, seed republishes).
      */
-    private val maxInterfaceMembers = 45
+    private val maxInterfaceMembers = 46
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

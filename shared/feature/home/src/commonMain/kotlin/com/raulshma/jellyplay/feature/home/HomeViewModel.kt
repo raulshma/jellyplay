@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
+import com.raulshma.jellyplay.feature.home.generated.resources.home_discover_reroll_failed
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_started
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_start_failed
 import com.raulshma.jellyplay.feature.home.generated.resources.home_series_download_queued
@@ -590,6 +591,7 @@ internal class HomeViewModel(
                         partialLoadError = refresh.partialLoadError,
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
+                        rollingDiscoverRowIds = refresh.rollingDiscoverRowIds,
                         offlineMode = refresh.offlineMode,
                     )
                 }
@@ -934,11 +936,21 @@ internal class HomeViewModel(
      * The dice affordance: re-rolls one RANDOM-sorted discover row via the
      * refresher's in-place patch (cache invalidation + fresh fetch + section
      * item swap — no full refresh). The row config is read from the prefs
-     * mirror, so a roll for a since-deleted row is a no-op.
+     * mirror, so a roll for a since-deleted row is a no-op. A failed roll
+     * (fetch error or empty result) surfaces on the message bus — the row
+     * keeps its current items, but the tap is never silently dead.
      */
     private fun rollDiscoverRow(rowId: String) {
-        val row = sectionPrefs.query.discoverRows.find { it.id == rowId } ?: return
-        refresher.rollDiscoverRow(row)
+        val row = sectionPrefs.query.discoverRows.find { it.id == rowId }
+        if (row == null) {
+            userMessageBus.error(UiText.Resource(Res.string.home_discover_reroll_failed))
+            return
+        }
+        refresher.rollDiscoverRow(row) { rolled ->
+            if (!rolled) {
+                userMessageBus.error(UiText.Resource(Res.string.home_discover_reroll_failed))
+            }
+        }
     }
 
     override fun onCleared() {

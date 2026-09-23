@@ -167,6 +167,10 @@ class LibraryApiClientImpl(
         homeSectionsFetcher.invalidateDiscoverRow(rowId)
     }
 
+    override fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
+        homeSectionsFetcher.seedDiscoverRow(row, items)
+    }
+
     override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> = engine.withApi { api ->
         // Query assembly (all shared + discover-only dimensions) lives in the
         // commonMain [buildDiscoverRowQuerySpec]; this adapter resolves the

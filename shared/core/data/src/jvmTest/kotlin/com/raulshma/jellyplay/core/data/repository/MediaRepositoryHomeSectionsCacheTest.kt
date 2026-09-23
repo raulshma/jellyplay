@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -167,6 +168,42 @@ class MediaRepositoryHomeSectionsCacheTest {
         repository.invalidateCaches()
         repository.getHomeSections(HomeSectionQuery())
 
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `invalidateDiscoverRowCache also drops the cached home payload`() = runBlocking {
+        // The dice roll's pre-fetch step: without this drop the next
+        // TTL-served periodic read replays the pre-roll sections and reverts
+        // the on-screen roll.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+
+        repository.getHomeSections(HomeSectionQuery())
+        repository.invalidateDiscoverRowCache("dr_x")
+        repository.getHomeSections(HomeSectionQuery())
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `seedDiscoverRowCache publishes the row memo and drops the home payload`() = runBlocking {
+        // The dice roll's commit step: the rolled items land in the network
+        // layer's per-row memo (delegated) AND the assembled home payload
+        // drops again, so a fetch that raced the roll cannot re-cache the
+        // pre-roll sections after the pre-fetch invalidate.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+        val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
+        val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+
+        repository.getHomeSections(HomeSectionQuery())
+        repository.seedDiscoverRowCache(row, rolledItems)
+        repository.getHomeSections(HomeSectionQuery())
+
+        coVerify(exactly = 1) { apiClient.seedDiscoverRowCache(row, rolledItems) }
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 

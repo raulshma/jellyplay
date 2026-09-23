@@ -47,6 +47,8 @@
     <!-- Home section headers. -->
     <string name="home_because_you_watched">%1$s を見たので</string>
     <string name="home_discover">発見</string>
+    <string name="home_discover_reroll">この行をシャッフル</string>
+    <string name="home_discover_reroll_failed">この行をシャッフルできませんでした</string>
     <string name="home_coming_soon">公開予定</string>
     <string name="home_continue_watching">視聴を続ける</string>
     <string name="home_continue_reading">読書を続ける</string>
