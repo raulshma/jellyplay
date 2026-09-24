@@ -33,10 +33,12 @@ class SettingsRowRecordTest {
         IntegrationsRowRecords to IntegrationsSearchItems,
         ActivityInsightsRowRecords to ActivityInsightsSearchItems,
         SystemRowRecords to SystemSearchItems,
+        HomeDisplayRowRecords to HomeDisplaySearchItems,
+        HomeNextUpRowRecords to HomeNextUpSearchItems,
+        HomeLayoutRowRecords to HomeLayoutSearchItems,
         AppearanceThemeRowRecords to AppearanceThemeSearchItems,
         AppearanceNavigationRowRecords to AppearanceNavigationSearchItems,
         AppearanceLibraryRowRecords to AppearanceLibrarySearchItems,
-        AppearanceHomeLayoutRowRecords to AppearanceHomeLayoutSearchItems,
         AppearancePerformanceRowRecords to AppearancePerformanceSearchItems,
         AppearanceEyeCareRowRecords to AppearanceEyeCareSearchItems,
         AppearanceNewsletterRowRecords to AppearanceNewsletterSearchItems,
@@ -95,7 +97,7 @@ class SettingsRowRecordTest {
 
     @Test
     fun `records span the declared catalog minus the experimental binding-derived screen`() {
-        // 270 hand-declared records; the experimental screen's 5 rows stay on
+        // 271 hand-declared records; the experimental screen's 5 rows stay on
         // the ExperimentalPreferenceSpecs derivation (the Stage-A pilot) and
         // are the documented records exception.
         val experimentalIds = setOf(

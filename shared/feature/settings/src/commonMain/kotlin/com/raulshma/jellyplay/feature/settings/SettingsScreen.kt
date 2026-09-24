@@ -145,6 +145,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_badge
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_sections_visible
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore_subtitle
@@ -1537,6 +1539,21 @@ fun SettingsScreen(
                                     },
                                 )
                             }
+                        }
+
+                        settingsSection("item_home") {
+                            val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
+                            SettingListItem(
+                                icon = Tabler.Outline.Home,
+                                title = stringResource(Res.string.settings_home_title),
+                                subtitle = stringResource(
+                                    Res.string.settings_home_sections_visible,
+                                    homePrefs.enabledHomeSectionTypes.size,
+                                    HomeSectionType.CONFIGURABLE.size,
+                                ),
+                                index = 0, count = 1,
+                                onClick = { openSetting("home") { Route.HomeSettings(it) } },
+                            )
                         }
 
                         settingsSection("item_appearance") {

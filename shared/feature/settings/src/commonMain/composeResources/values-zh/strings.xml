@@ -849,6 +849,12 @@
     <string name="settings_show_external_ratings_subtitle">在详情页显示评论家评分（IMDb/TMDB）</string>
     <string name="settings_home_screen_layout">主屏布局</string>
     <string name="settings_home_sections_visible">%2$d 个分区中 %1$d 个可见</string>
+    <string name="settings_home_title">主屏幕</string>
+    <string name="settings_home_display">主屏显示</string>
+    <string name="settings_continue_next_up">继续观看和待看</string>
+    <string name="settings_reset_home_title">重置主屏设置？</string>
+    <string name="settings_reset_home_message">所有主屏幕设置将恢复为默认值。</string>
+    <string name="settings_home_moved_info">主屏幕设置已移动，可在“主屏幕”页面中找到。</string>
     <string name="settings_pinned_home_sections_brief">将合集、播放列表、收藏、流派或工作室固定到主页</string>
     <string name="settings_home_layout_presets_brief">保存、分享、导入或重置你的主页布局</string>
     <string name="settings_performance">性能</string>
@@ -1187,6 +1193,8 @@
     <string name="ss_home_layout_presets_subtitle">保存、分享、导入或重置您的主页屏幕布局</string>
     <string name="ss_configure_libraries_title">配置媒体库</string>
     <string name="ss_configure_libraries_subtitle">各媒体库的最新内容和最近添加</string>
+    <string name="ss_discover_rows_title">发现行</string>
+    <string name="ss_discover_rows_subtitle">用组合筛选创建自定义发现行</string>
     <string name="ss_settings_in_home_search_title">主页搜索中的设置</string>
     <string name="ss_settings_in_home_search_subtitle">在主页搜索栏中显示设置结果</string>
     <string name="ss_date_format_title">日期格式</string>

@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.feature.library.di.desktopPhotoExportModule
 import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
 import com.raulshma.jellyplay.feature.shell.sharedFeatureModules
 import org.koin.core.module.Module
+import org.koin.dsl.module
 
 /**
  * The desktop shell's startKoin module list (extracted from Main.kt): the
@@ -37,6 +38,11 @@ import org.koin.core.module.Module
  * other registration.
  */
 internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
+    // The resolved bundle itself, for platform modules that resolve the full
+    // paths object via `get<DesktopPaths>()` (desktopPlayerModule's
+    // PlayerEngineFactory + Anime4KShaderInstaller); the modules below take
+    // their path slices as parameters instead.
+    module { single { paths } },
     datastoreCommonModule,
     desktopDatastoreModule(paths.dataDir),
     databaseDaosModule,

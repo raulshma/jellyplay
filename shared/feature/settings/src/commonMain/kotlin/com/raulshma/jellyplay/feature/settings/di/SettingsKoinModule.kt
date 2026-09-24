@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings.di
 import com.raulshma.jellyplay.feature.settings.AboutViewModel
 import com.raulshma.jellyplay.feature.settings.AdvancedSettingsGate
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsViewModel
+import com.raulshma.jellyplay.feature.settings.HomeSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ArrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.AudioSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsViewModel
@@ -100,6 +101,13 @@ val settingsModule: Module = module {
     }
     viewModel {
         AppearanceSettingsViewModel(
+            projections = get(),
+            advancedSettings = get(),
+            editor = get(),
+        )
+    }
+    viewModel {
+        HomeSettingsViewModel(
             projections = get(),
             advancedSettings = get(),
             editor = get(),

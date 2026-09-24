@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalPreferences
+import com.raulshma.jellyplay.core.model.HomeScreenPreferences
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.MainPreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
@@ -329,6 +330,35 @@ class PreferenceProjections constructor(
         )
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), AppearanceScreenPreferences())
+
+    /**
+     * Fields read by `HomeSettingsScreen` — a single-store slice over
+     * [HomeDiscoveryStore] so the home config hub recomposes only on
+     * home-discovery writes. The card-display toggles stay out (app-wide card
+     * settings owned by the Appearance screen).
+     */
+    val homeScreenPreferences: StateFlow<HomeScreenPreferences> =
+        stores.homeDiscovery.homeDiscovery.map { home ->
+            HomeScreenPreferences(
+                homeMode = home.homeMode,
+                homeHeroEnabled = home.homeHeroEnabled,
+                homeBackdropEnabled = home.homeBackdropEnabled,
+                showClockOnHome = home.showClockOnHome,
+                showSettingsInHomeSearch = home.showSettingsInHomeSearch,
+                hideTopHeaderOnScroll = home.hideTopHeaderOnScroll,
+                continueWatchingClickBehavior = home.continueWatchingClickBehavior,
+                hiddenCwItemIds = home.hiddenCwItemIds,
+                mergeContinueWatchingAndNextUp = home.mergeContinueWatchingAndNextUp,
+                nextUpMaxDays = home.nextUpMaxDays,
+                nextUpRewatching = home.nextUpRewatching,
+                enabledHomeSectionTypes = home.enabledHomeSectionTypes,
+                homeSectionOrder = home.homeSectionOrder,
+                pinnedHomeSections = home.pinnedHomeSections,
+                discoverRows = home.discoverRows,
+                homeLayoutPresets = home.homeLayoutPresets,
+            )
+        }.distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), HomeScreenPreferences())
 
     // -------------------------------------------------------------------------
     // Consumer-screen projections (non-settings surfaces).

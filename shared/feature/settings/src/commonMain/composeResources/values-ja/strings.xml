@@ -847,6 +847,12 @@
     <string name="settings_show_external_ratings_subtitle">詳細ページに評論家の評価（IMDb/TMDB）を表示</string>
     <string name="settings_home_screen_layout">ホーム画面のレイアウト</string>
     <string name="settings_home_sections_visible">%2$d セクション中 %1$d 件が表示中</string>
+    <string name="settings_home_title">ホーム画面</string>
+    <string name="settings_home_display">ホーム表示</string>
+    <string name="settings_continue_next_up">視聴を続けると次に視聴</string>
+    <string name="settings_reset_home_title">ホーム設定をリセットしますか?</string>
+    <string name="settings_reset_home_message">ホーム画面の設定はすべてデフォルトに戻ります。</string>
+    <string name="settings_home_moved_info">ホーム画面の設定は「ホーム画面」ページに移動しました。</string>
     <string name="settings_pinned_home_sections_brief">コレクション、プレイリスト、お気に入り、ジャンル、スタジオをホームに固定</string>
     <string name="settings_home_layout_presets_brief">ホームレイアウトを保存、共有、インポート、リセット</string>
     <string name="settings_performance">パフォーマンス</string>
@@ -1185,6 +1191,8 @@
     <string name="ss_home_layout_presets_subtitle">ホーム画面のレイアウトを保存、共有、インポート、リセットします</string>
     <string name="ss_configure_libraries_title">ライブラリを設定</string>
     <string name="ss_configure_libraries_subtitle">ライブラリごとの最新メディアと最近追加されたアイテム</string>
+    <string name="ss_discover_rows_title">ディスカバー行</string>
+    <string name="ss_discover_rows_subtitle">フィルターを組み合わせてカスタムディスカバー行を作成</string>
     <string name="ss_settings_in_home_search_title">ホーム検索の設定</string>
     <string name="ss_settings_in_home_search_subtitle">ホームの検索バーに設定の検索結果を表示します</string>
     <string name="ss_date_format_title">日付形式</string>

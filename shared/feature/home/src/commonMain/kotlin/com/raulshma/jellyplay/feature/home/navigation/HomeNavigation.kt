@@ -71,7 +71,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                 },
                 onSettingsSearchItemClick = { route -> navigator.navigate(route) },
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
-                onConfigureHomeLayout = { navigator.navigate(Route.AppearanceSettings("home_section_layout")) },
+                onConfigureHomeLayout = { navigator.navigate(Route.HomeSettings("pinned_home_sections")) },
                 onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
                 onSeeAllClick = { _, libraryId, collectionType, title ->
                     // Per-library "Latest X" sorts by DateLastContentAdded so a

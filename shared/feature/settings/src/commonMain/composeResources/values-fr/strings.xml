@@ -849,6 +849,12 @@
     <string name="settings_show_external_ratings_subtitle">Afficher les notes de critiques (IMDb/TMDB) sur les pages de détail</string>
     <string name="settings_home_screen_layout">Disposition de l\'écran d\'accueil</string>
     <string name="settings_home_sections_visible">%1$d sur %2$d sections visibles</string>
+    <string name="settings_home_title">Écran d'accueil</string>
+    <string name="settings_home_display">Affichage de l'accueil</string>
+    <string name="settings_continue_next_up">Reprendre et À suivre</string>
+    <string name="settings_reset_home_title">Réinitialiser les réglages de l'accueil ?</string>
+    <string name="settings_reset_home_message">Tous les réglages de l'écran d'accueil seront restaurés à leurs valeurs par défaut.</string>
+    <string name="settings_home_moved_info">Les réglages de l\'écran d\'accueil ont déménagé — retrouvez-les sur la page « Écran d\'accueil ».</string>
     <string name="settings_pinned_home_sections_brief">Épingler collections, listes, favoris, genres ou studios sur l\'accueil</string>
     <string name="settings_home_layout_presets_brief">Enregistrer, partager, importer ou réinitialiser votre disposition d\'accueil</string>
     <string name="settings_performance">Performance</string>
@@ -1187,6 +1193,8 @@
     <string name="ss_home_layout_presets_subtitle">Enregistrer, partager, importer ou réinitialiser la mise en page de votre écran d\'accueil</string>
     <string name="ss_configure_libraries_title">Configurer les bibliothèques</string>
     <string name="ss_configure_libraries_subtitle">Derniers médias, ajoutés récemment par bibliothèque</string>
+    <string name="ss_discover_rows_title">Lignes de découverte</string>
+    <string name="ss_discover_rows_subtitle">Créer des lignes de découverte personnalisées avec des filtres combinés</string>
     <string name="ss_settings_in_home_search_title">Paramètres dans la recherche d\'accueil</string>
     <string name="ss_settings_in_home_search_subtitle">Afficher les résultats des paramètres dans la barre de recherche d\'accueil</string>
     <string name="ss_date_format_title">Format de date</string>

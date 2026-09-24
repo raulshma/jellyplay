@@ -19,11 +19,12 @@ internal data class SettingsEntranceSection(
  * 19 hand-typed literals drifting apart.
  *
  * The list mirrors the `settingsSection(...)` call sites in [SettingsScreen]:
- * `item_notifications` is the platform-gated section (it composes only where
- * `settingsCapabilities.supportsNotifications` holds) but keeps its slot —
- * today's literal numbers keep counting it on every platform, and the pinned
- * derivation must equal those numbers exactly (the accepted stagger hole on
- * platforms without notifications).
+ * `item_notifications` and `group_idle_ambient` are the platform-gated
+ * sections (they compose only where `settingsCapabilities.supportsNotifications`
+ * / `supportsIdleAmbientScreen` hold) but keep their slots — today's literal
+ * numbers keep counting them on every platform, and the pinned derivation
+ * must equal those numbers exactly (the accepted stagger hole on platforms
+ * without the capability).
  */
 internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("profile"),
@@ -32,6 +33,7 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("account"),
     SettingsEntranceSection("activity"),
     SettingsEntranceSection("system"),
+    SettingsEntranceSection("item_home"),
     SettingsEntranceSection("item_appearance"),
     SettingsEntranceSection("item_playback"),
     SettingsEntranceSection("item_audio"),
@@ -42,6 +44,7 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("item_privacy_data"),
     SettingsEntranceSection("item_backup"),
     SettingsEntranceSection("group_screensaver", tvOnly = true),
+    SettingsEntranceSection("group_idle_ambient"),
     SettingsEntranceSection("item_experimental"),
     SettingsEntranceSection("item_integrations"),
     SettingsEntranceSection("item_about"),

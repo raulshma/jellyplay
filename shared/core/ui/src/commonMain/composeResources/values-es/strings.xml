@@ -135,6 +135,7 @@
     <string name="ss_cat_audio_player">Reproductor de audio</string>
     <string name="ss_cat_backup_restore">Copia de seguridad y restauración</string>
     <string name="ss_cat_experimental">Experimental</string>
+    <string name="ss_cat_home">Pantalla de inicio</string>
     <string name="ss_cat_integrations">Integraciones</string>
     <string name="ss_cat_language_subtitles">Idioma y subtítulos</string>
     <string name="ss_cat_notifications">Notificaciones</string>

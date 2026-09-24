@@ -849,6 +849,12 @@
     <string name="settings_show_external_ratings_subtitle">Mostra i punteggi della critica (IMDb/TMDB) nelle pagine di dettaglio</string>
     <string name="settings_home_screen_layout">Layout schermata Home</string>
     <string name="settings_home_sections_visible">%1$d di %2$d sezioni visibili</string>
+    <string name="settings_home_title">Schermata Home</string>
+    <string name="settings_home_display">Visualizzazione Home</string>
+    <string name="settings_continue_next_up">Continua a guardare e Prossimo</string>
+    <string name="settings_reset_home_title">Reimpostare le impostazioni della Home?</string>
+    <string name="settings_reset_home_message">Tutte le impostazioni della schermata Home verranno ripristinate ai valori predefiniti.</string>
+    <string name="settings_home_moved_info">Le impostazioni della schermata Home sono state spostate: le trovi nella pagina «Schermata Home».</string>
     <string name="settings_pinned_home_sections_brief">Fissa collezioni, playlist, preferiti, generi o studi sulla home</string>
     <string name="settings_home_layout_presets_brief">Salva, condividi, importa o ripristina il tuo layout home</string>
     <string name="settings_performance">Prestazioni</string>
@@ -1189,6 +1195,8 @@
     <string name="ss_home_layout_presets_subtitle">Salva, condividi, importa o reimposta il layout della schermata home</string>
     <string name="ss_configure_libraries_title">Configura librerie</string>
     <string name="ss_configure_libraries_subtitle">Ultimi contenuti aggiunti, recenti per libreria</string>
+    <string name="ss_discover_rows_title">Righe di scoperta</string>
+    <string name="ss_discover_rows_subtitle">Crea righe di scoperta personalizzate con filtri combinati</string>
     <string name="ss_settings_in_home_search_title">Impostazioni nella ricerca home</string>
     <string name="ss_settings_in_home_search_subtitle">Mostra i risultati delle impostazioni nella barra di ricerca home</string>
     <string name="ss_date_format_title">Formato data</string>

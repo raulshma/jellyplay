@@ -849,6 +849,12 @@
     <string name="settings_show_external_ratings_subtitle">Kritiker-Wertungen (IMDb/TMDB) auf Detailseiten anzeigen</string>
     <string name="settings_home_screen_layout">Startbildschirm-Layout</string>
     <string name="settings_home_sections_visible">%1$d von %2$d Bereichen sichtbar</string>
+    <string name="settings_home_title">Startbildschirm</string>
+    <string name="settings_home_display">Startbildschirm-Anzeige</string>
+    <string name="settings_continue_next_up">Weitersehen &amp;amp; Next Up</string>
+    <string name="settings_reset_home_title">Home-Einstellungen zurücksetzen?</string>
+    <string name="settings_reset_home_message">Alle Startbildschirm-Einstellungen werden auf ihre Standardwerte zurückgesetzt.</string>
+    <string name="settings_home_moved_info">Die Startbildschirm-Einstellungen sind umgezogen — zu finden auf der Seite „Startbildschirm“.</string>
     <string name="settings_pinned_home_sections_brief">Sammlungen, Wiedergabelisten, Favoriten, Genres oder Studios an den Startbildschirm anheften</string>
     <string name="settings_home_layout_presets_brief">Dein Start-Layout speichern, teilen, importieren oder zurücksetzen</string>
     <string name="settings_performance">Leistung</string>
@@ -1185,6 +1191,8 @@
     <string name="ss_home_layout_presets_subtitle">Startseiten-Layout speichern, teilen, importieren oder zurücksetzen</string>
     <string name="ss_configure_libraries_title">Mediatheken konfigurieren</string>
     <string name="ss_configure_libraries_subtitle">Neueste Medien, kürzlich hinzugefügt pro Mediathek</string>
+    <string name="ss_discover_rows_title">Entdeckungszeilen</string>
+    <string name="ss_discover_rows_subtitle">Eigene Entdeckungszeilen mit gemischten Filtern erstellen</string>
     <string name="ss_settings_in_home_search_title">Einstellungen in der Startsuche</string>
     <string name="ss_settings_in_home_search_subtitle">Einstellungsergebnisse in der Startseiten-Suchleiste anzeigen</string>
     <string name="ss_date_format_title">Datumsformat</string>

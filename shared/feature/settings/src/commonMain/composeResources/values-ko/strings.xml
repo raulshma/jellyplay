@@ -847,6 +847,12 @@
     <string name="settings_show_external_ratings_subtitle">상세 페이지에 평론가 평점(IMDb/TMDB) 표시</string>
     <string name="settings_home_screen_layout">홈 화면 레이아웃</string>
     <string name="settings_home_sections_visible">%2$d개 섹션 중 %1$d개 표시</string>
+    <string name="settings_home_title">홈 화면</string>
+    <string name="settings_home_display">홈 화면 표시</string>
+    <string name="settings_continue_next_up">계속 시청과 다음 작품</string>
+    <string name="settings_reset_home_title">홈 설정을 초기화하시겠습니까?</string>
+    <string name="settings_reset_home_message">홈 화면 설정이 모두 기본값으로 복원됩니다.</string>
+    <string name="settings_home_moved_info">홈 화면 설정이 \'홈 화면\' 페이지로 이동했습니다.</string>
     <string name="settings_pinned_home_sections_brief">컬렉션, 재생목록, 즐겨찾기, 장르 또는 스튜디오를 홈에 고정</string>
     <string name="settings_home_layout_presets_brief">홈 레이아웃 저장, 공유, 가져오기 또는 재설정</string>
     <string name="settings_performance">성능</string>
@@ -1185,6 +1191,8 @@
     <string name="ss_home_layout_presets_subtitle">홈 화면 레이아웃을 저장, 공유, 가져오기 또는 재설정합니다</string>
     <string name="ss_configure_libraries_title">라이브러리 설정</string>
     <string name="ss_configure_libraries_subtitle">라이브러리별 최신 미디어 및 최근 추가된 항목입니다</string>
+    <string name="ss_discover_rows_title">탐색 행</string>
+    <string name="ss_discover_rows_subtitle">필터를 조합해 맞춤 탐색 행 만들기</string>
     <string name="ss_settings_in_home_search_title">홈 검색의 설정</string>
     <string name="ss_settings_in_home_search_subtitle">홈 검색창에 설정 결과를 표시합니다</string>
     <string name="ss_date_format_title">날짜 형식</string>

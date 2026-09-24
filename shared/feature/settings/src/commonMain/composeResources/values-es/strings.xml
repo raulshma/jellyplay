@@ -849,6 +849,12 @@
     <string name="settings_show_external_ratings_subtitle">Mostrar puntuaciones de críticos (IMDb/TMDB) en páginas de detalles</string>
     <string name="settings_home_screen_layout">Diseño de pantalla de inicio</string>
     <string name="settings_home_sections_visible">%1$d de %2$d secciones visibles</string>
+    <string name="settings_home_title">Pantalla de inicio</string>
+    <string name="settings_home_display">Visualización de inicio</string>
+    <string name="settings_continue_next_up">Seguir viendo y A continuación</string>
+    <string name="settings_reset_home_title">¿Restablecer la configuración de inicio?</string>
+    <string name="settings_reset_home_message">Todos los ajustes de la pantalla de inicio se restaurarán a sus valores predeterminados.</string>
+    <string name="settings_home_moved_info">Los ajustes de la pantalla de inicio se han trasladado: búscalos en la página «Pantalla de inicio».</string>
     <string name="settings_pinned_home_sections_brief">Fija colecciones, listas, favoritos, géneros o estudios en tu inicio</string>
     <string name="settings_home_layout_presets_brief">Guarda, comparte, importa o restablece tu diseño de inicio</string>
     <string name="settings_performance">Rendimiento</string>
@@ -1187,6 +1193,8 @@
     <string name="ss_home_layout_presets_subtitle">Guarda, comparte, importa o restablece el diseño de tu pantalla de inicio</string>
     <string name="ss_configure_libraries_title">Configurar bibliotecas</string>
     <string name="ss_configure_libraries_subtitle">Lo más reciente y añadido recientemente por biblioteca</string>
+    <string name="ss_discover_rows_title">Filas de descubrimiento</string>
+    <string name="ss_discover_rows_subtitle">Crea filas de descubrimiento personalizadas con filtros combinados</string>
     <string name="ss_settings_in_home_search_title">Ajustes en la búsqueda de inicio</string>
     <string name="ss_settings_in_home_search_subtitle">Muestra resultados de ajustes en la barra de búsqueda de inicio</string>
     <string name="ss_date_format_title">Formato de fecha</string>

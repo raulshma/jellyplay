@@ -4,6 +4,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Book
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Clock
+import com.composables.icons.tabler.outline.Compass
 import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.LayersLinked
@@ -41,6 +42,7 @@ class HomeSectionIconTest {
         assertEquals(Tabler.Outline.Download, homeSectionIcon(HomeSectionType.DOWNLOADED))
         assertEquals(Tabler.Outline.Wand, homeSectionIcon(HomeSectionType.RECOMMENDATIONS))
         assertEquals(Tabler.Outline.Pinned, homeSectionIcon(HomeSectionType.PINNED))
+        assertEquals(Tabler.Outline.Compass, homeSectionIcon(HomeSectionType.DISCOVER))
     }
 
     @Test
@@ -48,7 +50,7 @@ class HomeSectionIconTest {
         // If a new HomeSectionType is added this fails on the distinct-icon
         // count unless the mapping gains a branch (compiler enforces the when;
         // this pins the test-side inventory).
-        assertEquals(HomeSectionType.entries.size, 10)
+        assertEquals(HomeSectionType.entries.size, 11)
     }
 
     @Test

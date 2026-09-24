@@ -77,11 +77,11 @@ class HomeNavigationTest {
     }
 
     @Test
-    fun onConfigureHomeLayout_navigatesToAppearanceSettings() {
+    fun onConfigureHomeLayout_navigatesToHomeSettings() {
         val callbacks = buildTestCallbacks(navigator)
         callbacks.onConfigureHomeLayout()
 
-        verify { navigator.navigate(Route.AppearanceSettings("home_section_layout")) }
+        verify { navigator.navigate(Route.HomeSettings("pinned_home_sections")) }
     }
 
     @Test
@@ -130,7 +130,7 @@ class HomeNavigationTest {
             },
             onSettingsSearchItemClick = { route -> navigator.navigate(route) },
             onNewsletterClick = { navigator.navigate(Route.Newsletter) },
-            onConfigureHomeLayout = { navigator.navigate(Route.AppearanceSettings("home_section_layout")) },
+            onConfigureHomeLayout = { navigator.navigate(Route.HomeSettings("pinned_home_sections")) },
             onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
         )
     }

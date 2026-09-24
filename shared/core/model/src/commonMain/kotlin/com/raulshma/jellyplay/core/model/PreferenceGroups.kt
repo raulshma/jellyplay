@@ -447,3 +447,33 @@ data class AppearanceScreenPreferences(
     ),
     val newsletterSectionOrder: List<NewsletterSectionType> = NewsletterSectionType.DEFAULT_ORDER,
 )
+
+/**
+ * Fields read by `HomeSettingsScreen` — the home-screen config hub (display
+ * rows, Continue Watching / Next Up behavior, and the home layout editor).
+ * Everything here projects from the single [HomeDiscoveryStore] slice; the
+ * card-display toggles (unwatched badge, watched checkmark, hide watched,
+ * external ratings) are deliberately excluded because they are app-wide card
+ * settings that stay on the Appearance screen.
+ */
+@Immutable
+@Serializable
+data class HomeScreenPreferences(
+    val homeMode: HomeMode = HomeMode.VIDEO,
+    val homeHeroEnabled: Boolean = true,
+    val homeBackdropEnabled: Boolean = true,
+    val showClockOnHome: Boolean = false,
+    val showSettingsInHomeSearch: Boolean = true,
+    val hideTopHeaderOnScroll: Boolean = false,
+    val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
+    val hiddenCwItemIds: Set<String> = emptySet(),
+    val mergeContinueWatchingAndNextUp: Boolean = false,
+    val nextUpMaxDays: Int = 0,
+    val nextUpRewatching: Boolean = false,
+    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+    val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
+    /** The user's custom Discover rows (config order). */
+    val discoverRows: List<DiscoverRowConfig> = emptyList(),
+    val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
+)

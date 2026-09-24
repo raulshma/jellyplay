@@ -849,6 +849,12 @@
     <string name="settings_show_external_ratings_subtitle">Mostrar pontuações de críticos (IMDb/TMDB) nas páginas de detalhe</string>
     <string name="settings_home_screen_layout">Disposição do ecrã inicial</string>
     <string name="settings_home_sections_visible">%1$d de %2$d secções visíveis</string>
+    <string name="settings_home_title">Ecrã inicial</string>
+    <string name="settings_home_display">Apresentação do ecrã inicial</string>
+    <string name="settings_continue_next_up">Continuar e A seguir</string>
+    <string name="settings_reset_home_title">Repor definições do ecrã inicial?</string>
+    <string name="settings_reset_home_message">Todas as definições do ecrã inicial serão restauradas para os valores predefinidos.</string>
+    <string name="settings_home_moved_info">As definições do ecrã inicial foram movidas — encontram-se na página «Ecrã inicial».</string>
     <string name="settings_pinned_home_sections_brief">Fixar coleções, listas, favoritos, géneros ou estúdios no início</string>
     <string name="settings_home_layout_presets_brief">Guardar, partilhar, importar ou repor a sua disposição inicial</string>
     <string name="settings_performance">Desempenho</string>
@@ -1187,6 +1193,8 @@
     <string name="ss_home_layout_presets_subtitle">Guardar, partilhar, importar ou repor a disposição do ecrã inicial</string>
     <string name="ss_configure_libraries_title">Configurar bibliotecas</string>
     <string name="ss_configure_libraries_subtitle">Mais recentes, adicionados recentemente por biblioteca</string>
+    <string name="ss_discover_rows_title">Linhas de descoberta</string>
+    <string name="ss_discover_rows_subtitle">Crie linhas de descoberta personalizadas com filtros combinados</string>
     <string name="ss_settings_in_home_search_title">Definições na Pesquisa do Início</string>
     <string name="ss_settings_in_home_search_subtitle">Mostrar resultados das definições na barra de pesquisa do início</string>
     <string name="ss_date_format_title">Formato de Data</string>

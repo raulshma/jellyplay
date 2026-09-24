@@ -138,6 +138,7 @@
     <string name="ss_cat_audio_player">오디오 플레이어</string>
     <string name="ss_cat_backup_restore">백업 및 복원</string>
     <string name="ss_cat_experimental">실험적 기능</string>
+    <string name="ss_cat_home">홈 화면</string>
     <string name="ss_cat_integrations">연동</string>
     <string name="ss_cat_language_subtitles">언어 및 자막</string>
     <string name="ss_cat_notifications">알림</string>

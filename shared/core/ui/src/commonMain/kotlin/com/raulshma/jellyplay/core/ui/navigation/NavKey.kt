@@ -268,6 +268,12 @@ sealed class Route : NavKey {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
+    /** Home screen config hub — display rows, Next Up behavior and the home layout editor. */
+    @Serializable data class HomeSettings(val highlightSettingId: String? = null) : Route(),
+        HighlightableRoute {
+        override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
+    }
+
     @Serializable data class PinnedHomeSections(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)

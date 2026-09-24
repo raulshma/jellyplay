@@ -138,6 +138,7 @@
     <string name="ss_cat_audio_player">音频播放器</string>
     <string name="ss_cat_backup_restore">备份与还原</string>
     <string name="ss_cat_experimental">实验性</string>
+    <string name="ss_cat_home">主屏幕</string>
     <string name="ss_cat_integrations">集成</string>
     <string name="ss_cat_language_subtitles">语言与字幕</string>
     <string name="ss_cat_notifications">通知</string>

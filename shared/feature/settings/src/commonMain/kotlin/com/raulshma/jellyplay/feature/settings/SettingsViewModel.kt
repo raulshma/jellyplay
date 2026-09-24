@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.HomeScreenPreferences
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.Job
@@ -41,6 +42,10 @@ class SettingsViewModel(
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
         projections.settingsScreenPreferences
+
+    /** Home-config slice backing the root Home row's "sections visible" summary. */
+    val homePreferences: kotlinx.coroutines.flow.StateFlow<HomeScreenPreferences> =
+        projections.homeScreenPreferences
 
     var preferences by composeState(SettingsScreenPreferences())
         private set

@@ -1013,6 +1013,12 @@
     <string name="settings_show_external_ratings_subtitle">Display critic rating scores (IMDb/TMDB) on details pages</string>
     <string name="settings_home_screen_layout">Home Screen Layout</string>
     <string name="settings_home_sections_visible">%1$d of %2$d sections visible</string>
+    <string name="settings_home_title">Home Screen</string>
+    <string name="settings_home_display">Home Display</string>
+    <string name="settings_continue_next_up">Continue Watching &amp;amp; Next Up</string>
+    <string name="settings_reset_home_title">Reset home settings?</string>
+    <string name="settings_reset_home_message">All home screen settings will be restored to their defaults.</string>
+    <string name="settings_home_moved_info">Home screen settings have moved — find them on the Home Screen page.</string>
     <string name="settings_pinned_home_sections_brief">Pin collections, playlists, favorites, genres or studios to home</string>
     <string name="settings_home_layout_presets_brief">Save, share, import or reset your home layout</string>
     <string name="settings_performance">Performance</string>
@@ -1325,6 +1331,8 @@
     <string name="ss_home_layout_presets_subtitle">Save, share, import or reset your home screen layout</string>
     <string name="ss_configure_libraries_title">Configure libraries</string>
     <string name="ss_configure_libraries_subtitle">Latest Media, Recently Added per library</string>
+    <string name="ss_discover_rows_title">Discover Rows</string>
+    <string name="ss_discover_rows_subtitle">Build custom discover rows with mixed filters</string>
     <string name="ss_settings_in_home_search_title">Settings in Home Search</string>
     <string name="ss_settings_in_home_search_subtitle">Show settings results in the home search bar</string>
     <string name="ss_date_format_title">Date Format</string>

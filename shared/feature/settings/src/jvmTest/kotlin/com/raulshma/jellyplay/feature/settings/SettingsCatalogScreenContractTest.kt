@@ -58,6 +58,7 @@ class SettingsCatalogScreenContractTest {
         AudioSettingsIds,
         BackupSettingsIds,
         ExperimentalSettingsIds,
+        HomeSettingsIds,
         IntegrationsScreenIds,
         LanguageSettingsIds,
         NotificationSettingsIds,

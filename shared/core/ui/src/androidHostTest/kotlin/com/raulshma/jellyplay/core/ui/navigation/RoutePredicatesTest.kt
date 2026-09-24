@@ -77,9 +77,12 @@ class RoutePredicatesTest {
         Route.UserManagement(),
         Route.SeerrSettings(),
         Route.AppearanceSettings(),
+        Route.HomeSettings(),
         Route.PinnedHomeSections(),
         Route.HomeLayoutPresets(),
         Route.LibraryHomeSections(),
+        Route.DiscoverRows(),
+        Route.DiscoverRowEditor(),
         Route.PlaybackSettings(),
         Route.AudioSettings(),
         Route.LanguageSettings(),
@@ -210,8 +213,9 @@ class RoutePredicatesTest {
                 // downloads
                 "OfflineLibrary",
                 // settings sub-screens without modal classification
-                "ServerManagement", "UserManagement", "AppearanceSettings",
+                "ServerManagement", "UserManagement", "AppearanceSettings", "HomeSettings",
                 "PinnedHomeSections", "HomeLayoutPresets", "LibraryHomeSections",
+                "DiscoverRows", "DiscoverRowEditor",
                 "PlaybackSettings", "AudioSettings", "LanguageSettings",
                 "NotificationSettings", "StorageSettings", "SecuritySettings",
                 "PrivacyData", "BackupSettings", "ImportPreview",

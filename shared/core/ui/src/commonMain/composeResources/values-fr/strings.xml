@@ -136,6 +136,7 @@
     <string name="ss_cat_audio_player">Lecteur audio</string>
     <string name="ss_cat_backup_restore">Sauvegarde &amp; restauration</string>
     <string name="ss_cat_experimental">Expérimental</string>
+    <string name="ss_cat_home">Écran d'accueil</string>
     <string name="ss_cat_integrations">Intégrations</string>
     <string name="ss_cat_language_subtitles">Langue &amp; sous-titres</string>
     <string name="ss_cat_notifications">Notifications</string>

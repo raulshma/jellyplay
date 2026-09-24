@@ -148,6 +148,7 @@
     <string name="ss_cat_audio_player">Audio Player</string>
     <string name="ss_cat_backup_restore">Backup &amp; Restore</string>
     <string name="ss_cat_experimental">Experimental</string>
+    <string name="ss_cat_home">Home Screen</string>
     <string name="ss_cat_integrations">Integrations</string>
     <string name="ss_cat_language_subtitles">Language &amp; Subtitles</string>
     <string name="ss_cat_notifications">Notifications</string>

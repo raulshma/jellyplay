@@ -98,11 +98,22 @@ internal object SettingsScreenGroups {
     val systemIdleAmbient = SystemSearchItems.filter { it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) }
         .asSearchGroup("system.idleAmbient")
 
+    // ── HomeSettingsScreen ─────────────────────────────────────────────
+    /**
+     * The home config hub's three screen groups — the rows moved off
+     * Appearance (the former advanced-gated home display rows, the Next Up
+     * behavior rows, and the former `appearance.homeLayout` drill-in group).
+     * Ids carried over verbatim, so persisted deep-links/recents keep
+     * resolving — only the owning screen changed.
+     */
+    val homeDisplay = HomeDisplaySearchItems.asSearchGroup("home.display")
+    val homeNextUp = HomeNextUpSearchItems.asSearchGroup("home.nextUp")
+    val homeLayout = HomeLayoutSearchItems.asSearchGroup("home.layout")
+
     // ── AppearanceSettingsScreen ────────────────────────────────────────
     val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme")
     val appearanceNavigation = AppearanceNavigationSearchItems.asSearchGroup("appearance.navigation")
     val appearanceLibrary = AppearanceLibrarySearchItems.asSearchGroup("appearance.library")
-    val appearanceHomeLayout = AppearanceHomeLayoutSearchItems.asSearchGroup("appearance.homeLayout")
     val appearancePerformance = AppearancePerformanceSearchItems.asSearchGroup("appearance.performance")
     val appearanceEyeCare = AppearanceEyeCareSearchItems.asSearchGroup("appearance.eyeCare")
     val appearanceNewsletter = AppearanceNewsletterSearchItems.asSearchGroup("appearance.newsletter")
@@ -202,10 +213,12 @@ internal object SettingsScreenGroups {
         systemCore,
         systemScreensaver,
         systemIdleAmbient,
+        homeDisplay,
+        homeNextUp,
+        homeLayout,
         appearanceTheme,
         appearanceNavigation,
         appearanceLibrary,
-        appearanceHomeLayout,
         appearancePerformance,
         appearanceEyeCare,
         appearanceNewsletter,

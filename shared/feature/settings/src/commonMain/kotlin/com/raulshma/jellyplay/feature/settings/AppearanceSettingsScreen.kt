@@ -4,21 +4,30 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
@@ -27,11 +36,11 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.accentOptions
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.settingsGroupContainerColor
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.AppFontScale
-import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
@@ -47,11 +56,9 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.CircleShape
-import com.raulshma.jellyplay.core.ui.components.homeSectionIcon
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.ConsumeSettingsItemIndex
@@ -76,16 +83,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_colo
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_comfort_eye_care
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_confirm_library_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_confirm_library_reset_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast_high
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast_medium
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast_standard
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_friday
@@ -96,6 +99,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_tuesday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_wednesday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_moved_info
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_newsletter
@@ -110,30 +114,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets_brief
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_music
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_video
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_screen_layout
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_sections_visible
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_cards
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_grid
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_list
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_masonry
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_thumb
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_labels_off
@@ -154,8 +142,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_news
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_recently_added
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_recently_added_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_sections_enabled
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
@@ -165,10 +151,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_over
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections_brief
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows_helper
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
@@ -176,21 +158,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rese
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_appearance_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduced_motion
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_home
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_section
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
@@ -217,10 +187,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_them
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_scheduled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -230,15 +196,15 @@ private val THEME_HIGHLIGHT_IDS = setOf(AppearanceSettingsIds.THEME_MODE, Appear
 /**
  * The declared appearance screen groups in LazyColumn order — the derivation
  * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
- * the scroll target can never drift from the UI. Indices 0-3 always render;
- * 4-6 (performance, eye care, newsletter) only compose when advanced settings
- * are shown.
+ * the scroll target can never drift from the UI. Indices 0-2 always render;
+ * 3-5 (performance, eye care, newsletter) only compose when advanced settings
+ * are shown. (The home display / Next Up / home-layout rows moved to
+ * HomeSettingsScreen.)
  */
 private val appearanceScreenGroups: List<Set<String>> = listOf(
     SettingsScreenGroups.appearanceTheme.itemIdSet,
     SettingsScreenGroups.appearanceNavigation.itemIdSet,
     SettingsScreenGroups.appearanceLibrary.itemIdSet,
-    SettingsScreenGroups.appearanceHomeLayout.itemIdSet,
     SettingsScreenGroups.appearancePerformance.itemIdSet,
     SettingsScreenGroups.appearanceEyeCare.itemIdSet,
     SettingsScreenGroups.appearanceNewsletter.itemIdSet,
@@ -254,7 +220,7 @@ internal fun appearanceAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
     if (showAdvanced) {
         { it }
     } else {
-        { raw -> if (raw >= 4) -1 else raw }
+        { raw -> if (raw >= 3) -1 else raw }
     }
 
 /**
@@ -293,7 +259,6 @@ fun AppearanceSettingsScreen(
         tag = "appearance_init",
     )
 
-    val homeLayoutGroupIds = SettingsScreenGroups.appearanceHomeLayout.itemIdSet
     val scrollState = rememberLazyListState()
     val scrollIndex = rememberHighlightScrollIndex(
         highlightSettingId,
@@ -398,7 +363,6 @@ fun AppearanceSettingsScreen(
                     val appearanceItems = remember(
                         preferences.themeVariant,
                         preferences.themeMode,
-                        preferences.hiddenCwItemIds,
                         showAdvanced,
                         isDarkActive,
                         isAndroid12,
@@ -420,19 +384,6 @@ fun AppearanceSettingsScreen(
                             if (showAdvanced) {
                                 add(AppearanceSettingsIds.CONTRAST)
                                 add(AppearanceSettingsIds.LIBRARY_VIEW_MODE)
-                                add(AppearanceSettingsIds.HOME_MODE)
-                                add(AppearanceSettingsIds.HERO_SECTION)
-                                add(AppearanceSettingsIds.HOME_BACKDROP)
-                                add(AppearanceSettingsIds.CLOCK_HOME)
-                                add(AppearanceSettingsIds.HIDE_TOP_HEADER)
-                                add(AppearanceSettingsIds.SETTINGS_IN_HOME_SEARCH)
-                                add(AppearanceSettingsIds.CONTINUE_WATCHING_CLICK)
-                                if (preferences.hiddenCwItemIds.isNotEmpty()) {
-                                    add(AppearanceSettingsIds.UNHIDE_CW)
-                                }
-                                add(AppearanceSettingsIds.MERGE_CONTINUE_NEXT_UP)
-                                add(AppearanceSettingsIds.NEXT_UP_MAX_DAYS)
-                                add(AppearanceSettingsIds.NEXT_UP_REWATCHING)
                                 add(AppearanceSettingsIds.THEME_MUSIC)
                                 add(AppearanceSettingsIds.NAV_LABELS)
                                 add(AppearanceSettingsIds.DATE_FORMAT)
@@ -593,146 +544,6 @@ fun AppearanceSettingsScreen(
                                     onClick = {
                                         viewModel.edit { it.library.setLibraryViewMode(preferences.libraryViewMode.next) }
                                     },
-                                )
-                            }
-                            AppearanceSettingsIds.HOME_MODE -> {
-                                SettingListItem(
-                                    icon = Tabler.Outline.Home,
-                                    title = rowTitle(AppearanceSettingsIds.HOME_MODE),
-                                    subtitle = if (preferences.homeMode == HomeMode.VIDEO) stringResource(Res.string.settings_home_mode_video) else stringResource(Res.string.settings_home_mode_music),
-                                    trailingText = preferences.homeMode.name,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.HOME_MODE,
-                                    onClick = {
-                                        val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                                        viewModel.edit { it.homeDiscovery.setHomeMode(next) }
-                                    },
-                                )
-                            }
-                            AppearanceSettingsIds.HERO_SECTION -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.LayersLinked,
-                                    title = rowTitle(AppearanceSettingsIds.HERO_SECTION),
-                                    subtitle = if (preferences.homeHeroEnabled) stringResource(Res.string.settings_show_hero_on) else stringResource(Res.string.settings_show_hero_off),
-                                    checked = preferences.homeHeroEnabled,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.HERO_SECTION,
-                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroEnabled(it) } },
-                                )
-                            }
-                            AppearanceSettingsIds.HOME_BACKDROP -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.Background,
-                                    title = rowTitle(AppearanceSettingsIds.HOME_BACKDROP),
-                                    subtitle = if (preferences.homeBackdropEnabled) stringResource(Res.string.settings_home_backdrop_on) else stringResource(Res.string.settings_home_backdrop_off),
-                                    checked = preferences.homeBackdropEnabled,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.HOME_BACKDROP,
-                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeBackdropEnabled(it) } },
-                                )
-                            }
-                            AppearanceSettingsIds.CLOCK_HOME -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.Clock,
-                                    title = rowTitle(AppearanceSettingsIds.CLOCK_HOME),
-                                    subtitle = if (preferences.showClockOnHome) stringResource(Res.string.settings_show_clock_on) else stringResource(Res.string.settings_show_clock_off),
-                                    checked = preferences.showClockOnHome,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.CLOCK_HOME,
-                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowClockOnHome(it) } },
-                                )
-                            }
-                            AppearanceSettingsIds.HIDE_TOP_HEADER -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.ArrowBarToDown,
-                                    title = rowTitle(AppearanceSettingsIds.HIDE_TOP_HEADER),
-                                    subtitle = if (preferences.hideTopHeaderOnScroll) stringResource(Res.string.settings_hide_top_header_on_scroll_on) else stringResource(Res.string.settings_hide_top_header_on_scroll_off),
-                                    checked = preferences.hideTopHeaderOnScroll,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.HIDE_TOP_HEADER,
-                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideTopHeaderOnScroll(it) } },
-                                )
-                            }
-                            AppearanceSettingsIds.SETTINGS_IN_HOME_SEARCH -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.Adjustments,
-                                    title = rowTitle(AppearanceSettingsIds.SETTINGS_IN_HOME_SEARCH),
-                                    subtitle = if (preferences.showSettingsInHomeSearch) stringResource(Res.string.settings_show_settings_in_home_search_on) else stringResource(Res.string.settings_show_settings_in_home_search_off),
-                                    checked = preferences.showSettingsInHomeSearch,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.SETTINGS_IN_HOME_SEARCH,
-                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowSettingsInHomeSearch(it) } },
-                                )
-                            }
-                            AppearanceSettingsIds.CONTINUE_WATCHING_CLICK -> {
-                                val cwTitle = rowTitle(AppearanceSettingsIds.CONTINUE_WATCHING_CLICK)
-                                SettingListItem(
-                                    icon = Tabler.Outline.PlayerPlay,
-                                    title = cwTitle,
-                                    subtitle = stringResource(Res.string.settings_continue_watching_tap_subtitle),
-                                    trailingText = preferences.continueWatchingClickBehavior.displayName,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.CONTINUE_WATCHING_CLICK,
-                                    onClick = {
-                                        activePicker = PickerState.List(
-                                            title = cwTitle,
-                                            items = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.entries,
-                                            label = { it.displayName },
-                                            isSelected = { it == preferences.continueWatchingClickBehavior },
-                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setContinueWatchingClickBehavior(it) } },
-                                        )
-                                    },
-                                )
-                            }
-                            AppearanceSettingsIds.UNHIDE_CW -> {
-                                SettingListItem(
-                                    icon = Tabler.Outline.Eye,
-                                    title = rowTitle(AppearanceSettingsIds.UNHIDE_CW),
-                                    subtitle = stringResource(Res.string.settings_unhide_continue_watching_subtitle, preferences.hiddenCwItemIds.size),
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.UNHIDE_CW,
-                                    onClick = { viewModel.edit { it.homeDiscovery.unhideAllCwItems() } },
-                                )
-                            }
-                            AppearanceSettingsIds.MERGE_CONTINUE_NEXT_UP -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.LayersLinked,
-                                    title = rowTitle(AppearanceSettingsIds.MERGE_CONTINUE_NEXT_UP),
-                                    subtitle = if (preferences.mergeContinueWatchingAndNextUp) stringResource(Res.string.settings_merge_continue_next_up_on) else stringResource(Res.string.settings_merge_continue_next_up_off),
-                                    checked = preferences.mergeContinueWatchingAndNextUp,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.MERGE_CONTINUE_NEXT_UP,
-                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setMergeContinueWatchingAndNextUp(it) } },
-                                )
-                            }
-                            AppearanceSettingsIds.NEXT_UP_MAX_DAYS -> {
-                                val nextUpTitle = rowTitle(AppearanceSettingsIds.NEXT_UP_MAX_DAYS)
-                                val unlimitedLabel = stringResource(Res.string.settings_unlimited)
-                                val xDaysFormat = stringResource(Res.string.settings_x_days)
-                                val dayLabels = mapOf(
-                                    0 to unlimitedLabel,
-                                    7 to formatIntPattern(xDaysFormat, 7),
-                                    14 to formatIntPattern(xDaysFormat, 14),
-                                    30 to formatIntPattern(xDaysFormat, 30),
-                                    60 to formatIntPattern(xDaysFormat, 60),
-                                    90 to formatIntPattern(xDaysFormat, 90),
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.CalendarTime,
-                                    title = nextUpTitle,
-                                    subtitle = stringResource(Res.string.settings_next_up_time_window_subtitle),
-                                    trailingText = dayLabels[preferences.nextUpMaxDays] ?: formatIntPattern(xDaysFormat, preferences.nextUpMaxDays),
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.NEXT_UP_MAX_DAYS,
-                                    onClick = {
-                                        activePicker = PickerState.List(
-                                            title = nextUpTitle,
-                                            items = listOf(0, 7, 14, 30, 60, 90),
-                                            label = { dayLabels[it] ?: formatIntPattern(xDaysFormat, it) },
-                                            isSelected = { it == preferences.nextUpMaxDays },
-                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpMaxDays(it) } },
-                                        )
-                                    },
-                                )
-                            }
-                            AppearanceSettingsIds.NEXT_UP_REWATCHING -> {
-                                SettingToggleItem(
-                                    icon = Tabler.Outline.History,
-                                    title = rowTitle(AppearanceSettingsIds.NEXT_UP_REWATCHING),
-                                    subtitle = if (preferences.nextUpRewatching) stringResource(Res.string.settings_rewatching_next_up_on) else stringResource(Res.string.settings_rewatching_next_up_off),
-                                    checked = preferences.nextUpRewatching,
-                                    highlighted = highlightSettingId == AppearanceSettingsIds.NEXT_UP_REWATCHING,
-                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpRewatching(it) } },
                                 )
                             }
                             AppearanceSettingsIds.THEME_MUSIC -> {
@@ -1010,80 +821,39 @@ fun AppearanceSettingsScreen(
                 }
             }
 
+            // Pointer for the moved home settings: the former Home Screen
+            // Layout group (and the home display rows) now live on the
+            // dedicated Home Screen settings page.
             item {
-                SettingsGroup(
-                    icon = Tabler.Outline.Home,
-                    title = stringResource(Res.string.settings_home_screen_layout),
-                    summary = {
-                        val enabled = preferences.enabledHomeSectionTypes
-                        stringResource(Res.string.settings_home_sections_visible, enabled.size, HomeSectionType.CONFIGURABLE.size)
-                    },
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in homeLayoutGroupIds,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(ShapeCache.smooth16)
+                        .background(settingsGroupContainerColor())
+                        .focusIndicator()
+                        .clickable { navActions.onNavigate(Route.HomeSettings()) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    SettingListItem(
-                        icon = Tabler.Outline.Pinned,
-                        title = rowTitle(AppearanceSettingsIds.PINNED_HOME_SECTIONS),
-                        subtitle = stringResource(Res.string.settings_pinned_home_sections_brief),
-                        trailingText = if (preferences.pinnedHomeSections.isEmpty()) "" else "${preferences.pinnedHomeSections.size}",
-                        highlighted = highlightSettingId == AppearanceSettingsIds.PINNED_HOME_SECTIONS,
-                        index = 0, count = 1,
-                        onClick = { navActions.onNavigate(Route.PinnedHomeSections(if (highlightSettingId == AppearanceSettingsIds.PINNED_HOME_SECTIONS) PINNED_ADD_HIGHLIGHT_ID else null)) },
+                    Icon(
+                        Tabler.Outline.InfoCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
                     )
-
-                    SettingListItem(
-                        icon = Tabler.Outline.Bookmarks,
-                        title = rowTitle(AppearanceSettingsIds.HOME_LAYOUT_PRESETS),
-                        subtitle = stringResource(Res.string.settings_home_layout_presets_brief),
-                        trailingText = if (preferences.homeLayoutPresets.isEmpty()) "" else "${preferences.homeLayoutPresets.size}",
-                        highlighted = highlightSettingId == AppearanceSettingsIds.HOME_LAYOUT_PRESETS,
-                        index = 0, count = 1,
-                        onClick = { navActions.onNavigate(Route.HomeLayoutPresets(if (highlightSettingId == AppearanceSettingsIds.HOME_LAYOUT_PRESETS) PRESET_LIST_HIGHLIGHT_ID else null)) },
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(Res.string.settings_home_moved_info),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
                     )
-
-                    SettingListItem(
-                        icon = Tabler.Outline.Folders,
-                        title = rowTitle(AppearanceSettingsIds.CONFIGURE_LIBRARIES),
-                        subtitle = stringResource(Res.string.settings_configure_libraries_desc),
-                        trailingText = "",
-                        highlighted = highlightSettingId == AppearanceSettingsIds.CONFIGURE_LIBRARIES,
-                        index = 0, count = 1,
-                        onClick = { navActions.onNavigate(Route.LibraryHomeSections(if (highlightSettingId == AppearanceSettingsIds.CONFIGURE_LIBRARIES) "configure_libraries" else null)) },
+                    Icon(
+                        Tabler.Outline.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
                     )
-
-                    SettingListItem(
-                        icon = Tabler.Outline.Compass,
-                        title = stringResource(Res.string.settings_discover_rows),
-                        subtitle = stringResource(Res.string.settings_discover_rows_helper),
-                        trailingText = if (preferences.discoverRows.isEmpty()) "" else "${preferences.discoverRows.size}",
-                        highlighted = false,
-                        index = 0, count = 1,
-                        onClick = { navActions.onNavigate(Route.DiscoverRows()) },
-                    )
-
-                    val homeSections = rememberReorderableOrderedList(
-                        storedOrder = preferences.homeSectionOrder,
-                        onPersist = { order -> viewModel.edit { it.homeDiscovery.setHomeSectionOrder(order) } },
-                    )
-
-                    homeSections.items.forEachIndexed { index, sectionType ->
-                        val enabled = sectionType in preferences.enabledHomeSectionTypes
-                        SettingReorderableToggleItem(
-                            icon = homeSectionIcon(sectionType),
-                            title = sectionType.displayName,
-                            subtitle = sectionType.description,
-                            checked = enabled,
-                            index = index,
-                            count = homeSections.items.size,
-                            modifier = Modifier.onSizeChanged { homeSections.recordHeight(sectionType, it.height) },
-                            onCheckedChange = { checked ->
-                                viewModel.edit { it.homeDiscovery.setSectionVisible(sectionType, checked) }
-                            },
-                            onDrag = { delta -> homeSections.onDrag(sectionType, delta) },
-                            onDragStart = { homeSections.onDragStart(sectionType) },
-                            onDragEnd = homeSections::onDragEnd,
-                        )
-                    }
                 }
             }
 
@@ -1255,8 +1025,11 @@ fun AppearanceSettingsScreen(
 
             if (!showAdvanced) {
                 item {
+                    // Eight always-on advanced theme rows plus the two rows in
+                    // each of the three advanced-only groups (performance, eye
+                    // care, newsletter) are hidden while Advanced is off.
                     HiddenSettingsHint(
-                        hiddenCount = 7,
+                        hiddenCount = 14,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

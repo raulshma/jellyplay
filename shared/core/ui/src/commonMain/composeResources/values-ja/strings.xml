@@ -138,6 +138,7 @@
     <string name="ss_cat_audio_player">オーディオプレーヤー</string>
     <string name="ss_cat_backup_restore">バックアップと復元</string>
     <string name="ss_cat_experimental">実験的機能</string>
+    <string name="ss_cat_home">ホーム画面</string>
     <string name="ss_cat_integrations">連携</string>
     <string name="ss_cat_language_subtitles">言語と字幕</string>
     <string name="ss_cat_notifications">通知</string>
