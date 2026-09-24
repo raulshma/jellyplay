@@ -7,6 +7,18 @@ plugins {
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.player.video"
+        // Rehomed :app androidTest suites (AVSyncSheet, AspectRatioSheet,
+        // DecoderPickerSheet, HdrBadge, NextEpisodeOverlay, PlaybackInfoOverlay,
+        // SkipOverlay, SubtitleDelayOverlay, SubtitleManagerSection,
+        // SubtitleStyleSheet, TrickplayOverlay) — withHostTest creates the
+        // androidUnitTest variant bound to the Kotlin test tree (AGP-9 KMP
+        // library plugin). Flags mirrored verbatim from shared/core/ui: real
+        // resource serving for compose-resources string lookups and
+        // unstubbed-Context tolerance.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     sourceSets {
@@ -174,3 +186,25 @@ kotlin {
 // land in `...feature.player.video.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.player.video.generated.resources"
+
+// Robolectric lane for the 11 rehomed :app androidTest Compose suites.
+// AGP 9.4's withHostTest names the lane's source set androidHostTest
+// (src/androidHostTest/kotlin) and materializes it only in afterEvaluate, so
+// the dependency wiring rides a configureEach — an eager lookup would run
+// before the source set exists (same pattern as shared/core/ui).
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+            implementation(libs.androidx.test.core)
+            // Compose UI tests under Robolectric (the rehomed sheet/overlay
+            // regression suites; media3's @UnstableApi opt-in rides the
+            // androidMain runtime classpath).
+            implementation(project.dependencies.platform(libs.compose.bom))
+            implementation(libs.compose.ui.test)
+            implementation(libs.compose.ui.test.manifest)
+        }
+    }
+}

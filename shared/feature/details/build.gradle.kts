@@ -66,6 +66,9 @@ kotlin {
         getByName("jvmTest").dependencies {
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
+            // The shared FakeUserDataMutator double (test-scoped only — see
+            // the fixtures module's house rules).
+            implementation(project(":shared:core:test-fixtures"))
         }
         getByName("androidMain").dependencies {
             // The trailer-host actual delegates to InlineTrailerPlayer

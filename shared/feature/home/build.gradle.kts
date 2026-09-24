@@ -63,6 +63,10 @@ kotlin {
         getByName("jvmTest").dependencies {
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
+            // The shared FakeUserDataMutator double, replacing the private
+            // twin this suite used to carry (test-scoped only — see the
+            // fixtures module's house rules).
+            implementation(project(":shared:core:test-fixtures"))
         }
         getByName("androidMain").dependencies {
             // The process-lifecycle actual (refresher start/stop on app

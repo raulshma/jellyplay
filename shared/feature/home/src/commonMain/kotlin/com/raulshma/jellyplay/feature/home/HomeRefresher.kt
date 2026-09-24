@@ -230,25 +230,61 @@ internal class HomeRefresher(
      */
     private var customSeerrRowsCache: List<HomeSection> = emptyList()
     /**
-     * Dice rolls that landed while a full refresh was ALREADY in flight:
-     * row id → rolled items. That fetch captured the row's pre-roll payloads
-     * before [rollDiscoverRow] seeded the network cache, so its sections
-     * write would transiently revert the on-screen roll; the write re-applies
-     * these entries instead (see [applyPendingRolledRows]) and clears them —
-     * later fetches serve the seeded cache and need no guard.
+     * The roll-vs-fetch registry: dice rolls that landed while a full refresh
+     * was ALREADY in flight, row id → (rolled items, generation stamp). That
+     * fetch captured the row's pre-roll payloads before [rollDiscoverRow]
+     * re-seeded the network cache, so its sections write would transiently
+     * revert the on-screen roll; the write re-applies these entries instead
+     * (see [applyRolledRowGenerations]) and drains them — later fetches serve
+     * the seeded cache and need no guard.
+     *
+     * THE GENERATION INVARIANT — the one ordering rule this registry exists
+     * to state: a fetch re-applies every roll registered before the fetch's
+     * DRAIN POINT; a roll registered after the drain point applies itself.
+     * The drain point is the last statement before the fetch's single
+     * sections write, with no suspension between drain and write, so every
+     * suspension a fetch can park on (the main sections await, the
+     * custom-Seerr splice await, the book-fraction decode) sits strictly
+     * BEFORE it: a roll landing anywhere mid-fetch registers into a
+     * not-yet-drained registry and is re-applied by the write that follows,
+     * while a roll landing after the write is not that fetch's to cover —
+     * registration happens-before the roll's own in-place patch, so it
+     * applies itself, and its entry simply waits for the NEXT fetch's drain
+     * (re-applying it is idempotent). [registerRolledRowGeneration] stamps
+     * [rollGeneration] on every entry to give that happens-before edge a
+     * name; the stamps are ordered, never compared — the registry drains
+     * whole, no filtering by stamp.
+     *
+     * Vocabulary: "generation", not "epoch", in the feature layer — this
+     * file already spends "epoch" on [identityEpoch] (identity transitions,
+     * a different mechanism), and the lower layers keep their store-local
+     * epoch guards (the repository's discoverRollEpoch, the network layer's
+     * discoverRowEpoch). Identity transitions clear this registry wholesale
+     * ([cancelRollsForIdentityChange]) — clearing alone is sufficient because
+     * the generation's job is ordering WITHIN one identity, and an identity
+     * change voids ordering wholesale; [rollGeneration] is deliberately not
+     * reset.
      *
      * Plain map on purpose: written by [rollDiscoverRow]'s job and consumed
      * by [fetchOnce], both on [scope]'s main-confined dispatcher with no
      * suspension between the drain and the clear.
      */
-    private val pendingRolledRows = LinkedHashMap<String, List<MediaItem>>()
+    private val rolledRowGenerations = LinkedHashMap<String, RolledRowGeneration>()
+
+    /**
+     * Monotonic source of the stamps in [rolledRowGenerations]. Plain var on
+     * purpose — bumped only by [registerRolledRowGeneration] on [scope]'s
+     * main-confined dispatcher, the single-writer idiom of this class's
+     * cross-job fields.
+     */
+    private var rollGeneration = 0L
 
     /**
      * In-flight dice-roll jobs (row id → job), so the identity transitions can
      * cancel them alongside [refreshJob]/[discoverJob]: a roll that raced a
      * sign-out or user-switch belongs to the PREVIOUS identity — letting it
      * land would patch the new identity's freshly painted sections, and its
-     * [pendingRolledRows] entry would make the next fetch re-apply the
+     * [rolledRowGenerations] entry would make the next fetch re-apply the
      * previous user's rolled items. Removed by each roll's finally (including
      * a cancelled one, via [NonCancellable] clearing through the flag reset).
      */
@@ -423,23 +459,21 @@ internal class HomeRefresher(
                         // and BEFORE the sections write so sections and
                         // fractions land as ONE emission — a two-step write
                         // painted paged-book cards on the percent fallback
-                        // until the second update arrived. It also runs BEFORE
-                        // draining [pendingRolledRows] on purpose: the decode
-                        // suspends, and a roll landing mid-decode would
-                        // register into a map this fetch had already drained —
-                        // its state patch would then be reverted by this
-                        // write. Decoding from the pre-roll spliced sections
-                        // is still the right map: the decode reads only the
-                        // CONTINUE_READING section, and discover rolls never
-                        // touch it.
+                        // until the second update arrived. The decode is also
+                        // the fetch's LAST suspension and must stay ahead of
+                        // the roll-registry drain below (generation invariant
+                        // on [rolledRowGenerations]); it reads only the
+                        // CONTINUE_READING section, which discover rolls never
+                        // touch, so the pre-roll spliced sections are the
+                        // right input either way.
                         val bookFractions = decodeBookProgressFractionsFor(splicedSections)
 
-                        // A dice roll that landed while THIS fetch was in
-                        // flight must survive its sections write — re-apply
-                        // the rolled items over the pre-roll payloads the
-                        // fetch captured (see [pendingRolledRows]). No
+                        // The fetch's drain point — its own last word on
+                        // sections: re-apply every roll registered before now
+                        // over the pre-roll payloads this fetch captured
+                        // (generation invariant on [rolledRowGenerations]). No
                         // suspension between this drain and the write below.
-                        val rolledSections = applyPendingRolledRows(splicedSections)
+                        val rolledSections = applyRolledRowGenerations(splicedSections)
                         _state.update { it.copy(sections = rolledSections, bookProgressFractions = bookFractions) }
 
                         val continueWatching = rolledSections
@@ -856,15 +890,16 @@ internal class HomeRefresher(
                     // so the periodic refresh replays THIS roll rather than
                     // re-querying the server (yet another reshuffle).
                     mediaRepository.seedDiscoverRowCache(row, items)
-                    // Register BEFORE the state patch below: a fetch that is
-                    // already in flight captured the pre-roll payloads and will
-                    // land its own sections write after this one — the entry
-                    // makes that write re-apply the rolled items (see
-                    // [applyPendingRolledRows]) instead of reverting the roll.
-                    pendingRolledRows[row.id] = items
+                    // Register BEFORE the state patch below (generation
+                    // invariant on [rolledRowGenerations]): a fetch already in
+                    // flight captured the pre-roll payloads and lands its own
+                    // sections write after this one — the stamped entry makes
+                    // that write re-apply the rolled items instead of
+                    // reverting the roll.
+                    val generation = registerRolledRowGeneration(row.id, items)
                     Log.d(
                         TAG,
-                        "roll ${row.id}: patched ${items.size} items, first=${items.firstOrNull()?.id} " +
+                        "roll ${row.id}: gen=$generation, patched ${items.size} items, first=${items.firstOrNull()?.id} " +
                             "(on-screen first=${_state.value.sections
                                 .firstOrNull { it.id == HomeSectionType.DISCOVER.descriptor.idFor(row.id) }
                                 ?.items?.firstOrNull()?.id})",
@@ -903,37 +938,57 @@ internal class HomeRefresher(
     /**
      * Identity-transition drain of the dice-roll machinery (see [rollJobs]):
      * cancel the in-flight rolls — their finally clears the rolling flags via
-     * [NonCancellable] — and drop the pending-rolls entries so the incoming
-     * identity's first fetch doesn't re-apply the previous user's rolled
-     * items. The network-layer caches they seeded are cleared wholesale by
-     * the identity transition itself.
+     * [NonCancellable] — and clear the roll-generation registry so the
+     * incoming identity's first fetch doesn't re-apply the previous user's
+     * rolled items (see [rolledRowGenerations]: clearing is sufficient — an
+     * identity change voids the ordering the generations track). The
+     * network-layer caches they seeded are cleared wholesale by the identity
+     * transition itself.
      */
     private fun cancelRollsForIdentityChange() {
         rollJobs.values.forEach { it.cancel() }
         rollJobs.clear()
-        pendingRolledRows.clear()
+        rolledRowGenerations.clear()
     }
 
     /**
-     * Re-applies [pendingRolledRows] over the fetch's sections and drains the
-     * map — the fetch's own last word on sections, so a roll that completed
-     * mid-fetch keeps its freshly-rolled items on screen. Entries whose row
-     * the fetch doesn't carry (disabled / absent) are dropped with the drain:
-     * the roll had no section to patch either. No suspension between the
-     * drain and the clear, so a roll landing on the other side of this call
-     * registers cleanly into the empty map.
+     * Registration half of the generation invariant (see
+     * [rolledRowGenerations]): stamps the next [rollGeneration] onto the
+     * entry and returns the stamp for log correlation. Called by
+     * [rollDiscoverRow] strictly before the roll's own in-place state patch.
      */
-    private fun applyPendingRolledRows(sections: List<HomeSection>): List<HomeSection> {
-        if (pendingRolledRows.isEmpty()) return sections
-        val rolledBySectionId = pendingRolledRows.mapKeys { (rowId, _) ->
+    private fun registerRolledRowGeneration(rowId: String, items: List<MediaItem>): Long {
+        val generation = ++rollGeneration
+        rolledRowGenerations[rowId] = RolledRowGeneration(items, generation)
+        return generation
+    }
+
+    /**
+     * Drain half of the generation invariant (see [rolledRowGenerations]):
+     * overlays every registered roll over the fetch's sections and drains the
+     * registry — the fetch's own last word on sections, so a roll that
+     * completed mid-fetch keeps its freshly-rolled items on screen. Called as
+     * the last statement before the fetch's single sections write, with no
+     * suspension after it. Entries whose row the fetch doesn't carry
+     * (disabled / absent) are dropped with the drain: the roll had no section
+     * to patch either.
+     */
+    private fun applyRolledRowGenerations(sections: List<HomeSection>): List<HomeSection> {
+        if (rolledRowGenerations.isEmpty()) return sections
+        Log.d(
+            TAG,
+            "fetch re-applying rolled rows ${rolledRowGenerations.keys} " +
+                "(generations ${rolledRowGenerations.values.joinToString { it.generation.toString() }})",
+        )
+        val rolledBySectionId = rolledRowGenerations.mapKeys { (rowId, _) ->
             HomeSectionType.DISCOVER.descriptor.idFor(rowId)
         }
-        pendingRolledRows.clear()
+        rolledRowGenerations.clear()
         return sections.map { section ->
             if (section.type != HomeSectionType.DISCOVER) {
                 section
             } else {
-                rolledBySectionId[section.id]?.let { section.copy(items = it) } ?: section
+                rolledBySectionId[section.id]?.let { section.copy(items = it.items) } ?: section
             }
         }
     }
@@ -1356,6 +1411,16 @@ internal class HomeRefresher(
         _state.update { it.copy(discoverSections = newSections) }
     }
 }
+
+/**
+ * One [HomeRefresher.rolledRowGenerations] entry: the rolled items plus the
+ * monotonic [HomeRefresher.rollGeneration] stamp of the registration that
+ * produced them (see the generation invariant on the registry).
+ */
+private data class RolledRowGeneration(
+    val items: List<MediaItem>,
+    val generation: Long,
+)
 
 /**
  * Merges the feature-layer Seerr discover rows into the ordered section list

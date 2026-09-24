@@ -1,11 +1,13 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 
 /**
  * Manages the per-card loading state for SeerrMediaCard click animations.
@@ -31,6 +33,10 @@ import androidx.compose.runtime.remember
  *     },
  *)
  * ```
+ *
+ * Callers usually shouldn't orchestrate that by hand: [seerrCardClickHandler]
+ * builds the card onClick cascade, and [ProvideSeerrCardPrefetching] wires up
+ * and provides both primitives below a screen root.
  */
 @Stable
 interface SeerrCardLoadingState {
@@ -66,6 +72,74 @@ val LocalSeerrCardLoadingState = compositionLocalOf<SeerrCardLoadingState?> { nu
 @Composable
 fun rememberSeerrCardLoadingState(): SeerrCardLoadingState {
     return remember { SeerrCardLoadingStateImpl() }
+}
+
+/**
+ * Builds a SeerrMediaCard onClick that runs the prefetch cascade: mark the
+ * card as loading, pre-fetch the detail via [prefetch], clear the loading
+ * mark, then navigate. When either primitive is missing (the card renders
+ * outside a prefetch-providing screen) the card navigates immediately.
+ *
+ * Navigation stays feature-owned — pass the route invocation as [navigate],
+ * so this helper needs no knowledge of the app's navigation graph.
+ *
+ * Deduplicates the startLoading -> prefetch { stopLoading; navigate } cascade
+ * that previously lived inline in both `SeerrHorizontalSection`
+ * (SeerrDetailScreen) and `SeerrItemsRow` (MediaDetailBody).
+ */
+fun seerrCardClickHandler(
+    loadingState: SeerrCardLoadingState?,
+    prefetch: SeerrPrefetchCallback?,
+    id: Int,
+    mediaType: String,
+    navigate: () -> Unit,
+): () -> Unit = {
+    if (loadingState != null && prefetch != null) {
+        loadingState.startLoading(id)
+        prefetch(id, mediaType) {
+            loadingState.stopLoading(id)
+            navigate()
+        }
+    } else {
+        navigate()
+    }
+}
+
+/**
+ * Wraps a feature's raw Seerr detail prefetch (typically a ViewModel call) in
+ * the card-loading choreography — start loading, run the prefetch, stop
+ * loading, then signal completion — and provides the resulting
+ * [SeerrPrefetchCallback] and its [SeerrCardLoadingState] to [content] via
+ * [LocalSeerrPrefetch] and [LocalSeerrCardLoadingState].
+ *
+ * Screens that own a Seerr-capable ViewModel call this once at their root
+ * instead of hand-rolling the callback + provider pair per feature. The
+ * provided callback instance is stable across recompositions (the latest
+ * [prefetchDetail] lambda is always invoked), so readers of
+ * [LocalSeerrPrefetch] don't recompose unnecessarily.
+ */
+@Composable
+fun ProvideSeerrCardPrefetching(
+    prefetchDetail: (tmdbId: Int, mediaType: String, onDone: () -> Unit) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val loadingState = rememberSeerrCardLoadingState()
+    val currentPrefetch by rememberUpdatedState(prefetchDetail)
+    val prefetch: SeerrPrefetchCallback = remember(loadingState) {
+        { tmdbId, mediaType, onDone ->
+            loadingState.startLoading(tmdbId)
+            currentPrefetch(tmdbId, mediaType) {
+                loadingState.stopLoading(tmdbId)
+                onDone()
+            }
+        }
+    }
+    CompositionLocalProvider(
+        LocalSeerrPrefetch provides prefetch,
+        LocalSeerrCardLoadingState provides loadingState,
+    ) {
+        content()
+    }
 }
 
 private class SeerrCardLoadingStateImpl : SeerrCardLoadingState {

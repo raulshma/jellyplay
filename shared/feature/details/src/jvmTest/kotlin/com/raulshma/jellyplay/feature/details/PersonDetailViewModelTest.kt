@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every

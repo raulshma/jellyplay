@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
-import com.raulshma.jellyplay.core.data.playback.PipTransport
+import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -509,6 +509,35 @@ class VideoPlayerViewModel(
                     ),
                 )
             }
+        },
+        // Session-collector fold seams (the SubtitleStyleController
+        // narrow-mirror pattern — named per concern, never a generic state
+        // transformer): the whole onSessionState fold lives in the
+        // projector; these fire from it with the cadence/order the inline
+        // collector had. The lambdas capture only stable handles (the
+        // `_uiState` StateFlow, the VM) and read later-declared
+        // collaborators lazily — the trackSelectionHelper/
+        // persistRememberedTrack pattern — because they run only from
+        // init's collector, long after those properties initialise.
+        setTitleSubtitle = { title, subtitle ->
+            _uiState.update { it.copy(title = title, subtitle = subtitle) }
+        },
+        onStoredSelectionChanged = { stored ->
+            trackSelectionHelper.onStoredSelectionChanged(stored)
+        },
+        getStoredSelection = { itemId ->
+            itemId?.let { cachedAggregate.engine.mediaStreamSelections[it] }
+        },
+        refreshPlaybackPreferences = {
+            trackSelectionHelper.refreshPlaybackPreferences()
+        },
+        onSessionItemChanged = { itemId, seriesId ->
+            render.onSessionItemChanged(itemId, seriesId)
+        },
+        launchAsync = { block ->
+            // Fire-and-forget, never awaited — the inline collector's
+            // `launch { render.onSessionItemChanged(...) }` verbatim.
+            launch { block() }
         },
     )
     private val mediaSessionController = mediaSessionFactory.create(
@@ -1428,11 +1457,8 @@ class VideoPlayerViewModel(
         }
         // Register the PiP transport bridge so the Activity can dispatch PiP
         // remote-action intents (play/pause/skip/next) to the active engine.
-        // Also re-armed on every load: this VM is Activity-scoped
-        // (Nav3 has no per-entry ViewModelStore here) and is reused across media,
-        // and release() from the screen's onDispose runs pipController.reset()
-        // which nulls the transport — but init never re-runs on the reused
-        // instance, so every load must re-arm it or PiP controls go dead.
+        // Also re-armed on every load via the rearmTransports hook — see
+        // [reArmPipTransport] for why the re-arm must ride the load lifecycle.
         registerPipTransport()
         launch {
             pipController.pipDismissed.collect { dismissed ->
@@ -1538,44 +1564,18 @@ class VideoPlayerViewModel(
         playerAudioLifecycle.registerBecomingNoisy()
 
         launch {
-            var lastItemId: String? = null
-            var lastSeriesId: String? = null
             // Upstream is the session's DIRECT alias of the manager's flow —
             // same StateFlow instance, so dispatch ordering relative to the
-            // engineFlow collector below is unchanged.
+            // engineFlow collector below is unchanged. No operators/buffering:
+            // each emission folds synchronously through the projector
+            // (title/subtitle + media mirror + stored-selection seed every
+            // emission; on an item/series change: preference refresh then a
+            // fire-and-forget render poke) — MediaContentProjector's
+            // onSessionState is the whole former inline body, VM-lifetime
+            // fold state included (never reset per item, so it survives
+            // releaseInternalsVmPart like the collector's local vars did).
             playbackSession.sessionState.collect { session ->
-                val itemId = session.currentItemId
-                val seriesId = session.mediaDetail?.item?.seriesId
-                val prefs = cachedAggregate
-                val stored = itemId?.let { prefs.engine.mediaStreamSelections[it] }
-                // Title/subtitle are top-level uiState fields; the media
-                // slice mirrors through the projector (its single writer).
-                _uiState.update { state ->
-                    state.copy(
-                        title = session.title,
-                        subtitle = session.subtitle,
-                    )
-                }
-                mediaContentProjector.onSessionState(session, seriesId)
-                // The per-item override flags now live in the track slice.
-                trackSelectionHelper.onStoredSelectionChanged(stored)
-                // Re-resolve per-item/series language preference when the
-                // current item or series changes. The cached value feeds
-                // TrackSelectionHelper and the series-pref toggles.
-                if (itemId != lastItemId || seriesId != lastSeriesId) {
-                    lastItemId = itemId
-                    lastSeriesId = seriesId
-                    trackSelectionHelper.refreshPlaybackPreferences()
-                    // re-resolve the session's render override for the
-                    // new item (item row > series row; null = global stands)
-                    // and re-apply the config — the override lands a beat
-                    // after the load, applied through the engine's diff cache.
-                    // The row fetch + re-resolution + config rebuild are the
-                    // controller's choreography.
-                    launch {
-                        render.onSessionItemChanged(itemId, seriesId)
-                    }
-                }
+                mediaContentProjector.onSessionState(session, session.mediaDetail?.item?.seriesId)
             }
         }
 
@@ -1751,22 +1751,20 @@ class VideoPlayerViewModel(
 
     /**
      * Arms the PiP transport bridge so the Activity can dispatch PiP remote-action
-     * intents (play/pause/skip/next) to the active engine. Idempotent and safe to
-     * call repeatedly: [release] → [performRelease] → [PipController.reset] nulls
-     * the transport, and because this VM is Activity-scoped (Nav3 has no per-entry
-     * ViewModelStore here) `init` does not re-run on the reused instance — so
-     * [PlaybackSession.initialize] must re-arm it on every load or PiP controls go dead
-     * after the first media close.
+     * intents (play/pause/skip/next) to the active engine. The assignment mechanics
+     * and the why-re-arm lifecycle rationale (Activity-scoped VM, reset() on release,
+     * init never re-runs) live in [reArmPipTransport]; this body owns only the VOD
+     * action mapping. Idempotent and safe to call repeatedly (init + every load).
      */
     private fun registerPipTransport() {
-        pipController.pipTransport = PipTransport { action ->
+        reArmPipTransport(pipController) { action ->
             val engine = playerSessionManager.engine
             if (engine == null) {
                 // PiP bypasses the MediaSession entirely (broadcast -> PipTransport
                 // -> engine), so this silently no-ops when no engine is bound.
                 // Log so a stale transport is diagnosable instead of dead-buttons.
                 Log.w(TAG, "PiP action $action dropped: no active player engine")
-                return@PipTransport
+                return@reArmPipTransport
             }
             Log.d(TAG, "PiP action $action -> engine")
             when (action) {
@@ -2919,11 +2917,11 @@ class VideoPlayerViewModel(
         syncPlay.reset()
         // Clear per-item PiP mirrors but KEEP pipTransport: it is a VM-owned
         // bridge re-armed in init AND on every load via the rearmTransports
-        // the screen's onDispose runs pipController.reset(), nulling it). Nulling
-        // it here would deaden PiP controls mid-session, since initialize() calls
-        // releaseInternals() on every item load. The full reset() (transport
-        // included) runs in performRelease() on teardown, and the next load
-        // re-arms it.
+        // hook (the screen's onDispose runs pipController.reset(), nulling
+        // it). Nulling it here would deaden PiP controls mid-session, since
+        // initialize() calls releaseInternals() on every item load. The full
+        // reset() (transport included) runs in performRelease() on teardown,
+        // and the next load re-arms it.
         pipController.setPlaying(false)
         pipController.pipHasNext = false
         trickplayManager.clear()

@@ -92,13 +92,19 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -132,6 +138,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalo
 
 
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeoutMs
@@ -808,36 +815,20 @@ fun VideoPlayerScreen(
     val disconnectCast = rememberCastDisconnect(viewModel)
 
     if (isCastConnected) {
-        // Track slice — collected here (the cast dashboard is the
-        // only consumer on this branch) rather than through the residual uiState.
-        val trackState by viewModel.trackState.collectAsStateWithLifecycle()
-        CompanionDashboard(
+        CastCompanionDashboardBranch(
+            viewModel = viewModel,
             title = title,
             subtitle = subtitle,
-            overview = uiState.media.overview,
-            people = uiState.media.people,
-            lyricsLines = uiState.media.lyricsLines,
-            artworkUrl = uiState.media.artworkUrl,
+            uiState = uiState,
             isPlaying = isPlaying,
-            castPositionFlow = viewModel.cast.castPositionMs,
-            castVolumeFlow = viewModel.cast.castVolumeFlow,
+            isCastConnecting = isCastConnecting,
             durationMs = duration,
-            isConnecting = isCastConnecting,
-            audioTracks = trackState.audioTracks,
-            subtitleTracks = trackState.subtitleTracks,
-            episodes = uiState.episodes.seasonEpisodes,
-            onPlayPause = doTogglePlayPause,
-            onSeekBack = doSeekBack,
-            onSeekForward = doSeekForward,
-            onSeekTo = doSeekTo,
-            onVolumeChange = { vol -> viewModel.cast.setCastVolume(vol) },
-            onDisconnect = { viewModel.cast.onCastDisconnected(); disconnectCast() },
-            onSelectAudioTrack = { viewModel.selectAudioTrack(it) },
-            onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
-            onPlayEpisode = { epId -> viewModel.initialize(epId, null, 0L) },
-            getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+            doTogglePlayPause = doTogglePlayPause,
+            doSeekBack = doSeekBack,
+            doSeekForward = doSeekForward,
+            doSeekTo = doSeekTo,
             onToggleOrientation = toggleOrientation,
-            modifier = Modifier.fillMaxSize()
+            disconnectCast = disconnectCast,
         )
     } else {
         Box(
@@ -845,222 +836,61 @@ fun VideoPlayerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
                 .then(
-                    if (isTv && currentSheet == PlayerSheet.None) {
-                        Modifier
-                            .focusRequester(tvPlayerFocusRequester)
-                            .focusable()
-                            .onKeyEvent { keyEvent ->
-                                userInteractionCount++
-                                viewModel.onUserInteraction()
-                                if (keyEvent.type == KeyEventType.KeyDown &&
-                                    keyEvent.playerKeyCode == PlayerKeyCodes.KEYCODE_SPACE
-                                ) {
-                                    doTogglePlayPause()
-                                    performConfirmHaptic()
-                                    showControls = true
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                            .onDpadKeyEvent(
-                                onRight = { dpadKey ->
-                                    if (!showControls) {
-                                        if (dpadKey.isKeyDown) {
-                                            seekState.seekForward(dpadKey.repeatCount)
-                                        } else if (dpadKey.isKeyUp) {
-                                            seekState.commitForward()
-                                            performConfirmHaptic()
-                                        }
-                                        true
-                                    } else false
-                                },
-                                onLeft = { dpadKey ->
-                                    if (!showControls) {
-                                        if (dpadKey.isKeyDown) {
-                                            seekState.seekBackward(dpadKey.repeatCount)
-                                        } else if (dpadKey.isKeyUp) {
-                                            seekState.commitBackward()
-                                            performConfirmHaptic()
-                                        }
-                                        true
-                                    } else false
-                                },
-                                onSelect = {
-                                    if (!showControls) {
-                                        showControls = true
-                                        true
-                                    } else false
-                                },
-                                onUp = {
-                                    if (!showControls) {
-                                        showControls = true
-                                        true
-                                    } else false
-                                },
-                                onDown = {
-                                    if (!showControls) {
-                                        showControls = true
-                                        true
-                                    } else false
-                                },
-                                onBack = {
-                                    if (showControls) {
-                                        showControls = false
-                                        true
-                                    } else false
-                                },
-                                onPlayPause = {
-                                    doTogglePlayPause()
-                                    performConfirmHaptic()
-                                    true
-                                },
-                                onFastForward = {
-                                    doSeekForward()
-                                    showControls = true
-                                    performConfirmHaptic()
-                                    true
-                                },
-                                onRewind = {
-                                    doSeekBack()
-                                    showControls = true
-                                    performConfirmHaptic()
-                                    true
-                                },
-                            )
-                    } else if (!isTv && hasHardwareKeyboard && currentSheet == PlayerSheet.None) {
-                        // Hardware-keyboard shortcuts for phones/tablets with a
-                        // keyboard (Chromebook, Bluetooth, Samsung DeX). TV keeps
-                        // the D-pad scheme above; this branch is non-TV only so the
-                        // two never interfere. Keys match common media conventions:
-                        // space=play/pause, arrows=seek/volume, F=fullscreen, M=mute,
-                        // Esc=back, J/L=seek like YouTube.
-                        Modifier
-                            .focusRequester(keyboardFocusRequester)
-                            //  focus diagnostics — desktop-only (the
-                            // grab seam is the same gate), so the Android
-                            // modifier chain is byte-identical: `.then(Modifier)`
-                            // short-circuits to `this`. onFocusChanged observes
-                            // the focus target below; the preview logger fires
-                            // only when a key dispatch actually DESCENDS into
-                            // this Box (a focused target inside it, or itself) —
-                            // under the null-focus fallback the chain stops at
-                            // the shell's scaffold Row above the screen, so
-                            // silence here means the key never had a Compose
-                            // focus target under this Box. Harness-gated no-op
-                            // output otherwise.
-                            .then(
-                                if (grabsKeyboardFocusWithControlsVisible()) {
-                                    Modifier
-                                        .onFocusChanged { state ->
-                                            keyboardLayerHoldsFocus = state.hasFocus
-                                            harnessFocusDiag(
-                                                "player-keyboard-box focus: isFocused=" +
-                                                    "${state.isFocused} hasFocus=${state.hasFocus}",
-                                            )
-                                        }
-                                        .onPreviewKeyEvent { keyEvent ->
-                                            harnessFocusDiag(
-                                                "player-keyboard-box PREVIEW: type=" +
-                                                    "${keyEvent.type} key=${keyEvent.key}",
-                                            )
-                                            false
-                                        }
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .focusable()
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                //  diagnostic (desktop-only, harness-gated
-                                // no-op): proves the key HANDLER ran, separating
-                                // "no Compose focus target" failures from
-                                // "handler ran but the play state flipped back".
-                                if (grabsKeyboardFocusWithControlsVisible()) {
-                                    harnessFocusDiag(
-                                        "player-keyboard-box onKeyEvent: key=${keyEvent.key}",
-                                    )
-                                }
-                                // The interpretation moved into
-                                // [handleMediaKeyDown] above so the shell's
-                                // deterministic forward (the bridge sink) runs
-                                // the exact same when-block.
-                                handleMediaKeyDown(keyEvent)
-                            }
-                    } else Modifier
+                    playerBoxKeyInputModifier(
+                        isTv = isTv,
+                        hasHardwareKeyboard = hasHardwareKeyboard,
+                        isSheetOpen = currentSheet != PlayerSheet.None,
+                        showControls = showControls,
+                        onShowControlsChange = { showControls = it },
+                        tvPlayerFocusRequester = tvPlayerFocusRequester,
+                        keyboardFocusRequester = keyboardFocusRequester,
+                        onUserInteraction = {
+                            userInteractionCount++
+                            viewModel.onUserInteraction()
+                        },
+                        onKeyboardLayerFocusChange = { keyboardLayerHoldsFocus = it },
+                        seekState = seekState,
+                        doTogglePlayPause = doTogglePlayPause,
+                        doSeekBack = doSeekBack,
+                        doSeekForward = doSeekForward,
+                        performConfirmHaptic = performConfirmHaptic,
+                        handleMediaKeyDown = handleMediaKeyDown,
+                    )
                 )
-                .pointerInput(uiState.gestures.gesturesEnabled, isScreenLocked) {
-                    if (isScreenLocked) return@pointerInput
-                    if (!uiState.gestures.gesturesEnabled) return@pointerInput
-                    detectTapGestures(
-                        onTap = {
-                            viewModel.onUserInteraction()
-                            if (uiState.gestures.isHoldSpeedActive) {
-                                viewModel.stopHoldSpeed()
+                .then(
+                    Modifier.playerTapAndZoomGestures(
+                        gesturesEnabled = uiState.gestures.gesturesEnabled,
+                        isScreenLocked = isScreenLocked,
+                        onUserInteraction = { viewModel.onUserInteraction() },
+                        isHoldSpeedActive = { uiState.gestures.isHoldSpeedActive },
+                        holdSpeedEnabled = { uiState.gestures.holdSpeedEnabled },
+                        stopHoldSpeed = { viewModel.stopHoldSpeed() },
+                        startHoldSpeed = { viewModel.startHoldSpeed() },
+                        toggleControls = { showControls = !showControls },
+                        onDoubleTapSeekBack = {
+                            seekState.addOffset(-1, currentSeekDurationMs)
+                            currentDoSeekBack()
+                            performConfirmHaptic()
+                        },
+                        onDoubleTapSeekForward = {
+                            seekState.addOffset(1, currentSeekDurationMs)
+                            currentDoSeekForward()
+                            performConfirmHaptic()
+                        },
+                        onDoubleTapCenter = {
+                            if (videoZoom > 1f) {
+                                videoZoom = 1f
                             } else {
-                                showControls = !showControls
+                                currentDoTogglePlayPause()
+                                performConfirmHaptic()
                             }
                         },
-                        onLongPress = {
+                        applyZoomDelta = { delta ->
+                            videoZoom = (videoZoom * delta).coerceIn(1f, 3f)
                             viewModel.onUserInteraction()
-                            if (uiState.gestures.holdSpeedEnabled) viewModel.startHoldSpeed()
-                        },
-                        onDoubleTap = { offset ->
-                            viewModel.onUserInteraction()
-                            val width = size.width
-                            when {
-                                offset.x < width * 0.35 -> {
-                                    seekState.addOffset(-1, currentSeekDurationMs)
-                                    currentDoSeekBack()
-                                    performConfirmHaptic()
-                                }
-                                offset.x > width * 0.65 -> {
-                                    seekState.addOffset(1, currentSeekDurationMs)
-                                    currentDoSeekForward()
-                                    performConfirmHaptic()
-                                }
-                                else -> {
-                                    if (videoZoom > 1f) {
-                                        videoZoom = 1f
-                                    } else {
-                                        currentDoTogglePlayPause()
-                                        performConfirmHaptic()
-                                    }
-                                }
-                            }
                         },
                     )
-                }
-                .pointerInput(uiState.gestures.gesturesEnabled, isScreenLocked) {
-                    if (isScreenLocked) return@pointerInput
-                    if (!uiState.gestures.gesturesEnabled) return@pointerInput
-                    awaitEachGesture {
-                        var prevDistance = 0f
-                        do {
-                            val event = awaitPointerEvent()
-                            val pointers = event.changes.filter { it.pressed }
-                            if (pointers.size >= 2) {
-                                val p0 = pointers[0].position
-                                val p1 = pointers[1].position
-                                val distance = kotlin.math.sqrt(
-                                    (p0.x - p1.x) * (p0.x - p1.x) + (p0.y - p1.y) * (p0.y - p1.y)
-                                )
-                                if (prevDistance > 0f && distance > 0f) {
-                                    val zoom = distance / prevDistance
-                                    if (zoom != 1f) {
-                                        videoZoom = (videoZoom * zoom).coerceIn(1f, 3f)
-                                        viewModel.onUserInteraction()
-                                    }
-                                }
-                                prevDistance = distance
-                                pointers.forEach { it.consume() }
-                            } else {
-                                prevDistance = 0f
-                            }
-                        } while (event.changes.any { it.pressed })
-                    }
-                },
+                ),
         ) {
             // Effective zoom = pinch zoom × TV baseline zoom. Computed once
             // so the video graphicsLayer and the zoom-gated subtitle logic
@@ -1201,220 +1031,58 @@ fun VideoPlayerScreen(
                 }
             }
 
-            GestureOverlay(
+            PlayerGestureOverlayTier(
                 seekState = seekState,
-                brightnessFlow = gestureController.brightnessOverlay,
-                volumeFlow = gestureController.volumeOverlay,
-                indicatorSide = uiState.gestures.gestureIndicatorSide,
+                gestureController = gestureController,
+                gestureIndicatorSide = uiState.gestures.gestureIndicatorSide,
                 gesturesEnabled = uiState.gestures.gesturesEnabled && !isScreenLocked,
                 swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,
-                onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
-                onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },
-                onVolumeGesture = remember(gestureController) { { delta -> gestureController.onVolumeGesture(delta) } },
-                onClearOverlays = remember(gestureController, seekState) {
-                    {
-                        gestureController.onClearOverlays()
-                        seekState.reset()
-                    }
-                },
                 showControls = showControls,
-                onEdgeSwipe = remember(onBack) {
-                    {
-                        if (!showControls) {
-                            showControls = true
-                        } else {
-                            onBack()
-                        }
-                    }
-                },
-                onHapticPulse = remember(windowOps, viewModel) {
-                    {
-                        if (viewModel.hapticsEnabled) {
-                            windowOps.performConfirmHaptic()
-                        }
-                    }
-                },
-                onStartGesture = remember(gestureController) { { gestureController.onStartGesture() } },
-                onCancelOverlays = remember(gestureController, seekState) {
-                    {
-                        gestureController.onCancelOverlays()
-                        seekState.reset()
-                    }
-                },
+                onShowControlsChange = { showControls = it },
+                viewModel = viewModel,
+                windowOps = windowOps,
+                onBack = onBack,
+                isHoldSpeedActive = uiState.gestures.isHoldSpeedActive,
+                playbackSpeed = uiState.playbackSpeed,
             )
 
-            AnimatedVisibility(
-                visible = uiState.gestures.isHoldSpeedActive,
-                enter = fadeIn(tween(100)),
-                exit = fadeOut(tween(150)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(ShapeCache.smoothPill)
-                            .background(playerScrimColor().copy(alpha = 0.7f))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "${uiState.playbackSpeed}x",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                            ),
-                        )
-                    }
-                }
-            }
-
-            // Trickplay overlay for seek gestures
-            AnimatedVisibility(
-                visible = uiState.uiPrefs.trickplayOnSeekGesture && gestureTrickplayVisible,
-                enter = fadeIn(tween(150, easing = AlphaEasing)),
-                exit = fadeOut(tween(200, easing = AlphaEasing)),
-                modifier = Modifier.align(Alignment.Center),
-            ) {
-                TrickplayOverlay(
-                    bitmap = gestureTrickplayBitmap,
-                    positionMs = gestureSeekPositionMs,
-                    deltaMs = gestureDeltaMs,
-                    durationMs = duration,
-                )
-            }
-
-            if (cinemaIntroState != null && !isInPipMode) {
-                IntroSkipOverlay(
-                    isVisible = true,
-                    onSkip = {
-                        viewModel.skipIntro()
-                        performConfirmHaptic()
-                    },
-                    focusRequester = tvCinemaIntroFocusRequester,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 100.dp, end = 40.dp),
-                )
-            }
-
-            if (activeSegment != null && activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON && !isInPipMode) {
-                val hideForUpNext = activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext
-                if (!hideForUpNext) {
-                    SegmentSkipOverlay(
-                        isVisible = true,
-                        segmentType = activeSegment.type,
-                        onSkip = {
-                            viewModel.skipSegment(activeSegment)
-                            performConfirmHaptic()
-                        },
-                        focusRequester = tvSkipSegmentFocusRequester,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(bottom = 100.dp, end = 40.dp),
-                    )
-                }
-            }
-
-            // "Skipped …" confirmation: raised by the VM when an
-            // auto-skip fires or a skip-on-seek clamp lands; the VM owns the
-            // ~2.5 s auto-clear, this is a pure AnimatedVisibility consumer.
-            // Co-located with the SegmentSkipOverlay placement so the two
-            // never overlap it (bottom-center, above the control chrome).
-            val skippedNotice = uiState.skippedSegmentNotice
-            AnimatedVisibility(
-                visible = skippedNotice != null,
-                enter = fadeIn(tween(150, easing = AlphaEasing)),
-                exit = fadeOut(tween(300, easing = AlphaEasing)),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 100.dp),
-            ) {
-                if (skippedNotice != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(ShapeCache.smoothPill)
-                            .background(playerScrimColor().copy(alpha = 0.7f))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.player_video_skipped_segment, skippedNotice.segmentType.localizedDisplayName()),
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        )
-                    }
-                }
-            }
-
-            if (nextEpisode != null) {
-                NextEpisodeOverlay(
-                    isVisible = shouldShowUpNext,
-                    episodeTitle = nextEpisode.name,
-                    seriesName = nextEpisode.seriesName,
-                    seasonNumber = nextEpisode.seasonNumber,
-                    episodeNumber = nextEpisode.episodeNumber,
-                    thumbnailUrl = nextEpisodeImageUrl,
-                    countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
-                    autoplayEnabled = uiState.autoplay.videoAutoplayNext,
-                    onPlayNext = { viewModel.playNextEpisode() },
-                    onCancel = { viewModel.cancelAutoplay() },
-                    onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext) },
-                    isPlaying = isPlaying,
-                    pauseCountdown = currentSheet != PlayerSheet.None || isScreenLocked,
-                    isLoading = isNextEpisodeLoading,
-                    focusRequester = tvNextEpisodeFocusRequester,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 40.dp, end = 40.dp),
-                )
-            }
-
-            HdrBadge(
-                hdrType = uiState.hdrType,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = 16.dp, end = 16.dp),
+            PlayerCenterOverlayTier(
+                viewModel = viewModel,
+                uiState = uiState,
+                trickplayOnSeekGesture = uiState.uiPrefs.trickplayOnSeekGesture,
+                gestureTrickplayVisible = gestureTrickplayVisible,
+                gestureTrickplayBitmap = gestureTrickplayBitmap,
+                gestureSeekPositionMs = gestureSeekPositionMs,
+                gestureDeltaMs = gestureDeltaMs,
+                durationMs = duration,
+                isCinemaIntroVisible = isCinemaIntroVisible,
+                tvCinemaIntroFocusRequester = tvCinemaIntroFocusRequester,
+                performConfirmHaptic = performConfirmHaptic,
+                activeSegment = activeSegment,
+                activeSegmentBehavior = activeSegmentBehavior,
+                shouldShowUpNext = shouldShowUpNext,
+                isInPipMode = isInPipMode,
+                tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
+                nextEpisode = nextEpisode,
+                nextEpisodeImageUrl = nextEpisodeImageUrl,
+                isNextEpisodeLoading = isNextEpisodeLoading,
+                tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
+                isPlaying = isPlaying,
+                isSheetOpen = currentSheet != PlayerSheet.None,
+                isScreenLocked = isScreenLocked,
+                playbackIntended = playbackIntended,
             )
-
-            if (uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended) {
-                Box(
-                    modifier = Modifier.align(Alignment.Center),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    JellyPlayLoadingIndicator(color = playerOnScrim())
-                }
-            }
 
             if (isScreenLocked && !isInPipMode) {
-                val usePin = uiState.uiPrefs.usePinForPlayerLock && uiState.uiPrefs.hasPin
-                if (usePin) {
-                    PinLockOverlay(
-                        visible = true,
-                        onDismiss = { },
-                        onUnlock = {
-                            viewModel.setScreenLocked(false)
-                            showControls = true
-                        },
-                        verifyPin = { pin -> viewModel.verifyPlayerLockPin(pin) },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    SlideToUnlockOverlay(
-                        visible = true,
-                        onDismiss = { },
-                        onUnlock = {
-                            viewModel.setScreenLocked(false)
-                            showControls = true
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+                PlayerLockOverlayTier(
+                    usePinForPlayerLock = uiState.uiPrefs.usePinForPlayerLock,
+                    hasPin = uiState.uiPrefs.hasPin,
+                    viewModel = viewModel,
+                    onUnlock = {
+                        viewModel.setScreenLocked(false)
+                        showControls = true
+                    },
+                )
             }
 
             // Controller-owned slices — collected here, at their
@@ -1427,70 +1095,21 @@ fun VideoPlayerScreen(
             val abRepeat by viewModel.abRepeat.state.collectAsStateWithLifecycle()
             val syncPlay by viewModel.syncPlay.state.collectAsStateWithLifecycle()
 
-            if (uiState.uiPrefs.showVideoStats) {
-                VideoStatsOverlay(
-                    statsFlow = viewModel.videoStats,
-                    currentPositionFlow = viewModel.currentPositionMs,
-                    // the ranges readout row's source, collected at
-                    // this leaf like statsFlow.
-                    bufferedRangesFlow = viewModel.bufferedRanges,
-                    durationMs = duration,
-                    playbackSpeed = playbackSpeed,
-                    isPlaying = isPlaying,
-                    playbackState = when {
-                        uiState.playerError != null -> "Error"
-                        !isPlaying -> "Paused"
-                        else -> "Playing"
-                    },
-                    playMethod = uiState.media.playMethod,
-                    streamingQuality = uiState.preferredPlayerType.name,
-                    playerType = uiState.preferredPlayerType.name,
-                    decoderMode = effectsState.decoderMode.displayName,
-                    transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
-                    // Engines expose a real audio session id (ExoPlayer: live
-                    // session; mpv: generated id; VLC: 0 — capabilities gate the
-                    // row). Read the collected engine so a swap refreshes it.
-                    audioSessionId = engine?.audioSessionId ?: 0,
-                    // Drop below the CastIndicator when both are visible so
-                    // they don't stack on the same (60dp, 16dp) anchor.
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = if (isCastConnected || isCastConnecting) 92.dp else 60.dp)
-                        .width(280.dp),
-                )
-            }
-
-            AutoAspectRatioBadge(
+            PlayerStatusOverlayTier(
+                viewModel = viewModel,
+                uiState = uiState,
+                durationMs = duration,
+                playbackSpeed = playbackSpeed,
+                isPlaying = isPlaying,
+                decoderMode = effectsState.decoderMode,
+                engine = engine,
+                isCastConnected = isCastConnected,
+                isCastConnecting = isCastConnecting,
+                snackbarHostState = snackbarHostState,
+                resumeChipHostState = resumeChipHostState,
                 detectedAspectRatio = detectedAspectRatio,
                 aspectRatio = aspectRatio,
-            )
-            AbRepeatBadge(events = viewModel.abRepeat.events)
-
-            ZoomBadge(videoZoom = videoZoom)
-
-            if (isCastConnected || isCastConnecting) {
-                CastIndicatorOverlay(
-                    isConnecting = isCastConnecting,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 60.dp, start = 16.dp),
-                )
-            }
-
-            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = SNACKBAR_BOTTOM_CLEARANCE_DP.dp),
-            )
-
-            // "Resumed from where you left off" chip — anchored under the top bar.
-            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
-                hostState = resumeChipHostState,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = RESUME_CHIP_TOP_CLEARANCE_DP.dp),
+                videoZoom = videoZoom,
             )
 
             val hasEpisodes = uiState.episodes.seriesSeasons.isNotEmpty() && uiState.episodes.seasonEpisodes.isNotEmpty()
@@ -1650,7 +1269,7 @@ fun VideoPlayerScreen(
             // (below the control chrome) so the user can watch subtitles shift.
             // Passes empty-space taps through to the host gesture layer.
             if (showDelayOverlay && !isInPipMode && !isScreenLocked) {
-                SubtitleDelayOverlay(
+                PlayerSubtitleDelayOverlay(
                     currentDelayMs = uiState.subtitleStyle.offsetMs,
                     onChange = { viewModel.setSubtitleDelay(it) },
                     onDismiss = { showDelayOverlay = false },
@@ -1771,18 +1390,15 @@ fun VideoPlayerScreen(
             )
             } // end PlayerDarkTheme (control bars)
 
-            AnimatedVisibility(
-                visible = !isTv && uiState.uiPrefs.trickplayEnabled && showControls && isSeeking,
-                enter = fadeIn(tween(150, easing = AlphaEasing)),
-                exit = fadeOut(tween(200, easing = AlphaEasing)),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP.dp),
-            ) {
-                TrickplayOverlay(
-                    bitmap = seekTrickplayBitmap,
-                    positionMs = seekPositionMs,
-                    durationMs = duration,
-                )
-            }
+            PlayerSeekScrubTrickplayOverlay(
+                isTv = isTv,
+                trickplayEnabled = uiState.uiPrefs.trickplayEnabled,
+                showControls = showControls,
+                isSeeking = isSeeking,
+                bitmap = seekTrickplayBitmap,
+                positionMs = seekPositionMs,
+                durationMs = duration,
+            )
 
             // Full-screen loading overlay during the initial media load. Covers
             // the surface + controls so the seek bar never paints a transient 0
@@ -1944,6 +1560,682 @@ fun VideoPlayerScreen(
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },
             transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
+        )
+    }
+}
+
+/** Cast-connected branch: the companion dashboard replaces the video surface entirely (track slice collected branch-locally). */
+@Composable
+private fun CastCompanionDashboardBranch(
+    viewModel: VideoPlayerViewModel,
+    title: String,
+    subtitle: String,
+    uiState: VideoPlayerUiState,
+    isPlaying: Boolean,
+    isCastConnecting: Boolean,
+    durationMs: Long,
+    doTogglePlayPause: () -> Unit,
+    doSeekBack: () -> Unit,
+    doSeekForward: () -> Unit,
+    doSeekTo: (Long) -> Unit,
+    onToggleOrientation: () -> Unit,
+    disconnectCast: () -> Unit,
+) {
+    // Track slice — collected here (the cast dashboard is the
+    // only consumer on this branch) rather than through the residual uiState.
+    val trackState by viewModel.trackState.collectAsStateWithLifecycle()
+    CompanionDashboard(
+        title = title,
+        subtitle = subtitle,
+        overview = uiState.media.overview,
+        people = uiState.media.people,
+        lyricsLines = uiState.media.lyricsLines,
+        artworkUrl = uiState.media.artworkUrl,
+        isPlaying = isPlaying,
+        castPositionFlow = viewModel.cast.castPositionMs,
+        castVolumeFlow = viewModel.cast.castVolumeFlow,
+        durationMs = durationMs,
+        isConnecting = isCastConnecting,
+        audioTracks = trackState.audioTracks,
+        subtitleTracks = trackState.subtitleTracks,
+        episodes = uiState.episodes.seasonEpisodes,
+        onPlayPause = doTogglePlayPause,
+        onSeekBack = doSeekBack,
+        onSeekForward = doSeekForward,
+        onSeekTo = doSeekTo,
+        onVolumeChange = { vol -> viewModel.cast.setCastVolume(vol) },
+        onDisconnect = { viewModel.cast.onCastDisconnected(); disconnectCast() },
+        onSelectAudioTrack = { viewModel.selectAudioTrack(it) },
+        onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
+        onPlayEpisode = { epId -> viewModel.initialize(epId, null, 0L) },
+        getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+        onToggleOrientation = onToggleOrientation,
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
+/** The surface Box's TV D-pad / hardware-key focus + input tier (the inline if/else modifier chain verbatim). */
+private fun playerBoxKeyInputModifier(
+    isTv: Boolean,
+    hasHardwareKeyboard: Boolean,
+    isSheetOpen: Boolean,
+    showControls: Boolean,
+    onShowControlsChange: (Boolean) -> Unit,
+    tvPlayerFocusRequester: FocusRequester,
+    keyboardFocusRequester: FocusRequester,
+    onUserInteraction: () -> Unit,
+    onKeyboardLayerFocusChange: (Boolean) -> Unit,
+    seekState: DpadSeekState,
+    doTogglePlayPause: () -> Unit,
+    doSeekBack: () -> Unit,
+    doSeekForward: () -> Unit,
+    performConfirmHaptic: () -> Unit,
+    handleMediaKeyDown: (KeyEvent) -> Boolean,
+): Modifier =
+    if (isTv && !isSheetOpen) {
+        Modifier
+            .focusRequester(tvPlayerFocusRequester)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                onUserInteraction()
+                if (keyEvent.type == KeyEventType.KeyDown &&
+                    keyEvent.playerKeyCode == PlayerKeyCodes.KEYCODE_SPACE
+                ) {
+                    doTogglePlayPause()
+                    performConfirmHaptic()
+                    onShowControlsChange(true)
+                    true
+                } else {
+                    false
+                }
+            }
+            .onDpadKeyEvent(
+                onRight = { dpadKey ->
+                    if (!showControls) {
+                        if (dpadKey.isKeyDown) {
+                            seekState.seekForward(dpadKey.repeatCount)
+                        } else if (dpadKey.isKeyUp) {
+                            seekState.commitForward()
+                            performConfirmHaptic()
+                        }
+                        true
+                    } else false
+                },
+                onLeft = { dpadKey ->
+                    if (!showControls) {
+                        if (dpadKey.isKeyDown) {
+                            seekState.seekBackward(dpadKey.repeatCount)
+                        } else if (dpadKey.isKeyUp) {
+                            seekState.commitBackward()
+                            performConfirmHaptic()
+                        }
+                        true
+                    } else false
+                },
+                onSelect = {
+                    if (!showControls) {
+                        onShowControlsChange(true)
+                        true
+                    } else false
+                },
+                onUp = {
+                    if (!showControls) {
+                        onShowControlsChange(true)
+                        true
+                    } else false
+                },
+                onDown = {
+                    if (!showControls) {
+                        onShowControlsChange(true)
+                        true
+                    } else false
+                },
+                onBack = {
+                    if (showControls) {
+                        onShowControlsChange(false)
+                        true
+                    } else false
+                },
+                onPlayPause = {
+                    doTogglePlayPause()
+                    performConfirmHaptic()
+                    true
+                },
+                onFastForward = {
+                    doSeekForward()
+                    onShowControlsChange(true)
+                    performConfirmHaptic()
+                    true
+                },
+                onRewind = {
+                    doSeekBack()
+                    onShowControlsChange(true)
+                    performConfirmHaptic()
+                    true
+                },
+            )
+    } else if (!isTv && hasHardwareKeyboard && !isSheetOpen) {
+        // Hardware-keyboard shortcuts for phones/tablets with a
+        // keyboard (Chromebook, Bluetooth, Samsung DeX). TV keeps
+        // the D-pad scheme above; this branch is non-TV only so the
+        // two never interfere. Keys match common media conventions:
+        // space=play/pause, arrows=seek/volume, F=fullscreen, M=mute,
+        // Esc=back, J/L=seek like YouTube.
+        Modifier
+            .focusRequester(keyboardFocusRequester)
+            //  focus diagnostics — desktop-only (the
+            // grab seam is the same gate), so the Android
+            // modifier chain is byte-identical: `.then(Modifier)`
+            // short-circuits to `this`. onFocusChanged observes
+            // the focus target below; the preview logger fires
+            // only when a key dispatch actually DESCENDS into
+            // this Box (a focused target inside it, or itself) —
+            // under the null-focus fallback the chain stops at
+            // the shell's scaffold Row above the screen, so
+            // silence here means the key never had a Compose
+            // focus target under this Box. Harness-gated no-op
+            // output otherwise.
+            .then(
+                if (grabsKeyboardFocusWithControlsVisible()) {
+                    Modifier
+                        .onFocusChanged { state ->
+                            onKeyboardLayerFocusChange(state.hasFocus)
+                            harnessFocusDiag(
+                                "player-keyboard-box focus: isFocused=" +
+                                    "${state.isFocused} hasFocus=${state.hasFocus}",
+                            )
+                        }
+                        .onPreviewKeyEvent { keyEvent ->
+                            harnessFocusDiag(
+                                "player-keyboard-box PREVIEW: type=" +
+                                    "${keyEvent.type} key=${keyEvent.key}",
+                            )
+                            false
+                        }
+                } else {
+                    Modifier
+                },
+            )
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                //  diagnostic (desktop-only, harness-gated
+                // no-op): proves the key HANDLER ran, separating
+                // "no Compose focus target" failures from
+                // "handler ran but the play state flipped back".
+                if (grabsKeyboardFocusWithControlsVisible()) {
+                    harnessFocusDiag(
+                        "player-keyboard-box onKeyEvent: key=${keyEvent.key}",
+                    )
+                }
+                // The interpretation moved into
+                // [handleMediaKeyDown] so the shell's
+                // deterministic forward (the bridge sink) runs
+                // the exact same when-block.
+                handleMediaKeyDown(keyEvent)
+            }
+    } else Modifier
+
+/** The surface Box's tap / double-tap / pinch-zoom gesture tier (the two pointerInput modifiers verbatim). */
+private fun Modifier.playerTapAndZoomGestures(
+    gesturesEnabled: Boolean,
+    isScreenLocked: Boolean,
+    onUserInteraction: () -> Unit,
+    isHoldSpeedActive: () -> Boolean,
+    holdSpeedEnabled: () -> Boolean,
+    stopHoldSpeed: () -> Unit,
+    startHoldSpeed: () -> Unit,
+    toggleControls: () -> Unit,
+    onDoubleTapSeekBack: () -> Unit,
+    onDoubleTapSeekForward: () -> Unit,
+    onDoubleTapCenter: () -> Unit,
+    applyZoomDelta: (Float) -> Unit,
+): Modifier =
+    // pointerInput only re-launches its block when a KEY changes, so every
+    // callback reading live screen state (hold-speed flags, the zoom value,
+    // the rememberUpdatedState seek delegates) must arrive as a
+    // reader/setter LAMBDA invoked at event time — a captured VALUE would
+    // freeze until the next key change (the staleness the inline lambdas
+    // avoided by reading through the parent's state delegates).
+    pointerInput(gesturesEnabled, isScreenLocked) {
+        if (isScreenLocked) return@pointerInput
+        if (!gesturesEnabled) return@pointerInput
+        detectTapGestures(
+            onTap = {
+                onUserInteraction()
+                if (isHoldSpeedActive()) {
+                    stopHoldSpeed()
+                } else {
+                    toggleControls()
+                }
+            },
+            onLongPress = {
+                onUserInteraction()
+                if (holdSpeedEnabled()) startHoldSpeed()
+            },
+            onDoubleTap = { offset ->
+                onUserInteraction()
+                val width = size.width
+                when {
+                    offset.x < width * 0.35 -> onDoubleTapSeekBack()
+                    offset.x > width * 0.65 -> onDoubleTapSeekForward()
+                    else -> onDoubleTapCenter()
+                }
+            },
+        )
+    }
+        .pointerInput(gesturesEnabled, isScreenLocked) {
+            if (isScreenLocked) return@pointerInput
+            if (!gesturesEnabled) return@pointerInput
+            awaitEachGesture {
+                var prevDistance = 0f
+                do {
+                    val event = awaitPointerEvent()
+                    val pointers = event.changes.filter { it.pressed }
+                    if (pointers.size >= 2) {
+                        val p0 = pointers[0].position
+                        val p1 = pointers[1].position
+                        val distance = kotlin.math.sqrt(
+                            (p0.x - p1.x) * (p0.x - p1.x) + (p0.y - p1.y) * (p0.y - p1.y)
+                        )
+                        if (prevDistance > 0f && distance > 0f) {
+                            val zoom = distance / prevDistance
+                            if (zoom != 1f) {
+                                applyZoomDelta(zoom)
+                            }
+                        }
+                        prevDistance = distance
+                        pointers.forEach { it.consume() }
+                    } else {
+                        prevDistance = 0f
+                    }
+                } while (event.changes.any { it.pressed })
+            }
+        }
+
+/** Overlays tier 1: the gesture indicator layer (swipe seek/volume/brightness) + the hold-speed pill. */
+@Composable
+private fun PlayerGestureOverlayTier(
+    seekState: DpadSeekState,
+    gestureController: GestureSeekController,
+    gestureIndicatorSide: GestureIndicatorSide,
+    gesturesEnabled: Boolean,
+    swipeSeekMaxMs: Long,
+    showControls: Boolean,
+    onShowControlsChange: (Boolean) -> Unit,
+    viewModel: VideoPlayerViewModel,
+    windowOps: PlayerWindowOps,
+    onBack: () -> Unit,
+    isHoldSpeedActive: Boolean,
+    playbackSpeed: Float,
+) {
+    GestureOverlay(
+        seekState = seekState,
+        brightnessFlow = gestureController.brightnessOverlay,
+        volumeFlow = gestureController.volumeOverlay,
+        indicatorSide = gestureIndicatorSide,
+        gesturesEnabled = gesturesEnabled,
+        swipeSeekMaxMs = swipeSeekMaxMs,
+        onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
+        onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },
+        onVolumeGesture = remember(gestureController) { { delta -> gestureController.onVolumeGesture(delta) } },
+        onClearOverlays = remember(gestureController, seekState) {
+            {
+                gestureController.onClearOverlays()
+                seekState.reset()
+            }
+        },
+        showControls = showControls,
+        onEdgeSwipe = remember(onBack) {
+            {
+                if (!showControls) {
+                    onShowControlsChange(true)
+                } else {
+                    onBack()
+                }
+            }
+        },
+        onHapticPulse = remember(windowOps, viewModel) {
+            {
+                if (viewModel.hapticsEnabled) {
+                    windowOps.performConfirmHaptic()
+                }
+            }
+        },
+        onStartGesture = remember(gestureController) { { gestureController.onStartGesture() } },
+        onCancelOverlays = remember(gestureController, seekState) {
+            {
+                gestureController.onCancelOverlays()
+                seekState.reset()
+            }
+        },
+    )
+
+    AnimatedVisibility(
+        visible = isHoldSpeedActive,
+        enter = fadeIn(tween(100)),
+        exit = fadeOut(tween(150)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(ShapeCache.smoothPill)
+                    .background(playerScrimColor().copy(alpha = 0.7f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "${playbackSpeed}x",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+/** Center/anchored overlays: gesture trickplay, intro/segment skip, skipped notice, up-next, HDR badge, buffering spinner. */
+@Composable
+private fun BoxScope.PlayerCenterOverlayTier(
+    viewModel: VideoPlayerViewModel,
+    uiState: VideoPlayerUiState,
+    trickplayOnSeekGesture: Boolean,
+    gestureTrickplayVisible: Boolean,
+    gestureTrickplayBitmap: PlatformBitmap?,
+    gestureSeekPositionMs: Long,
+    gestureDeltaMs: Long,
+    durationMs: Long,
+    isCinemaIntroVisible: Boolean,
+    tvCinemaIntroFocusRequester: FocusRequester,
+    performConfirmHaptic: () -> Unit,
+    activeSegment: MediaSegment?,
+    activeSegmentBehavior: SegmentBehavior?,
+    shouldShowUpNext: Boolean,
+    isInPipMode: Boolean,
+    tvSkipSegmentFocusRequester: FocusRequester,
+    nextEpisode: MediaItem?,
+    nextEpisodeImageUrl: String?,
+    isNextEpisodeLoading: Boolean,
+    tvNextEpisodeFocusRequester: FocusRequester,
+    isPlaying: Boolean,
+    isSheetOpen: Boolean,
+    isScreenLocked: Boolean,
+    playbackIntended: Boolean,
+) {
+    // Trickplay overlay for seek gestures
+    AnimatedVisibility(
+        visible = trickplayOnSeekGesture && gestureTrickplayVisible,
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
+        modifier = Modifier.align(Alignment.Center),
+    ) {
+        TrickplayOverlay(
+            bitmap = gestureTrickplayBitmap,
+            positionMs = gestureSeekPositionMs,
+            deltaMs = gestureDeltaMs,
+            durationMs = durationMs,
+        )
+    }
+
+    if (isCinemaIntroVisible) {
+        IntroSkipOverlay(
+            isVisible = true,
+            onSkip = {
+                viewModel.skipIntro()
+                performConfirmHaptic()
+            },
+            focusRequester = tvCinemaIntroFocusRequester,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 100.dp, end = 40.dp),
+        )
+    }
+
+    if (activeSegment != null && activeSegmentBehavior == SegmentBehavior.SHOW_BUTTON && !isInPipMode) {
+        val hideForUpNext = activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext
+        if (!hideForUpNext) {
+            SegmentSkipOverlay(
+                isVisible = true,
+                segmentType = activeSegment.type,
+                onSkip = {
+                    viewModel.skipSegment(activeSegment)
+                    performConfirmHaptic()
+                },
+                focusRequester = tvSkipSegmentFocusRequester,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 100.dp, end = 40.dp),
+            )
+        }
+    }
+
+    // "Skipped …" confirmation: raised by the VM when an
+    // auto-skip fires or a skip-on-seek clamp lands; the VM owns the
+    // ~2.5 s auto-clear, this is a pure AnimatedVisibility consumer.
+    // Co-located with the SegmentSkipOverlay placement so the two
+    // never overlap it (bottom-center, above the control chrome).
+    val skippedNotice = uiState.skippedSegmentNotice
+    AnimatedVisibility(
+        visible = skippedNotice != null,
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(300, easing = AlphaEasing)),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 100.dp),
+    ) {
+        if (skippedNotice != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(ShapeCache.smoothPill)
+                    .background(playerScrimColor().copy(alpha = 0.7f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.player_video_skipped_segment, skippedNotice.segmentType.localizedDisplayName()),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+        }
+    }
+
+    if (nextEpisode != null) {
+        NextEpisodeOverlay(
+            isVisible = shouldShowUpNext,
+            episodeTitle = nextEpisode.name,
+            seriesName = nextEpisode.seriesName,
+            seasonNumber = nextEpisode.seasonNumber,
+            episodeNumber = nextEpisode.episodeNumber,
+            thumbnailUrl = nextEpisodeImageUrl,
+            countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
+            autoplayEnabled = uiState.autoplay.videoAutoplayNext,
+            onPlayNext = { viewModel.playNextEpisode() },
+            onCancel = { viewModel.cancelAutoplay() },
+            onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext) },
+            isPlaying = isPlaying,
+            pauseCountdown = isSheetOpen || isScreenLocked,
+            isLoading = isNextEpisodeLoading,
+            focusRequester = tvNextEpisodeFocusRequester,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 40.dp, end = 40.dp),
+        )
+    }
+
+    HdrBadge(
+        hdrType = uiState.hdrType,
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(top = 16.dp, end = 16.dp),
+    )
+
+    if (uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended) {
+        Box(
+            modifier = Modifier.align(Alignment.Center),
+            contentAlignment = Alignment.Center,
+        ) {
+            JellyPlayLoadingIndicator(color = playerOnScrim())
+        }
+    }
+}
+
+/** Full-screen lock overlays: PIN pad (when configured) or slide-to-unlock; unlock re-reveals the controls. */
+@Composable
+private fun PlayerLockOverlayTier(
+    usePinForPlayerLock: Boolean,
+    hasPin: Boolean,
+    viewModel: VideoPlayerViewModel,
+    onUnlock: () -> Unit,
+) {
+    val usePin = usePinForPlayerLock && hasPin
+    if (usePin) {
+        PinLockOverlay(
+            visible = true,
+            onDismiss = { },
+            onUnlock = onUnlock,
+            verifyPin = { pin -> viewModel.verifyPlayerLockPin(pin) },
+            modifier = Modifier.fillMaxSize(),
+        )
+    } else {
+        SlideToUnlockOverlay(
+            visible = true,
+            onDismiss = { },
+            onUnlock = onUnlock,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+/** Stats/badges/snackbar tier: "Stats for Nerds", aspect/AB-repeat/zoom badges, cast indicator, both snackbar hosts. */
+@Composable
+private fun BoxScope.PlayerStatusOverlayTier(
+    viewModel: VideoPlayerViewModel,
+    uiState: VideoPlayerUiState,
+    durationMs: Long,
+    playbackSpeed: Float,
+    isPlaying: Boolean,
+    decoderMode: DecoderMode,
+    engine: MediaEngine?,
+    isCastConnected: Boolean,
+    isCastConnecting: Boolean,
+    snackbarHostState: SnackbarHostState,
+    resumeChipHostState: SnackbarHostState,
+    detectedAspectRatio: AspectRatio?,
+    aspectRatio: AspectRatio,
+    videoZoom: Float,
+) {
+    if (uiState.uiPrefs.showVideoStats) {
+        VideoStatsOverlay(
+            statsFlow = viewModel.videoStats,
+            currentPositionFlow = viewModel.currentPositionMs,
+            // the ranges readout row's source, collected at
+            // this leaf like statsFlow.
+            bufferedRangesFlow = viewModel.bufferedRanges,
+            durationMs = durationMs,
+            playbackSpeed = playbackSpeed,
+            isPlaying = isPlaying,
+            playbackState = when {
+                uiState.playerError != null -> "Error"
+                !isPlaying -> "Paused"
+                else -> "Playing"
+            },
+            playMethod = uiState.media.playMethod,
+            streamingQuality = uiState.preferredPlayerType.name,
+            playerType = uiState.preferredPlayerType.name,
+            decoderMode = decoderMode.displayName,
+            transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
+            // Engines expose a real audio session id (ExoPlayer: live
+            // session; mpv: generated id; VLC: 0 — capabilities gate the
+            // row). Read the collected engine so a swap refreshes it.
+            audioSessionId = engine?.audioSessionId ?: 0,
+            // Drop below the CastIndicator when both are visible so
+            // they don't stack on the same (60dp, 16dp) anchor.
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 16.dp, top = if (isCastConnected || isCastConnecting) 92.dp else 60.dp)
+                .width(280.dp),
+        )
+    }
+
+    AutoAspectRatioBadge(
+        detectedAspectRatio = detectedAspectRatio,
+        aspectRatio = aspectRatio,
+    )
+    AbRepeatBadge(events = viewModel.abRepeat.events)
+
+    ZoomBadge(videoZoom = videoZoom)
+
+    if (isCastConnected || isCastConnecting) {
+        CastIndicatorOverlay(
+            isConnecting = isCastConnecting,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 60.dp, start = 16.dp),
+        )
+    }
+
+    com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = SNACKBAR_BOTTOM_CLEARANCE_DP.dp),
+    )
+
+    // "Resumed from where you left off" chip — anchored under the top bar.
+    com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
+        hostState = resumeChipHostState,
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(top = RESUME_CHIP_TOP_CLEARANCE_DP.dp),
+    )
+}
+
+/** Transparent VLC-style subtitle-delay overlay (empty-space taps pass through to the gesture layer). */
+@Composable
+private fun PlayerSubtitleDelayOverlay(
+    currentDelayMs: Long,
+    onChange: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    SubtitleDelayOverlay(
+        currentDelayMs = currentDelayMs,
+        onChange = onChange,
+        onDismiss = onDismiss,
+    )
+}
+
+/** Seek-scrub trickplay thumbnail anchored above the bottom controls (non-TV, controls visible, active scrub). */
+@Composable
+private fun BoxScope.PlayerSeekScrubTrickplayOverlay(
+    isTv: Boolean,
+    trickplayEnabled: Boolean,
+    showControls: Boolean,
+    isSeeking: Boolean,
+    bitmap: PlatformBitmap?,
+    positionMs: Long,
+    durationMs: Long,
+) {
+    AnimatedVisibility(
+        visible = !isTv && trickplayEnabled && showControls && isSeeking,
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP.dp),
+    ) {
+        TrickplayOverlay(
+            bitmap = bitmap,
+            positionMs = positionMs,
+            durationMs = durationMs,
         )
     }
 }

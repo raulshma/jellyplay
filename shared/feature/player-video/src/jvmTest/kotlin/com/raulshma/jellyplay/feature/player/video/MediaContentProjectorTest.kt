@@ -5,21 +5,25 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 /**
  * Tests for [MediaContentProjector] — the `media` slice's single writer
  * (A8). All dependencies are plain constructor-lambda fakes over a real
- * [MediaContentState] mirror; no ViewModel, no uiState. The headline pin is
+ * [MediaContentState] mirror; no ViewModel, no uiState. The headline pins:
  * the refreshed-detail ORDER (detail apply → session-manager re-sync →
- * streams write → track-rebuild fan-outs) that used to live only as prose in
- * the VM's applyMediaDetailAndSourceState.
+ * streams write → track-rebuild fan-outs) and the session-state FOLD
+ * (unguarded title/subtitle + stored-seed every emission; item-change =
+ * refresh THEN the fire-and-forget render poke) that used to live as the
+ * VM's inline collector body.
  */
 class MediaContentProjectorTest {
 
@@ -32,6 +36,12 @@ class MediaContentProjectorTest {
     private var lastRefreshedStreams: List<MediaStream>? = null
     private var lastRefreshedSubtitleIndex: Int? = null
     private var matchedSource: MediaSource? = source("version-a")
+
+    // Session-fold mirrors (the new seams' captured writes).
+    private var lastTitle: String? = null
+    private var lastSubtitle: String? = null
+    private var lastStoredSelection: MediaStreamSelection? = null
+    private val storedSelectionsByItem = mutableMapOf<String, MediaStreamSelection>()
 
     private lateinit var projector: MediaContentProjector
 
@@ -65,6 +75,26 @@ class MediaContentProjectorTest {
                 lastRefreshedStreams = streams
                 lastRefreshedSubtitleIndex = newSubtitleStreamIndex
                 log += "onStreamsRefreshed"
+            },
+            setTitleSubtitle = { title, subtitle ->
+                lastTitle = title
+                lastSubtitle = subtitle
+                log += "titleSubtitle"
+            },
+            onStoredSelectionChanged = { stored ->
+                lastStoredSelection = stored
+                log += "storedSelection"
+            },
+            getStoredSelection = { itemId -> itemId?.let { storedSelectionsByItem[it] } },
+            refreshPlaybackPreferences = { log += "refreshPlaybackPreferences" },
+            onSessionItemChanged = { itemId, seriesId ->
+                log += "renderPoke:$itemId:$seriesId"
+            },
+            // Runs the launched block inline so the refresh → poke ordering
+            // is deterministic in the log; the real seam never awaits it.
+            launchAsync = { block ->
+                log += "launchAsync"
+                kotlinx.coroutines.runBlocking { block() }
             },
         )
     }
@@ -116,6 +146,118 @@ class MediaContentProjectorTest {
         // A null overview normalizes to empty, not null.
         projector.onDetail(detail(overview = null), artworkUrl = "x")
         assertEquals("", media.overview)
+    }
+
+    @Test
+    fun onSessionState_firstEmissionFiresItemChange_refreshBeforeLaunchBeforeRenderPoke() {
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1", title = "Episode 2"),
+            seriesId = "series-9",
+        )
+
+        // THE session-fold ordering pin (the VM's former inline body): the
+        // unguarded mirrors first, then — on the FIRST emission (fold state
+        // starts null) — refreshPlaybackPreferences BEFORE the render poke,
+        // and the poke goes through the launch seam (fire-and-forget).
+        assertEquals(
+            listOf(
+                "titleSubtitle",
+                "mediaWrite",
+                "storedSelection",
+                "refreshPlaybackPreferences",
+                "launchAsync",
+                "renderPoke:item-1:series-9",
+            ),
+            log,
+        )
+        assertEquals("Episode 2", lastTitle)
+    }
+
+    @Test
+    fun onSessionState_sameItemAndSeries_doesNotRefireItemChange() {
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1", title = "Episode 2"),
+            seriesId = "series-9",
+        )
+        log.clear()
+
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1", title = "Episode 2 (updated)"),
+            seriesId = "series-9",
+        )
+
+        // Same item + series: only the unguarded per-emission mirrors run —
+        // no refresh, no poke.
+        assertEquals(listOf("titleSubtitle", "mediaWrite", "storedSelection"), log)
+        assertEquals("Episode 2 (updated)", lastTitle, "title still forwarded on every emission")
+    }
+
+    @Test
+    fun onSessionState_seriesOnlyChangeFiresItemChange() {
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1"),
+            seriesId = "series-9",
+        )
+        log.clear()
+
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1"),
+            seriesId = "series-10",
+        )
+
+        assertEquals(
+            listOf("titleSubtitle", "mediaWrite", "storedSelection", "refreshPlaybackPreferences", "launchAsync", "renderPoke:item-1:series-10"),
+            log,
+        )
+    }
+
+    @Test
+    fun onSessionState_titleSubtitleForwardedEveryEmission_unguarded() {
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1", title = "A", subtitle = "S1"),
+            seriesId = null,
+        )
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1", title = "B", subtitle = "S2"),
+            seriesId = null,
+        )
+
+        assertEquals("B", lastTitle)
+        assertEquals("S2", lastSubtitle)
+        assertEquals(2, log.count { it == "titleSubtitle" }, "one mirror write per emission, no equality guard")
+    }
+
+    @Test
+    fun onSessionState_storedSelectionForwardedEveryEmission_derivedPerItem() {
+        val stored = MediaStreamSelection(audioStreamIndex = 1, subtitleStreamIndex = 2)
+        storedSelectionsByItem["item-1"] = stored
+
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1"),
+            seriesId = null,
+        )
+        assertEquals(stored, lastStoredSelection)
+
+        // A different item with no stored row forwards null (seeds the
+        // track slice's override flags OFF) — still every emission.
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-2"),
+            seriesId = null,
+        )
+        assertNull(lastStoredSelection)
+        assertEquals(2, log.count { it == "storedSelection" })
+    }
+
+    @Test
+    fun onSessionState_nullItemAndNullSeriesFirstEmission_doesNotFireItemChange() {
+        // Fold vars start null: an all-null first emission (pre-load session
+        // state) matches the fold and does NOT fire refresh/poke — the
+        // inline collector's null == null comparison verbatim.
+        projector.onSessionState(session = PlayerSessionState(title = "Loading"), seriesId = null)
+
+        assertFalse(log.contains("refreshPlaybackPreferences"))
+        assertFalse(log.contains("launchAsync"))
+        assertEquals(listOf("titleSubtitle", "mediaWrite", "storedSelection"), log)
     }
 
     @Test

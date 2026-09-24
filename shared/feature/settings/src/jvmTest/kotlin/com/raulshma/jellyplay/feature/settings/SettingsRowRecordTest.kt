@@ -124,6 +124,16 @@ class SettingsRowRecordTest {
     }
 
     @Test
+    fun `rowIcon projects the record icon`() {
+        // The screen-side icon resolver must be the pure record projection:
+        // rowIcon(id) === record.icon for every declared row, so a screen row
+        // adopting it can never drift from its record's icon field.
+        SettingsRowRecords.all.forEach { rec ->
+            assertEquals(rec.icon, rowIcon(rec.id), "rowIcon drift for ${rec.id}")
+        }
+    }
+
+    @Test
     fun `media segment records share the enum's core_segment resources`() {
         // The screen side is enum-driven (MediaSegmentType) and stays there;
         // the records mirror the SAME accessors the enum names, so the

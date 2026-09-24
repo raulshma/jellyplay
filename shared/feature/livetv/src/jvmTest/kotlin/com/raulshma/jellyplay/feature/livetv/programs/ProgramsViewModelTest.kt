@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
-import com.raulshma.jellyplay.feature.livetv.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.clearMocks

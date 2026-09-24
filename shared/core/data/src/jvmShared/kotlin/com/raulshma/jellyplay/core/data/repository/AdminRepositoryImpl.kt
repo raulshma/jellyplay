@@ -42,7 +42,11 @@ class AdminRepositoryImpl constructor(
 
     override fun getUserImageUrl(userId: String, tag: String?, maxWidth: Int): String =
         buildUserImageUrl(
-            baseUrl = engine.currentServer.value?.address,
+            // activeServerAddress, NOT currentServer.value?.address: the router's
+            // active endpoint is failover-correct — after a failover the server's
+            // primary address may be the dead one, and an image URL pinned to it
+            // becomes a straggler request against a server nobody can reach.
+            baseUrl = engine.activeServerAddress,
             userId = userId,
             imageType = "Primary",
             maxWidth = maxWidth,

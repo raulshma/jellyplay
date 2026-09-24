@@ -525,244 +525,26 @@ internal fun HomeContentList(
                 // Seerr-sourced custom discover rows bypass the chassis
                 // entirely — they carry TMDB cards with request actions, not
                 // server MediaItems.
+                val armContext = HomeRowArmContext(
+                    section = section,
+                    title = sectionTitle,
+                    modifier = sectionModifier,
+                    onSectionLongClick = sectionLongClick,
+                    onSeeAllClick = seeAllClick,
+                    resumeSinks = resumeSinks,
+                    focusRequester = rowFocusRequesters[index],
+                    onRowFocused = { homeFocusRow = index },
+                    currentOfflineById = currentOfflineById,
+                    discoverSpacing = discoverSpacing,
+                    seerrCardLoadingState = seerrCardLoadingState,
+                )
                 if (section.seerrItems.isNotEmpty()) {
-                    Column(modifier = sectionModifier) {
-                        HomeRowTitle(
-                            title = sectionTitle,
-                            contentPad = state.contentPad,
-                            onLongClick = sectionLongClick,
-                        )
-                        SeerrDiscoverRow(
-                            items = section.seerrItems,
-                            itemWidth = 120.dp,
-                            rowHorizontalPadding = state.contentPad,
-                            spacing = discoverSpacing,
-                            backgroundColor = state.backgroundColor,
-                            homeBackdropEnabled = state.homeBackdropEnabled,
-                            clippingEnabled = state.experimentalCardClippingEnabled,
-                            seerrCardLoadingState = seerrCardLoadingState,
-                            seerrPrefetch = callbacks.seerrPrefetch,
-                            onSeerrItemClick = callbacks.onSeerrItemClick,
-                            onSeerrRequest = callbacks.onSeerrRequest,
-                        )
-                    }
+                    HomeSectionSeerrRow(ctx = armContext, state = state, callbacks = callbacks)
                 } else when (homeRowChassis(section, offlineContent != null)) {
-                    is HomeRowChassis.OfflinePoster -> {
-                        // Offline-derived section (see buildOfflineHomeSections):
-                        // re-resolve the offline originals by id (shared lookup
-                        // above) so the cards render local artwork; clicks go to
-                        // the unified detail tree like any online item. The
-                        // mirrored Continue Reading row instead rides the
-                        // resume-row click policy (Details / Play / Ask) like
-                        // its online counterpart.
-                        val byId = currentOfflineById
-                        val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
-                        // Percent fallback for books the TOC decode missed,
-                        // pre-lifted once per items change so the per-card
-                        // lookup below stays a map read — the toMediaItem
-                        // lift runs ≤20 times per items change, not per card
-                        // per recomposition.
-                        val bookFallbackFractions = if (section.type == HomeSectionType.CONTINUE_READING) {
-                            remember(offlineItems) {
-                                offlineItems.associate { it.id to it.toMediaItem().bookProgressFraction() }
-                            }
-                        } else {
-                            emptyMap()
-                        }
-                        // Continue Reading rides the resume-row click policy
-                        // (Details / Play / Ask); every other offline poster
-                        // row opens details by id — the selection lives in
-                        // posterRowClick so the online poster row cannot
-                        // drift from it.
-                        val rowItemClick: (OfflineMediaItem) -> Unit = remember(
-                            section.type, state.continueWatchingClickBehavior, callbacks,
-                        ) {
-                            posterRowClick(
-                                sectionType = section.type,
-                                behavior = state.continueWatchingClickBehavior,
-                                toMediaItem = { it.toMediaItem() },
-                                sinks = resumeSinks,
-                                onPlainClick = { item -> callbacks.onItemClick(item.id) },
-                            )
-                        }
-                        OfflineHomeMediaRow(
-                            title = sectionTitle,
-                            items = offlineItems,
-                            onItemClick = rowItemClick,
-                            modifier = sectionModifier,
-                            focusRequester = rowFocusRequesters[index],
-                            onRowFocused = { homeFocusRow = index },
-                            clippingEnabled = state.experimentalCardClippingEnabled,
-                            // Mirrored rows keep their online counterparts'
-                            // long-press configure affordance (configurable types
-                            // only — same gate as the online branch).
-                            onSectionLongClick = sectionLongClick,
-                            // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
-                            // online "See All" pill and play overlay (#147).
-                            onSeeAllClick = seeAllClick,
-                            onPlayClick = remember(callbacks) {
-                                { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
-                            },
-                            onFocusedItemChange = callbacks.onFocusedMediaItem,
-                            // Book reading bars: the TOC-cache decodes picked
-                            // by render source at the HomeContentState build
-                            // (online: refresher; offline: the offline gate),
-                            // percent fallback for items the cache misses.
-                            progressFractionFor = if (section.type == HomeSectionType.CONTINUE_READING) {
-                                remember(state.bookProgressFractions, bookFallbackFractions) {
-                                    bookProgressFractionFor(
-                                        fractions = state.bookProgressFractions,
-                                        idOf = { it.id },
-                                        fallback = { bookFallbackFractions[it.id] },
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                        )
-                    }
-                    is HomeRowChassis.OfflineWide -> {
-                        // Offline-derived Continue Watching / Next Up (see
-                        // buildOfflineHomeSections): same wide-card row and the
-                        // same Resume-vs-Details click behavior as the online
-                        // home, but re-resolved to the offline originals by id
-                        // (shared lookup above) so cards render local artwork.
-                        // Every sink — Details, PLAY, the ASK dialog — rides
-                        // the same unified funnels as online: MediaDetail and
-                        // the player resolve downloaded items themselves, so no
-                        // offline-specific routing exists.
-                        val byId = currentOfflineById
-                        val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
-                        val rowItemClick: (OfflineMediaItem) -> Unit = remember(
-                            section.type, state.continueWatchingClickBehavior, callbacks,
-                        ) {
-                            resumeRowClick(
-                                sectionType = section.type,
-                                behavior = state.continueWatchingClickBehavior,
-                                toMediaItem = { it.toMediaItem() },
-                                sinks = resumeSinks,
-                            )
-                        }
-                        ContinueWatchingRow(
-                            title = sectionTitle,
-                            items = offlineItems,
-                            toMediaItem = { it.toMediaItem() },
-                            imageUrl = { it.posterPath.orEmpty() },
-                            backdropUrl = { it.backdropPath.orEmpty() },
-                            key = { it.id },
-                            onItemClick = rowItemClick,
-                            onPlayClick = remember(callbacks) {
-                                { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
-                            },
-                            modifier = sectionModifier,
-                            focusRequester = rowFocusRequesters[index],
-                            onRowFocused = { homeFocusRow = index },
-                            clippingEnabled = state.experimentalCardClippingEnabled,
-                            onSectionLongClick = sectionLongClick,
-                            onFocusedItemChange = callbacks.onFocusedMediaItem,
-                        )
-                    }
-                    is HomeRowChassis.OnlineWide -> {
-                        val rowItemClick: (MediaItem) -> Unit = remember(
-                            section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
-                        ) {
-                            resumeRowClick(
-                                sectionType = section.type,
-                                behavior = state.continueWatchingClickBehavior,
-                                toMediaItem = { it },
-                                sinks = resumeSinks,
-                            )
-                        }
-                        ContinueWatchingRow(
-                            title = sectionTitle,
-                            items = section.items,
-                            toMediaItem = { it },
-                            imageUrl = callbacks.mediaImageUrlBuilder,
-                            backdropUrl = callbacks.mediaBackdropUrlBuilder,
-                            onItemClick = rowItemClick,
-                            onPlayClick = callbacks.mediaOnPlayClick,
-                            modifier = sectionModifier,
-                            focusRequester = rowFocusRequesters[index],
-                            onRowFocused = { homeFocusRow = index },
-                            clippingEnabled = state.experimentalCardClippingEnabled,
-                            onSectionLongClick = sectionLongClick,
-                            onFocusedItemChange = callbacks.onFocusedMediaItem,
-                        )
-                    }
-                    is HomeRowChassis.OnlinePoster -> {
-                        // Continue Reading rides the resume-row click policy
-                        // (Details / Play / Ask — the same pref as Continue
-                        // Watching; PLAY funnels to the reader through the
-                        // play fork's BOOK branch). Every other poster row
-                        // opens details — the selection lives in posterRowClick
-                        // so the offline poster row cannot drift from it.
-                        // (Same remember-key shape as the offline poster
-                        // branch: HomeContentCallbacks is a data class, so
-                        // whole-callbacks keys are stable.)
-                        val rowItemClick: (MediaItem) -> Unit = remember(
-                            section.type, state.continueWatchingClickBehavior, callbacks,
-                        ) {
-                            posterRowClick(
-                                sectionType = section.type,
-                                behavior = state.continueWatchingClickBehavior,
-                                toMediaItem = { it },
-                                sinks = resumeSinks,
-                                onPlainClick = callbacks.mediaOnItemClick,
-                            )
-                        }
-                        // Dice affordance: RANDOM-sorted custom discover rows only
-                        // (the descriptor resolves the row id back out of the
-                        // `discover_<rowId>` section id). Resolved once here so
-                        // the click, the tumble flag and the label key the SAME id.
-                        val diceRowId: String? = if (section.type == HomeSectionType.DISCOVER) {
-                            remember(section.id, state.randomDiscoverRowIds) {
-                                HomeSectionType.DISCOVER.descriptor.instanceIdFor(section.id)
-                                    ?.takeIf { it in state.randomDiscoverRowIds }
-                            }
-                        } else null
-                        val rollDiscoverRow = remember(callbacks) { callbacks.onRollDiscoverRow }
-                        val diceRowAccessibilityLabel = if (diceRowId != null) {
-                            stringResource(Res.string.home_discover_reroll)
-                        } else null
-                        HomeMediaRow(
-                            title = sectionTitle,
-                            items = section.items,
-                            imageUrlBuilder = callbacks.mediaImageUrlBuilder,
-                            fallbackImageUrlBuilder = callbacks.fallbackImageUrlBuilder,
-                            onItemClick = rowItemClick,
-                            onPlayClick = callbacks.mediaOnPlayClick,
-                            modifier = sectionModifier,
-                            photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
-                            focusRequester = rowFocusRequesters[index],
-                            onRowFocused = { homeFocusRow = index },
-                            clippingEnabled = state.experimentalCardClippingEnabled,
-                            showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
-                            onSectionLongClick = sectionLongClick,
-                            onSeeAllClick = seeAllClick,
-                            onRollClick = if (diceRowId != null) {
-                                { rollDiscoverRow(diceRowId) }
-                            } else null,
-                            rollInProgress = diceRowId != null && diceRowId in state.rollingDiscoverRowIds,
-                            rollAccessibilityLabel = diceRowAccessibilityLabel,
-                            onFocusedItemChange = callbacks.onFocusedMediaItem,
-                            // Book progress bars: exact page fractions from the
-                            // refresher's TOC-cache decodes, percent fallback for
-                            // items the cache doesn't know (see bookProgressFraction).
-                            progressFractionFor = if (section.type == HomeSectionType.CONTINUE_READING) {
-                                remember(state.bookProgressFractions) {
-                                    bookProgressFractionFor(
-                                        fractions = state.bookProgressFractions,
-                                        idOf = { it.id },
-                                        fallback = { it.bookProgressFraction() },
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                            seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
-                            seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
-                        )
-                    }
+                    is HomeRowChassis.OfflinePoster -> HomeSectionOfflinePosterRow(ctx = armContext, state = state, callbacks = callbacks)
+                    is HomeRowChassis.OfflineWide -> HomeSectionOfflineWideRow(ctx = armContext, state = state, callbacks = callbacks)
+                    is HomeRowChassis.OnlineWide -> HomeSectionOnlineWideRow(ctx = armContext, state = state, callbacks = callbacks)
+                    is HomeRowChassis.OnlinePoster -> HomeSectionOnlinePosterRow(ctx = armContext, state = state, callbacks = callbacks)
                 }
             }
 
@@ -834,25 +616,347 @@ internal fun HomeContentList(
 
     val askItem = askContinueItem
     if (askItem != null) {
-        AlertDialog(
+        HomeAskContinueDialog(
+            item = askItem,
             onDismissRequest = { askContinueItem = null },
-            icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
-            title = { Text(askItem.name) },
-            text = { Text(stringResource(Res.string.home_resume_or_details)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    askContinueItem = null
-                    callbacks.mediaOnPlayClick(askItem)
-                }) { Text(stringResource(Res.string.home_resume)) }
+            onPlay = {
+                askContinueItem = null
+                callbacks.mediaOnPlayClick(askItem)
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    askContinueItem = null
-                    callbacks.mediaOnItemClick(askItem)
-                }) { Text(stringResource(Res.string.home_details)) }
+            onDetails = {
+                askContinueItem = null
+                callbacks.mediaOnItemClick(askItem)
             },
         )
     }
+}
+
+/** Per-item locals every chassis arm renders with — see the dispatch in [HomeContentList]. */
+private data class HomeRowArmContext(
+    val section: HomeSection,
+    val title: String,
+    val modifier: Modifier,
+    val onSectionLongClick: (() -> Unit)?,
+    val onSeeAllClick: (() -> Unit)?,
+    val resumeSinks: ResumeRowSinks,
+    val focusRequester: FocusRequester,
+    val onRowFocused: () -> Unit,
+    val currentOfflineById: Map<String, OfflineMediaItem>,
+    val discoverSpacing: Dp,
+    val seerrCardLoadingState: SeerrCardLoadingState,
+)
+
+/** Seerr-sourced custom discover row (TMDB cards with request actions) — bypasses the row chassis entirely. */
+@Composable
+private fun HomeSectionSeerrRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+) {
+    Column(modifier = ctx.modifier) {
+        HomeRowTitle(
+            title = ctx.title,
+            contentPad = state.contentPad,
+            onLongClick = ctx.onSectionLongClick,
+        )
+        SeerrDiscoverRow(
+            items = ctx.section.seerrItems,
+            itemWidth = 120.dp,
+            rowHorizontalPadding = state.contentPad,
+            spacing = ctx.discoverSpacing,
+            backgroundColor = state.backgroundColor,
+            homeBackdropEnabled = state.homeBackdropEnabled,
+            clippingEnabled = state.experimentalCardClippingEnabled,
+            seerrCardLoadingState = ctx.seerrCardLoadingState,
+            seerrPrefetch = callbacks.seerrPrefetch,
+            onSeerrItemClick = callbacks.onSeerrItemClick,
+            onSeerrRequest = callbacks.onSeerrRequest,
+        )
+    }
+}
+
+/** Offline-derived poster row: offline originals re-resolved by id, resume-row policy for Continue Reading. */
+@Composable
+private fun HomeSectionOfflinePosterRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+) {
+    val section = ctx.section
+    val sectionTitle = ctx.title
+    val sectionModifier = ctx.modifier
+    val sectionLongClick = ctx.onSectionLongClick
+    val seeAllClick = ctx.onSeeAllClick
+    // Offline-derived section (see buildOfflineHomeSections):
+    // re-resolve the offline originals by id (shared lookup
+    // above) so the cards render local artwork; clicks go to
+    // the unified detail tree like any online item. The
+    // mirrored Continue Reading row instead rides the
+    // resume-row click policy (Details / Play / Ask) like
+    // its online counterpart.
+    val byId = ctx.currentOfflineById
+    val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
+    // Percent fallback for books the TOC decode missed,
+    // pre-lifted once per items change so the per-card
+    // lookup below stays a map read — the toMediaItem
+    // lift runs ≤20 times per items change, not per card
+    // per recomposition.
+    val bookFallbackFractions = if (section.type == HomeSectionType.CONTINUE_READING) {
+        remember(offlineItems) {
+            offlineItems.associate { it.id to it.toMediaItem().bookProgressFraction() }
+        }
+    } else {
+        emptyMap()
+    }
+    // Continue Reading rides the resume-row click policy
+    // (Details / Play / Ask); every other offline poster
+    // row opens details by id — the selection lives in
+    // posterRowClick so the online poster row cannot
+    // drift from it.
+    val rowItemClick: (OfflineMediaItem) -> Unit = remember(
+        section.type, state.continueWatchingClickBehavior, callbacks,
+    ) {
+        posterRowClick(
+            sectionType = section.type,
+            behavior = state.continueWatchingClickBehavior,
+            toMediaItem = { it.toMediaItem() },
+            sinks = ctx.resumeSinks,
+            onPlainClick = { item -> callbacks.onItemClick(item.id) },
+        )
+    }
+    OfflineHomeMediaRow(
+        title = sectionTitle,
+        items = offlineItems,
+        onItemClick = rowItemClick,
+        modifier = sectionModifier,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        // Mirrored rows keep their online counterparts'
+        // long-press configure affordance (configurable types
+        // only — same gate as the online branch).
+        onSectionLongClick = sectionLongClick,
+        // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
+        // online "See All" pill and play overlay (#147).
+        onSeeAllClick = seeAllClick,
+        onPlayClick = remember(callbacks) {
+            { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+        },
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
+        // Book reading bars: the TOC-cache decodes picked
+        // by render source at the HomeContentState build
+        // (online: refresher; offline: the offline gate),
+        // percent fallback for items the cache misses.
+        progressFractionFor = if (section.type == HomeSectionType.CONTINUE_READING) {
+            remember(state.bookProgressFractions, bookFallbackFractions) {
+                bookProgressFractionFor(
+                    fractions = state.bookProgressFractions,
+                    idOf = { it.id },
+                    fallback = { bookFallbackFractions[it.id] },
+                )
+            }
+        } else {
+            null
+        },
+    )
+}
+
+/** Offline-derived Continue Watching / Next Up wide row, re-resolved to offline originals by id. */
+@Composable
+private fun HomeSectionOfflineWideRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+) {
+    val section = ctx.section
+    val sectionTitle = ctx.title
+    val sectionModifier = ctx.modifier
+    val sectionLongClick = ctx.onSectionLongClick
+    // Offline-derived Continue Watching / Next Up (see
+    // buildOfflineHomeSections): same wide-card row and the
+    // same Resume-vs-Details click behavior as the online
+    // home, but re-resolved to the offline originals by id
+    // (shared lookup above) so cards render local artwork.
+    // Every sink — Details, PLAY, the ASK dialog — rides
+    // the same unified funnels as online: MediaDetail and
+    // the player resolve downloaded items themselves, so no
+    // offline-specific routing exists.
+    val byId = ctx.currentOfflineById
+    val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
+    val rowItemClick: (OfflineMediaItem) -> Unit = remember(
+        section.type, state.continueWatchingClickBehavior, callbacks,
+    ) {
+        resumeRowClick(
+            sectionType = section.type,
+            behavior = state.continueWatchingClickBehavior,
+            toMediaItem = { it.toMediaItem() },
+            sinks = ctx.resumeSinks,
+        )
+    }
+    ContinueWatchingRow(
+        title = sectionTitle,
+        items = offlineItems,
+        toMediaItem = { it.toMediaItem() },
+        imageUrl = { it.posterPath.orEmpty() },
+        backdropUrl = { it.backdropPath.orEmpty() },
+        key = { it.id },
+        onItemClick = rowItemClick,
+        onPlayClick = remember(callbacks) {
+            { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+        },
+        modifier = sectionModifier,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        onSectionLongClick = sectionLongClick,
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
+    )
+}
+
+/** Online Continue Watching / Next Up wide row over the server feed. */
+@Composable
+private fun HomeSectionOnlineWideRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+) {
+    val section = ctx.section
+    val sectionTitle = ctx.title
+    val sectionModifier = ctx.modifier
+    val sectionLongClick = ctx.onSectionLongClick
+    val rowItemClick: (MediaItem) -> Unit = remember(
+        section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
+    ) {
+        resumeRowClick(
+            sectionType = section.type,
+            behavior = state.continueWatchingClickBehavior,
+            toMediaItem = { it },
+            sinks = ctx.resumeSinks,
+        )
+    }
+    ContinueWatchingRow(
+        title = sectionTitle,
+        items = section.items,
+        toMediaItem = { it },
+        imageUrl = callbacks.mediaImageUrlBuilder,
+        backdropUrl = callbacks.mediaBackdropUrlBuilder,
+        onItemClick = rowItemClick,
+        onPlayClick = callbacks.mediaOnPlayClick,
+        modifier = sectionModifier,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        onSectionLongClick = sectionLongClick,
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
+    )
+}
+
+/** Online poster row (Latest / Continue Reading / custom discover) over the server feed. */
+@Composable
+private fun HomeSectionOnlinePosterRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+) {
+    val section = ctx.section
+    val sectionTitle = ctx.title
+    val sectionModifier = ctx.modifier
+    val sectionLongClick = ctx.onSectionLongClick
+    val seeAllClick = ctx.onSeeAllClick
+    // Continue Reading rides the resume-row click policy
+    // (Details / Play / Ask — the same pref as Continue
+    // Watching; PLAY funnels to the reader through the
+    // play fork's BOOK branch). Every other poster row
+    // opens details — the selection lives in posterRowClick
+    // so the offline poster row cannot drift from it.
+    // (Same remember-key shape as the offline poster
+    // branch: HomeContentCallbacks is a data class, so
+    // whole-callbacks keys are stable.)
+    val rowItemClick: (MediaItem) -> Unit = remember(
+        section.type, state.continueWatchingClickBehavior, callbacks,
+    ) {
+        posterRowClick(
+            sectionType = section.type,
+            behavior = state.continueWatchingClickBehavior,
+            toMediaItem = { it },
+            sinks = ctx.resumeSinks,
+            onPlainClick = callbacks.mediaOnItemClick,
+        )
+    }
+    // Dice affordance: RANDOM-sorted custom discover rows only
+    // (the descriptor resolves the row id back out of the
+    // `discover_<rowId>` section id). Resolved once here so
+    // the click, the tumble flag and the label key the SAME id.
+    val diceRowId: String? = if (section.type == HomeSectionType.DISCOVER) {
+        remember(section.id, state.randomDiscoverRowIds) {
+            HomeSectionType.DISCOVER.descriptor.instanceIdFor(section.id)
+                ?.takeIf { it in state.randomDiscoverRowIds }
+        }
+    } else null
+    val rollDiscoverRow = remember(callbacks) { callbacks.onRollDiscoverRow }
+    val diceRowAccessibilityLabel = if (diceRowId != null) {
+        stringResource(Res.string.home_discover_reroll)
+    } else null
+    HomeMediaRow(
+        title = sectionTitle,
+        items = section.items,
+        imageUrlBuilder = callbacks.mediaImageUrlBuilder,
+        fallbackImageUrlBuilder = callbacks.fallbackImageUrlBuilder,
+        onItemClick = rowItemClick,
+        onPlayClick = callbacks.mediaOnPlayClick,
+        modifier = sectionModifier,
+        photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
+        onSectionLongClick = sectionLongClick,
+        onSeeAllClick = seeAllClick,
+        onRollClick = if (diceRowId != null) {
+            { rollDiscoverRow(diceRowId) }
+        } else null,
+        rollInProgress = diceRowId != null && diceRowId in state.rollingDiscoverRowIds,
+        rollAccessibilityLabel = diceRowAccessibilityLabel,
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
+        // Book progress bars: exact page fractions from the
+        // refresher's TOC-cache decodes, percent fallback for
+        // items the cache doesn't know (see bookProgressFraction).
+        progressFractionFor = if (section.type == HomeSectionType.CONTINUE_READING) {
+            remember(state.bookProgressFractions) {
+                bookProgressFractionFor(
+                    fractions = state.bookProgressFractions,
+                    idOf = { it.id },
+                    fallback = { it.bookProgressFraction() },
+                )
+            }
+        } else {
+            null
+        },
+        seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
+        seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
+    )
+}
+
+/** The continue-watching "Resume vs Details" ask dialog for a partially-watched item. */
+@Composable
+private fun HomeAskContinueDialog(
+    item: MediaItem,
+    onDismissRequest: () -> Unit,
+    onPlay: () -> Unit,
+    onDetails: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
+        title = { Text(item.name) },
+        text = { Text(stringResource(Res.string.home_resume_or_details)) },
+        confirmButton = {
+            TextButton(onClick = onPlay) { Text(stringResource(Res.string.home_resume)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDetails) { Text(stringResource(Res.string.home_details)) }
+        },
+    )
 }
 
 /**

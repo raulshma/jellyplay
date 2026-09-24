@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
-import com.raulshma.jellyplay.feature.livetv.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every

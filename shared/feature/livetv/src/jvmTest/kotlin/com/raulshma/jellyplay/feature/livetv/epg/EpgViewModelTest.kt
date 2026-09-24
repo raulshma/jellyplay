@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
-import com.raulshma.jellyplay.feature.livetv.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import androidx.lifecycle.viewModelScope
 import io.mockk.coEvery
 import io.mockk.coVerify

@@ -3,30 +3,32 @@ package com.raulshma.jellyplay.core.data.syncplay
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import kotlinx.coroutines.CancellationException
 
 /**
  * The ONE fire-and-forget wrapper home for SyncPlay wire commands that player
  * plumbing issues without awaiting a result (`SyncPlayBridge`,
  * `SyncPlayPlaybackCore`, `VideoPlayerViewModel`): every member is a
- * [safe]-wrapped one-liner over [JellyfinApiClient], and nothing else in the
- * app wraps these calls. Group lifecycle (join/leave) is NOT here —
- * `SyncPlayManager` calls the api client directly because it must observe the
- * results — and the repository seam (`SyncPlayRepository`) only carries the
- * commands its UI consumers await.
+ * [safe]-wrapped one-liner over [SyncPlayApiClient] (the family seam, not the
+ * JellyfinApiClient union — the PlaybackRepositoryImpl ctor precedent; the
+ * family single composes the same impl the union delegates to), and nothing
+ * else in the app wraps these calls. Group lifecycle (join/leave) is NOT
+ * here — `SyncPlayManager` calls the api client directly because it must
+ * observe the results — and the repository seam (`SyncPlayRepository`) only
+ * carries the commands its UI consumers await.
  *
  * Members here are pruned to the called vocabulary: `queue`,
  * `removeFromPlaylist`, and `movePlaylistItem` were removed after a census
  * (working tree and HEAD) found zero call sites.
  */
 class SyncPlayController constructor(
-    private val apiClient: JellyfinApiClient,
+    private val syncPlayApiClient: SyncPlayApiClient,
 ) {
-    suspend fun unpause() = safe("unpause") { apiClient.syncPlayUnpause() }
-    suspend fun pause() = safe("pause") { apiClient.syncPlayPause() }
-    suspend fun seek(positionTicks: Long) = safe("seek") { apiClient.syncPlaySeek(positionTicks) }
-    suspend fun stop() = safe("stop") { apiClient.syncPlayStop() }
+    suspend fun unpause() = safe("unpause") { syncPlayApiClient.syncPlayUnpause() }
+    suspend fun pause() = safe("pause") { syncPlayApiClient.syncPlayPause() }
+    suspend fun seek(positionTicks: Long) = safe("seek") { syncPlayApiClient.syncPlaySeek(positionTicks) }
+    suspend fun stop() = safe("stop") { syncPlayApiClient.syncPlayStop() }
 
     suspend fun setNewQueue(
         itemIds: List<String>,
@@ -34,26 +36,26 @@ class SyncPlayController constructor(
         mediaSourceId: String? = null,
         startPositionTicks: Long = 0L,
     ) = safe("setNewQueue") {
-        apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
+        syncPlayApiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
     }
 
     suspend fun nextItem(playlistItemId: String) =
-        safe("nextItem") { apiClient.syncPlayNextItem(playlistItemId) }
+        safe("nextItem") { syncPlayApiClient.syncPlayNextItem(playlistItemId) }
 
     suspend fun previousItem(playlistItemId: String) =
-        safe("previousItem") { apiClient.syncPlayPreviousItem(playlistItemId) }
+        safe("previousItem") { syncPlayApiClient.syncPlayPreviousItem(playlistItemId) }
 
     suspend fun setPlaylistItem(playlistItemId: String) =
-        safe("setPlaylistItem") { apiClient.syncPlaySetPlaylistItem(playlistItemId) }
+        safe("setPlaylistItem") { syncPlayApiClient.syncPlaySetPlaylistItem(playlistItemId) }
 
     suspend fun setRepeatMode(mode: SyncPlayRepeatMode) =
-        safe("setRepeatMode") { apiClient.syncPlaySetRepeatMode(mode) }
+        safe("setRepeatMode") { syncPlayApiClient.syncPlaySetRepeatMode(mode) }
 
     suspend fun setShuffleMode(mode: SyncPlayShuffleMode) =
-        safe("setShuffleMode") { apiClient.syncPlaySetShuffleMode(mode) }
+        safe("setShuffleMode") { syncPlayApiClient.syncPlaySetShuffleMode(mode) }
 
     suspend fun setIgnoreWait(ignore: Boolean) =
-        safe("setIgnoreWait") { apiClient.syncPlaySetIgnoreWait(ignore) }
+        safe("setIgnoreWait") { syncPlayApiClient.syncPlaySetIgnoreWait(ignore) }
 
     /**
      * Reports local readiness to the group. [whenMs] MUST be the
@@ -72,7 +74,7 @@ class SyncPlayController constructor(
         playlistItemId: String? = null,
         whenMs: Long,
     ) = safe("reportReady") {
-        apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId, whenMs)
+        syncPlayApiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId, whenMs)
     }
 
     /** Same [whenMs] clock contract as [reportReady]: remote-now only. */
@@ -82,7 +84,7 @@ class SyncPlayController constructor(
         playlistItemId: String? = null,
         whenMs: Long,
     ) = safe("reportBuffering") {
-        apiClient.syncPlayBuffering(positionTicks, isPlaying, playlistItemId, whenMs)
+        syncPlayApiClient.syncPlayBuffering(positionTicks, isPlaying, playlistItemId, whenMs)
     }
 
     /**

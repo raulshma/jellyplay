@@ -77,8 +77,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
+import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.model.MediaType
@@ -107,8 +108,8 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
-import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
+import com.raulshma.jellyplay.core.ui.components.seerrCardClickHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
@@ -222,21 +223,12 @@ fun SeerrDetailScreen(
         colorStyle = preferences.theme.colorStyle,
         accentColorSwatch = preferences.theme.accentColorSwatch,
     ) {
-        val seerrLoadingState = rememberSeerrCardLoadingState()
-        val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback =
-            remember(seerrLoadingState, viewModel) {
-                { tmdbId, mediaType, onDone ->
-                    seerrLoadingState.startLoading(tmdbId)
-                    viewModel.prefetchRelatedDetails(tmdbId, mediaType) {
-                        seerrLoadingState.stopLoading(tmdbId)
-                        onDone()
-                    }
-                }
+        // One root-level bundle of the Seerr card-loading state + prefetch
+        // callback; descendant rows read them via the composition locals.
+        com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+            prefetchDetail = { tmdbId, mediaType, onDone ->
+                viewModel.prefetchRelatedDetails(tmdbId, mediaType, onDone)
             }
-
-        androidx.compose.runtime.CompositionLocalProvider(
-            com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides prefetchCallback,
-            com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState provides seerrLoadingState,
         ) {
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -384,35 +376,17 @@ private fun SeerrDetailContent(
     val isTv = LocalTvMode.current
     val density = LocalDensity.current
 
-    val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
-    val isAurora = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current ==
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.AURORA
+    val themeVariant = LocalThemeVariant.current
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val outline = MaterialTheme.colorScheme.outline
-    // Rebuilt only when the theme flags / palette change so the consuming
-    // Cards see a stable BorderStroke instance between scroll frames.
-    val cardBorder = remember(isSynthwave, isSoothing, isAurora, primary, secondary, outline) {
-        when {
-            isSynthwave -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 1.5.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(primary, secondary)
-                    )
-                )
-            }
-            isSoothing -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 0.8.dp,
-                    color = outline.copy(alpha = 0.35f)
-                )
-            }
-            // Aurora: soft accent glow border matching the gradient background.
-            isAurora -> com.raulshma.jellyplay.core.designsystem.theme.auroraCardBorder(primary)
-            else -> null
-        }
+    // Rebuilt only when the variant / palette change so the consuming Cards
+    // see a stable BorderStroke instance between scroll frames. This screen
+    // includes the Aurora arm; the other detail-card borders opt out via
+    // includeAurora = false to keep their historical no-border Aurora look.
+    val cardBorder = remember(themeVariant, primary, secondary, outline) {
+        themeVariant.detailCardBorder(primary, secondary, outline)
     }
 
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
@@ -1108,16 +1082,13 @@ private fun SeerrHorizontalSection(
                 item = item,
                 imageUrl = item.posterUrl,
                 isLoading = loadingState?.isLoading(item.id) == true,
-                onClick = {
-                    if (loadingState != null && prefetch != null) {
-                        loadingState.startLoading(item.id)
-                        prefetch(item.id, item.mediaType) {
-                            loadingState.stopLoading(item.id)
-                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
-                        }
-                    } else {
-                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
-                    }
+                onClick = seerrCardClickHandler(
+                    loadingState = loadingState,
+                    prefetch = prefetch,
+                    id = item.id,
+                    mediaType = item.mediaType,
+                ) {
+                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
                 },
                 modifier = Modifier.width(
                     LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)

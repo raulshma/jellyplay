@@ -115,9 +115,8 @@ fun synthwaveBackgroundBrush(): Brush = SynthwaveBackgroundBrush
 
 /**
  * Aurora's soft accent-glow border — one definition shared by
- * [ThemeVariant.cardBorder] and the detail screens that hand-roll borders for
- * a subset of variants (those screens keep plain/no borders for the rest, so
- * they can't call [ThemeVariant.cardBorder] directly).
+ * [ThemeVariant.cardBorder] and [ThemeVariant.detailCardBorder] (the
+ * detail-screens subset that keeps plain/no borders for the other variants).
  */
 fun auroraCardBorder(primary: Color): BorderStroke =
     BorderStroke(width = 1.dp, color = primary.copy(alpha = 0.25f))
@@ -219,6 +218,38 @@ fun rememberThemeCardBorder(themeVariant: ThemeVariant): BorderStroke? {
     return remember(themeVariant, primary, secondary, outline) {
         themeVariant.cardBorder(primary, secondary, outline)
     }
+}
+
+/**
+ * The detail-screens subset of [ThemeVariant.cardBorder]: Synthwave's gradient
+ * stroke, Soothing's hairline outline and — only when [includeAurora] is set —
+ * Aurora's accent glow via [auroraCardBorder]. Every other variant renders no
+ * border, which is why detail surfaces can't call [ThemeVariant.cardBorder]
+ * directly (that one borders all eight variants).
+ *
+ * The four detail-feature call sites (Seerr detail cards, video cards, the
+ * up-next card and episode cards) each hand-rolled this branch chain before;
+ * those copies were deleted in favour of this helper. Three of them pass
+ * `includeAurora = false` to keep their historical no-border look under
+ * Aurora — letting the Aurora glow show there too may be an improvement, but
+ * it is a visual change to make deliberately, not implicitly.
+ */
+fun ThemeVariant.detailCardBorder(
+    primary: Color,
+    secondary: Color,
+    outline: Color,
+    includeAurora: Boolean = true,
+): BorderStroke? = when (this) {
+    ThemeVariant.SYNTHWAVE -> BorderStroke(
+        width = 1.5.dp,
+        brush = Brush.linearGradient(colors = listOf(primary, secondary))
+    )
+    ThemeVariant.SOOTHING -> BorderStroke(
+        width = 0.8.dp,
+        color = outline.copy(alpha = 0.35f)
+    )
+    ThemeVariant.AURORA -> if (includeAurora) auroraCardBorder(primary) else null
+    else -> null
 }
 
 @Composable

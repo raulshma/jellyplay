@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookTocEntry
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -27,6 +28,7 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -129,8 +131,14 @@ class HomeRefresherTest {
     private var tocPageCounts: Map<String, Int> = emptyMap()
     private val bookTocCacheRepository = object : BookTocCacheRepository {
         override fun observeToc(itemId: String): Flow<BookTocCache?> = flowOf(null)
-        override suspend fun getToc(itemId: String): BookTocCache? =
-            tocPageCounts[itemId]?.let { BookTocCache(itemId, BookFormat.PDF, pageCount = it, entries = emptyList(), updatedAt = 0L) }
+        override suspend fun getToc(itemId: String): BookTocCache? {
+            // While gated, every lookup parks — the fetch's book-fraction
+            // decode (its last suspension before the roll-registry drain)
+            // parks with it, so the roll-generation tests can land a dice
+            // roll mid-decode. Mirrors [drainGate]'s idiom.
+            tocGate?.await()
+            return tocPageCounts[itemId]?.let { BookTocCache(itemId, BookFormat.PDF, pageCount = it, entries = emptyList(), updatedAt = 0L) }
+        }
         override suspend fun putToc(itemId: String, format: BookFormat, pageCount: Int, entries: List<BookTocEntry>) = Unit
         override suspend fun deleteToc(itemId: String) = Unit
     }
@@ -142,6 +150,14 @@ class HomeRefresherTest {
      */
     private var drainCalls = 0
     private var drainGate: CompletableDeferred<Unit>? = null
+
+    /**
+     * While set, the fake TOC cache's getToc parks — parks the fetch's
+     * book-fraction decode, the fetch's LAST suspension before the
+     * roll-registry drain, so a dice-roll test can land a roll strictly
+     * before the drain point from the other side of that suspension.
+     */
+    private var tocGate: CompletableDeferred<Unit>? = null
 
     @BeforeTest
     fun setUp() {
@@ -908,6 +924,81 @@ class HomeRefresherTest {
         assertSame(otherBefore, sections[0].items.last())
         assertFalse(sections[0].items.last().isPlayed)
         refresher.stop()
+    }
+
+    // ── rollDiscoverRow × fetch generation registry ─────────────────────────
+
+    @Test
+    fun rollDiscoverRow_landingDuringBookFractionDecode_survivesTheFetchsSectionsWrite() = runTest {
+        // Pins the generation invariant at its riskiest suspension (see the
+        // rolledRowGenerations registry in HomeRefresher): the book-fraction
+        // decode is the fetch's LAST suspension before the registry drain, so
+        // a roll landing mid-decode must register into a not-yet-drained
+        // registry and be re-applied by the fetch's sections write. The
+        // FetchTest mid-fetch pin parks the fetch earlier — on the main
+        // sections await; this one parks it between that await and the drain,
+        // so moving the drain ahead of the decode is caught ONLY here.
+        val discoverRow = HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor("dr_x"),
+            title = "Surprise Me",
+            type = HomeSectionType.DISCOVER,
+            items = listOf(item("m1")),
+        )
+        val continueReading = section(
+            HomeSectionType.CONTINUE_READING,
+            listOf(item("book1").copy(mediaType = MediaType.BOOK, playbackPositionTicks = 50_000L)),
+        )
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+            Result.success(HomeSectionsResult(sections = listOf(discoverRow, continueReading)))
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+
+        // Park the next full refresh mid-decode: main sections await released,
+        // TOC lookup gated.
+        val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
+        tocGate = CompletableDeferred()
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        fetchGate.complete(
+            Result.success(HomeSectionsResult(sections = listOf(discoverRow, continueReading))),
+        )
+        runCurrent() // the fetch advances past its sections await and parks inside the decode
+
+        assertTrue(refresher.state.value.isRefreshing, "the fetch is still in flight, parked on the decode")
+
+        // The dice roll completes while the fetch is parked mid-decode —
+        // strictly before the fetch's drain point.
+        val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+        val reRolled = listOf(item("r2"), item("r7"))
+        coEvery { mediaRepository.getDiscoverRowItems(any()) } returns Result.success(reRolled)
+        refresher.rollDiscoverRow(rolledRow)
+        runCurrent()
+        assertEquals(
+            reRolled,
+            refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
+            "the roll patches the row immediately",
+        )
+
+        // Release the decode: the fetch's write lands with the pre-roll
+        // payload it captured — it must re-apply the registered roll, not
+        // revert it.
+        tocGate!!.complete(Unit)
+        runCurrent()
+        assertEquals(
+            reRolled,
+            refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
+            "the fetch's sections write re-applies the roll registered before its drain point",
+        )
+
+        try {
+            advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+            runCurrent()
+            assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
+        } finally {
+            refresher.stop()
+        }
     }
 
     private fun section(

@@ -8,6 +8,15 @@ plugins {
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.syncplay"
+        // Rehomed :app androidTest suite (SyncPlayScreenTest) — withHostTest
+        // creates the androidUnitTest variant bound to the Kotlin test tree
+        // (AGP-9 KMP library plugin). Flags mirrored verbatim from
+        // shared/core/ui: real resource serving for compose-resources string
+        // lookups and unstubbed-Context tolerance.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     sourceSets {
@@ -74,3 +83,26 @@ kotlin {
 // generated accessors land in `...feature.syncplay.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.syncplay.generated.resources"
+
+// Robolectric lane for the rehomed SyncPlayScreenTest. AGP 9.4's withHostTest
+// names the lane's source set androidHostTest (src/androidHostTest/kotlin)
+// and materializes it only in afterEvaluate, so the dependency wiring rides a
+// configureEach — an eager lookup would run before the source set exists
+// (same pattern as shared/core/ui).
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+            implementation(libs.androidx.test.core)
+            // Compose UI tests under Robolectric (the rehomed screen
+            // regression suite; mockk doubles the SyncPlayViewModel ctor
+            // seams — same setup as the jvmTest ViewModel suite).
+            implementation(project.dependencies.platform(libs.compose.bom))
+            implementation(libs.compose.ui.test)
+            implementation(libs.compose.ui.test.manifest)
+            implementation(libs.mockk)
+        }
+    }
+}

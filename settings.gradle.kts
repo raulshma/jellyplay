@@ -58,6 +58,11 @@ include(":shared:core:data")
 include(":shared:core:ui")
 include(":shared:core:player-contract")
 
+// Test doubles shared across feature jvmTest lanes. AGP 9 has no KMP
+// testFixtures support, so this is a plain library consumed test-scoped
+// only — never a main source set dependency (see its build.gradle.kts).
+include(":shared:core:test-fixtures")
+
 // Feature conveyor: one shared feature module per migration
 // PR, same shape as the shared core stack above.
 include(":shared:feature:search")

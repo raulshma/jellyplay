@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
-import com.raulshma.jellyplay.core.data.playback.PipTransport
+import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
@@ -748,10 +748,9 @@ class LiveTvPlayerViewModel(
         // engine instance, mirroring the VOD player. They persist across
         // channel switches and are torn down in [stop].
         playerAudioLifecycle?.onEngineCreated()
-        // Re-arm the PiP transport alongside every engine creation: [stop]
-        // runs PipController.reset() which nulls it, and this (reused,
-        // activity-scoped) VM's init never re-runs on a screen re-entry — so
-        // the bridge must ride the engine lifecycle or PiP controls go dead.
+        // Re-arm the PiP transport with every engine creation: [stop] nulls
+        // it via PipController.reset() — the re-arm lifecycle rationale lives
+        // on [reArmPipTransport].
         registerPipTransport()
         return newEngine
     }
@@ -1081,17 +1080,19 @@ class LiveTvPlayerViewModel(
 
     /**
      * Arms the PiP transport bridge so the host Activity can dispatch PiP
-     * remote-action intents to the live engine. Live mapping: PLAY/PAUSE hit
-     * the engine directly; the window's rewind/forward SKIP actions zap
-     * channel-down/up (the live-TV PiP convention — a DVR micro-seek is
-     * meaningless on pure-live streams, and [seekWithinDvr] is already a
-     * no-op there), re-resolving with the route's preferred stream overrides;
-     * NEXT stays unmapped (live has no "next episode", so pipHasNext is never
-     * set and the Activity never renders that action).
+     * remote-action intents to the live engine. The null-controller guard and
+     * assignment mechanics (plus the Activity-scoped-VM re-arm rationale)
+     * live in [reArmPipTransport]; this body owns only the live mapping:
+     * PLAY/PAUSE hit the engine directly (no SyncPlay/cast routing exists on
+     * live); the window's rewind/forward SKIP actions zap channel-down/up
+     * (the live-TV PiP convention — a DVR micro-seek is meaningless on
+     * pure-live streams, and [seekWithinDvr] is already a no-op there),
+     * re-resolving with the route's preferred stream overrides; NEXT stays
+     * unmapped (live has no "next episode", so pipHasNext is never set and
+     * the Activity never renders that action).
      */
     private fun registerPipTransport() {
-        val pip = pip ?: return
-        pip.pipTransport = PipTransport { action ->
+        reArmPipTransport(pip) { action ->
             when (action) {
                 PipAction.PLAY -> engine?.play()
                 PipAction.PAUSE -> engine?.pause()

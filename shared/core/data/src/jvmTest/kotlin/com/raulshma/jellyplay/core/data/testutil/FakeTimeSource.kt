@@ -10,6 +10,11 @@ import java.time.ZoneId
  * drift those invited: one copy had renamed its field, another a different
  * default, so single-homing them here).
  *
+ * The canonical cross-module twin of this fake lives in :shared:core:test-fixtures
+ * (com.raulshma.jellyplay.core.testfixtures.FakeTimeSource) for the feature
+ * modules' jvmTests; this local copy stays until a touch migrates core:data's
+ * 14 consumers (per-touch adoption). Keep the two in shape sync.
+ *
  * Semantics are the common shape all the copies shared:
  *  - [nowEpochMillis] / [nowElapsedRealtimeMillis] both read [nowMs]
  *    (tests advance time by assigning/incrementing it directly).

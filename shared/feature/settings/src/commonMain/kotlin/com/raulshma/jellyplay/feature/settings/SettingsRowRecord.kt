@@ -143,3 +143,16 @@ internal fun rowTitle(id: String): String {
     }
     return stringResource(res)
 }
+
+/**
+ * [rowTitle]'s icon twin: the ONE place a settings row's leading icon is
+ * resolved from. `icon = rowIcon(SomeIds.X)` replaces the per-row hand-written
+ * `Tabler.Outline.X` so the record's [SettingsRowRecord.icon] field is
+ * referenced from exactly one declaration home — the record is the single
+ * source, and any screen/record icon drift resolves to the record's icon.
+ * Non-composable: the icon is a plain [ImageVector] field, so no composition
+ * is needed. A missing id fails loudly (the same getValue miss pattern as
+ * [rowTitle]); every id [rowTitle] accepts has a record, so the two resolvers
+ * accept the same id vocabulary.
+ */
+internal fun rowIcon(id: String): ImageVector = SettingsRowRecords.byId.getValue(id).icon

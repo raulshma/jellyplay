@@ -366,6 +366,22 @@ host-window/lifecycle effects moved verbatim into ONE composable called at
 the same composition position, so effect dispatch order is preserved (the
 race-documented guards ride along unchanged).
 
+`VideoPlayerScreen`'s main composable is nine private siblings now
+(`CastCompanionDashboardBranch`, `playerBoxKeyInputModifier`,
+`Modifier.playerTapAndZoomGestures`, `PlayerGestureOverlayTier`,
+`PlayerCenterOverlayTier`, `PlayerLockOverlayTier`,
+`PlayerStatusOverlayTier`, `PlayerSubtitleDelayOverlay`,
+`PlayerSeekScrubTrickplayOverlay`); the controls' arg-prep block stays
+INLINE deliberately — its lambdas are remember-memoized delegates for
+skippability, and extraction would freeze them. The screen's
+`MediaContentProjector` absorbed the VM's `sessionState` collector
+residue via narrow seams (`setTitleSubtitle`,
+`onStoredSelectionChanged`, `getStoredSelection`,
+`refreshPlaybackPreferences`, `onSessionItemChanged`, `launchAsync`), the
+`lastItemId`/`lastSeriesId` fold state is projector-private, and the VM
+collector is one delegation — the `godStateWirings` ratchet still 3, six
+new projector pins.
+
 **`SubtitlePreviewController`** (beside the other player controllers) owns
 the subtitle cue-preview sheet: the EXTERNAL-vs-EMBEDDED source precedence,
 exact-id-then-label track→source resolution, the sheet-visible gate on the
@@ -855,6 +871,27 @@ it stays on `create()` rather than the factory). `SyncStatusStateHolderFactory`
 (core/data) is the same move for the sync holder. `HomeRefresherTest` still
 constructs the refresher directly — the factory delegates, it adds no
 behavioural seam.
+
+**Discover-row roll registry.** `rollDiscoverRow`'s dice re-roll orders
+against in-flight fetches through ONE registry, `rolledRowGenerations`
+(`LinkedHashMap<String, RolledRowGeneration>` — rolled items + a monotonic
+`rollGeneration` stamp; accessors `registerRolledRowGeneration` /
+`applyRolledRowGenerations`): a roll landing mid-fetch re-seeds the network
+cache that fetch already captured, so the fetch's single `sections` write
+drains the registry and re-applies instead of transiently reverting the
+on-screen roll. THE GENERATION INVARIANT (one KDoc owns the rationale): a
+fetch re-applies every roll registered before the fetch's DRAIN POINT —
+the last statement before the sections write, no suspension between drain
+and write, so all three suspensions a fetch can park on (the main sections
+await, the custom-Seerr splice await, the book-fraction decode) sit
+strictly before it; a roll registered after applies itself (registration
+happens-before its in-place patch; re-application idempotent; stamps
+ordered, never compared). Vocabulary: "generation" in the feature layer —
+`identityEpoch` owns "epoch" here, and the network/repo layers' store-local
+epoch guards (`discoverRowEpoch` / `discoverRollEpoch`) compose with the
+registry, are not replaced by it; identity transitions clear it wholesale.
+Pinned by
+`HomeRefresherTest.rollDiscoverRow_landingDuringBookFractionDecode_survivesTheFetchsSectionsWrite`.
 
 **`HomeViewModel`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeViewModel.kt`)
 is a flows + `onEvent` facade. Its public surface is StateFlows
@@ -1703,6 +1740,17 @@ NOT extend `LyricsRepository`: `AudioLyricsManager` and
 `DataKoinModule` binds `LyricsRepositoryImpl` as its own single;
 `DataKoinModulesTest` pins resolution.
 
+The DI monolith is an aggregate now: `dataJvmModule` (formerly ONE
+914-line/149-single module) is `module { includes(...) }` over ten jvmShared
+family modules in the same `di/` package (DataCoreLeaf / DataRepositories /
+DataSessionPlayback / DataMediaRepository / DataDownloadsConveyor /
+DataDownloadActions / DataPlaybackFamily / DataSubtitleProvider /
+DataSeerrArr / DataAdmin Koin modules — the old file's comment-section
+boundaries), and `androidCoreDataModule` likewise aggregates five androidMain
+siblings (PlaybackFocus / PlaybackStack / RemoteCast / IntakeStorage /
+WorkSchedulers). The aggregate names are unchanged — consumers and
+`DataKoinModulesTest` untouched.
+
 **`MediaRepository` union shrink (landed)**: `MediaRepository` no longer
 extends `LiveTvRepository` / `SyncPlayRepository` / `NewsletterRepository` /
 `PlaylistRepository` — its interface is its own 42 members (the former
@@ -1742,13 +1790,22 @@ No legacy unit-test file runs lane-less anymore: since the cutover
 shared module's androidHostTest lane — kmp-build.yml's android-app job runs
 :shared:core:data:testAndroidHostTest (the 69 core:data + 8 notification
 files: cast, worker and playback platform code included) and
-:shared:core:ui:testAndroidHostTest (14, incl. RoutePredicatesTest and
+:shared:core:ui:testAndroidHostTest (16, incl. RoutePredicatesTest and
 TvDrawerFocusWiringTest, plus the former instrumented-only sheet/scrim
 pairs, which now execute under Robolectric). Keep the Phase-X rule itself:
 treat a legacy-only assertion as dead when its class moves to `androidMain`.
 Still dark is execution, not compilation: the instrumented androidTest
 sources are compile-gated only — :app
-via :app:assemblePhoneDebugAndroidTest, no emulator lane.
+via :app:assemblePhoneDebugAndroidTest, no emulator lane. The stranded-:app
+androidTest rescue rehomed 15 instrumented files into their
+owning modules' androidHostTest Robolectric lanes: the 11 player-video
+component tests plus ErrorScreenTest / NavigationRouteTest /
+PinLockScreenTest → core:ui, SyncPlayScreenTest → feature:syncplay — the
+player-video and syncplay lanes are newly wired (`withHostTest` +
+`robolectric.properties` sdk=35). 28 stale assertions were repaired to the
+current component contracts, zero deleted; NavigationRouteTest gained the
+four missing routes (HomeSettings, DiscoverRows, DiscoverRowEditor,
+ImportPreview).
 
 The data layer's clock reads go through the injected **`TimeSource`**
 (jvmShared `util/TimeSource.kt`, the Koin-single `SystemTimeSource`): every
@@ -1768,6 +1825,16 @@ implementation (perf-mode 300/400 clamp, `p_|b_|c_` key grammar,
 put-only-on-non-empty, null-width bypass, 512-entry bound) bound by both the
 Android and desktop DI modules — the `android.util.LruCache` and desktop
 `LinkedHashMap` twins are gone, pinned by `ImageUrlProviderImplTest`.
+
+Test doubles for that clock seam are shared from
+**:shared:core:test-fixtures`** (new module, jvmShared-only — `TimeSource`
+lives in core:data jvmShared, so commonMain is impossible): the canonical
+`FakeTimeSource` (richest shape) + the public `FakeUserDataMutator`,
+consumed test-scoped by livetv/details/home; core:data keeps its local
+`FakeTimeSource` copy behind a sync-pointer KDoc.
+`TestFixturesScopeGuardTest` (the module's jvmTest) is the tripwire — it
+fails if any build script references the module outside test-scoped
+blocks, wired into task inputs so it cannot go UP-TO-DATE stale.
 
 Four more repository internals were deepened (public
 interfaces unchanged): **`SeerrRepositoryImpl`** folds its 27 hand-copied
@@ -2009,9 +2076,14 @@ was REJECTED (the feature-layer core:network embargo in the
 player-video/player-live/details/insights build files is load-bearing;
 the repository members ARE the feature-visible narrow seams). Ratchet:
 `PlaybackRepositorySurfaceTest`, baseline 27 — lower when the surface
-shrinks, never raise. Deliberately NOT swept: the other 16
+shrinks, never raise. Deliberately NOT swept in that pass: the other 16
 `JellyfinApiClient` constructor injectors (per-touch only,
-opportunistically).
+opportunistically). The next per-touch batch closed the SyncPlay family
+(Koin definitions change parameter types only): `SyncPlayManager`'s ctor
+takes `syncPlayApiClient` + `authApiClient` (the postCapabilities
+pre-join call), `SyncPlayController` narrows to `SyncPlayApiClient`,
+`TimeSyncManager` to `PlaybackApiClient` (`getServerTime` is its only
+call), and `EpisodeCatalogueImpl` to `LibraryApiClient`.
 
 Migration chain hygiene: the chain is split into era files beside the
 slim `Migrations.kt` registry — `Migrations1To23` / `Migration24To25` /
@@ -2341,6 +2413,15 @@ primary, stale after failover) and were rescued only by the failover
 interceptor's absolute-URL promise. Pinned by
 `JellyfinRawRequesterTest` (MockWebServer, the `SeerrApiClientTest`
 setup) plus the first-ever `PluginApiClientImplTest` through the seam.
+That bug class's last two stragglers are closed:
+`AdminRepositoryImpl.getUserImageUrl` and `PluginAdminRepositoryImpl` now
+build URLs from `engine.activeServerAddress` too, and the latter's
+whole-engine ctor dep is deleted — `(pluginApiClient,
+activeServerAddress: () -> String?, session: () -> ActiveSession?,
+okHttpClient: OkHttpClient)`, the okHttp DI single injected unqualified
+(the `DlnaCastStrategy` precedent); its webview credentials read ONE
+atomic `ActiveSession` per the Session-identity rule. Failover-pinned in
+both jvmTests: the URL follows failover.example.com over the primary.
 Small folds landed around it:
 `ItemCountsDto`→`toItemCounts()` lives in `JellyfinDtoMappers` (the
 byte-identical Admin/MediaInfo pair is gone), the parental
@@ -2691,7 +2772,23 @@ settings commonMain) is one record per row naming every title face once —
 the screen row's `settings_*` title (rendered through `rowTitle`, so the
 resource is referenced from exactly one place in code), the `ss_*_title`
 search hit, and the deliberately-descriptive `ss_*_subtitle` marked by
-field name. Pinned by `SettingsRowRecordTest`.
+field name — and, since the icon batch, every leading ICON once:
+`rowIcon(id)` beside `rowTitle(id)` (same loud-miss `getValue` pattern;
+non-composable `ImageVector` field, the record is the single icon source)
+replaced the 108 hand-written `Tabler.Outline.*` row icons, and the seven
+screen/record icon drifts resolved to the records
+(DVR_RECORDING_QUALITY's hand-written Video → the record's BadgeHd, …).
+Pinned by `SettingsRowRecordTest`.
+
+The screens decomposed with it: `PlaybackSettingsScreen` (2,184 lines)
+renders through eleven private group composables (`PlaybackPlayerGroup`,
+`PlaybackPlayerAdvancedRows`, `PlaybackAdvancedVideoGroup`,
+`PlaybackEngineGroup` + the per-engine Mpv/Vlc/Exo row groups,
+`MediaSegments`, `SyncPlay`, `Casting`, `Dvr`); `SettingsScreen`'s
+mid-composable `settingsSection` local is hoisted top-level with five
+`SettingsGroup` sections extracted (Account / Activity / System /
+Screensaver / IdleAmbient), picker/dialog state threading as
+`activePicker`/`activeDialog` `MutableState`s.
 
 The same pass finished the declared-admissions ratchet: the notification,
 language-subtitles and security groups now declare per-id
@@ -2969,7 +3066,14 @@ their theme files) and `backgroundBrush()` returning the full-bleed
 vertical gradient (Synthwave + Aurora) or null, which is what the app
 shell's `LocalThemeVariant.current.backgroundBrush()` background switch and
 the `JellyPlayScreenScaffold`'s remembered-background transparency check
-both read. Per-variant schemes live beside the registry (`AuroraTheme.kt`,
+both read. The border derivations ride the registry too:
+`detailCardBorder(primary, secondary, outline, includeAurora = true)` is
+the detail-screens subset of `cardBorder` — the four hand-rolled border
+derivations (`SeerrDetailScreen`, `MediaDetailBody` ×2,
+`MediaDetailSeasons`) are deleted; three of the four sites keep
+`includeAurora = false`, preserving their historical null-on-aurora
+(enabling aurora there is a deliberate visual follow-up, not this fold).
+Per-variant schemes live beside the registry (`AuroraTheme.kt`,
 `SakuraTheme.kt`, `VectorPopTheme.kt`, `VividTheme.kt`);
 `AppearanceSettingsScreen` renders one generalized
 `VariantAccentPicker(variant)` (in shared/core/ui's `AccentColorPicker.kt`).
@@ -3182,7 +3286,16 @@ latch-members behavior by construction: `LiveTvPlayerViewModel` collects
 VOD VM's auto-exit discharge, which live previously lacked: the flag merely
 latched and nothing closed the window) and defensively clears both one-shot
 latches in `initialize()`; the live screen folds `closePlayer` into its
-`onBack`.
+`onBack`. The players' transport re-arm is shared with the same shape:
+**`reArmPipTransport(pip, handler)`** (core:data commonMain
+`playback/PipTransportReArm.kt`) owns the null-guard + transport
+assignment + the lifecycle rationale (Activity-scoped VM,
+`PipController.reset()` on teardown, `init` never re-runs). The per-action
+MAPPING stays host-owned BY DESIGN — live maps to channel zaps + direct
+engine calls (no funnels exist on live), VOD to the
+`routedPlay`/`seekByStep`/`playNextEpisode` funnels with a `Log.w`
+no-engine drop; pinned by `PipTransportReArmTest` (core:data jvmTest)
+plus live's existing transport pins.
 
 **`ExternalPlayerHost`** (navigation/playbackhost): the six-step launch
 protocol (resolve → report-start → stash → chooser → failure clears
@@ -4096,6 +4209,25 @@ overlap). See docs/adr/0004-playback-focus.md.
   and sibling features). SeerrDetailScreen's `formatRatingOneDecimal` /
   `formatUsCurrency` / `releaseTypePresentation` moved beside it to
   feature/details' `SeerrDetailUtils`.
+- **`seerrCardClickHandler(...)` + `ProvideSeerrCardPrefetching`**
+  (core/ui `components/SeerrCardLoadingState.kt`): the route-agnostic
+  Seerr card click choreography — startLoading → prefetch detail →
+  stopLoading → navigate — written once (both the `SeerrHorizontalSection`
+  and `SeerrItemsRow` cascades folded), and the prefetch
+  `CompositionLocal` provider construction deduped behind the
+  `ProvideSeerrCardPrefetching(prefetchDetail, content)` composable.
+  Deliberately not migrated: home's `SeerrDiscoverRow` variant (provides
+  an extra local). Known remaining occurrences: auth's ServerListScreen /
+  UserSelectionScreen and music's `ArtistDetailScreen`.
+- **`BiometricAuthHelper`** (core:ui androidMain `components/`) is
+  consolidated behind one prompt engine: `launchPrompt(activity, spec, …)`
+  over `PromptSpec` (authenticators / title / negative button / crypto /
+  cancellations), ONE cipher factory `initCipher(CryptoBinding)` — the
+  `KeyPermanentlyInvalidatedException` recovery written once — and ONE key
+  factory `createAuthKey(CryptoBinding)`; the three public `authenticate*`
+  variants are thin builders, public surface unchanged. Cancellation
+  classification is extracted pure, pinned by
+  `BiometricAuthHelperCancellationTest` (core:ui androidHostTest).
 - **Meaningful-runtime + watch-progress predicates** (core/model
   `MediaItem.kt`): `hasPlaybackPosition` (non-null, > 0 ticks),
   `hasWatchProgress` (+ `!isPlayed` — the "time remaining" predicate),

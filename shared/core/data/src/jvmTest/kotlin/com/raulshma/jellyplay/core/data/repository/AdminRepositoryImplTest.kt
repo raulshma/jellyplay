@@ -54,15 +54,6 @@ class AdminRepositoryImplTest {
             address = "https://server.example.com",
         ),
     )
-    private val currentUser = MutableStateFlow<com.raulshma.jellyplay.core.model.UserInfo?>(
-        com.raulshma.jellyplay.core.model.UserInfo(
-            id = "11111111-1111-4111-8111-111111111111",
-            name = "admin",
-            serverAddress = "https://server.example.com",
-            accessToken = "token-1",
-            serverId = "server-1",
-        ),
-    )
 
     @BeforeTest
     fun setup() {
@@ -70,8 +61,9 @@ class AdminRepositoryImplTest {
         engine = mockk()
         realtimeTasks = mockk()
         activityLogChannel = mockk()
-        every { engine.currentServer } returns currentServer
-        every { engine.currentUser } returns currentUser
+        // The router-address read the URL builder consumes; the default mirrors
+        // "no failover configured" (active == the server's primary).
+        every { engine.activeServerAddress } answers { currentServer.value?.address }
         every { realtimeTasks.tasks } returns flowOf(emptyList())
         every { realtimeTasks.scanLibraryTask } returns flowOf(null)
         every { realtimeTasks.lastPushAtMs } returns 0L
@@ -233,6 +225,18 @@ class AdminRepositoryImplTest {
         assertTrue(url.contains("/Images/Primary"), url)
         assertTrue(url.contains("maxWidth=200"), url)
         assertTrue(url.contains("tag=abc"), url)
+    }
+
+    @Test
+    fun `getUserImageUrl follows the router's failover address, not the server's primary`() {
+        // Failover pin: the router moved to an alternate while currentServer
+        // still carries the (dead) primary — the URL must target the active
+        // endpoint, never the straggler primary address.
+        every { engine.activeServerAddress } returns "https://failover.example.com"
+
+        val url = repository.getUserImageUrl("11111111-1111-4111-8111-111111111111", tag = "abc", maxWidth = 200)
+
+        assertTrue(url.startsWith("https://failover.example.com/Users/"), url)
     }
 
     @Test

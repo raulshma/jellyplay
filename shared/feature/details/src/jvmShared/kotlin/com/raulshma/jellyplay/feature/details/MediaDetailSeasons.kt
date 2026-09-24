@@ -52,7 +52,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -63,9 +62,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
@@ -623,31 +622,18 @@ internal fun EpisodeCard(
     val isTv = LocalTvMode.current
     val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.5f).coerceAtLeast(260.dp)
 
-    val isSynthwave = LocalIsSynthwave.current
-    val isSoothing = LocalIsSoothingTheme.current
-    // Read theme colors here (composable scope) so the remember block below
-    // doesn't need to call composable functions.
+    // Border depends only on the active theme, not on the per-episode data — wrap
+    // in remember so the Modifier + gradient aren't rebuilt per card per recompose.
+    // includeAurora = false keeps the historical no-border look under Aurora
+    // (only the Seerr detail cards glow there).
+    val themeVariant = LocalThemeVariant.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val outlineColor = MaterialTheme.colorScheme.outline
-    // Depends only on the active theme, not on the per-episode data — wrap in
-    // remember so the Modifier + gradient aren't rebuilt per card per recompose.
-    val borderModifier = remember(isSynthwave, isSoothing, primaryColor, secondaryColor, outlineColor) {
-        when {
-            isSynthwave -> Modifier.border(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(primaryColor, secondaryColor)
-                ),
-                shape = ShapeCache.smooth16
-            )
-            isSoothing -> Modifier.border(
-                width = 0.8.dp,
-                color = outlineColor.copy(alpha = 0.35f),
-                shape = ShapeCache.smooth16
-            )
-            else -> Modifier
-        }
+    val borderModifier = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
+        themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
+            ?.let { Modifier.border(it, ShapeCache.smooth16) }
+            ?: Modifier
     }
 
     Column(

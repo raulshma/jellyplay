@@ -55,9 +55,9 @@ import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Star
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.formatRuntimeLabelFromTicks
+import com.raulshma.jellyplay.core.ui.components.seerrCardClickHandler
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -1295,16 +1296,13 @@ internal fun SeerrItemsRow(
                     item = seerrItem,
                     imageUrl = seerrItem.posterUrl,
                     isLoading = loadingState?.isLoading(seerrItem.id) == true,
-                    onClick = {
-                        if (loadingState != null && prefetch != null) {
-                            loadingState.startLoading(seerrItem.id)
-                            prefetch(seerrItem.id, seerrItem.mediaType) {
-                                loadingState.stopLoading(seerrItem.id)
-                                onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                            }
-                        } else {
-                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
-                        }
+                    onClick = seerrCardClickHandler(
+                        loadingState = loadingState,
+                        prefetch = prefetch,
+                        id = seerrItem.id,
+                        mediaType = seerrItem.mediaType,
+                    ) {
+                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(seerrItem.id, seerrItem.mediaType))
                     },
                     onRequestClick = { onSeerrRequest(seerrItem) },
                     modifier = focusModifier.width(cardWidth),
@@ -1376,30 +1374,14 @@ private fun VideosSection(
     val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
     // The video card border depends only on the active theme, not on the per-video
     // data, so compute it once here rather than rebuilding a BorderStroke + gradient
-    // per video per recomposition.
-    val isSynthwave = LocalIsSynthwave.current
-    val isSoothing = LocalIsSoothingTheme.current
+    // per video per recomposition. includeAurora = false keeps the historical
+    // no-border look under Aurora (only the Seerr detail cards glow there).
+    val themeVariant = LocalThemeVariant.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val outlineColor = MaterialTheme.colorScheme.outline
-    val videoCardBorder = remember(isSynthwave, isSoothing, primaryColor, secondaryColor, outlineColor) {
-        when {
-            isSynthwave -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 1.5.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(primaryColor, secondaryColor)
-                    )
-                )
-            }
-            isSoothing -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 0.8.dp,
-                    color = outlineColor.copy(alpha = 0.35f)
-                )
-            }
-            else -> null
-        }
+    val videoCardBorder = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
+        themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
     }
     // Same hoist for the per-card bottom scrim: identical for every video,
     // so build it once instead of per card per recomposition.
@@ -1624,27 +1606,18 @@ internal fun UpNextSection(
         label = "upNextPlayScale",
     )
 
-    val isSynthwave = LocalIsSynthwave.current
-    val isSoothing = LocalIsSoothingTheme.current
+    // Border depends only on the active theme, not on this card's state — wrap
+    // in remember so the Modifier + gradient aren't rebuilt per recomposition.
+    // includeAurora = false keeps the historical no-border look under Aurora
+    // (only the Seerr detail cards glow there).
+    val themeVariant = LocalThemeVariant.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val outlineColor = MaterialTheme.colorScheme.outline
-    val borderModifier = remember(isSynthwave, isSoothing, primaryColor, secondaryColor, outlineColor) {
-        when {
-            isSynthwave -> Modifier.border(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(primaryColor, secondaryColor)
-                ),
-                shape = ShapeCache.smooth16,
-            )
-            isSoothing -> Modifier.border(
-                width = 0.8.dp,
-                color = outlineColor.copy(alpha = 0.35f),
-                shape = ShapeCache.smooth16,
-            )
-            else -> Modifier
-        }
+    val borderModifier = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
+        themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
+            ?.let { Modifier.border(it, ShapeCache.smooth16) }
+            ?: Modifier
     }
 
     val cardFocusState = rememberTvFocusState(focusedScale = 1.02f)

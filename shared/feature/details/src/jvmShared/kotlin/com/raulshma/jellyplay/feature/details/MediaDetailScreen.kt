@@ -43,17 +43,13 @@ import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
-import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
-import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
-import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
-import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -403,22 +399,13 @@ fun MediaDetailScreen(
             // into uiState as-is — its dialogItem gates the request dialog)
             val seerrRequest = uiState.seerrRequest
 
-            // Seerr card loading state for prefetch animation
-            val seerrLoadingState = rememberSeerrCardLoadingState()
-            val seerrPrefetchCallback: SeerrPrefetchCallback =
-                remember(seerrLoadingState, viewModel) {
-                    { tmdbId, mediaType, onDone ->
-                        seerrLoadingState.startLoading(tmdbId)
-                        viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType) {
-                            seerrLoadingState.stopLoading(tmdbId)
-                            onDone()
-                        }
-                    }
+            // Seerr card loading state for prefetch animation: one root-level
+            // bundle of the callback + loading state; descendant rows read them
+            // via the composition locals.
+            com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+                prefetchDetail = { tmdbId, mediaType, onDone ->
+                    viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType, onDone)
                 }
-
-            CompositionLocalProvider(
-                LocalSeerrPrefetch provides seerrPrefetchCallback,
-                LocalSeerrCardLoadingState provides seerrLoadingState,
             ) {
                 val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
