@@ -127,12 +127,12 @@ internal val SecuritySettingsSearchItems: List<SettingsSearchItem> = SecuritySet
 
 /**
  * The security group's per-id declared row admissions — the single gate both
- * `securityScreenRowTotal` and SecuritySettingsScreen's emission `if`s read.
- * Only the lock-group rows declare gates (the biometric flag is the screen's
- * gate-aware computed value); `pin_for_player_lock` — the shipped count quirk
- * — and the quick-connect/remote-control rows (counted in their own
- * single-row groups) stay undeclared, and the strict default counts nothing
- * undeclared.
+ * `rowTotalFor` (the screen's total) and SecuritySettingsScreen's emission
+ * `if`s read. Only the lock-group rows declare gates (the biometric flag is
+ * the screen's gate-aware computed value); `pin_for_player_lock` — the
+ * shipped count quirk — and the quick-connect / remote-control /
+ * remote-display rows (counted in their own single-row groups) stay
+ * undeclared, and the strict derivation counts nothing undeclared.
  */
 internal val SecurityRowAdmissions: Map<String, RowAdmission> = mapOf(
     SecuritySettingsIds.PIN_LOCK to RowAdmission.Always,

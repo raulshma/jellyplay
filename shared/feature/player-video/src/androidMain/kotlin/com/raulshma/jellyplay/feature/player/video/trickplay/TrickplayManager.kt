@@ -71,7 +71,7 @@ class TrickplayManager(
     // outlive `clear()` — the manager is held as a VM field so dies with the
     // VM, but per-item `clear()` on item switch leaked work from the previous
     // item. Recreated lazily, only when inactive (mirrors the engineScope
-    // pattern).
+    // law in BasePlayerEngine: a cancelled scope is replaced before reuse).
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // The one preload slot: cancel-and-replace in [schedulePreload], cancelled

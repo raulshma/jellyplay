@@ -4,8 +4,8 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
-import com.raulshma.jellyplay.feature.player.video.engine.FakeMediaEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

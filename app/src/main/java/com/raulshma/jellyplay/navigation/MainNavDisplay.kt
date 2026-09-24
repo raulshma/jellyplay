@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.scene.Scene
@@ -25,9 +24,7 @@ import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass
-import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
-import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
 
@@ -73,8 +70,7 @@ internal fun MainNavDisplay(
     val onNowPlayingClick = shellParams.onNowPlayingClick
     val onAmbientClick = shellParams.onAmbientClick
     val playOn = shellParams.playOn
-    val mainViewModel = shellParams.mainViewModel
-    val surpriseRequests = shellParams.surpriseRequests
+    val shellHost = shellParams.shellHost
 
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
@@ -111,19 +107,6 @@ internal fun MainNavDisplay(
     val motionScheme = MaterialTheme.motionScheme
     val reducedMotion = isReducedMotion()
 
-    // Admin access-control state, collected once here (a @Composable context)
-    // and threaded into the admin section as read lambdas so the navigation
-    // entries — which are composed lazily — observe the latest value without
-    // re-building the entry graph. MainViewModel arrives via [ShellNavParams]:
-    // the SAME activity-scoped instance MainActivity's `by viewModels`
-    // delegate holds, threaded down the call chain. (The former
-    // LocalViewModelStoreOwner + mainViewModelFromKoin re-lookup here was
-    // identity-by-convention — it held only while both sites sat under
-    // MainActivity's ViewModelStoreOwner; deleted with the shell split, like
-    // the PlayOn koinViewModel() self-resolution before it.)
-    val isAdminState = mainViewModel.isAdmin.collectAsStateWithLifecycle()
-    val isRefreshingAdminState = mainViewModel.isRefreshingAdmin.collectAsStateWithLifecycle()
-
     // Remember the entry provider graph so the ~25 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every
     // MainNavDisplay recomposition. The 20 shared sections are the shell
@@ -131,40 +114,10 @@ internal fun MainNavDisplay(
     // shell adds only what cannot leave Android — the androidMain-only
     // livePlayer/subtitleTester builders and the inline PlayOnCompanion
     // entry — through shellEntryProvider's extraSections slot, which the
-    // shared registration ledger sees too.
-    val shellHost = remember(
-        navigator,
-        homeMode,
-        onModeChange,
-        onNowPlayingClick,
-        onAmbientClick,
-        onLogout,
-        playOn,
-    ) {
-        ShellHostHooks(
-            homeMode = homeMode,
-            onHomeModeChange = onModeChange,
-            onNowPlayingClick = onNowPlayingClick,
-            onAmbientClick = onAmbientClick,
-            onLogout = onLogout,
-            onCheckForUpdates = { mainViewModel.updateCoordinator.manualCheckForUpdate() },
-            // Lazy .value reads — admin refreshes don't rebuild the graph.
-            isAdmin = { isAdminState.value },
-            isRefreshingAdmin = { isRefreshingAdminState.value },
-            onRefreshAdmin = { mainViewModel.refreshAdminStatus() },
-            // The shared home module narrows the Play-On surface to its
-            // HomePlayOnRedirect seam (the concrete strategy is Android-
-            // bound); the probe + fling choreography lives on the controller
-            // (flingIfConnected), so the strategy never leaves it. Declared
-            // delta: the redirect is active on EVERY host now —
-            // it used to be phone-layout-only (the TV and full-screen
-            // MainNavDisplay calls passed no strategy). Only observable when
-            // a remote session is already connected, which itself can only
-            // be initiated from the phone layout's Play On device sheet.
-            playOnRedirect = HomePlayOnRedirect(playOn::flingIfConnected),
-            surpriseRequests = surpriseRequests,
-        )
-    }
+    // shared registration ledger sees too. The hooks arrive already built
+    // on [ShellNavParams] (MainContent constructs them from the
+    // activity-scoped MainViewModel it owns), so the admin/update seams
+    // never touch this file.
     val shellSections = remember(navigator, shellHost) {
         shellEntryProvider(navigator = navigator, host = shellHost) {
             livePlayerSection(navigator)

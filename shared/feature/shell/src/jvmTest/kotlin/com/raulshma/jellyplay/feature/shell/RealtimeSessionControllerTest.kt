@@ -1,8 +1,14 @@
 package com.raulshma.jellyplay.feature.shell
 
+import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,6 +35,13 @@ import kotlin.test.assertTrue
  * pinned to the exact same arm the credentials ride: same auth-true edge,
  * same resolved pair, same pair-null never-retry skip, and no re-fire on
  * socket reconnects (only a fresh auth edge re-fires it).
+ *
+ * The [RealtimeSessionController.create] factory — the construction path both
+ * shells now share — is pinned against the same fake recording surfaces:
+ * the concrete collaborators (final classes, mocked like the app module's
+ * SessionCoordinatorTest does) must wire onto the identical seams, and the
+ * omitted [RealtimeSessionController.onConnected] must default to the no-op
+ * the desktop construction relies on.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RealtimeSessionControllerTest {
@@ -325,6 +338,59 @@ class RealtimeSessionControllerTest {
         assertEquals(realtime.user.value, realtime.connectedPairs.last().second)
     }
 
+    // ── the shared create() factory ─────────────────────────────────────
+
+    @Test
+    fun `create wires the transport, receiver and identity seams onto the shared choreography`() = runTest {
+        val realtime = FakeRealtime()
+        realtime.activeUrl = "https://alternate.example"
+        val connectedPairs = mutableListOf<Pair<ServerInfo, UserInfo>>()
+        createController(realtime, testScope(), clientName = "JellyPlay Desktop") { server, user ->
+            connectedPairs.add(server to user)
+        }
+
+        realtime.isAuth.value = true
+        advanceUntilIdle()
+
+        // The hand-duplicated bundles, now written once in the factory: the
+        // ACTIVE endpoint over the primary address, the host clientName, the
+        // identity store's device id, the receiver armed on the same edge.
+        val credentials = realtime.connects.single()
+        assertEquals("JellyPlay Desktop", credentials.clientName)
+        assertEquals("https://alternate.example", credentials.serverAddress)
+        assertEquals("device-1", credentials.deviceId)
+        assertEquals(1, realtime.receiverStarts.size)
+        assertEquals(listOf("startReceiver"), realtime.fireOrder)
+        assertEquals(1, connectedPairs.size)
+        assertEquals("server-1", connectedPairs.single().first.id)
+        assertEquals("user-1", connectedPairs.single().second.id)
+
+        // Reconnect arms ride the wired transport flows…
+        realtime.reconnects.emit(Unit)
+        advanceUntilIdle()
+        assertEquals(2, realtime.capabilityPosts.size)
+        // …and the false edge tears both socket and receiver down.
+        realtime.isAuth.value = false
+        advanceUntilIdle()
+        assertEquals(listOf(Unit), realtime.disconnects)
+        assertEquals(listOf(Unit), realtime.receiverStops)
+    }
+
+    @Test
+    fun `create defaults onConnected to the no-op the desktop construction relies on`() = runTest {
+        val realtime = FakeRealtime()
+        // No onConnected argument — the desktop call shape.
+        createController(realtime, testScope())
+
+        realtime.isAuth.value = true
+        advanceUntilIdle()
+
+        // Connect + receiver arm still fire; only the fan-out is absent.
+        assertEquals(1, realtime.connects.size)
+        assertEquals(1, realtime.receiverStarts.size)
+        assertEquals(listOf("startReceiver"), realtime.fireOrder)
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────
 
     /**
@@ -335,6 +401,73 @@ class RealtimeSessionControllerTest {
      */
     private fun kotlinx.coroutines.test.TestScope.testScope(): CoroutineScope =
         CoroutineScope(coroutineContext + SupervisorJob())
+
+    /**
+     * The factory under test, over mocked collaborators recording into the
+     * same fake surfaces the seam-level tests read (they are final classes —
+     * the app module's SessionCoordinatorTest mocking pattern).
+     */
+    private fun createController(
+        realtime: FakeRealtime,
+        scope: CoroutineScope,
+        clientName: String = "JellyPlay",
+        onConnected: (suspend (ServerInfo, UserInfo) -> Unit)? = null,
+    ): RealtimeSessionController {
+        val connection = mockk<RealtimeConnection> {
+            every { serverUrl() } answers { realtime.activeUrl }
+            every { isConnected } returns realtime.isConnected
+            every { reconnects } returns realtime.reconnects
+            every { connect(any()) } answers {
+                realtime.connects.add(firstArg())
+                // A real connect flips the handshake state, arming the
+                // watcher's first-connect wait.
+                realtime.isConnected.value = true
+            }
+            every { disconnect() } answers {
+                realtime.disconnects.add(Unit)
+                realtime.isConnected.value = false
+            }
+        }
+        val receiver = mockk<RemoteControlReceiver> {
+            every { start() } answers {
+                realtime.receiverStarts.add(Unit)
+                realtime.fireOrder.add("startReceiver")
+            }
+            every { stop() } answers { realtime.receiverStops.add(Unit) }
+        }
+        val identityStore = mockk<ServerIdentityStore> {
+            coEvery { ensureDeviceId() } answers {
+                realtime.deviceIdCalls++
+                "device-1"
+            }
+        }
+        return if (onConnected != null) {
+            RealtimeSessionController.create(
+                scope = scope,
+                isAuthenticated = realtime.isAuth,
+                currentServer = realtime.server,
+                currentUser = realtime.user,
+                clientName = clientName,
+                realtimeConnection = connection,
+                remoteControlReceiver = receiver,
+                serverIdentityStore = identityStore,
+                onReconnect = { realtime.capabilityPosts.add(Unit) },
+                onConnected = onConnected,
+            )
+        } else {
+            RealtimeSessionController.create(
+                scope = scope,
+                isAuthenticated = realtime.isAuth,
+                currentServer = realtime.server,
+                currentUser = realtime.user,
+                clientName = clientName,
+                realtimeConnection = connection,
+                remoteControlReceiver = receiver,
+                serverIdentityStore = identityStore,
+                onReconnect = { realtime.capabilityPosts.add(Unit) },
+            )
+        }
+    }
 }
 
 /** Top level so the non-inner [RealtimeSessionControllerTest.FakeRealtime] can reach them. */

@@ -64,10 +64,15 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
+import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
+import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerHost
 import com.raulshma.jellyplay.navigation.playbackhost.HostDecision
 import com.raulshma.jellyplay.navigation.playbackhost.PlaybackHostRouter
+import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.ShellInfra
+import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
+import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.launch
 
 @Composable
@@ -77,6 +82,9 @@ internal fun MainContent(
     preferences: MainPreferences,
     infra: ShellInfra,
     audioPlaybackManager: AudioPlaybackManager,
+    sessionCoordinator: SessionCoordinator,
+    updateCoordinator: UpdateCoordinator,
+    syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
 ) {
     val homeMode = preferences.homeMode
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
@@ -230,7 +238,7 @@ internal fun MainContent(
     }
 
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
-    val libraryFolders by viewModel.sessionCoordinator.libraryFolders.collectAsStateWithLifecycle()
+    val libraryFolders by sessionCoordinator.libraryFolders.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
     val showMiniPlayer by remember {
         derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
@@ -291,8 +299,8 @@ internal fun MainContent(
     // while no player is on top of any back stack → open the video player.
     // When a player IS already open, its SyncPlayBridge drives the item load
     // in place — the player-open guard lives in the collector's pure fold.
-    LaunchedEffect(viewModel.syncPlayOpenCoordinator) {
-        navRequests.collectSyncPlayOpens(viewModel.syncPlayOpenCoordinator.openRequests)
+    LaunchedEffect(syncPlayOpenCoordinator) {
+        navRequests.collectSyncPlayOpens(syncPlayOpenCoordinator.openRequests)
     }
 
     // Remote-control "now playing" snackbar; the title fallback + template
@@ -418,9 +426,6 @@ internal fun MainContent(
     // so a fresh lambda per recomposition forces downstream invalidation even
     // when the captured state hasn't changed. MainContent recomposes often
     // (audio metadata, nav color, mini-player), so hoist these out.
-    val consumeSearchQuery: () -> Unit = remember(viewModel) {
-        { viewModel.consumePendingSearchQuery() }
-    }
 
     CompositionLocalProvider(
         LocalTvMode provides isTv,
@@ -440,7 +445,6 @@ internal fun MainContent(
         ),
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
-        val pendingSearchQuery by viewModel.pendingSearchQuery.collectAsStateWithLifecycle()
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
@@ -448,8 +452,6 @@ internal fun MainContent(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
                 LocalNavigationBarColor provides navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) floatingNavOffset else ({ 0f })),
-                com.raulshma.jellyplay.feature.search.LocalPendingSearchQuery provides pendingSearchQuery,
-                com.raulshma.jellyplay.feature.search.LocalConsumeSearchQuery provides consumeSearchQuery,
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives
@@ -488,6 +490,58 @@ internal fun MainContent(
             val playOn: com.raulshma.jellyplay.PlayOnViewModel =
                 org.koin.compose.viewmodel.koinViewModel()
 
+            // Admin access-control state, collected once here (a @Composable
+            // context) and threaded into the hooks as read lambdas so the
+            // navigation entries — which are composed lazily — observe the
+            // latest value without re-building the entry graph. The same
+            // activity-scoped MainViewModel instance MainActivity's
+            // `by viewModels` delegate holds owns these flows; it stays in
+            // this file, and nothing below this point names the type.
+            val isAdminState = viewModel.isAdmin.collectAsStateWithLifecycle()
+            val isRefreshingAdminState = viewModel.isRefreshingAdmin.collectAsStateWithLifecycle()
+
+            // The shell-host hooks (ShellHostHooks) behind the shared section
+            // graph, built ONCE here — the single site where the MainViewModel
+            // signals (admin gate, update check, surprise/search prefill) and
+            // the Play On controller meet the shell seam. Remembered on the
+            // same keys the former MainNavDisplay construction used, so the
+            // graph rebuilds only when they change.
+            val shellHost = remember(
+                navigator,
+                homeMode,
+                onModeChange,
+                onNowPlayingClick,
+                onAmbientClick,
+                onLogout,
+                playOn,
+            ) {
+                ShellHostHooks(
+                    homeMode = homeMode,
+                    onHomeModeChange = onModeChange,
+                    onNowPlayingClick = onNowPlayingClick,
+                    onAmbientClick = onAmbientClick,
+                    onLogout = onLogout,
+                    onCheckForUpdates = { updateCoordinator.manualCheckForUpdate() },
+                    // Lazy .value reads — admin refreshes don't rebuild the graph.
+                    isAdmin = { isAdminState.value },
+                    isRefreshingAdmin = { isRefreshingAdminState.value },
+                    onRefreshAdmin = { viewModel.refreshAdminStatus() },
+                    // The shared home module narrows the Play-On surface to its
+                    // HomePlayOnRedirect seam (the concrete strategy is Android-
+                    // bound); the probe + fling choreography lives on the controller
+                    // (flingIfConnected), so the strategy never leaves it. Declared
+                    // delta: the redirect is active on EVERY host now —
+                    // it used to be phone-layout-only (the TV and full-screen
+                    // MainNavDisplay calls passed no strategy). Only observable when
+                    // a remote session is already connected, which itself can only
+                    // be initiated from the phone layout's Play On device sheet.
+                    playOnRedirect = HomePlayOnRedirect(playOn::flingIfConnected),
+                    surpriseRequests = viewModel.surpriseRequests,
+                    pendingSearchQuery = viewModel.pendingSearchQuery,
+                    onConsumeSearchQuery = viewModel::consumePendingSearchQuery,
+                )
+            }
+
             // The shell-wide parameter bundle (the HomeCallbacks idiom —
             // ShellNavParams in ShellLayouts.kt): everything drilled
             // identically into all three layout branches and MainNavDisplay.
@@ -507,8 +561,7 @@ internal fun MainContent(
                 onNowPlayingClick = onNowPlayingClick,
                 onAmbientClick = onAmbientClick,
                 playOn = playOn,
-                mainViewModel = viewModel,
-                surpriseRequests = viewModel.surpriseRequests,
+                shellHost = shellHost,
             )
 
             Box(Modifier.fillMaxSize()) {

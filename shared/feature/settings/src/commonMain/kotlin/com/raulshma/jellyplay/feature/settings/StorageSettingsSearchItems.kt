@@ -451,13 +451,26 @@ internal val StorageDownloadsSearchItems: List<SettingsSearchItem> = StorageDown
 
 
 /**
- * The downloads group's per-id declared row admissions — the three
- * `download_schedule_*` window rows only render while their parent toggle is
- * on (`storageDownloadsScreenRowTotal` and StorageSettingsScreen's emission
- * `if` read this one gate).
+ * The cache group's per-id declared row admissions — full coverage, so
+ * `rowTotalFor` (plus the screen's explicit cache-used +1 term) reads one gate
+ * per id: the base gate is each record's own `isAdvanced` flag — the two
+ * clear rows always render, the five tuning rows ride the advanced toggle
+ * (the screen's `if (showAdvanced)` block reads the same gates).
  */
-internal val StorageDownloadsRowAdmissions: Map<String, RowAdmission> = mapOf(
-    StorageSettingsIds.DOWNLOAD_SCHEDULE_START to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
-    StorageSettingsIds.DOWNLOAD_SCHEDULE_END to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
-    StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
-)
+internal val StorageCacheRowAdmissions: Map<String, RowAdmission> =
+    StorageCacheRowRecords.admissionsByAdvancedFlag()
+
+/**
+ * The downloads group's per-id declared row admissions — full coverage, so
+ * `rowTotalFor` and StorageSettingsScreen's emission `if`s read one gate per
+ * id. The base gate is each record's own `isAdvanced` flag (every download
+ * record renders unconditionally); the overrides are the three
+ * `download_schedule_*` window rows, which only render while their parent
+ * toggle is on.
+ */
+internal val StorageDownloadsRowAdmissions: Map<String, RowAdmission> =
+    StorageDownloadsRowRecords.admissionsByAdvancedFlag() + mapOf(
+        StorageSettingsIds.DOWNLOAD_SCHEDULE_START to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
+        StorageSettingsIds.DOWNLOAD_SCHEDULE_END to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
+        StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
+    )

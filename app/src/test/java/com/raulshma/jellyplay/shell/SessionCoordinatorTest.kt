@@ -215,6 +215,27 @@ class SessionCoordinatorTest {
     }
 
     @Test
+    fun `restart raises the splash gate synchronously before the restore coroutine runs`() = runTest(dispatcher) {
+        // The activity-state-loss rebuild path: start() again after the first
+        // pass settled the gate. StandardTestDispatcher is NOT the VM's
+        // Main.immediate — the launched restore coroutine does not run until
+        // advanceUntilIdle — so the gate-up must happen synchronously inside
+        // start(): a splash reading between the two would otherwise see the
+        // previous pass's false (restore()'s internal re-raise comes too late).
+        coordinator.start(lifecycleScope) { }
+        advanceUntilIdle()
+        assertFalse(coordinator.isRestoring.value)
+
+        coordinator.start(lifecycleScope) { }
+        assertTrue(
+            "the gate must be up when start() returns, before the launched restore can re-raise it",
+            coordinator.isRestoring.value,
+        )
+        advanceUntilIdle()
+        assertFalse(coordinator.isRestoring.value)
+    }
+
+    @Test
     fun `capabilities re-posted on every websocket reconnect while authenticated`() = runTest(dispatcher) {
         coordinator.start(lifecycleScope) { }
         advanceUntilIdle()

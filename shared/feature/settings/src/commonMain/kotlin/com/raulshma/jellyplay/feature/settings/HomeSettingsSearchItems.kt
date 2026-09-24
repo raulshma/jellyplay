@@ -172,6 +172,19 @@ internal val HomeDisplaySearchItems: List<SettingsSearchItem> = HomeDisplayRowRe
 
 
 /**
+ * The display group's per-id declared row admissions — the single gate both
+ * `homeDisplayScreenRowTotal` and HomeSettingsScreen's emission list read.
+ * The seven config rows always render ([RowAdmission.Always]); `unhide_cw`
+ * deliberately declares NO gate: it renders only while hidden continue-
+ * watching items exist — a content-state condition with no admission
+ * vocabulary — so the strict derivation excludes it and the screen adds the
+ * +1 explicitly (the storage cache-used info row shape, preserved count).
+ */
+internal val HomeDisplayRowAdmissions: Map<String, RowAdmission> =
+    HomeDisplayRowRecords.filter { it.id != HomeSettingsIds.UNHIDE_CW }.admissionsByAdvancedFlag()
+
+
+/**
  * Settings-search items for the "Continue Watching & Next Up" group of
  * HomeSettingsScreen — Next Up behavior rows moved off Appearance.
  */

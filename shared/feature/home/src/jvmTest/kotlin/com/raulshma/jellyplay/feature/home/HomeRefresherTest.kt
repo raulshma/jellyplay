@@ -972,7 +972,7 @@ class HomeRefresherTest {
         // strictly before the fetch's drain point.
         val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
         val reRolled = listOf(item("r2"), item("r7"))
-        coEvery { mediaRepository.getDiscoverRowItems(any()) } returns Result.success(reRolled)
+        coEvery { mediaRepository.rerollDiscoverRow(any()) } returns Result.success(reRolled)
         refresher.rollDiscoverRow(rolledRow)
         runCurrent()
         assertEquals(

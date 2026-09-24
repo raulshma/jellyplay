@@ -11,29 +11,28 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.feature.shell.RealtimeSessionController
+import com.raulshma.jellyplay.feature.shell.SessionRestore
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
 import com.raulshma.jellyplay.widget.ContinueWatchingWidget
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Owns the app-shell session lifecycle behind a small seam: session restore,
- * the Android-only authenticated-state fan-out (server health, widgets,
- * cache maintenance, library folders — hung off the shared controller's
- * `onConnected` hook), and full teardown on logout / session revocation. The
- * realtime core itself — WebSocket connect on the auth edge, remote-control
- * receiver start/stop, endpoint selection, capabilities re-posting on every
- * socket reconnect — is the shared [RealtimeSessionController]
- * (shared/feature/shell), constructed per lifecycle with clientName
- * "JellyPlay".
+ * Owns the app-shell session lifecycle behind a small seam: the Android-only
+ * authenticated-state fan-out (server health, widgets, cache maintenance,
+ * library folders — hung off the shared controller's `onConnected` hook) and
+ * full teardown on logout / session revocation. The realtime core itself —
+ * WebSocket connect on the auth edge, remote-control receiver start/stop,
+ * endpoint selection, capabilities re-posting on every socket reconnect — is
+ * the shared [RealtimeSessionController], built through its `create` factory
+ * per lifecycle with clientName "JellyPlay"; session restore (restore call →
+ * authenticated-mirror wait → bounded timeout → splash release) is the
+ * shared [SessionRestore], with this class exposing its flows verbatim.
  *
  * Interface is one state triple plus start/stop commands —
  * [isRestoring], [isAuthenticated], [libraryFolders] and [serverHealth] are
@@ -53,12 +52,6 @@ class SessionCoordinator(
     private val cacheMaintenanceInitializer: CacheMaintenanceInitializer,
     private val mediaRepository: MediaRepository,
 ) : ShellCoordinator() {
-    private val _isRestoring = MutableStateFlow(true)
-    val isRestoring: StateFlow<Boolean> = _isRestoring.asStateFlow()
-
-    private val _isAuthenticated = MutableStateFlow(false)
-    val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
-
     private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
 
@@ -69,10 +62,44 @@ class SessionCoordinator(
      * re-arm), rebuilt per [start]: [RealtimeSessionController.stop] on the
      * previous occupant first, so a lifecycle restart (activity-state loss
      * rebuilt the ViewModel) never duplicates its collectors — the same
-     * cancel-then-replace discipline [RestartableJob] applies to the
-     * collectors below.
+     * cancel-then-replace discipline the [RestartableJob] lifecycle slot and
+     * [SessionRestore]'s mirror collector each apply to their own state.
      */
     private var realtimeSession: RealtimeSessionController? = null
+
+    /**
+     * The shared session-restore choreography (shared/feature/shell): owns
+     * the restore call → authenticated-mirror wait → bounded timeout →
+     * splash-release sequence and the mirror collector. The flows this class
+     * exposes below are ITS state — one instance for this coordinator's
+     * lifetime, so the state the activity and the shell render from is
+     * stable across [start] rebuilds exactly as the former hand-rolled
+     * fields were. The Android-only false-edge teardown rides the shared
+     * mirror collector through `onAuthChange`.
+     */
+    private val sessionRestore by lazy {
+        SessionRestore(
+            authChanges = authRepository.isAuthenticated,
+            restoreSession = authRepository::restoreSession,
+            currentServer = authRepository.currentServer,
+            currentUser = authRepository.currentUser,
+            // Warms the preferences DataStore during the restore window, as
+            // the former inline choreography did.
+            warmup = { experimentalStore.experimental.first() },
+            onAuthChange = { isAuth ->
+                if (!isAuth) {
+                    serverHealthMonitor.stopMonitoring()
+                    _libraryFolders.value = emptyList()
+                }
+            },
+        )
+    }
+
+    /** The splash gate (MainActivity's system splash keep-on-screen read). */
+    val isRestoring: StateFlow<Boolean> get() = sessionRestore.isRestoring
+
+    /** The authenticated flag the shell renders from — the shared mirror. */
+    val isAuthenticated: StateFlow<Boolean> get() = sessionRestore.isAuthenticated
 
     /**
      * Begins the session lifecycle on [scope]. [onSessionRestored] fires once
@@ -83,22 +110,16 @@ class SessionCoordinator(
      * lifecycle job first, so collectors are never duplicated.
      */
     fun start(scope: CoroutineScope, onSessionRestored: () -> Unit = {}) {
-        _isRestoring.value = true
         realtimeSession?.stop()
-        realtimeSession = RealtimeSessionController(
+        realtimeSession = RealtimeSessionController.create(
             scope = scope,
             isAuthenticated = authRepository.isAuthenticated,
             currentServer = authRepository.currentServer,
             currentUser = authRepository.currentUser,
             clientName = "JellyPlay",
-            serverUrl = realtimeConnection::serverUrl,
-            isConnected = realtimeConnection.isConnected,
-            reconnects = realtimeConnection.reconnects,
-            connect = realtimeConnection::connect,
-            disconnect = realtimeConnection::disconnect,
-            startReceiver = remoteControlReceiver::start,
-            stopReceiver = remoteControlReceiver::stop,
-            ensureDeviceId = serverIdentityStore::ensureDeviceId,
+            realtimeConnection = realtimeConnection,
+            remoteControlReceiver = remoteControlReceiver,
+            serverIdentityStore = serverIdentityStore,
             onReconnect = { authRepository.postCapabilities() },
             onConnected = { server, user ->
                 // The Android-only authenticated fan-out, delivered through
@@ -106,8 +127,9 @@ class SessionCoordinator(
                 // edge, after the connect + receiver arm, with the same
                 // resolved (server, user) pair the credentials used — the
                 // exact arm this class used to duplicate by re-reading the
-                // flows in the collector below. Auth-edge work only: socket
-                // reconnects re-post capabilities but never re-fire this.
+                // flows in its own auth collector. Auth-edge work only:
+                // socket reconnects re-post capabilities but never re-fire
+                // this.
                 serverHealthMonitor.startMonitoring(server.address)
                 scope.launch {
                     widgetWorkScheduler.refreshLibraryNow()
@@ -130,21 +152,13 @@ class SessionCoordinator(
                 refreshLibraryFolders()
             },
         )
+        // The splash gate must be up before any suspension so the splash can
+        // never flash; restore()'s internal re-raise stays an idempotent safety.
+        sessionRestore.markRestoring()
         lifecycleJob.launchIn(scope) {
             launch {
-                restoreSession()
+                sessionRestore.restore(scope)
                 onSessionRestored()
-            }
-            launch {
-                // Mirror + teardown only: everything authenticated-state
-                // positive rides the controller's onConnected above.
-                authRepository.isAuthenticated.collect { isAuth ->
-                    _isAuthenticated.value = isAuth
-                    if (!isAuth) {
-                        serverHealthMonitor.stopMonitoring()
-                        _libraryFolders.value = emptyList()
-                    }
-                }
             }
         }
     }
@@ -173,45 +187,5 @@ class SessionCoordinator(
             mediaRepository.getLibraryFolders()
                 .onSuccess { _libraryFolders.value = it }
         }
-    }
-
-    private suspend fun restoreSession() {
-        coroutineScope {
-            val authDeferred = async { authRepository.restoreSession() }
-            val prefsDeferred = async { experimentalStore.experimental.first() }
-            val result = authDeferred.await()
-            prefsDeferred.await()
-            if (result.isSuccess) {
-                val server = authRepository.currentServer.first()
-                val user = authRepository.currentUser.first()
-                if (server != null && user != null) {
-                    // Restore succeeded with a persisted server + user, so the
-                    // authenticated flag should already be true. Wait on the
-                    // COORDINATOR'S OWN mirror — the flag the shell renders
-                    // from — not the repository flow: resuming off the mirror
-                    // write itself guarantees the release below cannot land
-                    // while the shell still composes the signed-out auth host
-                    // (SignedOutAuthHost). (Measured
-                    // on device: the repository flow's flip resumed this
-                    // coroutine up to ~10ms ahead of the mirror collector —
-                    // a (isRestoring=false, isAuthenticated=false) frame that
-                    // flashed the server list over Home.) The timeout caps
-                    // the wait so a corrupted flow can't hang the splash
-                    // gate and onSessionRestored forever.
-                    withTimeoutOrNull(AUTH_CONFIRMATION_TIMEOUT_MS) {
-                        _isAuthenticated.first { it }
-                    }
-                }
-            }
-        }
-        _isRestoring.value = false
-    }
-
-    private companion object {
-        // The mirror flip trails the restore by ~10 ms, so this exists purely
-        // to bound the corrupted-flow case — not to outlast a slow cold start.
-        // A pathological stall past 2.5 s trades one possible frame of auth
-        // flash for un-blocking the splash instead of pinning it for seconds.
-        const val AUTH_CONFIRMATION_TIMEOUT_MS = 2_500L
     }
 }

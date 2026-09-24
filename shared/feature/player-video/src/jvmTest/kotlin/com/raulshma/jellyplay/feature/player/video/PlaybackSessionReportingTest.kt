@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.feature.player.video.engine.FakeMediaEngine
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -45,16 +45,27 @@ import kotlinx.coroutines.test.runTest
  * the session's `scope.launch` blocks run synchronously on the test thread;
  * repositories are relaxed mocks and the VM-facing seams
  * ([SessionLifecycleHooks], [SessionPositionStore]) are recording fakes. The
- * release-scope work ([PlaybackSession.releaseScope], a real IO scope built
- * inside the session) is awaited with mockk's timeout verification — that
+ * release scope is injected too — a real IO scope, built by the test like the
+ * production VM does — and cancelled after its work was verified: that
  * teardown must outlive the caller's scope, so it cannot run on the test
- * dispatcher.
+ * dispatcher. The wall clock is injected as a controllable fake
+ * ([nowMs]), so the seek-freshness window and the persist throttle are pinned
+ * deterministically instead of against real time.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackSessionReportingTest {
 
     /** The session's injected scope — Unconfined so launches run synchronously. */
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    /**
+     * The session's injected release scope — a real IO scope, so release()'s
+     * NonCancellable teardown keeps running after the test body returns.
+     */
+    private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** The injected wall clock's current reading; [buildSession] resets it. */
+    private var nowMs = 0L
 
     private lateinit var playerSessionManager: PlayerSessionManager
     private lateinit var sessionStateFlow: MutableStateFlow<PlayerSessionState>
@@ -68,8 +79,9 @@ class PlaybackSessionReportingTest {
 
     @kotlin.test.AfterTest
     fun tearDown() {
-        // Cancel the session-owned release scope AFTER its IO work was verified.
-        session.onOwnerCleared()
+        // Cancel the injected release scope AFTER its IO work was verified —
+        // the owner's teardown path, as in the VM's onCleared.
+        releaseScope.cancel()
         sessionScope.cancel()
     }
 
@@ -90,6 +102,7 @@ class PlaybackSessionReportingTest {
         mirrorQuality: StreamingQuality = StreamingQuality.AUTO,
         mirrorMode: PlaybackMode = PlaybackMode.AUTO,
     ) {
+        nowMs = 1_000_000L
         engine = FakeMediaEngine().apply {
             durationValue = 100_000L
             advanceTo(30_000L)
@@ -109,6 +122,8 @@ class PlaybackSessionReportingTest {
 
         session = PlaybackSession(
             scope = sessionScope,
+            releaseScope = releaseScope,
+            clock = { nowMs },
             playerSessionManager = playerSessionManager,
             progressReporter = progressReporter,
             sessionLoadPipeline = mockk(relaxed = true),
@@ -148,7 +163,7 @@ class PlaybackSessionReportingTest {
         // A seek followed by an immediate teardown must report the seek
         // position, not the engine's not-yet-caught-up position.
         session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = System.currentTimeMillis()
+        session.lastSeekTimestamp = nowMs // the latch was stamped "just now"
 
         assertEquals(42_000L, session.getReportPositionMs())
     }
@@ -157,7 +172,7 @@ class PlaybackSessionReportingTest {
     fun getReportPositionMs_staleSeek_fallsBackToEnginePosition() {
         engine.advanceTo(50_000L)
         session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = System.currentTimeMillis() - 60_000L // far past the 3 s window
+        session.lastSeekTimestamp = nowMs - 60_000L // far past the 3 s window
 
         assertEquals(50_000L, session.getReportPositionMs())
     }
@@ -176,7 +191,7 @@ class PlaybackSessionReportingTest {
         assertEquals("item-1", persist.itemId)
         assertEquals(10_000L, persist.positionMs)
         assertEquals("server-1", persist.playSessionId)
-        assertTrue(persist.nowMs > 0L)
+        assertEquals(nowMs, persist.nowMs, "the snapshot carries the injected clock's reading")
         assertEquals(10_000L, session.lastPersistedPositionMs)
 
         // The offline mirror runs on the session scope (Unconfined → synchronous).

@@ -767,22 +767,25 @@ internal val PlaybackSettingsSearchItems: List<SettingsSearchItem> = PlaybackSet
 
 
 /**
- * The player group's per-id declared row admissions — the single gate both
- * `playbackPlayerScreenRowTotal` and PlaybackSettingsScreen's emission `if`s
- * read: the capability rows drop where the platform cannot back them, the
- * two TV rows ride the TV form factor alone (they are declared `isAdvanced`
- * yet the count has always admitted them on `isTv` only — the shipped
- * semantics, preserved verbatim).
+ * The player group's per-id declared row admissions — full coverage, so
+ * `rowTotalFor` and PlaybackSettingsScreen's emission `if`s read one gate per
+ * id. The base gate is each record's own `isAdvanced` flag (the predicate the
+ * retired hand count fell back to); the overrides are the capability rows,
+ * which drop where the platform cannot back them, and the two TV rows, which
+ * ride the TV form factor alone (they are declared `isAdvanced` yet the count
+ * has always admitted them on `isTv` only — the shipped semantics, preserved
+ * verbatim in their override).
  */
-internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> = mapOf(
-    PlaybackSettingsIds.SEEK_DURATION to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
-    PlaybackSettingsIds.ORIENTATION to RowAdmission.Platform(RowAdmissionCapability.ScreenOrientation),
-    PlaybackSettingsIds.GESTURES to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
-    PlaybackSettingsIds.GESTURE_INDICATOR_SIDE to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
-    PlaybackSettingsIds.ANDROID_TV_WATCH_NEXT to RowAdmission.Tv,
-    PlaybackSettingsIds.TV_ZOOM_MODE to RowAdmission.Tv,
-    PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE to RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
-)
+internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> =
+    PlaybackSettingsRowRecords.admissionsByAdvancedFlag() + mapOf(
+        PlaybackSettingsIds.SEEK_DURATION to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+        PlaybackSettingsIds.ORIENTATION to RowAdmission.Platform(RowAdmissionCapability.ScreenOrientation),
+        PlaybackSettingsIds.GESTURES to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+        PlaybackSettingsIds.GESTURE_INDICATOR_SIDE to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+        PlaybackSettingsIds.ANDROID_TV_WATCH_NEXT to RowAdmission.Tv,
+        PlaybackSettingsIds.TV_ZOOM_MODE to RowAdmission.Tv,
+        PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE to RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
+    )
 
 /**
  * Settings-search items for the "Advanced Video" group of PlaybackSettingsScreen
@@ -885,13 +888,18 @@ internal val PlaybackAdvancedVideoSearchItems: List<SettingsSearchItem> = Playba
 
 
 /**
- * The advanced-video group's per-id declared row admissions — the strength
- * row only renders while its parent toggle is on (`playbackAdvancedVideo-
- * ScreenRowTotal` and both screens' emission `if`s read this one gate).
+ * The advanced-video group's per-id declared row admissions — full coverage
+ * (every record is advanced, so the base gate is the advanced toggle; the
+ * group only composes behind it). The strength row additionally rides its
+ * parent toggle — `All(Advanced, WhenOn)`, the one declaration
+ * `rowTotalFor` and both screens' emission `if`s read (the audio screen
+ * renders the dialogue-boost pair inside its equalizer block, behind the
+ * same gates).
  */
-internal val PlaybackAdvancedVideoRowAdmissions: Map<String, RowAdmission> = mapOf(
-    PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH to RowAdmission.WhenOn(PlaybackSettingsIds.DIALOGUE_BOOST),
-)
+internal val PlaybackAdvancedVideoRowAdmissions: Map<String, RowAdmission> =
+    PlaybackAdvancedVideoRowRecords.admissionsByAdvancedFlag() + mapOf(
+        PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackSettingsIds.DIALOGUE_BOOST)),
+    )
 
 /**
  * Settings-search items for the "MPV Engine Config" group of the old core/ui
@@ -1116,23 +1124,6 @@ internal val MpvEngineSearchItems: List<SettingsSearchItem> = MpvEngineRowRecord
 
 
 /**
- * The engine-config group's per-id declared row admissions: the three
- * mpv audio-device rows are desktop-backed — [RowAdmission.Platform] hides
- * them where no enumerator exists, and both `playbackEngineScreenRowTotal`
- * and the screen's emission `if`s read this one gate.
- */
-internal val PlaybackEngineRowAdmissions: Map<String, RowAdmission> = mapOf(
-    PlaybackSettingsIds.MPV_AUDIO_DEVICE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
-    PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
-    PlaybackSettingsIds.MPV_AUDIO_MODE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
-    PlaybackSettingsIds.MPV_SHADER_PACK to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
-    PlaybackSettingsIds.MPV_TONE_MAPPING to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
-    PlaybackSettingsIds.MPV_RENDER_QUALITY to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
-    PlaybackSettingsIds.MPV_HDR_PASSTHROUGH to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
-    PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
-)
-
-/**
  * Settings-search items for the "VLC Engine Config" group of the old core/ui
  * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
  * flags) next to PlaybackSettingsScreen (player defaults, MPV/VLC/ExoPlayer engine config, SyncPlay, casting, Live TV & DVR). Aggregated in [SettingsSearchCatalog].
@@ -1302,6 +1293,29 @@ internal val ExoPlayerEngineRowRecords = listOf(
 
 /** The catalog projection of `ExoPlayerEngineRowRecords`: the search faces + the shared category. */
 internal val ExoPlayerEngineSearchItems: List<SettingsSearchItem> = ExoPlayerEngineRowRecords.toSearchItems(CoreUiRes.string.ss_cat_playback).androidOnly()
+
+
+/**
+ * The engine-config group's per-id declared row admissions — full coverage
+ * across the three engine lists (every record is advanced; the branches only
+ * compose behind the advanced toggle). The overrides are the desktop-backed
+ * mpv rows: [RowAdmission.Platform] hides the three audio-device rows where
+ * no enumerator exists and the five render rows where no render-profile
+ * plumbing exists — the one declaration `playbackEngineScreenRowTotal` (via
+ * `rowTotalFor`) and the screen's emission `if`s read. Declared after all
+ * three engine record lists (same-file top-level initialization order).
+ */
+internal val PlaybackEngineRowAdmissions: Map<String, RowAdmission> =
+    (MpvEngineRowRecords + VlcEngineRowRecords + ExoPlayerEngineRowRecords).admissionsByAdvancedFlag() + mapOf(
+        PlaybackSettingsIds.MPV_AUDIO_DEVICE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
+        PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
+        PlaybackSettingsIds.MPV_AUDIO_MODE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
+        PlaybackSettingsIds.MPV_SHADER_PACK to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+        PlaybackSettingsIds.MPV_TONE_MAPPING to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+        PlaybackSettingsIds.MPV_RENDER_QUALITY to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+        PlaybackSettingsIds.MPV_HDR_PASSTHROUGH to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+        PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE to RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+    )
 
 
 /**

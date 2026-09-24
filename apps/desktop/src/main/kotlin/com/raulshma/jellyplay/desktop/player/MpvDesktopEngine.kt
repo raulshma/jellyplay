@@ -210,6 +210,12 @@ open class MpvDesktopEngine(
     override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
     override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
 
+    // Scope law (the local twin of androidMain BasePlayerEngine's
+    // self-healing engineScope): created ONCE and cancelled EXACTLY ONCE —
+    // in the terminal [release], before mpv_terminate_destroy. This engine
+    // never internally releases (no release()-as-reset path) and is
+    // single-use: the released CAS in [release] is irreversible, so no load
+    // can run after the scope dies and no recreate is needed.
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val audioSessionId: Int = -1   // no Android audio session on desktop
@@ -230,7 +236,7 @@ open class MpvDesktopEngine(
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         val ticker = EnginePositionTicker(
-            scope = engineScope,
+            scopeProvider = { engineScope },
             pollingIntervalMs = _pollingIntervalMs,
             isPlayingFlow = isPlaying,
             isCurrentlyPlaying = { isPlaying.value },

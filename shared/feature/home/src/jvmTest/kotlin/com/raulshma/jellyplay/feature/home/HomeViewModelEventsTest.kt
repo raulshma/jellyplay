@@ -350,7 +350,7 @@ class HomeViewModelEventsTest {
         )
 
         val rolled = listOf(item("r9"), item("r4"))
-        coEvery { mediaRepository.getDiscoverRowItems(row) } returns Result.success(rolled)
+        coEvery { mediaRepository.rerollDiscoverRow(row) } returns Result.success(rolled)
 
         viewModel.onEvent(HomeUiEvent.RollDiscoverRow(row.id))
         runCurrent()
@@ -363,7 +363,10 @@ class HomeViewModelEventsTest {
         advanceTimeBy(701)
         runCurrent()
         assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty(), "the rolling flag settles")
-        coVerify(exactly = 1) { mediaRepository.seedDiscoverRowCache(row, rolled) }
+        // The cache choreography is the repository's now (rerollDiscoverRow
+        // owns invalidate → fetch → seed); the end-to-end pin here is that the
+        // roll reached it exactly once.
+        coVerify(exactly = 1) { mediaRepository.rerollDiscoverRow(row) }
     }
 
     @Test
@@ -386,7 +389,7 @@ class HomeViewModelEventsTest {
         signIn("u1")
         runCurrent()
 
-        coEvery { mediaRepository.getDiscoverRowItems(row) } returns
+        coEvery { mediaRepository.rerollDiscoverRow(row) } returns
             Result.failure(RuntimeException("server hiccup"))
 
         viewModel.onEvent(HomeUiEvent.RollDiscoverRow(row.id))
@@ -401,7 +404,6 @@ class HomeViewModelEventsTest {
         advanceTimeBy(701)
         runCurrent()
         assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty())
-        coVerify(exactly = 0) { mediaRepository.seedDiscoverRowCache(any(), any()) }
     }
 
     // ── MarkItemUnplayed ─────────────────────────────────────────────────────

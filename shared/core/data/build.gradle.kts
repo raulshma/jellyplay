@@ -179,6 +179,10 @@ kotlin {
             // (PlaybackOutboxRepositoryImplTest, AuthRepositoryImplTest) —
             // same pattern as :shared:core:database's jvmTest.
             implementation(libs.androidx.sqlite.bundled)
+            // Shared MediaEngine double (AUTO_PLAY mpv personality) for the
+            // audio queue-semantics suite — the former same-package private
+            // copy was its twin, migrated in the fixtures merge.
+            implementation(project(":shared:core:test-fixtures"))
         }
     }
 }

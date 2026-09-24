@@ -80,7 +80,11 @@ fun EntryProviderScope<NavKey>.appSections(
         },
     )
     librarySection(navigator)
-    searchSection(navigator)
+    searchSection(
+        navigator = navigator,
+        pendingSearchQuery = host.pendingSearchQuery,
+        onConsumeSearchQuery = host.onConsumeSearchQuery,
+    )
     liveTvSection(navigator)
     detailsSection(navigator)
     editorSection(navigator)

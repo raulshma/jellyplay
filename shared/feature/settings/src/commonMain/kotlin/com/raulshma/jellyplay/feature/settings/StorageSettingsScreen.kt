@@ -290,11 +290,13 @@ fun StorageSettingsScreen(
                         }
                     }
 
-                    // Derived from the cache group declaration (the admission
-                    // total beside SettingsScreenGroups): the declared rows
-                    // behind the advanced toggle plus the cache-used info
-                    // row (a screen-local row with no search entry).
-                    val storageTotal = storageCacheScreenRowTotal(showAdvanced)
+                    // Derived by rowTotalFor from the cache group
+                    // declaration (full per-id admission coverage — the
+                    // advanced rows behind the advanced toggle) plus the
+                    // cache-used info row (a screen-local row with no
+                    // search entry — the explicit +1 term).
+                    val storageTotal =
+                        rowTotalFor(SettingsScreenGroups.storageCache, RowAdmissionFlags(showAdvanced = showAdvanced)) + 1
                     SettingsItemList(total = storageTotal) {
                         // Screen-local info row: SettingInfoItem takes
                         // explicit index/count (it does not consume the list's
@@ -566,11 +568,13 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    // Derived from the downloads group declaration (the
-                    // admission total beside SettingsScreenGroups): the three
-                    // schedule-window rows only render when scheduling is on.
+                    // Derived by rowTotalFor from the downloads group
+                    // declaration (full per-id admission coverage): the
+                    // three schedule-window rows only render when scheduling
+                    // is on (their declared WhenOn gate, which rowFlags
+                    // carries — the emission `if`s below read it too).
                     SettingsItemList(
-                        total = storageDownloadsScreenRowTotal(preferences.downloadScheduleEnabled),
+                        total = rowTotalFor(SettingsScreenGroups.storageDownloads, rowFlags),
                     ) {
 
                     val downloadQualityTitle = rowTitle(StorageSettingsIds.DOWNLOAD_QUALITY)

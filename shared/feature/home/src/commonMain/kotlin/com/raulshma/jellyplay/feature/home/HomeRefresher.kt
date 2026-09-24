@@ -231,12 +231,16 @@ internal class HomeRefresher(
     private var customSeerrRowsCache: List<HomeSection> = emptyList()
     /**
      * The roll-vs-fetch registry: dice rolls that landed while a full refresh
-     * was ALREADY in flight, row id → (rolled items, generation stamp). That
-     * fetch captured the row's pre-roll payloads before [rollDiscoverRow]
-     * re-seeded the network cache, so its sections write would transiently
-     * revert the on-screen roll; the write re-applies these entries instead
-     * (see [applyRolledRowGenerations]) and drains them — later fetches serve
-     * the seeded cache and need no guard.
+     * was ALREADY in flight, row id → (rolled items, generation stamp). The
+     * repository's epoch guards keep its caches roll-clean ([rerollDiscoverRow]
+     * owns the invalidate → fetch → seed ordering since the protocol moved
+     * behind that one operation), but the raced fetch's ALREADY-RESOLVED
+     * result still carries the row's pre-roll payloads, and its single
+     * sections write would transiently revert the on-screen roll; the write
+     * re-applies these entries instead (see [applyRolledRowGenerations]) and
+     * drains them — later fetches serve the seeded cache and need no guard.
+     * This uiState-vs-fetch-fold race is why the registry survives the
+     * repository-owned reroll: it orders FEATURE state, not caches.
      *
      * THE GENERATION INVARIANT — the one ordering rule this registry exists
      * to state: a fetch re-applies every roll registered before the fetch's
@@ -836,15 +840,17 @@ internal class HomeRefresher(
     }
 
     /**
-     * The dice affordance for one RANDOM-sorted Jellyfin discover row: drops
-     * the cached payloads that still carry the row's pre-roll items, re-fetches
-     * fresh from the server, commits the rolled set back into the network
-     * layer's per-row cache (so the next periodic refresh serves it instead of
-     * reverting or re-rolling) and patches the row's items in place — no full
-     * refresh, no spinner, sibling rows untouched. Failures degrade silently
-     * (row keeps its current items; the rolling flag still clears). One
-     * in-flight roll per row — a tap while that row's dice is already
-     * animating ([HomeRefreshState.rollingDiscoverRowIds]) is ignored.
+     * The dice affordance for one RANDOM-sorted Jellyfin discover row. The
+     * repository's [MediaRepository.rerollDiscoverRow] owns the whole cache
+     * choreography (drop the pre-roll payloads, fetch fresh, commit the rolled
+     * set where the next home fetch reads it); this side does only what the
+     * repository cannot see: patch the row's items in place — no full refresh,
+     * no spinner, sibling rows untouched — guarded by the roll-generation
+     * registry against a fetch already in flight, and keep the spin state
+     * honest. Failures degrade silently (row keeps its current items; the
+     * rolling flag still clears). One in-flight roll per row — a tap while
+     * that row's dice is already animating
+     * ([HomeRefreshState.rollingDiscoverRowIds]) is ignored.
      */
     fun rollDiscoverRow(row: DiscoverRowConfig, onResult: (Boolean) -> Unit = {}) {
         // Check-and-set inside _state.update's CAS loop so a concurrent state
@@ -870,12 +876,7 @@ internal class HomeRefresher(
             var rolled = false
             try {
                 runCatchingRethrowingCancellation {
-                    // Invalidate FIRST: the network row memo AND the repo's
-                    // assembled home payload both still hold the pre-roll items —
-                    // the latter would replay them on the next TTL-served
-                    // periodic read and revert the on-screen roll.
-                    mediaRepository.invalidateDiscoverRowCache(row.id)
-                    val result = mediaRepository.getDiscoverRowItems(row)
+                    val result = mediaRepository.rerollDiscoverRow(row)
                     val items = result.getOrNull().orEmpty()
                     if (items.isEmpty()) {
                         // A silent skip here reads as a dead button on the
@@ -886,10 +887,6 @@ internal class HomeRefresher(
                         return@runCatchingRethrowingCancellation
                     }
                     rolled = true
-                    // Commit the rolled set where the next home fetch reads it,
-                    // so the periodic refresh replays THIS roll rather than
-                    // re-querying the server (yet another reshuffle).
-                    mediaRepository.seedDiscoverRowCache(row, items)
                     // Register BEFORE the state patch below (generation
                     // invariant on [rolledRowGenerations]): a fetch already in
                     // flight captured the pre-roll payloads and lands its own
@@ -996,8 +993,10 @@ internal class HomeRefresher(
     /**
      * Fetches the enabled SEERR-sourced custom discover rows (TTL-gated,
      * last-known-good via [customSeerrRowsCache] — see its KDoc). Failing
-     * rows are dropped (pin policy); an all-out Seerr failure keeps the
-     * previous rows rather than clearing them.
+     * rows are dropped (pin policy); a TOTAL failure keeps the previous rows
+     * and leaves the TTL unstamped — the next fetch retries, so an outage can
+     * neither blank the rows nor pin the blank for the DISCOVER TTL. Partial
+     * success keeps the successes and stamps fresh.
      */
     private suspend fun fetchCustomSeerrRows(prefs: SeerrPreferences): List<HomeSection> {
         if (!prefs.enabled) return emptyList()
@@ -1019,8 +1018,19 @@ internal class HomeRefresher(
                     fetchSeerrDiscoverRow(row, today)
                 }
             }
-            customSeerrRowsCache = fetched.filterNotNull()
-            customDiscoverCache.markFetched(clock.nowEpochMillis())
+            val fetchedRows = fetched.filterNotNull()
+            // A total failure (every row failed or came back empty) keeps the
+            // previous rows on screen and leaves the TTL unstamped — the
+            // Jellyfin twin's drop-failed-retry-next-fetch policy
+            // (HomeSectionsFetcher.fetchDiscoverRows). The overwrite-to-empty +
+            // unconditional stamp that ran here blanked the rows on an outage
+            // AND pinned the blank for the full DISCOVER TTL.
+            if (fetchedRows.isNotEmpty()) {
+                // Partial success: the successes land, failed rows drop and
+                // retry at the next TTL expiry (same policy).
+                customSeerrRowsCache = fetchedRows
+                customDiscoverCache.markFetched(clock.nowEpochMillis())
+            }
         }
         return customSeerrRowsCache
     }

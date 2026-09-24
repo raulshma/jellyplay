@@ -292,7 +292,7 @@ class CastManager(
             // polling the remote renderer while nothing was playing.
             castPollingIntervalMs.value = if (isDlna || isJellyfin) 1000L else 500L
             tickerJob = EnginePositionTicker(
-                scope = coroutineScope,
+                scopeProvider = { coroutineScope },
                 pollingIntervalMs = castPollingIntervalMs,
                 isPlayingFlow = _castIsPlaying,
                 isCurrentlyPlaying = { _castIsPlaying.value },

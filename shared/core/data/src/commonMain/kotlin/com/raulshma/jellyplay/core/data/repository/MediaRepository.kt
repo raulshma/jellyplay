@@ -30,35 +30,31 @@ interface MediaRepository {
     ): Result<HomeSectionsResult>
 
     /**
-     * Fetches one custom discover row's items fresh from the server (dice
-     * affordance + editor preview) — bypasses every cache by construction
-     * (direct client call, not the home-sections path). Pair with
-     * [invalidateDiscoverRowCache] before fetching when the roll must survive
-     * the next periodic home refresh.
+     * Fetches one custom discover row's items fresh from the server (the
+     * editor's unsaved-draft preview) — bypasses every cache by construction
+     * (direct client call, not the home-sections path). A ROLL that must
+     * survive the next periodic home refresh is [rerollDiscoverRow]'s job,
+     * not a hand-sequenced pair with a cache drop.
      */
     suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
 
     /**
-     * Drops the network layer's memoised items for one discover row so the
-     * next home-sections fetch re-queries it (re-rolling a RANDOM row) instead
-     * of replaying the cached set for the sub-call TTL. Also drops the
-     * repo-level home-sections payload: it still holds the row's pre-roll
-     * items, and the next non-forced periodic read would serve them and
-     * revert the roll on screen.
+     * The dice re-roll as ONE operation: drops the caches still carrying the
+     * row's pre-roll items, fetches the row fresh from the server, and — on a
+     * non-empty result — commits the rolled set into the network layer's
+     * per-row memo so the next home-sections fetch serves the roll instead of
+     * reverting or re-rolling it. Returns the fresh items.
+     *
+     * The invalidate → fetch → seed ORDERING is the operation's contract and
+     * is owned here: the pre-fetch drop stops the next TTL-served read from
+     * replaying pre-roll items, the epoch guards (repo + network layers)
+     * stall-guard every fetch in flight across the roll, and the commit
+     * re-drops the assembled home payload a racing fetch may have re-cached.
+     * A failure or an empty result skips the commit and returns as-is — the
+     * caches stay dropped, so the next home fetch re-queries the row rather
+     * than replaying or pinning pre-roll items.
      */
-    fun invalidateDiscoverRowCache(rowId: String)
-
-    /**
-     * Commits a discover row's freshly rolled items (dice affordance):
-     * memoises them in the network layer's per-row sub-call cache so the
-     * next home-sections fetch serves the rolled set instead of re-querying
-     * the server — the roll survives the periodic refresh. Also drops the
-     * repo-level home payload at commit time (a fetch racing the roll could
-     * have re-cached the pre-roll sections after the pre-fetch invalidate).
-     * No-op on an empty list. Call AFTER [invalidateDiscoverRowCache] +
-     * [getDiscoverRowItems] produced the new items.
-     */
-    fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>)
+    suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>>
 
     /**
      * Returns the last persisted home-sections snapshot for the current

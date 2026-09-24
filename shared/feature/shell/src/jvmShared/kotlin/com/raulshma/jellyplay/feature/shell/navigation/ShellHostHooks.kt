@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.shell.navigation
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 
 /**
@@ -13,8 +15,8 @@ import kotlinx.coroutines.flow.emptyFlow
  *
  * Kept deliberately small by the deletion test: a callback both shells
  * implement identically (e.g. the settings "rerun setup" push) lives inside
- * [appSections] itself, not here. The constructor having eleven parameters is
- * the honest measure of how much of the old per-shell entryProvider blocks
+ * [appSections] itself, not here. The constructor having thirteen parameters
+ * is the honest measure of how much of the old per-shell entryProvider blocks
  * was already shell policy rather than graph shape. A constructor-arg bundle
  * (the HomeCallbacks / SettingsNavActions idiom), not an interface: shells
  * build it inside `remember`, and the named arguments reference the shell's
@@ -68,4 +70,14 @@ class ShellHostHooks(
      * never-firing flow.
      */
     val surpriseRequests: Flow<Unit> = emptyFlow(),
+    /**
+     * searchSection's pending-query prefill channel: the shell arms a query
+     * (Android: launcher-shortcut/shared-text intents), SearchScreen fires it
+     * as a search, then calls [onConsumeSearchQuery] to clear it. A StateFlow,
+     * unlike [surpriseRequests] — the armed value must survive until the
+     * search screen consumes it. Shells without a prefill source keep the
+     * default never-armed flow.
+     */
+    val pendingSearchQuery: StateFlow<String?> = MutableStateFlow(null),
+    val onConsumeSearchQuery: () -> Unit = {},
 )

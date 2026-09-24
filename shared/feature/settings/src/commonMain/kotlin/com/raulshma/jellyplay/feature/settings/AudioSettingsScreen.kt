@@ -162,18 +162,17 @@ internal fun audioRowAdmissionFlags(showAdvanced: Boolean, preferences: AudioPre
     )
 
 /**
- * The audio group's `SettingsItemList(total = …)` row count, derived from the
- * [SettingsScreenGroups.audio] declaration (the Playback screen's landed
- * shape): non-advanced rows always render; an advanced row renders only
- * behind the advanced toggle — and the effect-dependent strength rows (plus
- * the replaygain pre-amp and the equalizer preset) only while their parent
- * effect is enabled, each via its declared [RowAdmission] (the same predicate
- * the screen's emission `if`s read). The dialogue-boost pair renders inside
- * this screen's equalizer block too, but its declaration lives with the
- * playback advanced-video group (both screens render the shared
- * audio-effects rows), so it is counted from that group: the toggle rides
- * the equalizer block (read through the preset row's declared gate), the
- * strength row its own declared dialogue-boost gate.
+ * The audio group's `SettingsItemList(total = …)` row count, derived by
+ * [rowTotalFor] from the [SettingsScreenGroups.audio] declaration (full
+ * per-id admission coverage — the base gate is each record's `isAdvanced`
+ * flag, the effect-dependent rows override with `All(Advanced, WhenOn)`).
+ * The dialogue-boost pair renders inside this screen's equalizer block too,
+ * but its declaration lives with the playback advanced-video group (both
+ * screens render the shared audio-effects rows), so it is added from that
+ * group through its declared gates: the toggle rides the equalizer block
+ * (read through the preset row's declared gate), the strength row its own
+ * declared `All(Advanced, WhenOn)` gate — the two screen-local terms
+ * [rowTotalFor] cannot see.
  *
  * Pure (and internal) so the contract test can pin each conditional against
  * the declaration.
@@ -183,17 +182,9 @@ internal fun audioScreenRowTotal(
     preferences: AudioPreferences,
 ): Int {
     val flags = audioRowAdmissionFlags(showAdvanced, preferences)
-    return SettingsScreenGroups.audio.items.count { item ->
-        SettingsScreenGroups.audio.admissionOf(item.id)?.admitted(flags)
-            ?: (!item.isAdvanced || showAdvanced)
-    } + SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
-        when (item.id) {
-            PlaybackSettingsIds.DIALOGUE_BOOST -> SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.EQUALIZER_PRESET, flags)
-            PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH -> showAdvanced &&
-                SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(item.id, flags)
-            else -> false
-        }
-    }
+    return rowTotalFor(SettingsScreenGroups.audio, flags) +
+        (if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.EQUALIZER_PRESET, flags)) 1 else 0) +
+        (if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH, flags)) 1 else 0)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)

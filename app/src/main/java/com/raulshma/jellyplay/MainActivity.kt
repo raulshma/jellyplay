@@ -56,6 +56,9 @@ import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.PinGateController
+import com.raulshma.jellyplay.shell.SessionCoordinator
+import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
+import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
@@ -68,6 +71,16 @@ import org.koin.mp.KoinPlatform
 class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
+
+    // Shell coordinators — the SAME Koin singles MainViewModel's constructor
+    // injects and starts on its scope. Resolved here (not read off the
+    // ViewModel, which no longer re-exports them) so the composition root can
+    // hand them to JellyPlayApp → MainContent. The coordinator construction
+    // timing is unchanged: building MainViewModel already forced these
+    // singles to exist.
+    private val sessionCoordinator: SessionCoordinator by lazy { KoinPlatform.getKoin()!!.get() }
+    private val updateCoordinator: UpdateCoordinator by lazy { KoinPlatform.getKoin()!!.get() }
+    private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator by lazy { KoinPlatform.getKoin()!!.get() }
 
     // Cross-cutting shell infrastructure, resolved from the Koin container
     // instead of re-exported through MainViewModel —
@@ -157,7 +170,7 @@ class MainActivity : FragmentActivity() {
         // every later getSharedInstance caller (the hidden route button
         // there, CastManager, GoogleCastStrategy) still hits the cached
         // singleton.
-        splashScreen.setKeepOnScreenCondition { viewModel.sessionCoordinator.isRestoring.value }
+        splashScreen.setKeepOnScreenCondition { sessionCoordinator.isRestoring.value }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
         // holds the splash view alive across an alpha fade, and because the
@@ -402,6 +415,9 @@ class MainActivity : FragmentActivity() {
                     JellyPlayApp(
                         viewModel = viewModel,
                         infra = shellInfra,
+                        sessionCoordinator = sessionCoordinator,
+                        updateCoordinator = updateCoordinator,
+                        syncPlayOpenCoordinator = syncPlayOpenCoordinator,
                     )
                 }
             }

@@ -37,9 +37,15 @@ class MediaRepositorySurfaceTest {
      * seam reasoning: the People picker rides the discover editor, which
      * already reaches the catalog through this repository. 46 adds
      * seedDiscoverRowCache — the dice roll's commit half of the same
-     * row-scoped pair (invalidate drops, seed republishes).
+     * row-scoped pair (invalidate drops, seed republishes). 45 again after
+     * the reroll deep operation: rerollDiscoverRow took over the
+     * invalidate → fetch → seed ordering, and the two protocol primitives it
+     * composed (invalidateDiscoverRowCache, seedDiscoverRowCache) retired to
+     * impl-private machinery — a seam that only worked when callers
+     * hand-sequenced its members in one order was the caller-side convention
+     * the deep operation exists to kill.
      */
-    private val maxInterfaceMembers = 46
+    private val maxInterfaceMembers = 45
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

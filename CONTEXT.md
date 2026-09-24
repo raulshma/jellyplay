@@ -3367,14 +3367,19 @@ media-key fallback on their side of the line. Truth table pinned by
 **`JellyPlayApp` split** (same package, `app/.../navigation/`): the
 1,606-line `JellyPlayApp.kt` is now `JellyPlayApp.kt` (the shell session
 gate + top-level wiring) + `MainContent.kt` + `ShellLayouts.kt` (the
-`ShellNavParams` `@Immutable` bundle threading `MainViewModel` and the
-shell hooks whole, so each branch takes one value instead of a ~20-param
-funnel) + `MainNavDisplay.kt` + `ShellOverlays.kt`, plus the pure
-`isFullScreenRouteActive` (`FullScreenRoutePolicy.kt`, pinned by
-`FullScreenRoutePolicyTest` in `:app`'s test lane). The `MainNavDisplay`
-Koin re-lookup is gone — `MainViewModel` arrives through
-`ShellNavParams` instead of a `LocalViewModelStoreOwner` +
-`mainViewModelFromKoin` hop; the `OnboardingContent` wrapper is deleted.
+`ShellNavParams` `@Immutable` bundle threading the shell hooks
+(`shellHost: ShellHostHooks`, built once in `MainContent`) and `playOn`
+whole, so each branch takes one value instead of a ~20-param funnel —
+the layout subtree never names `MainViewModel`) + `MainNavDisplay.kt` +
+`ShellOverlays.kt`, plus the pure `isFullScreenRouteActive`
+(`FullScreenRoutePolicy.kt`, pinned by `FullScreenRoutePolicyTest` in
+`:app`'s test lane). The `MainNavDisplay` Koin re-lookup is gone — the
+shell hooks arrive through `ShellNavParams` instead of a
+`LocalViewModelStoreOwner` + `mainViewModelFromKoin` hop; the
+`OnboardingContent` wrapper is deleted. `MainViewModel` keeps its
+coordinators private (never re-exported); the composition root
+(`MainActivity` → `JellyPlayApp` → `MainContent`) threads them to the
+few consumers that need them.
 
 **`SignedOutAuthHost`** (`shared/feature/shell/navigation`, jvmShared)
 is the signed-out half of the session gate, shared by both shells — the

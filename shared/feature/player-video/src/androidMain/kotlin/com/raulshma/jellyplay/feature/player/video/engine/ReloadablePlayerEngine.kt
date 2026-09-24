@@ -210,7 +210,7 @@ abstract class ReloadablePlayerEngine(
     ): Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         val ticker = EnginePositionTicker(
-            scope = engineScope,
+            scopeProvider = { engineScope },
             pollingIntervalMs = _pollingIntervalMs,
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = isCurrentlyPlaying,

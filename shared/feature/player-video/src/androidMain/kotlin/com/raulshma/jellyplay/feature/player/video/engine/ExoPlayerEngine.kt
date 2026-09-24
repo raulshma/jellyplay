@@ -392,7 +392,6 @@ class ExoPlayerEngine(
 
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
-        recreateEngineScopeIfInactive()
 
         currentNormalizationGain = request.normalizationGain
 
@@ -427,12 +426,11 @@ class ExoPlayerEngine(
             return
         }
 
+        // Full teardown-as-reset before the rebuild. release() still cancels
+        // engineScope (terminal semantics unchanged); BasePlayerEngine's
+        // self-healing engineScope hands positionFlow's ticker a fresh live
+        // generation on its next read, so no paired revive is needed here.
         release()
-        // release() cancels engineScope, and positionFlow's EnginePositionTicker
-        // launches on that scope when the flow is first collected — a dead scope
-        // means the ticker loop never runs and the seek bar freezes at its seed
-        // position. Revive it here so load() always returns with a live scope.
-        recreateEngineScopeIfInactive()
         lastRebuildInputs = inputs
 
         val selector = DefaultTrackSelector(context)
@@ -1427,7 +1425,10 @@ class ExoPlayerEngine(
         trySend(p.currentPosition)
 
         val ticker = EnginePositionTicker(
-            scope = engineScope,
+            // Provider, not capture: launch() re-reads the accessor, so an
+            // internal release-as-reset inside load() cannot leave this
+            // collection's ticker on the cancelled generation.
+            scopeProvider = { engineScope },
             pollingIntervalMs = _pollingIntervalMs,
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = { p.isPlaying },

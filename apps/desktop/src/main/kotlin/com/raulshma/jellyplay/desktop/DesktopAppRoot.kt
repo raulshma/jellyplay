@@ -26,7 +26,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -74,6 +73,8 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.shell.RealtimeSessionController
+import com.raulshma.jellyplay.feature.shell.SessionRestore
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.UserMessageHost
@@ -239,11 +240,25 @@ internal fun DesktopAppRoot(
 
     // Session-restore probe: until it completes we cannot know whether a
     // persisted (server, user) pair exists, so hold on a neutral splash
-    // instead of flashing the sign-in pane at every resuming session.
-    var sessionRestoreDone by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        authRepository.restoreSession()
-        sessionRestoreDone = true
+    // instead of flashing the sign-in pane at every resuming session. The
+    // choreography is the SHARED SessionRestore now (shared/feature/shell) —
+    // restore call → authenticated-mirror wait → bounded timeout → release —
+    // replacing the former bare restore-call-then-done effect; the mirror
+    // wait and the 2.5 s cap are the discipline desktop GAINED (the release
+    // can no longer land while this composition still shows the signed-out
+    // host). The splash rendering below stays this shell's own.
+    val sessionScope = rememberCoroutineScope()
+    val sessionRestore = remember(authRepository) {
+        SessionRestore(
+            authChanges = authRepository.isAuthenticated,
+            restoreSession = authRepository::restoreSession,
+            currentServer = authRepository.currentServer,
+            currentUser = authRepository.currentUser,
+        )
+    }
+    val isRestoring by sessionRestore.isRestoring.collectAsState()
+    LaunchedEffect(sessionRestore) {
+        sessionRestore.restore(sessionScope)
     }
 
     // Desktop receiver port: realtime socket + capabilities + the
@@ -253,34 +268,27 @@ internal fun DesktopAppRoot(
     // The choreography itself is the SHARED RealtimeSessionController now
     // (shared/feature/shell) — the former DesktopSessionCoordinator held only
     // this wiring and died with the fold; the per-shell share is the client
-    // name and this construction. Session restore stays above (recorded cut):
-    // a persisted session may already be authenticated when this composes, and
-    // the controller's auth collector picks that up off the StateFlow's
-    // current value on its first pass.
+    // name and this `create` call. The restore above may leave this
+    // composition already authenticated, and the controller's auth collector
+    // picks that up off the StateFlow's current value on its first pass.
     val realtimeConnection: com.raulshma.jellyplay.core.data.repository.RealtimeConnection = koinInject()
     val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore = koinInject()
     val remoteControlReceiver: com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver = koinInject()
-    val sessionScope = androidx.compose.runtime.rememberCoroutineScope()
     val realtimeSession = remember(
         authRepository,
         realtimeConnection,
         serverIdentityStore,
         remoteControlReceiver,
     ) {
-        com.raulshma.jellyplay.feature.shell.RealtimeSessionController(
+        RealtimeSessionController.create(
             scope = sessionScope,
             isAuthenticated = authRepository.isAuthenticated,
             currentServer = authRepository.currentServer,
             currentUser = authRepository.currentUser,
             clientName = "JellyPlay Desktop",
-            serverUrl = realtimeConnection::serverUrl,
-            isConnected = realtimeConnection.isConnected,
-            reconnects = realtimeConnection.reconnects,
-            connect = realtimeConnection::connect,
-            disconnect = realtimeConnection::disconnect,
-            startReceiver = remoteControlReceiver::start,
-            stopReceiver = remoteControlReceiver::stop,
-            ensureDeviceId = { serverIdentityStore.ensureDeviceId() },
+            realtimeConnection = realtimeConnection,
+            remoteControlReceiver = remoteControlReceiver,
+            serverIdentityStore = serverIdentityStore,
             onReconnect = { authRepository.postCapabilities() },
         )
     }
@@ -289,7 +297,7 @@ internal fun DesktopAppRoot(
     }
 
     when {
-        !sessionRestoreDone -> SessionRestoreSplash()
+        isRestoring -> SessionRestoreSplash()
         // The signed-out gate is the SHARED SignedOutAuthHost now
         // (shared/feature/shell) — the former DesktopSignedOutAuthHost
         // hand-copy is retired with its v1 cut-list. The desktop-only chrome
@@ -674,6 +682,12 @@ private fun DesktopNavScaffold(
         resolveIdleOverlayIdentity(currentUser, servers)
     }
 
+    // Search-prefill channel (ShellHostHooks.pendingSearchQuery): desktop has
+    // no intent/shared-text source to arm it yet — the channel is wired
+    // explicitly (never a silent local default), so a future source only
+    // sets this flow.
+    val pendingSearchQuery = remember { MutableStateFlow<String?>(null) }
+
     // Shell-supplied surface behind the shared section graph (ShellHostHooks):
     // the now-playing/ambient lambdas read the desktop audio core
     // (DesktopAudioQueueManager) at click time, and the session seams wrap the
@@ -704,6 +718,8 @@ private fun DesktopNavScaffold(
             isAdmin = { isAdmin },
             isRefreshingAdmin = { isRefreshingAdmin },
             onRefreshAdmin = sessionController::refreshAdminStatusNow,
+            pendingSearchQuery = pendingSearchQuery,
+            onConsumeSearchQuery = { pendingSearchQuery.value = null },
         )
     }
 

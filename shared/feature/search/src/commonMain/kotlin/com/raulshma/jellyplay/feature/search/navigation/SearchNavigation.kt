@@ -6,12 +6,17 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.navigatePhotoAware
 import com.raulshma.jellyplay.feature.search.SearchScreen
+import kotlinx.coroutines.flow.StateFlow
 
 fun EntryProviderScope<NavKey>.searchSection(
     navigator: Navigator,
+    pendingSearchQuery: StateFlow<String?>,
+    onConsumeSearchQuery: () -> Unit,
 ) {
     entry<Route.Search> {
         SearchScreen(
+            pendingSearchQuery = pendingSearchQuery,
+            onConsumeSearchQuery = onConsumeSearchQuery,
             onItemClick = { itemId, mediaType, parentId, itemName ->
                 navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
             },

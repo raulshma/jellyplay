@@ -184,17 +184,12 @@ fun NotificationSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    // Derived from the notifications group declaration via the
-                    // admission total beside SettingsScreenGroups (the hand-run
-                    // `1 + 4 + 4 + cap + 2` arithmetic this replaces never
-                    // drifted from these gates — now it cannot).
+                    // Derived by rowTotalFor from the notifications group
+                    // declaration (the hand-run `1 + 4 + 4 + cap + 2`
+                    // arithmetic this replaces never drifted from these
+                    // gates — now it cannot).
                     SettingsItemList(
-                        total = notificationScreenRowTotal(
-                            enabled = notifPrefs.enabled,
-                            showAdvanced = showAdvanced,
-                            quietHoursEnabled = notifPrefs.quietHoursEnabled,
-                            canOpenSystemNotificationSettings = canOpenSystemNotificationSettings,
-                        ),
+                        total = rowTotalFor(SettingsScreenGroups.notifications, rowFlags),
                     ) {
 
                     SettingToggleItem(

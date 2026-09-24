@@ -11,10 +11,13 @@ kotlin {
         // ── what this module is ──────────────────────────────────────────
         // Test doubles needed by MORE THAN ONE module's test lane — today
         // FakeTimeSource (livetv; core:data keeps its own same-shaped local
-        // copy until a touch migrates its 14 consumers) and
-        // FakeUserDataMutator (details + home). AGP 9 has no KMP
-        // testFixtures support, so this is a plain library module declared
-        // inside consumers' test source-set blocks ONLY.
+        // copy until a touch migrates its 14 consumers),
+        // FakeUserDataMutator (details + home) and FakeMediaEngine (the one
+        // MediaEngine double for the session + audio-queue jvmTest suites;
+        // apps/desktop's app-side copy is the remaining per-touch
+        // candidate). AGP 9 has no KMP testFixtures support, so this is a
+        // plain library module declared inside consumers' test source-set
+        // blocks ONLY.
         //
         // The dissolved :core:testing lesson: a central test module
         // accretes every helper anyone ever copied twice and becomes a
@@ -42,6 +45,12 @@ kotlin {
             // carries its own core:data edge — this module must never
             // become a reason to widen one.
             implementation(project(":shared:core:data"))
+            // The MediaEngine contract (+ PlayerLifecycleCallbacks/
+            // RemotePlayableEngine supertypes, same packages) FakeMediaEngine
+            // implements. implementation, not api: every consumer already
+            // carries its own player-contract edge, same rule as core:data
+            // above — this module must never become a reason to widen one.
+            implementation(project(":shared:core:player-contract"))
         }
     }
 }

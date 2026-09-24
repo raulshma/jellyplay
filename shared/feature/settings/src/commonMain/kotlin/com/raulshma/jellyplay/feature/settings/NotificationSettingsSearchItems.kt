@@ -195,12 +195,12 @@ internal val NotificationSettingsSearchItems: List<SettingsSearchItem> = Notific
 
 /**
  * The notification group's per-id declared row admissions — the single gate
- * both `notificationScreenRowTotal` and NotificationSettingsScreen's emission
- * `if`s read: the four rows behind the master toggle ride it, the quiet-hours
- * trio additionally the quiet-hours toggle, the rest ride advanced mode, and
- * the system-settings row the platform-intent capability. The master toggle
- * declares [RowAdmission.Always] — the totals count strictly, so every
- * declared id states its gate explicitly.
+ * both `rowTotalFor` (the screen's total) and NotificationSettingsScreen's
+ * emission `if`s read: the four rows behind the master toggle ride it, the
+ * quiet-hours trio additionally the quiet-hours toggle, the rest ride advanced
+ * mode, and the system-settings row the platform-intent capability. The master
+ * toggle declares [RowAdmission.Always] — the derivation counts strictly, so
+ * every declared id states its gate explicitly.
  */
 internal val NotificationRowAdmissions: Map<String, RowAdmission> = mapOf(
     NotificationSettingsIds.NOTIFICATIONS_ENABLE to RowAdmission.Always,

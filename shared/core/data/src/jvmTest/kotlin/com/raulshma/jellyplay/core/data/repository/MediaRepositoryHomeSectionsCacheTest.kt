@@ -23,11 +23,15 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -172,39 +176,91 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
-    fun `invalidateDiscoverRowCache also drops the cached home payload`() = runBlocking {
-        // The dice roll's pre-fetch step: without this drop the next
-        // TTL-served periodic read replays the pre-roll sections and reverts
-        // the on-screen roll.
+    fun `rerollDiscoverRow returns the fresh items and commits the row memo`() = runBlocking {
+        // The dice roll as one operation: the fresh fetch is returned to the
+        // caller AND committed into the network layer's per-row memo (the
+        // invalidate → fetch → seed ordering is the repository's), so the next
+        // home fetch serves the rolled set instead of re-querying (re-rolling)
+        // the server.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
+        val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+        coEvery { apiClient.getDiscoverRowItems(row) } returns Result.success(rolledItems)
+
+        val result = repository.rerollDiscoverRow(row)
+
+        assertEquals(rolledItems, result.getOrNull())
+        coVerify(exactly = 1) { apiClient.invalidateDiscoverRowCache(row.id) }
+        coVerify(exactly = 1) { apiClient.getDiscoverRowItems(row) }
+        coVerify(exactly = 1) { apiClient.seedDiscoverRowCache(row, rolledItems) }
+    }
+
+    @Test
+    fun `rerollDiscoverRow drops the cached home payload - the next ordinary read refetches`() = runBlocking {
+        // "The roll survives the periodic refresh" at the repo layer: the
+        // pre-roll assembled payload the reroll dropped cannot be replayed by
+        // the next TTL-served read — that read refetches through the network
+        // layer, which now serves the seeded row memo.
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+        coEvery { apiClient.getDiscoverRowItems(any()) } returns
+            Result.success(listOf(mockk<MediaItem>(relaxed = true)))
+        val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
         repository.getHomeSections(HomeSectionQuery())
-        repository.invalidateDiscoverRowCache("dr_x")
+        repository.rerollDiscoverRow(row)
         repository.getHomeSections(HomeSectionQuery())
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
-    fun `seedDiscoverRowCache publishes the row memo and drops the home payload`() = runBlocking {
-        // The dice roll's commit step: the rolled items land in the network
-        // layer's per-row memo (delegated) AND the assembled home payload
-        // drops again, so a fetch that raced the roll cannot re-cache the
-        // pre-roll sections after the pre-fetch invalidate.
+    fun `a home fetch in flight across a reroll does not pin its pre-roll payload`() = runTest {
+        // The epoch guard through the new operation: a getHomeSections already
+        // on the wire when the reroll lands captured the pre-roll payloads; its
+        // completion is returned to its caller but must not be written into the
+        // in-memory cache, or the next TTL-served periodic read would replay
+        // them and revert the on-screen roll. Not pinned ⇔ the next ordinary
+        // read refetches (2 network calls, not 1).
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
-        val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
+        val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { apiClient.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
+        coEvery { apiClient.getDiscoverRowItems(any()) } returns
+            Result.success(listOf(mockk<MediaItem>(relaxed = true)))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
-        repository.getHomeSections(HomeSectionQuery())
-        repository.seedDiscoverRowCache(row, rolledItems)
+        val racedFetch = async { repository.getHomeSections(HomeSectionQuery()) }
+        runCurrent() // the fetch captures its epoch and parks on the gate
+        repository.rerollDiscoverRow(row)
+
+        fetchGate.complete(homeResult("pre-roll"))
+        assertTrue(racedFetch.await().isSuccess, "the raced fetch still returns its result to its caller")
+
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("post-roll")
         repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 1) { apiClient.seedDiscoverRowCache(row, rolledItems) }
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `rerollDiscoverRow failure returns the failure without committing the memo`() = runBlocking {
+        // A failed roll skips the commit: the network memo is untouched and
+        // only the pre-fetch drop remains — the next home fetch re-queries the
+        // row rather than replaying pre-roll items.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getDiscoverRowItems(any()) } returns
+            Result.failure(RuntimeException("flaky"))
+        val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+
+        val result = repository.rerollDiscoverRow(row)
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 1) { apiClient.invalidateDiscoverRowCache(row.id) }
+        coVerify(exactly = 0) { apiClient.seedDiscoverRowCache(any(), any()) }
     }
 
     @Test

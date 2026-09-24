@@ -883,7 +883,7 @@ class DesktopAudioQueueManager(
             }
         }
         positionJob = EnginePositionTicker(
-            scope = scope,
+            scopeProvider = { scope },
             pollingIntervalMs = MutableStateFlow(positionPollIntervalMs),
             isPlayingFlow = state.isPlaying,
             isCurrentlyPlaying = { engine?.isPlaying?.value == true },

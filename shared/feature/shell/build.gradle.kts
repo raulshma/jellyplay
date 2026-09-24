@@ -21,6 +21,13 @@ kotlin {
             implementation(project(":shared:core:model"))
             // Navigation vocabulary: Route / NavKey / Navigator.
             implementation(project(":shared:core:ui"))
+            // RealtimeSessionController.create's transport/receiver/identity
+            // collaborators (RealtimeConnection, RemoteControlReceiver,
+            // ServerIdentityStore). The module stays repository-free at the
+            // signature level: no *Repository type crosses any constructor —
+            // the auth seams stay plain flows / suspend lambdas.
+            implementation(project(":shared:core:data"))
+            implementation(project(":shared:core:datastore"))
             // Star-topology aggregator: one dependency per feature whose
             // *Section builder appSections registers. Nothing depends on this
             // module except the two shells.
@@ -74,6 +81,11 @@ kotlin {
             // The session controller's arbitration/collect tests (runTest +
             // fake clock, the core-data jvmTest pattern).
             implementation(libs.coroutines.test)
+            // RealtimeSessionControllerTest's create-factory coverage mocks
+            // the concrete transport/receiver/identity collaborators (the
+            // app module's SessionCoordinatorTest pattern — final classes,
+            // no seams of their own).
+            implementation(libs.mockk)
         }
         // SharedFeatureModules (jvmShared) collects every feature Koin
         // module as a Module value — the features' own koin edges are

@@ -226,12 +226,12 @@ val biometricGate = rememberBiometricGate()
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    // Derived from the security group declaration via the
-                    // admission total beside SettingsScreenGroups (the shipped
-                    // count quirks — pin_for_player_lock never admitted, the
-                    // biometric count ignoring the runtime gate — preserved
-                    // verbatim there).
-                    SettingsItemList(total = securityScreenRowTotal(canShowBiometric, showAdvanced)) {
+                    // Derived by rowTotalFor from the security group
+                    // declaration (the shipped count quirks —
+                    // pin_for_player_lock never admitted, the biometric count
+                    // ignoring the runtime gate — preserved verbatim in the
+                    // declaration).
+                    SettingsItemList(total = rowTotalFor(SettingsScreenGroups.security, securityRowFlags)) {
                     SettingToggleItem(
                         icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
                         title = rowTitle(SecuritySettingsIds.PIN_LOCK),

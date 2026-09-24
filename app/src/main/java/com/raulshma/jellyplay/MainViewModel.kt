@@ -42,11 +42,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * preferences, the external-player reporting contract, one-shot messages — and
  * starts the cross-cutting shell coordinators on its scope.
  *
- * The coordinators themselves are the only service surface: session lifecycle
- * state ([SessionCoordinator.isRestoring] / [isAuthenticated] /
- * [libraryFolders] / [serverHealth]), logout, update checks, and SyncPlay opens
- * are all reached through [sessionCoordinator] / [updateCoordinator] /
- * [syncPlayOpenCoordinator] — never re-exported here. Stores and managers this
+ * The three shell coordinators are started here on [scope] and never
+ * re-exported: session lifecycle state ([SessionCoordinator.isRestoring] /
+ * [isAuthenticated] / [libraryFolders] / [serverHealth]), logout, update
+ * checks, and SyncPlay opens are consumed through the coordinator instances
+ * threaded to the composition root (MainActivity resolves the same Koin
+ * singles it injected here), not through this class. Stores and managers this
  * class merely wires (network monitor, message bus, audio playback, remote
  * navigation) are injected where they are consumed instead of exposed from
  * here.
@@ -65,9 +66,9 @@ class MainViewModel(
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
-    val sessionCoordinator: SessionCoordinator,
-    val updateCoordinator: UpdateCoordinator,
-    val syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
+    private val sessionCoordinator: SessionCoordinator,
+    private val updateCoordinator: UpdateCoordinator,
+    private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
 ) : JellyPlayViewModel() {
 
     /**

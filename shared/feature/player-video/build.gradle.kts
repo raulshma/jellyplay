@@ -81,6 +81,10 @@ kotlin {
         getByName("jvmTest").dependencies {
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
+            // Shared MediaEngine double (default MANUAL personality) for the
+            // session/policy suites — the former engine-package private fake
+            // was its twin, migrated in the fixtures merge.
+            implementation(project(":shared:core:test-fixtures"))
             // Desktop compose UI test for the keyboard-focus grab
             // (PlayerKeyboardFocusGrabUiTest) — runComposeUiTest is the
             // framework-agnostic ComposeUiTest entry (no JUnit4 runner; the

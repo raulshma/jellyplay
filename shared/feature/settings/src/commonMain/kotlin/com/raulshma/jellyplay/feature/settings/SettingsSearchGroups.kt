@@ -106,7 +106,7 @@ internal object SettingsScreenGroups {
      * Ids carried over verbatim, so persisted deep-links/recents keep
      * resolving — only the owning screen changed.
      */
-    val homeDisplay = HomeDisplaySearchItems.asSearchGroup("home.display")
+    val homeDisplay = HomeDisplaySearchItems.asSearchGroup("home.display", HomeDisplayRowAdmissions)
     val homeNextUp = HomeNextUpSearchItems.asSearchGroup("home.nextUp")
     val homeLayout = HomeLayoutSearchItems.asSearchGroup("home.layout")
 
@@ -177,7 +177,7 @@ internal object SettingsScreenGroups {
      * `SettingsCatalogScreenContractTest`.
      */
     val languageGeneral = LanguageSettingsSearchItems.take(LANGUAGE_GENERAL_GROUP_SIZE)
-        .asSearchGroup("language.general")
+        .asSearchGroup("language.general", LanguageGeneralRowAdmissions)
     val languageSubtitles = LanguageSettingsSearchItems.drop(LANGUAGE_GENERAL_GROUP_SIZE)
         .asSearchGroup("language.subtitles", LanguageSubtitlesRowAdmissions)
 
@@ -192,7 +192,7 @@ internal object SettingsScreenGroups {
     val notifications = NotificationSettingsSearchItems.asSearchGroup("notifications", NotificationRowAdmissions)
 
     // ── StorageSettingsScreen ───────────────────────────────────────────
-    val storageCache = StorageCacheSearchItems.asSearchGroup("storage.cache")
+    val storageCache = StorageCacheSearchItems.asSearchGroup("storage.cache", StorageCacheRowAdmissions)
     val storageNetwork = StorageNetworkSearchItems.asSearchGroup("storage.network")
     val storageDownloads = StorageDownloadsSearchItems.asSearchGroup("storage.downloads", StorageDownloadsRowAdmissions)
 

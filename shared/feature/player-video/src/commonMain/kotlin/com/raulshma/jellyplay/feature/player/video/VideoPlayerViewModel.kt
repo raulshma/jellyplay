@@ -66,8 +66,11 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayPreparation
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,6 +88,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -1009,9 +1013,20 @@ class VideoPlayerViewModel(
         SavedStateHandlePositionStore(savedStateHandle)
 
     /**
+     * Teardown scope handed to [playbackSession] (injected, like the VM scope):
+     * the final stop-report and the pending-seek join must outlive the
+     * viewModelScope on clear(), so they launch here — IO dispatcher +
+     * supervisor so one failing write cannot cancel the other. This owner
+     * cancels the scope in [onCleared] AFTER release(), preserving the same
+     * cancel-after-release ordering the session's `onOwnerCleared` applied
+     * back when the session built the scope internally.
+     */
+    private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
      * Playback-session deep module (Stage B): owns the session-scoped latches
      * and bookkeeping (release flag, Stop-report dedup, seek + persist
-     * positions, play-session id, load/seek jobs, the release scope), as of
+     * positions, play-session id, load/seek jobs), as of
      * B1b the initialize sequence driving the hooks above and the
      * pipeline-start ownership ([PlaybackSession.initialize]), as of B2 the
      * engine reload/retry paths plus the
@@ -1033,6 +1048,7 @@ class VideoPlayerViewModel(
      */
     private val playbackSession = PlaybackSession(
         scope = scope,
+        releaseScope = releaseScope,
         playerSessionManager = playerSessionManager,
         progressReporter = progressReporter,
         sessionLoadPipeline = sessionLoadPipeline,
@@ -2983,11 +2999,12 @@ class VideoPlayerViewModel(
     override fun onCleared() {
         super.onCleared()
         release()
-        // Same cancel-after-release ordering as before the release scope
-        // moved into the session: the final stop-report / pending-seek join
-        // (launched on the release scope by release()) run first, and the
-        // scope is only cancelled once the owner is going away for good.
-        playbackSession.onOwnerCleared()
+        // Same cancel-after-release ordering as before the release scope became
+        // an injected constructor parameter: the final stop-report /
+        // pending-seek join (launched on the release scope by release()) run
+        // first, and the scope is only cancelled once the owner is going away
+        // for good.
+        releaseScope.cancel()
     }
 
     private fun performRelease() {

@@ -180,7 +180,6 @@ class LibVlcPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
-        recreateEngineScopeIfInactive()
         releaseInternal(releaseVlc = true)
 
         currentPlaybackRequest = request

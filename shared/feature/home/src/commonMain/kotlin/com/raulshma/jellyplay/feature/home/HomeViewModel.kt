@@ -934,11 +934,12 @@ internal class HomeViewModel(
 
     /**
      * The dice affordance: re-rolls one RANDOM-sorted discover row via the
-     * refresher's in-place patch (cache invalidation + fresh fetch + section
-     * item swap — no full refresh). The row config is read from the prefs
-     * mirror, so a roll for a since-deleted row is a no-op. A failed roll
-     * (fetch error or empty result) surfaces on the message bus — the row
-     * keeps its current items, but the tap is never silently dead.
+     * refresher's in-place patch (the repository's rerollDiscoverRow owns the
+     * cache choreography; the refresher swaps the row's items in place — no
+     * full refresh). The row config is read from the prefs mirror, so a roll
+     * for a since-deleted row is a no-op. A failed roll (fetch error or empty
+     * result) surfaces on the message bus — the row keeps its current items,
+     * but the tap is never silently dead.
      */
     private fun rollDiscoverRow(rowId: String) {
         val row = sectionPrefs.query.discoverRows.find { it.id == rowId }

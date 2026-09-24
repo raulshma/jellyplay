@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
@@ -56,9 +55,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.core.ui.navigation.navIcon
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
+import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
-import kotlinx.coroutines.flow.Flow
 import kotlin.math.roundToInt
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
 import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
@@ -98,10 +97,12 @@ data class ShellNavParams(
     val onAmbientClick: () -> Unit,
     /** Play On controller — MainContent's single construction site. */
     val playOn: PlayOnViewModel,
-    /** The activity-scoped MainViewModel (MainActivity's own instance). */
-    val mainViewModel: MainViewModel,
-    /** Remote "Surprise Me" requests, collected by the shared section graph. */
-    val surpriseRequests: Flow<Unit>,
+    /**
+     * The shell-host hooks behind the shared section graph — built once in
+     * MainContent from the activity-scoped MainViewModel, so no type below
+     * this bundle names that ViewModel.
+     */
+    val shellHost: ShellHostHooks,
 )
 
 /**

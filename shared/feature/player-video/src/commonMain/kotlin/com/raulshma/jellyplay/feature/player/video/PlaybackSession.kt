@@ -23,11 +23,8 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineSessionShell
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.toEngineEventSource
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -135,12 +132,15 @@ internal fun resolveResumeTicks(
  * constructor lambda; the session never touches the ui state.
  *
  * Construction contract:
- * - the ViewModel's [CoroutineScope] is INJECTED, never constructed here.
- *   Session-launched coroutines (e.g. the coalesced seek-mirror write tracked
- *   by the seek-progress task slot) keep launching on that scope — never on
- *   [releaseScope] and never on a session-internal scope cancelled in
- *   release(), because the onDispose teardown path joins the pending seek
- *   job and depends on those launch semantics;
+ * - both the ViewModel's [CoroutineScope]s are INJECTED, never constructed
+ *   here: [scope] (session-launched coroutines, e.g. the coalesced seek-mirror
+ *   write tracked by the seek-progress task slot — never on [releaseScope]
+ *   and never on a session-internal scope cancelled in release(), because the
+ *   onDispose teardown path joins the pending seek job and depends on those
+ *   launch semantics) and [releaseScope] (the teardown work that must outlive
+ *   the viewModelScope on clear(); the owner cancels it from `onCleared`
+ *   AFTER release(), the same cancel-after-release ordering it has always
+ *   applied);
  * - [PlayerSessionManager] and [PlaybackProgressReporter] are injected as
  *   already-constructed instances. The reporter keeps being built inside the
  *   ViewModel (its ui-state handle wiring stays VM-side by design) and is
@@ -164,6 +164,24 @@ private const val SEEK_PROGRESS = "PlaybackSession.seekProgress"
 
 internal class PlaybackSession(
     val scope: CoroutineScope,
+    /**
+     * Scope for teardown work that must outlive the viewModelScope on clear()
+     * (the final stop-report and the pending-seek join): IO dispatcher +
+     * supervisor so one failing write cannot cancel the other. INJECTED by the
+     * owner like [scope] — never constructed here — and cancelled by the
+     * owner's `onCleared` AFTER release(), preserving the cancel-after-release
+     * ordering.
+     */
+    internal val releaseScope: CoroutineScope,
+    /**
+     * Wall-clock millis behind the seek-latch freshness window
+     * ([getReportPositionMs]), the position-persist throttle
+     * ([persistPlaybackPosition]) and the process-death staleness check — a
+     * WALL clock (not monotonic), because the persisted-at stamps it is
+     * compared against were written by a previous process. Injectable for
+     * tests.
+     */
+    private val clock: () -> Long = { System.currentTimeMillis() },
     val playerSessionManager: PlayerSessionManager,
     val progressReporter: PlaybackProgressReporter,
     private val sessionLoadPipeline: SessionLoadPipeline,
@@ -388,14 +406,6 @@ internal class PlaybackSession(
      * network/teardown side effects when a SyncPlay load event races a user
      * navigation.
      */
-
-    /**
-     * Scope for teardown work that must outlive the viewModelScope on clear()
-     * (the final stop-report and the pending-seek join): IO dispatcher +
-     * supervisor so one failing write cannot cancel the other. The VM cancels
-     * it from onCleared.
-     */
-    internal val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Job returned from [initialize] when a hook early-returns before any
@@ -885,7 +895,7 @@ internal class PlaybackSession(
         val seekPos = lastSeekPositionMs
         val seekTime = lastSeekTimestamp
         if (seekPos != null && seekTime > 0L) {
-            val timeSinceSeek = System.currentTimeMillis() - seekTime
+            val timeSinceSeek = clock() - seekTime
             if (timeSinceSeek < 3000L) {
                 return seekPos
             }
@@ -951,7 +961,7 @@ internal class PlaybackSession(
      */
     fun seekPersisted(positionMs: Long) {
         lastSeekPositionMs = positionMs
-        val now = System.currentTimeMillis()
+        val now = clock()
         lastSeekTimestamp = now
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
@@ -979,7 +989,7 @@ internal class PlaybackSession(
      * start-report.
      */
     fun persistPlaybackPosition(positionMs: Long, force: Boolean) {
-        val now = System.currentTimeMillis()
+        val now = clock()
         if (!force && now - lastPersistedAtMs < POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
@@ -1072,7 +1082,7 @@ internal class PlaybackSession(
         return resolveResumeTicks(
             savedPosMs = savedPosMs,
             persistedAtMs = persistedAt,
-            nowMs = System.currentTimeMillis(),
+            nowMs = clock(),
             entryPointTicks = startPositionTicks,
             staleThresholdMs = STALE_POSITION_THRESHOLD_MS,
         )
@@ -1209,16 +1219,6 @@ internal class PlaybackSession(
                 }
             }
         }
-    }
-
-    /**
-     * Cancels [releaseScope] — the teardown work that must outlive the
-     * viewModelScope (final stop-report, pending-seek join). Called by the
-     * VM's `onCleared` AFTER its `release()`, preserving the same
-     * cancel-after-release ordering the VM used when it owned the scope.
-     */
-    fun onOwnerCleared() {
-        releaseScope.cancel()
     }
 }
 

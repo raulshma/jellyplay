@@ -559,7 +559,6 @@ class MpvPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
-        recreateEngineScopeIfInactive()
         // Engine may have been release()d and is being reused — clear the
         // teardown guard so observer callbacks are honoured again.
         released = false
@@ -646,10 +645,9 @@ class MpvPlayerEngine(
         // through the hook that reset fires.
         resetPublishedEngineState()
         serverDurationMs = 0L
-        // Recreate the scope so a re-used engine stays usable without waiting
-        // for the next load(). A cancelled scope silently swallows new
-        // launches (no-ops), which would otherwise lose the position ticker.
-        recreateEngineScopeIfInactive()
+        // The scope stays cancelled here; a re-used engine gets a fresh live
+        // generation from BasePlayerEngine's self-healing engineScope on its
+        // next read, so the former post-release revive is not needed.
         // Stop the dedicated release thread once the engine is fully
         // torn down. The last scheduled runnable has already captured `view`
         // and will run to completion, but no new work can be enqueued because

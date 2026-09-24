@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.feature.shell
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -178,5 +181,51 @@ class RealtimeSessionController(
                 runCatchingRethrowingCancellation { onReconnect() }
             }
         }
+    }
+
+    companion object {
+        /**
+         * The construction path for both shells (Android `SessionCoordinator`
+         * / desktop `DesktopAppRoot`), which used to hand-duplicate the same
+         * lambda bundle adapting these three collaborators onto the
+         * constructor's plain-flow/lambda seams. The collaborators enter as
+         * the narrow surfaces they already are — [RealtimeConnection] (split
+         * out of AuthRepository precisely so the session shell depends on the
+         * transport surface alone), the receiver and the identity store; the
+         * AUTH seams stay repository-free (plain flows for
+         * [isAuthenticated]/[currentServer]/[currentUser], a suspend lambda
+         * for [onReconnect] — the hosts' `postCapabilities` posts), so no
+         * repository type crosses this module's signatures. Direct
+         * construction, no Koin binding (ADR 0001's pattern); per-shell
+         * remains: the client name and Android's [onConnected] fan-out.
+         */
+        fun create(
+            scope: CoroutineScope,
+            isAuthenticated: Flow<Boolean>,
+            currentServer: Flow<ServerInfo?>,
+            currentUser: Flow<UserInfo?>,
+            clientName: String,
+            realtimeConnection: RealtimeConnection,
+            remoteControlReceiver: RemoteControlReceiver,
+            serverIdentityStore: ServerIdentityStore,
+            onReconnect: suspend () -> Unit,
+            onConnected: suspend (ServerInfo, UserInfo) -> Unit = { _, _ -> },
+        ) = RealtimeSessionController(
+            scope = scope,
+            isAuthenticated = isAuthenticated,
+            currentServer = currentServer,
+            currentUser = currentUser,
+            clientName = clientName,
+            serverUrl = realtimeConnection::serverUrl,
+            isConnected = realtimeConnection.isConnected,
+            reconnects = realtimeConnection.reconnects,
+            connect = realtimeConnection::connect,
+            disconnect = realtimeConnection::disconnect,
+            startReceiver = remoteControlReceiver::start,
+            stopReceiver = remoteControlReceiver::stop,
+            ensureDeviceId = serverIdentityStore::ensureDeviceId,
+            onReconnect = onReconnect,
+            onConnected = onConnected,
+        )
     }
 }

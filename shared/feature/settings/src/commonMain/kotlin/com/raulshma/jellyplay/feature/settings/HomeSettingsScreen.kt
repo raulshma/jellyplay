@@ -111,9 +111,18 @@ internal val homeScreenGroups: List<Set<String>> = listOf(
     SettingsScreenGroups.homeLayout.itemIdSet,
 )
 
-/** The display group's declared rows plus the conditional unhide action row. */
+/**
+ * The display group's `SettingsItemList(total = …)` row count, derived by
+ * [rowTotalFor] from the [SettingsScreenGroups.homeDisplay] declaration
+ * (seven always-rendered config rows — the declared `unhide_cw` admission is
+ * deliberately absent, so the strict derivation excludes it) plus the
+ * conditional unhide action row, which renders only while hidden
+ * continue-watching items exist — a content-state condition with no
+ * admission vocabulary (the storage cache-used info row shape: the screen
+ * adds the +1 explicitly).
+ */
 internal fun homeDisplayScreenRowTotal(hiddenCwItems: Int): Int =
-    SettingsScreenGroups.homeDisplay.items.size + if (hiddenCwItems > 0) 1 else 0
+    rowTotalFor(SettingsScreenGroups.homeDisplay, RowAdmissionFlags()) + if (hiddenCwItems > 0) 1 else 0
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -194,21 +203,16 @@ fun HomeSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
+                    // Derived from the declared display group (the derivation
+                    // source the row total below reads — one declaration, no
+                    // parallel id list): the seven always-rendered config rows
+                    // in catalog order, plus the unhide row while hidden
+                    // continue-watching items exist.
                     val displayItems = remember(preferences.hiddenCwItemIds) {
-                        buildList {
-                            add(HomeSettingsIds.HOME_MODE)
-                            add(HomeSettingsIds.HERO_SECTION)
-                            add(HomeSettingsIds.HOME_BACKDROP)
-                            add(HomeSettingsIds.CLOCK_HOME)
-                            add(HomeSettingsIds.HIDE_TOP_HEADER)
-                            add(HomeSettingsIds.SETTINGS_IN_HOME_SEARCH)
-                            add(HomeSettingsIds.CONTINUE_WATCHING_CLICK)
-                            if (preferences.hiddenCwItemIds.isNotEmpty()) {
-                                add(HomeSettingsIds.UNHIDE_CW)
-                            }
-                        }
+                        SettingsScreenGroups.homeDisplay.itemIds.filter { it != HomeSettingsIds.UNHIDE_CW } +
+                            if (preferences.hiddenCwItemIds.isNotEmpty()) listOf(HomeSettingsIds.UNHIDE_CW) else emptyList()
                     }
-                    SettingsItemList(total = displayItems.size) {
+                    SettingsItemList(total = homeDisplayScreenRowTotal(preferences.hiddenCwItemIds.size)) {
                     displayItems.forEach { item ->
                         when (item) {
                             HomeSettingsIds.HOME_MODE -> {

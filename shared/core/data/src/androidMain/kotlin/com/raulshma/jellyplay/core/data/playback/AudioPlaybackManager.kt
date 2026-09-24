@@ -1598,7 +1598,7 @@ class AudioPlaybackManager(
         // [onActive] on a play→pause edge — the body's own gate keeps them
         // no-ops, exactly as before the unification.
         positionJob = EnginePositionTicker(
-            scope = scope,
+            scopeProvider = { scope },
             pollingIntervalMs = MutableStateFlow(POSITION_POLL_INTERVAL_MS),
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = { exoPlayer?.isPlaying == true },

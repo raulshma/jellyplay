@@ -236,15 +236,30 @@ internal val LanguageSettingsSearchItems: List<SettingsSearchItem> = LanguageSet
 
 
 /**
+ * The language screen's leading "Language" trio's per-id declared row
+ * admissions — full coverage, so `rowTotalFor` and LanguageSettingsScreen's
+ * emission `if` read one gate per id: the audio/subtitle language rows always
+ * render, and the per-app display-language row only where the
+ * `AppLocaleSetter` seam is real (desktop's is a no-op — the
+ * [RowAdmission.Platform] gate the screen reads through the same
+ * `supportsAppLocaleOverride` flag).
+ */
+internal val LanguageGeneralRowAdmissions: Map<String, RowAdmission> =
+    LanguageSettingsRowRecords.take(SettingsScreenGroups.LANGUAGE_GENERAL_GROUP_SIZE).admissionsByAdvancedFlag() + mapOf(
+        LanguageSettingsIds.APP_LANGUAGE to RowAdmission.Platform(RowAdmissionCapability.AppLocaleOverride),
+    )
+
+
+/**
  * The subtitles group's per-id declared row admissions — the single gate both
- * `languageSubtitlesScreenRowTotal` and LanguageSettingsScreen's emission `if`s
- * read. Every id is declared, so the total counts strictly (the
- * notifications/security `?: false` shape): the tester/font-size/forced-only
- * trio always render ([RowAdmission.Always]) — as does high-contrast
- * subtitles, declared `isAdvanced` yet shown in every mode (the shipped quirk,
- * stated explicitly) — the seven style rows ride [RowAdmission.Advanced] (the
- * screen's advanced structural block carries that gate), and the HDR font-size
- * row additionally rides the HDR-style toggle ([RowAdmission.All]).
+ * `rowTotalFor` (the screen's "Subtitles" total) and LanguageSettingsScreen's
+ * emission `if`s read. Every id is declared, so the total counts strictly
+ * (the notifications/security shape): the tester/font-size/forced-only trio
+ * always render ([RowAdmission.Always]) — as does high-contrast subtitles,
+ * declared `isAdvanced` yet shown in every mode (the shipped quirk, stated
+ * explicitly) — the seven style rows ride [RowAdmission.Advanced] (the
+ * screen's advanced structural block carries that gate), and the HDR
+ * font-size row additionally rides the HDR-style toggle ([RowAdmission.All]).
  */
 internal val LanguageSubtitlesRowAdmissions: Map<String, RowAdmission> = mapOf(
     LanguageSettingsIds.SUBTITLE_FONT_SIZE to RowAdmission.Always,

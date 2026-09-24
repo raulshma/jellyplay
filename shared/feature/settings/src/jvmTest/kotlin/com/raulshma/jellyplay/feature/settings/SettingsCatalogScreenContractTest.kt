@@ -159,14 +159,82 @@ class SettingsCatalogScreenContractTest {
                 "${group.id} declares admissions for undeclared ids",
             )
         }
-        // The audio gates REPLACE the isAdvanced base in the count, so every
-        // audio key must sit on an isAdvanced row (a non-advanced key would
-        // silently widen admission).
-        assertEquals(
-            emptyList(),
-            AudioRowAdmissions.keys.filterNot { id -> SettingsScreenGroups.audio.items.first { it.id == id }.isAdvanced },
-            "audio admissions must sit on isAdvanced rows (the gate replaces the advanced base)",
+    }
+
+    /**
+     * The strict derivation's coverage ratchet: [rowTotalFor] counts nothing
+     * for an id that declares no gate, so every group a screen feeds a
+     * `SettingsItemList` total from must declare EVERY id's admission — the
+     * listed exceptions are the deliberately-undeclared rows (screen-local or
+     * content-gated rows the screens add explicitly, each commented at its
+     * declaration). A row added to one of these groups without an admission
+     * fails here instead of silently shrinking the on-screen total. The two
+     * size-derived exceptions (storage.network, appearance.library) are
+     * pinned separately below — their screens feed the declaration size
+     * itself, so the per-id ratchet cannot apply.
+     */
+    @Test
+    fun `groups the screens feed totals from declare every id's admission`() {
+        val undeclaredExceptions = mapOf(
+            "audio" to emptySet<String>(),
+            "playback.player" to emptySet(),
+            "playback.advancedVideo" to emptySet(),
+            "playback.engine" to emptySet(),
+            "notifications" to emptySet(),
+            "language.general" to emptySet(),
+            "language.trackSelection" to emptySet(),
+            "language.subtitles" to emptySet(),
+            "storage.cache" to emptySet(),
+            "storage.downloads" to emptySet(),
+            // The shipped count quirks: pin_for_player_lock renders behind the
+            // pin toggle but has never been admitted into the count, and the
+            // quick-connect / remote-control / remote-display rows render in
+            // their own single-row groups outside the lock-group total.
+            "security" to setOf(
+                SecuritySettingsIds.PIN_FOR_PLAYER_LOCK,
+                SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE,
+                SecuritySettingsIds.REMOTE_CONTROL_ENABLED,
+                SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED,
+            ),
+            // The unhide row rides hidden-CW content state — no admission
+            // vocabulary; the screen adds the +1 explicitly.
+            "home.display" to setOf(HomeSettingsIds.UNHIDE_CW),
         )
+        undeclaredExceptions.forEach { (groupId, exceptions) ->
+            val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
+            assertEquals(
+                emptySet(),
+                group.itemIdSet - group.admissions.keys - exceptions,
+                "$groupId admission coverage drifted (an id declares no gate)",
+            )
+        }
+
+        // The two size-derived exceptions: every declared row renders
+        // unconditionally, so the screens feed the declaration size itself —
+        // storage feeds `items.size` directly (no conditional, so no
+        // admission function), and the appearance screen's wrapper adds the
+        // screen-local confirm-library-reset +1 (the same explicit term the
+        // storage cache-used info row rides). A total that IS the declaration
+        // size self-tracks a new unconditional row, so the per-id ratchet
+        // above cannot apply; pin instead that the groups stay wholly
+        // undeclared at the expected sizes — a row made CONDITIONAL in one of
+        // these groups must move it onto the admission-derived ratchet above.
+        val sizeDerivedGroups = mapOf(
+            "storage.network" to 11,
+            "appearance.library" to 10,
+        )
+        sizeDerivedGroups.forEach { (groupId, declaredCount) ->
+            val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
+            assertTrue(
+                group.admissions.isEmpty(),
+                "$groupId grew an admission while its screen still feeds the declaration size — move it onto the admission-derived ratchet",
+            )
+            assertEquals(
+                declaredCount,
+                group.items.size,
+                "$groupId declaration changed — update this pin or move the group onto the admission-derived ratchet",
+            )
+        }
     }
 
     @Test
@@ -233,11 +301,7 @@ class SettingsCatalogScreenContractTest {
 
     @Test
     fun `when-on rows admit on their declared parent toggle`() {
-        // The playback advanced-video strength row and the storage schedule
-        // windows ride their parent toggle alone…
-        val boostOn = RowAdmissionFlags(parentsOn = setOf(PlaybackSettingsIds.DIALOGUE_BOOST))
-        assertTrue(SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH, boostOn))
-        assertFalse(SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH, RowAdmissionFlags()))
+        // The storage schedule windows ride their parent toggle alone…
         val scheduleOn = RowAdmissionFlags(parentsOn = setOf(StorageSettingsIds.DOWNLOAD_SCHEDULE))
         listOf(
             StorageSettingsIds.DOWNLOAD_SCHEDULE_START,
@@ -249,8 +313,29 @@ class SettingsCatalogScreenContractTest {
         }
         assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.DOWNLOAD_SCHEDULE, RowAdmissionFlags()))
 
-        // …while the audio strength rows additionally ride the advanced
-        // toggle (All(Advanced, WhenOn(parent)) — the advanced half is the
+        // …while the dialogue-boost strength row rides the advanced toggle
+        // AND its parent toggle (All(Advanced, WhenOn) — the structural
+        // advanced blocks around both emission sites, playback and audio,
+        // carry the advanced half).
+        val boostOn = RowAdmissionFlags(showAdvanced = true, parentsOn = setOf(PlaybackSettingsIds.DIALOGUE_BOOST))
+        assertTrue(SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH, boostOn))
+        assertFalse(
+            SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(
+                PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH,
+                RowAdmissionFlags(showAdvanced = true),
+            ),
+            "the strength row must drop while the boost toggle is off",
+        )
+        assertFalse(
+            SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(
+                PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH,
+                RowAdmissionFlags(parentsOn = setOf(PlaybackSettingsIds.DIALOGUE_BOOST)),
+            ),
+            "the strength row must drop while advanced mode is off",
+        )
+
+        // …and the audio strength rows also ride the advanced toggle
+        // (All(Advanced, WhenOn(parent)) — the advanced half is the
         // structural block the screen's advanced section carries).
         val parentsOnly = RowAdmissionFlags(parentsOn = setOf(AudioSettingsIds.NIGHT_MODE, AudioSettingsIds.EQUALIZER))
         assertFalse(SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.NIGHT_MODE_STRENGTH, parentsOnly))
@@ -506,13 +591,16 @@ class SettingsCatalogScreenContractTest {
         assertTrue(LanguageSettingsIds.HIGH_CONTRAST_SUBTITLES in SettingsScreenGroups.languageSubtitles.itemIdSet)
     }
 
-    // ── 6. The per-group row-admission totals ───────────────────────────
+    // ── 6. The per-group row-total derivation ───────────────────────────
 
     /**
      * The index/total pair a rendered group emits: inside `SettingsItemList`
      * the rows take the auto-index 0..total-1 and every row's `count` is the
      * admission total, so each pinned total below IS the total the screen
      * feeds and the sequence below IS the index sequence the rows display.
+     * Every total is read through [rowTotalFor] — the same call the screens
+     * make — so the pins hold the derivation itself, not a per-screen
+     * wrapper.
      */
     private fun emittedIndexSequence(total: Int): List<Int> = (0 until total).toList()
 
@@ -568,25 +656,29 @@ class SettingsCatalogScreenContractTest {
         assertEquals(5, nonAdvanced, "the audio declaration's non-advanced set changed — update the totals pin")
         assertEquals(
             nonAdvanced,
-            audioScreenRowTotal(showAdvanced = false, preferences = AudioPreferences()),
+            rowTotalFor(SettingsScreenGroups.audio, RowAdmissionFlags()),
         )
     }
 
     @Test
     fun `storage row totals track the cache and downloads declarations`() {
-        // Cache: the screen-local cache-used info row + the declared
-        // non-advanced rows (clear_cache, clear_image_cache); the five
-        // advanced declarations only behind the advanced toggle.
+        // Cache: the screen-local cache-used info row (the explicit +1) plus
+        // the declared rows — the two clear rows always, the five tuning rows
+        // behind the advanced toggle (their declared Advanced base).
+        assertEquals(
+            SettingsScreenGroups.storageCache.items.count { !it.isAdvanced },
+            rowTotalFor(SettingsScreenGroups.storageCache, RowAdmissionFlags(showAdvanced = false)),
+        )
         assertEquals(
             SettingsScreenGroups.storageCache.items.count { !it.isAdvanced } + 1,
-            storageCacheScreenRowTotal(showAdvanced = false),
+            rowTotalFor(SettingsScreenGroups.storageCache, RowAdmissionFlags(showAdvanced = false)) + 1,
         )
         assertEquals(
             SettingsScreenGroups.storageCache.items.size + 1,
-            storageCacheScreenRowTotal(showAdvanced = true),
+            rowTotalFor(SettingsScreenGroups.storageCache, RowAdmissionFlags(showAdvanced = true)) + 1,
         )
-        assertEquals(3, storageCacheScreenRowTotal(showAdvanced = false))
-        assertEquals(8, storageCacheScreenRowTotal(showAdvanced = true))
+        assertEquals(3, rowTotalFor(SettingsScreenGroups.storageCache, RowAdmissionFlags(showAdvanced = false)) + 1)
+        assertEquals(8, rowTotalFor(SettingsScreenGroups.storageCache, RowAdmissionFlags(showAdvanced = true)) + 1)
         assertEquals(emittedIndexSequence(3), List(3) { it })
 
         // Network: unconditionally the whole declaration (the screen feeds
@@ -595,17 +687,24 @@ class SettingsCatalogScreenContractTest {
         assertEquals(11, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
 
         // Downloads: the three download_schedule_* window rows only when
-        // scheduling is on; the toggle itself always renders.
+        // scheduling is on (their declared WhenOn gate); every other record
+        // renders unconditionally (its non-advanced base).
         assertEquals(
             SettingsScreenGroups.storageDownloads.items.size - 3,
-            storageDownloadsScreenRowTotal(downloadScheduleEnabled = false),
+            rowTotalFor(
+                SettingsScreenGroups.storageDownloads,
+                RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to false)),
+            ),
         )
         assertEquals(
             SettingsScreenGroups.storageDownloads.items.size,
-            storageDownloadsScreenRowTotal(downloadScheduleEnabled = true),
+            rowTotalFor(
+                SettingsScreenGroups.storageDownloads,
+                RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to true)),
+            ),
         )
-        assertEquals(7, storageDownloadsScreenRowTotal(downloadScheduleEnabled = false))
-        assertEquals(10, storageDownloadsScreenRowTotal(downloadScheduleEnabled = true))
+        assertEquals(7, rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to false))))
+        assertEquals(10, rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to true))))
     }
 
     @Test
@@ -615,36 +714,92 @@ class SettingsCatalogScreenContractTest {
         // hold_speed_multiplier) survive every gate off; each flag reveals
         // exactly its own rows — plus the volume-memory toggle, whose
         // Platform(VolumeMemory) admission rides this JVM's desktop seam (on).
-        val allGatesOff = playbackPlayerScreenRowTotal(
-            isTv = false,
-            showAdvanced = false,
-            supportsScreenOrientation = false,
-            supportsTouchGestures = false,
+        val allGatesOff = rowTotalFor(
+            SettingsScreenGroups.playbackPlayer,
+            RowAdmissionFlags(
+                isTv = false,
+                showAdvanced = false,
+                supportsScreenOrientation = false,
+                supportsTouchGestures = false,
+            ),
         )
         assertEquals(7, allGatesOff)
-        assertEquals(8, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = true, supportsTouchGestures = false))
-        assertEquals(10, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = false, supportsTouchGestures = true))
+        assertEquals(
+            8,
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayer,
+                RowAdmissionFlags(
+                    isTv = false,
+                    showAdvanced = false,
+                    supportsScreenOrientation = true,
+                    supportsTouchGestures = false,
+                ),
+            ),
+        )
+        assertEquals(
+            10,
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayer,
+                RowAdmissionFlags(
+                    isTv = false,
+                    showAdvanced = false,
+                    supportsScreenOrientation = false,
+                    supportsTouchGestures = true,
+                ),
+            ),
+        )
         // Every non-advanced declaration renders with caps on (isTv off: the
         // two TV rows ride isTv alone — shipped semantics, also without
         // advanced mode).
         assertEquals(
             SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced },
-            playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = true, supportsTouchGestures = true),
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayer,
+                RowAdmissionFlags(
+                    isTv = false,
+                    showAdvanced = false,
+                    supportsScreenOrientation = true,
+                    supportsTouchGestures = true,
+                ),
+            ),
         )
         assertEquals(
             SettingsScreenGroups.playbackPlayer.items.size - 2, // minus the two TV rows
-            playbackPlayerScreenRowTotal(false, true, supportsScreenOrientation = true, supportsTouchGestures = true),
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayer,
+                RowAdmissionFlags(
+                    isTv = false,
+                    showAdvanced = true,
+                    supportsScreenOrientation = true,
+                    supportsTouchGestures = true,
+                ),
+            ),
         )
-        assertEquals(34, playbackPlayerScreenRowTotal(true, true, supportsScreenOrientation = true, supportsTouchGestures = true))
+        assertEquals(
+            34,
+            rowTotalFor(
+                SettingsScreenGroups.playbackPlayer,
+                RowAdmissionFlags(
+                    isTv = true,
+                    showAdvanced = true,
+                    supportsScreenOrientation = true,
+                    supportsTouchGestures = true,
+                ),
+            ),
+        )
 
-        // Advanced video: the dialogue-boost strength row rides its toggle.
+        // Advanced video: the whole group only composes behind the advanced
+        // toggle (its declared Advanced base — the flags carry that toggle);
+        // the dialogue-boost strength row additionally rides its parent
+        // toggle (its declared All gate).
+        val boostOn = RowAdmissionFlags(showAdvanced = true, parentsOn = rowParentsOn(PlaybackSettingsIds.DIALOGUE_BOOST to true))
         assertEquals(
             SettingsScreenGroups.playbackAdvancedVideo.items.size - 1,
-            playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled = false),
+            rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, RowAdmissionFlags(showAdvanced = true)),
         )
         assertEquals(
             SettingsScreenGroups.playbackAdvancedVideo.items.size,
-            playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled = true),
+            rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, boostOn),
         )
 
         // Engine branches: declared prefix rows (the mpv branch minus the
@@ -682,40 +837,120 @@ class SettingsCatalogScreenContractTest {
 
     @Test
     fun `notification row total tracks the declaration through every gate`() {
-        val allOn = notificationScreenRowTotal(
-            enabled = true,
-            showAdvanced = true,
-            quietHoursEnabled = true,
-            canOpenSystemNotificationSettings = true,
+        val allOn = rowTotalFor(
+            SettingsScreenGroups.notifications,
+            RowAdmissionFlags(
+                showAdvanced = true,
+                supportsSystemNotificationSettings = true,
+                parentsOn = rowParentsOn(
+                    NotificationSettingsIds.NOTIFICATIONS_ENABLE to true,
+                    NotificationSettingsIds.QUIET_HOURS to true,
+                ),
+            ),
         )
         assertEquals(SettingsScreenGroups.notifications.items.size, allOn, "a declared notification id is admitted by no gate")
-        assertEquals(1, notificationScreenRowTotal(false, true, true, true)) // master toggle off: only itself
-        assertEquals(5, notificationScreenRowTotal(true, false, true, true)) // + frequency/sound/vibrate/lights
-        assertEquals(9, notificationScreenRowTotal(true, true, false, false)) // + quiet hours/dnd/max-per-check/libraries
-        assertEquals(11, notificationScreenRowTotal(true, true, true, false)) // + quiet start/end
+        val masterOff = RowAdmissionFlags(
+            showAdvanced = true,
+            supportsSystemNotificationSettings = true,
+            parentsOn = rowParentsOn(NotificationSettingsIds.QUIET_HOURS to true),
+        )
+        assertEquals(1, rowTotalFor(SettingsScreenGroups.notifications, masterOff)) // master toggle off: only itself
+        assertEquals(
+            5,
+            rowTotalFor(
+                SettingsScreenGroups.notifications,
+                RowAdmissionFlags(parentsOn = rowParentsOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE to true, NotificationSettingsIds.QUIET_HOURS to true)),
+            ),
+        ) // + frequency/sound/vibrate/lights
+        assertEquals(
+            9,
+            rowTotalFor(
+                SettingsScreenGroups.notifications,
+                RowAdmissionFlags(
+                    showAdvanced = true,
+                    parentsOn = rowParentsOn(NotificationSettingsIds.NOTIFICATIONS_ENABLE to true),
+                ),
+            ),
+        ) // + quiet hours/dnd/max-per-check/libraries
+        assertEquals(
+            11,
+            rowTotalFor(
+                SettingsScreenGroups.notifications,
+                RowAdmissionFlags(
+                    showAdvanced = true,
+                    parentsOn = rowParentsOn(
+                        NotificationSettingsIds.NOTIFICATIONS_ENABLE to true,
+                        NotificationSettingsIds.QUIET_HOURS to true,
+                    ),
+                ),
+            ),
+        ) // + quiet start/end
         assertEquals(12, allOn) // + the platform's system-notification-settings row
     }
 
     @Test
     fun `language row totals track the trio and the subtitles conditionals`() {
         // The leading trio: the app-language row only where the locale
-        // override applies.
-        assertEquals(2, languageGeneralScreenRowTotal(showsAppLocaleRow = false))
+        // override applies (its declared AppLocaleOverride Platform gate).
+        assertEquals(
+            2,
+            rowTotalFor(SettingsScreenGroups.languageGeneral, RowAdmissionFlags(supportsAppLocaleOverride = false)),
+        )
         assertEquals(
             SettingsScreenGroups.languageGeneral.items.size,
-            languageGeneralScreenRowTotal(showsAppLocaleRow = true),
+            rowTotalFor(SettingsScreenGroups.languageGeneral, RowAdmissionFlags(supportsAppLocaleOverride = true)),
         )
 
         // Subtitles: 4 always (tester/font-size/forced-only + the
         // always-shown high-contrast row — declared advanced yet never
         // gated); the style rows behind advanced; the HDR font-size row
         // behind the HDR toggle.
-        assertEquals(4, languageSubtitlesScreenRowTotal(showAdvanced = false, hdrSubtitleStyleEnabled = true))
-        assertEquals(11, languageSubtitlesScreenRowTotal(showAdvanced = true, hdrSubtitleStyleEnabled = false))
+        assertEquals(
+            4,
+            rowTotalFor(
+                SettingsScreenGroups.languageSubtitles,
+                RowAdmissionFlags(showAdvanced = false, parentsOn = rowParentsOn(LanguageSettingsIds.HDR_SUBTITLE_STYLE to true)),
+            ),
+        )
+        assertEquals(
+            11,
+            rowTotalFor(SettingsScreenGroups.languageSubtitles, RowAdmissionFlags(showAdvanced = true)),
+        )
         assertEquals(
             SettingsScreenGroups.languageSubtitles.items.size,
-            languageSubtitlesScreenRowTotal(showAdvanced = true, hdrSubtitleStyleEnabled = true),
+            rowTotalFor(
+                SettingsScreenGroups.languageSubtitles,
+                RowAdmissionFlags(showAdvanced = true, parentsOn = rowParentsOn(LanguageSettingsIds.HDR_SUBTITLE_STYLE to true)),
+            ),
         )
+
+        // Track selection: every row always renders (its declared Always).
+        assertEquals(4, SettingsScreenGroups.languageTrackSelection.items.size, "the track-selection declaration changed — update this pin")
+        assertEquals(
+            SettingsScreenGroups.languageTrackSelection.items.size,
+            rowTotalFor(SettingsScreenGroups.languageTrackSelection, RowAdmissionFlags()),
+        )
+    }
+
+    @Test
+    fun `home display row total is the seven declared rows plus the conditional unhide row`() {
+        // The retired oracle double-counted: items.size (8, including the
+        // unhide row) + 1 — while the screen emits 7 rows without hidden CW
+        // items and 8 with. The derivation fixes the count to the emitted
+        // rows: the seven always-declared rows plus the explicit unhide +1.
+        assertEquals(7, homeDisplayScreenRowTotal(hiddenCwItems = 0))
+        assertEquals(8, homeDisplayScreenRowTotal(hiddenCwItems = 1))
+        assertEquals(
+            SettingsScreenGroups.homeDisplay.items.size - 1,
+            homeDisplayScreenRowTotal(hiddenCwItems = 0),
+            "the display declaration changed — update this pin",
+        )
+        // The unhide row is declared last, so the derived emission order
+        // matches the retired hand-built list.
+        assertEquals(HomeSettingsIds.UNHIDE_CW, SettingsScreenGroups.homeDisplay.itemIds.last())
+        // …and it admits for emission (rowAdmitted's no-gate default) — the
+        // screen's content-state `if` carries its gate.
+        assertTrue(SettingsScreenGroups.homeDisplay.rowAdmitted(HomeSettingsIds.UNHIDE_CW, RowAdmissionFlags()))
     }
 
     @Test
@@ -732,11 +967,14 @@ class SettingsCatalogScreenContractTest {
         // The pin row always; biometric rides the platform+gate flag; the
         // auto-lock timer rides advanced. pin_for_player_lock renders behind
         // the pin toggle but has never been admitted into the count — the
-        // preserved quirk this pins.
-        assertEquals(1, securityScreenRowTotal(canShowBiometric = false, showAdvanced = false))
-        assertEquals(2, securityScreenRowTotal(canShowBiometric = true, showAdvanced = false))
-        assertEquals(2, securityScreenRowTotal(canShowBiometric = false, showAdvanced = true))
-        assertEquals(3, securityScreenRowTotal(canShowBiometric = true, showAdvanced = true))
+        // preserved quirk this pins (the strict derivation counts it as 0:
+        // it declares no gate).
+        fun securityTotal(canShowBiometric: Boolean, showAdvanced: Boolean) =
+            rowTotalFor(SettingsScreenGroups.security, RowAdmissionFlags(showAdvanced = showAdvanced, supportsBiometric = canShowBiometric))
+        assertEquals(1, securityTotal(canShowBiometric = false, showAdvanced = false))
+        assertEquals(2, securityTotal(canShowBiometric = true, showAdvanced = false))
+        assertEquals(2, securityTotal(canShowBiometric = false, showAdvanced = true))
+        assertEquals(3, securityTotal(canShowBiometric = true, showAdvanced = true))
     }
 
     // ── 7. The search-result click action ───────────────────────────────

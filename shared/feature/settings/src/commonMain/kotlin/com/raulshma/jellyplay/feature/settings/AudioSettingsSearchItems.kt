@@ -485,22 +485,25 @@ internal val AudioSettingsSearchItems: List<SettingsSearchItem> = AudioSettingsR
 
 
 /**
- * The audio group's per-id declared row admissions — every effect-dependent
- * strength row only renders behind the advanced toggle AND its parent effect
- * (`audioScreenRowTotal` and AudioSettingsScreen's emission `if`s read these
- * one gates). Parent ids are this group's toggle rows; `volume_normalization`
- * counts as "on" while normalization is in the TRACK/ALBUM modes — the
- * `audioRowAdmissionFlags` builder translates.
+ * The audio group's per-id declared row admissions — full coverage, so
+ * `rowTotalFor` and AudioSettingsScreen's emission `if`s read one gate per
+ * id. The base gate is each record's own `isAdvanced` flag (the predicate the
+ * retired hand count fell back to); the overrides are the effect-dependent
+ * rows that additionally ride their parent effect — every one an isAdvanced
+ * row gated `All(Advanced, WhenOn(parent))`. Parent ids are this group's
+ * toggle rows; `volume_normalization` counts as "on" while normalization is
+ * in the TRACK/ALBUM modes — the `audioRowAdmissionFlags` builder translates.
  */
-internal val AudioRowAdmissions: Map<String, RowAdmission> = mapOf(
-    AudioSettingsIds.REPLAYGAIN_PREAMP to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.VOLUME_NORMALIZATION)),
-    AudioSettingsIds.EQUALIZER_PRESET to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.EQUALIZER)),
-    AudioSettingsIds.NIGHT_MODE_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.NIGHT_MODE)),
-    AudioSettingsIds.BASS_BOOST_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.BASS_BOOST)),
-    AudioSettingsIds.VIRTUALIZER_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.VIRTUALIZER)),
-    AudioSettingsIds.VOLUME_BOOST_GAIN to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.VOLUME_BOOST)),
-    AudioSettingsIds.CHANNEL_MIX_MODE to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.CHANNEL_MIXING)),
-)
+internal val AudioRowAdmissions: Map<String, RowAdmission> =
+    AudioSettingsRowRecords.admissionsByAdvancedFlag() + mapOf(
+        AudioSettingsIds.REPLAYGAIN_PREAMP to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.VOLUME_NORMALIZATION)),
+        AudioSettingsIds.EQUALIZER_PRESET to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.EQUALIZER)),
+        AudioSettingsIds.NIGHT_MODE_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.NIGHT_MODE)),
+        AudioSettingsIds.BASS_BOOST_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.BASS_BOOST)),
+        AudioSettingsIds.VIRTUALIZER_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.VIRTUALIZER)),
+        AudioSettingsIds.VOLUME_BOOST_GAIN to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.VOLUME_BOOST)),
+        AudioSettingsIds.CHANNEL_MIX_MODE to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(AudioSettingsIds.CHANNEL_MIXING)),
+    )
 
 /**
  * Settings-search items for the nested "Audio Caching" group of

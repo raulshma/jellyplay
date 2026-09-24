@@ -256,12 +256,15 @@ fun LanguageSettingsScreen(
                     val displayLanguageTitle = rowTitle(LanguageSettingsIds.APP_LANGUAGE)
                     // The per-app display-language override only applies where the
                     // AppLocaleSetter seam is real (desktop's is a no-op), so the
-                    // row vanishes there and the remaining rows re-index.
+                    // row vanishes there and the remaining rows re-index — the
+                    // group's declared AppLocaleOverride Platform gate, which
+                    // both the row total and the emission `if` read.
                     val showAppLocaleRow = settingsCapabilities.supportsAppLocaleOverride
+                    val languageRowFlags = RowAdmissionFlags(supportsAppLocaleOverride = showAppLocaleRow)
                     // The row total derives from the declared leading trio via
-                    // the admission function beside SettingsScreenGroups.
-                    SettingsItemList(total = languageGeneralScreenRowTotal(showAppLocaleRow)) {
-                    if (showAppLocaleRow) {
+                    // rowTotalFor (full per-id admission coverage).
+                    SettingsItemList(total = rowTotalFor(SettingsScreenGroups.languageGeneral, languageRowFlags)) {
+                    if (SettingsScreenGroups.languageGeneral.rowAdmitted(LanguageSettingsIds.APP_LANGUAGE, languageRowFlags)) {
                         SettingListItem(
                             icon = Tabler.Outline.Language,
                             title = rowTitle(LanguageSettingsIds.APP_LANGUAGE),
@@ -331,7 +334,11 @@ fun LanguageSettingsScreen(
                     var showSubtitleOrderEditor by remember { mutableStateOf(false) }
                     var showRulesEditor by remember { mutableStateOf(false) }
                     val langDefaultFallback = stringResource(Res.string.settings_lang_default)
-                    SettingsItemList(total = languageTrackSelectionScreenRowTotal()) {
+                    // Derived by rowTotalFor from the track-selection group
+                    // declaration (every row declares Always, so the strict
+                    // count fails loudly if a gated row ever lands here
+                    // without an admission).
+                    SettingsItemList(total = rowTotalFor(SettingsScreenGroups.languageTrackSelection, RowAdmissionFlags())) {
                         // Preset picker — the headline knob; descriptions are
                         // resolved here so the non-composable picker lambdas
                         // only carry strings.
@@ -451,15 +458,14 @@ fun LanguageSettingsScreen(
                         style = preferences.subtitleStyle,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
-                    // Derived from the subtitles group declaration via the
-                    // admission total beside SettingsScreenGroups (every id's
-                    // declared [RowAdmission]): 4 always (the
-                    // tester/font-size/forced-only trio plus high-contrast
-                    // subtitles), the style rows behind their declared
-                    // Advanced gate and the HDR font-size row behind the
-                    // HDR-style toggle.
+                    // Derived by rowTotalFor from the subtitles group
+                    // declaration (every id's declared [RowAdmission]): 4
+                    // always (the tester/font-size/forced-only trio plus
+                    // high-contrast subtitles), the style rows behind their
+                    // declared Advanced gate and the HDR font-size row behind
+                    // the HDR-style toggle.
                     SettingsItemList(
-                        total = languageSubtitlesScreenRowTotal(showAdvanced, preferences.hdrSubtitleStyleEnabled),
+                        total = rowTotalFor(SettingsScreenGroups.languageSubtitles, subtitleRowFlags),
                     ) {
                     SettingListItem(
                         icon = Tabler.Outline.Eye,

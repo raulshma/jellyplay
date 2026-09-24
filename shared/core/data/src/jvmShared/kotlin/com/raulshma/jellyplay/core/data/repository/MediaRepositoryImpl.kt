@@ -234,8 +234,9 @@ class MediaRepositoryImpl internal constructor(
     )
 
     /**
-     * Bumped by the dice roll's [invalidateDiscoverRowCache] /
-     * [seedDiscoverRowCache] pair and read as [TtlCache.getOrFetch]'s write
+     * Bumped by the dice roll's invalidate / seed halves ([rerollDiscoverRow]'s
+     * ordering, see the two private members below) and read as
+     * [TtlCache.getOrFetch]'s write
      * guard in [getHomeSections]: a fetch that was already in flight when the
      * roll landed captured the row's pre-roll payloads, and its completion
      * must not pin that assembled result back into [homeSectionsCache] — the
@@ -394,10 +395,28 @@ class MediaRepositoryImpl internal constructor(
     override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> =
         apiClient.getDiscoverRowItems(row)
 
-    override fun invalidateDiscoverRowCache(rowId: String) {
-        // Stall-guard the in-flight home fetch FIRST (see [discoverRollEpoch]):
-        // its completion must not re-pin the pre-roll payload the clear below
-        // is about to drop.
+    override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
+        invalidateDiscoverRowCache(row.id)
+        val result = getDiscoverRowItems(row)
+        // Commit only a real roll: seedDiscoverRowCache no-ops on an empty
+        // list, so a failed/empty fetch leaves nothing behind but the
+        // pre-fetch drop — the next home fetch re-queries the row instead of
+        // replaying or pinning pre-roll items.
+        result.onSuccess { seedDiscoverRowCache(row, it) }
+        return result
+    }
+
+    /**
+     * Reroll half 1 (see [rerollDiscoverRow] — the ordering contract lives
+     * there; this is impl-private machinery, no external caller): bumps the
+     * roll epoch so an in-flight home fetch cannot re-pin its pre-roll
+     * payload, drops the network layer's memoised row items so the next
+     * home-sections fetch re-queries the row, and drops the assembled home
+     * payload that still carries the row's pre-roll items (the next
+     * TTL-served periodic read would otherwise replay them and revert the
+     * roll on screen).
+     */
+    private fun invalidateDiscoverRowCache(rowId: String) {
         discoverRollEpoch.incrementAndGet()
         apiClient.invalidateDiscoverRowCache(rowId)
         // The assembled home payload still carries the row's pre-roll items;
@@ -407,17 +426,20 @@ class MediaRepositoryImpl internal constructor(
         homeSectionsCache.clear()
     }
 
-    override fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
+    /**
+     * Reroll half 3 (see [rerollDiscoverRow]): memoises the freshly rolled
+     * items in the network layer's per-row cache so the next home fetch
+     * serves the rolled set instead of re-querying the server. Bumps the
+     * epoch again at COMMIT time — a fetch still in flight across the whole
+     * roll stays stall-guarded — and drops the assembled payload again (a
+     * periodic fetch that raced the roll would have re-cached the pre-roll
+     * sections after the pre-fetch invalidate). Cheap (maxSize 1). No-op on
+     * an empty list.
+     */
+    private fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return
-        // Bump again at COMMIT time: a fetch still in flight across the whole
-        // roll (started before the invalidate above) stays stall-guarded
-        // against writing its pre-roll result after the seed.
         discoverRollEpoch.incrementAndGet()
         apiClient.seedDiscoverRowCache(row, items)
-        // Drop the assembled payload again at COMMIT time: a periodic fetch
-        // that raced the roll (started before the pre-fetch invalidate, wrote
-        // after it) would have re-cached the pre-roll sections, and the next
-        // TTL-served read would still revert the roll. Cheap (maxSize 1).
         homeSectionsCache.clear()
     }
 

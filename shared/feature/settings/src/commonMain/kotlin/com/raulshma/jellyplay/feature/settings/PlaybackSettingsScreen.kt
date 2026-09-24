@@ -517,7 +517,6 @@ fun PlaybackSettingsScreen(
             item {
                 PlaybackPlayerGroup(
                     preferences = preferences,
-                    isTv = isTv,
                     showAdvanced = showAdvanced,
                     rowFlags = rowFlags,
                     highlightSettingId = highlightSettingId,
@@ -598,11 +597,11 @@ fun PlaybackSettingsScreen(
                         // A frozen hand approximation, kept verbatim: the real hidden-
                         // row count varies by platform, engine and the dialogue-boost
                         // toggle (the three advanced-only groups alone hide anywhere
-                        // from 7 to 19+ rows), so no derivation from the
-                        // *ScreenRowTotal functions reproduces 9 across the (isTv,
-                        // engine) combos. Its source rows are the advanced-only blocks:
-                        // the player group's advanced rows, the advanced-video group,
-                        // the engine group and the media-segments group.
+                        // from 7 to 19+ rows), so no derivation via rowTotalFor
+                        // reproduces 9 across the (isTv, engine) combos. Its source
+                        // rows are the advanced-only blocks: the player group's
+                        // advanced rows, the advanced-video group, the engine group
+                        // and the media-segments group.
                         hiddenCount = 9,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
@@ -637,7 +636,6 @@ fun PlaybackSettingsScreen(
 @Composable
 private fun PlaybackPlayerGroup(
     preferences: PlaybackPreferences,
-    isTv: Boolean,
     showAdvanced: Boolean,
     rowFlags: RowAdmissionFlags,
     highlightSettingId: String?,
@@ -652,13 +650,13 @@ private fun PlaybackPlayerGroup(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    // Derived from the player group declaration via the
-                    // admission total beside SettingsScreenGroups: the
+                    // Derived by rowTotalFor from the player group
+                    // declaration (full per-id admission coverage): the
                     // platform-gated rows drop where the capability is
                     // missing, the TV rows need the TV form factor, and
                     // isAdvanced rows only render behind the advanced toggle.
                     SettingsItemList(
-                        total = playbackPlayerScreenRowTotal(isTv = isTv, showAdvanced = showAdvanced),
+                        total = rowTotalFor(SettingsScreenGroups.playbackPlayer, rowFlags),
                     ) {
                     val preferredPlayerTitle = stringResource(Res.string.settings_preferred_player)
                     SettingListItem(
@@ -1188,7 +1186,7 @@ private fun PlaybackAdvancedVideoGroup(
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
                 ) {
                     SettingsItemList(
-                        total = playbackAdvancedVideoScreenRowTotal(preferences.dialogueBoostEnabled),
+                        total = rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, rowFlags),
                     ) {
                     SettingToggleItem(
                         icon = rowIcon(PlaybackSettingsIds.DIALOGUE_BOOST),
