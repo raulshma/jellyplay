@@ -711,19 +711,16 @@ internal fun HomeContentList(
                             )
                         }
                         // Dice affordance: RANDOM-sorted custom discover rows only
-                        // (section id is `discover_<rowId>` — strip the prefix for
-                        // the row-id keyed callback). Resolved once here so the
-                        // click, the tumble flag and the label key the SAME id.
+                        // (the descriptor resolves the row id back out of the
+                        // `discover_<rowId>` section id). Resolved once here so
+                        // the click, the tumble flag and the label key the SAME id.
                         val diceRowId: String? = if (section.type == HomeSectionType.DISCOVER) {
                             remember(section.id, state.randomDiscoverRowIds) {
-                                val prefix = HomeSectionType.DISCOVER.descriptor.idFor("")
-                                val rowId = section.id.removePrefix(prefix)
-                                if (rowId != section.id && rowId in state.randomDiscoverRowIds) rowId else null
+                                HomeSectionType.DISCOVER.descriptor.instanceIdFor(section.id)
+                                    ?.takeIf { it in state.randomDiscoverRowIds }
                             }
                         } else null
-                        val rollDiscoverRow = remember(callbacks) {
-                            { rowId: String -> callbacks.onRollDiscoverRow(rowId) }
-                        }
+                        val rollDiscoverRow = remember(callbacks) { callbacks.onRollDiscoverRow }
                         val diceRowAccessibilityLabel = if (diceRowId != null) {
                             stringResource(Res.string.home_discover_reroll)
                         } else null
@@ -742,11 +739,11 @@ internal fun HomeContentList(
                             showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
                             onSectionLongClick = sectionLongClick,
                             onSeeAllClick = seeAllClick,
-                            onShuffleClick = if (diceRowId != null) {
+                            onRollClick = if (diceRowId != null) {
                                 { rollDiscoverRow(diceRowId) }
                             } else null,
-                            shuffleInProgress = diceRowId != null && diceRowId in state.rollingDiscoverRowIds,
-                            shuffleAccessibilityLabel = diceRowAccessibilityLabel,
+                            rollInProgress = diceRowId != null && diceRowId in state.rollingDiscoverRowIds,
+                            rollAccessibilityLabel = diceRowAccessibilityLabel,
                             onFocusedItemChange = callbacks.onFocusedMediaItem,
                             // Book progress bars: exact page fractions from the
                             // refresher's TOC-cache decodes, percent fallback for

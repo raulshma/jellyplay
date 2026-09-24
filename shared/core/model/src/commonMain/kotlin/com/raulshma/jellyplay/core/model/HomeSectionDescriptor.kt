@@ -55,6 +55,17 @@ class HomeSectionDescriptor(
         checkNotNull(dynamicIdPrefix) { "$type has no dynamic id prefix" } + instanceId
 
     /**
+     * Inverse of [idFor]: strips [dynamicIdPrefix] off a per-instance row id
+     * and returns the instance id, or null when the id doesn't carry this
+     * type's prefix (or the type has none) — callers never re-derive the
+     * prefix with `idFor("")` + removePrefix.
+     */
+    fun instanceIdFor(sectionId: String): String? {
+        val prefix = dynamicIdPrefix ?: return null
+        return sectionId.removePrefix(prefix).takeIf { it != sectionId }
+    }
+
+    /**
      * Resolves the header title for a per-library LATEST_MEDIA row by
      * substituting the library's display name into [dynamicTitleTemplate].
      * PINNED rows render the user's pin title verbatim — no template.

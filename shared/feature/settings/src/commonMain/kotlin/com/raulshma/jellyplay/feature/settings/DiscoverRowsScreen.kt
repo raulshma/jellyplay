@@ -57,6 +57,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_add_discover_row
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_movies
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_tv
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_upcoming_short
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows_helper
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows_title
@@ -184,7 +187,7 @@ private fun DiscoverRowListEntry(
         },
         supportingContent = {
             Text(
-                text = "${row.source.displayName} • ${describeDiscoverRow(row)} • #$position",
+                text = "${discoverRowSourceLabel(row.source)} • ${describeDiscoverRow(row, discoverRowSummaryLabels())} • #$position",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -253,14 +256,17 @@ private fun DiscoverRowListEntry(
     )
 }
 
-/** One-line human summary of the row's active filters (the list subtitle). */
-internal fun describeDiscoverRow(row: DiscoverRowConfig): String {
+/** One-line human summary of the row's active filters (the list subtitle). [labels] supplies the localized bits. */
+internal fun describeDiscoverRow(
+    row: DiscoverRowConfig,
+    labels: DiscoverRowSummaryLabels,
+): String {
     if (row.source == DiscoverRowSource.SEERR) {
         val f = row.seerrFilters
-        val media = if (f.media == com.raulshma.jellyplay.core.model.SeerrRowMedia.MOVIE) "Movies" else "TV"
+        val media = if (f.media == com.raulshma.jellyplay.core.model.SeerrRowMedia.MOVIE) labels.movies else labels.tv
         val bits = mutableListOf(media)
         if (f.genres.isNotEmpty()) bits += f.genres.joinToString("/") { it.name }
-        if (f.upcomingOnly) bits += "upcoming"
+        if (f.upcomingOnly) bits += labels.upcoming
         return bits.joinToString(" • ")
     }
     val f = row.filters
@@ -277,6 +283,20 @@ internal fun describeDiscoverRow(row: DiscoverRowConfig): String {
     row.premieredWithinYears?.let { bits += "last ${it}y" }
     return bits.joinToString(" • ").ifEmpty { f.sortBy.displayName }
 }
+
+/** Localized bits [describeDiscoverRow] interpolates — resolved per composition by [discoverRowSummaryLabels]. */
+internal data class DiscoverRowSummaryLabels(
+    val movies: String,
+    val tv: String,
+    val upcoming: String,
+)
+
+@Composable
+internal fun discoverRowSummaryLabels(): DiscoverRowSummaryLabels = DiscoverRowSummaryLabels(
+    movies = stringResource(Res.string.settings_discover_row_movies),
+    tv = stringResource(Res.string.settings_discover_row_tv),
+    upcoming = stringResource(Res.string.settings_discover_row_upcoming_short),
+)
 
 @Composable
 private fun DiscoverRowTemplatesPresentation(

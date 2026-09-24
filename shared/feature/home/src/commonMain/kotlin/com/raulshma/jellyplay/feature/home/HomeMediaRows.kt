@@ -499,9 +499,9 @@ fun HomeMediaRow(
     // Dice affordance for RANDOM-sorted custom discover rows — renders in the
     // row header next to the title. While the re-fetch is in flight the icon
     // tumbles and further taps are ignored.
-    onShuffleClick: (() -> Unit)? = null,
-    shuffleInProgress: Boolean = false,
-    shuffleAccessibilityLabel: String? = null,
+    onRollClick: (() -> Unit)? = null,
+    rollInProgress: Boolean = false,
+    rollAccessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -537,9 +537,9 @@ fun HomeMediaRow(
             onLongClick = onSectionLongClick,
             onSeeAllClick = onSeeAllClick,
             seeAllFocusRequester = seeAllFocusRequester,
-            onShuffleClick = onShuffleClick,
-            shuffleInProgress = shuffleInProgress,
-            accessibilityLabel = shuffleAccessibilityLabel,
+            onRollClick = onRollClick,
+            rollInProgress = rollInProgress,
+            accessibilityLabel = rollAccessibilityLabel,
         )
         HomeItemRow(
             items = effectiveItems,
@@ -679,9 +679,9 @@ internal fun HomeRowTitle(
     onSeeAllClick: (() -> Unit)? = null,
     seeAllFocusRequester: FocusRequester? = null,
     /** Dice affordance for RANDOM-sorted custom discover rows: re-rolls the row's items. */
-    onShuffleClick: (() -> Unit)? = null,
+    onRollClick: (() -> Unit)? = null,
     /** True while that re-roll's fetch is in flight — tumbles the dice icon and absorbs taps. */
-    shuffleInProgress: Boolean = false,
+    rollInProgress: Boolean = false,
     accessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
@@ -720,12 +720,12 @@ internal fun HomeRowTitle(
                 .weight(1f)
                 .semantics { heading() },
         )
-        if (onShuffleClick != null) {
+        if (onRollClick != null) {
             Spacer(modifier = Modifier.width(12.dp))
             // The dice tumbles while the re-fetch runs — the only affordance
             // feedback a roll gets (no spinner, content stays). Reduced-motion
             // users keep the static icon; the tap guard below still applies.
-            val diceRotation = if (shuffleInProgress && !isReducedMotion()) {
+            val diceRotation = if (rollInProgress && !isReducedMotion()) {
                 val transition = rememberInfiniteTransition(label = "diceRoll")
                 transition.animateFloat(
                     initialValue = 0f,
@@ -739,8 +739,8 @@ internal fun HomeRowTitle(
                 0f
             }
             IconButton(
-                onClick = onShuffleClick,
-                enabled = !shuffleInProgress,
+                onClick = onRollClick,
+                enabled = !rollInProgress,
             ) {
                 Icon(
                     imageVector = Tabler.Outline.Dice,

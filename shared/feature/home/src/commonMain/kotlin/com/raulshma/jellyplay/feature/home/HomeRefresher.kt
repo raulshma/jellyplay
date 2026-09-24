@@ -29,7 +29,6 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
-import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
@@ -223,7 +222,26 @@ internal class HomeRefresher(
     // ordered section list — the splice needs values on EVERY main fetch,
     // unlike the fixed grid which simply skips its state write.
     private val customDiscoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
+    /**
+     * Plain var on purpose, same rule as [lastFetchRacedPendingSync]:
+     * [fetchCustomSeerrRows] runs only inside [fetchOnce]'s mutex-serialized
+     * body on [scope]'s main-confined dispatcher — a single writer with no
+     * suspension between the memo write and the return read.
+     */
     private var customSeerrRowsCache: List<HomeSection> = emptyList()
+    /**
+     * Dice rolls that landed while a full refresh was ALREADY in flight:
+     * row id → rolled items. That fetch captured the row's pre-roll payloads
+     * before [rollDiscoverRow] seeded the network cache, so its sections
+     * write would transiently revert the on-screen roll; the write re-applies
+     * these entries instead (see [applyPendingRolledRows]) and clears them —
+     * later fetches serve the seeded cache and need no guard.
+     *
+     * Plain map on purpose: written by [rollDiscoverRow]'s job and consumed
+     * by [fetchOnce], both on [scope]'s main-confined dispatcher with no
+     * suspension between the drain and the clear.
+     */
+    private val pendingRolledRows = LinkedHashMap<String, List<MediaItem>>()
     private var lastContinueWatchingIds: Set<String> = emptySet()
     /**
      * Set when a fetch painted sections while the outbox drain was still
@@ -384,6 +402,12 @@ internal class HomeRefresher(
                             prefs = sectionPrefs,
                         )
 
+                        // A dice roll that landed while THIS fetch was in
+                        // flight must survive its sections write — re-apply
+                        // the rolled items over the pre-roll payloads the
+                        // fetch captured (see [pendingRolledRows]).
+                        val rolledSections = applyPendingRolledRows(splicedSections)
+
                         // Continue Reading progress bars: books carry no
                         // runTimeTicks, so the video fraction math cannot serve
                         // the row — the shared TOC-cache decode (also the
@@ -395,10 +419,10 @@ internal class HomeRefresher(
                         // fractions land as ONE emission — a two-step write
                         // painted paged-book cards on the percent fallback
                         // until the second update arrived.
-                        val bookFractions = decodeBookProgressFractionsFor(splicedSections)
-                        _state.update { it.copy(sections = splicedSections, bookProgressFractions = bookFractions) }
+                        val bookFractions = decodeBookProgressFractionsFor(rolledSections)
+                        _state.update { it.copy(sections = rolledSections, bookProgressFractions = bookFractions) }
 
-                        val continueWatching = splicedSections
+                        val continueWatching = rolledSections
                             .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                             ?.items ?: emptyList()
                         val currentIds = continueWatching.map { it.id }.toSet()
@@ -810,6 +834,12 @@ internal class HomeRefresher(
                     // so the periodic refresh replays THIS roll rather than
                     // re-querying the server (yet another reshuffle).
                     mediaRepository.seedDiscoverRowCache(row, items)
+                    // Register BEFORE the state patch below: a fetch that is
+                    // already in flight captured the pre-roll payloads and will
+                    // land its own sections write after this one — the entry
+                    // makes that write re-apply the rolled items (see
+                    // [applyPendingRolledRows]) instead of reverting the roll.
+                    pendingRolledRows[row.id] = items
                     Log.d(
                         TAG,
                         "roll ${row.id}: patched ${items.size} items, first=${items.firstOrNull()?.id} " +
@@ -843,6 +873,30 @@ internal class HomeRefresher(
                 }
                 Log.d(TAG, "roll ${row.id}: flag cleared")
                 _state.update { it.copy(rollingDiscoverRowIds = it.rollingDiscoverRowIds - row.id) }
+            }
+        }
+    }
+
+    /**
+     * Re-applies [pendingRolledRows] over the fetch's sections and drains the
+     * map — the fetch's own last word on sections, so a roll that completed
+     * mid-fetch keeps its freshly-rolled items on screen. Entries whose row
+     * the fetch doesn't carry (disabled / absent) are dropped with the drain:
+     * the roll had no section to patch either. No suspension between the
+     * drain and the clear, so a roll landing on the other side of this call
+     * registers cleanly into the empty map.
+     */
+    private fun applyPendingRolledRows(sections: List<HomeSection>): List<HomeSection> {
+        if (pendingRolledRows.isEmpty()) return sections
+        val rolledBySectionId = pendingRolledRows.mapKeys { (rowId, _) ->
+            HomeSectionType.DISCOVER.descriptor.idFor(rowId)
+        }
+        pendingRolledRows.clear()
+        return sections.map { section ->
+            if (section.type != HomeSectionType.DISCOVER) {
+                section
+            } else {
+                rolledBySectionId[section.id]?.let { section.copy(items = it) } ?: section
             }
         }
     }
@@ -882,14 +936,7 @@ internal class HomeRefresher(
     /** One Seerr row: builds the discover query from the row's filters, maps to a request-capable section (or null when empty/failed). */
     private suspend fun fetchSeerrDiscoverRow(row: DiscoverRowConfig, today: String): HomeSection? {
         val filters = row.seerrFilters
-        val params = SeerrDiscoverParams(
-            genreIds = filters.genres.map { it.id },
-            yearFrom = filters.yearFrom,
-            yearTo = filters.yearTo,
-            minVoteAverage = filters.minVoteAverage,
-            sortBy = filters.sort.apiValueFor(filters.media),
-            releaseDateGte = if (filters.upcomingOnly) today else null,
-        )
+        val params = filters.toSeerrDiscoverParams(today)
         val response = when (filters.media) {
             SeerrRowMedia.MOVIE -> seerrRepository.getDiscoverMovies(params = params)
             SeerrRowMedia.TV -> seerrRepository.getDiscoverTv(params = params)

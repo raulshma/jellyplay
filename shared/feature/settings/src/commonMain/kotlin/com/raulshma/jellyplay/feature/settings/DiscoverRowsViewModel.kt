@@ -20,8 +20,6 @@ import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.StudioRef
 import com.raulshma.jellyplay.core.model.TmdbGenreRef
 import com.raulshma.jellyplay.core.model.newDiscoverRowId
-import com.raulshma.jellyplay.core.model.withDiscoverRowEnabled
-import com.raulshma.jellyplay.core.model.withDiscoverRowMoved
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -190,18 +188,17 @@ class DiscoverRowsViewModel(
         editor.edit { homeDiscovery.removeDiscoverRow(rowId) }
     }
 
+    // These two route through the store's own read-modify-write commands
+    // (which read the CURRENT persisted state inside the edit) — NOT through
+    // setDiscoverRows with a value snapshotted off the StateFlow mirror,
+    // which loses an update when a rapid toggle+move pair interleaves before
+    // the mirror republishes.
     fun setDiscoverRowEnabled(rowId: String, enabled: Boolean) {
-        editor.edit {
-            val current = homeDiscoveryStore.homeDiscovery.value.discoverRows
-            homeDiscovery.setDiscoverRows(current.withDiscoverRowEnabled(rowId, enabled))
-        }
+        editor.edit { homeDiscovery.setDiscoverRowEnabled(rowId, enabled) }
     }
 
     fun moveDiscoverRow(rowId: String, up: Boolean) {
-        editor.edit {
-            val current = homeDiscoveryStore.homeDiscovery.value.discoverRows
-            homeDiscovery.setDiscoverRows(current.withDiscoverRowMoved(rowId, up) ?: current)
-        }
+        editor.edit { homeDiscovery.moveDiscoverRow(rowId, up) }
     }
 
     /** Creates a row from a template directly on the manage screen. */

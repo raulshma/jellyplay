@@ -61,10 +61,19 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_add_discover_row
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_back
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_edit
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_added_within
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_all
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_any
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_edit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_filters
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_genres
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_media
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_media_types
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_min_rating
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_min_vote
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_movies
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_name
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_preview
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_preview_empty
@@ -73,8 +82,16 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_people_selected
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_premiered_within
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_save
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_seerr_filters
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_source
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_source_my_server
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_source_seerr
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_status
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_studios
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_sort
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_tags
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_tv
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_years
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_upcoming
 
@@ -184,7 +201,7 @@ fun DiscoverRowEditorScreen(
                             FilterChip(
                                 selected = row.source == source,
                                 onClick = { viewModel.updateRow { it.copy(source = source) } },
-                                label = { Text(source.displayName) },
+                                label = { Text(discoverRowSourceLabel(source)) },
                             )
                         }
                     }
@@ -215,7 +232,7 @@ fun DiscoverRowEditorScreen(
                         EditorClickRow(
                             label = stringResource(Res.string.settings_discover_row_libraries),
                             value = if (row.libraryIds.isEmpty()) {
-                                "All"
+                                stringResource(Res.string.settings_discover_row_all)
                             } else {
                                 row.libraryIds.size.toString()
                             },
@@ -279,78 +296,50 @@ fun DiscoverRowEditorScreen(
         }
     }
 
-    if (showLibrariesSheet) {
-        TvSafeSheet(onDismissRequest = { showLibrariesSheet = false }) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                Text(
-                    stringResource(Res.string.settings_discover_row_libraries),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
-                val currentRow = draft?.row ?: return@Column
-                val selected = currentRow.libraryIds.toSet()
-                LazyColumn {
-                    items(libraryFolders.size, key = { libraryFolders[it].id }) { index ->
-                        val folder = libraryFolders[index]
-                        ListItem(
-                            headlineContent = { Text(folder.name) },
-                            trailingContent = {
-                                Switch(
-                                    checked = folder.id in selected || selected.isEmpty(),
-                                    onCheckedChange = { checked ->
-                                        viewModel.updateRow { r ->
-                                            val next = if (checked) {
-                                                (r.libraryIds + folder.id).distinct()
-                                            } else {
-                                                r.libraryIds - folder.id
-                                            }
-                                            r.copy(libraryIds = next)
-                                        }
-                                    },
-                                )
-                            },
-                        )
+    if (showLibrariesSheet && current != null) {
+        // Empty selection = the whole catalog: every library shows checked.
+        DiscoverRowToggleSheet(
+            title = stringResource(Res.string.settings_discover_row_libraries),
+            items = libraryFolders,
+            keyFor = { it.id },
+            labelFor = { it.name },
+            isChecked = { folder ->
+                val ids = current.row.libraryIds
+                ids.isEmpty() || folder.id in ids
+            },
+            onToggle = { folder, checked ->
+                viewModel.updateRow { r ->
+                    val next = if (checked) {
+                        (r.libraryIds + folder.id).distinct()
+                    } else {
+                        r.libraryIds - folder.id
                     }
+                    r.copy(libraryIds = next)
                 }
-            }
-        }
+            },
+            onDismissRequest = { showLibrariesSheet = false },
+        )
     }
 
-    if (showStudiosSheet) {
-        TvSafeSheet(onDismissRequest = { showStudiosSheet = false }) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                Text(
-                    stringResource(Res.string.settings_discover_row_studios),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
-                val currentRow = draft?.row ?: return@Column
-                val selected = currentRow.studios.map { it.id }.toSet()
-                LazyColumn {
-                    items(studios.size, key = { studios[it].id }) { index ->
-                        val studio = studios[index]
-                        ListItem(
-                            headlineContent = { Text(studio.name) },
-                            trailingContent = {
-                                Switch(
-                                    checked = studio.id in selected,
-                                    onCheckedChange = { checked ->
-                                        viewModel.updateRow { r ->
-                                            val next = if (checked) {
-                                                r.studios + StudioRef(studio.id, studio.name)
-                                            } else {
-                                                r.studios.filterNot { it.id == studio.id }
-                                            }
-                                            r.copy(studios = next)
-                                        }
-                                    },
-                                )
-                            },
-                        )
+    if (showStudiosSheet && current != null) {
+        DiscoverRowToggleSheet(
+            title = stringResource(Res.string.settings_discover_row_studios),
+            items = studios,
+            keyFor = { it.id },
+            labelFor = { it.name },
+            isChecked = { studio -> current.row.studios.any { it.id == studio.id } },
+            onToggle = { studio, checked ->
+                viewModel.updateRow { r ->
+                    val next = if (checked) {
+                        r.studios + StudioRef(studio.id, studio.name)
+                    } else {
+                        r.studios.filterNot { it.id == studio.id }
                     }
+                    r.copy(studios = next)
                 }
-            }
-        }
+            },
+            onDismissRequest = { showStudiosSheet = false },
+        )
     }
 
     if (showPeopleSheet) {
@@ -439,12 +428,12 @@ private fun JellyfinFilterGroups(
     val filters = row.filters
     SettingsGroup(
         icon = Tabler.Outline.Filter,
-        title = "Filters",
+        title = stringResource(Res.string.settings_discover_row_filters),
         initiallyExpanded = true,
         modifier = Modifier.padding(vertical = 8.dp),
     ) {
         // Media types
-        FilterChipFlow(label = "Media types") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_media_types)) {
             filterableMediaTypes.forEach { type ->
                 FilterChip(
                     selected = type in filters.mediaTypes,
@@ -456,7 +445,7 @@ private fun JellyfinFilterGroups(
             }
         }
         // Sort
-        FilterChipFlow(label = "Sort") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_sort)) {
             SortOption.entries.forEach { sort ->
                 FilterChip(
                     selected = filters.sortBy == sort,
@@ -466,7 +455,7 @@ private fun JellyfinFilterGroups(
             }
         }
         // Played status
-        FilterChipFlow(label = "Status") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_status)) {
             PlayedStatus.entries.forEach { status ->
                 FilterChip(
                     selected = filters.playedStatus == status,
@@ -476,18 +465,18 @@ private fun JellyfinFilterGroups(
             }
         }
         // Min rating
-        FilterChipFlow(label = "Min rating") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_min_rating)) {
             listOf(0f, 6f, 7f, 7.5f, 8f).forEach { rating ->
                 FilterChip(
                     selected = filters.minRating == rating,
                     onClick = { onUpdate { it.copy(filters = it.filters.withMinRating(rating)) } },
-                    label = { Text(if (rating == 0f) "Any" else "★ $rating") },
+                    label = { Text(if (rating == 0f) stringResource(Res.string.settings_discover_row_any) else "★ $rating") },
                 )
             }
         }
         // Genres
         if (genres.isNotEmpty()) {
-            FilterChipFlow(label = "Genres") {
+            FilterChipFlow(label = stringResource(Res.string.settings_discover_row_genres)) {
                 genres.take(24).forEach { genre ->
                     FilterChip(
                         selected = genre in filters.genres,
@@ -499,7 +488,7 @@ private fun JellyfinFilterGroups(
         }
         // Tags
         if (tags.isNotEmpty()) {
-            FilterChipFlow(label = "Tags") {
+            FilterChipFlow(label = stringResource(Res.string.settings_discover_row_tags)) {
                 tags.take(20).forEach { tag ->
                     FilterChip(
                         selected = tag in filters.tags,
@@ -510,11 +499,11 @@ private fun JellyfinFilterGroups(
             }
         }
         // Years
-        FilterChipFlow(label = "Years") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_years)) {
             FilterChip(
                 selected = filters.years.isEmpty(),
                 onClick = { onUpdate { it.copy(filters = it.filters.withYears(emptyList())) } },
-                label = { Text("Any") },
+                label = { Text(stringResource(Res.string.settings_discover_row_any)) },
             )
             listOf(2020..2026, 2010..2019, 2000..2009, 1990..1999).forEach { range ->
                 FilterChip(
@@ -530,7 +519,7 @@ private fun JellyfinFilterGroups(
                 FilterChip(
                     selected = row.addedWithinDays == days,
                     onClick = { onUpdate { it.copy(addedWithinDays = days) } },
-                    label = { Text(days?.let { "$it d" } ?: "Any") },
+                    label = { Text(days?.let { "$it d" } ?: stringResource(Res.string.settings_discover_row_any)) },
                 )
             }
         }
@@ -540,7 +529,7 @@ private fun JellyfinFilterGroups(
                 FilterChip(
                     selected = row.premieredWithinYears == years,
                     onClick = { onUpdate { it.copy(premieredWithinYears = years) } },
-                    label = { Text(years?.let { "$it y" } ?: "Any") },
+                    label = { Text(years?.let { "$it y" } ?: stringResource(Res.string.settings_discover_row_any)) },
                 )
             }
         }
@@ -557,20 +546,27 @@ private fun SeerrFilterGroups(
     val f = row.seerrFilters
     SettingsGroup(
         icon = Tabler.Outline.Filter,
-        title = "Seerr filters",
+        title = stringResource(Res.string.settings_discover_row_seerr_filters),
         initiallyExpanded = true,
         modifier = Modifier.padding(vertical = 8.dp),
     ) {
-        FilterChipFlow(label = "Media") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_media)) {
             SeerrRowMedia.entries.forEach { media ->
                 FilterChip(
                     selected = f.media == media,
                     onClick = { onUpdate { it.copy(seerrFilters = it.seerrFilters.copy(media = media)) } },
-                    label = { Text(if (media == SeerrRowMedia.MOVIE) "Movies" else "TV") },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (media == SeerrRowMedia.MOVIE) Res.string.settings_discover_row_movies
+                                else Res.string.settings_discover_row_tv,
+                            ),
+                        )
+                    },
                 )
             }
         }
-        FilterChipFlow(label = "Genres") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_genres)) {
             TmdbGenres.forMedia(f.media).forEach { genre ->
                 FilterChip(
                     selected = f.genres.any { it.id == genre.id },
@@ -584,18 +580,18 @@ private fun SeerrFilterGroups(
                 )
             }
         }
-        FilterChipFlow(label = "Min vote") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_min_vote)) {
             listOf(0f, 6f, 7f, 7.5f, 8f).forEach { vote ->
                 FilterChip(
                     selected = f.minVoteAverage == vote,
                     onClick = {
                         onUpdate { it.copy(seerrFilters = it.seerrFilters.copy(minVoteAverage = vote)) }
                     },
-                    label = { Text(if (vote == 0f) "Any" else "★ $vote") },
+                    label = { Text(if (vote == 0f) stringResource(Res.string.settings_discover_row_any) else "★ $vote") },
                 )
             }
         }
-        FilterChipFlow(label = "Sort") {
+        FilterChipFlow(label = stringResource(Res.string.settings_discover_row_sort)) {
             SeerrRowSort.entries.forEach { sort ->
                 FilterChip(
                     selected = f.sort == sort,
@@ -618,6 +614,59 @@ private fun List<TmdbGenreRef>.toggleTmdbGenre(genre: TmdbGenreRef): List<TmdbGe
     if (any { it.id == genre.id }) filterNot { it.id == genre.id } else this + genre
 
 // ── Small editor rows ──────────────────────────────────────────────────────
+
+/**
+ * Localized [DiscoverRowSource] label for the editor's source chips and the
+ * manage screen's row summaries — the enum itself stays resource-free
+ * (core:model has no string resources).
+ */
+@Composable
+internal fun discoverRowSourceLabel(source: DiscoverRowSource): String = when (source) {
+    DiscoverRowSource.JELLYFIN -> stringResource(Res.string.settings_discover_row_source_my_server)
+    DiscoverRowSource.SEERR -> stringResource(Res.string.settings_discover_row_source_seerr)
+}
+
+/**
+ * The shared shape of the editor's simple pickers (libraries, studios): a
+ * TV-safe sheet headed by [title] listing [items] with a trailing Switch per
+ * row. Selection stays live — [isChecked]/[onToggle] read and write through
+ * the caller's draft, so a toggle re-renders the sheet's rows immediately.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> DiscoverRowToggleSheet(
+    title: String,
+    items: List<T>,
+    keyFor: (T) -> Any,
+    labelFor: (T) -> String,
+    isChecked: (T) -> Boolean,
+    onToggle: (T, Boolean) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    TvSafeSheet(onDismissRequest = onDismissRequest) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(16.dp),
+            )
+            LazyColumn {
+                items(items.size, key = { keyFor(items[it]) }) { index ->
+                    val item = items[index]
+                    ListItem(
+                        headlineContent = { Text(labelFor(item)) },
+                        trailingContent = {
+                            Switch(
+                                checked = isChecked(item),
+                                onCheckedChange = { checked -> onToggle(item, checked) },
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

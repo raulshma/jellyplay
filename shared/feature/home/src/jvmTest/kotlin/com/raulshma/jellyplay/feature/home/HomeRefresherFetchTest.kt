@@ -440,6 +440,57 @@ class HomeRefresherFetchTest {
     }
 
     @Test
+    fun rollDiscoverRow_rollLandingMidFetch_survivesTheInFlightFetchsSectionsWrite() = runTest {
+        val discoverRow = HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor("dr_x"),
+            title = "Surprise Me",
+            type = HomeSectionType.DISCOVER,
+            items = listOf(item("m1")),
+        )
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+            Result.success(HomeSectionsResult(sections = listOf(discoverRow)))
+        val refresher = buildRefresher()
+        refresher.fetchOnce()
+        runCurrent()
+
+        // Park a full refresh mid-fetch (it captured the PRE-roll payload)…
+        val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+
+        // …then let the dice roll complete while that fetch is still parked.
+        val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+        val reRolled = listOf(item("r2"), item("r7"))
+        coEvery { mediaRepository.getDiscoverRowItems(any()) } returns Result.success(reRolled)
+        refresher.rollDiscoverRow(rolledRow)
+        runCurrent()
+        assertEquals(
+            reRolled,
+            refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
+            "the roll patches the row immediately",
+        )
+
+        // The in-flight fetch lands with the pre-roll payload it captured —
+        // it must NOT revert the roll that beat it.
+        fetchGate.complete(Result.success(HomeSectionsResult(sections = listOf(discoverRow))))
+        runCurrent()
+        assertEquals(
+            reRolled,
+            refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
+            "the fetch's sections write re-applies the pending roll instead of reverting it",
+        )
+
+        try {
+            advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+            runCurrent()
+            assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
+        } finally {
+            refresher.stop()
+        }
+    }
+
+    @Test
     fun rollDiscoverRow_failureOrEmptyFetch_keepsCurrentItems_andClearsTheFlag() = runTest {
         val discoverRow = HomeSection(
             id = HomeSectionType.DISCOVER.descriptor.idFor("dr_x"),

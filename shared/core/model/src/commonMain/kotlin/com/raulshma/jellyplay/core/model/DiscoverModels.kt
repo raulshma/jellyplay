@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import kotlinx.serialization.Serializable
 
 /**
@@ -17,12 +18,6 @@ enum class DiscoverRowSource {
     JELLYFIN,
     SEERR,
     ;
-
-    val displayName: String
-        get() = when (this) {
-            JELLYFIN -> "My Server"
-            SEERR -> "Seerr"
-        }
 }
 
 /** A Jellyfin studio picked for a discover row — id + display name kept together so the editor can re-render the chip without a lookup round-trip. */
@@ -107,6 +102,21 @@ data class SeerrRowFilters(
             yearTo != null ||
             minVoteAverage > 0f ||
             upcomingOnly
+
+    /**
+     * Builds the Seerr wire-query params for a row carrying these filters
+     * ([today] = ISO `yyyy-MM-dd`, only read when [upcomingOnly]). The single
+     * translation site between the persisted user-filter model and the
+     * `/api/v1/discover` vocabulary — kept here so callers can't drift copies.
+     */
+    fun toSeerrDiscoverParams(today: String): SeerrDiscoverParams = SeerrDiscoverParams(
+        genreIds = genres.map { it.id },
+        yearFrom = yearFrom,
+        yearTo = yearTo,
+        minVoteAverage = minVoteAverage,
+        sortBy = sort.apiValueFor(media),
+        releaseDateGte = if (upcomingOnly) today else null,
+    )
 }
 
 /**
