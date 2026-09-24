@@ -26,6 +26,18 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 
 /**
+ * Monotonic counter backing [HomeSectionsFetcher]'s discover-row epoch guard
+ * (see the `discoverRowEpoch` field there). Expect/actual rather than
+ * `kotlin.concurrent.atomics` — still experimental at this stdlib version,
+ * and no commonMain atomics seam exists in this module yet. JVM actual lives
+ * in jvmShared and serves both targets.
+ */
+internal expect class DiscoverRowEpoch() {
+    fun incrementAndGet(): Long
+    fun get(): Long
+}
+
+/**
  * The home feed's entire view of the transport: exactly the client sub-calls
  * the section-fetch choreography needs, with signatures borrowed verbatim
  * from [com.raulshma.jellyplay.core.network.api.LibraryApiClient] so both
@@ -120,6 +132,17 @@ internal class HomeSectionsFetcher(
     private val homeDiscoverRowCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.DISCOVER_ROW_TTL_MS)
 
     /**
+     * Bumped by the dice roll's [invalidateDiscoverRow] / [seedDiscoverRow]
+     * pair and read as the write guard in [cachedHomeSubCall]: a per-row
+     * sub-call that was already on the wire when the roll landed must not
+     * memoise its pre-roll response over the seeded items — the seed's put
+     * cannot stop a LATER write. Unguarded, the row would serve the pre-roll
+     * items from this TTL memo for up to [HomeFreshness.DISCOVER_ROW_TTL_MS],
+     * reverting the roll on every periodic refresh in that window.
+     */
+    private val discoverRowEpoch = DiscoverRowEpoch()
+
+    /**
      * Drops both sub-call caches so the next home fetch re-hits the server for the
      * latest/similar rows. The rows carry per-item UserData (played badge,
      * favorite heart, resume bar), so a watched/favorite/progress write must
@@ -139,15 +162,19 @@ internal class HomeSectionsFetcher(
      * evict can never touch another user's row.
      */
     fun invalidateDiscoverRow(rowId: String) {
+        // Stall-guard the in-flight per-row sub-calls first (see
+        // [discoverRowEpoch]): their completions must not memoise the
+        // pre-roll response over the seed that follows the re-query.
+        discoverRowEpoch.incrementAndGet()
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
         homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
     }
 
     /**
      * The discover-row sub-call cache key (minus identity scoping, which
-     * [TtlCache] applies): the fetch path composes it as
-     * `"<keyPart>_<limit>"` inside [cachedHomeSubCall]; [seedDiscoverRow]
-     * resolves the same string directly so the two writers can't drift.
+     * [TtlCache] applies): the single home of the key grammar — both the
+     * fetch path ([fetchDiscoverRows]) and [seedDiscoverRow] resolve their
+     * keys through it, so the two writers cannot drift.
      */
     private fun discoverRowCacheKey(rowId: String, limit: Int): String = "discover_${rowId}_$limit"
 
@@ -160,6 +187,10 @@ internal class HomeSectionsFetcher(
      */
     fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return
+        // Bump again at COMMIT time: a sub-call still on the wire across the
+        // whole roll (started before the invalidate above) stays stall-guarded
+        // against memoising its pre-roll response after this put.
+        discoverRowEpoch.incrementAndGet()
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
         homeDiscoverRowCache.put(identity, discoverRowCacheKey(row.id, row.limit), items)
     }
@@ -300,7 +331,13 @@ internal class HomeSectionsFetcher(
         // R is explicitly nullable: the transform legitimately yields null for
         // an empty/failed row, and mapConcurrentCatching drops those.
         val sections: List<HomeSection?> = Semaphore(3).mapConcurrentCatching(jellyfinRows) { row ->
-            cachedHomeSubCall(homeDiscoverRowCache, "discover_${row.id}", row.limit, force, identity) {
+            cachedHomeSubCall(
+                homeDiscoverRowCache,
+                discoverRowCacheKey(row.id, row.limit),
+                force,
+                identity,
+                currentEpoch = discoverRowEpoch::get,
+            ) {
                 sources.getDiscoverRowItems(row)
             }
                 .getOrNull()
@@ -324,21 +361,28 @@ internal class HomeSectionsFetcher(
      * next periodic refresh instead of the pre-pull rows reverting for up to
      * the TTL. Keys are scoped to the current [CacheIdentity] so a
      * user/server switch can never serve the previous identity's rows.
+     *
+     * [currentEpoch], when supplied, guards the write: an epoch bump mid-fetch
+     * (the discover-row dice roll's invalidate/seed pair, see
+     * [discoverRowEpoch]) means the response is already stale and must not be
+     * pinned over the seeded items.
      */
     private suspend fun cachedHomeSubCall(
         cache: TtlCache<List<MediaItem>>,
-        keyPart: String,
-        limit: Int,
+        cacheKey: String,
         force: Boolean,
         identity: CacheIdentity,
+        currentEpoch: (() -> Long)? = null,
         fetch: suspend () -> Result<List<MediaItem>>,
     ): Result<List<MediaItem>> {
-        val cacheKey = "${keyPart}_$limit"
         if (!force) {
             cache.get(identity, cacheKey)?.let { return Result.success(it) }
         }
+        val epochAtStart = currentEpoch?.invoke()
         return fetch().also { result ->
-            result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
+            if (currentEpoch == null || currentEpoch() == epochAtStart) {
+                result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
+            }
         }
     }
     /**
@@ -347,7 +391,7 @@ internal class HomeSectionsFetcher(
      * browse/library screens still go straight to the port for fresh data.
      */
     private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean, identity: CacheIdentity): Result<List<MediaItem>> =
-        cachedHomeSubCall(homeLatestMediaCache, parentId, limit, force, identity) { sources.getLatestMedia(parentId, limit) }
+        cachedHomeSubCall(homeLatestMediaCache, "${parentId}_$limit", force, identity) { sources.getLatestMedia(parentId, limit) }
 
     /**
      * Home-path wrapper around [HomeSectionSources.getSimilarItems] that
@@ -357,7 +401,7 @@ internal class HomeSectionsFetcher(
      * within the TTL window, so back-to-back refreshes skip it entirely.
      */
     private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean, identity: CacheIdentity): Result<List<MediaItem>> =
-        cachedHomeSubCall(homeSimilarCache, seedId, limit, force, identity) { sources.getSimilarItems(seedId, limit) }
+        cachedHomeSubCall(homeSimilarCache, "${seedId}_$limit", force, identity) { sources.getSimilarItems(seedId, limit) }
 
     /**
      * The recommendations ("Recommended For You") core. Preserved wart, kept

@@ -780,6 +780,11 @@
     <string name="settings_discover_row_upcoming_short">upcoming</string>
     <string name="settings_discover_row_source_my_server">My Server</string>
     <string name="settings_discover_row_source_seerr">Seerr</string>
+    <string name="settings_discover_row_added_days_short">added ≤ %1$dd</string>
+    <string name="settings_discover_row_premiered_years_short">last %1$dy</string>
+    <string name="settings_discover_row_sort_popularity">Popularity</string>
+    <string name="settings_discover_row_sort_rating">Rating</string>
+    <string name="settings_discover_row_sort_release_date">Release date</string>
     <string name="settings_favorites">Favorites</string>
     <string name="settings_pinned_collection_desc">A curated box-set of items</string>
     <string name="settings_pinned_playlist_desc">A saved playback playlist</string>

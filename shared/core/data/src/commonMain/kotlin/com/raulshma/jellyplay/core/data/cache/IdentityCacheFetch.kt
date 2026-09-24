@@ -44,7 +44,12 @@ import com.raulshma.jellyplay.core.model.TtlCache
  *    Sites without a lever at all (`getStudios`) take the `force = false`
  *    default; sites whose network call doesn't propagate the lever
  *    (`getLibraryFolders`) keep their fetch lambda as-is — both drifts are
- *    the migrated sites' real behaviour and are preserved.
+ *    the migrated sites' real behaviour and are preserved. The shape also
+ *    carries the epoch-guard dimension as an optional `currentEpoch`
+ *    parameter (the write guard below, verbatim) for the one site that
+ *    combines force with an invalidation it must not race: the home-sections
+ *    read, whose dice-roll invalidation must stall-guard an in-flight fetch
+ *    from re-pinning the pre-roll payload.
  *  - **Epoch-guarded write** — [getOrFetchGuarded]: the epoch is captured
  *    AFTER the miss, before the fetch, and the write lands only if the epoch
  *    is unchanged at completion — a stale fetch that raced an invalidation is
@@ -101,18 +106,22 @@ internal suspend fun <V : Any> TtlCache<V>.fetchThrough(
  * result. With `force = true` the entry is evicted before the read (the
  * freshness lever). [onFetched], when supplied, runs after the put on the
  * fetch path only (never on a hit) — the home-sections SWR persist's seam.
+ * [currentEpoch], when supplied, guards the write exactly as in
+ * [getOrFetchGuarded]: a fetch that raced an epoch bump returns its result
+ * but stores nothing.
  */
 suspend fun <V : Any> TtlCache<V>.getOrFetch(
     identity: suspend () -> CacheIdentity,
     key: String,
     force: Boolean = false,
     onFetched: (suspend (V) -> Unit)? = null,
+    currentEpoch: (() -> Long)? = null,
     fetch: suspend () -> Result<V>,
 ): Result<V> {
     val startIdentity = identity()
     if (force) remove(startIdentity, key)
     get(startIdentity, key)?.let { return Result.success(it) }
-    return fetchThrough(startIdentity, key, currentEpoch = null, onFetched = onFetched, fetch = fetch)
+    return fetchThrough(startIdentity, key, currentEpoch = currentEpoch, onFetched = onFetched, fetch = fetch)
 }
 
 /**

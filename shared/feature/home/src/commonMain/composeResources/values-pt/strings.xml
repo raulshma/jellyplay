@@ -47,8 +47,8 @@
     <!-- Home section headers. -->
     <string name="home_because_you_watched">Porque viu %1$s</string>
     <string name="home_discover">Descobrir</string>
-    <string name="home_discover_reroll">Misturar esta linha</string>
-    <string name="home_discover_reroll_failed">Não foi possível misturar esta linha</string>
+    <string name="home_discover_reroll">Rolar novamente esta linha</string>
+    <string name="home_discover_reroll_failed">Não foi possível rolar novamente esta linha</string>
     <string name="home_coming_soon">Em breve</string>
     <string name="home_continue_watching">Continuar a ver</string>
     <string name="home_continue_reading">Continuar a ler</string>

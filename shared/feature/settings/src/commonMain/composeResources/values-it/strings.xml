@@ -1834,6 +1834,11 @@
     <string name="settings_discover_row_upcoming_short">in arrivo</string>
     <string name="settings_discover_row_source_my_server">Mio server</string>
     <string name="settings_discover_row_source_seerr">Seerr</string>
+    <string name="settings_discover_row_added_days_short">aggiunto ≤ %1$dg</string>
+    <string name="settings_discover_row_premiered_years_short">ultimi %1$d anni</string>
+    <string name="settings_discover_row_sort_popularity">Popolarità</string>
+    <string name="settings_discover_row_sort_rating">Valutazione</string>
+    <string name="settings_discover_row_sort_release_date">Data di uscita</string>
     <string name="settings_confirm_library_reset">Conferma ripristino libreria</string>
     <string name="settings_confirm_library_reset_subtitle">Mostra una finestra di conferma prima di ripristinare la libreria ai valori predefiniti</string>
     <string name="settings_audio_device">Dispositivo audio</string>

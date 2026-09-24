@@ -47,8 +47,8 @@
     <!-- Home section headers. -->
     <string name="home_because_you_watched">%1$s을(를) 시청했기 때문에</string>
     <string name="home_discover">발견</string>
-    <string name="home_discover_reroll">이 줄 섞기</string>
-    <string name="home_discover_reroll_failed">이 줄을 섞을 수 없습니다</string>
+    <string name="home_discover_reroll">이 줄 다시 굴리기</string>
+    <string name="home_discover_reroll_failed">이 줄을 다시 굴릴 수 없습니다</string>
     <string name="home_coming_soon">공개 예정</string>
     <string name="home_continue_watching">이어보기</string>
     <string name="home_continue_reading">이어 읽기</string>

@@ -1832,6 +1832,11 @@
     <string name="settings_discover_row_upcoming_short">próximamente</string>
     <string name="settings_discover_row_source_my_server">Mi servidor</string>
     <string name="settings_discover_row_source_seerr">Seerr</string>
+    <string name="settings_discover_row_added_days_short">añadido ≤ %1$dd</string>
+    <string name="settings_discover_row_premiered_years_short">últ. %1$da</string>
+    <string name="settings_discover_row_sort_popularity">Popularidad</string>
+    <string name="settings_discover_row_sort_rating">Valoración</string>
+    <string name="settings_discover_row_sort_release_date">Fecha de estreno</string>
     <string name="settings_confirm_library_reset">Confirmar restablecimiento de biblioteca</string>
     <string name="settings_confirm_library_reset_subtitle">Muestra un diálogo de confirmación antes de restablecer la biblioteca a los valores predeterminados</string>
     <string name="settings_audio_device">Dispositivo de audio</string>

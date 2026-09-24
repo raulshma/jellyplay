@@ -233,6 +233,19 @@ class MediaRepositoryImpl internal constructor(
         clock = { timeSource.nowElapsedRealtimeMillis() },
     )
 
+    /**
+     * Bumped by the dice roll's [invalidateDiscoverRowCache] /
+     * [seedDiscoverRowCache] pair and read as [TtlCache.getOrFetch]'s write
+     * guard in [getHomeSections]: a fetch that was already in flight when the
+     * roll landed captured the row's pre-roll payloads, and its completion
+     * must not pin that assembled result back into [homeSectionsCache] — the
+     * clear inside the roll's seed cannot stop a LATER write. Unguarded, the
+     * next TTL-served periodic read would replay the pre-roll payload and
+     * revert the on-screen roll up to [HomeFreshness.REPO_MEMORY_TTL_MS]
+     * later. Same idiom as [MediaRepositoryInternals]' detail epoch.
+     */
+    private val discoverRollEpoch = java.util.concurrent.atomic.AtomicLong(0L)
+
     // Lazy staleness for the announced-user-data read groups (#157): the
     // eager eviction this replaces cleared caches at every user-data
     // mutation, forcing the NEXT read into a full blocking refetch even when
@@ -367,6 +380,7 @@ class MediaRepositoryImpl internal constructor(
                 // never on a cache hit, so a hit cannot slide the persisted row's
                 // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
                 onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
+                currentEpoch = discoverRollEpoch::get,
             ) {
                 // The query value object crosses the repo → network seam intact;
                 // effectiveForce (not force) so a consumed staleness marker
@@ -381,6 +395,10 @@ class MediaRepositoryImpl internal constructor(
         apiClient.getDiscoverRowItems(row)
 
     override fun invalidateDiscoverRowCache(rowId: String) {
+        // Stall-guard the in-flight home fetch FIRST (see [discoverRollEpoch]):
+        // its completion must not re-pin the pre-roll payload the clear below
+        // is about to drop.
+        discoverRollEpoch.incrementAndGet()
         apiClient.invalidateDiscoverRowCache(rowId)
         // The assembled home payload still carries the row's pre-roll items;
         // without this drop the next TTL-served periodic read would replay
@@ -391,6 +409,10 @@ class MediaRepositoryImpl internal constructor(
 
     override fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return
+        // Bump again at COMMIT time: a fetch still in flight across the whole
+        // roll (started before the invalidate above) stays stall-guarded
+        // against writing its pre-roll result after the seed.
+        discoverRollEpoch.incrementAndGet()
         apiClient.seedDiscoverRowCache(row, items)
         // Drop the assembled payload again at COMMIT time: a periodic fetch
         // that raced the roll (started before the pre-fetch invalidate, wrote

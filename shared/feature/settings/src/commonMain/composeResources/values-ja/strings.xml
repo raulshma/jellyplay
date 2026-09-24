@@ -1830,6 +1830,11 @@
     <string name="settings_discover_row_upcoming_short">今後公開</string>
     <string name="settings_discover_row_source_my_server">自分のサーバー</string>
     <string name="settings_discover_row_source_seerr">Seerr</string>
+    <string name="settings_discover_row_added_days_short">追加 ≤ %1$d日</string>
+    <string name="settings_discover_row_premiered_years_short">過去%1$d年</string>
+    <string name="settings_discover_row_sort_popularity">人気度</string>
+    <string name="settings_discover_row_sort_rating">評価</string>
+    <string name="settings_discover_row_sort_release_date">公開日</string>
     <string name="settings_confirm_library_reset">ライブラリのリセット確認</string>
     <string name="settings_confirm_library_reset_subtitle">ライブラリを既定値にリセットする前に確認ダイアログを表示</string>
     <string name="settings_audio_device">オーディオデバイス</string>

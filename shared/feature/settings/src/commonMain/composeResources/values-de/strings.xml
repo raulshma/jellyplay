@@ -1830,6 +1830,11 @@
     <string name="settings_discover_row_upcoming_short">kommend</string>
     <string name="settings_discover_row_source_my_server">Mein Server</string>
     <string name="settings_discover_row_source_seerr">Seerr</string>
+    <string name="settings_discover_row_added_days_short">hinzugefügt ≤ %1$dd</string>
+    <string name="settings_discover_row_premiered_years_short">letzte %1$d J.</string>
+    <string name="settings_discover_row_sort_popularity">Popularität</string>
+    <string name="settings_discover_row_sort_rating">Bewertung</string>
+    <string name="settings_discover_row_sort_release_date">Erscheinungsdatum</string>
     <string name="settings_confirm_library_reset">Zurücksetzen der Bibliothek bestätigen</string>
     <string name="settings_confirm_library_reset_subtitle">Zeigt einen Bestätigungsdialog, bevor die Bibliothek auf Standardwerte zurückgesetzt wird</string>
     <string name="settings_audio_device">Audiogerät</string>

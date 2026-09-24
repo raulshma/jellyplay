@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
+import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -57,7 +58,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_add_discover_row
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_added_days_short
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_movies
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_premiered_years_short
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_tv
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_upcoming_short
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
@@ -187,7 +190,7 @@ private fun DiscoverRowListEntry(
         },
         supportingContent = {
             Text(
-                text = "${discoverRowSourceLabel(row.source)} • ${describeDiscoverRow(row, discoverRowSummaryLabels())} • #$position",
+                text = "${discoverRowSourceLabel(row.source)} • ${describeDiscoverRow(row)} • #$position",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -256,63 +259,63 @@ private fun DiscoverRowListEntry(
     )
 }
 
-/** One-line human summary of the row's active filters (the list subtitle). [labels] supplies the localized bits. */
-internal fun describeDiscoverRow(
-    row: DiscoverRowConfig,
-    labels: DiscoverRowSummaryLabels,
-): String {
+/**
+ * One-line human summary of the row's active filters (the list subtitle).
+ * Composable on purpose: every localized bit resolves via [stringResource] /
+ * [MediaType.mediaTypeDisplayName] right where it's read, so arbitrary
+ * day/year values format correctly per locale instead of relying on a
+ * pre-resolved snapshot.
+ */
+@Composable
+internal fun describeDiscoverRow(row: DiscoverRowConfig): String {
     if (row.source == DiscoverRowSource.SEERR) {
         val f = row.seerrFilters
-        val media = if (f.media == com.raulshma.jellyplay.core.model.SeerrRowMedia.MOVIE) labels.movies else labels.tv
+        val media = if (f.media == com.raulshma.jellyplay.core.model.SeerrRowMedia.MOVIE) {
+            stringResource(Res.string.settings_discover_row_movies)
+        } else {
+            stringResource(Res.string.settings_discover_row_tv)
+        }
         val bits = mutableListOf(media)
         if (f.genres.isNotEmpty()) bits += f.genres.joinToString("/") { it.name }
-        if (f.upcomingOnly) bits += labels.upcoming
+        if (f.upcomingOnly) bits += stringResource(Res.string.settings_discover_row_upcoming_short)
         return bits.joinToString(" • ")
     }
     val f = row.filters
     val bits = mutableListOf<String>()
     if (f.mediaTypes.isNotEmpty()) {
-        bits += f.mediaTypes.joinToString("/") { it.name.lowercase().replace('_', ' ') }
+        bits += f.mediaTypes.map { it.mediaTypeDisplayName() }.joinToString("/")
     }
     if (f.genres.isNotEmpty()) bits += f.genres.joinToString("/") { it }
     if (f.playedStatus != com.raulshma.jellyplay.core.model.PlayedStatus.ALL) bits += f.playedStatus.displayName
     if (f.minRating > 0f) bits += "★ ${f.minRating}"
-    if (row.studios.isNotEmpty()) bits += row.studios.joinToString("/") { it.name }
-    if (row.people.isNotEmpty()) bits += row.people.joinToString("/") { it.name }
-    row.addedWithinDays?.let { bits += "added ≤ ${it}d" }
-    row.premieredWithinYears?.let { bits += "last ${it}y" }
+    if (row.studios.isNotEmpty()) bits += row.studios.map { it.name }.joinToString("/")
+    if (row.people.isNotEmpty()) bits += row.people.map { it.name }.joinToString("/")
+    row.addedWithinDays?.let { bits += stringResource(Res.string.settings_discover_row_added_days_short, it) }
+    row.premieredWithinYears?.let { bits += stringResource(Res.string.settings_discover_row_premiered_years_short, it) }
     return bits.joinToString(" • ").ifEmpty { f.sortBy.displayName }
 }
-
-/** Localized bits [describeDiscoverRow] interpolates — resolved per composition by [discoverRowSummaryLabels]. */
-internal data class DiscoverRowSummaryLabels(
-    val movies: String,
-    val tv: String,
-    val upcoming: String,
-)
-
-@Composable
-internal fun discoverRowSummaryLabels(): DiscoverRowSummaryLabels = DiscoverRowSummaryLabels(
-    movies = stringResource(Res.string.settings_discover_row_movies),
-    tv = stringResource(Res.string.settings_discover_row_tv),
-    upcoming = stringResource(Res.string.settings_discover_row_upcoming_short),
-)
 
 @Composable
 private fun DiscoverRowTemplatesPresentation(
     onUseTemplate: (DiscoverRowConfig) -> Unit,
 ) {
+    // Icon + factory pairs — the template's title is NOT duplicated here; the
+    // row renders factory().title (remembered below), so a factory rename
+    // can't drift against a stale list label.
     val templates = listOf(
-        Triple(Tabler.Outline.EyeOff, DiscoverRowTemplates::unwatchedMovies, "Unwatched Movies"),
-        Triple(Tabler.Outline.Star, DiscoverRowTemplates::highlyRated, "Highly Rated Gems"),
-        Triple(Tabler.Outline.CalendarPlus, DiscoverRowTemplates::newThisMonth, "New This Month"),
-        Triple(Tabler.Outline.Dice, DiscoverRowTemplates::randomSurprise, "Random Surprise"),
-        Triple(Tabler.Outline.TrendingUp, DiscoverRowTemplates::trendingSeerr, "Trending on Seerr"),
+        Tabler.Outline.EyeOff to DiscoverRowTemplates::unwatchedMovies,
+        Tabler.Outline.Star to DiscoverRowTemplates::highlyRated,
+        Tabler.Outline.CalendarPlus to DiscoverRowTemplates::newThisMonth,
+        Tabler.Outline.Dice to DiscoverRowTemplates::randomSurprise,
+        Tabler.Outline.TrendingUp to DiscoverRowTemplates::trendingSeerr,
     )
     Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
-        templates.forEachIndexed { index, (icon, factory, _) ->
+        templates.forEachIndexed { index, (icon, factory) ->
             val shape = expressiveListShape(index, templates.size, innerRadius = 0.dp)
             val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+            // One config per composition for the title; the click invokes the
+            // factory again so every use adds a row with its own fresh id.
+            val template = remember(factory) { factory() }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -335,7 +338,7 @@ private fun DiscoverRowTemplatesPresentation(
                     )
                     Spacer(Modifier.width(14.dp))
                     Text(
-                        factory().title,
+                        template.title,
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                         color = MaterialTheme.colorScheme.onSurface,
                     )

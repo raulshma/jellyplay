@@ -188,7 +188,8 @@ class HomeDiscoveryStoreTest {
         activate("userA")
         // A set persisted before the section shipped (no version stamp): the
         // union must surface the new row, and the untouched types must not be
-        // re-enabled if the user had disabled them.
+        // re-enabled if the user had disabled them. DISCOVER ships at v2 and
+        // unions in for the same reason.
         dataStore.edit {
             it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
                 """["CONTINUE_WATCHING","LATEST_MEDIA","RECOMMENDATIONS"]"""
@@ -197,6 +198,7 @@ class HomeDiscoveryStoreTest {
             setOf(
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
+                HomeSectionType.DISCOVER,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECOMMENDATIONS,
             ),
@@ -235,16 +237,21 @@ class HomeDiscoveryStoreTest {
             setOf(
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
+                HomeSectionType.DISCOVER,
                 HomeSectionType.NEXT_UP,
                 HomeSectionType.LATEST_MEDIA,
             ),
             slice().enabledHomeSectionTypes,
         )
         store.setSectionVisible(HomeSectionType.CONTINUE_READING, visible = false)
+        // DISCOVER survives the rewrite: the pre-version read unioned it in
+        // (shipped@2) and the read-modify-write only drops the member being
+        // disabled — same carry-through CONTINUE_READING documented above.
         assertEquals(
             setOf(
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.NEXT_UP,
+                HomeSectionType.DISCOVER,
                 HomeSectionType.LATEST_MEDIA,
             ),
             slice().enabledHomeSectionTypes,
@@ -264,9 +271,14 @@ class HomeDiscoveryStoreTest {
         // read-modify-write drops exactly the unioned member) under the new
         // version stamp — the parse cache must key on the stamp too, or it
         // serves the stale unioned value from the first read until restart.
+        // DISCOVER (also unioned at this pre-version stamp) carries through.
         store.setSectionVisible(HomeSectionType.CONTINUE_READING, visible = false)
         assertEquals(
-            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+            setOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.NEXT_UP,
+                HomeSectionType.DISCOVER,
+            ),
             slice().enabledHomeSectionTypes,
         )
     }

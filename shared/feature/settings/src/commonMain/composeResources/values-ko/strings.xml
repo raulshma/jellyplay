@@ -1830,6 +1830,11 @@
     <string name="settings_discover_row_upcoming_short">예정</string>
     <string name="settings_discover_row_source_my_server">내 서버</string>
     <string name="settings_discover_row_source_seerr">Seerr</string>
+    <string name="settings_discover_row_added_days_short">추가 ≤ %1$d일</string>
+    <string name="settings_discover_row_premiered_years_short">최근 %1$d년</string>
+    <string name="settings_discover_row_sort_popularity">인기도</string>
+    <string name="settings_discover_row_sort_rating">평점</string>
+    <string name="settings_discover_row_sort_release_date">개봉일</string>
     <string name="settings_confirm_library_reset">라이브러리 초기화 확인</string>
     <string name="settings_confirm_library_reset_subtitle">라이브러리를 기본값으로 초기화하기 전에 확인 대화상자 표시</string>
     <string name="settings_audio_device">오디오 기기</string>

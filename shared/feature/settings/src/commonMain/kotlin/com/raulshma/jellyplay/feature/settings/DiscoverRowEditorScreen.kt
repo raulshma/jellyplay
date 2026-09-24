@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.model.StudioRef
 import com.raulshma.jellyplay.core.model.TmdbGenreRef
 import com.raulshma.jellyplay.core.model.TmdbGenres
 import com.raulshma.jellyplay.core.model.filterableMediaTypes
+import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -89,6 +90,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_status
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_studios
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_sort
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_sort_popularity
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_sort_rating
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_sort_release_date
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_tags
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_tv
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_row_years
@@ -179,10 +183,8 @@ fun DiscoverRowEditorScreen(
                     initiallyExpanded = true,
                     modifier = Modifier.padding(vertical = 8.dp),
                 ) {
-                    EditorTextRow(
-                        label = stringResource(Res.string.settings_discover_row_name),
-                        value = row.title,
-                    )
+                    // The editable name field IS the row's title display — no
+                    // read-only mirror above it.
                     EditorInlineTextField(
                         value = row.title,
                         onValueChange = { value -> viewModel.updateRow { it.copy(title = value.take(60)) } },
@@ -418,6 +420,9 @@ fun DiscoverRowEditorScreen(
 
 // ── Jellyfin filter groups ─────────────────────────────────────────────────
 
+/** The rating/vote chip ladder shared by the Jellyfin min-rating and Seerr min-vote groups. */
+private val RatingChipSteps = listOf(0f, 6f, 7f, 7.5f, 8f)
+
 @Composable
 private fun JellyfinFilterGroups(
     row: DiscoverRowConfig,
@@ -440,7 +445,7 @@ private fun JellyfinFilterGroups(
                     onClick = {
                         onUpdate { it.copy(filters = it.filters.withMediaTypeToggled(type)) }
                     },
-                    label = { Text(type.name.lowercase().replace('_', ' ')) },
+                    label = { Text(type.mediaTypeDisplayName()) },
                 )
             }
         }
@@ -466,7 +471,7 @@ private fun JellyfinFilterGroups(
         }
         // Min rating
         FilterChipFlow(label = stringResource(Res.string.settings_discover_row_min_rating)) {
-            listOf(0f, 6f, 7f, 7.5f, 8f).forEach { rating ->
+            RatingChipSteps.forEach { rating ->
                 FilterChip(
                     selected = filters.minRating == rating,
                     onClick = { onUpdate { it.copy(filters = it.filters.withMinRating(rating)) } },
@@ -581,7 +586,7 @@ private fun SeerrFilterGroups(
             }
         }
         FilterChipFlow(label = stringResource(Res.string.settings_discover_row_min_vote)) {
-            listOf(0f, 6f, 7f, 7.5f, 8f).forEach { vote ->
+            RatingChipSteps.forEach { vote ->
                 FilterChip(
                     selected = f.minVoteAverage == vote,
                     onClick = {
@@ -596,7 +601,7 @@ private fun SeerrFilterGroups(
                 FilterChip(
                     selected = f.sort == sort,
                     onClick = { onUpdate { it.copy(seerrFilters = it.seerrFilters.copy(sort = sort)) } },
-                    label = { Text(sort.name.lowercase().replace('_', ' ')) },
+                    label = { Text(seerrRowSortLabel(sort)) },
                 )
             }
         }
@@ -608,6 +613,18 @@ private fun SeerrFilterGroups(
             },
         )
     }
+}
+
+/**
+ * Localized [SeerrRowSort] label for the sort chips — the enum itself stays
+ * resource-free (core:model has no string resources), same doctrine as
+ * [discoverRowSourceLabel].
+ */
+@Composable
+internal fun seerrRowSortLabel(sort: SeerrRowSort): String = when (sort) {
+    SeerrRowSort.POPULARITY -> stringResource(Res.string.settings_discover_row_sort_popularity)
+    SeerrRowSort.RATING -> stringResource(Res.string.settings_discover_row_sort_rating)
+    SeerrRowSort.RELEASE_DATE -> stringResource(Res.string.settings_discover_row_sort_release_date)
 }
 
 private fun List<TmdbGenreRef>.toggleTmdbGenre(genre: TmdbGenreRef): List<TmdbGenreRef> =
@@ -701,14 +718,6 @@ private fun EditorClickRow(label: String, value: String, onClick: () -> Unit) {
         headlineContent = { Text(label) },
         supportingContent = { Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         modifier = Modifier.clickable(onClick = onClick),
-    )
-}
-
-@Composable
-private fun EditorTextRow(label: String, value: String) {
-    ListItem(
-        headlineContent = { Text(label) },
-        supportingContent = { Text(value.ifBlank { "—" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
     )
 }
 

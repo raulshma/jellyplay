@@ -242,6 +242,17 @@ internal class HomeRefresher(
      * suspension between the drain and the clear.
      */
     private val pendingRolledRows = LinkedHashMap<String, List<MediaItem>>()
+
+    /**
+     * In-flight dice-roll jobs (row id → job), so the identity transitions can
+     * cancel them alongside [refreshJob]/[discoverJob]: a roll that raced a
+     * sign-out or user-switch belongs to the PREVIOUS identity — letting it
+     * land would patch the new identity's freshly painted sections, and its
+     * [pendingRolledRows] entry would make the next fetch re-apply the
+     * previous user's rolled items. Removed by each roll's finally (including
+     * a cancelled one, via [NonCancellable] clearing through the flag reset).
+     */
+    private val rollJobs = LinkedHashMap<String, Job>()
     private var lastContinueWatchingIds: Set<String> = emptySet()
     /**
      * Set when a fetch painted sections while the outbox drain was still
@@ -402,12 +413,6 @@ internal class HomeRefresher(
                             prefs = sectionPrefs,
                         )
 
-                        // A dice roll that landed while THIS fetch was in
-                        // flight must survive its sections write — re-apply
-                        // the rolled items over the pre-roll payloads the
-                        // fetch captured (see [pendingRolledRows]).
-                        val rolledSections = applyPendingRolledRows(splicedSections)
-
                         // Continue Reading progress bars: books carry no
                         // runTimeTicks, so the video fraction math cannot serve
                         // the row — the shared TOC-cache decode (also the
@@ -418,8 +423,23 @@ internal class HomeRefresher(
                         // and BEFORE the sections write so sections and
                         // fractions land as ONE emission — a two-step write
                         // painted paged-book cards on the percent fallback
-                        // until the second update arrived.
-                        val bookFractions = decodeBookProgressFractionsFor(rolledSections)
+                        // until the second update arrived. It also runs BEFORE
+                        // draining [pendingRolledRows] on purpose: the decode
+                        // suspends, and a roll landing mid-decode would
+                        // register into a map this fetch had already drained —
+                        // its state patch would then be reverted by this
+                        // write. Decoding from the pre-roll spliced sections
+                        // is still the right map: the decode reads only the
+                        // CONTINUE_READING section, and discover rolls never
+                        // touch it.
+                        val bookFractions = decodeBookProgressFractionsFor(splicedSections)
+
+                        // A dice roll that landed while THIS fetch was in
+                        // flight must survive its sections write — re-apply
+                        // the rolled items over the pre-roll payloads the
+                        // fetch captured (see [pendingRolledRows]). No
+                        // suspension between this drain and the write below.
+                        val rolledSections = applyPendingRolledRows(splicedSections)
                         _state.update { it.copy(sections = rolledSections, bookProgressFractions = bookFractions) }
 
                         val continueWatching = rolledSections
@@ -556,6 +576,7 @@ internal class HomeRefresher(
                 refreshJob?.cancel()
                 userDataRefreshJob?.cancel()
                 discoverJob?.cancel()
+                cancelRollsForIdentityChange()
                 // The raced-sync bypass described sections this reset just
                 // dropped — it must not outlive the identity that raced.
                 lastFetchRacedPendingSync = false
@@ -630,6 +651,7 @@ internal class HomeRefresher(
         // identity; letting it land would repopulate the just-cleared
         // discoverSections with the previous user's rows.
         discoverJob?.cancel()
+        cancelRollsForIdentityChange()
         val sectionPrefs = sectionPrefsProvider()
         val cachedSections = orderedCachedSections(sectionPrefs)
         // Same single-emission pairing as the fetch write: the SWR paint and
@@ -806,7 +828,7 @@ internal class HomeRefresher(
         if (!accepted) return
         val rollStartedAt = TimeSource.Monotonic.markNow()
         Log.d(TAG, "roll ${row.id}: accepted, flag up")
-        scope.launch {
+        rollJobs[row.id] = scope.launch {
             // The roll's outcome for the caller: true when the row's items
             // were swapped, false when the fetch failed/returned nothing
             // (the row keeps its current items — reported, not silent).
@@ -872,9 +894,24 @@ internal class HomeRefresher(
                     if (remainingMs > 0) delay(remainingMs)
                 }
                 Log.d(TAG, "roll ${row.id}: flag cleared")
+                rollJobs.remove(row.id)
                 _state.update { it.copy(rollingDiscoverRowIds = it.rollingDiscoverRowIds - row.id) }
             }
         }
+    }
+
+    /**
+     * Identity-transition drain of the dice-roll machinery (see [rollJobs]):
+     * cancel the in-flight rolls — their finally clears the rolling flags via
+     * [NonCancellable] — and drop the pending-rolls entries so the incoming
+     * identity's first fetch doesn't re-apply the previous user's rolled
+     * items. The network-layer caches they seeded are cleared wholesale by
+     * the identity transition itself.
+     */
+    private fun cancelRollsForIdentityChange() {
+        rollJobs.values.forEach { it.cancel() }
+        rollJobs.clear()
+        pendingRolledRows.clear()
     }
 
     /**

@@ -148,7 +148,7 @@ class HomeDiscoveryStore constructor(
          * then disables the section keeps that choice.
          */
         val HOME_ENABLED_SECTION_TYPES_VERSION = intPreferencesKey("home_enabled_section_types_version")
-        const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 1
+        const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 2
         /**
          * The version at which [HomeSectionType.CONTINUE_READING] shipped —
          * a persisted set stamped older than this unions it in on read (see
@@ -158,6 +158,14 @@ class HomeDiscoveryStore constructor(
          * shipped-at entry, never editing this one.
          */
         const val CONTINUE_READING_SHIPPED_AT_VERSION = 1
+        /**
+         * The version at which [HomeSectionType.DISCOVER] (the custom discover
+         * rows block) shipped — same union-in mechanics as
+         * [CONTINUE_READING_SHIPPED_AT_VERSION]: without the entry, every
+         * user whose enabled-set predates the section would never see the
+         * DISCOVER block render, no matter their row config.
+         */
+        const val DISCOVER_SHIPPED_AT_VERSION = 2
         val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
         val HOME_LIBRARY_SECTION_OVERRIDES = stringPreferencesKey("home_library_section_overrides")
         /** Legacy all-or-nothing "hide library from home" key — kept only to migrate. */
@@ -476,6 +484,8 @@ class HomeDiscoveryStore constructor(
         private val sectionsShippedByVersion: List<Pair<Int, HomeSectionType>> = listOf(
             // v1: reading-experience 2.0's Continue Reading row
             Keys.CONTINUE_READING_SHIPPED_AT_VERSION to HomeSectionType.CONTINUE_READING,
+            // v2: the custom discover rows block (Home Screen settings hub)
+            Keys.DISCOVER_SHIPPED_AT_VERSION to HomeSectionType.DISCOVER,
         )
 
         /**

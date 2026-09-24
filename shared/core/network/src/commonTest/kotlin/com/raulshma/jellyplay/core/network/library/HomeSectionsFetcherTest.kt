@@ -501,4 +501,64 @@ class HomeSectionsFetcherTest {
         assertEquals(2, fake.calls.count { it.startsWith("latest:") })
         assertEquals(listOf("post-write-row"), latestRows(after).single().items.map { it.id })
     }
+
+    // ── discover-row dice roll (seed / epoch-stall-guard) ────────────────────
+
+    private fun discoverRow(id: String) =
+        com.raulshma.jellyplay.core.model.DiscoverRowConfig(id = id, title = "Row $id")
+
+    private fun discoverRows(result: HomeSectionsResult) =
+        result.sections.filter { it.type == HomeSectionType.DISCOVER }
+
+    @Test
+    fun `a rolled discover row is served from the seed without re-querying the server`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val f = fetcher(fake)
+        val row = discoverRow("r1")
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(row),
+        )
+
+        // The dice roll's commit: seed the freshly rolled items as if fetched.
+        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")))
+        val after = f.fetch(query)
+
+        assertEquals(0, fake.calls.count { it.startsWith("discover:") })
+        assertEquals(
+            listOf("rolled-1", "rolled-2"),
+            discoverRows(after).single().items.map { it.id },
+        )
+    }
+
+    @Test
+    fun `a discover sub-call in flight when the roll lands must not memoise its pre-roll response`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.discoverRowResults += Result.success(listOf(item("pre-roll-1"), item("pre-roll-2")))
+        val f = fetcher(fake)
+        val row = discoverRow("r1")
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(row),
+        )
+
+        // The race the epoch guard exists for: a periodic fetch is already on
+        // the wire for the row when the user rolls the dice. The fetch's own
+        // sections write is repaired one layer up (HomeRefresher's pending
+        // rolls) — HERE the claim is the cache: its pre-roll response must not
+        // overwrite the seed and revert the row for the TTL window.
+        val gate = fake.gate("discover:r1:${row.limit}")
+        val first = launch { f.fetch(query) }
+        runCurrent() // the sub-call is now parked on the gate
+        f.invalidateDiscoverRow("r1")
+        f.seedDiscoverRow(row, listOf(item("rolled-1")))
+        gate.complete(Unit)
+        first.join()
+
+        // TTL is fresh and the only memo entry is the seed: the next fetch
+        // serves the rolled items with zero new port calls.
+        val after = f.fetch(query)
+        assertEquals(1, fake.calls.count { it.startsWith("discover:") })
+        assertEquals(listOf("rolled-1"), discoverRows(after).single().items.map { it.id })
+    }
 }
