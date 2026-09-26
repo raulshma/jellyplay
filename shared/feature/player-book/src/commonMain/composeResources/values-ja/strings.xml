@@ -79,4 +79,7 @@
     <string name="book_reader_auto_scroll_speed">自動スクロール速度</string>
     <string name="book_reader_auto_scroll_start">自動スクロールを開始</string>
     <string name="book_reader_auto_scroll_stop">自動スクロールを停止</string>
+    <string name="book_reader_layout">レイアウト</string>
+    <string name="book_reader_layout_single">単ページ</string>
+    <string name="book_reader_layout_double">見開き</string>
 </resources>

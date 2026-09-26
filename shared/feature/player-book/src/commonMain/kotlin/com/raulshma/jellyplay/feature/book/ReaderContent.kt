@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,6 +70,7 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
+import com.raulshma.jellyplay.core.datastore.reader.ReadingLayout
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.model.currentPlatform
@@ -123,6 +126,9 @@ internal fun PagedReaderContent(
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val pdfOutline by viewModel.pdfOutline.collectAsStateWithLifecycle()
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
+    // Per-book double-page (spread) mode — the pager steps slots, everything
+    // else stays page-based (see SpreadSlots).
+    val layout by viewModel.readingLayout.collectAsStateWithLifecycle()
     val brightnessPct = prefs.global.brightnessPct
     val volumeKeyPaging = prefs.global.volumeKeyPaging
     val animatedPageTurns = prefs.global.animatedPageTurns
@@ -168,37 +174,73 @@ internal fun PagedReaderContent(
                 onDoubleTap = { doubleTapZoomToken++ },
             ),
     ) {
-        val pagerState = rememberPagerState(initialPage = content.currentPage) { content.pageCount }
+        // The pager steps SLOTS (one page in SINGLE, a spread in DOUBLE); the
+        // VM and every tick/bookmark stay page-based — the mapping happens only
+        // at this boundary. Toggling the layout re-keys the state so the pager
+        // re-anchors on the current page's slot.
+        val slotCount = SpreadSlots.slotCount(content.pageCount, layout)
+        val currentSlot = SpreadSlots.slotForPage(content.currentPage, content.pageCount, layout)
+        val pagerState = key(layout) {
+            rememberPagerState(initialPage = currentSlot) { slotCount }
+        }
         // The page-turn protocol lives in the coordinator (PagedPagerCoordinator
         // owns the ordering contract KDoc): settle/swipe reporting installs once,
         // VM-driven paging rides turnTo's guard, rail/slider jumps ride jumpTo.
         val coordinator = rememberPagedPagerCoordinator(
             pagerState = pagerState,
             animated = { prefs.global.animatedPageTurns },
-            onPageSettled = viewModel::onPageChanged,
+            // Settles report a SLOT; the VM learns the slot's lead page.
+            onPageSettled = { slot ->
+                viewModel.onPageChanged(SpreadSlots.firstPageOfSlot(slot, content.pageCount, layout))
+            },
         )
         LaunchedEffect(coordinator) { coordinator.attach(this) }
         // VM-driven paging (keyboard, slider, tap zones, outline/bookmark
         // jumps): the uiState page is already the truth — the coordinator
         // animates or snaps the pager to it, skipping pages the pager holds
         // or already flies to (which makes the settle round trip idempotent).
-        LaunchedEffect(coordinator, content.currentPage, animatedPageTurns) {
-            coordinator.turnTo(content.currentPage)
+        LaunchedEffect(coordinator, content.currentPage, animatedPageTurns, layout) {
+            coordinator.turnTo(currentSlot)
         }
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             reverseLayout = direction == ReadingDirection.RTL,
             key = { it },
-        ) { page ->
-            PageTile(
-                pageIndex = page,
-                widthPx = surfaceWidthPx,
-                heightPx = surfaceHeightPx,
-                fitMode = fitMode,
-                doubleTapZoomToken = if (page == content.currentPage) doubleTapZoomToken else 0,
-                viewModel = viewModel,
-            )
+        ) { slot ->
+            val pages = SpreadSlots.pagesOfSlot(slot, content.pageCount, layout)
+            when {
+                // Spread: two tiles side by side (the lead page on the left in
+                // LTR, on the right in RTL — manga's page flow), each rastered
+                // to half the surface width.
+                pages.size == 2 -> {
+                    val arranged = if (direction == ReadingDirection.RTL) pages.reversed() else pages
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        arranged.forEach { page ->
+                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                PageTile(
+                                    pageIndex = page,
+                                    widthPx = surfaceWidthPx / 2,
+                                    heightPx = surfaceHeightPx,
+                                    fitMode = fitMode,
+                                    doubleTapZoomToken = if (page == content.currentPage) doubleTapZoomToken else 0,
+                                    viewModel = viewModel,
+                                )
+                            }
+                        }
+                    }
+                }
+                else -> pages.forEach { page ->
+                    PageTile(
+                        pageIndex = page,
+                        widthPx = surfaceWidthPx,
+                        heightPx = surfaceHeightPx,
+                        fitMode = fitMode,
+                        doubleTapZoomToken = if (page == content.currentPage) doubleTapZoomToken else 0,
+                        viewModel = viewModel,
+                    )
+                }
+            }
         }
 
         // Above the pages, under the chrome — controls stay full-brightness.
@@ -220,7 +262,9 @@ internal fun PagedReaderContent(
                     val page = tick.page ?: return@ReaderTocRail
                     // Pager-first jump (the coordinator contract's jumpTo
                     // half): the VM learns through the settle collector.
-                    scope.launch { coordinator.jumpTo(page) }
+                    scope.launch {
+                        coordinator.jumpTo(SpreadSlots.slotForPage(page, content.pageCount, layout))
+                    }
                 },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -255,7 +299,9 @@ internal fun PagedReaderContent(
                 onSeekPage = { page ->
                     // Pager-first jump (the coordinator contract's jumpTo
                     // half): the VM follows through the settle collector.
-                    scope.launch { coordinator.jumpTo(page) }
+                    scope.launch {
+                        coordinator.jumpTo(SpreadSlots.slotForPage(page, content.pageCount, layout))
+                    }
                 },
             )
         }
@@ -263,10 +309,12 @@ internal fun PagedReaderContent(
         if (sheets.showSettings) {
             PagedSettingsSheet(
                 direction = direction,
+                layout = layout,
                 tocAvailable = content.format == BookFormat.PDF,
                 fitMode = fitMode,
                 prefs = prefs,
                 onSetDirection = viewModel::setReadingDirection,
+                onSetLayout = viewModel::setReadingLayout,
                 onSetFitMode = { fitMode = it },
                 onBehaviorChange = viewModel.preferences::applyBehavior,
                 onOpenToc = { sheets.showSettings = false; sheets.showToc = true },

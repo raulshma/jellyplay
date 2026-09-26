@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
 class BookReaderViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 43
+    private val maxPublicInternalMembers = 45
 
     /**
      * A class-body declaration line at the ViewModel's single level of

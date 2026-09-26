@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
+import com.raulshma.jellyplay.core.datastore.reader.ReadingLayout
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.model.BookFormat
@@ -135,6 +136,10 @@ class BookReaderViewModel(
 
     private val _readingDirection = MutableStateFlow(ReadingDirection.LTR)
     val readingDirection: StateFlow<ReadingDirection> = _readingDirection.asStateFlow()
+
+    /** Per-book paged layout (the manga double-page/spread toggle). */
+    private val _readingLayout = MutableStateFlow(ReadingLayout.SINGLE)
+    val readingLayout: StateFlow<ReadingLayout> = _readingLayout.asStateFlow()
 
     /**
      * The reader preference snapshot ([ReaderPreferences.snapshot]) — every
@@ -389,6 +394,7 @@ class BookReaderViewModel(
                     userDirectionPinned = true
                     _readingDirection.value = snap.direction
                 }
+                _readingLayout.value = snap.layout
             }
         }
         // Single-flight: a re-load cancels the in-flight fetch/open (which also
@@ -555,11 +561,26 @@ class BookReaderViewModel(
 
     /** Keyboard / tap-zone paging. The pager follows [currentPage] via the screen's sync effect. */
     fun nextPage() {
-        onPageChanged(currentPage + 1)
+        onPageChanged(nextSlotStart())
     }
 
     fun previousPage() {
-        onPageChanged(currentPage - 1)
+        onPageChanged(previousSlotStart())
+    }
+
+    /** In DOUBLE layout a turn steps a whole spread; the result is a slot's lead page. */
+    private fun nextSlotStart(): Int {
+        val pageCount = document?.pageCount ?: return currentPage + 1
+        val layout = _readingLayout.value
+        val slot = SpreadSlots.slotForPage(currentPage, pageCount, layout)
+        return SpreadSlots.firstPageOfSlot(slot + 1, pageCount, layout)
+    }
+
+    private fun previousSlotStart(): Int {
+        val pageCount = document?.pageCount ?: return currentPage - 1
+        val layout = _readingLayout.value
+        val slot = SpreadSlots.slotForPage(currentPage, pageCount, layout)
+        return SpreadSlots.firstPageOfSlot(slot - 1, pageCount, layout)
     }
 
     /**
@@ -744,6 +765,12 @@ class BookReaderViewModel(
     fun toggleControls() {
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
         _uiState.value = ready.copy(showControls = !ready.showControls)
+    }
+
+    /** Per-book double-page (spread) toggle — persists like the direction. */
+    fun setReadingLayout(layout: ReadingLayout) {
+        _readingLayout.value = layout
+        preferences.setReadingLayout(layout)
     }
 
     fun setReadingDirection(direction: ReadingDirection) {

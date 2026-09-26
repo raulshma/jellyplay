@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.datastore.reader.PerBookAppearance
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
+import com.raulshma.jellyplay.core.datastore.reader.ReadingLayout
 import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
 import com.raulshma.jellyplay.core.datastore.reader.ReaderSlice
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
@@ -27,6 +28,8 @@ data class ReaderPrefsSnapshot(
     val perBook: PerBookAppearance? = null,
     val direction: ReadingDirection = ReadingDirection.LTR,
     val directionPinned: Boolean = false,
+    /** Per-book paged layout (manga double-page mode); SINGLE when unset. */
+    val layout: ReadingLayout = ReadingLayout.SINGLE,
 ) {
     /** Per-book override axis ?: the global one — the single render truth. */
     val effective: EffectiveAppearance
@@ -308,6 +311,14 @@ class ReaderPreferences(
         }
     }
 
+    /** Per-book paged layout (double-page/spread mode for manga). */
+    fun setReadingLayout(layout: ReadingLayout) {
+        val id = _snapshot.value.itemId ?: return
+        write(persist = { store.setReadingLayout(id, layout) }) {
+            it.copy(layout = layout)
+        }
+    }
+
     /** The exact-resume anchor read at open time (ADR-0003 point 4). */
     fun lastCfi(itemId: String): String? = store.lastCfi(itemId)
 
@@ -356,6 +367,7 @@ class ReaderPreferences(
             perBook = id?.let { slice.perBookAppearance[it] },
             direction = id?.let { slice.readingDirections[it] } ?: ReadingDirection.LTR,
             directionPinned = id != null && slice.readingDirections.containsKey(id),
+            layout = id?.let { slice.readingLayouts[it] } ?: ReadingLayout.SINGLE,
         )
     }
 

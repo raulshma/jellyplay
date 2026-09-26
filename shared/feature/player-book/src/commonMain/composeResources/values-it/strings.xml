@@ -79,4 +79,7 @@
     <string name="book_reader_auto_scroll_speed">Velocità di scorrimento automatico</string>
     <string name="book_reader_auto_scroll_start">Avvia lo scorrimento automatico</string>
     <string name="book_reader_auto_scroll_stop">Interrompi lo scorrimento automatico</string>
+    <string name="book_reader_layout">Layout</string>
+    <string name="book_reader_layout_single">Pagina singola</string>
+    <string name="book_reader_layout_double">Doppia pagina</string>
 </resources>

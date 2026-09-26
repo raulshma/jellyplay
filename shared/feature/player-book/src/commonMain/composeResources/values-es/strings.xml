@@ -79,4 +79,7 @@
     <string name="book_reader_auto_scroll_speed">Velocidad de desplazamiento automático</string>
     <string name="book_reader_auto_scroll_start">Iniciar desplazamiento automático</string>
     <string name="book_reader_auto_scroll_stop">Detener el desplazamiento automático</string>
+    <string name="book_reader_layout">Diseño</string>
+    <string name="book_reader_layout_single">Página simple</string>
+    <string name="book_reader_layout_double">Doble página</string>
 </resources>

@@ -79,4 +79,7 @@
     <string name="book_reader_auto_scroll_speed">自动滚动速度</string>
     <string name="book_reader_auto_scroll_start">开始自动滚动</string>
     <string name="book_reader_auto_scroll_stop">停止自动滚动</string>
+    <string name="book_reader_layout">版式</string>
+    <string name="book_reader_layout_single">单页</string>
+    <string name="book_reader_layout_double">双页</string>
 </resources>

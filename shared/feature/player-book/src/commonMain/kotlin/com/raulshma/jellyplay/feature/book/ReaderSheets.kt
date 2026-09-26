@@ -46,6 +46,7 @@ import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
 import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
+import com.raulshma.jellyplay.core.datastore.reader.ReadingLayout
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.feature.book.epub.EpubSearchResult
@@ -60,6 +61,9 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookm
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmarks_empty
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_dialog_cancel
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direction_ltr
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_layout
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_layout_double
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_layout_single
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direction_rtl
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_fit_mode
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_fit_original
@@ -191,10 +195,12 @@ private fun SettingsSwitchRow(label: String, checked: Boolean, onChange: (Boolea
 @Composable
 internal fun PagedSettingsSheet(
     direction: ReadingDirection,
+    layout: ReadingLayout,
     tocAvailable: Boolean,
     fitMode: ReaderFitMode,
     prefs: ReaderPrefsSnapshot,
     onSetDirection: (ReadingDirection) -> Unit,
+    onSetLayout: (ReadingLayout) -> Unit,
     onSetFitMode: (ReaderFitMode) -> Unit,
     onBehaviorChange: (ReaderBehaviorState) -> Unit,
     onOpenToc: () -> Unit,
@@ -219,6 +225,22 @@ internal fun PagedSettingsSheet(
                     selected = direction == ReadingDirection.RTL,
                     onClick = { onSetDirection(ReadingDirection.RTL) },
                     label = { Text(stringResource(Res.string.book_reader_direction_rtl)) },
+                )
+            }
+            SectionLabel(text = stringResource(Res.string.book_reader_layout), topPadding = 8.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                FilterChip(
+                    selected = layout == ReadingLayout.SINGLE,
+                    onClick = { onSetLayout(ReadingLayout.SINGLE) },
+                    label = { Text(stringResource(Res.string.book_reader_layout_single)) },
+                )
+                FilterChip(
+                    selected = layout == ReadingLayout.DOUBLE,
+                    onClick = { onSetLayout(ReadingLayout.DOUBLE) },
+                    label = { Text(stringResource(Res.string.book_reader_layout_double)) },
                 )
             }
             SectionLabel(text = stringResource(Res.string.book_reader_fit_mode), topPadding = 8.dp)

@@ -79,4 +79,7 @@
     <string name="book_reader_auto_scroll_speed">자동 스크롤 속도</string>
     <string name="book_reader_auto_scroll_start">자동 스크롤 시작</string>
     <string name="book_reader_auto_scroll_stop">자동 스크롤 중지</string>
+    <string name="book_reader_layout">레이아웃</string>
+    <string name="book_reader_layout_single">단페이지</string>
+    <string name="book_reader_layout_double">두 페이지</string>
 </resources>

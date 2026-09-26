@@ -26,6 +26,17 @@ enum class ReadingDirection {
 }
 
 /**
+ * Paged-book layout: one page per screen turn, or a two-page spread (manga /
+ * double-page mode). Lives beside [ReadingDirection] for the same reason —
+ * a pure reader preference with no server-side counterpart.
+ */
+@Serializable
+enum class ReadingLayout {
+    SINGLE,
+    DOUBLE,
+}
+
+/**
  * Global reflowable-book appearance theme. Lives in the datastore module (not
  * core/model) for the same reason as [ReadingDirection]: a pure reader
  * preference with no server-side counterpart.
@@ -95,6 +106,7 @@ class ReaderStore constructor(
 
     internal object Keys {
         val READING_DIRECTIONS = stringPreferencesKey("reader_reading_directions")
+        val READER_READING_LAYOUTS = stringPreferencesKey("reader_reading_layouts")
         val READER_THEME = stringPreferencesKey("reader_theme")
         val READER_FONT_SIZE_PX = intPreferencesKey("reader_font_size_px")
         val READER_FONT_FAMILY = stringPreferencesKey("reader_font_family")
@@ -155,6 +167,7 @@ class ReaderStore constructor(
      */
     internal fun read(prefs: Preferences): ReaderSlice = ReaderSlice(
         readingDirections = decodeDirections(prefs[Keys.READING_DIRECTIONS]),
+        readingLayouts = decodeLayouts(prefs[Keys.READER_READING_LAYOUTS]),
         readerTheme = decodeTheme(prefs[Keys.READER_THEME]),
         readerFontSizePx = decodeFontSize(prefs[Keys.READER_FONT_SIZE_PX]),
         fontFamily = decodeFontFamily(prefs[Keys.READER_FONT_FAMILY]),
@@ -187,6 +200,20 @@ class ReaderStore constructor(
             prefs[Keys.READING_DIRECTIONS] = PreferenceCodec.json.encodeToString(
                 EncodedDirections.serializer(),
                 EncodedDirections(updated),
+            )
+        }
+    }
+
+    /** The paged layout for [itemId], defaulting to [ReadingLayout.SINGLE]. */
+    fun readingLayout(itemId: String): ReadingLayout =
+        reader.value.readingLayouts[itemId] ?: ReadingLayout.SINGLE
+
+    suspend fun setReadingLayout(itemId: String, layout: ReadingLayout) {
+        dataStore.edit { prefs ->
+            val updated = decodeLayouts(prefs[Keys.READER_READING_LAYOUTS]) + (itemId to layout)
+            prefs[Keys.READER_READING_LAYOUTS] = PreferenceCodec.json.encodeToString(
+                EncodedLayouts.serializer(),
+                EncodedLayouts(updated),
             )
         }
     }
@@ -379,6 +406,7 @@ class ReaderStore constructor(
      */
     internal val resetKeys: List<Preferences.Key<*>> = listOf(
         Keys.READING_DIRECTIONS,
+        Keys.READER_READING_LAYOUTS,
         Keys.READER_THEME,
         Keys.READER_FONT_SIZE_PX,
         Keys.READER_FONT_FAMILY,
@@ -404,6 +432,7 @@ class ReaderStore constructor(
 @Serializable
 data class ReaderSlice(
     val readingDirections: Map<String, ReadingDirection> = emptyMap(),
+    val readingLayouts: Map<String, ReadingLayout> = emptyMap(),
     val readerTheme: ReaderTheme = ReaderTheme.DARK,
     val readerFontSizePx: Int = ReaderStore.DEFAULT_FONT_SIZE_PX,
     val fontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
@@ -427,6 +456,10 @@ data class ReaderSlice(
 @Serializable
 private data class EncodedDirections(val directions: Map<String, ReadingDirection>)
 
+/** JSON carrier so the per-book layout map round-trips through the shared lenient codec. */
+@Serializable
+private data class EncodedLayouts(val layouts: Map<String, ReadingLayout>)
+
 /** JSON carrier so the per-book appearance map round-trips through the shared lenient codec. */
 @Serializable
 private data class EncodedPerBookAppearance(val appearances: Map<String, PerBookAppearance>)
@@ -441,6 +474,15 @@ private fun decodeDirections(raw: String?): Map<String, ReadingDirection> {
         PreferenceCodec.json
             .decodeFromString<EncodedDirections>(raw)
             .directions
+    }.getOrDefault(emptyMap())
+}
+
+private fun decodeLayouts(raw: String?): Map<String, ReadingLayout> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    return runCatching {
+        PreferenceCodec.json
+            .decodeFromString<EncodedLayouts>(raw)
+            .layouts
     }.getOrDefault(emptyMap())
 }
 
