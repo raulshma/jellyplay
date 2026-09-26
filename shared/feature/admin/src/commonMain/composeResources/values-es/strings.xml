@@ -48,7 +48,7 @@
     <string name="admin_stop">Detener</string>
     <string name="admin_stop_session_cd">Detener reproducción</string>
     <string name="admin_stop_session_title">¿Detener la reproducción?</string>
-    <string name="admin_stop_session_body">¿Detener el medio que se reproduce en \"%1$s\"?</string>
+    <string name="admin_stop_session_body">¿Detener el medio que se reproduce en "%1$s"?</string>
     <string name="admin_run">Ejecutar</string>
 
     <!-- Relative time -->

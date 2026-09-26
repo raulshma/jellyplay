@@ -260,4 +260,13 @@
     <string name="core_ui_auth_device_credential_prompt">Gerätesperre zum Entsperren verwenden</string>
     <string name="core_show_password">Passwort anzeigen</string>
     <string name="core_hide_password">Passwort ausblenden</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">Was ist neu</string>
+    <string name="core_ui_whatsnew_release_title">Neu in v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">Neu</string>
+    <string name="core_ui_whatsnew_category_improvement">Verbessert</string>
+    <string name="core_ui_whatsnew_category_fix">Behoben</string>
+    <string name="core_ui_whatsnew_take_me_there">Direkt hin</string>
+    <string name="core_ui_whatsnew_got_it">Verstanden</string>
+    <string name="core_ui_whatsnew_archive_empty">Noch keine Release-Highlights.</string>
 </resources>

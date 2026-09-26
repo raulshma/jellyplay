@@ -66,7 +66,7 @@
     <string name="book_reader_read_aloud">Lecture à voix haute</string>
     <string name="book_reader_speech_rate">Vitesse de lecture</string>
     <string name="book_reader_speech_pitch">Hauteur de la voix</string>
-    <string name="book_reader_speech_unavailable">La lecture à voix haute n\'est pas disponible sur cet appareil</string>
+    <string name="book_reader_speech_unavailable">La lecture à voix haute n'est pas disponible sur cet appareil</string>
     <string name="book_reader_speech_active">Lecture en cours</string>
     <string name="book_reader_speech_start">Commencer la lecture à voix haute</string>
     <string name="book_reader_speech_pause">Mettre la lecture en pause</string>

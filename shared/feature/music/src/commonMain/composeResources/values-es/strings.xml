@@ -95,7 +95,7 @@
     <string name="music_new_playlist">Nueva lista</string>
     <string name="music_edit_playlist">Editar lista</string>
     <string name="music_delete_playlist">Eliminar lista</string>
-    <string name="music_delete_playlist_confirm">¿Eliminar \"%1$s\"? Esta acción no se puede deshacer.</string>
+    <string name="music_delete_playlist_confirm">¿Eliminar "%1$s"? Esta acción no se puede deshacer.</string>
     <string name="music_create">Crear</string>
     <string name="music_save">Guardar</string>
     <string name="music_edit">Editar</string>

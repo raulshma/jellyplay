@@ -48,6 +48,7 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("item_experimental"),
     SettingsEntranceSection("item_integrations"),
     SettingsEntranceSection("item_about"),
+    SettingsEntranceSection("item_whatsnew"),
 )
 
 /** The derived entrance steps for one section: phone and TV stagger indexes. */

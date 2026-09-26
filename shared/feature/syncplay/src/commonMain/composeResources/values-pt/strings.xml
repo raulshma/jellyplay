@@ -8,7 +8,7 @@
     <string name="syncplay_create_group_together">Crie um grupo para assistir juntos</string>
     <string name="syncplay_create_group">Criar grupo</string>
     <string name="syncplay_join_group_question">Entrar no grupo?</string>
-    <string name="syncplay_join_group_confirm">Entrar em \"%1$s\"?</string>
+    <string name="syncplay_join_group_confirm">Entrar em "%1$s"?</string>
     <string name="syncplay_join">Entrar</string>
     <string name="syncplay_cancel">Cancelar</string>
     <string name="syncplay_playing_item">Reproduzindo: %1$s</string>

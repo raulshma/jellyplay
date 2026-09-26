@@ -5,10 +5,10 @@
     <string name="settings_home_layout_reset_title">Reset Home Layout</string>
     <string name="settings_home_layout_reset_message">Reset all home layout settings to their defaults? Saved presets are kept.</string>
     <string name="settings_preset_applied">Preset applied</string>
-    <string name="settings_preset_saved">Saved \"%1$s\"</string>
-    <string name="settings_preset_applied_named">Applied \"%1$s\"</string>
-    <string name="settings_preset_deleted">Deleted \"%1$s\"</string>
-    <string name="settings_share_preset">Share \"%1$s\"</string>
+    <string name="settings_preset_saved">Saved "%1$s"</string>
+    <string name="settings_preset_applied_named">Applied "%1$s"</string>
+    <string name="settings_preset_deleted">Deleted "%1$s"</string>
+    <string name="settings_share_preset">Share "%1$s"</string>
     <string name="settings_home_layout_subject">JellyPlay Home Layout: %1$s</string>
 
     <!-- Common shared strings -->
@@ -42,16 +42,16 @@
     <string name="settings_quick_actions">Quick Actions</string>
     <string name="settings_server_settings">Server</string>
     <string name="settings_switch_user_action">Switch User</string>
-    <string name="settings_whats_new">What\'s New</string>
+    <string name="settings_whats_new">What's New</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as_name">Signed in as %1$s</string>
     <string name="settings_sign_out">Sign Out</string>
     <string name="settings_sign_out_subtitle">Log out of current account</string>
     <string name="settings_sign_out_from_server">Sign Out from Server</string>
-    <string name="settings_sign_out_from_server_subtitle">Revoke this device\'s session on the server</string>
+    <string name="settings_sign_out_from_server_subtitle">Revoke this device's session on the server</string>
     <string name="settings_server_management_subtitle">Switch servers or add new connections</string>
     <string name="settings_trust_self_signed">Trust self-signed certificates</string>
-    <string name="settings_trust_self_signed_off">Trusts this server\'s certificate even when it can\'t be verified. Turn off to require a valid certificate.</string>
+    <string name="settings_trust_self_signed_off">Trusts this server's certificate even when it can't be verified. Turn off to require a valid certificate.</string>
     <string name="settings_switch_user_subtitle">Manage server users and profiles</string>
     <string name="settings_activity_insights">Activity &amp; Insights</string>
     <string name="settings_activity_insights_subtitle">Favorites, history, queue, and upcoming</string>
@@ -126,8 +126,8 @@
     <string name="settings_subtitles_test">Test</string>
     <string name="settings_sign_out_confirm_title_server">Sign Out from Server?</string>
     <string name="settings_sign_out_confirm_title">Sign Out?</string>
-    <string name="settings_sign_out_confirm_message_server">This will revoke this device\'s session on the server. You\'ll need to sign in again to use the app.</string>
-    <string name="settings_sign_out_confirm_message">You\'ll be logged out of your current account.</string>
+    <string name="settings_sign_out_confirm_message_server">This will revoke this device's session on the server. You'll need to sign in again to use the app.</string>
+    <string name="settings_sign_out_confirm_message">You'll be logged out of your current account.</string>
 
     <!-- ServerManagementScreen.kt -->
     <string name="settings_server_management">Server Management</string>
@@ -189,7 +189,7 @@
     <string name="settings_download_updates_subtitle">New updates download right away instead of waiting for you to tap Download</string>
     <string name="settings_check_for_updates">Check for Updates</string>
     <string name="settings_update_dismiss_title">Hide Dismissed Updates For</string>
-    <string name="settings_update_dismiss_subtitle">How long an update you dismissed with \"Later\" stays hidden</string>
+    <string name="settings_update_dismiss_subtitle">How long an update you dismissed with "Later" stays hidden</string>
     <string name="settings_update_dismiss_12_hours">12 hours</string>
     <string name="settings_update_dismiss_24_hours">24 hours</string>
     <string name="settings_update_dismiss_3_days">3 days</string>
@@ -210,7 +210,7 @@
     <string name="settings_quiet_end">Quiet End</string>
     <string name="settings_quiet_end_subtitle">End quiet hours</string>
     <string name="settings_respect_system_dnd">Respect System DND</string>
-    <string name="settings_respect_system_dnd_subtitle">Don\'t show notifications when Do Not Disturb is active</string>
+    <string name="settings_respect_system_dnd_subtitle">Don't show notifications when Do Not Disturb is active</string>
     <string name="settings_system_notification_settings">System Notification Settings</string>
     <string name="settings_system_notification_settings_subtitle">Customize per-library channel in system settings</string>
     <string name="settings_sound">Sound</string>
@@ -335,7 +335,7 @@
     <string name="settings_paused_cd">Paused</string>
     <string name="settings_send_message_cd">Send message</string>
     <string name="settings_send_message_title">Send Message</string>
-    <string name="settings_send_message_to">Send a message to %1$s\'s %2$s</string>
+    <string name="settings_send_message_to">Send a message to %1$s's %2$s</string>
     <string name="settings_message_from_admin">Message from Admin</string>
     <string name="settings_header_label">Header</string>
     <string name="settings_message_label">Message</string>
@@ -370,7 +370,7 @@
     <string name="settings_arr_test">Test</string>
     <string name="settings_arr_test_all">Test all</string>
     <string name="settings_arr_no_servers_hint">No servers detected. Enable Auto-discover via Seerr (and make sure Seerr is connected), or add a manual server below.</string>
-    <string name="settings_arr_no_admin_hint">Auto-discover needs a Seerr account with Admin permission (the server list comes from Seerr\'s admin-only settings). Use an API key from an admin user, then retry — or add a manual server below.</string>
+    <string name="settings_arr_no_admin_hint">Auto-discover needs a Seerr account with Admin permission (the server list comes from Seerr's admin-only settings). Use an API key from an admin user, then retry — or add a manual server below.</string>
     <string name="settings_seerr_sign_in">Sign In</string>
     <string name="settings_disconnect">Disconnect</string>
     <string name="settings_integration_features">Integration Features</string>
@@ -735,8 +735,8 @@
     <string name="settings_library_no_libraries">No libraries found</string>
     <string name="settings_subsection_latest_media">Latest Media</string>
     <string name="settings_subsection_recently_added">Recently Added</string>
-    <string name="settings_subsection_latest_media_desc">Show a \"Latest\" row for this library</string>
-    <string name="settings_subsection_recently_added_desc">Include this library in \"Recently Added\"</string>
+    <string name="settings_subsection_latest_media_desc">Show a "Latest" row for this library</string>
+    <string name="settings_subsection_recently_added_desc">Include this library in "Recently Added"</string>
     <string name="settings_move_up_cd">Move up</string>
     <string name="settings_move_down_cd">Move down</string>
     <string name="settings_remove_section_cd">Remove %1$s</string>
@@ -797,7 +797,7 @@
     <string name="settings_pinned_genre_desc">Items matching a genre</string>
     <string name="settings_pinned_studio_desc">Items from a studio</string>
     <string name="settings_back">Back</string>
-    <string name="settings_couldnt_load_items">Couldn\'t load items</string>
+    <string name="settings_couldnt_load_items">Couldn't load items</string>
     <string name="settings_nothing_to_pin">Nothing available to pin.</string>
     <string name="settings_already_pinned_cd">Already pinned</string>
     <string name="settings_pin_cd">Pin</string>
@@ -1036,7 +1036,7 @@
     <string name="settings_show_share_media">Show Share Media Option</string>
     <string name="settings_show_share_media_subtitle">Show share option button on details pages</string>
     <string name="settings_hide_search_history">Hide Search History</string>
-    <string name="settings_hide_search_history_subtitle">Don\'t show recent searches on the search screen</string>
+    <string name="settings_hide_search_history_subtitle">Don't show recent searches on the search screen</string>
     <string name="settings_show_external_ratings">Show External Ratings</string>
     <string name="settings_show_external_ratings_subtitle">Display critic rating scores (IMDb/TMDB) on details pages</string>
     <string name="settings_home_screen_layout">Home Screen Layout</string>
@@ -1195,8 +1195,8 @@
     <string name="settings_audio_mode">Audio Output Mode</string>
     <string name="settings_audio_mode_auto">Follows the Audio Passthrough toggle</string>
     <string name="settings_audio_mode_stereo">Forces a stereo downmix (no passthrough)</string>
-    <string name="settings_audio_mode_optical">Bitstreams AC-3 and DTS over S/PDIF — falls back to stereo if your receiver can\'t decode a format</string>
-    <string name="settings_audio_mode_hdmi">Bitstreams AC-3, E-AC-3, DTS, DTS-HD and TrueHD over HDMI — falls back to stereo if your receiver can\'t decode a format</string>
+    <string name="settings_audio_mode_optical">Bitstreams AC-3 and DTS over S/PDIF — falls back to stereo if your receiver can't decode a format</string>
+    <string name="settings_audio_mode_hdmi">Bitstreams AC-3, E-AC-3, DTS, DTS-HD and TrueHD over HDMI — falls back to stereo if your receiver can't decode a format</string>
     <string name="settings_shader_pack">Shader Pack</string>
     <string name="settings_tone_mapping">Tone Mapping</string>
     <string name="settings_render_quality">Quality Profile</string>
@@ -1716,7 +1716,7 @@
     <string name="ss_notifications_enable_title">Notifications Check Frequency</string>
     <string name="ss_notifications_enable_subtitle">Enable library background updates checking frequency</string>
     <string name="ss_respect_system_dnd_title">Respect System DND</string>
-    <string name="ss_respect_system_dnd_subtitle">Don\'t show notifications when Do Not Disturb is active</string>
+    <string name="ss_respect_system_dnd_subtitle">Don't show notifications when Do Not Disturb is active</string>
     <string name="ss_system_notification_settings_title">System Notification Settings</string>
     <string name="ss_system_notification_settings_subtitle">Customize per-library channel in system settings</string>
     <string name="ss_notification_check_frequency_title">Notification Check Frequency</string>
@@ -1822,7 +1822,7 @@
     <string name="ss_arr_settings_title">Radarr / Sonarr Servers</string>
     <string name="ss_arr_settings_subtitle">Configure direct Radarr/Sonarr server connections</string>
     <string name="ss_sign_out_from_server_title">Sign Out from Server</string>
-    <string name="ss_sign_out_from_server_subtitle">Revoke this device\'s session on the server</string>
+    <string name="ss_sign_out_from_server_subtitle">Revoke this device's session on the server</string>
     <string name="ss_screensaver_show_title_title">Show Title</string>
     <string name="ss_screensaver_show_title_subtitle">Display media title</string>
     <string name="ss_screensaver_categories_title">Categories</string>
@@ -1931,4 +1931,6 @@
     <string name="settings_certificate_pick_certificate_title">Choose certificate (.p12 / .pfx / .crt / .pem)</string>
     <string name="settings_certificate_pick_key_title">Choose private key (.key)</string>
     <string name="settings_certificate_pick_ca_title">Choose server CA certificate (.pem / .crt)</string>
+    <string name="settings_whatsnew_title">What's New</string>
+    <string name="settings_whatsnew_subtitle">Release highlights and what changed</string>
 </resources>

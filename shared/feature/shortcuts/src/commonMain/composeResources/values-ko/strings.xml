@@ -42,7 +42,7 @@
     <string name="shortcuts_item_about_title">정보</string>
     <string name="shortcuts_item_about_description">버전, 라이선스 및 앱 정보.</string>
     <string name="shortcuts_search_placeholder">바로 가기 검색…</string>
-    <string name="shortcuts_search_no_results">\'%1$s\'와 일치하는 바로 가기 없음</string>
+    <string name="shortcuts_search_no_results">'%1$s'와 일치하는 바로 가기 없음</string>
     <string name="shortcuts_search_clear">검색 지우기</string>
     <string name="shortcuts_admin_badge">관리자</string>
 </resources>

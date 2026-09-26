@@ -55,5 +55,6 @@ class ShellInfra(
     val sessionCoordinatorLazy: Lazy<SessionCoordinator>,
     val updateCoordinatorLazy: Lazy<UpdateCoordinator>,
     val syncPlayOpenCoordinatorLazy: Lazy<SyncPlayOpenCoordinator>,
+    val whatsNewCoordinatorLazy: Lazy<WhatsNewCoordinator>,
     val keyDispatcher: (Int) -> Boolean,
 )

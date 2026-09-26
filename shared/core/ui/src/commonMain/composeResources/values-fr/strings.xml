@@ -13,7 +13,7 @@
     <string name="core_ok">OK</string>
     <string name="core_delete">Supprimer</string>
     <string name="core_clear">Effacer</string>
-    <string name="core_undo">Annuler l\'action</string>
+    <string name="core_undo">Annuler l'action</string>
     <string name="core_clear_filters">Réinitialiser les filtres</string>
     <string name="core_copy">Copier</string>
     <string name="core_copied_to_clipboard">Copié dans le presse-papiers</string>
@@ -34,7 +34,7 @@
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->
     <string name="msg_no_video_player_found">Aucun lecteur vidéo trouvé</string>
-    <string name="msg_smart_download_deleted">Téléchargement vu supprimé pour libérer de l\'espace</string>
+    <string name="msg_smart_download_deleted">Téléchargement vu supprimé pour libérer de l'espace</string>
 
     <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
          by every feature screen that renders a media-type badge or filter chip.
@@ -102,15 +102,15 @@
     <string name="core_ui_seerr_request">Demander</string>
 
     <!-- core/ui accent / color pickers -->
-    <string name="core_ui_accent_color_title">Couleur d\'accent</string>
-    <string name="core_ui_accent_color_subtitle">Sélectionnez un échantillon de couleur d\'accent personnalisée ou dynamique</string>
+    <string name="core_ui_accent_color_title">Couleur d'accent</string>
+    <string name="core_ui_accent_color_subtitle">Sélectionnez un échantillon de couleur d'accent personnalisée ou dynamique</string>
     <string name="core_ui_color_style_title">Style de couleur</string>
-    <string name="core_ui_color_style_subtitle">Définissez l\'ambiance visuelle des palettes générées</string>
-    <string name="core_ui_dynamic_colors">Couleurs dynamiques du fond d\'écran</string>
+    <string name="core_ui_color_style_subtitle">Définissez l'ambiance visuelle des palettes générées</string>
+    <string name="core_ui_dynamic_colors">Couleurs dynamiques du fond d'écran</string>
     <string name="core_ui_synthwave_accent_title">Accent Synthwave</string>
-    <string name="core_ui_synthwave_accent_subtitle">Sélectionnez un échantillon de couleur d\'accent néon personnalisée</string>
+    <string name="core_ui_synthwave_accent_subtitle">Sélectionnez un échantillon de couleur d'accent néon personnalisée</string>
     <string name="core_ui_soothing_accent_title">Accent apaisant</string>
-    <string name="core_ui_soothing_accent_subtitle">Sélectionnez une couleur d\'accent apaisante</string>
+    <string name="core_ui_soothing_accent_subtitle">Sélectionnez une couleur d'accent apaisante</string>
     <string name="core_ui_variant_accent_title">Accent %1$s</string>
     <string name="core_ui_variant_accent_subtitle">Sélectionner la couleur d'accent de ce style de thème</string>
 
@@ -124,7 +124,7 @@
     <string name="core_ui_downloaded">Téléchargé</string>
     <string name="core_ui_cd_loading">Chargement</string>
     <string name="core_ui_cd_error">Erreur</string>
-    <string name="core_ui_cd_local_network">Réseau local, pas d\'internet</string>
+    <string name="core_ui_cd_local_network">Réseau local, pas d'internet</string>
     <string name="core_ui_cd_offline">Hors ligne</string>
     <string name="core_ui_cd_server_unreachable">Serveur injoignable</string>
 
@@ -146,7 +146,7 @@
     <string name="ss_cat_system">Système</string>
 
     <!-- Accessibility / media -->
-    <string name="core_ui_image_placeholder">Espace réservé d\'image</string>
+    <string name="core_ui_image_placeholder">Espace réservé d'image</string>
 
     <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
     <string name="core_segment_intro">Intro</string>
@@ -217,37 +217,37 @@
     <!-- Transcode-reason surfacing ("Why am I transcoding?") -->
     <string name="transcode_reasons_title">Pourquoi une transcodification ?</string>
     <string name="transcode_reason_unknown">Le serveur a signalé : %1$s</string>
-    <string name="transcode_reason_container_not_supported">Le conteneur du fichier n\'est pas pris en charge en lecture directe.</string>
-    <string name="transcode_reason_video_codec_not_supported">Le codec vidéo n\'est pas pris en charge par les décodeurs de cet appareil.</string>
-    <string name="transcode_reason_audio_codec_not_supported">Le codec audio n\'est pas pris en charge par les décodeurs de cet appareil.</string>
+    <string name="transcode_reason_container_not_supported">Le conteneur du fichier n'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_video_codec_not_supported">Le codec vidéo n'est pas pris en charge par les décodeurs de cet appareil.</string>
+    <string name="transcode_reason_audio_codec_not_supported">Le codec audio n'est pas pris en charge par les décodeurs de cet appareil.</string>
     <string name="transcode_reason_video_bitrate">Le débit vidéo dépasse la limite de qualité de streaming.</string>
     <string name="transcode_reason_audio_bitrate">Le débit audio dépasse la limite de qualité de streaming.</string>
     <string name="transcode_reason_container_bitrate">Le débit global dépasse la limite de qualité de streaming.</string>
-    <string name="transcode_reason_video_bit_depth">La profondeur de bits vidéo (p. ex. 10 bits) n\'est pas prise en charge en lecture directe.</string>
-    <string name="transcode_reason_audio_bit_depth">La profondeur de bits audio n\'est pas prise en charge en lecture directe.</string>
-    <string name="transcode_reason_audio_channels">L\'audio a plus de canaux que le profil de l\'appareil n\'en autorise.</string>
-    <string name="transcode_reason_audio_profile">Le profil audio (p. ex. DTS-HD, Atmos) n\'est pas pris en charge en lecture directe.</string>
-    <string name="transcode_reason_audio_sample_rate">La fréquence d\'échantillonnage audio n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_video_bit_depth">La profondeur de bits vidéo (p. ex. 10 bits) n'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_audio_bit_depth">La profondeur de bits audio n'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_audio_channels">L'audio a plus de canaux que le profil de l'appareil n'en autorise.</string>
+    <string name="transcode_reason_audio_profile">Le profil audio (p. ex. DTS-HD, Atmos) n'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_audio_sample_rate">La fréquence d'échantillonnage audio n'est pas prise en charge en lecture directe.</string>
     <string name="transcode_reason_audio_is_external">La piste audio est externe au conteneur et ne peut pas être diffusée directement.</string>
     <string name="transcode_reason_secondary_audio">Une piste audio secondaire (p. ex. commentaires) a forcé la transcodification.</string>
-    <string name="transcode_reason_interlaced">La vidéo entrelacée n\'est pas prise en charge en lecture directe.</string>
-    <string name="transcode_reason_anamorphic">L\'encodage vidéo anamorphique n\'est pas pris en charge en lecture directe.</string>
-    <string name="transcode_reason_ref_frames">La vidéo contient trop d\'images de référence pour le décodeur de l\'appareil.</string>
+    <string name="transcode_reason_interlaced">La vidéo entrelacée n'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_anamorphic">L'encodage vidéo anamorphique n'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_ref_frames">La vidéo contient trop d'images de référence pour le décodeur de l'appareil.</string>
     <string name="transcode_reason_video_codec_tag">Le tag du codec vidéo est rare et non reconnu en lecture directe.</string>
-    <string name="transcode_reason_video_framerate">La fréquence d\'images de la vidéo n\'est pas prise en charge en lecture directe.</string>
-    <string name="transcode_reason_video_level">Le niveau du codec vidéo est trop élevé pour le décodeur de l\'appareil.</string>
-    <string name="transcode_reason_video_profile">Le profil du codec vidéo n\'est pas pris en charge en lecture directe.</string>
-    <string name="transcode_reason_video_range">La plage vidéo (p. ex. HDR, Dolby Vision) n\'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_video_framerate">La fréquence d'images de la vidéo n'est pas prise en charge en lecture directe.</string>
+    <string name="transcode_reason_video_level">Le niveau du codec vidéo est trop élevé pour le décodeur de l'appareil.</string>
+    <string name="transcode_reason_video_profile">Le profil du codec vidéo n'est pas pris en charge en lecture directe.</string>
+    <string name="transcode_reason_video_range">La plage vidéo (p. ex. HDR, Dolby Vision) n'est pas prise en charge en lecture directe.</string>
     <string name="transcode_reason_video_resolution">La résolution vidéo dépasse la limite de lecture directe.</string>
     <string name="transcode_reason_subtitle_codec">Le format des sous-titres doit être incrusté par le serveur.</string>
-    <string name="transcode_reason_stream_count">Le fichier contient plus de flux que le profil de l\'appareil n\'en autorise.</string>
-    <string name="transcode_reason_direct_play_error">Le serveur n\'a pas pu analyser le flux original en lecture directe.</string>
-    <string name="transcode_reason_unknown_video_info">Le serveur n\'a pas pu déterminer les détails du flux vidéo et a transcodifié par précaution.</string>
-    <string name="transcode_reason_unknown_audio_info">Le serveur n\'a pas pu déterminer les détails du flux audio et a transcodifié par précaution.</string>
+    <string name="transcode_reason_stream_count">Le fichier contient plus de flux que le profil de l'appareil n'en autorise.</string>
+    <string name="transcode_reason_direct_play_error">Le serveur n'a pas pu analyser le flux original en lecture directe.</string>
+    <string name="transcode_reason_unknown_video_info">Le serveur n'a pas pu déterminer les détails du flux vidéo et a transcodifié par précaution.</string>
+    <string name="transcode_reason_unknown_audio_info">Le serveur n'a pas pu déterminer les détails du flux audio et a transcodifié par précaution.</string>
     <string name="transcode_reason_hint_engine">Essayez un autre moteur de lecture (mpv ou VLC) — il pourra peut-être le lire directement.</string>
     <string name="transcode_reason_hint_decoder">Passer le décodeur en Software/FFmpeg peut résoudre le problème.</string>
     <string name="transcode_reason_hint_quality">Augmentez la limite de qualité de streaming dans le sélecteur de qualité.</string>
-    <string name="transcode_reason_hint_subtitle">Choisissez un sous-titre SRT/externe pour éviter l\'incrustation.</string>
+    <string name="transcode_reason_hint_subtitle">Choisissez un sous-titre SRT/externe pour éviter l'incrustation.</string>
     <string name="core_remove_download_title">Supprimer le téléchargement ?</string>
     <string name="core_remove_download_message">Ceci supprime la copie téléchargée de « %1$s » de cet appareil. La copie sur le serveur n’est pas affectée.</string>
     <string name="core_remove_download_confirm">Supprimer</string>
@@ -255,9 +255,18 @@
     <string name="core_ui_show_less">Afficher moins</string>
     <string name="core_media_folder">Dossier</string>
     <string name="core_media_folder_plural">Dossiers</string>
-    <string name="core_ui_auth_use_screen_lock">Utiliser le verrouillage d\'écran</string>
-    <string name="core_ui_auth_unlock_screen_lock">Déverrouiller avec le verrouillage d\'écran</string>
-    <string name="core_ui_auth_device_credential_prompt">Utilisez le verrouillage d\'écran de l\'appareil pour déverrouiller</string>
+    <string name="core_ui_auth_use_screen_lock">Utiliser le verrouillage d'écran</string>
+    <string name="core_ui_auth_unlock_screen_lock">Déverrouiller avec le verrouillage d'écran</string>
+    <string name="core_ui_auth_device_credential_prompt">Utilisez le verrouillage d'écran de l'appareil pour déverrouiller</string>
     <string name="core_show_password">Afficher le mot de passe</string>
     <string name="core_hide_password">Masquer le mot de passe</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">Nouveautés</string>
+    <string name="core_ui_whatsnew_release_title">Nouveau dans la v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">Nouveau</string>
+    <string name="core_ui_whatsnew_category_improvement">Amélioré</string>
+    <string name="core_ui_whatsnew_category_fix">Corrigé</string>
+    <string name="core_ui_whatsnew_take_me_there">Y aller</string>
+    <string name="core_ui_whatsnew_got_it">Compris</string>
+    <string name="core_ui_whatsnew_archive_empty">Pas encore de notes de version.</string>
 </resources>

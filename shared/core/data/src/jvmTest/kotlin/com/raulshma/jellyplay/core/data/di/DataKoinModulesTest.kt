@@ -255,6 +255,13 @@ class DataKoinModulesTest {
             // no-self-update platform inputs (appdata updates dir, sentinel
             // version, "desktop" flavor) from desktopDataModule.
             assertResolves<AppUpdateRepository>(koin)
+
+            // ── What's-New family module ────────────────────────
+            // The release-notes feed repository: GitHubReleasesApi from
+            // networkJvmModule (same source as the update check),
+            // ExperimentalStore from datastoreCommonModule, and the shared
+            // application scope.
+            assertResolves<com.raulshma.jellyplay.core.data.whatsnew.WhatsNewRepository>(koin)
         } finally {
             database.close()
             stopKoin()

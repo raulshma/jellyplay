@@ -5,11 +5,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
  * The compiled-in allow-list pinning every URL the update-check pipeline
- * trusts: the GitHub Releases feed is the ONE identity the update
- * check may talk to, and the three server-controlled URL surfaces it feeds —
- * the final post-redirect endpoint URL, the release `html_url`, and every
- * asset's `browser_download_url` — must stay inside that identity before any
- * of them can drive a download or a browser handoff.
+ * trusts: the GitHub Releases feed is the ONE identity the update check and
+ * the What's New refresh may talk to, and the three server-controlled URL
+ * surfaces it feeds — the final post-redirect endpoint URL, the release
+ * `html_url`, and every asset's `browser_download_url` — must stay inside
+ * that identity before any of them can drive a download or a browser
+ * handoff. (The What's New content itself now rides the same releases
+ * endpoints, so it needs no identity of its own.)
  *
  * ## Why compiled-in
  *
@@ -25,7 +27,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  *
  *  - Release endpoints: https, host in [ALLOWED_RELEASE_HOSTS], and the
  *    path under `/repos/<ALLOWED_OWNER>/` (owner pin, matching the
- *    [GitHubReleasesApiImpl.LATEST_RELEASE_URL] identity).
+ *    [GitHubReleasesApiImpl.LATEST_RELEASE_URL] /
+ *    [GitHubReleasesApiImpl.RELEASES_LIST_URL] identities).
  *  - Asset/download URLs — and release PAGE urls, which share the
  *    `github.com/<owner>/<repo>/…` shape: https, host in
  *    [ALLOWED_ASSET_HOSTS], and an owner-repo path — except the legacy S3

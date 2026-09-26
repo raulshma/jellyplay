@@ -1912,4 +1912,6 @@
     <string name="diff_self_update_download">自动下载更新</string>
     <string name="diff_update_dismiss_period">更新提醒忽略时长</string>
     <string name="diff_vlc_skip_frame">LibVLC 跳帧</string>
+    <string name="settings_whatsnew_title">新功能</string>
+    <string name="settings_whatsnew_subtitle">版本亮点与更改</string>
 </resources>

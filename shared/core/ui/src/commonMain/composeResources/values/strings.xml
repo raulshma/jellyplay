@@ -240,8 +240,8 @@
     <string name="transcode_reasons_title">Why am I transcoding?</string>
     <string name="transcode_reason_unknown">Server reported: %1$s</string>
     <string name="transcode_reason_container_not_supported">The file container is not supported for direct play.</string>
-    <string name="transcode_reason_video_codec_not_supported">The video codec is not supported by this device\'s decoders.</string>
-    <string name="transcode_reason_audio_codec_not_supported">The audio codec is not supported by this device\'s decoders.</string>
+    <string name="transcode_reason_video_codec_not_supported">The video codec is not supported by this device's decoders.</string>
+    <string name="transcode_reason_audio_codec_not_supported">The audio codec is not supported by this device's decoders.</string>
     <string name="transcode_reason_video_bitrate">The video bitrate exceeds the streaming quality limit.</string>
     <string name="transcode_reason_audio_bitrate">The audio bitrate exceeds the streaming quality limit.</string>
     <string name="transcode_reason_container_bitrate">The overall bitrate exceeds the streaming quality limit.</string>
@@ -275,4 +275,15 @@
     <string name="core_remove_download_confirm">Delete</string>
     <string name="core_ui_read_more">Read more</string>
     <string name="core_ui_show_less">Show less</string>
+
+    <!-- What's New (structured release highlights). Content itself is
+         English-only by design; only this chrome is localized. -->
+    <string name="core_ui_whatsnew_sheet_title">What's New</string>
+    <string name="core_ui_whatsnew_release_title">New in v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">New</string>
+    <string name="core_ui_whatsnew_category_improvement">Improved</string>
+    <string name="core_ui_whatsnew_category_fix">Fixed</string>
+    <string name="core_ui_whatsnew_take_me_there">Take me there</string>
+    <string name="core_ui_whatsnew_got_it">Got it</string>
+    <string name="core_ui_whatsnew_archive_empty">No release highlights yet.</string>
 </resources>

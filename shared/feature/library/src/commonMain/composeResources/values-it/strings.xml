@@ -76,7 +76,7 @@
     <string name="library_action_group">Raggruppa</string>
     <string name="library_reset_all">Reimposta tutto</string>
     <string name="library_reset_confirm_title">Reimpostare la libreria?</string>
-    <string name="library_reset_confirm_message">Questo cancella tutti i filtri e torna alla libreria predefinita. Modalità di vista, dimensione poster e raggruppamento, oltre ai filtri salvati e all\'ordinamento della cartella corrente, verranno ripristinati.</string>
+    <string name="library_reset_confirm_message">Questo cancella tutti i filtri e torna alla libreria predefinita. Modalità di vista, dimensione poster e raggruppamento, oltre ai filtri salvati e all'ordinamento della cartella corrente, verranno ripristinati.</string>
     <string name="library_reset_dont_show_again">Non mostrare più</string>
     <string name="library_year_from">Da %1$d</string>
     <string name="library_year_to">Fino a %1$d</string>

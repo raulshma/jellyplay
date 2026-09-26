@@ -49,6 +49,7 @@ class SettingsEntranceStepsTest {
         "item_experimental" to (17 to 18),
         "item_integrations" to (18 to 19),
         "item_about" to (19 to 20),
+        "item_whatsnew" to (20 to 21),
     )
 
     @Test

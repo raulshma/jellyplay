@@ -55,7 +55,7 @@
     <string name="library_reset_confirm_title">Reset library?</string>
     <!-- Info shown in the reset confirmation dialog. -->
     <string name="library_reset_confirm_message">This clears all filters and returns to the default library. Your view mode, poster size and grouping, plus the saved filters and sort order for the current folder, will be reset.</string>
-    <string name="library_reset_dont_show_again">Don\'t show again</string>
+    <string name="library_reset_dont_show_again">Don't show again</string>
     <string name="library_sort_by">Sort By</string>
     <string name="library_media_type">Filter by Type</string>
     <string name="library_status">Status</string>

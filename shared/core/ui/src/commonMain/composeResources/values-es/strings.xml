@@ -259,4 +259,13 @@
     <string name="core_ui_auth_device_credential_prompt">Usa el bloqueo de pantalla del dispositivo para desbloquear</string>
     <string name="core_show_password">Mostrar contraseña</string>
     <string name="core_hide_password">Ocultar contraseña</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">Novedades</string>
+    <string name="core_ui_whatsnew_release_title">Nuevo en v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">Nuevo</string>
+    <string name="core_ui_whatsnew_category_improvement">Mejorado</string>
+    <string name="core_ui_whatsnew_category_fix">Corregido</string>
+    <string name="core_ui_whatsnew_take_me_there">Llévame</string>
+    <string name="core_ui_whatsnew_got_it">Entendido</string>
+    <string name="core_ui_whatsnew_archive_empty">Aún no hay novedades de versión.</string>
 </resources>

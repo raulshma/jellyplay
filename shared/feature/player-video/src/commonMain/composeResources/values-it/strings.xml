@@ -110,7 +110,7 @@
     <string name="player_video_no_remote_subtitles">Nessun sottotitolo remoto disponibile.</string>
     <string name="player_video_unknown">Sconosciuto</string>
     <string name="player_video_perfect_match">Corrispondenza perfetta</string>
-    <string name="player_video_taking_a_while">Ci sta mettendo un po\'…</string>
+    <string name="player_video_taking_a_while">Ci sta mettendo un po'…</string>
     <string name="player_video_use">Usa</string>
     <string name="player_video_failed_tap_to_retry">Non riuscito — tocca per riprovare</string>
     <string name="player_video_search_failed">Ricerca non riuscita</string>
@@ -233,7 +233,7 @@
     <string name="player_video_subtitle_delay_voice_heard">Voce udita</string>
     <string name="player_video_subtitle_delay_text_seen">Testo visto</string>
     <string name="player_video_subtitle_delay_show_controls">Regola ritardo</string>
-    <string name="player_video_subtitle_delay_hub_hint">Regola la temporizzazione dei sottotitoli rispetto al video. Usa l\'overlay per vedere i sottotitoli spostarsi mentre regoli.</string>
+    <string name="player_video_subtitle_delay_hub_hint">Regola la temporizzazione dei sottotitoli rispetto al video. Usa l'overlay per vedere i sottotitoli spostarsi mentre regoli.</string>
     <string name="player_video_av_sync_audio_helper">Negativo: audio prima. Positivo: audio dopo.</string>
     <string name="player_video_av_sync_decrease">Diminuisci %1$s</string>
     <string name="player_video_av_sync_increase">Aumenta %1$s</string>

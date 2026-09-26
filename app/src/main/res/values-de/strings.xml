@@ -184,4 +184,7 @@
     <string name="player_speed_custom">Eigene Geschwindigkeit</string>
     <string name="player_speed_value">%1$sx</string>
     <string name="player_speed_slider_label">Wiedergabegeschwindigkeit anpassen</string>
+    <string name="whatsnew_sheet_title">Was ist neu</string>
+    <string name="whatsnew_release_title">Neu in v%1$s</string>
+    <string name="whatsnew_got_it">Verstanden</string>
 </resources>

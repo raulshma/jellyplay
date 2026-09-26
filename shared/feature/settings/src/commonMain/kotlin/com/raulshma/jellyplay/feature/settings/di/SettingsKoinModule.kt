@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.feature.settings.SettingsSearchCatalogPrewarmer
 import com.raulshma.jellyplay.feature.settings.SettingsViewModel
 import com.raulshma.jellyplay.feature.settings.StorageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsViewModel
+import com.raulshma.jellyplay.feature.settings.WhatsNewViewModel
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -260,6 +261,11 @@ val settingsModule: Module = module {
     viewModel {
         LicensesViewModel(
             jsonSource = get(),
+        )
+    }
+    viewModel {
+        WhatsNewViewModel(
+            whatsNewRepository = get(),
         )
     }
     // ──  final slice: home-layout cluster + notifications ──

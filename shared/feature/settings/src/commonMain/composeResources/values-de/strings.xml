@@ -6,10 +6,10 @@
     <string name="settings_home_layout_reset_title">Start-Layout zurücksetzen</string>
     <string name="settings_home_layout_reset_message">Alle Start-Layout-Einstellungen auf Standardwerte zurücksetzen? Gespeicherte Presets bleiben erhalten.</string>
     <string name="settings_preset_applied">Preset angewendet</string>
-    <string name="settings_preset_saved">„%1$s\" gespeichert</string>
-    <string name="settings_preset_applied_named">„%1$s\" angewendet</string>
-    <string name="settings_preset_deleted">„%1$s\" gelöscht</string>
-    <string name="settings_share_preset">„%1$s\" teilen</string>
+    <string name="settings_preset_saved">„%1$s" gespeichert</string>
+    <string name="settings_preset_applied_named">„%1$s" angewendet</string>
+    <string name="settings_preset_deleted">„%1$s" gelöscht</string>
+    <string name="settings_share_preset">„%1$s" teilen</string>
     <string name="settings_home_layout_subject">JellyPlay Start-Layout: %1$s</string>
 
     <!-- Common shared strings -->
@@ -176,7 +176,7 @@
     <string name="settings_quiet_end">Ruheende</string>
     <string name="settings_quiet_end_subtitle">Ruhezeiten enden</string>
     <string name="settings_respect_system_dnd">Systemeinstellung „Bitte nicht stören" beachten</string>
-    <string name="settings_respect_system_dnd_subtitle">Keine Benachrichtigungen zeigen, wenn „Nicht stören\" aktiv ist</string>
+    <string name="settings_respect_system_dnd_subtitle">Keine Benachrichtigungen zeigen, wenn „Nicht stören" aktiv ist</string>
     <string name="settings_system_notification_settings">System-Benachrichtigungseinstellungen</string>
     <string name="settings_system_notification_settings_subtitle">Pro-Mediathek-Kanal in den Systemeinstellungen anpassen</string>
     <string name="settings_sound">Ton</string>
@@ -611,13 +611,13 @@
     <string name="settings_no_pinned_sections">Noch keine angehefteten Bereiche</string>
     <string name="settings_pinned_helper">Hefte Sammlungen, Wiedergabelisten, Favoriten, Genres oder Studios an deinen Startbildschirm für schnellen Zugriff.</string>
     <string name="settings_configure_libraries">Mediatheken konfigurieren</string>
-    <string name="settings_configure_libraries_desc">Wähle, welche Mediatheken „Neueste Medien\" und „Kürzlich hinzugefügt\" auf dem Startbildschirm zeigen</string>
+    <string name="settings_configure_libraries_desc">Wähle, welche Mediatheken „Neueste Medien" und „Kürzlich hinzugefügt" auf dem Startbildschirm zeigen</string>
     <string name="settings_library_sections">Mediatheken auf dem Startbildschirm</string>
     <string name="settings_library_no_libraries">Keine Mediatheken gefunden</string>
     <string name="settings_subsection_latest_media">Neueste Medien</string>
     <string name="settings_subsection_recently_added">Kürzlich hinzugefügt</string>
-    <string name="settings_subsection_latest_media_desc">Eine „Neueste\"-Reihe für diese Mediathek zeigen</string>
-    <string name="settings_subsection_recently_added_desc">Diese Mediathek in „Kürzlich hinzugefügt\" aufnehmen</string>
+    <string name="settings_subsection_latest_media_desc">Eine „Neueste"-Reihe für diese Mediathek zeigen</string>
+    <string name="settings_subsection_recently_added_desc">Diese Mediathek in „Kürzlich hinzugefügt" aufnehmen</string>
     <string name="settings_move_up_cd">Nach oben</string>
     <string name="settings_move_down_cd">Nach unten</string>
     <string name="settings_remove_section_cd">%1$s entfernen</string>
@@ -1910,4 +1910,6 @@
     <string name="diff_self_update_download">Updates automatisch herunterladen</string>
     <string name="diff_update_dismiss_period">Ausblenddauer für Update-Hinweise</string>
     <string name="diff_vlc_skip_frame">LibVLC Frame-Skip</string>
+    <string name="settings_whatsnew_title">Was ist neu</string>
+    <string name="settings_whatsnew_subtitle">Release-Highlights und Änderungen</string>
 </resources>

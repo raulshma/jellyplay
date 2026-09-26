@@ -624,7 +624,7 @@ KDoc-relevant. Pinned by `SyncPlayPlaybackCoreReconcileTest`.
 
 ## State slices (`VideoPlayerUiState`)
 
-> **player VMs/screens** the god-VM funnel
+> **deepening cohort (player VMs/screens):** the god-VM funnel
 > cohort's two missing members landed: `VideoPlayerUiEvent` (56 events +
 > `onEvent`, 13 dead members deleted first; ownership ratchet ceiling 35)
 > and `LiveTvPlayerUiEvent` (17 events; live ratchet ceiling lowered
@@ -645,7 +645,6 @@ KDoc-relevant. Pinned by `SyncPlayPlaybackCoreReconcileTest`.
 > badges → `VideoPlayerScreenInfo.kt`, sheet routing →
 > `VideoPlayerScreenSheets.kt` (composition-shape-only, bodies
 > byte-identical).
-
 
 `VideoPlayerUiState` (`shared/feature/player-video/src/commonMain/kotlin/.../VideoPlayerUiState.kt`)
 is seven stored slices — `gestures` (`GesturePrefsState`), `segmentState`
@@ -844,7 +843,6 @@ is the DI seam (`AppRuntimeStateStore` stays out of the VM ctor).
 > `DiscoverRowsViewModelTest`), its chip ladders are declared data
 > (`DiscoverRowEditorChoices`), and its template titles are localized
 > `UiText`s.
-
 
 **`HomeRefresher`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
 is the Home feed's deep module. Its public interface is five members —
@@ -1410,20 +1408,16 @@ Each VM keeps one delegating fun; the screens collect the single state
 (the two former `LaunchedEffect` cascades). Pinned by
 `InstantMixStateHolderTest` + `InstantMixOutcomeMessagesTest`.
 
-**`LiveTvLoad`** (livetv commonMain — the load-ladder fold's first module
-slice, since folded into core:ui's `loadInto`; the object itself is gone)
-owns the load ladder (start → fetch → dispatch to
-exactly one arm; the returned `Result` is the continuation gate) folded
-across Channels/Series/Recordings/ChannelDetail/Programs ViewModels —
-the load-ladder fold's first module slice. Site-specific drift stays at
-the call sites as declared arms: Recordings' legacy unconditional
-`getOrDefault(emptyList())` settle is preserved verbatim (failure clears
-the list — commented), Programs' `fullRender` variant rides the `start`
-closure, ChannelDetail leg-gates on the returned Result, and
-ScheduleViewModel is deliberately NOT folded (two independent fetches —
-a single-Result dispatch would lose the surviving half on partial
-failure). Pinned by `LiveTvLoadTest` (retargeted to `loadInto`,
-assertions unchanged) with the six per-VM suites unmodified.
+The livetv load ladders ride core:ui's `loadInto` (the
+feature-VM load-ladder fold — the former `LiveTvLoad` slice is
+deleted; `LiveTvLoadTest` was retargeted with assertions unchanged).
+Per-VM settle variants stay declared at the call sites: Recordings'
+legacy unconditional `getOrDefault(emptyList())` settle is preserved
+verbatim (failure clears the list — commented), Programs' `fullRender`
+variant rides the `start` closure, ChannelDetail leg-gates on the
+returned Result, and `ScheduleViewModel` is deliberately NOT folded
+(two independent fetches — a single-Result dispatch would lose the
+surviving half on partial failure).
 
 The music collections ride the **collection chassis**: `MusicCollectionKind`
 is the pure decision table (sort admission, media-type binding, layout,
@@ -1804,7 +1798,6 @@ the client directly). The `PlaybackRepositorySurfaceTest` ratchet dropped to
 > narrowed from the `JellyfinApiClient` union to the family singles its
 > members actually call.
 
-
 **`LyricsRepositoryImpl`** (`shared/core/data/src/jvmShared/kotlin/.../repository/LyricsRepositoryImpl.kt`)
 owns the whole LRC/LRCLIB fetch-parse-cache chain (cache read → Jellyfin
 endpoint → LRCLIB best-match, skipped on Local networks → negative-result
@@ -1970,7 +1963,7 @@ caching policy; `invalidateSegmentsCache` removes + bumps). The legacy
 sync workers reach the wholesale cache drop through the one-member
 `MediaCacheInvalidator` port (bound in `DataKoinModule` to the same
 `MediaRepositoryImpl` single) instead of the concrete 1009-line class. In
-the legacy `core/data` cast corner, `CastStrategy` gained transport
+the cast corner (core:data androidMain), `CastStrategy` gained transport
 members (`play`/`pause`/`seekTo`/`setRendererVolume`/`loadMedia` as
 interface defaults, overridden by the DLNA and Jellyfin-remote strategies;
 the local Google-Cast player rides a manager-owned adapter) —
@@ -1978,9 +1971,9 @@ the local Google-Cast player rides a manager-owned adapter) —
 `activeTransport` resolver and `cancelJobs()` deduped the teardown
 triplication. `updateCastState`/`toggleTicker` stay hand-folded
 deliberately (per-branch state writes and predicates that map to no
-strategy member); behaviour-pinned by the legacy Robolectric suites
+strategy member); behaviour-pinned by the Robolectric suites
 (CastManagerTest/JellyfinRemotePlayCastStrategyTest/DlnaCastStrategyTest),
-which run in CI via the :core:data:testDebugUnitTest lane.
+which run in CI via the :shared:core:data:testAndroidHostTest lane.
 
 **`UserErrorMessages`** (commonMain `core/data/error/`) is THE
 error-message fold — the one resolver that turns a failed repository
@@ -2165,7 +2158,8 @@ call), and `EpisodeCatalogueImpl` to `LibraryApiClient`.
 
 Migration chain hygiene: the chain is split into era files beside the
 slim `Migrations.kt` registry — `Migrations1To23` / `Migration24To25` /
-`Migrations25To45` / `Migrations46To56`, with `allMigrations` keeping the
+`Migrations25To45` / `Migrations46To56` / `Migration56To57`, with
+`allMigrations` keeping the
 strictly-ascending order (the source stays a reliable map of the upgrade
 path and `MigrationTest` asserts contiguity).
 `collectRowsThenUpdate` (private, Migrations.kt) is the one backfill
@@ -2651,12 +2645,11 @@ caller's leave-the-schedule signal).
 > two-module pointer pair); `DesktopDataModule` is the aggregate. The
 > Android shell's module list is extracted to
 > **`app/di/AndroidKoinModules.androidKoinModules(app)`** (the registration
-> guard test scans it), `ShellInfra` carries the three coordinators (one
+> guard test scans it), `ShellInfra` carries the four coordinators (one
 > resolution site; `MainContent` is down to five params), and the
 > UserMessageHost wiring is ONE shared composable,
 > **`rememberShellUserMessages(present, sources…)`** (feature/shell) — both
 > shells supply only their `present` adapter.
-
 
 The **`NavDestination` registry** (core/ui `navigation/`) is the single home
 for top-level destination facts — persisted customization key, icon, rail
@@ -2880,7 +2873,7 @@ screen/record icon drifts resolved to the records
 (DVR_RECORDING_QUALITY's hand-written Video → the record's BadgeHd, …).
 Pinned by `SettingsRowRecordTest`.
 
-The screens decomposed with it: `PlaybackSettingsScreen` (2,184 lines)
+The screens decomposed with it: `PlaybackSettingsScreen` (2,421 lines)
 renders through eleven private group composables (`PlaybackPlayerGroup`,
 `PlaybackPlayerAdvancedRows`, `PlaybackAdvancedVideoGroup`,
 `PlaybackEngineGroup` + the per-engine Mpv/Vlc/Exo row groups,
@@ -3875,18 +3868,16 @@ overlap). See docs/adr/0004-playback-focus.md.
 
 ## Admin feature (`shared/feature/admin`)
 
-- **`AdminLoad`** (jvmShared, the `LiveTvLoad` shape — since folded into
-  core:ui's `loadInto`; the object itself is gone) is the admin slice
-  of the load-ladder fold: 10 VMs (Dashboard, Devices, Logs, Plugin
+- The admin load ladders ride core:ui's `loadInto` (the former
+  `AdminLoad` slice is deleted; `AdminLoadTest` retargeted with
+  assertions unchanged): 10 VMs (Dashboard, Devices, Logs, Plugin
   Detail, Plugins, Stats, Stats Detail, Scheduled Tasks, Users,
-  androidMain Plugin Config), both ladder shapes — start → single
-  suspend fetch → exactly-one-arm dispatch; settles stay per-VM as
-  declared variants (final-update, flavour starts, Dashboard's
-  persisted-error try/catch expressed as a `runCatching{getOrThrow}`
-  fetch, Logs' parallel pair under one catch). Declared timing
-  unification: Plugins/ScheduledTasks' legacy fire-and-forget inner
-  launch now awaits. Pinned by `AdminLoadTest` (retargeted to
-  `loadInto`, assertions unchanged).
+  androidMain Plugin Config), settles staying per-VM as declared
+  variants (final-update, flavour starts, Dashboard's persisted-error
+  try/catch expressed as a `runCatching{getOrThrow}` fetch, Logs'
+  parallel pair under one catch). Declared timing unification:
+  Plugins/ScheduledTasks' legacy fire-and-forget inner launch now
+  awaits.
 - **`StatisticsMath`** (core/data, pure) owns watch-time breakdown +
   viewing-streak math out of `AdminStatisticsRepositoryImpl`; the watched
   scan rides `AdminStatisticsLabelProvider`. The repo `formatSize` twin
@@ -4011,10 +4002,12 @@ overlap). See docs/adr/0004-playback-focus.md.
   would move `app_language`/`prefer_audio_description` reset ownership
   away from SubtitleLanguageStore's documented split) and most other
   domains. Derived since: the shared projection field-sets (see
-  `DeclaredProjectionFields.kt` above), and the legacy `UserPreferences.kt`
+  `DeclaredProjectionFields.kt` below), and the legacy `UserPreferences.kt`
   aggregate is deleted outright (see `PreferenceSliceSnapshot`).
 - **`directArrEnabled`** (beside `ExperimentalStore`): one extension pair
   (store-Flow + slice shapes) replaces the five hand-copied
+  `enabledExperimentalFeatures.contains(DIRECT_ARR_INTEGRATION)`
+  inline reads — slice holders re-collect nothing for one bit.
   - **Declared projection field-sets** (`DeclaredProjectionFields.kt`,
   internal, beside `PreferenceProjections`): the field lists that more than
   one projection lane consumes are declared ONCE — an explicit values holder
@@ -4365,7 +4358,7 @@ overlap). See docs/adr/0004-playback-focus.md.
   — the two adoptions onto the band table were REVERTED as
   non-output-equivalent (one-decimal KB and the GB band change on-screen
   text: "2 KB" → "1.5 KB", and sizes ≥ 1 GB moved between bands), so
-  both remain remaining private ÷1024 copies — and the player stats
+  both remain private ÷1024 copies — and the player stats
   overlay's `formatBitrate`/`formatBandwidth` ladders (SI-decimal ÷1000
   NETWORK RATES, not storage sizes — deliberately local) — different
   surface, opportunistic.
@@ -4715,7 +4708,7 @@ re-derives the designs nor lands them casually.
 - **Unpicked candidates** (named during reviews, no design recorded):
   MediaDetailScreen dialog coordinator; signed-out auth shell.
 
-## v0.11.1 hardening wave (2026-09-22)
+## v0.11.1 hardening
 
 The staged hardening wave — eight new architectural surfaces, each wired
 both shells and pinned:
@@ -4796,3 +4789,62 @@ both shells and pinned:
   `SessionCoordinator` delegates to it); `DesktopIdleAmbientController`
   owns the idle "Ready-to-play" ambient seam the scaffold used to inline
   (idle decision + active-remote-session count + overlay in one object).
+
+## What's New + release notes
+
+The What's New system and the self-update sheet's release notes are ONE
+pipeline over ONE content artifact: the GitHub release body. A `## What's
+New` GFM table inside the body becomes the guided entry cards (category
+chip, icon, "where to find it", optional deep link); a body without the
+table renders as plain markdown. Nothing is compiled in and nothing lives
+in the repo — authoring is editing the GitHub release, and corrections
+reach already-shipped installs through the fetch.
+
+- **Body-table parser** (core:model `WhatsNew.kt`):
+  `parseWhatsNewEntries` is the hand-rolled pipe-table grammar —
+  prefix-matched columns (Title/Category/Summary/Where/Icon/Link/
+  Highlight, order-free, unknown columns ignored), bold/code markers
+  stripped, blank-title rows dropped, unknown categories degrade to
+  IMPROVEMENT. `whatsNewReleaseFromNotes` maps one GitHub release
+  (tag/date/name/body) onto `WhatsNewRelease`, which now carries the full
+  `body` beside the derived `entries` so entry-less releases still render
+  their prose. `parseWhatsNewFeed` remains the DataStore-cache round-trip
+  (a body-only release derives its entries on decode). Pinned by
+  `WhatsNewBodyParsingTest` + `WhatsNewFeedTest`.
+- **Remote source** (core:network): `GitHubReleasesApi.fetchReleaseNotes`
+  (`GitHubReleasesApiImpl`, the `/releases?per_page=30` list endpoint) maps
+  `tag_name`/`name`/`published_at`/`body` onto `GitHubReleaseNotes`, behind
+  the SAME `GitHubRepoAllowList.isReleaseEndpoint` fail-closed gate as the
+  update check. The separate raw-content feed (the deleted `WhatsNewFeedApi`
+  + `whatsnew/whatsnew.json` on raw.githubusercontent.com) and its
+  allow-list identity are gone. Pinned by the `fetchReleaseNotes` arms of
+  `GitHubReleasesApiImplTest`.
+- **Repository** (core:data `whatsnew/`): `WhatsNewRepositoryImpl` starts
+  EMPTY — the deleted `WhatsNewBundled` snapshot is not replaced; the
+  ExperimentalStore `whatsNewFeedJson` cache folds in at construction (the
+  offline floor between launches) and a successful `refresh()` overrides
+  per version. Family DI: `dataWhatsNewModule` (GitHubReleasesApi from
+  `networkJvmModule`, the same single the update check uses). Pinned by
+  `WhatsNewRepositoryImplTest` (empty start, cache survival, per-version
+  override-by-edit, blank-release drop).
+- **Launch policy** (app `shell/WhatsNewCoordinator.kt`, pure policy in
+  `whatsnew/WhatsNewDecision.kt`): SHOW_IF_CONTENT serves the cached feed
+  first; a version the cache doesn't know waits for exactly one fetch.
+  The stamp-when-unknown arm fires ONLY on a SUCCESSFUL fetch — a failed
+  one (offline first launch) leaves the seen-version stamp alone so the
+  next launch retries instead of silently losing the prompt (the policy
+  the bundled snapshot used to make unnecessary). Rendered by
+  `WhatsNewSheetOverlay` only while the update sheet is Idle — an
+  available self-update outranks the prompt. Pinned by
+  `WhatsNewCoordinatorTest` (incl. the failed-fetch-never-stamps retry) +
+  `WhatsNewDecisionTest`.
+- **Surfaces**: the post-update `WhatsNewSheet` and the Settings archive
+  (`WhatsNewScreen`, feature/settings) render cards, falling back to
+  `MarkdownText` for releases without the table; deep links resolve through
+  the compiled-in `WhatsNewTargets` route map (core/ui navigation). The
+  update sheet's `UpdateAvailable` state derives the SAME cards from the
+  pending release's body — `parseWhatsNewEntries` over
+  `AppUpdateInfo.releaseNotes`, which rides along with the update-check
+  response, zero extra fetches — with a view/hide full-notes toggle reusing
+  the up-to-date viewer's strings. Desktop keeps its markdown-body update
+  surfaces; parser and repository are shared, so cards are a drop-in there.

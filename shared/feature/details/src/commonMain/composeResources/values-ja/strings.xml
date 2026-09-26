@@ -102,10 +102,10 @@
     <string name="detail_playlist_create">作成</string>
     <string name="detail_msg_no_playlists">まだプレイリストはありません</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_added_to_playlist">\"%1$s\" に追加しました</string>
+    <string name="detail_msg_added_to_playlist">"%1$s" に追加しました</string>
     <string name="detail_msg_added_to_watch_later">「後で見る」に追加しました</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_playlist_created">\"%1$s\" を作成しアイテムを追加しました</string>
+    <string name="detail_msg_playlist_created">"%1$s" を作成しアイテムを追加しました</string>
     <string name="detail_msg_couldnt_add_to_playlist">プレイリストに追加できませんでした</string>
     <plurals name="detail_playlist_item_count">
         <item quantity="other">%1$d 件のアイテム</item>
@@ -120,9 +120,9 @@
     <string name="detail_collection_create">作成</string>
     <string name="detail_msg_no_collections">コレクションはまだありません</string>
     <!-- %1$s = コレクション名 -->
-    <string name="detail_msg_added_to_collection">\"%1$s\" に追加しました</string>
+    <string name="detail_msg_added_to_collection">"%1$s" に追加しました</string>
     <!-- %1$s = コレクション名 -->
-    <string name="detail_msg_collection_created">\"%1$s\" を作成しアイテムを追加しました</string>
+    <string name="detail_msg_collection_created">"%1$s" を作成しアイテムを追加しました</string>
     <string name="detail_msg_couldnt_add_to_collection">コレクションに追加できませんでした</string>
     <plurals name="detail_collection_item_count">
         <item quantity="other">%1$d 件のアイテム</item>
@@ -238,7 +238,7 @@
     <string name="detail_manage_delete_file">ファイルを削除</string>
     <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
     <string name="detail_manage_delete_title">エピソードファイルを削除</string>
-    <string name="detail_manage_delete_message">\"%1$s\" (%2$s) のファイルを削除しますか? Sonarrから削除され、代替を検索できます。</string>
+    <string name="detail_manage_delete_message">"%1$s" (%2$s) のファイルを削除しますか? Sonarrから削除され、代替を検索できます。</string>
     <string name="detail_manage_delete_confirm">削除</string>
     <!-- Empty / error states -->
     <string name="detail_manage_no_episodes">このシリーズのエピソードはSonarrに見つかりませんでした。</string>

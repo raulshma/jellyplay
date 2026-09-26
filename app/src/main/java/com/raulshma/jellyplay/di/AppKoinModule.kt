@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import com.raulshma.jellyplay.startup.AppStartupPrewarms
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
 import com.raulshma.jellyplay.startup.DownloadRecoveryInitializer
@@ -113,6 +114,14 @@ fun androidAppModule(context: Context): Module = module {
             appUpdateRepository = get(),
             apkInstallBuilder = get(),
             experimentalStore = get(),
+        )
+    }
+    single {
+        WhatsNewCoordinator(
+            whatsNewRepository = get(),
+            experimentalStore = get(),
+            appRuntimeStateStore = get(),
+            currentVersionName = { installedVersionName(context) },
         )
     }
     single { SyncPlayOpenCoordinator(syncPlayManager = get()) }
@@ -215,6 +224,7 @@ val androidAppViewModelsModule: Module = module {
             sessionCoordinator = get(),
             updateCoordinator = get(),
             syncPlayOpenCoordinator = get(),
+            whatsNewCoordinator = get(),
         )
     }
     viewModel {
@@ -323,6 +333,28 @@ private class AppAudioPlayerCast(
     override fun pause() = castManager.pause()
     override fun seekTo(positionMs: Long) = castManager.seekTo(positionMs)
     override fun setVolume(volume: Float) = castManager.setVolume(volume)
+}
+
+/**
+ * The installed version name for the What's New coordinator's show-once
+ * comparison — a twin of core:data AndroidDataModule's update-check probe
+ * (same PackageManager read, same versionName-first preference). Kept here
+ * because that seam is module-private and update-flow-local; when a third
+ * consumer appears, hoist both into one shared Koin single.
+ */
+private fun installedVersionName(context: Context): String {
+    val pm = context.packageManager
+    val info = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        pm.getPackageInfo(
+            context.packageName,
+            android.content.pm.PackageManager.PackageInfoFlags.of(0),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        pm.getPackageInfo(context.packageName, 0)
+    }
+    @Suppress("DEPRECATION")
+    return info.versionName ?: androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info).toString()
 }
 
 /**

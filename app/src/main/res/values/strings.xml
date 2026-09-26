@@ -188,4 +188,7 @@
     <string name="player_speed_custom">Custom speed</string>
     <string name="player_speed_value">%1$sx</string>
     <string name="player_speed_slider_label">Adjust playback speed</string>
+    <string name="whatsnew_sheet_title">What\'s New</string>
+    <string name="whatsnew_release_title">New in v%1$s</string>
+    <string name="whatsnew_got_it">Got it</string>
 </resources>

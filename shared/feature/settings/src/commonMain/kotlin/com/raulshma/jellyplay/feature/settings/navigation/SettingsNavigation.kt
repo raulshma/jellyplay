@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.feature.settings.SettingsNavActions
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
+import com.raulshma.jellyplay.feature.settings.WhatsNewScreen
 
 fun EntryProviderScope<NavKey>.settingsSection(
     navigator: Navigator,
@@ -266,6 +267,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
     entry<Route.Licenses> {
         LicensesScreen(
             onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.WhatsNew> {
+        WhatsNewScreen(
+            onBack = { navigator.goBack() },
+            onNavigate = { route -> navigator.navigate(route) },
         )
     }
 }

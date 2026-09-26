@@ -5,13 +5,13 @@
 
     <string name="syncplay_leave_group">Leave group</string>
     <string name="syncplay_leave_group_confirm_title">Leave group?</string>
-    <string name="syncplay_leave_group_confirm_message">You\'ll be removed from the watch party.</string>
+    <string name="syncplay_leave_group_confirm_message">You'll be removed from the watch party.</string>
     <string name="syncplay_retry">Retry</string>
     <string name="syncplay_no_active_groups">No active SyncPlay groups</string>
     <string name="syncplay_create_group_together">Create a group to watch together</string>
     <string name="syncplay_create_group">Create group</string>
     <string name="syncplay_join_group_question">Join group?</string>
-    <string name="syncplay_join_group_confirm">Join \"%1$s\"?</string>
+    <string name="syncplay_join_group_confirm">Join "%1$s"?</string>
     <string name="syncplay_join">Join</string>
     <string name="syncplay_cancel">Cancel</string>
     <string name="syncplay_playing_item">Playing: %1$s</string>

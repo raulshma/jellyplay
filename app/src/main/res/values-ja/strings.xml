@@ -184,4 +184,7 @@
     <string name="player_speed_custom">再生速度を指定</string>
     <string name="player_speed_value">%1$sx</string>
     <string name="player_speed_slider_label">再生速度を調整</string>
+    <string name="whatsnew_sheet_title">新機能</string>
+    <string name="whatsnew_release_title">v%1$s の新機能</string>
+    <string name="whatsnew_got_it">了解</string>
 </resources>

@@ -6,10 +6,10 @@
     <string name="settings_home_layout_reset_title">ホームレイアウトをリセット</string>
     <string name="settings_home_layout_reset_message">すべてのホームレイアウト設定をデフォルトにリセットしますか? 保存済みのプリセットは保持されます。</string>
     <string name="settings_preset_applied">プリセットを適用しました</string>
-    <string name="settings_preset_saved">\"%1$s\" を保存しました</string>
-    <string name="settings_preset_applied_named">\"%1$s\" を適用しました</string>
-    <string name="settings_preset_deleted">\"%1$s\" を削除しました</string>
-    <string name="settings_share_preset">\"%1$s\" を共有</string>
+    <string name="settings_preset_saved">"%1$s" を保存しました</string>
+    <string name="settings_preset_applied_named">"%1$s" を適用しました</string>
+    <string name="settings_preset_deleted">"%1$s" を削除しました</string>
+    <string name="settings_share_preset">"%1$s" を共有</string>
     <string name="settings_home_layout_subject">JellyPlay ホームレイアウト: %1$s</string>
 
     <!-- Common shared strings -->
@@ -1910,4 +1910,6 @@
     <string name="diff_self_update_download">アップデートの自動ダウンロード</string>
     <string name="diff_update_dismiss_period">アップデート通知の非表示期間</string>
     <string name="diff_vlc_skip_frame">LibVLC フレームスキップ</string>
+    <string name="settings_whatsnew_title">新機能</string>
+    <string name="settings_whatsnew_subtitle">リリースのハイライトと変更点</string>
 </resources>

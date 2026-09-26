@@ -38,17 +38,17 @@
 
     <!-- Grab -->
     <string name="arrqueue_grab_title">Force-grab release</string>
-    <string name="arrqueue_grab_message">Send \"%1$s\" to its download client now?</string>
-    <string name="arrqueue_grab_sent">Grab sent for \"%1$s\"</string>
+    <string name="arrqueue_grab_message">Send "%1$s" to its download client now?</string>
+    <string name="arrqueue_grab_sent">Grab sent for "%1$s"</string>
 
     <!-- Import -->
     <string name="arrqueue_import_title">Force import</string>
-    <string name="arrqueue_import_message">Import \"%1$s\" into %2$s now?</string>
-    <string name="arrqueue_import_sent">Import sent for \"%1$s\"</string>
+    <string name="arrqueue_import_message">Import "%1$s" into %2$s now?</string>
+    <string name="arrqueue_import_sent">Import sent for "%1$s"</string>
 
     <!-- Remove / delete dialog -->
     <string name="arrqueue_remove_selected_title">Remove selected?</string>
-    <string name="arrqueue_remove_item_title">Remove \"%1$s\"?</string>
+    <string name="arrqueue_remove_item_title">Remove "%1$s"?</string>
     <string name="arrqueue_remove_body_bulk">Choose how these items should be removed from the queue.</string>
     <string name="arrqueue_remove_body_single">Choose how this item should be removed from the queue.</string>
     <string name="arrqueue_remove_only">Remove only</string>

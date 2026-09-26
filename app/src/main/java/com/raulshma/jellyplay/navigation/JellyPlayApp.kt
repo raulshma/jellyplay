@@ -135,5 +135,14 @@ fun JellyPlayApp(
         // build exists. Keep this after the `when` so the sheet sits above all
         // content.
         UpdateSheetOverlay(infra.updateCoordinatorLazy.value)
+
+        // Post-update What's New sheet — same root placement, but the overlay
+        // itself defers to the update sheet above (never stacks on it). Deep
+        // links ride the ViewModel's pending-route channel.
+        WhatsNewSheetOverlay(
+            whatsNew = infra.whatsNewCoordinatorLazy.value,
+            update = infra.updateCoordinatorLazy.value,
+            onNavigate = viewModel::navigateFromShell,
+        )
     }
 }

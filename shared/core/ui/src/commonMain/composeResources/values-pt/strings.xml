@@ -260,4 +260,13 @@
     <string name="core_ui_read">Ler</string>
     <string name="core_show_password">Mostrar palavra-passe</string>
     <string name="core_hide_password">Ocultar palavra-passe</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">Novidades</string>
+    <string name="core_ui_whatsnew_release_title">Novidades na v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">Novo</string>
+    <string name="core_ui_whatsnew_category_improvement">Melhorado</string>
+    <string name="core_ui_whatsnew_category_fix">Corrigido</string>
+    <string name="core_ui_whatsnew_take_me_there">Levar-me lá</string>
+    <string name="core_ui_whatsnew_got_it">Entendido</string>
+    <string name="core_ui_whatsnew_archive_empty">Ainda sem destaques da versão.</string>
 </resources>

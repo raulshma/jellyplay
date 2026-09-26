@@ -259,4 +259,13 @@
     <string name="core_ui_read">阅读</string>
     <string name="core_show_password">显示密码</string>
     <string name="core_hide_password">隐藏密码</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">新功能</string>
+    <string name="core_ui_whatsnew_release_title">v%1$s 的新功能</string>
+    <string name="core_ui_whatsnew_category_new">新增</string>
+    <string name="core_ui_whatsnew_category_improvement">改进</string>
+    <string name="core_ui_whatsnew_category_fix">修复</string>
+    <string name="core_ui_whatsnew_take_me_there">带我去</string>
+    <string name="core_ui_whatsnew_got_it">知道了</string>
+    <string name="core_ui_whatsnew_archive_empty">暂无版本亮点。</string>
 </resources>

@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -112,6 +113,7 @@ class MainViewModelTest {
     private val sessionCoordinator: SessionCoordinator = mockk(relaxed = true)
     private val updateCoordinator: UpdateCoordinator = mockk(relaxed = true)
     private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator = mockk(relaxed = true)
+    private val whatsNewCoordinator: WhatsNewCoordinator = mockk(relaxed = true)
 
     private val currentUser = MutableStateFlow<UserInfo?>(null)
     private val mainPreferences = MutableStateFlow(MainPreferences())
@@ -166,6 +168,7 @@ class MainViewModelTest {
         sessionCoordinator = sessionCoordinator,
         updateCoordinator = updateCoordinator,
         syncPlayOpenCoordinator = syncPlayOpenCoordinator,
+        whatsNewCoordinator = whatsNewCoordinator,
     )
 
     // ── launcher shortcut routing ──────────────────────────────────────────

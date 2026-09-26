@@ -53,8 +53,8 @@
     <!-- Confirm dialogs -->
     <string name="requests_dialog_approve_title">Approve request?</string>
     <string name="requests_dialog_decline_title">Decline request?</string>
-    <string name="requests_dialog_approve_message">Approve this request? This can\'t be undone.</string>
-    <string name="requests_dialog_decline_message">Decline this request? The requester will be notified and this can\'t be undone.</string>
+    <string name="requests_dialog_approve_message">Approve this request? This can't be undone.</string>
+    <string name="requests_dialog_decline_message">Decline this request? The requester will be notified and this can't be undone.</string>
     <string name="requests_action_cancel">Cancel</string>
 
     <!-- Relative time -->

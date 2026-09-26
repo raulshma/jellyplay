@@ -169,6 +169,7 @@ class MainActivity : FragmentActivity() {
             sessionCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             updateCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             syncPlayOpenCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            whatsNewCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             // Remote navigation ladder: synthesized D-pad/select/menu
             // key events go through the activity's own dispatch (down + up),
             // so Compose's existing key/focus handling interprets them —

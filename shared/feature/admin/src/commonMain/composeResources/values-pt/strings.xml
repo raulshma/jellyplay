@@ -48,7 +48,7 @@
     <string name="admin_stop">Parar</string>
     <string name="admin_stop_session_cd">Parar reprodução</string>
     <string name="admin_stop_session_title">Parar a reprodução?</string>
-    <string name="admin_stop_session_body">Parar a mídia em reprodução em \"%1$s\"?</string>
+    <string name="admin_stop_session_body">Parar a mídia em reprodução em "%1$s"?</string>
     <string name="admin_run">Executar</string>
 
     <!-- Relative time -->
@@ -86,7 +86,7 @@
     <!-- DevicesScreen -->
     <string name="admin_devices_title">Dispositivos</string>
     <string name="admin_delete_device_title">Excluir dispositivo</string>
-    <string name="admin_delete_device_body">Excluir \"%1$s\"? Isso encerrará todas as sessões associadas.</string>
+    <string name="admin_delete_device_body">Excluir "%1$s"? Isso encerrará todas as sessões associadas.</string>
     <string name="admin_edit_device_name_title">Editar nome do dispositivo</string>
     <string name="admin_custom_name">Nome personalizado</string>
     <string name="admin_no_devices">Nenhum dispositivo encontrado</string>
@@ -159,7 +159,7 @@
     <string name="admin_password_optional">Senha (opcional)</string>
     <string name="admin_create">Criar</string>
     <string name="admin_delete_user_title">Excluir usuário</string>
-    <string name="admin_delete_user_body">Excluir \"%1$s\"? Isso não pode ser desfeito.</string>
+    <string name="admin_delete_user_body">Excluir "%1$s"? Isso não pode ser desfeito.</string>
     <string name="admin_new_password">Nova senha</string>
     <string name="admin_discard">Descartar</string>
     <string name="admin_save_changes">Salvar alterações</string>

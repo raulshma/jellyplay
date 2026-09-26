@@ -48,7 +48,7 @@
     <string name="admin_stop">중지</string>
     <string name="admin_stop_session_cd">재생 중지</string>
     <string name="admin_stop_session_title">재생을 중지하시겠습니까?</string>
-    <string name="admin_stop_session_body">\"%1$s\"에서 재생 중인 미디어를 중지하시겠습니까?</string>
+    <string name="admin_stop_session_body">"%1$s"에서 재생 중인 미디어를 중지하시겠습니까?</string>
     <string name="admin_run">실행</string>
 
     <!-- Relative time -->
@@ -86,7 +86,7 @@
     <!-- DevicesScreen -->
     <string name="admin_devices_title">기기</string>
     <string name="admin_delete_device_title">기기 삭제</string>
-    <string name="admin_delete_device_body">\"%1$s\"를 삭제하시겠습니까? 연결된 모든 세션이 로그아웃됩니다.</string>
+    <string name="admin_delete_device_body">"%1$s"를 삭제하시겠습니까? 연결된 모든 세션이 로그아웃됩니다.</string>
     <string name="admin_edit_device_name_title">기기 이름 편집</string>
     <string name="admin_custom_name">사용자 지정 이름</string>
     <string name="admin_no_devices">기기를 찾을 수 없습니다</string>
@@ -159,7 +159,7 @@
     <string name="admin_password_optional">비밀번호(선택)</string>
     <string name="admin_create">만들기</string>
     <string name="admin_delete_user_title">사용자 삭제</string>
-    <string name="admin_delete_user_body">\"%1$s\"를 삭제하시겠습니까? 되돌릴 수 없습니다.</string>
+    <string name="admin_delete_user_body">"%1$s"를 삭제하시겠습니까? 되돌릴 수 없습니다.</string>
     <string name="admin_new_password">새 비밀번호</string>
     <string name="admin_discard">취소</string>
     <string name="admin_save_changes">변경 사항 저장</string>

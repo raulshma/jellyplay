@@ -23,19 +23,19 @@
 
     <string name="livetv_record_once">Enregistrer</string>
     <string name="livetv_record_series">Enregistrer la série</string>
-    <string name="livetv_cancel_recording">Annuler l\'enregistrement</string>
+    <string name="livetv_cancel_recording">Annuler l'enregistrement</string>
     <string name="livetv_cancel_series">Annuler la série</string>
     <string name="livetv_delete">Supprimer</string>
-    <string name="livetv_delete_recording_cd">Supprimer l\'enregistrement</string>
-    <string name="livetv_delete_recording_title">Supprimer l\'enregistrement ?</string>
+    <string name="livetv_delete_recording_cd">Supprimer l'enregistrement</string>
+    <string name="livetv_delete_recording_title">Supprimer l'enregistrement ?</string>
     <string name="livetv_delete_recording_body">Supprimer « %1$s » ? Action irréversible.</string>
     <string name="livetv_record_success">Enregistrement programmé</string>
-    <string name="livetv_record_failed">Échec de la programmation de l\'enregistrement</string>
+    <string name="livetv_record_failed">Échec de la programmation de l'enregistrement</string>
     <string name="livetv_record_canceled">Enregistrement annulé</string>
 
     <!-- Channel detail screen -->
     <string name="livetv_channel_watch_live">Regarder en direct</string>
-    <string name="livetv_channel_on_today">Diffusé aujourd\'hui</string>
+    <string name="livetv_channel_on_today">Diffusé aujourd'hui</string>
     <string name="livetv_channel_live">DIRECT</string>
     <string name="livetv_channel_no_program_info">Aucune information sur le programme</string>
     <string name="livetv_channel_load_failed">Échec du chargement du guide des programmes</string>
@@ -46,7 +46,7 @@
     <string name="livetv_no_guide_available">Aucun guide des programmes disponible</string>
     <string name="livetv_record_program_prompt">Enregistrer le programme ?</string>
     <string name="livetv_record_single_timer_note">Un minuteur unique sera programmé sur le serveur.</string>
-    <string name="livetv_record_schedule_failed">Impossible de programmer l\'enregistrement</string>
+    <string name="livetv_record_schedule_failed">Impossible de programmer l'enregistrement</string>
     <string name="livetv_recording_in_progress">Enregistrement…</string>
     <string name="livetv_scheduling_timer">Programmation du minuteur</string>
     <string name="livetv_action_cancel">Annuler</string>

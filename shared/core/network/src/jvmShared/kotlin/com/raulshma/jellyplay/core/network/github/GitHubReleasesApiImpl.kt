@@ -30,8 +30,9 @@ data class GitHubReleaseAsset(
 class GitHubReleasesApiImpl(
     private val okHttpClient: OkHttpClient,
     // Overridable only so unit tests can point at a MockWebServer; production
-    // wiring leaves it as the GitHub Releases latest endpoint.
+    // wiring leaves these as the GitHub Releases endpoints.
     private val latestReleaseUrl: String = LATEST_RELEASE_URL,
+    private val releasesListUrl: String = RELEASES_LIST_URL,
 ) : GitHubReleasesApi {
 
     private val json = SeerrApiClientImpl.lenientJson
@@ -78,6 +79,16 @@ class GitHubReleasesApiImpl(
             size = size,
         )
     }
+
+    // The /releases list item: notes metadata only — no assets to vet, the
+    // body is rendered (markdown/cards), never used to drive a download.
+    @Serializable
+    private data class GitHubReleaseListItem(
+        @SerialName("tag_name") val tagName: String? = null,
+        val name: String? = null,
+        @SerialName("published_at") val publishedAt: String? = null,
+        val body: String? = null,
+    )
 
     override suspend fun fetchLatestUpdate(
         currentVersionName: String,
@@ -170,6 +181,52 @@ class GitHubReleasesApiImpl(
         }
     }
 
+    override suspend fun fetchReleaseNotes(): Result<List<GitHubReleaseNotes>> {
+        val request = Request.Builder()
+            .url(releasesListUrl)
+            .header("Accept", "application/vnd.github.v3+json")
+            .get()
+            .build()
+
+        return try {
+            withContext(Dispatchers.IO) {
+                http.execute(request) { response ->
+                    // Same fail-closed gate as the latest-release fetch: the
+                    // FINAL post-redirect URL must stay on the pinned repo's
+                    // releases path before a byte of the list is trusted.
+                    val finalUrl = response.request.url
+                    if (!GitHubRepoAllowList.isReleaseEndpoint(finalUrl)) {
+                        throw securityViolation(
+                            "GitHub releases endpoint left the pinned repo (final URL: $finalUrl)",
+                        )
+                    }
+                    val stream = response.body?.byteStream()
+                        ?: throw http.emptyBodyNetworkError()
+                    val items = json.decodeFromStream<List<GitHubReleaseListItem>>(stream)
+                    items.mapNotNull { item ->
+                        val tag = item.tagName?.trim()?.removePrefix("v").orEmpty()
+                        if (tag.isBlank()) null
+                        else GitHubReleaseNotes(
+                            version = tag,
+                            // ISO-8601 `2026-09-26T10:00:00Z` → display date.
+                            date = item.publishedAt?.takeIf { it.length >= 10 }?.take(10),
+                            title = item.name?.takeIf { it.isNotBlank() },
+                            body = item.body.orEmpty(),
+                        )
+                    }
+                }
+            }.let { Result.success(it) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: UpdateSecurityException) {
+            Result.failure(e)
+        } catch (e: ApiException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(ApiException.fromNetwork(e, e.message ?: "GitHub request failed"))
+        }
+    }
+
     /**
      * Logs the allow-list violation at warn (the security breadcrumb) and
      * shapes it as the fail-closed failure the callers surface.
@@ -184,6 +241,10 @@ class GitHubReleasesApiImpl(
 
         const val LATEST_RELEASE_URL =
             "https://api.github.com/repos/raulshma/jellyplay/releases/latest"
+
+        /** The What's New feed's remote source: the recent-releases list. */
+        const val RELEASES_LIST_URL =
+            "https://api.github.com/repos/raulshma/jellyplay/releases?per_page=30"
 
         /**
          * Picks the APK asset whose name matches the running [flavor] and the

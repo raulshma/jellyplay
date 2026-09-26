@@ -6,10 +6,10 @@
     <string name="settings_home_layout_reset_title">홈 레이아웃 초기화</string>
     <string name="settings_home_layout_reset_message">모든 홈 레이아웃 설정을 기본값으로 재설정하시겠습니까? 저장된 프리셋은 유지됩니다.</string>
     <string name="settings_preset_applied">프리셋이 적용됨</string>
-    <string name="settings_preset_saved">\"%1$s\" 저장됨</string>
-    <string name="settings_preset_applied_named">\"%1$s\" 적용됨</string>
-    <string name="settings_preset_deleted">\"%1$s\" 삭제됨</string>
-    <string name="settings_share_preset">\"%1$s\" 공유</string>
+    <string name="settings_preset_saved">"%1$s" 저장됨</string>
+    <string name="settings_preset_applied_named">"%1$s" 적용됨</string>
+    <string name="settings_preset_deleted">"%1$s" 삭제됨</string>
+    <string name="settings_share_preset">"%1$s" 공유</string>
     <string name="settings_home_layout_subject">JellyPlay 홈 레이아웃: %1$s</string>
 
     <!-- Common shared strings -->
@@ -156,7 +156,7 @@
     <string name="settings_check_updates_subtitle">주기적으로 GitHub에서 새 릴리스 확인</string>
     <string name="settings_check_for_updates">업데이트 확인</string>
     <string name="settings_update_dismiss_title">닫은 업데이트 숨기기 기간</string>
-    <string name="settings_update_dismiss_subtitle">\'나중에\'로 닫은 업데이트가 다시 표시되기까지의 기간</string>
+    <string name="settings_update_dismiss_subtitle">'나중에'로 닫은 업데이트가 다시 표시되기까지의 기간</string>
     <string name="settings_update_dismiss_12_hours">12시간</string>
     <string name="settings_update_dismiss_24_hours">24시간</string>
     <string name="settings_update_dismiss_3_days">3일</string>
@@ -614,8 +614,8 @@
     <string name="settings_library_no_libraries">라이브러리를 찾을 수 없습니다</string>
     <string name="settings_subsection_latest_media">최신 미디어</string>
     <string name="settings_subsection_recently_added">최근 추가됨</string>
-    <string name="settings_subsection_latest_media_desc">이 라이브러리의 \"최신\" 행 표시</string>
-    <string name="settings_subsection_recently_added_desc">\"최근 추가됨\"에 이 라이브러리 포함</string>
+    <string name="settings_subsection_latest_media_desc">이 라이브러리의 "최신" 행 표시</string>
+    <string name="settings_subsection_recently_added_desc">"최근 추가됨"에 이 라이브러리 포함</string>
     <string name="settings_move_up_cd">위로 이동</string>
     <string name="settings_move_down_cd">아래로 이동</string>
     <string name="settings_remove_section_cd">%1$s 제거</string>
@@ -852,7 +852,7 @@
     <string name="settings_continue_next_up">계속 시청과 다음 작품</string>
     <string name="settings_reset_home_title">홈 설정을 초기화하시겠습니까?</string>
     <string name="settings_reset_home_message">홈 화면 설정이 모두 기본값으로 복원됩니다.</string>
-    <string name="settings_home_moved_info">홈 화면 설정이 \'홈 화면\' 페이지로 이동했습니다.</string>
+    <string name="settings_home_moved_info">홈 화면 설정이 '홈 화면' 페이지로 이동했습니다.</string>
     <string name="settings_pinned_home_sections_brief">컬렉션, 재생목록, 즐겨찾기, 장르 또는 스튜디오를 홈에 고정</string>
     <string name="settings_home_layout_presets_brief">홈 레이아웃 저장, 공유, 가져오기 또는 재설정</string>
     <string name="settings_performance">성능</string>
@@ -1638,16 +1638,16 @@
     <string name="ss_remote_display_content_title">원격 콘텐츠 표시</string>
     <string name="ss_remote_display_content_subtitle">재생 중이 아닐 때 다른 세션이 이 기기에서 항목 세부 정보를 열 수 있습니다</string>
     <string name="settings_idle_ambient">유휴 화면</string>
-    <string name="settings_idle_ambient_on">유휴 상태이면 \'재생 준비 완료\' 화면이 나타납니다</string>
+    <string name="settings_idle_ambient_on">유휴 상태이면 '재생 준비 완료' 화면이 나타납니다</string>
     <string name="settings_idle_ambient_off">창은 마지막 화면을 계속 표시합니다</string>
     <string name="settings_idle_ambient_enabled">유휴 시 표시</string>
-    <string name="settings_idle_ambient_enabled_subtitle">일정 시간 사용하지 않으면 앰비언트 \'재생 준비 완료\' 화면을 표시합니다</string>
+    <string name="settings_idle_ambient_enabled_subtitle">일정 시간 사용하지 않으면 앰비언트 '재생 준비 완료' 화면을 표시합니다</string>
     <string name="settings_idle_ambient_timeout">유휴 시간 제한</string>
     <string name="settings_idle_ambient_timeout_subtitle">유휴 화면이 나타나기까지 대기할 시간</string>
     <string name="settings_idle_ambient_timeout_off">꺼짐</string>
     <string name="settings_idle_ambient_timeout_minutes">%1$d분</string>
     <string name="ss_idle_ambient_enabled_title">유휴 시 표시</string>
-    <string name="ss_idle_ambient_enabled_subtitle">일정 시간 사용하지 않으면 앰비언트 \'재생 준비 완료\' 화면을 표시합니다</string>
+    <string name="ss_idle_ambient_enabled_subtitle">일정 시간 사용하지 않으면 앰비언트 '재생 준비 완료' 화면을 표시합니다</string>
     <string name="ss_idle_ambient_timeout_title">유휴 시간 제한</string>
     <string name="ss_idle_ambient_timeout_subtitle">유휴 화면이 나타나기까지 대기할 시간</string>
     <string name="ss_home_backdrop_title">홈 배경</string>
@@ -1742,7 +1742,7 @@
     <string name="settings_switch_user_action">사용자 전환</string>
     <string name="settings_whats_new">새로운 기능</string>
     <string name="settings_download_updates_automatically">업데이트 자동 다운로드</string>
-    <string name="settings_download_updates_subtitle">\'다운로드\'를 누르기를 기다리지 않고 새 업데이트를 바로 내려받습니다.</string>
+    <string name="settings_download_updates_subtitle">'다운로드'를 누르기를 기다리지 않고 새 업데이트를 바로 내려받습니다.</string>
     <string name="factory_reset_cat_app_state">앱 상태</string>
     <string name="settings_import_preview_title">가져오기 미리보기</string>
     <string name="settings_import_preview_loading">백업 불러오는 중…</string>
@@ -1758,7 +1758,7 @@
     <string name="settings_import_preview_confirm_category_title">이 카테고리를 가져오시겠습니까?</string>
     <string name="settings_import_preview_confirm_category_message">이 카테고리의 설정만 백업 값으로 덮어써집니다.</string>
     <string name="settings_import_preview_confirm_extras_title">앱 상태를 가져오시겠습니까?</string>
-    <string name="settings_import_preview_confirm_extras_message">즐겨찾기 채널, 마지막 채널, \'나중에 보기\' 재생목록, 온보딩 상태가 백업 값으로 덮어써집니다.</string>
+    <string name="settings_import_preview_confirm_extras_message">즐겨찾기 채널, 마지막 채널, '나중에 보기' 재생목록, 온보딩 상태가 백업 값으로 덮어써집니다.</string>
     <string name="settings_track_selection">트랙 선택</string>
     <string name="settings_track_selection_summary">자동 오디오/자막 선택을 위한 프리셋과 언어 규칙</string>
     <string name="settings_track_selection_preset">선택 프리셋</string>
@@ -1894,8 +1894,8 @@
     <string name="diff_library_home_overrides">라이브러리별 홈 재정의</string>
     <string name="diff_nav_item_order">내비 항목 순서</string>
     <string name="diff_hidden_nav_items">숨김 처리한 내비 항목</string>
-    <string name="diff_next_up_excluded_series">\'다음 에피소드\'에서 제외한 시리즈</string>
-    <string name="diff_hidden_cw_items">숨김 처리한 \'이어 보기\' 항목</string>
+    <string name="diff_next_up_excluded_series">'다음 에피소드'에서 제외한 시리즈</string>
+    <string name="diff_hidden_cw_items">숨김 처리한 '이어 보기' 항목</string>
     <string name="diff_library_sort_overrides">라이브러리별 정렬 재정의</string>
     <string name="diff_library_view_overrides">라이브러리별 보기 재정의</string>
     <string name="diff_library_filter_overrides">라이브러리별 필터 재정의</string>
@@ -1910,4 +1910,6 @@
     <string name="diff_self_update_download">업데이트 자동 다운로드</string>
     <string name="diff_update_dismiss_period">업데이트 알림 미표시 기간</string>
     <string name="diff_vlc_skip_frame">LibVLC 프레임 건너뛰기</string>
+    <string name="settings_whatsnew_title">새로운 기능</string>
+    <string name="settings_whatsnew_subtitle">릴리스 하이라이트 및 변경 사항</string>
 </resources>

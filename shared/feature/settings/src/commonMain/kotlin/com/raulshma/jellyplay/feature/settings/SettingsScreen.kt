@@ -132,6 +132,8 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whatsnew_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whatsnew_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about_subtitle
@@ -1556,6 +1558,16 @@ fun SettingsScreen(
                                 subtitle = stringResource(Res.string.settings_about_subtitle),
                                 index = 0, count = 1,
                                 onClick = { openSetting("about") { Route.About } },
+                            )
+                        }
+
+                        settingsSection("item_whatsnew", isTv) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Sparkles,
+                                title = stringResource(Res.string.settings_whatsnew_title),
+                                subtitle = stringResource(Res.string.settings_whatsnew_subtitle),
+                                index = 0, count = 1,
+                                onClick = { openSetting("whatsnew") { Route.WhatsNew } },
                             )
                         }
                     }

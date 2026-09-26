@@ -18,7 +18,7 @@
     <string name="detail_section_special_features">Bonus</string>
     <string name="detail_section_chapters">Chapitres</string>
     <string name="detail_see_all">Tout voir</string>
-    <string name="detail_more_like_this_on_device">Sur l\'appareil</string>
+    <string name="detail_more_like_this_on_device">Sur l'appareil</string>
     <string name="detail_section_videos">Vidéos</string>
     <string name="detail_section_seasons">Saisons</string>
     <string name="detail_section_reviews">Critiques</string>
@@ -29,14 +29,14 @@
     <string name="detail_read">Lire</string>
     <string name="detail_continue_page">Continuer — page %1$d</string>
     <string name="detail_continue_percent">Continuer — %1$d %</string>
-    <string name="detail_play_finding_episode">Recherche de l\'épisode</string>
+    <string name="detail_play_finding_episode">Recherche de l'épisode</string>
     <string name="detail_play_no_episodes_available">Aucun épisode disponible</string>
     <string name="detail_play_no_episodes">Aucun épisode</string>
 
     <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
-    <string name="detail_skip_available_intro">Saut d\'intro disponible</string>
+    <string name="detail_skip_available_intro">Saut d'intro disponible</string>
     <string name="detail_skip_available_credits">Saut de générique disponible</string>
-    <string name="detail_skip_available_both">Saut d\'intro et générique</string>
+    <string name="detail_skip_available_both">Saut d'intro et générique</string>
 
     <!-- ── Up Next card label ───────────────────────────────────────────── -->
     <string name="detail_up_next">À suivre</string>
@@ -64,8 +64,8 @@
     <string name="detail_season_format">Saison %1$d</string>
     <string name="detail_spoiler">Spoiler</string>
     <string name="detail_watched_badge">Vu</string>
-    <string name="detail_cd_switch_to_list">Passer à la liste d\'épisodes verticale</string>
-    <string name="detail_cd_switch_to_cards">Passer aux cartes d\'épisodes horizontales</string>
+    <string name="detail_cd_switch_to_list">Passer à la liste d'épisodes verticale</string>
+    <string name="detail_cd_switch_to_cards">Passer aux cartes d'épisodes horizontales</string>
     <string name="detail_time_left_format">%1$s restantes</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
@@ -103,11 +103,11 @@
     <string name="detail_playlist_create">Créer</string>
     <string name="detail_msg_no_playlists">Aucune playlist pour le moment</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_added_to_playlist">Ajouté à \"%1$s\"</string>
+    <string name="detail_msg_added_to_playlist">Ajouté à "%1$s"</string>
     <string name="detail_msg_added_to_watch_later">Ajouté à À regarder plus tard</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_playlist_created">\"%1$s\" créée et élément ajouté</string>
-    <string name="detail_msg_couldnt_add_to_playlist">Impossible d\'ajouter à la playlist</string>
+    <string name="detail_msg_playlist_created">"%1$s" créée et élément ajouté</string>
+    <string name="detail_msg_couldnt_add_to_playlist">Impossible d'ajouter à la playlist</string>
     <plurals name="detail_playlist_item_count">
         <item quantity="one">%1$d élément</item>
         <item quantity="other">%1$d éléments</item>
@@ -122,10 +122,10 @@
     <string name="detail_collection_create">Créer</string>
     <string name="detail_msg_no_collections">Aucune collection pour le moment</string>
     <!-- %1$s = nom de la collection -->
-    <string name="detail_msg_added_to_collection">Ajouté à \"%1$s\"</string>
+    <string name="detail_msg_added_to_collection">Ajouté à "%1$s"</string>
     <!-- %1$s = nom de la collection -->
-    <string name="detail_msg_collection_created">\"%1$s\" créée et élément ajouté</string>
-    <string name="detail_msg_couldnt_add_to_collection">Impossible d\'ajouter à la collection</string>
+    <string name="detail_msg_collection_created">"%1$s" créée et élément ajouté</string>
+    <string name="detail_msg_couldnt_add_to_collection">Impossible d'ajouter à la collection</string>
     <plurals name="detail_collection_item_count">
         <item quantity="one">%1$d élément</item>
         <item quantity="other">%1$d éléments</item>
@@ -191,7 +191,7 @@
     <string name="detail_mark_season_unwatched_confirm_title">Marquer la saison comme non vue ?</string>
     <string name="detail_mark_season_unwatched_confirm_message">Cela marque tous les épisodes de cette saison comme non vus.</string>
     <string name="detail_cd_season_options">Marquer la saison comme vue ou non vue</string>
-    <string name="detail_msg_no_episodes_queued">Aucun épisode n\'a pu être mis en file</string>
+    <string name="detail_msg_no_episodes_queued">Aucun épisode n'a pu être mis en file</string>
     <string name="detail_msg_hidden_from_next_up">Masqué de À suivre</string>
     <string name="detail_msg_shown_in_next_up">Affiché dans À suivre</string>
     <string name="detail_msg_hidden_from_continue_watching">Masqué de Continuer à regarder</string>
@@ -205,13 +205,13 @@
 
     <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
     <string name="detail_error_load_failed">Impossible de charger les détails</string>
-    <string name="detail_error_access_denied">Vous n\'avez pas accès à cet élément.</string>
+    <string name="detail_error_access_denied">Vous n'avez pas accès à cet élément.</string>
     <string name="detail_error_details_not_loaded">Détails du média non chargés</string>
     <string name="detail_error_no_source">Aucune source de média disponible pour le téléchargement</string>
     <string name="detail_error_download_failed">Échec du téléchargement</string>
-    <string name="detail_error_not_a_series">Ceci n\'est pas une série</string>
+    <string name="detail_error_not_a_series">Ceci n'est pas une série</string>
     <string name="detail_error_queue_failed">Échec de la mise en file des téléchargements</string>
-    <string name="detail_error_unavailable_offline">Cet élément n\'est pas disponible hors ligne.</string>
+    <string name="detail_error_unavailable_offline">Cet élément n'est pas disponible hors ligne.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">Gérer la série</string>
@@ -241,8 +241,8 @@
     <string name="detail_manage_unmonitor">Ne plus surveiller</string>
     <string name="detail_manage_delete_file">Supprimer le fichier</string>
     <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
-    <string name="detail_manage_delete_title">Supprimer le fichier de l\'épisode</string>
-    <string name="detail_manage_delete_message">Supprimer le fichier de \"%1$s\" (%2$s) ? Sonarr le supprimera et vous pourrez rechercher un remplaçant.</string>
+    <string name="detail_manage_delete_title">Supprimer le fichier de l'épisode</string>
+    <string name="detail_manage_delete_message">Supprimer le fichier de "%1$s" (%2$s) ? Sonarr le supprimera et vous pourrez rechercher un remplaçant.</string>
     <string name="detail_manage_delete_confirm">Supprimer</string>
     <!-- Empty / error states -->
     <string name="detail_manage_no_episodes">Aucun épisode trouvé dans Sonarr pour cette série.</string>
@@ -250,13 +250,13 @@
     <!-- Content descriptions (TalkBack / TV) -->
     <string name="detail_manage_cd_search_season">Rechercher les éléments surveillés dans la saison</string>
     <string name="detail_manage_cd_toggle_monitor_season">Activer/désactiver la surveillance pour tous les épisodes de la saison</string>
-    <string name="detail_manage_cd_toggle_monitor_episode">Activer/désactiver la surveillance de l\'épisode</string>
-    <string name="detail_manage_cd_episode_menu">Options de l\'épisode</string>
+    <string name="detail_manage_cd_toggle_monitor_episode">Activer/désactiver la surveillance de l'épisode</string>
+    <string name="detail_manage_cd_episode_menu">Options de l'épisode</string>
 
     <!-- Localized error messages -->
     <string name="detail_manage_series_load_error">Impossible de charger les séries depuis Jellyfin.</string>
-    <string name="detail_manage_series_no_tvdb">Cette série n\'a pas d\'identifiant TVDb ; Sonarr ne peut pas la trouver.</string>
-    <string name="detail_manage_series_not_tracked">Aucun serveur Sonarr ne suit cette série. Ajoutez d\'abord la série dans Sonarr.</string>
+    <string name="detail_manage_series_no_tvdb">Cette série n'a pas d'identifiant TVDb ; Sonarr ne peut pas la trouver.</string>
+    <string name="detail_manage_series_not_tracked">Aucun serveur Sonarr ne suit cette série. Ajoutez d'abord la série dans Sonarr.</string>
 
     <!-- ── Seerr request / status buttons ──────────────────────────────── -->
     <string name="detail_available">Disponible</string>
@@ -313,7 +313,7 @@
     <string name="detail_collection_empty_title">Cette collection est vide</string>
     <string name="detail_collection_empty_description">Les éléments ajoutés à cette collection apparaîtront ici.</string>
     <string name="detail_person_empty_title">Aucun titre trouvé</string>
-    <string name="detail_person_empty_description">Cette personne n\'a aucun titre correspondant au filtre actuel.</string>
+    <string name="detail_person_empty_description">Cette personne n'a aucun titre correspondant au filtre actuel.</string>
     <string name="detail_season_empty_title">Aucun épisode disponible</string>
     <string name="detail_season_empty_description">Les épisodes apparaîtront ici une fois ajoutés.</string>
 
@@ -323,7 +323,7 @@
     <string name="detail_status">Statut</string>
     <string name="detail_progress">Progression</string>
     <string name="detail_download_status_pending">En attente</string>
-    <string name="detail_download_status_queued">En file d\'attente</string>
+    <string name="detail_download_status_queued">En file d'attente</string>
     <string name="detail_download_status_downloading">Téléchargement</string>
     <string name="detail_download_status_paused">En pause</string>
     <string name="detail_download_status_completed">Terminé</string>
@@ -340,10 +340,10 @@
     <string name="detail_close">Fermer</string>
     <string name="detail_delete">Supprimer</string>
     <string name="detail_delete_download_title">Supprimer le téléchargement</string>
-    <string name="detail_delete_download_message">Supprimer \"%1$s\" de votre appareil ? Cela libère %2$s.</string>
-    <string name="detail_delete_episode_title">Supprimer l\'épisode</string>
-    <string name="detail_delete_episode_cd">Supprimer l\'épisode</string>
-    <string name="detail_delete_episode_message">Supprimer \"%1$s\" de votre appareil ?</string>
+    <string name="detail_delete_download_message">Supprimer "%1$s" de votre appareil ? Cela libère %2$s.</string>
+    <string name="detail_delete_episode_title">Supprimer l'épisode</string>
+    <string name="detail_delete_episode_cd">Supprimer l'épisode</string>
+    <string name="detail_delete_episode_message">Supprimer "%1$s" de votre appareil ?</string>
     <string name="detail_delete_downloads_title">Supprimer les téléchargements</string>
     <string name="detail_select_episodes_to_remove">Sélectionnez les épisodes à supprimer de votre appareil.</string>
     <string name="detail_episodes_selected">%1$d sur %2$d épisodes sélectionnés</string>

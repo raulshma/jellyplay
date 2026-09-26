@@ -6,10 +6,10 @@
     <string name="settings_home_layout_reset_title">Restablecer diseño de inicio</string>
     <string name="settings_home_layout_reset_message">¿Restablecer todos los ajustes del diseño de inicio a sus valores predeterminados? Se conservan los presets guardados.</string>
     <string name="settings_preset_applied">Preset aplicado</string>
-    <string name="settings_preset_saved">Guardado \"%1$s\"</string>
-    <string name="settings_preset_applied_named">Aplicado \"%1$s\"</string>
-    <string name="settings_preset_deleted">Eliminado \"%1$s\"</string>
-    <string name="settings_share_preset">Compartir \"%1$s\"</string>
+    <string name="settings_preset_saved">Guardado "%1$s"</string>
+    <string name="settings_preset_applied_named">Aplicado "%1$s"</string>
+    <string name="settings_preset_deleted">Eliminado "%1$s"</string>
+    <string name="settings_share_preset">Compartir "%1$s"</string>
     <string name="settings_home_layout_subject">Diseño de inicio de JellyPlay: %1$s</string>
 
     <!-- Common shared strings -->
@@ -616,8 +616,8 @@
     <string name="settings_library_no_libraries">No se encontraron bibliotecas</string>
     <string name="settings_subsection_latest_media">Lo último</string>
     <string name="settings_subsection_recently_added">Añadido recientemente</string>
-    <string name="settings_subsection_latest_media_desc">Mostrar una fila de \"Lo último\" para esta biblioteca</string>
-    <string name="settings_subsection_recently_added_desc">Incluir esta biblioteca en \"Añadido recientemente\"</string>
+    <string name="settings_subsection_latest_media_desc">Mostrar una fila de "Lo último" para esta biblioteca</string>
+    <string name="settings_subsection_recently_added_desc">Incluir esta biblioteca en "Añadido recientemente"</string>
     <string name="settings_move_up_cd">Mover arriba</string>
     <string name="settings_move_down_cd">Mover abajo</string>
     <string name="settings_remove_section_cd">Quitar %1$s</string>
@@ -1912,4 +1912,6 @@
     <string name="diff_self_update_download">Descarga automática de actualizaciones</string>
     <string name="diff_update_dismiss_period">Periodo de descarte de actualizaciones</string>
     <string name="diff_vlc_skip_frame">Salto de fotogramas de LibVLC</string>
+    <string name="settings_whatsnew_title">Novedades</string>
+    <string name="settings_whatsnew_subtitle">Aspectos destacados y cambios de la versión</string>
 </resources>

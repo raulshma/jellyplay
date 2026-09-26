@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -46,6 +47,10 @@ import kotlinx.serialization.encodeToString
  *    dismissed-update keys are written via [setDismissedUpdate] but are **not**
  *    in [resetKeys] (a category reset must not re-prompt an already-dismissed
  *    update).
+ *  - `WHATSNEW_SEEN_VERSION` / `WHATSNEW_FEED_JSON` /
+ *    `WHATSNEW_FEED_FETCHED_AT_MS` → What's-New one-time + cache state, also
+ *    never reset and not slice fields (a stale feed document must not ride a
+ *    backup payload); see [whatsNewSeenVersion] / [setWhatsNewFeedCache].
  *  - `SHOW_ADVANCED_SETTINGS` → already a field of `AppearanceSlice`; this
  *    store clears it on reset (it is the experimental-category reset owner per
  *    `PreferenceResetCategory.EXPERIMENTAL`) but does **not** re-project it, to
@@ -87,6 +92,14 @@ class ExperimentalStore constructor(
 
         // How long a dismissed update stays suppressed for the same version.
         val UPDATE_DISMISS_PERIOD = stringPreferencesKey("update_dismiss_period")
+
+        // What's-New one-time + cache state — same one-time spirit as the
+        // dismissed-update keys (never reset, deliberately not slice fields so
+        // a stale feed document never rides a backup payload). Written via
+        // setWhatsNewSeenVersion / setWhatsNewFeedCache.
+        val WHATSNEW_SEEN_VERSION = stringPreferencesKey("whatsnew_seen_version")
+        val WHATSNEW_FEED_JSON = stringPreferencesKey("whatsnew_feed_json")
+        val WHATSNEW_FEED_FETCHED_AT_MS = longPreferencesKey("whatsnew_feed_fetched_at_ms")
     }
 
     private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
@@ -210,6 +223,51 @@ class ExperimentalStore constructor(
     /** Persists the "hide dismissed updates for" window (Settings → About). */
     suspend fun setUpdateDismissPeriod(period: UpdateDismissPeriod) {
         dataStore.edit { it[Keys.UPDATE_DISMISS_PERIOD] = period.name }
+    }
+
+    // ------------------------------------------------------------------
+    // What's New (one-time + cache state — deliberately NOT slice fields)
+    // ------------------------------------------------------------------
+
+    /**
+     * The version whose What's-New release the user has already been shown
+     * (or silently stamped for). `null` = never stamped (fresh install, or a
+     * pre-feature install). One-time state: never reset, never in a backup
+     * payload.
+     */
+    val whatsNewSeenVersion: Flow<String?> =
+        sharedPrefs.map { it[Keys.WHATSNEW_SEEN_VERSION] }.distinctUntilChanged()
+
+    /** Stamps [version] as seen; `null` clears the stamp. */
+    suspend fun setWhatsNewSeenVersion(version: String?) {
+        dataStore.edit {
+            if (version == null) it.remove(Keys.WHATSNEW_SEEN_VERSION)
+            else it[Keys.WHATSNEW_SEEN_VERSION] = version
+        }
+    }
+
+    /** The last fetched What's-New feed document (raw JSON), or null if never fetched. */
+    val whatsNewFeedJson: Flow<String?> =
+        sharedPrefs.map { it[Keys.WHATSNEW_FEED_JSON] }.distinctUntilChanged()
+
+    /** When [whatsNewFeedJson] was fetched (0 = never). */
+    val whatsNewFeedFetchedAtMs: Flow<Long> =
+        sharedPrefs.map { it[Keys.WHATSNEW_FEED_FETCHED_AT_MS] ?: 0L }.distinctUntilChanged()
+
+    /**
+     * Overwrites the feed cache. A `null` json clears both keys (treated as
+     * never-fetched); a non-null json always stamps [fetchedAtMs].
+     */
+    suspend fun setWhatsNewFeedCache(json: String?, fetchedAtMs: Long = wallNowMillis()) {
+        dataStore.edit {
+            if (json == null) {
+                it.remove(Keys.WHATSNEW_FEED_JSON)
+                it.remove(Keys.WHATSNEW_FEED_FETCHED_AT_MS)
+            } else {
+                it[Keys.WHATSNEW_FEED_JSON] = json
+                it[Keys.WHATSNEW_FEED_FETCHED_AT_MS] = fetchedAtMs
+            }
+        }
     }
 
     // ------------------------------------------------------------------

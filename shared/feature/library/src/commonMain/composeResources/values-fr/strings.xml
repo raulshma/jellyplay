@@ -2,7 +2,7 @@
 <resources>
     <!-- Library feature user-facing strings (enhancements §2.2) -->
     <string name="library_failed_to_load_items">Échec du chargement des éléments</string>
-    <string name="library_failed_to_load_more_items">Échec du chargement d\'autres éléments</string>
+    <string name="library_failed_to_load_more_items">Échec du chargement d'autres éléments</string>
 
     <!-- LibraryScreen -->
     <string name="library_title">Bibliothèque</string>
@@ -15,7 +15,7 @@
     </plurals>
     <string name="library_no_items_found">Aucun élément trouvé</string>
     <string name="library_no_downloads_offline">Aucun téléchargement pour le moment</string>
-    <string name="library_try_adjusting_filters">Essayez d\'ajuster vos filtres</string>
+    <string name="library_try_adjusting_filters">Essayez d'ajuster vos filtres</string>
     <string name="library_list_view">Vue en liste</string>
     <string name="library_grid_view">Vue en grille</string>
     <string name="library_thumb_view">Vue en miniatures</string>
@@ -34,7 +34,7 @@
     <string name="library_filter_resumable">En cours</string>
     <string name="library_filter_downloaded">Téléchargé</string>
     <string name="library_genres">Genres</string>
-    <string name="library_year_range">Plage d\'années</string>
+    <string name="library_year_range">Plage d'années</string>
     <string name="library_tags">Étiquettes</string>
     <string name="library_minimum_rating">Note minimale</string>
     <string name="library_apply_filters">Appliquer les filtres</string>
@@ -63,7 +63,7 @@
     <string name="library_all_filters">Tous les filtres</string>
     <string name="library_sort">Trier</string>
     <string name="library_type">Filtrer par type</string>
-    <string name="library_any">N\'importe lequel</string>
+    <string name="library_any">N'importe lequel</string>
     <string name="library_group_by">Grouper les résultats par</string>
     <string name="library_group_by_none">Aucun</string>
     <string name="library_group_by_name">Nom</string>
@@ -76,10 +76,10 @@
     <string name="library_action_group">Grouper</string>
     <string name="library_reset_all">Tout réinitialiser</string>
     <string name="library_reset_confirm_title">Réinitialiser la bibliothèque ?</string>
-    <string name="library_reset_confirm_message">Cela efface tous les filtres et revient à la bibliothèque par défaut. Le mode d\'affichage, la taille des affiches, le regroupement, ainsi que les filtres enregistrés et le tri du dossier actuel seront réinitialisés.</string>
+    <string name="library_reset_confirm_message">Cela efface tous les filtres et revient à la bibliothèque par défaut. Le mode d'affichage, la taille des affiches, le regroupement, ainsi que les filtres enregistrés et le tri du dossier actuel seront réinitialisés.</string>
     <string name="library_reset_dont_show_again">Ne plus afficher</string>
     <string name="library_year_from">À partir de %1$d</string>
-    <string name="library_year_to">Jusqu\'à %1$d</string>
+    <string name="library_year_to">Jusqu'à %1$d</string>
     <string name="data_download_started">Téléchargement démarré</string>
     <string name="data_download_start_failed">Impossible de démarrer le téléchargement</string>
 </resources>

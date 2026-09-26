@@ -259,4 +259,13 @@
     <string name="core_ui_read">読む</string>
     <string name="core_show_password">パスワードを表示</string>
     <string name="core_hide_password">パスワードを非表示</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">新機能</string>
+    <string name="core_ui_whatsnew_release_title">v%1$s の新機能</string>
+    <string name="core_ui_whatsnew_category_new">新規</string>
+    <string name="core_ui_whatsnew_category_improvement">改善</string>
+    <string name="core_ui_whatsnew_category_fix">修正</string>
+    <string name="core_ui_whatsnew_take_me_there">そこへ移動</string>
+    <string name="core_ui_whatsnew_got_it">了解</string>
+    <string name="core_ui_whatsnew_archive_empty">リリースのハイライトはまだありません。</string>
 </resources>

@@ -152,6 +152,12 @@ class UserPreferencesStore constructor(
         val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
         val DISMISSED_UPDATE_AT_MS = longPreferencesKey("dismissed_update_at_ms")
 
+        // Aliases for the What's-New one-time + cache keys owned by
+        // ExperimentalStore (registered here only for reset coverage).
+        val WHATSNEW_SEEN_VERSION = com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore.Keys.WHATSNEW_SEEN_VERSION
+        val WHATSNEW_FEED_JSON = com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore.Keys.WHATSNEW_FEED_JSON
+        val WHATSNEW_FEED_FETCHED_AT_MS = com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore.Keys.WHATSNEW_FEED_FETCHED_AT_MS
+
         // Aliases for store-owned keys the facade reads directly.
         val MEDIA_STREAM_SELECTIONS = com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore.Keys.MEDIA_STREAM_SELECTIONS
         val VIDEO_EFFECTS_SELECTIONS = com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore.Keys.VIDEO_EFFECTS_SELECTIONS
@@ -651,6 +657,12 @@ class UserPreferencesStore constructor(
         Keys.WATCH_LATER_PLAYLIST_ID,
         Keys.DISMISSED_UPDATE_VERSION,
         Keys.DISMISSED_UPDATE_AT_MS,
+        // What's-New one-time + cache state: same reasoning — a reset must not
+        // re-prompt a release the user already saw, and the fetched feed cache
+        // is runtime state, not a setting.
+        Keys.WHATSNEW_SEEN_VERSION,
+        Keys.WHATSNEW_FEED_JSON,
+        Keys.WHATSNEW_FEED_FETCHED_AT_MS,
     )
 
     /**

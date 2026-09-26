@@ -5,7 +5,7 @@
     <string name="onboarding_skip">Salta</string>
     <string name="onboarding_next">Avanti</string>
     <string name="onboarding_completion_title">Tutto pronto!</string>
-    <string name="onboarding_completion_subtitle">Il tuo JellyPlay è configurato e pronto all\'uso. Puoi sempre modificare queste impostazioni in seguito.</string>
+    <string name="onboarding_completion_subtitle">Il tuo JellyPlay è configurato e pronto all'uso. Puoi sempre modificare queste impostazioni in seguito.</string>
     <string name="onboarding_completion_start_watching">Inizia a guardare</string>
     <string name="onboarding_seerr_connection">Connessione</string>
     <string name="onboarding_seerr_connected">Connesso</string>
@@ -20,7 +20,7 @@
 
     <!-- SubtitlesStep (shared preview also consumes these) -->
     <string name="onboarding_subtitles_title">Sottotitoli</string>
-    <string name="onboarding_subtitles_subtitle">Personalizza l\'aspetto dei sottotitoli e le impostazioni predefinite</string>
+    <string name="onboarding_subtitles_subtitle">Personalizza l'aspetto dei sottotitoli e le impostazioni predefinite</string>
     <string name="onboarding_subtitles_preview">Anteprima sottotitoli</string>
     <string name="onboarding_subtitles_font_size">Dimensione carattere</string>
     <string name="onboarding_subtitles_font_color">Colore carattere</string>
@@ -38,8 +38,8 @@
     <string name="onboarding_seerr_password">Password</string>
     <string name="onboarding_seerr_password_placeholder_jellyfin">Password Jellyfin</string>
     <string name="onboarding_seerr_email">Email</string>
-    <string name="onboarding_seerr_email_placeholder">Email dell\'account Seerr</string>
-    <string name="onboarding_seerr_password_placeholder_seerr">Password dell\'account Seerr</string>
+    <string name="onboarding_seerr_email_placeholder">Email dell'account Seerr</string>
+    <string name="onboarding_seerr_password_placeholder_seerr">Password dell'account Seerr</string>
     <string name="onboarding_seerr_disconnect">Disconnetti</string>
     <string name="onboarding_seerr_enable_integration">Attiva integrazione Seerr</string>
     <string name="onboarding_seerr_master_switch">Interruttore principale per tutte le funzioni di Seerr</string>
@@ -53,16 +53,16 @@
 
     <!-- SecurityStep -->
     <string name="onboarding_security_title">Privacy e sicurezza</string>
-    <string name="onboarding_security_subtitle">Proteggi l\'app con un PIN o la biometria</string>
+    <string name="onboarding_security_subtitle">Proteggi l'app con un PIN o la biometria</string>
     <string name="onboarding_security_pin_lock">Blocco PIN</string>
-    <string name="onboarding_security_pin_lock_subtitle">Richiedi un PIN per aprire l\'app</string>
+    <string name="onboarding_security_pin_lock_subtitle">Richiedi un PIN per aprire l'app</string>
     <string name="onboarding_security_enter_pin">Inserisci PIN</string>
     <string name="onboarding_security_confirm_pin">Conferma PIN</string>
     <string name="onboarding_security_save_pin">Salva PIN</string>
     <string name="onboarding_security_pins_do_not_match">I PIN non corrispondono</string>
     <string name="onboarding_security_biometric_lock">Blocco biometrico</string>
     <string name="onboarding_security_biometric_unlock">Usa impronta digitale o sblocco facciale</string>
-    <string name="onboarding_security_biometric_setup_hint">Configura un\'impronta o un volto nelle Impostazioni di Android per attivarlo</string>
+    <string name="onboarding_security_biometric_setup_hint">Configura un'impronta o un volto nelle Impostazioni di Android per attivarlo</string>
     <string name="onboarding_security_auto_lock_timer">Timer di blocco automatico</string>
     <string name="onboarding_security_lock_never">Mai</string>
     <string name="onboarding_security_lock_15s">15s</string>
@@ -80,7 +80,7 @@
 
     <!-- AppearanceStep -->
     <string name="onboarding_appearance_title">Aspetto</string>
-    <string name="onboarding_appearance_subtitle">Scegli l\'aspetto di JellyPlay</string>
+    <string name="onboarding_appearance_subtitle">Scegli l'aspetto di JellyPlay</string>
     <string name="onboarding_appearance_theme">Tema</string>
     <string name="onboarding_appearance_theme_system">Sistema</string>
     <string name="onboarding_appearance_theme_light">Chiaro</string>
@@ -118,7 +118,7 @@
 
     <!-- PerformanceStep -->
     <string name="onboarding_performance_title">Prestazioni</string>
-    <string name="onboarding_performance_subtitle">Ottimizza l\'app per il tuo dispositivo</string>
+    <string name="onboarding_performance_subtitle">Ottimizza l'app per il tuo dispositivo</string>
     <string name="onboarding_performance_mode">Modalità prestazioni</string>
     <string name="onboarding_performance_description">Riduce animazioni, transizioni e qualità delle immagini per prestazioni più fluide su dispositivi di fascia bassa. Puoi sempre modificarlo in seguito nelle Impostazioni.</string>
     <string name="onboarding_performance_enable">Attiva modalità prestazioni</string>

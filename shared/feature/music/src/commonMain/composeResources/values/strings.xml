@@ -95,7 +95,7 @@
     <string name="music_new_playlist">New Playlist</string>
     <string name="music_edit_playlist">Edit Playlist</string>
     <string name="music_delete_playlist">Delete Playlist</string>
-    <string name="music_delete_playlist_confirm">Delete \"%1$s\"? This action cannot be undone.</string>
+    <string name="music_delete_playlist_confirm">Delete "%1$s"? This action cannot be undone.</string>
     <string name="music_create">Create</string>
     <string name="music_save">Save</string>
     <string name="music_edit">Edit</string>

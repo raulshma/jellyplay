@@ -46,7 +46,7 @@
 
     <!-- Delete dialogs -->
     <string name="downloads_delete_download_title">Download löschen</string>
-    <string name="downloads_delete_download_message">\"%1$s\" vom Gerät entfernen? Das gibt %2$s frei.</string>
+    <string name="downloads_delete_download_message">"%1$s" vom Gerät entfernen? Das gibt %2$s frei.</string>
     <string name="downloads_delete_downloads_title">Downloads löschen</string>
     <plurals name="downloads_delete_downloads_message">
         <item quantity="one">%1$d ausgewählten Download vom Gerät entfernen?</item>

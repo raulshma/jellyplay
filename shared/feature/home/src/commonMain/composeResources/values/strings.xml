@@ -42,7 +42,7 @@
     <string name="home_no_content_available">No Content Available</string>
     <string name="home_no_content_description">Check your Jellyfin libraries and try refreshing.</string>
     <string name="home_refresh">Refresh</string>
-    <string name="home_sections_load_failed">Some sections couldn\'t be loaded.</string>
+    <string name="home_sections_load_failed">Some sections couldn't be loaded.</string>
     <string name="home_retry">Retry</string>
 
     <!-- Home section headers. -->
@@ -54,7 +54,7 @@
     <string name="home_continue_watching">Continue Watching</string>
     <string name="home_continue_reading">Continue Reading</string>
     <string name="home_next_up">Next Up</string>
-    <string name="home_implicit_offline_banner">Couldn\'t reach the server — showing your downloads.</string>
+    <string name="home_implicit_offline_banner">Couldn't reach the server — showing your downloads.</string>
     <string name="home_recently_downloaded">Recently Downloaded</string>
     <string name="home_movies">Movies</string>
     <string name="home_series">Series</string>
@@ -82,7 +82,7 @@
     <string name="home_tv_show">TV Show</string>
     <string name="home_request_via_seerr">Request via Seerr</string>
     <string name="home_clear_search_history_title">Clear search history?</string>
-    <string name="home_clear_search_history_message">This removes all of your recent searches. This can\'t be undone.</string>
+    <string name="home_clear_search_history_message">This removes all of your recent searches. This can't be undone.</string>
     <string name="home_clear">Clear</string>
     <string name="home_cancel">Cancel</string>
 
@@ -96,7 +96,7 @@
     <string name="home_dismiss">Dismiss</string>
 
     <!-- Localized error messages -->
-    <string name="home_error_load_content">Couldn\'t load content. Check your connection and try again.</string>
+    <string name="home_error_load_content">Couldn't load content. Check your connection and try again.</string>
     <string name="home_download_started">Download started</string>
     <string name="home_download_start_failed">Couldn't start the download</string>
     <string name="home_series_download_queued">Episodes queued for download</string>

@@ -41,7 +41,7 @@
     <string name="admin_cancel_cd">Annuler</string>
     <string name="admin_share_cd">Partager</string>
     <string name="admin_add_user_cd">Ajouter un utilisateur</string>
-    <string name="admin_delete_user_cd">Supprimer l\'utilisateur</string>
+    <string name="admin_delete_user_cd">Supprimer l'utilisateur</string>
     <string name="admin_shutdown_cd">Arrêter</string>
     <string name="admin_stop_live_cd">Arrêter le direct</string>
     <string name="admin_start_live_cd">Démarrer le direct</string>
@@ -52,7 +52,7 @@
     <string name="admin_run">Exécuter</string>
 
     <!-- Relative time -->
-    <string name="admin_just_now">À l\'instant</string>
+    <string name="admin_just_now">À l'instant</string>
     <string name="admin_min_ago">il y a %1$dm</string>
     <string name="admin_hours_ago">il y a %1$dh</string>
     <string name="admin_days_ago">il y a %1$dj</string>
@@ -67,12 +67,12 @@
 
     <!-- AccessDeniedScreen -->
     <string name="admin_access_denied_title">Accès refusé</string>
-    <string name="admin_access_denied_body">Vous n\'avez pas l\'autorisation d\'accéder à cette section.</string>
-    <string name="admin_access_denied_contact">Contactez l\'administrateur du serveur si vous pensez qu\'il s\'agit d\'une erreur.</string>
+    <string name="admin_access_denied_body">Vous n'avez pas l'autorisation d'accéder à cette section.</string>
+    <string name="admin_access_denied_contact">Contactez l'administrateur du serveur si vous pensez qu'il s'agit d'une erreur.</string>
 
     <!-- AuditHistoryTab -->
-    <string name="admin_no_audit_history">Aucun historique d\'audit pour le moment</string>
-    <string name="admin_audit_history_tab">Historique d\'audit</string>
+    <string name="admin_no_audit_history">Aucun historique d'audit pour le moment</string>
+    <string name="admin_audit_history_tab">Historique d'audit</string>
 
     <!-- AdminDashboardScreen -->
     <string name="admin_dashboard_title">Tableau de bord</string>
@@ -85,9 +85,9 @@
 
     <!-- DevicesScreen -->
     <string name="admin_devices_title">Appareils</string>
-    <string name="admin_delete_device_title">Supprimer l\'appareil</string>
+    <string name="admin_delete_device_title">Supprimer l'appareil</string>
     <string name="admin_delete_device_body">Supprimer « %1$s » ? Toutes les sessions associées seront déconnectées.</string>
-    <string name="admin_edit_device_name_title">Modifier le nom de l\'appareil</string>
+    <string name="admin_edit_device_name_title">Modifier le nom de l'appareil</string>
     <string name="admin_custom_name">Nom personnalisé</string>
     <string name="admin_no_devices">Aucun appareil trouvé</string>
     <string name="admin_devices_search_placeholder">Rechercher par nom ou utilisateur</string>
@@ -95,7 +95,7 @@
     <!-- LogsScreen -->
     <string name="admin_logs_title">Journaux</string>
     <string name="admin_no_log_files">Aucun fichier journal trouvé</string>
-    <string name="admin_no_activity_log">Aucune entrée dans le journal d\'activité</string>
+    <string name="admin_no_activity_log">Aucune entrée dans le journal d'activité</string>
     <string name="admin_logs_search_placeholder">Filtrer les messages</string>
 
     <!-- Plugins -->
@@ -106,7 +106,7 @@
     <string name="admin_search_plugins">Rechercher des plugins…</string>
     <string name="admin_installed">Installé</string>
     <string name="admin_install_third_party_title">Installer un plugin tiers ?</string>
-    <string name="admin_install_third_party_body">Les plugins ont le même accès au système que votre serveur Jellyfin. N\'installez des plugins que depuis des sources de confiance. Continuer l\'installation de %1$s ?</string>
+    <string name="admin_install_third_party_body">Les plugins ont le même accès au système que votre serveur Jellyfin. N'installez des plugins que depuis des sources de confiance. Continuer l'installation de %1$s ?</string>
     <string name="admin_latest_version">Dernière : v%1$s</string>
     <string name="admin_installing">Installation de %1$s</string>
     <string name="admin_add_repository_title">Ajouter un dépôt</string>
@@ -119,11 +119,11 @@
 
     <!-- StaleMediaScreen -->
     <string name="admin_stale_media_title">Médias obsolètes</string>
-    <string name="admin_scan_results_tab">Résultats de l\'analyse</string>
+    <string name="admin_scan_results_tab">Résultats de l'analyse</string>
     <string name="admin_configuration_tab">Configuration</string>
-    <string name="admin_scan_configuration">Configuration de l\'analyse</string>
-    <string name="admin_stale_threshold">Seuil d\'obsolescence : %1$d jours</string>
-    <string name="admin_use_date_added">Utiliser la date d\'ajout à la bibliothèque</string>
+    <string name="admin_scan_configuration">Configuration de l'analyse</string>
+    <string name="admin_stale_threshold">Seuil d'obsolescence : %1$d jours</string>
+    <string name="admin_use_date_added">Utiliser la date d'ajout à la bibliothèque</string>
     <string name="admin_include_never_played">Inclure les éléments jamais lus</string>
     <string name="admin_delete_from_library">Supprimer de la bibliothèque</string>
 
@@ -158,12 +158,12 @@
     <string name="admin_new_user_title">Nouvel utilisateur</string>
     <string name="admin_password_optional">Mot de passe (facultatif)</string>
     <string name="admin_create">Créer</string>
-    <string name="admin_delete_user_title">Supprimer l\'utilisateur</string>
+    <string name="admin_delete_user_title">Supprimer l'utilisateur</string>
     <string name="admin_delete_user_body">Supprimer « %1$s » ? Action irréversible.</string>
     <string name="admin_new_password">Nouveau mot de passe</string>
     <string name="admin_discard">Abandonner</string>
     <string name="admin_save_changes">Enregistrer les modifications</string>
-    <string name="admin_could_not_reload">Impossible de recharger l\'utilisateur mis à jour</string>
+    <string name="admin_could_not_reload">Impossible de recharger l'utilisateur mis à jour</string>
 
     <!-- User detail: tabs / sections -->
     <string name="admin_sign_in">Connexion</string>
@@ -171,13 +171,13 @@
     <string name="admin_danger_zone">Zone de danger</string>
     <string name="admin_danger_zone_desc">Supprimer définitivement cet utilisateur du serveur.</string>
     <string name="admin_library_access">Accès à la bibliothèque</string>
-    <string name="admin_enable_all_libraries">Activer l\'accès à toutes les bibliothèques</string>
+    <string name="admin_enable_all_libraries">Activer l'accès à toutes les bibliothèques</string>
     <string name="admin_channel_access">Accès aux chaînes</string>
-    <string name="admin_enable_all_channels">Activer l\'accès à toutes les chaînes</string>
+    <string name="admin_enable_all_channels">Activer l'accès à toutes les chaînes</string>
     <string name="admin_media_deletion_from">Suppression de médias de</string>
     <string name="admin_all_libraries">Toutes les bibliothèques</string>
     <string name="admin_device_access">Accès aux appareils</string>
-    <string name="admin_enable_all_devices">Activer l\'accès depuis tous les appareils</string>
+    <string name="admin_enable_all_devices">Activer l'accès depuis tous les appareils</string>
     <string name="admin_security_limits">Limites de sécurité</string>
     <string name="admin_security_limits_desc">Sessions simultanées et protection de connexion.</string>
     <string name="admin_max_active_sessions">Sessions actives max.</string>
@@ -189,9 +189,9 @@
     <string name="admin_administrator">Administrateur</string>
     <string name="admin_active">Actif</string>
     <string name="admin_hidden">Masqué</string>
-    <string name="admin_hidden_desc">Masquer cet utilisateur de l\'écran de connexion</string>
-    <string name="admin_allow_preference_access">Autoriser l\'accès aux préférences</string>
-    <string name="admin_allow_preference_access_desc">Laisser l\'utilisateur modifier ses propres préférences</string>
+    <string name="admin_hidden_desc">Masquer cet utilisateur de l'écran de connexion</string>
+    <string name="admin_allow_preference_access">Autoriser l'accès aux préférences</string>
+    <string name="admin_allow_preference_access_desc">Laisser l'utilisateur modifier ses propres préférences</string>
     <string name="admin_max_parental_rating">Classification parentale max.</string>
     <string name="admin_max_parental_rating_desc">Masquer le contenu au-dessus de la classification choisie.</string>
     <string name="admin_block_unrated">Bloquer le contenu non classé</string>
@@ -205,7 +205,7 @@
     <string name="admin_add_tag">Ajouter une étiquette</string>
 
     <!-- User detail: access schedule -->
-    <string name="admin_access_schedules_title">Plages d\'accès</string>
+    <string name="admin_access_schedules_title">Plages d'accès</string>
     <string name="admin_access_schedules_desc">Restreindre quand cet utilisateur peut se connecter.</string>
     <string name="admin_add_schedule">Ajouter une plage</string>
     <string name="admin_day">Jour</string>
@@ -227,7 +227,7 @@
     <string name="admin_allow_media_downloading">Autoriser le téléchargement de médias</string>
     <string name="admin_features">Fonctionnalités</string>
     <string name="admin_features_desc">TV en direct, contrôle à distance et accès distant.</string>
-    <string name="admin_allow_live_tv">Autoriser l\'accès à la TV en direct</string>
+    <string name="admin_allow_live_tv">Autoriser l'accès à la TV en direct</string>
     <string name="admin_allow_live_tv_desc">Parcourir le guide des chaînes</string>
     <string name="admin_allow_live_tv_mgmt">Autoriser la gestion de la TV en direct</string>
     <string name="admin_allow_live_tv_mgmt_desc">Gérer les enregistrements et minuteurs</string>
@@ -263,7 +263,7 @@
     <string name="admin_tab_parental">Parental</string>
     <string name="admin_tab_account">Compte</string>
     <string name="admin_tab_log_files">Fichiers journaux</string>
-    <string name="admin_tab_activity_log">Journal d\'activité</string>
+    <string name="admin_tab_activity_log">Journal d'activité</string>
 
     <!-- Plugin status badges -->
     <string name="admin_status_active">Actif</string>
@@ -280,7 +280,7 @@
     <string name="admin_package_repositories">Dépôts de paquets</string>
     <string name="admin_no_repositories">Aucun dépôt configuré</string>
     <string name="admin_failed_load_statistics">Impossible de charger les statistiques</string>
-    <string name="admin_failed_load_user_details">Impossible de charger les détails de l\'utilisateur</string>
+    <string name="admin_failed_load_user_details">Impossible de charger les détails de l'utilisateur</string>
     <string name="admin_failed_load_config">Impossible de charger la configuration</string>
     <string name="admin_no_config_page">Aucune page de configuration trouvée</string>
     <string name="admin_loading">Chargement…</string>
@@ -289,7 +289,7 @@
     <!-- Plugin detail metadata -->
     <string name="admin_description">Description</string>
     <string name="admin_version_history">Historique des versions</string>
-    <string name="admin_loading_version_history">Chargement de l\'historique des versions…</string>
+    <string name="admin_loading_version_history">Chargement de l'historique des versions…</string>
     <string name="admin_configuration">Configuration</string>
     <string name="admin_edit_plugin_settings">Modifier les paramètres du plugin</string>
     <string name="admin_current">Actuelle</string>
@@ -327,14 +327,14 @@
     <string name="admin_most_watched_genres">Genres les plus regardés</string>
     <string name="admin_top_watched">Les plus regardés</string>
     <string name="admin_music_listening">Écoute de musique</string>
-    <string name="admin_listening_time">Temps d\'écoute</string>
+    <string name="admin_listening_time">Temps d'écoute</string>
     <string name="admin_top_artists">Meilleurs artistes</string>
     <string name="admin_top_genres">Meilleurs genres</string>
     <string name="admin_top_tracks">Meilleurs titres</string>
     <string name="admin_no_breakdown_data">Aucune donnée de répartition disponible</string>
     <string name="admin_no_data">Aucune donnée disponible</string>
     <string name="admin_no_trend_data">Aucune donnée de tendance disponible</string>
-    <string name="admin_no_activity_data">Aucune donnée d\'activité disponible</string>
+    <string name="admin_no_activity_data">Aucune donnée d'activité disponible</string>
     <string name="admin_no_watch_time_data">Aucune donnée de temps de lecture disponible</string>
     <string name="admin_no_music_data">Aucune donnée musicale disponible</string>
     <string name="admin_no_stale_found">Aucun média obsolète trouvé</string>
@@ -348,7 +348,7 @@
     <string name="admin_leave_blank_password">Laisser vide pour réinitialiser/effacer le mot de passe.</string>
     <string name="admin_no_schedules">Aucune plage définie</string>
     <string name="admin_no_libraries_found">Aucune bibliothèque trouvée</string>
-    <string name="admin_cannot_change_own_admin">Impossible de modifier votre propre statut d\'administrateur</string>
+    <string name="admin_cannot_change_own_admin">Impossible de modifier votre propre statut d'administrateur</string>
     <string name="admin_cannot_remove_last_admin">Impossible de supprimer le dernier administrateur</string>
     <string name="admin_cannot_disable_self">Vous ne pouvez pas vous désactiver vous-même</string>
     <string name="admin_disabled_cannot_sign_in">Les utilisateurs désactivés ne peuvent pas se connecter</string>
@@ -403,5 +403,5 @@
 
     <string name="admin_plugin_config_unavailable">La configuration du plugin n’est pas disponible sur cette plateforme.</string>
 
-    <string name="admin_no_delete_permission">Votre compte n\'est pas autorisé à supprimer du contenu. Contactez l\'administrateur de votre serveur.</string>
+    <string name="admin_no_delete_permission">Votre compte n'est pas autorisé à supprimer du contenu. Contactez l'administrateur de votre serveur.</string>
 </resources>

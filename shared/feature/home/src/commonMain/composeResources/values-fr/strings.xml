@@ -33,7 +33,7 @@
 
 
     <string name="home_settings">Paramètres</string>
-    <string name="home_switch_user">Changer d\'utilisateur</string>
+    <string name="home_switch_user">Changer d'utilisateur</string>
     <string name="home_go_online">Se connecter</string>
     <string name="home_go_offline">Se déconnecter</string>
 
@@ -80,7 +80,7 @@
     <string name="home_movie">Film</string>
     <string name="home_tv_show">Série</string>
     <string name="home_request_via_seerr">Demander via Seerr</string>
-    <string name="home_clear_search_history_title">Effacer l\'historique de recherche ?</string>
+    <string name="home_clear_search_history_title">Effacer l'historique de recherche ?</string>
     <string name="home_clear_search_history_message">Cela supprimera toutes vos recherches récentes. Action irréversible.</string>
     <string name="home_clear">Effacer</string>
     <string name="home_cancel">Annuler</string>

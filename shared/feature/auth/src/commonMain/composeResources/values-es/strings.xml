@@ -74,7 +74,7 @@
     <string name="auth_no_servers_added_desc">Añade tu servidor Jellyfin para empezar</string>
     <string name="auth_remove_server">Quitar servidor</string>
     <string name="auth_remove_server_title">¿Quitar servidor?</string>
-    <string name="auth_remove_server_message">Esto elimina \"%1$s\" y todos los usuarios guardados en él. No se puede deshacer.</string>
+    <string name="auth_remove_server_message">Esto elimina "%1$s" y todos los usuarios guardados en él. No se puede deshacer.</string>
     <string name="auth_remove">Quitar</string>
 
     <!-- User selection screen -->
@@ -85,7 +85,7 @@
     <string name="auth_user_placeholder">Usuario</string>
     <string name="auth_remove_user">Quitar usuario</string>
     <string name="auth_remove_user_title">¿Quitar usuario?</string>
-    <string name="auth_remove_user_message">¿Quitar a \"%1$s\" de este servidor? Tendrás que iniciar sesión de nuevo para usarlo.</string>
+    <string name="auth_remove_user_message">¿Quitar a "%1$s" de este servidor? Tendrás que iniciar sesión de nuevo para usarlo.</string>
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="auth_quick_connect">Conexión rápida</string>

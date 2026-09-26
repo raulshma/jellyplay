@@ -3,7 +3,7 @@
     <string name="calendar_title">À venir</string>
 
     <!-- Month nav -->
-    <string name="calendar_today">Aujourd\'hui</string>
+    <string name="calendar_today">Aujourd'hui</string>
     <string name="calendar_pick_date_cd">Choisir une date</string>
     <string name="calendar_prev_month_cd">Mois précédent</string>
     <string name="calendar_next_month_cd">Mois suivant</string>
@@ -20,12 +20,12 @@
     <!-- Empty / error -->
     <string name="calendar_empty_title">Rien à venir</string>
     <string name="calendar_empty_desc">Aucune sortie prévue ce mois-ci.</string>
-    <string name="calendar_go_today">Aller à aujourd\'hui</string>
+    <string name="calendar_go_today">Aller à aujourd'hui</string>
     <string name="calendar_error_unknown">Impossible de charger le calendrier.</string>
     <string name="calendar_no_detail">Aucun détail disponible pour cet élément.</string>
 
     <!-- Feature disabled -->
-    <string name="calendar_feature_disabled_title">L\'intégration *arr est désactivée</string>
+    <string name="calendar_feature_disabled_title">L'intégration *arr est désactivée</string>
     <string name="calendar_feature_disabled_desc">Activez-la dans Paramètres → Intégrations pour voir les sorties à venir de Sonarr et Radarr.</string>
     <string name="calendar_open_settings">Ouvrir les paramètres *arr</string>
 </resources>

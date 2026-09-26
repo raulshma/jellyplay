@@ -8,7 +8,7 @@
     <string name="syncplay_create_group_together">함께 시청할 그룹을 만드세요</string>
     <string name="syncplay_create_group">그룹 만들기</string>
     <string name="syncplay_join_group_question">그룹에 참여하시겠습니까?</string>
-    <string name="syncplay_join_group_confirm">\"%1$s\"에 참여하시겠습니까?</string>
+    <string name="syncplay_join_group_confirm">"%1$s"에 참여하시겠습니까?</string>
     <string name="syncplay_join">참여</string>
     <string name="syncplay_cancel">취소</string>
     <string name="syncplay_playing_item">재생 중: %1$s</string>

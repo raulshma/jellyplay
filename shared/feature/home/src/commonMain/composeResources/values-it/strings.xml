@@ -39,7 +39,7 @@
 
     <!-- Home empty / partial-load states. -->
     <string name="home_no_content_available">Nessun contenuto disponibile</string>
-    <string name="home_no_content_description">Controlla le tue librerie Jellyfin e riprova dopo l\'aggiornamento.</string>
+    <string name="home_no_content_description">Controlla le tue librerie Jellyfin e riprova dopo l'aggiornamento.</string>
     <string name="home_refresh">Aggiorna</string>
     <string name="home_sections_load_failed">Impossibile caricare alcune sezioni.</string>
     <string name="home_retry">Riprova</string>

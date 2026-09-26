@@ -162,6 +162,7 @@ val networkJvmModule: Module = module {
         GitHubReleasesApiImpl(
             okHttpClient = get(),
             latestReleaseUrl = GitHubReleasesApiImpl.LATEST_RELEASE_URL,
+            releasesListUrl = GitHubReleasesApiImpl.RELEASES_LIST_URL,
         )
     }
     single<GitHubReleasesApi> { get<GitHubReleasesApiImpl>() }

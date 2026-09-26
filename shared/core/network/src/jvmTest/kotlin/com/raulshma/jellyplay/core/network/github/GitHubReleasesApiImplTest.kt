@@ -225,4 +225,65 @@ class GitHubReleasesApiImplTest {
         assertIs<UpdateSecurityException>(error)
         assertTrue(error.message!!.contains("endpoint"), "unexpected message: $error")
     }
+
+    // ---- fetchReleaseNotes (the What's New feed's remote source) ----
+
+    private val sampleReleasesListJson = """
+        [
+          {
+            "tag_name": "v0.11.2",
+            "name": "Fresh coat of paint",
+            "published_at": "2026-09-26T10:30:00Z",
+            "body": "## What's New\n\n| Title |\n|---|\n| Cards |"
+          },
+          {
+            "tag_name": "v0.11.1",
+            "name": "",
+            "published_at": "2026-09-05T08:00:00Z",
+            "body": "plain notes"
+          },
+          {
+            "tag_name": "",
+            "name": "draft with no tag",
+            "published_at": null,
+            "body": "dropped"
+          }
+        ]
+    """.trimIndent()
+
+    @Test
+    fun `fetchReleaseNotes maps the list items and drops blank tags`() = runBlocking {
+        val fixture = canned(sampleReleasesListJson)
+
+        val notes = fixture.api.fetchReleaseNotes().getOrThrow()
+
+        assertEquals(listOf("0.11.2", "0.11.1"), notes.map { it.version })
+        val fresh = notes[0]
+        assertEquals("Fresh coat of paint", fresh.title)
+        assertEquals("2026-09-26", fresh.date)
+        assertTrue(fresh.body.startsWith("## What's New"))
+        // A blank release name degrades to no title, not an empty string.
+        assertNull(notes[1].title)
+        assertEquals("plain notes", notes[1].body)
+
+        // Sanity: the request actually went to the pinned list endpoint.
+        assertEquals(
+            GitHubReleasesApiImpl.RELEASES_LIST_URL,
+            fixture.interceptor.requests.single().url.toString(),
+        )
+    }
+
+    @Test
+    fun `fetchReleaseNotes fails closed when the final URL leaves the pinned repo`() = runBlocking {
+        val movedFinalUrl = "https://api.github.com/repos/attacker/jellyplay/releases?per_page=30"
+        val fixture = canned(
+            sampleReleasesListJson,
+            boundTo = Request.Builder().url(movedFinalUrl).build(),
+        )
+
+        val error = fixture.api.fetchReleaseNotes().exceptionOrNull()
+
+        assertIs<UpdateSecurityException>(error)
+        assertTrue(error.message!!.contains("endpoint"), "unexpected message: $error")
+    }
 }

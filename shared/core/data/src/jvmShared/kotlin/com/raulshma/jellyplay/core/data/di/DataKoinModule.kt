@@ -83,5 +83,6 @@ val dataJvmModule: Module = module {
         dataSubtitleProviderModule,
         dataSeerrArrModule,
         dataAdminModule,
+        dataWhatsNewModule,
     )
 }

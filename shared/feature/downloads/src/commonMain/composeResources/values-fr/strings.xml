@@ -15,7 +15,7 @@
 
     <!-- Storage / counts -->
     <string name="downloads_storage_used">Espace utilisé : %1$s</string>
-    <string name="downloads_on_device">· %1$s sur l\'appareil</string>
+    <string name="downloads_on_device">· %1$s sur l'appareil</string>
     <plurals name="downloads_item_count">
         <item quantity="one">%1$d élément</item>
         <item quantity="many">%1$d éléments</item>
@@ -47,7 +47,7 @@
 
     <!-- Delete dialogs -->
     <string name="downloads_delete_download_title">Supprimer le téléchargement</string>
-    <string name="downloads_delete_download_message">Supprimer \"%1$s\" de votre appareil ? Cela libère %2$s.</string>
+    <string name="downloads_delete_download_message">Supprimer "%1$s" de votre appareil ? Cela libère %2$s.</string>
     <string name="downloads_delete_downloads_title">Supprimer les téléchargements</string>
     <plurals name="downloads_delete_downloads_message">
         <item quantity="one">Supprimer %1$d téléchargement sélectionné de votre appareil ?</item>
@@ -59,7 +59,7 @@
     <string name="downloads_deleted_message">Téléchargement supprimé</string>
 
     <!-- Download statuses -->
-    <string name="downloads_status_queued">En file d\'attente</string>
+    <string name="downloads_status_queued">En file d'attente</string>
     <string name="downloads_status_waiting">En attente…</string>
     <string name="downloads_status_failed">Échec</string>
     <string name="downloads_status_paused">En pause</string>
@@ -94,7 +94,7 @@
     <!-- Force resync (granular item + data selection) -->
     <string name="downloads_force_resync_action">Forcer la synchronisation</string>
     <string name="downloads_force_resync_title">Forcer la synchronisation</string>
-    <string name="downloads_force_resync_description">Choisissez quels éléments téléchargés et quelles données actualiser depuis le serveur, qu\'une mise à jour ait été détectée ou non.</string>
+    <string name="downloads_force_resync_description">Choisissez quels éléments téléchargés et quelles données actualiser depuis le serveur, qu'une mise à jour ait été détectée ou non.</string>
     <string name="downloads_force_resync_items_header">Éléments à synchroniser</string>
     <string name="downloads_force_resync_data_header">Données à synchroniser</string>
     <string name="downloads_force_resync_data_metadata">Métadonnées</string>
@@ -108,7 +108,7 @@
     <string name="downloads_force_resync_data_subtitles">Sous-titres</string>
     <string name="downloads_force_resync_data_subtitles_desc">Pistes de sous-titres externes</string>
     <string name="downloads_force_resync_data_trickplay">Trickplay</string>
-    <string name="downloads_force_resync_data_trickplay_desc">Vignettes d\'aperçu de recherche</string>
+    <string name="downloads_force_resync_data_trickplay_desc">Vignettes d'aperçu de recherche</string>
     <string name="downloads_force_resync_data_segments">Segments</string>
     <string name="downloads_force_resync_data_segments_desc">Points de saut intro/générique</string>
     <string name="downloads_force_resync_summary">Synchroniser %1$d éléments</string>

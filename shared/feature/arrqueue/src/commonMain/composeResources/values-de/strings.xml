@@ -38,17 +38,17 @@
 
     <!-- Grab -->
     <string name="arrqueue_grab_title">Release erzwingen</string>
-    <string name="arrqueue_grab_message">\"%1$s\" jetzt an seinen Download-Client senden?</string>
-    <string name="arrqueue_grab_sent">Abruf gesendet für \"%1$s\"</string>
+    <string name="arrqueue_grab_message">"%1$s" jetzt an seinen Download-Client senden?</string>
+    <string name="arrqueue_grab_sent">Abruf gesendet für "%1$s"</string>
 
     <!-- Import -->
     <string name="arrqueue_import_title">Import erzwingen</string>
-    <string name="arrqueue_import_message">\"%1$s\" jetzt in %2$s importieren?</string>
-    <string name="arrqueue_import_sent">Import gesendet für \"%1$s\"</string>
+    <string name="arrqueue_import_message">"%1$s" jetzt in %2$s importieren?</string>
+    <string name="arrqueue_import_sent">Import gesendet für "%1$s"</string>
 
     <!-- Remove / delete dialog -->
     <string name="arrqueue_remove_selected_title">Ausgewählte entfernen?</string>
-    <string name="arrqueue_remove_item_title">\"%1$s\" entfernen?</string>
+    <string name="arrqueue_remove_item_title">"%1$s" entfernen?</string>
     <string name="arrqueue_remove_body_bulk">Wähle, wie diese Einträge aus der Warteschlange entfernt werden sollen.</string>
     <string name="arrqueue_remove_body_single">Wähle, wie dieser Eintrag aus der Warteschlange entfernt werden soll.</string>
     <string name="arrqueue_remove_only">Nur entfernen</string>

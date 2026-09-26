@@ -28,7 +28,7 @@
 
     <string name="syncplay_error_load_groups">Échec du chargement des groupes</string>
     <string name="syncplay_join_disabled">La rejoindre des groupes SyncPlay est désactivée dans les paramètres</string>
-    <string name="syncplay_error_join_group">Échec de l\'adhésion au groupe</string>
+    <string name="syncplay_error_join_group">Échec de l'adhésion au groupe</string>
     <string name="syncplay_error_leave_group">Échec pour quitter le groupe</string>
     <string name="syncplay_error_create_group">Échec de la création du groupe</string>
 

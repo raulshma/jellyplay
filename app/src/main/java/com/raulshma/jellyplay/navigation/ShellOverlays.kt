@@ -47,6 +47,38 @@ internal fun UpdateSheetOverlay(update: UpdateCoordinator) {
 }
 
 /**
+ * Collects [WhatsNewCoordinator.state] and shows the [WhatsNewSheet] while a
+ * release presentation is active — but only once the update sheet is Idle:
+ * an available self-update outranks the What's New presentation, so the two
+ * root overlays can never stack. The coordinator itself stays oblivious to
+ * that ordering; this is its single render site.
+ */
+@Composable
+internal fun WhatsNewSheetOverlay(
+    whatsNew: com.raulshma.jellyplay.shell.WhatsNewCoordinator,
+    update: UpdateCoordinator,
+    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
+) {
+    val state by whatsNew.state.collectAsStateWithLifecycle()
+    val updateState by update.updateState.collectAsStateWithLifecycle()
+    val presentation = state as? com.raulshma.jellyplay.whatsnew.WhatsNewState.Show
+    if (presentation != null && updateState is com.raulshma.jellyplay.update.UpdateState.Idle) {
+        com.raulshma.jellyplay.whatsnew.WhatsNewSheet(
+            release = presentation.release,
+            onNavigateToEntry = { entry ->
+                // Dismiss FIRST so the deep link also consumes the prompt —
+                // the coordinator stamps the version seen on every exit path.
+                whatsNew.dismiss()
+                com.raulshma.jellyplay.core.ui.navigation.WhatsNewTargets
+                    .resolve(entry.target, entry.highlightSettingId)
+                    ?.let(onNavigate)
+            },
+            onDismiss = { whatsNew.dismiss() },
+        )
+    }
+}
+
+/**
  * Single audio mini-player host for every form-factor shell (TV overlay,
  * phone NavigationRail, phone compact floating-nav). Owns the playback-flow
  * collects and the [MiniPlayer] transport wiring that all three shells used

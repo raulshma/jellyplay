@@ -44,10 +44,10 @@
     <string name="editor_field_end_date">Date de fin</string>
     <string name="editor_date_format_hint">AAAA-MM-JJ</string>
     <string name="editor_field_runtime_minutes">Durée (minutes)</string>
-    <string name="editor_field_episode_number">Numéro d\'épisode</string>
+    <string name="editor_field_episode_number">Numéro d'épisode</string>
     <string name="editor_field_season_number">Numéro de saison</string>
     <string name="editor_field_status">Statut</string>
-    <string name="editor_field_display_order">Ordre d\'affichage</string>
+    <string name="editor_field_display_order">Ordre d'affichage</string>
     <string name="editor_field_air_time">Heure de diffusion</string>
     <string name="editor_field_air_days">Jours de diffusion</string>
     <string name="editor_field_language">Langue</string>
@@ -83,7 +83,7 @@
     <string name="editor_person_type_producer">Producteur</string>
     <string name="editor_person_type_composer">Compositeur</string>
     <string name="editor_person_type_guest_star">Invité spécial</string>
-    <string name="editor_person_type_conductor">Chef d\'orchestre</string>
+    <string name="editor_person_type_conductor">Chef d'orchestre</string>
     <string name="editor_person_type_lyricist">Parolier</string>
     <string name="editor_person_type_arranger">Arrangeur</string>
     <string name="editor_person_role_as_format">%1$s dans le rôle de %2$s</string>
@@ -118,7 +118,7 @@
     <string name="editor_images_upload">Importer</string>
     <string name="editor_images_browse_online">Parcourir en ligne</string>
     <string name="editor_images_none_available">Aucune image disponible</string>
-    <string name="editor_images_delete_title">Supprimer l\'image</string>
+    <string name="editor_images_delete_title">Supprimer l'image</string>
     <string name="editor_images_delete_message">Voulez-vous vraiment supprimer cette image %1$s ?</string>
     <string name="editor_images_delete_action">Supprimer</string>
     <string name="editor_images_dimensions_format">%1$dx%2$d</string>
@@ -129,8 +129,8 @@
     <string name="editor_images_preview">Aperçu</string>
     <string name="editor_images_select_image">Sélectionner une image</string>
     <string name="editor_images_change_file">Changer de fichier</string>
-    <string name="editor_images_image_url">URL de l\'image</string>
-    <string name="editor_images_download_from_url">Télécharger depuis l\'URL</string>
+    <string name="editor_images_image_url">URL de l'image</string>
+    <string name="editor_images_download_from_url">Télécharger depuis l'URL</string>
     <string name="editor_images_all_providers">Tous les fournisseurs</string>
     <string name="editor_images_no_images_found">Aucune image trouvée</string>
     <string name="editor_images_pagination_format">%1$d-%2$d sur %3$d</string>
@@ -139,7 +139,7 @@
     <string name="editor_images_download">Télécharger</string>
     <string name="editor_images_close">Fermer</string>
     <string name="editor_images_select_type">Sélectionner un type</string>
-    <string name="editor_images_image_type">Type d\'image</string>
+    <string name="editor_images_image_type">Type d'image</string>
     <string name="editor_images_all_types">Tous les types</string>
 
     <!-- Image types (enum-like, kept translatable for display) -->

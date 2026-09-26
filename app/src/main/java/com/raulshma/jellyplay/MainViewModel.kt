@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -73,6 +74,7 @@ class MainViewModel(
     private val sessionCoordinator: SessionCoordinator,
     private val updateCoordinator: UpdateCoordinator,
     private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
+    private val whatsNewCoordinator: WhatsNewCoordinator,
 ) : JellyPlayViewModel() {
 
     /**
@@ -105,10 +107,12 @@ class MainViewModel(
 
     init {
         // Shell coordinators: session restore completes → run the launch-time
-        // update check; the session, update, and SyncPlay-open collectors each
-        // live inside their coordinator.
+        // update check + the post-update What's New decision; the session,
+        // update, and SyncPlay-open collectors each live inside their
+        // coordinator.
         sessionCoordinator.start(scope) {
             updateCoordinator.onSessionRestored()
+            whatsNewCoordinator.onSessionRestored()
         }
         updateCoordinator.start(scope)
         syncPlayOpenCoordinator.start(scope)
@@ -339,6 +343,15 @@ class MainViewModel(
 
     fun consumePendingRoute() {
         _pendingRoute.set(null)
+    }
+
+    /**
+     * Publishes a shell-overlay navigation request (the What's New sheet's
+     * "take me there" deep links) through the same pending-route channel the
+     * shortcut/deep-link paths use, so MainNavDisplay consumes it identically.
+     */
+    fun navigateFromShell(route: Route) {
+        _pendingRoute.set(route)
     }
 
     fun consumePendingSearchQuery() {

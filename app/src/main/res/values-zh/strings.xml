@@ -184,4 +184,7 @@
     <string name="player_speed_custom">自定义速度</string>
     <string name="player_speed_value">%1$sx</string>
     <string name="player_speed_slider_label">调整播放速度</string>
+    <string name="whatsnew_sheet_title">新功能</string>
+    <string name="whatsnew_release_title">v%1$s 的新功能</string>
+    <string name="whatsnew_got_it">知道了</string>
 </resources>

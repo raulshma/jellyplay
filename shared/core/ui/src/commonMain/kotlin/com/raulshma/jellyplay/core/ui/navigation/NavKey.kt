@@ -530,6 +530,13 @@ sealed class Route : NavKey {
 
     @Serializable data object About : Route()
 
+    /**
+     * What's New archive — the browsable list of every known release's
+     * curated entries (the structured feed behind the post-update sheet).
+     * Reached from the Settings hub; entries can deep-link elsewhere.
+     */
+    @Serializable data object WhatsNew : Route()
+
     @Serializable data object Licenses : Route()
 
     @Serializable data object WatchProgressHeatmap : Route()
