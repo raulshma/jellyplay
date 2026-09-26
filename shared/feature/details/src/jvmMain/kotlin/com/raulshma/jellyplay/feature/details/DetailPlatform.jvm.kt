@@ -59,7 +59,8 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     single { DownloadLifecycleActions.Factory(get(), get(), get(), get()) }
     single { ResyncActions.Factory(get(), get()) }
     single { WatchPartyActions.Factory(get(), get()) }
-    single { DetailActionFactories(get(), get(), get(), get()) }
+    single { MetadataAdminActions.Factory(get(), get()) }
+    single { DetailActionFactories(get(), get(), get(), get(), get()) }
     viewModel {
         DetailViewModel(
             storageProbe = get(),

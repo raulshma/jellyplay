@@ -7,9 +7,11 @@ import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
+import com.raulshma.jellyplay.core.model.MetadataRefreshOption
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.toRefreshParams
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
@@ -119,7 +121,7 @@ internal class EditorViewModel(
             EditorUiEvent.LoadConfiguredSubtitleProviders -> handleLoadConfiguredSubtitleProviders()
             is EditorUiEvent.SearchAllSubtitleProviders -> handleSearchAllSubtitleProviders(event.language)
             is EditorUiEvent.DownloadProviderSubtitle -> handleDownloadProviderSubtitle(event.result)
-            is EditorUiEvent.RefreshMetadata -> refreshMetadata(event.mode, event.replaceAllMetadata, event.replaceAllImages)
+            is EditorUiEvent.RefreshMetadata -> refreshMetadata(event.option)
         }
     }
 
@@ -481,15 +483,17 @@ internal class EditorViewModel(
 
     // endregion
 
-    private fun refreshMetadata(
-        mode: String = "FullRefresh",
-        replaceAllMetadata: Boolean = false,
-        replaceAllImages: Boolean = false,
-    ) {
+    private fun refreshMetadata(option: MetadataRefreshOption) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            editorRepository.refreshItemMetadata(itemId, mode, mode, replaceAllMetadata, replaceAllImages)
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+            val params = option.toRefreshParams()
+            editorRepository.refreshItemMetadata(
+                itemId,
+                params.metadataRefreshMode,
+                params.imageRefreshMode,
+                params.replaceAllMetadata,
+                params.replaceAllImages,
+            ).onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 

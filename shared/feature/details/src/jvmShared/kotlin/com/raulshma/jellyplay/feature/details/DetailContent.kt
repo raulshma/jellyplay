@@ -127,6 +127,7 @@ internal fun DetailContent(
             isSeries &&
             (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
         canEditMetadata = state.capabilities.remoteDiscovery,
+        canRefreshMetadata = state.canManageMetadata && state.capabilities.remoteDiscovery,
         canAddToPlaylist = state.capabilities.remoteDiscovery,
         canAddToCollection = state.capabilities.remoteDiscovery,
         canInstantMix = isAudio && state.capabilities.remoteDiscovery,
@@ -146,6 +147,7 @@ internal fun DetailContent(
         onHideDetailUpNext = callbacks.userData.onHideDetailUpNext,
         onShowDetailUpNext = callbacks.userData.onShowDetailUpNext,
         onManageSeries = callbacks.navigation.onManageSeries,
+        onRefreshMetadata = callbacks.metadata.onRefreshMetadata,
         onTechnicalInfo = { callbacks.navigation.onNavigate(Route.MediaInfo(state.itemId)) },
         onAddToPlaylist = callbacks.addTo.onAddToPlaylist,
         onAddToCollection = callbacks.addTo.onAddToCollection,

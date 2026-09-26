@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
+import com.raulshma.jellyplay.core.ui.components.RefreshMetadataSheet
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -127,6 +128,7 @@ fun MediaDetailScreen(
     val resyncState by viewModel.resync.state.collectAsStateWithLifecycle()
     val detail = uiState.detail
     val canManageSeries by viewModel.canManageSeries.collectAsStateWithLifecycle()
+    val canManageMetadata by viewModel.canManageMetadata.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
 
@@ -160,6 +162,8 @@ fun MediaDetailScreen(
     val outerIsLightTheme = rememberIsLightTheme()
 
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
+    /** "Refresh metadata" mode sheet (⋮ menu → Refresh metadata). */
+    var showRefreshMetadataSheet by remember { mutableStateOf(false) }
 
     // Route deep-link: a card long-press Download on a series lands here so
     // the user picks seasons/episodes. Seed the sheet once the detail resolves
@@ -462,6 +466,7 @@ fun MediaDetailScreen(
                     isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
                     preferences = preferences,
                     canManageSeries = canManageSeries,
+                    canManageMetadata = canManageMetadata,
                     origin = uiState.origin,
                     detailContext = uiState.detailContext,
                     capabilities = uiState.capabilities,
@@ -685,6 +690,12 @@ fun MediaDetailScreen(
                     )
                 }
 
+                val metadataCallbacks = remember(viewModel) {
+                    MetadataCallbacks(
+                        onRefreshMetadata = { showRefreshMetadataSheet = true },
+                    )
+                }
+
                 val callbacks = remember(
                     artworkCallbacks,
                     playbackCallbacks,
@@ -695,6 +706,7 @@ fun MediaDetailScreen(
                     addToCallbacks,
                     navigationCallbacks,
                     screenCallbacks,
+                    metadataCallbacks,
                 ) {
                     DetailContentCallbacks(
                         artwork = artworkCallbacks,
@@ -706,6 +718,7 @@ fun MediaDetailScreen(
                         addTo = addToCallbacks,
                         navigation = navigationCallbacks,
                         screen = screenCallbacks,
+                        metadata = metadataCallbacks,
                     )
                 }
 
@@ -833,6 +846,20 @@ fun MediaDetailScreen(
                     },
                 )
             }
+        }
+
+        // ── "Refresh metadata" mode sheet (⋮ menu). The sheet body is shared
+        // with the metadata editor (core/ui); the write itself runs through
+        // the VM's MetadataAdminActions helper (admin-gated entry above). ──
+        if (showRefreshMetadataSheet && detailItem != null) {
+            RefreshMetadataSheet(
+                itemName = detailItem.name.orEmpty(),
+                onConfirm = { option ->
+                    showRefreshMetadataSheet = false
+                    viewModel.metadataAdmin.refreshScreenItem(option)
+                },
+                onDismiss = { showRefreshMetadataSheet = false },
+            )
         }
 
         // ── Series batch-delete sheet. Replaces the old

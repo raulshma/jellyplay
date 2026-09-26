@@ -269,4 +269,14 @@
     <string name="core_ui_whatsnew_take_me_there">Levar-me lá</string>
     <string name="core_ui_whatsnew_got_it">Entendido</string>
     <string name="core_ui_whatsnew_archive_empty">Ainda sem destaques da versão.</string>
+    <string name="core_refresh_metadata_title">Atualizar metadados</string>
+    <string name="core_refresh_metadata_message">Escolha como o servidor atualiza os metadados e as imagens de “%s”.</string>
+    <string name="core_refresh_metadata_mode_default">Procurar dados em falta</string>
+    <string name="core_refresh_metadata_mode_default_desc">Transfere apenas metadados e imagens em falta.</string>
+    <string name="core_refresh_metadata_mode_full_validation">Validar todos os metadados</string>
+    <string name="core_refresh_metadata_mode_full_validation_desc">Reverifica cada campo mantendo os valores atuais como base.</string>
+    <string name="core_refresh_metadata_mode_replace_all">Substituir todos os metadados</string>
+    <string name="core_refresh_metadata_mode_replace_all_desc">Substitui os metadados atuais pelos do fornecedor. Numa série, os episódios também são atualizados.</string>
+    <string name="core_refresh_metadata_mode_replace_images">Substituir todas as imagens</string>
+    <string name="core_refresh_metadata_mode_replace_images_desc">Volta a transferir todas as imagens do fornecedor, mantendo os metadados.</string>
 </resources>

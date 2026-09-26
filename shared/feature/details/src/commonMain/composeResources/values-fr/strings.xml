@@ -447,4 +447,7 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">Tous les sous-titres</string>
     <string name="detail_download_subtitles_none">Aucun sous-titre</string>
+    <string name="detail_option_refresh_metadata">Actualiser les métadonnées</string>
+    <string name="detail_msg_refresh_started">Actualisation des métadonnées lancée sur le serveur</string>
+    <string name="detail_msg_refresh_failed">Impossible d’actualiser les métadonnées</string>
 </resources>

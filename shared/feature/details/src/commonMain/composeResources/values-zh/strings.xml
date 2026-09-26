@@ -437,4 +437,7 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">全部字幕</string>
     <string name="detail_download_subtitles_none">无字幕</string>
+    <string name="detail_option_refresh_metadata">刷新元数据</string>
+    <string name="detail_msg_refresh_started">已在服务器上排队刷新元数据</string>
+    <string name="detail_msg_refresh_failed">无法刷新元数据</string>
 </resources>

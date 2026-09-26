@@ -105,6 +105,59 @@ data class EditorPerson(
 )
 
 /**
+ * The user-facing Jellyfin metadata-refresh modes (the jellyfin-web "Refresh
+ * metadata" dialog's option set). Each maps onto the metadata/image refresh
+ * modes + replace flags of `POST /Items/{itemId}/Refresh` via
+ * [toRefreshParams]. Refreshing a SERIES item applies server-side to its
+ * episodes as well — that cascade is the bulk path for per-series refresh.
+ */
+enum class MetadataRefreshOption {
+    /** Fetch missing metadata and images only (Default/Default). */
+    DEFAULT,
+    /** Re-scan every field, keeping existing values as the baseline. */
+    FULL_VALIDATION,
+    /** Full refresh that overwrites current metadata with provider data. */
+    REPLACE_ALL_METADATA,
+    /** Full image refresh that overwrites all images, metadata untouched. */
+    REPLACE_IMAGES,
+}
+
+/** The wire parameters one [MetadataRefreshOption] resolves to. */
+data class MetadataRefreshParams(
+    val metadataRefreshMode: String,
+    val imageRefreshMode: String,
+    val replaceAllMetadata: Boolean,
+    val replaceAllImages: Boolean,
+)
+
+fun MetadataRefreshOption.toRefreshParams(): MetadataRefreshParams = when (this) {
+    MetadataRefreshOption.DEFAULT -> MetadataRefreshParams(
+        metadataRefreshMode = "Default",
+        imageRefreshMode = "Default",
+        replaceAllMetadata = false,
+        replaceAllImages = false,
+    )
+    MetadataRefreshOption.FULL_VALIDATION -> MetadataRefreshParams(
+        metadataRefreshMode = "FullRefresh",
+        imageRefreshMode = "Default",
+        replaceAllMetadata = false,
+        replaceAllImages = false,
+    )
+    MetadataRefreshOption.REPLACE_ALL_METADATA -> MetadataRefreshParams(
+        metadataRefreshMode = "FullRefresh",
+        imageRefreshMode = "FullRefresh",
+        replaceAllMetadata = true,
+        replaceAllImages = false,
+    )
+    MetadataRefreshOption.REPLACE_IMAGES -> MetadataRefreshParams(
+        metadataRefreshMode = "None",
+        imageRefreshMode = "FullRefresh",
+        replaceAllMetadata = false,
+        replaceAllImages = true,
+    )
+}
+
+/**
  * The editable field set of one item, as submitted by the metadata editor's
  * save action. Bundled so repository/update call sites don't thread ~30
  * positional primitives.

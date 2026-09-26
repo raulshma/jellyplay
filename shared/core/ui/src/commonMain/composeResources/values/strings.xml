@@ -286,4 +286,14 @@
     <string name="core_ui_whatsnew_take_me_there">Take me there</string>
     <string name="core_ui_whatsnew_got_it">Got it</string>
     <string name="core_ui_whatsnew_archive_empty">No release highlights yet.</string>
+    <string name="core_refresh_metadata_title">Refresh metadata</string>
+    <string name="core_refresh_metadata_message">Choose how the server refreshes metadata and images for “%s”.</string>
+    <string name="core_refresh_metadata_mode_default">Scan for missing data</string>
+    <string name="core_refresh_metadata_mode_default_desc">Downloads missing metadata and images only.</string>
+    <string name="core_refresh_metadata_mode_full_validation">Validate all metadata</string>
+    <string name="core_refresh_metadata_mode_full_validation_desc">Re-scans every field, keeping current values as the baseline.</string>
+    <string name="core_refresh_metadata_mode_replace_all">Replace all metadata</string>
+    <string name="core_refresh_metadata_mode_replace_all_desc">Overwrites current metadata with provider data. Refreshing a series also refreshes its episodes.</string>
+    <string name="core_refresh_metadata_mode_replace_images">Replace all images</string>
+    <string name="core_refresh_metadata_mode_replace_images_desc">Re-downloads every image from providers, keeping metadata.</string>
 </resources>

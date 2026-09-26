@@ -67,6 +67,12 @@ internal data class DetailContentState(
     val isSeerrRecommendationsEnabled: Boolean,
     val preferences: DetailPreferences,
     val canManageSeries: Boolean,
+    /**
+     * The signed-in user may run server-side metadata actions (admin). Gates
+     * the ⋮ menu's "Refresh metadata" entry together with
+     * [DetailCapabilities.remoteDiscovery] (resolved in `DetailContent`).
+     */
+    val canManageMetadata: Boolean = false,
     // ── Unified-provider fields. Drives source-aware rendering of the
     // download/sync UI, local subtitle selector, asset-aware image resolution,
     // and capability-gated navigation. Empty/default for a plain REMOTE item so
@@ -267,6 +273,20 @@ internal data class AddToCallbacks(
 )
 
 /**
+ * Admin metadata-maintenance actions for the current item (the ⋮ menu's
+ * server-side metadata entries).
+ *
+ * Grouping rule: the metadata-maintenance openers that open sheets at screen
+ * level; the underlying writes run through the `MetadataAdminActions` helper
+ * the screen reaches directly.
+ */
+@Immutable
+internal data class MetadataCallbacks(
+    /** Open the "Refresh metadata" mode sheet for the current item. */
+    val onRefreshMetadata: () -> Unit = {},
+)
+
+/**
  * Navigation off the detail screen.
  *
  * Grouping rule: every lambda whose job is to land the user on another screen
@@ -328,4 +348,5 @@ internal data class DetailContentCallbacks(
     val addTo: AddToCallbacks = AddToCallbacks(),
     val navigation: NavigationCallbacks = NavigationCallbacks(),
     val screen: ScreenCallbacks = ScreenCallbacks(),
+    val metadata: MetadataCallbacks = MetadataCallbacks(),
 )

@@ -13,4 +13,5 @@ internal class DetailActionFactories constructor(
     val resync: ResyncActions.Factory,
     val playlists: PlaylistTargets.Factory,
     val watchParty: WatchPartyActions.Factory,
+    val metadataAdmin: MetadataAdminActions.Factory,
 )

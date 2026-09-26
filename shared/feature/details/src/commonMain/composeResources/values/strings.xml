@@ -473,4 +473,7 @@
         <item quantity="one">%1$d highlight</item>
         <item quantity="other">%1$d highlights</item>
     </plurals>
+    <string name="detail_option_refresh_metadata">Refresh metadata</string>
+    <string name="detail_msg_refresh_started">Metadata refresh queued on the server</string>
+    <string name="detail_msg_refresh_failed">Couldn't refresh metadata</string>
 </resources>

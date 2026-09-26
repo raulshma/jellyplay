@@ -437,4 +437,7 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">모든 자막</string>
     <string name="detail_download_subtitles_none">자막 없음</string>
+    <string name="detail_option_refresh_metadata">메타데이터 새로 고침</string>
+    <string name="detail_msg_refresh_started">메타데이터 새로 고침이 서버에 요청되었습니다</string>
+    <string name="detail_msg_refresh_failed">메타데이터를 새로 고침할 수 없습니다</string>
 </resources>

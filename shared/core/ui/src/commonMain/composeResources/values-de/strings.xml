@@ -269,4 +269,14 @@
     <string name="core_ui_whatsnew_take_me_there">Direkt hin</string>
     <string name="core_ui_whatsnew_got_it">Verstanden</string>
     <string name="core_ui_whatsnew_archive_empty">Noch keine Release-Highlights.</string>
+    <string name="core_refresh_metadata_title">Metadaten aktualisieren</string>
+    <string name="core_refresh_metadata_message">Wähle, wie der Server Metadaten und Bilder für „%s“ aktualisiert.</string>
+    <string name="core_refresh_metadata_mode_default">Fehlende Daten suchen</string>
+    <string name="core_refresh_metadata_mode_default_desc">Lädt nur fehlende Metadaten und Bilder herunter.</string>
+    <string name="core_refresh_metadata_mode_full_validation">Alle Metadaten überprüfen</string>
+    <string name="core_refresh_metadata_mode_full_validation_desc">Prüft jedes Feld erneut, behält aktuelle Werte als Basis.</string>
+    <string name="core_refresh_metadata_mode_replace_all">Alle Metadaten ersetzen</string>
+    <string name="core_refresh_metadata_mode_replace_all_desc">Überschreibt aktuelle Metadaten mit Anbieterdaten. Bei einer Serie werden auch die Folgen aktualisiert.</string>
+    <string name="core_refresh_metadata_mode_replace_images">Alle Bilder ersetzen</string>
+    <string name="core_refresh_metadata_mode_replace_images_desc">Lädt alle Bilder neu von Anbietern herunter, Metadaten bleiben.</string>
 </resources>

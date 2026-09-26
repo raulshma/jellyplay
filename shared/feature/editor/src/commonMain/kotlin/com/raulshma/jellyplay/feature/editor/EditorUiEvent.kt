@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.editor
 
+import com.raulshma.jellyplay.core.model.MetadataRefreshOption
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 
 /**
@@ -81,10 +82,9 @@ sealed interface EditorUiEvent {
     /** Downloads an external-provider subtitle and persists it as a media stream. */
     data class DownloadProviderSubtitle(val result: SubtitleSearchResult) : EditorUiEvent
 
-    /** Triggers a server-side metadata refresh. */
-    data class RefreshMetadata(
-        val mode: String = "FullRefresh",
-        val replaceAllMetadata: Boolean = false,
-        val replaceAllImages: Boolean = false,
-    ) : EditorUiEvent
+    /**
+     * Triggers a server-side metadata refresh with the chosen
+     * [MetadataRefreshOption] (the shared "Refresh metadata" mode sheet).
+     */
+    data class RefreshMetadata(val option: MetadataRefreshOption) : EditorUiEvent
 }

@@ -340,6 +340,12 @@ class DetailViewModel internal constructor(
         messages = _messages,
         strings = strings,
     )
+    private val metadataAdminActions = actionFactories.metadataAdmin.create(
+        scope = scope,
+        session = _session,
+        messages = _messages,
+        strings = strings,
+    )
 
     /** Download-lifecycle seam: single-item/series downloads, sheets, picker. */
     internal val downloads: DownloadLifecycleActions get() = downloadLifecycleActions
@@ -361,6 +367,18 @@ class DetailViewModel internal constructor(
 
     /** Watch-party (SyncPlay) bootstrap seam. */
     internal val watchParty: WatchPartyActions get() = watchPartyActions
+
+    /** Admin metadata actions (refresh; the ⋮ menu's metadata-maintenance entries). */
+    internal val metadataAdmin: MetadataAdminActions get() = metadataAdminActions
+
+    /**
+     * Whether the signed-in user may run server-side metadata actions (admin).
+     * Gates the ⋮ menu's "Refresh metadata" entry. Folds the helper's cold
+     * admin flow into a StateFlow on the VM's scope (same shape as
+     * [canManageSeries]).
+     */
+    val canManageMetadata: StateFlow<Boolean> =
+        metadataAdminActions.isAdmin.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     /** Seerr request-flow seam (the state-holder pattern the helpers copy). */
     internal val seerrRequests: SeerrRequestStateHolder get() = seerrRequestState

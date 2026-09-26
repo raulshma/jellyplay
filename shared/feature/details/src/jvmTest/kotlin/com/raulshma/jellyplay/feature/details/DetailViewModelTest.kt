@@ -6,10 +6,12 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -215,6 +217,10 @@ class DetailViewModelTest {
             watchParty = WatchPartyActions.Factory(
                 syncPlayRepository = mockk<SyncPlayRepository>(relaxed = true),
                 syncPlayManager = mockk<SyncPlayManager>(relaxed = true),
+            ),
+            metadataAdmin = MetadataAdminActions.Factory(
+                editorRepository = mockk<MetadataEditorRepository>(relaxed = true),
+                authRepository = mockk<AuthRepository>(relaxed = true),
             ),
         )
         viewModel = DetailViewModel(

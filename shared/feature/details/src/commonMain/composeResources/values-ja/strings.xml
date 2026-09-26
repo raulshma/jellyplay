@@ -437,4 +437,7 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">すべての字幕</string>
     <string name="detail_download_subtitles_none">字幕なし</string>
+    <string name="detail_option_refresh_metadata">メタデータを更新</string>
+    <string name="detail_msg_refresh_started">メタデータ更新をサーバーに投入しました</string>
+    <string name="detail_msg_refresh_failed">メタデータを更新できませんでした</string>
 </resources>

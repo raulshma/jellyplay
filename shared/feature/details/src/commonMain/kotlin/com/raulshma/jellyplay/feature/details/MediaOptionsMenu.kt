@@ -11,6 +11,7 @@ import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
+import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.Stack2
 import com.composables.icons.tabler.outline.Trash
@@ -40,6 +41,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_next_up
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_instant_mix
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_manage_series
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_refresh_metadata
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_share
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_show_detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_show_in_continue_watching
@@ -83,6 +85,7 @@ internal fun rememberMediaOptions(
     canManageSeries: Boolean,
     canDeleteDownloadedSeries: Boolean,
     canEditMetadata: Boolean,
+    canRefreshMetadata: Boolean,
     canAddToPlaylist: Boolean,
     canAddToCollection: Boolean,
     canInstantMix: Boolean,
@@ -101,6 +104,7 @@ internal fun rememberMediaOptions(
     onHideDetailUpNext: () -> Unit = {},
     onShowDetailUpNext: () -> Unit = {},
     onManageSeries: () -> Unit,
+    onRefreshMetadata: () -> Unit = {},
     onTechnicalInfo: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onAddToCollection: () -> Unit = {},
@@ -140,6 +144,7 @@ internal fun rememberMediaOptions(
     val labelShowDetailUpNext = stringResource(Res.string.detail_option_show_detail_up_next)
     val labelTechnicalInfo = stringResource(Res.string.detail_option_technical_info)
     val labelManageSeries = stringResource(Res.string.detail_option_manage_series)
+    val labelRefreshMetadata = stringResource(Res.string.detail_option_refresh_metadata)
     val labelAddToPlaylist = stringResource(Res.string.detail_option_add_to_playlist)
     val labelAddToCollection = stringResource(Res.string.detail_option_add_to_collection)
     val labelDeleteDownloads = stringResource(Res.string.detail_option_delete_downloads)
@@ -150,7 +155,8 @@ internal fun rememberMediaOptions(
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
-        canAddToPlaylist, canAddToCollection, canInstantMix, canStartWatchParty, isOffline, labelManageSeries,
+        canRefreshMetadata, canAddToPlaylist, canAddToCollection, canInstantMix, canStartWatchParty, isOffline, labelManageSeries,
+        labelRefreshMetadata,
         labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
         labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty) {
         buildList {
@@ -160,6 +166,15 @@ internal fun rememberMediaOptions(
             if (canEditMetadata) {
                 add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
                     onClose(); onEditClick()
+                })
+            }
+            // Server-side metadata refresh (the jellyfin-web "Refresh metadata"
+            // dialog): admin-only (the server 403s non-admins) and remote-only,
+            // same origin rule as the editor. Sits directly under Edit so the
+            // two metadata-maintenance entries stay grouped.
+            if (canRefreshMetadata) {
+                add(MediaOption(labelRefreshMetadata, Tabler.Outline.Refresh) {
+                    onClose(); onRefreshMetadata()
                 })
             }
             if (preferences.showShareMediaOption) {
