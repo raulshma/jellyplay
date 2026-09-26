@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
+import com.raulshma.jellyplay.core.model.IdentifyItemType
 import com.raulshma.jellyplay.core.model.IdentifyQuery
 import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.model.MediaType
@@ -123,8 +124,8 @@ internal class MetadataAdminActions(
         val detail = session.value?.detail ?: return
         val item = detail.item
         val itemType = when (item.mediaType) {
-            MediaType.SERIES -> "Series"
-            MediaType.MOVIE -> "Movie"
+            MediaType.SERIES -> IdentifyItemType.SERIES
+            MediaType.MOVIE -> IdentifyItemType.MOVIE
             else -> return
         }
         _identifyState.value = IdentifyUiState(
@@ -155,7 +156,7 @@ internal class MetadataAdminActions(
         val query = _identifyState.value.query ?: return
         if (_identifyState.value.isSearching) return
         scope.launch {
-            _identifyState.update { it.copy(isSearching = true, error = null) }
+            _identifyState.update { it.copy(isSearching = true) }
             editorRepository.identifyRemoteSearch(query)
                 .onSuccess { results ->
                     _identifyState.update { it.copy(isSearching = false, results = results, hasSearched = true) }
@@ -177,7 +178,7 @@ internal class MetadataAdminActions(
         val query = _identifyState.value.query ?: return
         if (_identifyState.value.isApplying) return
         scope.launch {
-            _identifyState.update { it.copy(isApplying = true, error = null) }
+            _identifyState.update { it.copy(isApplying = true) }
             editorRepository.applyIdentifyResult(query.itemId, result, replaceAllImages)
                 .onSuccess {
                     messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_identify_applied)))
@@ -185,8 +186,8 @@ internal class MetadataAdminActions(
                     dismissIdentify()
                     _identifyState.update { it.copy(appliedCount = it.appliedCount + 1) }
                 }
-                .onFailure { cause ->
-                    _identifyState.update { it.copy(isApplying = false, error = cause.message) }
+                .onFailure {
+                    _identifyState.update { it.copy(isApplying = false) }
                     messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_identify_failed)))
                 }
         }
@@ -203,5 +204,4 @@ internal data class IdentifyUiState(
     val isApplying: Boolean = false,
     /** Monotonic counter of successful applies; the screen reloads on each bump. */
     val appliedCount: Int = 0,
-    val error: String? = null,
 )

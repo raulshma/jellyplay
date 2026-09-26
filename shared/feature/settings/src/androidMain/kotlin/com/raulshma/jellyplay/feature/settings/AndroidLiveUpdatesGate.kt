@@ -25,8 +25,6 @@ internal actual fun rememberLiveUpdatesGate(): LiveUpdatesGate? {
             private val manager
                 get() = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            override fun isSupported(): Boolean = true
-
             override fun isPromoted(): Boolean = manager.canPostPromotedNotifications()
 
             override fun openGrantScreen() {

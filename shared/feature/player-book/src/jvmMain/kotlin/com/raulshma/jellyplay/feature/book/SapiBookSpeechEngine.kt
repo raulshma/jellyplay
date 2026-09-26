@@ -6,8 +6,12 @@ import com.sun.jna.platform.win32.Guid
 import com.sun.jna.platform.win32.Variant.VARIANT
 import com.sun.jna.platform.win32.OleAuto
 import kotlinx.coroutines.flow.StateFlow
+import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import kotlin.math.log2
+import kotlin.math.roundToInt
 
 /**
  * Windows read-aloud engine: SAPI `ISpVoice` under the commonMain
@@ -17,9 +21,10 @@ import java.util.concurrent.Executors
  *  - every machine command ([configure]/[speak]/[stop]/[shutdown]) posts to
  *    that thread (the machine is single-thread confined);
  *  - the binding's [TtsBinding.Host] callbacks post back to it;
- *  - completion detection runs on a separate waiter thread polling
- *    `WaitUntilDone(100ms)` — blocking the apartment thread on the wait would
- *    deadlock a queued [stop].
+ *  - completion detection runs on a separate waiter thread that polls
+ *    `WaitUntilDone` in 100ms slices executed on the apartment thread — a
+ *    blocking whole-utterance wait on the apartment thread would deadlock a
+ *    queued [stop].
  *
  * `ISpVoice` is late-bound through IDispatch (JNA's `COMBindingBaseObject`
  * name-based oleMethod path) — no vtable arithmetic, no typelib wrapper.
@@ -83,7 +88,7 @@ private class SapiTtsBinding(
 
     private var voice: SpVoiceObject? = null
 
-    /** The waiter thread polls WaitUntilDone off-apartment; events re-post. */
+    /** The waiter thread blocks on completion polls; events re-post to the apartment. */
     private var waiter: ExecutorService? = null
 
     override var host: TtsBinding.Host? = null
@@ -107,20 +112,26 @@ private class SapiTtsBinding(
     override fun isDefaultLanguageUsable(): Boolean = voice != null
 
     override fun configure(ratePercent: Int, pitchPercent: Int) {
-        // 50–200% → SAPI's −10..10 (100% = 0). Pitch: no SAPI property — ignored.
-        voice?.setRate(((ratePercent - 100) / 10).coerceIn(-10, 10))
+        // 50–200% → SAPI's −10..10, log-scaled so each halving/doubling of
+        // speed is a full decade either side of 100% = 0. Pitch: no SAPI
+        // property — ignored.
+        val multiplier = ratePercent.coerceIn(50, 200) / 100.0
+        voice?.setRate((log2(multiplier) * 10).roundToInt())
     }
 
     override fun speak(text: String, utteranceId: String) {
         val v = voice ?: return
         v.speakAsync(text)
         waiter?.execute {
-            // Poll until SAPI reports the queue drained; a purge (stop or a
-            // superseded speak) short-circuits the wait. The machine's id
-            // guard makes any stale completion inert.
+            // Poll WaitUntilDone ON the apartment thread (the raw IDispatch
+            // must never leave its creating apartment); this thread only
+            // blocks on each 100ms poll's result, so a queued stop still
+            // reaches the voice between polls — its purge drains the queue
+            // and the next poll returns done. The machine's id guard makes
+            // any stale completion inert.
             val drained = try {
                 var done = false
-                while (!done) done = v.waitUntilDone(WAIT_POLL_MS)
+                while (!done) done = submitToApartment { v.waitUntilDone(WAIT_POLL_MS) }.get()
                 true
             } catch (_: Throwable) {
                 true
@@ -149,6 +160,9 @@ private class SapiTtsBinding(
     private fun postToApartment(block: () -> Unit) {
         apartment.execute(block)
     }
+
+    private fun submitToApartment(block: () -> Boolean): Future<Boolean> =
+        apartment.submit(Callable(block))
 }
 
 /**

@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 
 /**
  * Keeps an "endless radio" seeded off one item alive: observes the queue and
@@ -30,11 +32,16 @@ import kotlinx.coroutines.launch
  * stability matters more than unbounded runtime) — after the cap the radio
  * simply stops appending.
  *
- * **Threading.** The observer runs on the injected scope's dispatcher; the
- * [enqueue] lambda owns its own main-thread hop (the facade's
- * `enqueueTracks` pipeline), so this class never touches the queue contract
- * directly. Pure decisions — flows and lambdas in, no platform types —
- * so the whole state machine is unit-testable with MutableStateFlow fakes.
+ * **Threading.** The observer runs on the injected scope's dispatcher while
+ * [start]/[stop] are called from the caller's thread — every touch of
+ * `refillJob` / `consecutiveFailures` / the active-vs-launch decision goes
+ * through [lock], so a stop can never lose a race against a launch that is
+ * already past its active check (a post-stop refill would otherwise keep
+ * enqueuing into a stopped radio). The [enqueue] lambda owns its own
+ * main-thread hop (the facade's `enqueueTracks` pipeline), so this class
+ * never touches the queue contract directly. Pure decisions — flows and
+ * lambdas in, no platform types — so the whole state machine is
+ * unit-testable with MutableStateFlow fakes.
  */
 class AudioRadioController(
     private val scope: CoroutineScope,
@@ -69,6 +76,8 @@ class AudioRadioController(
     private val _state = MutableStateFlow(RadioState())
     val state: StateFlow<RadioState> = _state.asStateFlow()
 
+    /** Serializes refillJob/consecutiveFailures/state-active transitions (see Threading). */
+    private val lock = Any()
     private var refillJob: Job? = null
     private var consecutiveFailures = 0
 
@@ -81,46 +90,70 @@ class AudioRadioController(
 
     /** Arms the radio for [seedItemId] (call after the seed queue started playing). */
     fun start(seedItemId: String) {
-        refillJob?.cancel()
-        consecutiveFailures = 0
-        _state.value = RadioState(active = true, seedItemId = seedItemId)
+        synchronized(lock) {
+            refillJob?.cancel()
+            refillJob = null
+            consecutiveFailures = 0
+            _state.value = RadioState(active = true, seedItemId = seedItemId)
+        }
     }
 
     /** Deactivates the radio (manual stop or failure burnout). */
     fun stop() {
-        refillJob?.cancel()
-        refillJob = null
-        _state.value = RadioState()
+        synchronized(lock) {
+            refillJob?.cancel()
+            refillJob = null
+            _state.value = RadioState()
+        }
     }
 
     private fun maybeRefill(queue: List<AudioQueueItem>, currentIndex: Int) {
-        val current = _state.value
-        if (!current.active || current.isRefilling || refillJob?.isActive == true) return
-        if (queue.size >= MAX_QUEUE) return
-        val remaining = queue.size - (currentIndex + 1)
-        if (remaining > REFILL_THRESHOLD) return
-        val seed = current.seedItemId ?: return
+        synchronized(lock) {
+            val current = _state.value
+            if (!current.active || current.isRefilling || refillJob?.isActive == true) return
+            if (queue.size >= MAX_QUEUE) return
+            val remaining = queue.size - (currentIndex + 1)
+            if (remaining > REFILL_THRESHOLD) return
+            val seed = current.seedItemId ?: return
 
-        refillJob = scope.launch {
+            refillJob = scope.launch { refill(seed, queue) }
+        }
+    }
+
+    private suspend fun refill(seed: String, queue: List<AudioQueueItem>) {
+        val self = coroutineContext.job
+        synchronized(lock) {
+            // A stop/start already replaced this job before the body ran.
+            if (refillJob !== self) return
             _state.update { it.copy(isRefilling = true) }
-            try {
-                fetchMix(seed).fold(
-                    onSuccess = { tracks ->
-                        val queuedIds = queue.mapTo(HashSet(queue.size)) { it.id }
-                        val fresh = tracks.filter { it.id !in queuedIds }.take(REFILL_BATCH)
-                        if (fresh.isNotEmpty()) {
-                            enqueue(fresh)
-                            _state.update { it.copy(refillCount = it.refillCount + 1) }
-                        }
-                        consecutiveFailures = 0
-                    },
-                    onFailure = {
+        }
+        try {
+            fetchMix(seed).fold(
+                onSuccess = { tracks ->
+                    val queuedIds = queue.mapTo(HashSet(queue.size)) { it.id }
+                    val fresh = tracks.filter { it.id !in queuedIds }.take(REFILL_BATCH)
+                    if (fresh.isNotEmpty()) {
+                        enqueue(fresh)
+                        _state.update { it.copy(refillCount = it.refillCount + 1) }
+                    }
+                    synchronized(lock) { consecutiveFailures = 0 }
+                },
+                onFailure = {
+                    val burnout = synchronized(lock) {
                         consecutiveFailures++
-                        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) stop()
-                    },
-                )
-            } finally {
-                _state.update { it.copy(isRefilling = false) }
+                        consecutiveFailures >= MAX_CONSECUTIVE_FAILURES
+                    }
+                    if (burnout) stop()
+                },
+            )
+        } finally {
+            synchronized(lock) {
+                // A stop/start that replaced this job already reset the
+                // state; only the owning job clears the refilling flag.
+                if (refillJob === self) {
+                    refillJob = null
+                    _state.update { it.copy(isRefilling = false) }
+                }
             }
         }
     }

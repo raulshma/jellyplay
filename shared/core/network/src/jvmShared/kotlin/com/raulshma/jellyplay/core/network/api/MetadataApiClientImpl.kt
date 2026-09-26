@@ -162,7 +162,7 @@ class MetadataApiClientImpl(
             val uuid = requireItemUuid(query.itemId)
             val providerIds = query.providerIds.takeIf { it.isNotEmpty() }?.mapValues { it.value as String? }
             val results: List<org.jellyfin.sdk.model.api.RemoteSearchResult> = when (query.itemType) {
-                "Series" -> api.itemLookupApi.getSeriesRemoteSearchResults(
+                com.raulshma.jellyplay.core.model.IdentifyItemType.SERIES -> api.itemLookupApi.getSeriesRemoteSearchResults(
                     org.jellyfin.sdk.model.api.SeriesInfoRemoteSearchQuery(
                         searchInfo = org.jellyfin.sdk.model.api.SeriesInfo(
                             name = query.name,
@@ -175,7 +175,7 @@ class MetadataApiClientImpl(
                         includeDisabledProviders = false,
                     ),
                 ).content
-                "Movie" -> api.itemLookupApi.getMovieRemoteSearchResults(
+                com.raulshma.jellyplay.core.model.IdentifyItemType.MOVIE -> api.itemLookupApi.getMovieRemoteSearchResults(
                     org.jellyfin.sdk.model.api.MovieInfoRemoteSearchQuery(
                         searchInfo = org.jellyfin.sdk.model.api.MovieInfo(
                             name = query.name,
@@ -188,9 +188,6 @@ class MetadataApiClientImpl(
                         includeDisabledProviders = false,
                     ),
                 ).content
-                else -> throw IllegalArgumentException(
-                    "Identify supports Series and Movie items, got: ${query.itemType}",
-                )
             }
             results.map { dto ->
                 com.raulshma.jellyplay.core.model.IdentifyResult(
@@ -200,6 +197,8 @@ class MetadataApiClientImpl(
                     searchProviderName = dto.searchProviderName,
                     imageUrl = dto.imageUrl,
                     overview = dto.overview,
+                    // The apply endpoint posts this DTO back verbatim (below).
+                    raw = dto,
                 )
             }
         }
@@ -212,14 +211,19 @@ class MetadataApiClientImpl(
         api.itemLookupApi.applySearchCriteria(
             itemId = requireItemUuid(itemId),
             replaceAllImages = replaceAllImages,
-            data = org.jellyfin.sdk.model.api.RemoteSearchResult(
-                name = result.name,
-                providerIds = result.providerIds.mapValues { it.value as String? },
-                productionYear = result.year,
-                imageUrl = result.imageUrl,
-                searchProviderName = result.searchProviderName,
-                overview = result.overview,
-            ),
+            // jellyfin-web parity: the applied payload is the server's ORIGINAL
+            // RemoteSearchResult, untouched (provider-id key case, every field
+            // the model doesn't mirror). The trimmed rebuild is only a fallback
+            // for hand-constructed results that never came from a search.
+            data = result.raw as? org.jellyfin.sdk.model.api.RemoteSearchResult
+                ?: org.jellyfin.sdk.model.api.RemoteSearchResult(
+                    name = result.name,
+                    providerIds = result.providerIds.mapValues { it.value as String? },
+                    productionYear = result.year,
+                    imageUrl = result.imageUrl,
+                    searchProviderName = result.searchProviderName,
+                    overview = result.overview,
+                ),
         )
     }
 

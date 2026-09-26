@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
+import com.raulshma.jellyplay.core.model.IdentifyItemType
 import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -73,7 +74,7 @@ class IdentifyActionsTest {
         actions.openIdentifyScreenItem()
 
         val query = actions.identifyState.value.query
-        assertTrue(query != null && query.itemType == "Series")
+        assertTrue(query != null && query.itemType == IdentifyItemType.SERIES)
         assertEquals("Wr0ng N4me", query.name)
         assertEquals(1999, query.year)
         assertEquals(mapOf("tvdb" to "121361"), query.providerIds)

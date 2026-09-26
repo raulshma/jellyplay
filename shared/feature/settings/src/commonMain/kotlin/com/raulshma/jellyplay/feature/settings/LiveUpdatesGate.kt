@@ -4,15 +4,12 @@ import androidx.compose.runtime.Composable
 
 /**
  * The Android 16 "Live Updates" opt-in seam for the storage/downloads
- * settings: whether this device supports the progress-centric promoted
- * notifications (API 36+), whether the OS currently promotes ours, and the
- * deep link into the system grant screen. Null on platforms without the
- * concept (desktop) — the settings row renders nothing.
+ * settings: whether the OS currently promotes our progress-centric
+ * notifications, and the deep link into the system grant screen. Null where
+ * the concept doesn't exist (below API 36, desktop) — the settings row
+ * renders nothing and "supported" is already encoded by the gate existing.
  */
 internal interface LiveUpdatesGate {
-    /** API 36+ — the row only exists when true. */
-    fun isSupported(): Boolean
-
     /** The user has granted the promoted-notification special access. */
     fun isPromoted(): Boolean
 

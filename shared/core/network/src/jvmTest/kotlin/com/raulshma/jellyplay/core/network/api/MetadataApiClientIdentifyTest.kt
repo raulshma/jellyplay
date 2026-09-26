@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.IdentifyItemType
 import com.raulshma.jellyplay.core.model.IdentifyQuery
 import com.raulshma.jellyplay.core.model.IdentifyResult
 import io.mockk.mockk
@@ -14,9 +15,9 @@ import kotlin.test.assertTrue
 /**
  * Pins the Identify endpoints (jellyfin-web parity) onto the recording
  * ApiClient (real engine + real SDK operations over a recorded transport):
- * the type-specific remote-search dispatch (Series / Movie / unsupported),
- * the query body shaping (name / year / providerIds), and the apply round-trip
- * (path + replaceAllImages flag + provider-id key lowercasing).
+ * the type-specific remote-search dispatch (Series / Movie), the query body
+ * shaping (name / year / providerIds), and the apply round-trip (path +
+ * replaceAllImages flag + the server-original DTO posted back verbatim).
  */
 class MetadataApiClientIdentifyTest {
 
@@ -83,7 +84,7 @@ class MetadataApiClientIdentifyTest {
         val results = api.identifyRemoteSearch(
             IdentifyQuery(
                 itemId = "00000000-0000-0000-0000-000000000001",
-                itemType = "Series",
+                itemType = IdentifyItemType.SERIES,
                 name = "The Real Show",
                 year = 2020,
                 providerIds = mapOf("tvdb" to "121361"),
@@ -113,7 +114,7 @@ class MetadataApiClientIdentifyTest {
         val results = api.identifyRemoteSearch(
             IdentifyQuery(
                 itemId = "00000000-0000-0000-0000-000000000002",
-                itemType = "Movie",
+                itemType = IdentifyItemType.MOVIE,
                 name = "A Film",
                 year = null,
                 providerIds = emptyMap(),
@@ -122,14 +123,6 @@ class MetadataApiClientIdentifyTest {
 
         assertTrue(results.isEmpty())
         assertEquals("/Items/RemoteSearch/Movie", client.requests.single().pathTemplate)
-    }
-
-    @Test
-    fun `unsupported item type fails the call`() = runTest {
-        val result = api.identifyRemoteSearch(
-            IdentifyQuery(itemId = "00000000-0000-0000-0000-000000000003", itemType = "Season", name = "x"),
-        )
-        assertTrue(result.isFailure)
     }
 
     @Test
@@ -157,5 +150,34 @@ class MetadataApiClientIdentifyTest {
         val body = request.requestBody as org.jellyfin.sdk.model.api.RemoteSearchResult
         assertEquals("The Real Show", body.name)
         assertEquals("121361", body.providerIds?.get("tvdb"))
+    }
+
+    @Test
+    fun `apply posts the server original result dto verbatim when the candidate came from a search`() = runTest {
+        // Provider-id key arrives mixed-case from the wire; the model's
+        // lowercase convention is display-only and must NOT fold back into
+        // the applied payload (jellyfin-web posts the original object).
+        client.nextBody = """
+            [{"Name":"The Real Show","ProductionYear":2020,
+              "ProviderIds":{"Tvdb":"121361"},"SearchProviderName":"TheTVDB"}]
+        """.trimIndent()
+        val results = api.identifyRemoteSearch(
+            IdentifyQuery(
+                itemId = "00000000-0000-0000-0000-000000000005",
+                itemType = IdentifyItemType.SERIES,
+                name = "The Real Show",
+            ),
+        ).getOrThrow()
+
+        api.applyIdentifyResult(
+            itemId = "00000000-0000-0000-0000-000000000005",
+            result = results.single(),
+            replaceAllImages = false,
+        )
+
+        val applyBody = client.requests.last().requestBody as org.jellyfin.sdk.model.api.RemoteSearchResult
+        assertEquals("TheTVDB", applyBody.searchProviderName)
+        assertEquals("121361", applyBody.providerIds?.get("Tvdb"))
+        assertEquals(null, applyBody.providerIds?.get("tvdb"), "the original key case must survive, not be re-lowercased")
     }
 }

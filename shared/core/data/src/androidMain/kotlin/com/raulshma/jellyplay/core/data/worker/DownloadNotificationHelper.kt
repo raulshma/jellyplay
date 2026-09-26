@@ -140,16 +140,7 @@ internal object DownloadNotificationHelper {
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(
-                R.drawable.ic_notification_play,
-                context.getString(R.string.data_download_action_resume),
-                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_RESUME, ACTION_RESUME_OFFSET),
-            )
-            .addAction(
-                R.drawable.ic_notification_stop,
-                context.getString(R.string.data_download_action_cancel),
-                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_CANCEL, ACTION_CANCEL_OFFSET),
-            )
+            .addCompatActions(context, downloadId, DownloadAction.RESUME, DownloadAction.CANCEL)
             .build()
         NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
@@ -220,18 +211,14 @@ internal object DownloadNotificationHelper {
         // Android 16 "Live Updates": the progress-centric ProgressStyle renders
         // the pinned, glanceable progress card where the OS promotes it. Same
         // channel/id/actions as the classic path — the compat branch below
-        // stays byte-identical for API < 36.
+        // stays behaviour-identical for API < 36.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            val style = Notification.ProgressStyle()
-                .setProgressTrackerIcon(Icon.createWithResource(context, android.R.drawable.stat_sys_download))
-                .setProgress(progress * 10) // per-mille
-            return frameworkBuilder(context, downloadId, name)
-                .setContentText(formatProgressText(downloadedBytes, totalBytes, speedBytesPerSec))
-                .setStyle(style)
-                .setSubText(speedBytesPerSec.formatSpeed())
-                .addAction(progressAction(context, downloadId, pause = true))
-                .addAction(progressAction(context, downloadId, pause = false))
-                .build()
+            return liveUpdatesNotification(
+                context, downloadId, name,
+                bodyText = formatProgressText(downloadedBytes, totalBytes, speedBytesPerSec),
+                subText = speedBytesPerSec.formatSpeed(),
+                style = liveUpdatesProgressStyle(context, progress * 10), // per-mille
+            )
         }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(name)
@@ -244,16 +231,7 @@ internal object DownloadNotificationHelper {
             .setContentIntent(openDownloadsPendingIntent(context))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setGroup(GROUP_KEY)
-            .addAction(
-                R.drawable.ic_notification_pause,
-                context.getString(R.string.data_download_action_pause),
-                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_PAUSE, ACTION_PAUSE_OFFSET),
-            )
-            .addAction(
-                R.drawable.ic_notification_stop,
-                context.getString(R.string.data_download_action_cancel),
-                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_CANCEL, ACTION_CANCEL_OFFSET),
-            )
+            .addCompatActions(context, downloadId, DownloadAction.PAUSE, DownloadAction.CANCEL)
             .build()
     }
 
@@ -268,15 +246,11 @@ internal object DownloadNotificationHelper {
         name: String,
     ): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            val style = Notification.ProgressStyle()
-                .setProgressTrackerIcon(Icon.createWithResource(context, android.R.drawable.stat_sys_download))
-                .setProgress(0)
-            return frameworkBuilder(context, downloadId, name)
-                .setContentText(context.getString(R.string.data_download_queued))
-                .setStyle(style)
-                .addAction(progressAction(context, downloadId, pause = true))
-                .addAction(progressAction(context, downloadId, pause = false))
-                .build()
+            return liveUpdatesNotification(
+                context, downloadId, name,
+                bodyText = context.getString(R.string.data_download_queued),
+                style = liveUpdatesProgressStyle(context, 0).setProgressIndeterminate(true),
+            )
         }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(name)
@@ -288,26 +262,43 @@ internal object DownloadNotificationHelper {
             .setContentIntent(openDownloadsPendingIntent(context))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setGroup(GROUP_KEY)
-            .addAction(
-                R.drawable.ic_notification_pause,
-                context.getString(R.string.data_download_action_pause),
-                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_PAUSE, ACTION_PAUSE_OFFSET),
-            )
-            .addAction(
-                R.drawable.ic_notification_stop,
-                context.getString(R.string.data_download_action_cancel),
-                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_CANCEL, ACTION_CANCEL_OFFSET),
-            )
+            .addCompatActions(context, downloadId, DownloadAction.PAUSE, DownloadAction.CANCEL)
             .build()
     }
 
     // ── Live Updates (API 36+) ───────────────────────────────────────────
 
     /**
-     * The framework builder the ProgressStyle branch shares: every field of
-     * the compat card that is not style-specific, verbatim (channel, title,
-     * icon, ongoing/only-alert-once, content intent, category, group,
-     * low priority).
+     * The framework builder every ProgressStyle notification shares: all fields
+     * of the compat card that are not style-specific, verbatim (channel, title,
+     * icon, ongoing/only-alert-once, content intent, category, group, low
+     * priority) plus the style, body text, optional subText and actions.
+     */
+    private fun liveUpdatesNotification(
+        context: Context,
+        downloadId: String,
+        name: String,
+        bodyText: String,
+        style: Notification.ProgressStyle,
+        subText: String? = null,
+    ): Notification =
+        frameworkBuilder(context, downloadId, name)
+            .setContentText(bodyText)
+            .setStyle(style)
+            .also { builder -> subText?.let(builder::setSubText) }
+            .addAction(frameworkAction(context, downloadId, DownloadAction.PAUSE))
+            .addAction(frameworkAction(context, downloadId, DownloadAction.CANCEL))
+            .build()
+
+    /** Per-mille ProgressStyle with the download tracker icon; indeterminate is the caller's call. */
+    private fun liveUpdatesProgressStyle(context: Context, progressPerMille: Int): Notification.ProgressStyle =
+        Notification.ProgressStyle()
+            .setProgressTrackerIcon(Icon.createWithResource(context, android.R.drawable.stat_sys_download))
+            .setProgress(progressPerMille)
+
+    /**
+     * The framework builder skeleton the ProgressStyle notifications share:
+     * every non-style field of the compat card, verbatim.
      */
     private fun frameworkBuilder(
         context: Context,
@@ -323,30 +314,44 @@ internal object DownloadNotificationHelper {
             .setCategory(Notification.CATEGORY_PROGRESS)
             .setGroup(GROUP_KEY)
 
-    /** Pause (pause = true) / Cancel action in the framework Action shape. */
-    private fun progressAction(
-        context: Context,
-        downloadId: String,
-        pause: Boolean,
-    ): Notification.Action {
-        val (iconRes, labelRes, action, offset) = if (pause) {
-            ActionQuartet(R.drawable.ic_notification_pause, R.string.data_download_action_pause, DownloadActionReceiver.ACTION_PAUSE, ACTION_PAUSE_OFFSET)
-        } else {
-            ActionQuartet(R.drawable.ic_notification_stop, R.string.data_download_action_cancel, DownloadActionReceiver.ACTION_CANCEL, ACTION_CANCEL_OFFSET)
-        }
-        return Notification.Action.Builder(
-            Icon.createWithResource(context, iconRes),
-            context.getString(labelRes),
-            actionPendingIntent(context, downloadId, action, offset),
-        ).build()
-    }
-
-    private data class ActionQuartet(
+    /**
+     * Every notification action, in one place: icon, label, receiver action and
+     * PendingIntent request-code offset — the single home so the compat and
+     * framework Action shapes can never drift apart.
+     */
+    private enum class DownloadAction(
         val iconRes: Int,
         val labelRes: Int,
         val action: String,
         val offset: Int,
-    )
+    ) {
+        PAUSE(R.drawable.ic_notification_pause, R.string.data_download_action_pause, DownloadActionReceiver.ACTION_PAUSE, ACTION_PAUSE_OFFSET),
+        RESUME(R.drawable.ic_notification_play, R.string.data_download_action_resume, DownloadActionReceiver.ACTION_RESUME, ACTION_RESUME_OFFSET),
+        CANCEL(R.drawable.ic_notification_stop, R.string.data_download_action_cancel, DownloadActionReceiver.ACTION_CANCEL, ACTION_CANCEL_OFFSET),
+    }
+
+    /** [actions] appended to a compat builder, in the compat Action shape. */
+    private fun NotificationCompat.Builder.addCompatActions(
+        context: Context,
+        downloadId: String,
+        vararg actions: DownloadAction,
+    ): NotificationCompat.Builder = apply {
+        for (a in actions) {
+            addAction(a.iconRes, context.getString(a.labelRes), actionPendingIntent(context, downloadId, a.action, a.offset))
+        }
+    }
+
+    /** The same action in the framework Action shape (ProgressStyle branch). */
+    private fun frameworkAction(
+        context: Context,
+        downloadId: String,
+        action: DownloadAction,
+    ): Notification.Action =
+        Notification.Action.Builder(
+            Icon.createWithResource(context, action.iconRes),
+            context.getString(action.labelRes),
+            actionPendingIntent(context, downloadId, action.action, action.offset),
+        ).build()
 
     // ── Intents ──────────────────────────────────────────────────────────
 

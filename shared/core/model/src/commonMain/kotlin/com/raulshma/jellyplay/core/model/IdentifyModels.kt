@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.model
 
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * The Jellyfin "Identify" flow (jellyfin-web parity): search metadata
@@ -9,10 +10,22 @@ import kotlinx.serialization.Serializable
  * and apply one back onto the item (metadata + images replacement via
  * `POST /Items/RemoteSearch/Apply/{itemId}`).
  *
- * First version supports Series and Movie (the 90% mismatch case); the
- * client's search endpoint set is dispatch-per-type so further types slot in
+ * First version supports Series and Movie (the 90% mismatch case); further
+ * types slot into [IdentifyItemType] and the client's endpoint dispatch
  * without a model change.
  */
+
+/**
+ * The item types the Identify flow supports. [IdentifyItemType.wireName] is
+ * the SDK/endpoint discriminator — the single home for the "Series"/"Movie"
+ * literals so no caller re-spells them.
+ */
+@Immutable
+@Serializable
+enum class IdentifyItemType(val wireName: String) {
+    SERIES("Series"),
+    MOVIE("Movie"),
+}
 
 /**
  * The search sent to the providers: the item being identified plus the
@@ -24,14 +37,22 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class IdentifyQuery(
     val itemId: String,
-    /** Wire item type the search endpoint dispatches on: "Series" or "Movie". */
-    val itemType: String,
+    /** The item type whose search endpoint the call dispatches on. */
+    val itemType: IdentifyItemType,
     val name: String,
     val year: Int? = null,
     val providerIds: Map<String, String> = emptyMap(),
 )
 
-/** One provider candidate returned by the remote search. */
+/**
+ * One provider candidate returned by the remote search.
+ *
+ * [raw] carries the server's original RemoteSearchResult DTO (an SDK type —
+ * opaque here so the model stays SDK-free): the apply endpoint posts it back
+ * verbatim, exactly like jellyfin-web, so nothing the server returned is
+ * lost to the trimmed fields below. Only the network client writes it and
+ * only the network client reads it back on apply.
+ */
 @Immutable
 @Serializable
 data class IdentifyResult(
@@ -41,4 +62,5 @@ data class IdentifyResult(
     val searchProviderName: String? = null,
     val imageUrl: String? = null,
     val overview: String? = null,
+    @Transient val raw: Any? = null,
 )

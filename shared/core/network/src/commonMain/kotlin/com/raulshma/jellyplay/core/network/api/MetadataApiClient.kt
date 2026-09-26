@@ -40,16 +40,16 @@ interface MetadataApiClient {
     /**
      * The "Identify" provider search (jellyfin-web parity): posts the query to
      * the type-specific `/Items/RemoteSearch/{Type}` endpoint and returns the
-     * provider candidates. [IdentifyQuery.itemType] dispatches the endpoint —
-     * "Series" and "Movie" are supported; other types fail the call.
+     * provider candidates. [IdentifyQuery.itemType] dispatches the endpoint.
      */
     suspend fun identifyRemoteSearch(query: IdentifyQuery): Result<List<IdentifyResult>>
 
     /**
      * Applies a chosen [IdentifyResult] onto the item (metadata replacement;
      * images replaced when [replaceAllImages], the SDK/server default).
-     * `POST /Items/RemoteSearch/Apply/{itemId}` — the server also triggers a
-     * metadata refresh of the item on apply.
+     * `POST /Items/RemoteSearch/Apply/{itemId}` with the server's original
+     * result DTO when the candidate came from [identifyRemoteSearch] — the
+     * server also triggers a metadata refresh of the item on apply.
      */
     suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean = true): Result<Unit>
 }

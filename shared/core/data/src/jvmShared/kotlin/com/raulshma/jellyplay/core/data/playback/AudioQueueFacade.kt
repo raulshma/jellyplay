@@ -187,10 +187,12 @@ class DefaultAudioQueueFacade(
 ) : AudioQueueFacade {
 
     /**
-     * The radio state machine, created lazily on first radio use so a
-     * facade that never runs radio registers no observer. `radioScope`
-     * defaults to a private supervisor scope on Default — the observer only
-     * reads flows; the enqueue lambda owns the main-thread hop.
+     * The radio state machine, created lazily — in practice on the first
+     * [radioState] collection (the queue sheet's radio chip is always
+     * composed), which arms the queue observer; a facade whose radio state is
+     * never collected registers no observer. `radioScope` defaults to a
+     * private supervisor scope on Default — the observer only reads flows;
+     * the enqueue lambda owns the main-thread hop.
      */
     private val radio: AudioRadioController by lazy {
         AudioRadioController(
