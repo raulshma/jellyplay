@@ -268,6 +268,7 @@ slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
 libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
 # Desktop libmpv access (mpv-2.dll / libmpv.so / libmpv.dylib) for MpvDesktopEngine
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+jna-platform = { group = "net.java.dev.jna", name = "jna-platform", version.ref = "jna" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
 # libass wired into Media3's renderer pipeline — full ASS/SSA rendering
 # (positioning, fonts, animations, karaoke, vector drawing) on the

@@ -82,6 +82,10 @@ kotlin {
             // Desktop PDF rendering. Android intentionally uses the platform
             // android.graphics.pdf.PdfRenderer (no dependency there).
             implementation(libs.pdfbox)
+            // Windows SAPI read-aloud (ISpVoice via late-bound IDispatch; the
+            // desktop TtsBinding). jna-platform carries the COM plumbing the
+            // raw jna artifact (libmpv) lacks.
+            implementation(libs.jna.platform)
             // Desktop EPUB host — KCEF/Chromium; the screen owns KCEF.init and
             // shows the first-run CEF download progress.
             implementation(libs.compose.webview.multiplatform)
