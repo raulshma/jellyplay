@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
+import com.raulshma.jellyplay.desktop.harness.DesktopFlowHarness
 
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin

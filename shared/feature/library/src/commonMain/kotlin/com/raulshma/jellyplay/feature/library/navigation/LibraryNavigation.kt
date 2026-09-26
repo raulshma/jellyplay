@@ -11,8 +11,6 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.navigatePhotoAware
 import com.raulshma.jellyplay.feature.library.FavoritesScreen
 import com.raulshma.jellyplay.feature.library.LibraryScreen
-import com.raulshma.jellyplay.feature.library.PhotoAlbumScreen
-import com.raulshma.jellyplay.feature.library.PhotoViewerScreen
 import com.raulshma.jellyplay.feature.library.StudioDetailScreen
 
 /**
@@ -101,24 +99,9 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
         )
     }
 
-    entry<Route.PhotoAlbum> { key ->
-        PhotoAlbumScreen(
-            parentId = key.parentId,
-            folderName = key.folderName,
-            onPhotoClick = { itemId, parentId ->
-                navigator.navigate(Route.PhotoViewer(itemId, parentId))
-            },
-            onBack = { navigator.goBack() },
-        )
-    }
-
-    entry<Route.PhotoViewer> { key ->
-        PhotoViewerScreen(
-            itemId = key.itemId,
-            parentId = key.parentId,
-            onBack = { navigator.goBack() },
-        )
-    }
+    // Route.PhotoAlbum / Route.PhotoViewer entries live in feature/photos'
+    // photosSection since the photo-suite extraction (appSections registers
+    // it right after this builder).
 
     entry<Route.StudioDetail> { key ->
         StudioDetailScreen(

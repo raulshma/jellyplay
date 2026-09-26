@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.testutil
 
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import java.time.LocalDate
 import java.time.ZoneId
 

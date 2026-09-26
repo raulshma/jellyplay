@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.message.asString
 import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -299,23 +300,25 @@ internal fun describeDiscoverRow(row: DiscoverRowConfig): String {
 private fun DiscoverRowTemplatesPresentation(
     onUseTemplate: (DiscoverRowConfig) -> Unit,
 ) {
-    // Icon + factory pairs — the template's title is NOT duplicated here; the
-    // row renders factory().title (remembered below), so a factory rename
-    // can't drift against a stale list label.
+    // Icon + template pairs — the label renders the template's OWN localized
+    // title (resolved per composition below), so a template rename can't
+    // drift against a stale list label; the click re-invokes create() so
+    // every use adds a row with its own fresh id under that same title.
     val templates = listOf(
-        Tabler.Outline.EyeOff to DiscoverRowTemplates::unwatchedMovies,
-        Tabler.Outline.Star to DiscoverRowTemplates::highlyRated,
-        Tabler.Outline.CalendarPlus to DiscoverRowTemplates::newThisMonth,
-        Tabler.Outline.Dice to DiscoverRowTemplates::randomSurprise,
-        Tabler.Outline.TrendingUp to DiscoverRowTemplates::trendingSeerr,
+        Tabler.Outline.EyeOff to DiscoverRowTemplates.unwatchedMovies,
+        Tabler.Outline.Star to DiscoverRowTemplates.highlyRated,
+        Tabler.Outline.CalendarPlus to DiscoverRowTemplates.newThisMonth,
+        Tabler.Outline.Dice to DiscoverRowTemplates.randomSurprise,
+        Tabler.Outline.TrendingUp to DiscoverRowTemplates.trendingSeerr,
     )
     Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
-        templates.forEachIndexed { index, (icon, factory) ->
+        templates.forEachIndexed { index, (icon, template) ->
             val shape = expressiveListShape(index, templates.size, innerRadius = 0.dp)
             val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
-            // One config per composition for the title; the click invokes the
-            // factory again so every use adds a row with its own fresh id.
-            val template = remember(factory) { factory() }
+            // Resolved once per composition: the visible label and the title
+            // baked into the created config stay identical, whichever locale
+            // is active.
+            val title = template.title.asString()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -324,7 +327,7 @@ private fun DiscoverRowTemplatesPresentation(
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
                     .then(tvFocusState.focusModifier)
                     .tvFocusIndicator(tvFocusState, shape)
-                    .clickable { onUseTemplate(factory()) }
+                    .clickable { onUseTemplate(template.create(title)) }
                     .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -338,7 +341,7 @@ private fun DiscoverRowTemplatesPresentation(
                     )
                     Spacer(Modifier.width(14.dp))
                     Text(
-                        template.title,
+                        title,
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                         color = MaterialTheme.colorScheme.onSurface,
                     )

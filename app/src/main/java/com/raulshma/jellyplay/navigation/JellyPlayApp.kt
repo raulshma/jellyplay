@@ -13,10 +13,7 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
 import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
 import com.raulshma.jellyplay.feature.shell.navigation.SignedOutAuthHost
-import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.ShellInfra
-import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 
 /**
  * The Android app shell's root dispatcher. One `when` over the session state
@@ -36,14 +33,13 @@ import com.raulshma.jellyplay.shell.UpdateCoordinator
 fun JellyPlayApp(
     viewModel: MainViewModel,
     infra: ShellInfra,
-    // The shell coordinators, threaded from MainActivity (which resolves the
-    // same Koin singles MainViewModel's constructor injects) — the ViewModel
-    // starts them on its scope but no longer re-exports them.
-    sessionCoordinator: SessionCoordinator,
-    updateCoordinator: UpdateCoordinator,
-    syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
 ) {
-    val session = sessionCoordinator
+    // The shell coordinators ride the infra bundle — the composition's ONE
+    // resolution site for them (MainActivity builds the bundle; MainViewModel
+    // keeps its constructor injection only to START the same Koin singles on
+    // its scope). Resolved here (first composition) exactly where the former
+    // threading parameters arrived.
+    val session = infra.sessionCoordinatorLazy.value
     val isRestoring by session.isRestoring.collectAsStateWithLifecycle()
     val isAuthenticated by session.isAuthenticated.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -120,9 +116,6 @@ fun JellyPlayApp(
                         // sessions; collecting it anywhere earlier would defeat
                         // the lazy provider.
                         audioPlaybackManager = infra.audioPlaybackManagerLazy.value,
-                        sessionCoordinator = sessionCoordinator,
-                        updateCoordinator = updateCoordinator,
-                        syncPlayOpenCoordinator = syncPlayOpenCoordinator,
                     )
                 }
             }
@@ -141,6 +134,6 @@ fun JellyPlayApp(
         // check in UpdateCoordinator flips it to UpdateAvailable when a newer
         // build exists. Keep this after the `when` so the sheet sits above all
         // content.
-        UpdateSheetOverlay(updateCoordinator)
+        UpdateSheetOverlay(infra.updateCoordinatorLazy.value)
     }
 }

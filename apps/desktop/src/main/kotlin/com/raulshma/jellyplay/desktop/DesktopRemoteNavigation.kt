@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop
 
+import androidx.compose.ui.focus.FocusDirection
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
@@ -48,3 +49,19 @@ internal class DesktopRemoteNavCollector(
         const val CONTEXT_MENU_UNAVAILABLE = "Context menu not available here"
     }
 }
+
+/**
+ * The four-branch remote→Compose focus mapping the scaffold's `moveFocus`
+ * adapter used to inline: the receiver's [RemoteFocusDirection] onto
+ * Compose's [FocusDirection] for `FocusManager.moveFocus`. Total (the wire
+ * enum has exactly these four members) and pure — the objects are plain
+ * constants, so DesktopRemoteNavigationTest pins all four rows on the JVM
+ * without a focus tree.
+ */
+internal fun composeFocusDirection(direction: RemoteFocusDirection): FocusDirection =
+    when (direction) {
+        RemoteFocusDirection.UP -> FocusDirection.Up
+        RemoteFocusDirection.DOWN -> FocusDirection.Down
+        RemoteFocusDirection.LEFT -> FocusDirection.Left
+        RemoteFocusDirection.RIGHT -> FocusDirection.Right
+    }

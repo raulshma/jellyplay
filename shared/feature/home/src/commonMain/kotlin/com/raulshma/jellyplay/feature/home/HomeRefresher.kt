@@ -1,11 +1,9 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -17,17 +15,13 @@ import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
-import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
-import com.raulshma.jellyplay.core.model.SeerrRowMedia
-import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -40,8 +34,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,12 +43,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
-import kotlin.time.TimeSource
 
 /**
  * Deep module: the Home screen's entire refresh policy behind one small
@@ -87,7 +76,10 @@ import kotlin.time.TimeSource
  *    reconnect handshake: full-screen loader, outbox drain, capped fetch.
  *    The going-online busy flag itself is NOT here —
  *    [OfflineModeManager.goingOnline] owns it beside the transition that
- *    raises it).
+ *    raises it). The dice-roll MACHINERY is delegated to
+ *    [DiscoverRowsCoordinator] (constructed inside — same state store, same
+ *    scope, the generation invariant owned beside the roll jobs it orders);
+ *    the refresher keeps only the drain CALL SITE inside its fetch.
  *  * [HomeViewModel] is a flows + `onEvent` facade: it folds [state] into
  *    its single UiState object, resets the scroll anchor on identity
  *    changes and manual refresh (pure VM state the refresher cannot see),
@@ -165,23 +157,19 @@ internal class HomeRefresher(
          * is capped and the finally clears the loader on every exit path.
          */
         private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
-
-        /** Logcat/console tag for the dice roll's degraded-outcome logs. */
-        private const val TAG = "HomeRefresher"
-
-        /**
-         * Minimum time the rolling flag stays up per roll — the dice spin's
-         * display floor. A sub-100ms local-server roll must still show
-         * perceptible feedback or the affordance reads as dead.
-         */
-        private const val ROLL_MIN_SPIN_MS = 700L
-
-        /** Test-visible mirror of [ROLL_MIN_SPIN_MS] (private const can't be read from tests). */
-        internal const val ROLL_MIN_SPIN_FOR_TEST = ROLL_MIN_SPIN_MS
     }
 
     private val _state = MutableStateFlow(HomeRefreshState())
     val state: StateFlow<HomeRefreshState> = _state.asStateFlow()
+
+    /**
+     * The dice-roll machinery (registry, roll jobs, in-place patches, the
+     * min-spin floor) — extracted so the generation invariant lives beside
+     * the jobs it orders. Constructed here (not injected) with the refresher's
+     * own scope/repository/state so every construction surface that already
+     * builds a refresher keeps building a working one.
+     */
+    private val discoverRows = DiscoverRowsCoordinator(scope, mediaRepository, _state)
 
     private val refreshMutex = Mutex()
     private var refreshJob: Job? = null
@@ -215,84 +203,11 @@ internal class HomeRefresher(
      */
     private var userDataRefreshJob: Job? = null
     // Discover-sections TTL gate (see HomeFreshness.DISCOVER_TTL_MS / fetchDiscoverSections).
+    // The CUSTOM Seerr discover rows need no gate here anymore: they ride
+    // the home-sections fetch itself (network-layer TTL + last-known-good —
+    // see HomeSectionsFetcher.fetchSeerrDiscoverRows); the refresher's
+    // WHAT/WHEN voice for them is the query it hands to getHomeSections.
     private val discoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
-    // Custom Seerr discover rows: same TTL policy as the fixed sections. The
-    // fetched rows are ALSO memoised in [customSeerrRowsCache] so a gated
-    // fetch (TTL still fresh) can still splice the last-known rows into the
-    // ordered section list — the splice needs values on EVERY main fetch,
-    // unlike the fixed grid which simply skips its state write.
-    private val customDiscoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
-    /**
-     * Plain var on purpose, same rule as [lastFetchRacedPendingSync]:
-     * [fetchCustomSeerrRows] runs only inside [fetchOnce]'s mutex-serialized
-     * body on [scope]'s main-confined dispatcher — a single writer with no
-     * suspension between the memo write and the return read.
-     */
-    private var customSeerrRowsCache: List<HomeSection> = emptyList()
-    /**
-     * The roll-vs-fetch registry: dice rolls that landed while a full refresh
-     * was ALREADY in flight, row id → (rolled items, generation stamp). The
-     * repository's epoch guards keep its caches roll-clean ([rerollDiscoverRow]
-     * owns the invalidate → fetch → seed ordering since the protocol moved
-     * behind that one operation), but the raced fetch's ALREADY-RESOLVED
-     * result still carries the row's pre-roll payloads, and its single
-     * sections write would transiently revert the on-screen roll; the write
-     * re-applies these entries instead (see [applyRolledRowGenerations]) and
-     * drains them — later fetches serve the seeded cache and need no guard.
-     * This uiState-vs-fetch-fold race is why the registry survives the
-     * repository-owned reroll: it orders FEATURE state, not caches.
-     *
-     * THE GENERATION INVARIANT — the one ordering rule this registry exists
-     * to state: a fetch re-applies every roll registered before the fetch's
-     * DRAIN POINT; a roll registered after the drain point applies itself.
-     * The drain point is the last statement before the fetch's single
-     * sections write, with no suspension between drain and write, so every
-     * suspension a fetch can park on (the main sections await, the
-     * custom-Seerr splice await, the book-fraction decode) sits strictly
-     * BEFORE it: a roll landing anywhere mid-fetch registers into a
-     * not-yet-drained registry and is re-applied by the write that follows,
-     * while a roll landing after the write is not that fetch's to cover —
-     * registration happens-before the roll's own in-place patch, so it
-     * applies itself, and its entry simply waits for the NEXT fetch's drain
-     * (re-applying it is idempotent). [registerRolledRowGeneration] stamps
-     * [rollGeneration] on every entry to give that happens-before edge a
-     * name; the stamps are ordered, never compared — the registry drains
-     * whole, no filtering by stamp.
-     *
-     * Vocabulary: "generation", not "epoch", in the feature layer — this
-     * file already spends "epoch" on [identityEpoch] (identity transitions,
-     * a different mechanism), and the lower layers keep their store-local
-     * epoch guards (the repository's discoverRollEpoch, the network layer's
-     * discoverRowEpoch). Identity transitions clear this registry wholesale
-     * ([cancelRollsForIdentityChange]) — clearing alone is sufficient because
-     * the generation's job is ordering WITHIN one identity, and an identity
-     * change voids ordering wholesale; [rollGeneration] is deliberately not
-     * reset.
-     *
-     * Plain map on purpose: written by [rollDiscoverRow]'s job and consumed
-     * by [fetchOnce], both on [scope]'s main-confined dispatcher with no
-     * suspension between the drain and the clear.
-     */
-    private val rolledRowGenerations = LinkedHashMap<String, RolledRowGeneration>()
-
-    /**
-     * Monotonic source of the stamps in [rolledRowGenerations]. Plain var on
-     * purpose — bumped only by [registerRolledRowGeneration] on [scope]'s
-     * main-confined dispatcher, the single-writer idiom of this class's
-     * cross-job fields.
-     */
-    private var rollGeneration = 0L
-
-    /**
-     * In-flight dice-roll jobs (row id → job), so the identity transitions can
-     * cancel them alongside [refreshJob]/[discoverJob]: a roll that raced a
-     * sign-out or user-switch belongs to the PREVIOUS identity — letting it
-     * land would patch the new identity's freshly painted sections, and its
-     * [rolledRowGenerations] entry would make the next fetch re-apply the
-     * previous user's rolled items. Removed by each roll's finally (including
-     * a cancelled one, via [NonCancellable] clearing through the flag reset).
-     */
-    private val rollJobs = LinkedHashMap<String, Job>()
     private var lastContinueWatchingIds: Set<String> = emptySet()
     /**
      * Set when a fetch painted sections while the outbox drain was still
@@ -395,23 +310,14 @@ internal class HomeRefresher(
                     // force = the home screen's manual refresh /
                     // pull-to-refresh: bypass this query's home-sections
                     // cache rather than dropping every cache in the
-                    // repository (plan 08).
+                    // repository (plan 08). The main fetch carries the
+                    // custom discover rows of BOTH sources (Jellyfin +
+                    // Seerr) — the network layer owns their fan-out, TTL and
+                    // ordering; nothing is spliced here anymore.
                     mediaRepository.getHomeSections(sectionPrefs.query, force = force)
                 }
                 val discoverDeferred = if (discoverEnabledProvider()) {
                     async { runCatchingRethrowingCancellation { fetchDiscoverSections(seerrPreferencesProvider()) } }
-                } else null
-                // Custom Seerr discover rows — fetched whenever the DISCOVER
-                // section is enabled and Seerr is connected (independent of
-                // the legacy discover-grid toggle), spliced into the ordered
-                // section list at the DISCOVER block position below.
-                val customSeerrPrefs = seerrPreferencesProvider()
-                val customSeerrDeferred = if (
-                    customSeerrPrefs.enabled &&
-                    HomeSectionType.DISCOVER in sectionPrefs.query.enabledSections &&
-                    sectionPrefs.query.discoverRows.any { it.enabled && it.source == DiscoverRowSource.SEERR }
-                ) {
-                    async { runCatchingRethrowingCancellation { fetchCustomSeerrRows(customSeerrPrefs) } }
                 } else null
                 // Direct *arr "Recently Grabbed" calendar — gated by the
                 // DIRECT_ARR_INTEGRATION flag and the same TTL gate as
@@ -444,15 +350,6 @@ internal class HomeRefresher(
                             mergeContinueWatchingAndNextUp = sectionPrefs.mergeContinueWatchingAndNextUp,
                         )
 
-                        // Splice the custom Seerr rows into the DISCOVER block
-                        // (row-config order across BOTH sources is the single
-                        // ordering authority — see spliceDiscoverSeerrRows).
-                        val splicedSections = spliceDiscoverSeerrRows(
-                            sections = finalSections,
-                            seerrRows = customSeerrDeferred?.await()?.getOrNull().orEmpty(),
-                            prefs = sectionPrefs,
-                        )
-
                         // Continue Reading progress bars: books carry no
                         // runTimeTicks, so the video fraction math cannot serve
                         // the row — the shared TOC-cache decode (also the
@@ -466,18 +363,20 @@ internal class HomeRefresher(
                         // until the second update arrived. The decode is also
                         // the fetch's LAST suspension and must stay ahead of
                         // the roll-registry drain below (generation invariant
-                        // on [rolledRowGenerations]); it reads only the
-                        // CONTINUE_READING section, which discover rolls never
-                        // touch, so the pre-roll spliced sections are the
-                        // right input either way.
-                        val bookFractions = decodeBookProgressFractionsFor(splicedSections)
+                        // on [DiscoverRowsCoordinator.rolledRowGenerations]);
+                        // it reads only the CONTINUE_READING section, which
+                        // discover rolls never touch, so the pre-drain
+                        // sections are the right input either way.
+                        val bookFractions = decodeBookProgressFractionsFor(finalSections)
 
                         // The fetch's drain point — its own last word on
                         // sections: re-apply every roll registered before now
                         // over the pre-roll payloads this fetch captured
-                        // (generation invariant on [rolledRowGenerations]). No
-                        // suspension between this drain and the write below.
-                        val rolledSections = applyRolledRowGenerations(splicedSections)
+                        // (generation invariant on the coordinator's
+                        // registry). drainRolls is SYNCHRONOUS: no suspension
+                        // between this drain and the write below, by
+                        // construction.
+                        val rolledSections = discoverRows.drainRolls(finalSections)
                         _state.update { it.copy(sections = rolledSections, bookProgressFractions = bookFractions) }
 
                         val continueWatching = rolledSections
@@ -614,7 +513,7 @@ internal class HomeRefresher(
                 refreshJob?.cancel()
                 userDataRefreshJob?.cancel()
                 discoverJob?.cancel()
-                cancelRollsForIdentityChange()
+                discoverRows.cancelForIdentityChange()
                 // The raced-sync bypass described sections this reset just
                 // dropped — it must not outlive the identity that raced.
                 lastFetchRacedPendingSync = false
@@ -689,7 +588,7 @@ internal class HomeRefresher(
         // identity; letting it land would repopulate the just-cleared
         // discoverSections with the previous user's rows.
         discoverJob?.cancel()
-        cancelRollsForIdentityChange()
+        discoverRows.cancelForIdentityChange()
         val sectionPrefs = sectionPrefsProvider()
         val cachedSections = orderedCachedSections(sectionPrefs)
         // Same single-emission pairing as the fetch write: the SWR paint and
@@ -818,12 +717,13 @@ internal class HomeRefresher(
 
     /**
      * Resets the discover-sections TTL so the next [fetchDiscoverSections]
-     * actually hits the network. Called on user-initiated refresh — the custom
-     * Seerr rows share the treatment (pull-to-refresh re-rolls them too).
+     * actually hits the network. Called on user-initiated refresh — the
+     * custom Seerr rows ride the forced home-sections fetch instead (the
+     * network layer's force acts as their invalidation), and the legacy
+     * fixed grid is what this gate still covers.
      */
     private fun invalidateDiscoverCache() {
         discoverCache.invalidate()
-        customDiscoverCache.invalidate()
     }
 
     /**
@@ -840,218 +740,14 @@ internal class HomeRefresher(
     }
 
     /**
-     * The dice affordance for one RANDOM-sorted Jellyfin discover row. The
-     * repository's [MediaRepository.rerollDiscoverRow] owns the whole cache
-     * choreography (drop the pre-roll payloads, fetch fresh, commit the rolled
-     * set where the next home fetch reads it); this side does only what the
-     * repository cannot see: patch the row's items in place — no full refresh,
-     * no spinner, sibling rows untouched — guarded by the roll-generation
-     * registry against a fetch already in flight, and keep the spin state
-     * honest. Failures degrade silently (row keeps its current items; the
-     * rolling flag still clears). One in-flight roll per row — a tap while
-     * that row's dice is already animating
-     * ([HomeRefreshState.rollingDiscoverRowIds]) is ignored.
+     * The dice affordance for one RANDOM-sorted Jellyfin discover row —
+     * forwarded to [DiscoverRowsCoordinator.roll], which owns the whole roll
+     * choreography (the repository's reroll owns the cache half; see the roll
+     * protocol on `MediaRepository.rerollDiscoverRow`). Kept as a refresher
+     * member so the VM's (and tests') surface is unchanged.
      */
     fun rollDiscoverRow(row: DiscoverRowConfig, onResult: (Boolean) -> Unit = {}) {
-        // Check-and-set inside _state.update's CAS loop so a concurrent state
-        // writer can't slip a second roll for the same row between the check
-        // and the set (double fetch + a patch racing its own finally-clear).
-        var accepted = false
-        _state.update { state ->
-            if (row.id in state.rollingDiscoverRowIds) {
-                state
-            } else {
-                accepted = true
-                state.copy(rollingDiscoverRowIds = state.rollingDiscoverRowIds + row.id)
-            }
-        }
-        if (!accepted) return
-        val rollStartedAt = TimeSource.Monotonic.markNow()
-        Log.d(TAG, "roll ${row.id}: accepted, flag up")
-        rollJobs[row.id] = scope.launch {
-            // The roll's outcome for the caller: true when the row's items
-            // were swapped, false when the fetch failed/returned nothing
-            // (the row keeps its current items — reported, not silent).
-            // Declared outside try so the finally's diagnostic log can read it.
-            var rolled = false
-            try {
-                runCatchingRethrowingCancellation {
-                    val result = mediaRepository.rerollDiscoverRow(row)
-                    val items = result.getOrNull().orEmpty()
-                    if (items.isEmpty()) {
-                        // A silent skip here reads as a dead button on the
-                        // screen — log the cause so the failure is diagnosable.
-                        result.exceptionOrNull()?.let { e ->
-                            Log.w(TAG, "Discover row roll failed for ${row.id}: ${e.message}", e)
-                        }
-                        return@runCatchingRethrowingCancellation
-                    }
-                    rolled = true
-                    // Register BEFORE the state patch below (generation
-                    // invariant on [rolledRowGenerations]): a fetch already in
-                    // flight captured the pre-roll payloads and lands its own
-                    // sections write after this one — the stamped entry makes
-                    // that write re-apply the rolled items instead of
-                    // reverting the roll.
-                    val generation = registerRolledRowGeneration(row.id, items)
-                    Log.d(
-                        TAG,
-                        "roll ${row.id}: gen=$generation, patched ${items.size} items, first=${items.firstOrNull()?.id} " +
-                            "(on-screen first=${_state.value.sections
-                                .firstOrNull { it.id == HomeSectionType.DISCOVER.descriptor.idFor(row.id) }
-                                ?.items?.firstOrNull()?.id})",
-                    )
-                    val rowSectionId = HomeSectionType.DISCOVER.descriptor.idFor(row.id)
-                    _state.update { s ->
-                        s.copy(
-                            sections = s.sections.map { section ->
-                                if (section.id == rowSectionId && section.type == HomeSectionType.DISCOVER) {
-                                    section.copy(items = items)
-                                } else section
-                            },
-                        )
-                    }
-                }
-                onResult(rolled)
-            } finally {
-                // Keep the flag up for a minimum window: a fast local server
-                // answers in tens of milliseconds, and a spin that flashes for
-                // one frame reads as no feedback at all (the on-device report
-                // behind the dice feature). NonCancellable so a cancelled roll
-                // (stop()/user switch) still clears the flag — a stuck flag
-                // would disable the dice forever.
-                withContext(NonCancellable) {
-                    val remainingMs = ROLL_MIN_SPIN_MS - rollStartedAt.elapsedNow().inWholeMilliseconds
-                    Log.d(TAG, "roll ${row.id}: done in ${ROLL_MIN_SPIN_MS - remainingMs}ms, rolled=$rolled, holding flag ${remainingMs}ms more")
-                    if (remainingMs > 0) delay(remainingMs)
-                }
-                Log.d(TAG, "roll ${row.id}: flag cleared")
-                rollJobs.remove(row.id)
-                _state.update { it.copy(rollingDiscoverRowIds = it.rollingDiscoverRowIds - row.id) }
-            }
-        }
-    }
-
-    /**
-     * Identity-transition drain of the dice-roll machinery (see [rollJobs]):
-     * cancel the in-flight rolls — their finally clears the rolling flags via
-     * [NonCancellable] — and clear the roll-generation registry so the
-     * incoming identity's first fetch doesn't re-apply the previous user's
-     * rolled items (see [rolledRowGenerations]: clearing is sufficient — an
-     * identity change voids the ordering the generations track). The
-     * network-layer caches they seeded are cleared wholesale by the identity
-     * transition itself.
-     */
-    private fun cancelRollsForIdentityChange() {
-        rollJobs.values.forEach { it.cancel() }
-        rollJobs.clear()
-        rolledRowGenerations.clear()
-    }
-
-    /**
-     * Registration half of the generation invariant (see
-     * [rolledRowGenerations]): stamps the next [rollGeneration] onto the
-     * entry and returns the stamp for log correlation. Called by
-     * [rollDiscoverRow] strictly before the roll's own in-place state patch.
-     */
-    private fun registerRolledRowGeneration(rowId: String, items: List<MediaItem>): Long {
-        val generation = ++rollGeneration
-        rolledRowGenerations[rowId] = RolledRowGeneration(items, generation)
-        return generation
-    }
-
-    /**
-     * Drain half of the generation invariant (see [rolledRowGenerations]):
-     * overlays every registered roll over the fetch's sections and drains the
-     * registry — the fetch's own last word on sections, so a roll that
-     * completed mid-fetch keeps its freshly-rolled items on screen. Called as
-     * the last statement before the fetch's single sections write, with no
-     * suspension after it. Entries whose row the fetch doesn't carry
-     * (disabled / absent) are dropped with the drain: the roll had no section
-     * to patch either.
-     */
-    private fun applyRolledRowGenerations(sections: List<HomeSection>): List<HomeSection> {
-        if (rolledRowGenerations.isEmpty()) return sections
-        Log.d(
-            TAG,
-            "fetch re-applying rolled rows ${rolledRowGenerations.keys} " +
-                "(generations ${rolledRowGenerations.values.joinToString { it.generation.toString() }})",
-        )
-        val rolledBySectionId = rolledRowGenerations.mapKeys { (rowId, _) ->
-            HomeSectionType.DISCOVER.descriptor.idFor(rowId)
-        }
-        rolledRowGenerations.clear()
-        return sections.map { section ->
-            if (section.type != HomeSectionType.DISCOVER) {
-                section
-            } else {
-                rolledBySectionId[section.id]?.let { section.copy(items = it.items) } ?: section
-            }
-        }
-    }
-
-    /**
-     * Fetches the enabled SEERR-sourced custom discover rows (TTL-gated,
-     * last-known-good via [customSeerrRowsCache] — see its KDoc). Failing
-     * rows are dropped (pin policy); a TOTAL failure keeps the previous rows
-     * and leaves the TTL unstamped — the next fetch retries, so an outage can
-     * neither blank the rows nor pin the blank for the DISCOVER TTL. Partial
-     * success keeps the successes and stamps fresh.
-     */
-    private suspend fun fetchCustomSeerrRows(prefs: SeerrPreferences): List<HomeSection> {
-        if (!prefs.enabled) return emptyList()
-        if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return emptyList()
-        val rows = sectionPrefsProvider().query.discoverRows
-            .filter { it.enabled && it.source == DiscoverRowSource.SEERR }
-        if (rows.isEmpty()) {
-            customSeerrRowsCache = emptyList()
-            return emptyList()
-        }
-        if (customDiscoverCache.shouldFetch(clock.nowEpochMillis())) {
-            val today = clock.today().toString()
-            // coroutineScope, not the VM scope: the fan-out must die with the
-            // calling refresh job (same contract as fetchDiscoverSections).
-            // R is explicitly nullable (an empty/failed row yields null) —
-            // mapConcurrentCatching drops those.
-            val fetched: List<HomeSection?> = coroutineScope {
-                Semaphore(3).mapConcurrentCatching(rows) { row ->
-                    fetchSeerrDiscoverRow(row, today)
-                }
-            }
-            val fetchedRows = fetched.filterNotNull()
-            // A total failure (every row failed or came back empty) keeps the
-            // previous rows on screen and leaves the TTL unstamped — the
-            // Jellyfin twin's drop-failed-retry-next-fetch policy
-            // (HomeSectionsFetcher.fetchDiscoverRows). The overwrite-to-empty +
-            // unconditional stamp that ran here blanked the rows on an outage
-            // AND pinned the blank for the full DISCOVER TTL.
-            if (fetchedRows.isNotEmpty()) {
-                // Partial success: the successes land, failed rows drop and
-                // retry at the next TTL expiry (same policy).
-                customSeerrRowsCache = fetchedRows
-                customDiscoverCache.markFetched(clock.nowEpochMillis())
-            }
-        }
-        return customSeerrRowsCache
-    }
-
-    /** One Seerr row: builds the discover query from the row's filters, maps to a request-capable section (or null when empty/failed). */
-    private suspend fun fetchSeerrDiscoverRow(row: DiscoverRowConfig, today: String): HomeSection? {
-        val filters = row.seerrFilters
-        val params = filters.toSeerrDiscoverParams(today)
-        val response = when (filters.media) {
-            SeerrRowMedia.MOVIE -> seerrRepository.getDiscoverMovies(params = params)
-            SeerrRowMedia.TV -> seerrRepository.getDiscoverTv(params = params)
-        }.getOrNull() ?: return null
-        val items = response.results.take(row.limit)
-        if (items.isEmpty()) return null
-        return HomeSection(
-            id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),
-            title = row.title,
-            type = HomeSectionType.DISCOVER,
-            items = emptyList(),
-            seerrItems = items,
-        )
+        discoverRows.roll(row, onResult)
     }
 
     /**
@@ -1419,67 +1115,6 @@ internal class HomeRefresher(
 
         discoverCache.markFetched(clock.nowEpochMillis())
         _state.update { it.copy(discoverSections = newSections) }
-    }
-}
-
-/**
- * One [HomeRefresher.rolledRowGenerations] entry: the rolled items plus the
- * monotonic [HomeRefresher.rollGeneration] stamp of the registration that
- * produced them (see the generation invariant on the registry).
- */
-private data class RolledRowGeneration(
-    val items: List<MediaItem>,
-    val generation: Long,
-)
-
-/**
- * Merges the feature-layer Seerr discover rows into the ordered section list
- * at the DISCOVER block position. The user's row-config order (list position
- * in [HomeSectionQuery.discoverRows]) is the single ordering authority across
- * BOTH sources: the block is rebuilt as (Jellyfin rows fetched by the network
- * layer + these Seerr rows) sorted by row-config index, then re-inserted
- * where the block sits (or where the section order says it belongs when no
- * Jellyfin row rendered — e.g. Jellyfin-only rows disabled or empty).
- *
- * A disabled DISCOVER section type returns [sections] untouched (the caller
- * never fetches Seerr rows then, but the guard keeps the helper total).
- * Pure — unit-testable without the refresher.
- */
-internal fun spliceDiscoverSeerrRows(
-    sections: List<HomeSection>,
-    seerrRows: List<HomeSection>,
-    prefs: HomeSectionPrefs,
-): List<HomeSection> {
-    if (seerrRows.isEmpty()) return sections
-    if (HomeSectionType.DISCOVER !in prefs.query.enabledSections) return sections
-    val typeOrderIndex = prefs.homeSectionOrder.withIndex().associate { (index, type) -> type to index }
-    val discoverOrderIndex = typeOrderIndex[HomeSectionType.DISCOVER] ?: Int.MAX_VALUE
-    val rowConfigIndex = prefs.query.discoverRows.withIndex().associate { (index, row) ->
-        HomeSectionType.DISCOVER.descriptor.idFor(row.id) to index
-    }
-    fun rowOrderKey(section: HomeSection): Int = rowConfigIndex[section.id] ?: Int.MAX_VALUE
-
-    val existingDiscover = sections.filter { it.type == HomeSectionType.DISCOVER }
-    val mergedBlock = (existingDiscover + seerrRows)
-        .mapIndexed { stableIndex, section -> stableIndex to section }
-        .sortedWith(compareBy({ rowOrderKey(it.second) }, { it.first }))
-        .map { it.second }
-
-    val blockStart = sections.indexOfFirst { it.type == HomeSectionType.DISCOVER }
-        .takeIf { it >= 0 }
-        // No rendered Jellyfin discover row: insert ahead of the first section
-        // that sorts AFTER the DISCOVER type position (unknown types — e.g.
-        // pinned — count as +∞ and stay last).
-        ?: sections.indexOfFirst { section ->
-            (typeOrderIndex[section.type] ?: Int.MAX_VALUE) > discoverOrderIndex
-        }
-        .takeIf { it >= 0 }
-        ?: sections.size
-
-    return buildList {
-        addAll(sections.subList(0, blockStart))
-        addAll(mergedBlock)
-        addAll(sections.subList(blockStart, sections.size).filter { it.type != HomeSectionType.DISCOVER })
     }
 }
 

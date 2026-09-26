@@ -31,14 +31,20 @@ kotlin {
         //    redesign at the move.
         //
         // The doubles live in jvmShared, not commonMain: FakeTimeSource
-        // implements core:data's TimeSource, which itself lives in THAT
-        // module's jvmShared (java.time-flavored) and is therefore equally
-        // invisible to commonMain here. One home for all doubles keeps the
-        // story simple; a future common-safe double would add a commonMain
-        // file when a commonTest consumer actually exists.
+        // implements core:model's TimeSource (D3 moved the seam there from
+        // core:data), which lives in THAT module's jvmShared
+        // (java.time-flavored) and is therefore equally invisible to
+        // commonMain here. One home for all doubles keeps the story simple;
+        // a future common-safe double would add a commonMain file when a
+        // commonTest consumer actually exists.
 
         getByName("jvmShared").dependencies {
-            // TimeSource (core:data jvmShared) + the repository contract
+            // TimeSource (core:model jvmShared, the D3 move) FakeTimeSource
+            // implements. implementation, not api: every consumer already
+            // carries its own core:model edge — this module must never
+            // become a reason to widen one.
+            implementation(project(":shared:core:model"))
+            // The repository contract
             // types (UserDataMutator/MediaDetailProvider/AppliedMutation/
             // UserDataContainer, core:data commonMain) the doubles
             // implement. implementation, not api: every consumer already

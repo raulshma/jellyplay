@@ -45,14 +45,50 @@ interface MediaRepository {
      * per-row memo so the next home-sections fetch serves the roll instead of
      * reverting or re-rolling it. Returns the fresh items.
      *
-     * The invalidate → fetch → seed ORDERING is the operation's contract and
-     * is owned here: the pre-fetch drop stops the next TTL-served read from
-     * replaying pre-roll items, the epoch guards (repo + network layers)
-     * stall-guard every fetch in flight across the roll, and the commit
-     * re-drops the assembled home payload a racing fetch may have re-cached.
+     * ── THE ROLL PROTOCOL (single owner; implementation sites reference this
+     * doc instead of restating it) ──────────────────────────────────────────
+     *
+     * One user action must survive THREE race windows, one per layer:
+     *
+     *  1. FEATURE registry — a roll landing while a full home refresh is
+     *     already in flight: the raced fetch's resolved payloads still carry
+     *     the row's PRE-roll items, and its single sections write would
+     *     transiently revert the on-screen roll. The feature's
+     *     DiscoverRowsCoordinator registry (roll generations + the drain
+     *     point in HomeRefresher.fetchOnce, strictly between the last
+     *     suspension and the sections write) re-applies registered rolls.
+     *     This layer cannot see that write — it orders FEATURE state only.
+     *  2. REPO cache epoch — [MediaRepositoryImpl.discoverRollEpoch]: a
+     *     getHomeSections already on the wire when the roll landed must not
+     *     pin its pre-roll assembled payload into the repo's in-memory cache
+     *     (the seed's clear cannot stop a LATER write). Bumped at invalidate
+     *     AND at commit; consumed as the write guard on the repo's
+     *     home-sections cache-through read.
+     *  3. NETWORK row epoch — HomeSectionsFetcher's discoverRowEpoch: the
+     *     same stall-guard one layer down, for the per-row TTL memo (a row
+     *     sub-call in flight across the roll must not memoise its pre-roll
+     *     response over the seed). Same bump rule: at invalidate AND at
+     *     commit.
+     *
+     * The ORDERING is the operation's contract, owned by
+     * [MediaRepositoryImpl.rerollDiscoverRow]:
+     *   invalidate ([MediaRepositoryImpl.invalidateDiscoverRowCache]:
+     *     repo-epoch bump → network per-row memo drop → assembled home
+     *     payload drop) → fetch (fresh row query, every cache bypassed) →
+     *     seed on success ([MediaRepositoryImpl.seedDiscoverRowCache]:
+     *     network row memo write + epoch bump + assembled payload drop
+     *     again — a periodic fetch that raced the roll may have re-cached
+     *     the pre-roll sections after the pre-fetch invalidate).
+     *
+     * The "epoch bumped at invalidate AND at commit" rule is what closes the
+     * whole-roll window: a fetch that started BEFORE the invalidate and lands
+     * AFTER the commit stays stall-guarded across both halves.
+     *
      * A failure or an empty result skips the commit and returns as-is — the
      * caches stay dropped, so the next home fetch re-queries the row rather
-     * than replaying or pinning pre-roll items.
+     * than replaying or pinning pre-roll items. Reads compose: a cancelled or
+     * failed consuming home read re-arms its #157 staleness marker, so the
+     * next read still sees the roll's drops.
      */
     suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>>
 

@@ -18,10 +18,11 @@ import kotlin.test.fail
  *
  * Since the sharedFeatureModules fold, the ONE declaration both JVM shells
  * consume is `shared/feature/shell`'s `val sharedFeatureModules = listOf(…)`:
- * Android's
- * JellyPlayApplication.kt spreads it inside its own startKoin, desktop's
- * Main.kt consumes it through DesktopKoinModules' `desktopKoinModules(…)`
- * list. This guard auto-derives the expected set from that declaration with
+ * Android's startKoin consumes it through the extracted AndroidKoinModules'
+ * `androidKoinModules(…)` list (JellyPlayApplication.onCreate calls it),
+ * desktop's Main.kt consumes it through DesktopKoinModules'
+ * `desktopKoinModules(…)` list. This guard auto-derives the expected set
+ * from that declaration with
  * set-equality in BOTH directions against the feature modules discovered
  * under `shared/feature/<module>/src/{commonMain,jvmShared}`:
  *  - a feature module the declaration FORGETS fails (the arrqueue/shortcuts
@@ -47,7 +48,10 @@ class KoinModuleRegistrationGuardTest {
     private val desktopRegistrationFile =
         "apps/desktop/src/main/kotlin/com/raulshma/jellyplay/desktop/Main.kt"
 
-    /** The desktop module list Main.kt's startKoin consumes (the fold target). */
+    /** The module lists the two startKoin sites consume (the fold targets). */
+    private val androidModuleListFile =
+        "app/src/main/java/com/raulshma/jellyplay/di/AndroidKoinModules.kt"
+    private val androidModuleListName = "androidKoinModules"
     private val desktopModuleListFile =
         "apps/desktop/src/main/kotlin/com/raulshma/jellyplay/desktop/DesktopKoinModules.kt"
     private val desktopModuleListName = "desktopKoinModules"
@@ -138,24 +142,33 @@ class KoinModuleRegistrationGuardTest {
     /**
      * Both JVM shells must consume the declaration BY SPREAD, and neither
      * may name a feature module directly (a hand-copied inline list is the
-     * drift the fold removed): Android spreads it inside its own startKoin
-     * modules(...) block; desktop's startKoin consumes
-     * `desktopKoinModules(…)`, whose list is the only place the spread may
-     * live.
+     * drift the fold removed): Android's startKoin consumes
+     * `androidKoinModules(…)` and desktop's startKoin consumes
+     * `desktopKoinModules(…)` — each extracted list is the only place its
+     * shell's spread may live.
      */
     @Test
     fun bothJvmShells_consumeTheSharedDeclarationBySpread() {
         val root = repoRoot()
         val features = discoverFeatureModules(root)
 
-        // Android: the spread sits inside JellyPlayApplication's own
-        // modules(...) block.
+        // Android: JellyPlayApplication's startKoin consumes
+        // androidKoinModules(...), and THAT list carries the spread.
         val androidFile = root.resolve(androidRegistrationFile)
         val androidText = stripComments(androidFile.readText())
         val androidBlock = startKoinModulesBlock(androidFile)
         assertTrue(
-            androidBlock.contains("*$sharedDeclarationName"),
-            "Android's startKoin must register its feature modules via " +
+            androidBlock.contains(androidModuleListName),
+            "Android JellyPlayApplication's startKoin must consume " +
+                "`$androidModuleListName(app)` — the extracted module list " +
+                "(AndroidKoinModules.kt).",
+        )
+        val androidListFile = root.resolve(androidModuleListFile)
+        val androidListText = stripComments(androidListFile.readText())
+        val androidListBlock = functionListBlock(androidListFile, androidModuleListListMarker)
+        assertTrue(
+            androidListBlock.contains("*$sharedDeclarationName"),
+            "Android's `$androidModuleListName` list must spread " +
                 "`*$sharedDeclarationName` (the shared declaration), not a hand-copied " +
                 "module list.",
         )
@@ -184,6 +197,7 @@ class KoinModuleRegistrationGuardTest {
         val namedInline = buildList {
             for ((site, text) in listOf(
                 "Android app" to androidText,
+                "Android AndroidKoinModules.kt" to androidListText,
                 "Desktop Main.kt" to desktopBlock,
                 "Desktop DesktopKoinModules.kt" to desktopListText,
             )) {
@@ -264,13 +278,17 @@ class KoinModuleRegistrationGuardTest {
 
     // ------------------------------------------------------- block extraction
 
+    /** The `fun androidKoinModules(...)` marker whose listOf(...) body is scanned. */
+    private val androidModuleListListMarker = "fun $androidModuleListName"
+
     /** The `fun desktopKoinModules(...)` marker whose listOf(...) body is scanned. */
     private val desktopModuleListListMarker = "fun $desktopModuleListName"
 
     /**
      * The text inside the `listOf( … )` of the function introduced by
      * [marker], with comments stripped. Mirrors [startKoinModulesBlock]'s
-     * balance scan for the desktop module list extracted out of Main.kt.
+     * balance scan for the shell module lists extracted out of Main.kt /
+     * JellyPlayApplication.kt.
      */
     private fun functionListBlock(file: File, marker: String): String {
         assertTrue(file.isFile, "registration file ${file.path} does not exist")

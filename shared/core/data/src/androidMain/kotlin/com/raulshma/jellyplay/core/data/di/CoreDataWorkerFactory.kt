@@ -64,6 +64,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 mediaRepository = koin().get(),
                 playbackRepository = koin().get(),
                 playbackStore = koin().get(),
+                timeSource = koin().get(),
             )
             PlaybackSyncWorker::class.simpleName -> PlaybackSyncWorker(
                 context, workerParameters,

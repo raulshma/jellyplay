@@ -12,7 +12,6 @@ import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
-import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -22,8 +21,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
-import com.raulshma.jellyplay.core.model.SeerrRowFilters
-import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -436,7 +433,7 @@ class HomeRefresherFetchTest {
             refresher.state.value.sections.first { it.type == HomeSectionType.LATEST_MEDIA }.items,
             "sibling rows keep their items",
         )
-        advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+        advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
         runCurrent()
         assertTrue(
             "dr_x" !in refresher.state.value.rollingDiscoverRowIds,
@@ -487,7 +484,7 @@ class HomeRefresherFetchTest {
         )
 
         try {
-            advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+            advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
             runCurrent()
             assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
         } finally {
@@ -522,7 +519,7 @@ class HomeRefresherFetchTest {
             "a failed roll degrades silently — the row keeps its items",
         )
         assertNull(refresher.state.value.error, "a failed roll never raises the error surface")
-        advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+        advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
         runCurrent()
         assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
 
@@ -538,7 +535,7 @@ class HomeRefresherFetchTest {
             refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
             "an empty roll degrades silently — the row keeps its items",
         )
-        advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+        advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
         runCurrent()
         assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
     }
@@ -573,119 +570,18 @@ class HomeRefresherFetchTest {
         runCurrent()
 
         coVerify(exactly = 1) { mediaRepository.rerollDiscoverRow(rolledRow) }
-        advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+        advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
         runCurrent()
         assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
     }
 
-    // ── custom Seerr rows: total vs partial failure policy ──────────────────
-
-    @Test
-    fun seerrRows_totalFailure_keepsPreviousRows_andLeavesTheTtlUnstamped() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
-            Result.success(HomeSectionsResult(sections = emptyList()))
-        val row = DiscoverRowConfig(
-            id = "dr_seerr",
-            title = "Trending on Seerr",
-            source = DiscoverRowSource.SEERR,
-            seerrFilters = SeerrRowFilters(media = SeerrRowMedia.MOVIE),
-        )
-        val previous = listOf(seerrItem(1, "Kept Movie"), seerrItem(2, "Kept Movie 2"))
-        coEvery { seerrRepository.getDiscoverMovies(any(), any(), any()) } returns
-            Result.success(SeerrSearchResponse(results = previous))
-        val refresher = buildRefresher(
-            seerrPreferences = SeerrPreferences(enabled = true),
-            discoverRows = listOf(row),
-        )
-
-        fun renderedSeerrTitles() = refresher.state.value.sections
-            .first { it.type == HomeSectionType.DISCOVER }
-            .seerrItems
-            .map { it.title }
-
-        refresher.fetchOnce()
-        runCurrent()
-        assertEquals(
-            listOf("Kept Movie", "Kept Movie 2"),
-            renderedSeerrTitles(),
-            "the Seerr row renders from the first successful fetch",
-        )
-
-        // The outage: every row fails on the pull-to-refresh refetch…
-        coEvery { seerrRepository.getDiscoverMovies(any(), any(), any()) } returns
-            Result.failure(RuntimeException("seerr down"))
-        refresher.request(RefreshTrigger.PullToRefresh)
-        runCurrent()
-
-        // …which must keep the previous rows on screen instead of blanking
-        // them (the old overwrite-to-empty cleared an outage to emptyList()).
-        assertEquals(
-            listOf("Kept Movie", "Kept Movie 2"),
-            renderedSeerrTitles(),
-            "a total Seerr failure keeps the previous rows",
-        )
-
-        // And the TTL stays unstamped: the next ORDINARY (non-forced,
-        // gate-only) fetch retries the rows instead of serving the pinned
-        // blank for the DISCOVER TTL — three network calls total.
-        refresher.fetchOnce()
-        runCurrent()
-        coVerify(exactly = 3) { seerrRepository.getDiscoverMovies(any(), any(), any()) }
-        refresher.stop()
-    }
-
-    @Test
-    fun seerrRows_partialFailure_keepsTheSuccesses_dropsTheFailedRow_andStampsFresh() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
-            Result.success(HomeSectionsResult(sections = emptyList()))
-        val movieRow = DiscoverRowConfig(
-            id = "dr_movies",
-            title = "Seerr Movies",
-            source = DiscoverRowSource.SEERR,
-            seerrFilters = SeerrRowFilters(media = SeerrRowMedia.MOVIE),
-        )
-        val tvRow = DiscoverRowConfig(
-            id = "dr_tv",
-            title = "Seerr TV",
-            source = DiscoverRowSource.SEERR,
-            seerrFilters = SeerrRowFilters(media = SeerrRowMedia.TV),
-        )
-        coEvery { seerrRepository.getDiscoverMovies(any(), any(), any()) } returns
-            Result.success(SeerrSearchResponse(results = listOf(seerrItem(1, "Movie"))))
-        coEvery { seerrRepository.getDiscoverTv(any(), any(), any()) } returns
-            Result.failure(RuntimeException("tv endpoint down"))
-        val refresher = buildRefresher(
-            seerrPreferences = SeerrPreferences(enabled = true),
-            discoverRows = listOf(movieRow, tvRow),
-        )
-
-        fun renderedSeerrTitles() = refresher.state.value.sections
-            .filter { it.type == HomeSectionType.DISCOVER }
-            .map { it.title }
-
-        refresher.fetchOnce()
-        runCurrent()
-        assertEquals(
-            listOf("Seerr Movies"),
-            renderedSeerrTitles(),
-            "the failed TV row drops; the movie row renders",
-        )
-
-        // Refetch with the same partial failure: the successes land and the
-        // fetch stamps fresh (the failed row retries at the next TTL expiry —
-        // the Jellyfin twin's drop-failed policy).
-        refresher.request(RefreshTrigger.PullToRefresh)
-        runCurrent()
-        assertEquals(listOf("Seerr Movies"), renderedSeerrTitles())
-
-        // Stamped fresh: the next ordinary fetch serves the TTL gate instead
-        // of re-fanning-out (a total failure would have retried here).
-        refresher.fetchOnce()
-        runCurrent()
-        coVerify(exactly = 2) { seerrRepository.getDiscoverMovies(any(), any(), any()) }
-        coVerify(exactly = 2) { seerrRepository.getDiscoverTv(any(), any(), any()) }
-        refresher.stop()
-    }
+    // ── custom Seerr rows: the fetch moved to core:network ──────────────────
+    // The feature-side Seerr-row pins this section used to carry (total vs
+    // partial failure, TTL stamping) moved with the fetch itself — the
+    // network layer now owns the fan-out, gate and last-known-good memo, and
+    // HomeSectionsFetcherTest pins them there. The refresher's WHAT/WHEN
+    // voice for these rows is the query it hands to getHomeSections; with the
+    // repository mocked there is no feature-side choreography left to pin.
 
     // ── HomeRefreshState.fetchFailed boundary ──────────────────────────────
 

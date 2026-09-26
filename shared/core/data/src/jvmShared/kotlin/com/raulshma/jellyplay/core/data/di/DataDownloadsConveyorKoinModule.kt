@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
+import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriterCore
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -35,11 +36,54 @@ internal val dataDownloadsConveyorModule: Module = module {
     // interfaces, and MediaRepository behind the deferred MediaRepositoryAccess
     // (both platform defs forward to this module's own MediaRepositoryImpl
     // single since the cluster flip — Android in androidDataModule,
-    // desktop in desktopDataModule). `downloadDelegate` keeps the
-    // construction cycle broken via a memoizing kotlin Lazy (the Lazy-deferred
-    // pattern). Consumers (PlayedStateSyncImpl,
+    // desktop in desktopDataModule). Consumers (PlayedStateSyncImpl,
     // OfflinePlaybackFacade, AudioLibraryBrowser, workers, feature modules)
     // resolve this single from Koin directly.
+    //
+    // D6: the artifact-write half lives in the OfflineDownloadWriterCore
+    // single below — over its own DAOs and seams with NO back-reference to
+    // the repository — so the graph is a straight line (writer → delegate →
+    // repo, writer → repo) and the repository's former Lazy<DownloadDelegate>
+    // deferral is gone.
+    single {
+        OfflineDownloadWriterCore(
+            downloadDao = get(),
+            offlineMediaDao = get(),
+            playbackStateDao = get(),
+            syncBaselineDao = get(),
+            database = get(),
+            downloadsStore = get(),
+            storagePolicy = get(),
+            storageLayout = get<DownloadStorageLayoutContract>(),
+            syncComparator = get(),
+            downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
+            imagePreloader = get<OfflineImagePreloader>(),
+            playbackRepository = get(),
+            playbackIdentity = get(),
+            httpClient = get(),
+            json = get(),
+            timeSource = get(),
+            mediaRepository = get<MediaRepositoryAccess>(),
+        )
+    }
+
+    // The narrow write surface DownloadDelegate depends on — the former
+    // bindOfflineDownloadWriter @Binds. No longer an alias of the repository:
+    // the standalone writer core IS the implementation (the repository still
+    // carries the interface — DownloadRepository extends it — but forwards
+    // those members to this same core).
+    single<OfflineDownloadWriter> { get<OfflineDownloadWriterCore>() }
+
+    // Per-item download recipe (prepare + execute + artifact bundle). The
+    // writer edge resolves to the writer-core single above; no construction
+    // cycle remains, so the repository receives the delegate eagerly.
+    single {
+        DownloadDelegate(
+            writer = get<OfflineDownloadWriterCore>(),
+            playbackRepository = get(),
+        )
+    }
+
     single {
         DownloadRepositoryImpl(
             downloadDao = get(),
@@ -50,36 +94,15 @@ internal val dataDownloadsConveyorModule: Module = module {
             mediaRepository = get<MediaRepositoryAccess>(),
             episodeCatalogue = get(),
             playbackRepository = get(),
-            playbackIdentity = get(),
-            httpClient = get(),
             downloadsStore = get(),
-            json = get(),
-            downloadDelegate = lazy { get<DownloadDelegate>() },
             storagePolicy = get(),
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
-            storageLayout = get<DownloadStorageLayoutContract>(),
-            syncComparator = get(),
             progressNotifier = get<DownloadProgressNotifier>(),
-            imagePreloader = get<OfflineImagePreloader>(),
-            timeSource = get(),
+            writer = get(),
+            downloadDelegate = get(),
         )
     }
     single<DownloadRepository> { get<DownloadRepositoryImpl>() }
-
-    // The narrow write surface the DownloadDelegate depends on — the former
-    // bindOfflineDownloadWriter @Binds: same instance as the repository above
-    // (the interface extends OfflineDownloadWriter), not a second repository.
-    single<OfflineDownloadWriter> { get<DownloadRepository>() }
-
-    // Per-item download recipe (prepare + execute + artifact bundle). The
-    // writer edge resolves to the DownloadRepository single above; the Lazy in
-    // the repository ctor defers this resolution, breaking the cycle.
-    single {
-        DownloadDelegate(
-            writer = get<DownloadRepository>(),
-            playbackRepository = get(),
-        )
-    }
 
     // The unified quick-action download/remove delegate every host surface
     // shares (library, favorites, search, detail rows). Koin-owned

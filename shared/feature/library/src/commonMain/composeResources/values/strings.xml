@@ -1,6 +1,5 @@
 <resources>
     <!-- Library feature user-facing strings (enhancements §2.2) -->
-    <string name="library_photo_saved_to_gallery">Saved to gallery</string>
     <string name="library_failed_to_load_items">Failed to load items</string>
     <string name="library_failed_to_load_more_items">Failed to load more items</string>
 
@@ -85,31 +84,12 @@
     <string name="library_failed_to_load_more">Failed to load more</string>
 
     <!-- PhotoAlbumScreen -->
-    <string name="library_photos">Photos</string>
-    <string name="library_sort_options">Sort options</string>
-    <string name="library_failed_to_load_photos">Failed to load photos</string>
-    <string name="library_no_photos_found">No photos found</string>
 
     <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
-    <string name="library_photo_adjustments">Adjustments</string>
-    <string name="library_photo_slideshow">Slideshow</string>
-    <string name="library_photo_start_slideshow">Start slideshow</string>
-    <string name="library_photo_stop_slideshow">Stop slideshow</string>
     <!-- %1$d = brightness as integer percent -->
-    <string name="library_photo_brightness">Brightness %1$d%</string>
     <!-- %1$d = contrast as integer percent -->
-    <string name="library_photo_contrast">Contrast %1$d%</string>
     <!-- %1$d = saturation as integer percent -->
-    <string name="library_photo_saturation">Saturation %1$d%</string>
-    <string name="library_photo_failed_to_load">Failed to load photo</string>
     <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
-    <string name="library_cd_close">Close</string>
-    <string name="library_cd_share">Share</string>
-    <string name="library_cd_save">Save</string>
-    <string name="library_cd_info">Info</string>
-    <string name="library_cd_adjust">Adjust</string>
-    <string name="library_cd_previous">Previous</string>
-    <string name="library_cd_next">Next</string>
     <!-- Smart-play funnel download feedback (emitted by LibraryViewModel through
          the shared UserMessageBus; upstream keeps these untranslated). -->
     <string name="data_download_started">Download started</string>

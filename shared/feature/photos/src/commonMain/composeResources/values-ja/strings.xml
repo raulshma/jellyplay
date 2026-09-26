@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Photo-suite strings moved verbatim from feature/library at the photo-suite extraction (same resource names;
+         the two strings library still shares were re-keyed photos_reset / photos_failed_to_load_more). -->
+    <string name="photos_photo_saved_to_gallery">ギャラリーに保存しました</string>
+    <string name="photos_photos">写真</string>
+    <string name="photos_sort_options">並べ替えオプション</string>
+    <string name="photos_failed_to_load_photos">写真の読み込みに失敗しました</string>
+    <string name="photos_no_photos_found">写真が見つかりません</string>
+    <string name="photos_photo_adjustments">調整</string>
+    <string name="photos_photo_slideshow">スライドショー</string>
+    <string name="photos_photo_start_slideshow">スライドショーを開始</string>
+    <string name="photos_photo_stop_slideshow">スライドショーを停止</string>
+    <string name="photos_photo_brightness">明るさ %1$d%</string>
+    <string name="photos_photo_contrast">コントラスト %1$d%</string>
+    <string name="photos_photo_saturation">彩度 %1$d%</string>
+    <string name="photos_photo_failed_to_load">写真を読み込めませんでした</string>
+    <string name="photos_cd_close">閉じる</string>
+    <string name="photos_cd_share">共有</string>
+    <string name="photos_cd_save">保存</string>
+    <string name="photos_cd_info">情報</string>
+    <string name="photos_cd_adjust">調整</string>
+    <string name="photos_cd_previous">前へ</string>
+    <string name="photos_cd_next">次へ</string>
+    <string name="photos_reset">リセット</string>
+    <string name="photos_failed_to_load_more">続きの読み込みに失敗しました</string>
+</resources>

@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
+import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriterCore
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -39,7 +40,7 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
@@ -174,15 +175,26 @@ class DataKoinModulesTest {
 
             // V3 downloads conveyor: the download engine resolves on desktop —
             // the repository single (seams satisfied by desktopDataModule's
-            // actuals), its OfflineDownloadWriter view (same instance), the
-            // per-item delegate, and the in-process manager/scheduler behind
-            // the enqueue-coordinator seam. The MediaRepositoryAccess desktop
-            // def is the documented throwing-lazy — constructed eagerly here
-            // (cheap), only invoked on the series paths.
+            // actuals), the per-item delegate, and the in-process
+            // manager/scheduler behind the enqueue-coordinator seam. D6: the
+            // OfflineDownloadWriter view is the standalone writer core single
+            // (the artifact-write cluster extracted out of the repository),
+            // NOT the repository — the repo forwards its inherited writer
+            // surface to that same instance, so the graph is a straight line
+            // (writer → delegate → repo) with no construction cycle. The
+            // MediaRepositoryAccess desktop def is REAL since the
+            // downloads-cluster flip (DesktopDownloadsSeamsKoinModule owns
+            // it now) — constructed eagerly here (cheap), only invoked on
+            // the series paths.
             val repository = koin.get<DownloadRepository>()
+            val writer = koin.get<OfflineDownloadWriter>()
             assertTrue(
-                koin.get<OfflineDownloadWriter>() === repository,
-                "OfflineDownloadWriter must alias the DownloadRepository single (one instance, not two)",
+                writer is OfflineDownloadWriterCore,
+                "OfflineDownloadWriter must resolve to the extracted OfflineDownloadWriterCore single",
+            )
+            assertTrue(
+                writer !== repository,
+                "OfflineDownloadWriter must not alias the DownloadRepository single anymore (D6: standalone writer)",
             )
             assertResolves<DownloadDelegate>(koin)
             assertResolves<DownloadEnqueueCoordinator>(koin)

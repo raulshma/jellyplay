@@ -234,16 +234,11 @@ class MediaRepositoryImpl internal constructor(
     )
 
     /**
-     * Bumped by the dice roll's invalidate / seed halves ([rerollDiscoverRow]'s
-     * ordering, see the two private members below) and read as
-     * [TtlCache.getOrFetch]'s write
-     * guard in [getHomeSections]: a fetch that was already in flight when the
-     * roll landed captured the row's pre-roll payloads, and its completion
-     * must not pin that assembled result back into [homeSectionsCache] — the
-     * clear inside the roll's seed cannot stop a LATER write. Unguarded, the
-     * next TTL-served periodic read would replay the pre-roll payload and
-     * revert the on-screen roll up to [HomeFreshness.REPO_MEMORY_TTL_MS]
-     * later. Same idiom as [MediaRepositoryInternals]' detail epoch.
+     * The dice roll's stall guard for the repo's assembled-payload cache —
+     * roll-protocol window 2 of 3; the bump-at-invalidate-AND-commit rule and
+     * the full ordering live on [rerollDiscoverRow] (the protocol's single
+     * owner). Read as the write guard in [getHomeSections]. Same idiom as
+     * [MediaRepositoryInternals]' detail epoch.
      */
     private val discoverRollEpoch = java.util.concurrent.atomic.AtomicLong(0L)
 
@@ -396,6 +391,9 @@ class MediaRepositoryImpl internal constructor(
         apiClient.getDiscoverRowItems(row)
 
     override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
+        // The roll protocol's implementation: invalidate → fetch → seed. The
+        // ordering contract, the three race windows and the epoch bump rule
+        // are owned by the interface KDoc (MediaRepository.rerollDiscoverRow).
         invalidateDiscoverRowCache(row.id)
         val result = getDiscoverRowItems(row)
         // Commit only a real roll: seedDiscoverRowCache no-ops on an empty
@@ -407,34 +405,23 @@ class MediaRepositoryImpl internal constructor(
     }
 
     /**
-     * Reroll half 1 (see [rerollDiscoverRow] — the ordering contract lives
-     * there; this is impl-private machinery, no external caller): bumps the
-     * roll epoch so an in-flight home fetch cannot re-pin its pre-roll
-     * payload, drops the network layer's memoised row items so the next
-     * home-sections fetch re-queries the row, and drops the assembled home
-     * payload that still carries the row's pre-roll items (the next
-     * TTL-served periodic read would otherwise replay them and revert the
-     * roll on screen).
+     * Reroll half 1 (see the roll protocol on
+     * [MediaRepository.rerollDiscoverRow]): repo-epoch bump + network per-row
+     * memo drop + assembled-payload drop (maxSize is 1, so the clear is
+     * exactly the one cached payload — nothing else pays for the roll).
      */
     private fun invalidateDiscoverRowCache(rowId: String) {
         discoverRollEpoch.incrementAndGet()
         apiClient.invalidateDiscoverRowCache(rowId)
-        // The assembled home payload still carries the row's pre-roll items;
-        // without this drop the next TTL-served periodic read would replay
-        // them and revert the on-screen roll. maxSize is 1, so the clear is
-        // exactly the one cached payload — nothing else pays for the roll.
         homeSectionsCache.clear()
     }
 
     /**
-     * Reroll half 3 (see [rerollDiscoverRow]): memoises the freshly rolled
-     * items in the network layer's per-row cache so the next home fetch
-     * serves the rolled set instead of re-querying the server. Bumps the
-     * epoch again at COMMIT time — a fetch still in flight across the whole
-     * roll stays stall-guarded — and drops the assembled payload again (a
-     * periodic fetch that raced the roll would have re-cached the pre-roll
-     * sections after the pre-fetch invalidate). Cheap (maxSize 1). No-op on
-     * an empty list.
+     * Reroll half 3 (see the roll protocol on
+     * [MediaRepository.rerollDiscoverRow]): network row-memo write + the
+     * commit-time epoch bump (a fetch in flight across the whole roll stays
+     * stall-guarded) + the assembled-payload drop again. Cheap (maxSize 1).
+     * No-op on an empty list.
      */
     private fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.StaleMediaItem
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import kotlinx.coroutines.async
@@ -33,8 +34,18 @@ import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.*
 
+/** The default-zone wall clock through the seam — the ONE "now" derivation every seam read in this file shares (LocalDateTime.now() IS ofEpochMilli(System.currentTimeMillis()) in the default zone, and SystemTimeSource.nowEpochMillis() IS System.currentTimeMillis() on both platforms). */
+private fun TimeSource.nowLocalDateTime(): java.time.LocalDateTime =
+    java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(nowEpochMillis()), java.time.ZoneId.systemDefault())
+
 class MediaInfoApiClientImpl(
     private val engine: JellyfinApiEngine,
+    /**
+     * Clock seam (D3) for the stale/watched scans' `now` reference — the
+     * daysSincePlayed filtering is behaviour-bearing (what the cleanup
+     * suggestion shows), so it reads the injected clock, not the machine's.
+     */
+    private val timeSource: TimeSource,
 ) : MediaInfoApiClient {
 
     private val rawRequester = JellyfinRawRequester(engine)
@@ -276,7 +287,9 @@ class MediaInfoApiClientImpl(
         val playedItems = playedResponse?.items ?: emptyList()
         totalEstimate = playedResponse?.totalRecordCount ?: 0
 
-        val now = java.time.LocalDateTime.now()
+        // Same value LocalDateTime.now() produced, through the epoch seam —
+        // [nowLocalDateTime].
+        val now = timeSource.nowLocalDateTime()
         for (dto in playedItems) {
             val userData = dto.userData
             val lastPlayedStr = userData?.lastPlayedDate?.toString()
@@ -354,7 +367,8 @@ class MediaInfoApiClientImpl(
         ).content
 
         val items = (response?.items ?: emptyList())
-        val now = java.time.LocalDateTime.now()
+        // Seam-derived `now` — see [nowLocalDateTime] / the stale-scan site.
+        val now = timeSource.nowLocalDateTime()
         val filtered = items.filter { dto ->
             if (keepFavorites && dto.userData?.isFavorite == true) return@filter false
             val lastPlayed = dto.userData?.lastPlayedDate

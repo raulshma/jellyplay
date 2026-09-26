@@ -1835,6 +1835,11 @@
     <string name="settings_discover_row_sort_popularity">인기도</string>
     <string name="settings_discover_row_sort_rating">평점</string>
     <string name="settings_discover_row_sort_release_date">개봉일</string>
+    <string name="settings_discover_row_template_unwatched_movies">안 본 영화</string>
+    <string name="settings_discover_row_template_highly_rated">고평점 명작</string>
+    <string name="settings_discover_row_template_new_this_month">이번 달 신작</string>
+    <string name="settings_discover_row_template_random_surprise">랜덤 서프라이즈</string>
+    <string name="settings_discover_row_template_trending_seerr">Seerr 인기 작품</string>
     <string name="settings_confirm_library_reset">라이브러리 초기화 확인</string>
     <string name="settings_confirm_library_reset_subtitle">라이브러리를 기본값으로 초기화하기 전에 확인 대화상자 표시</string>
     <string name="settings_audio_device">오디오 기기</string>

@@ -56,9 +56,6 @@ import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.PinGateController
-import com.raulshma.jellyplay.shell.SessionCoordinator
-import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
@@ -72,28 +69,22 @@ class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
 
-    // Shell coordinators — the SAME Koin singles MainViewModel's constructor
-    // injects and starts on its scope. Resolved here (not read off the
-    // ViewModel, which no longer re-exports them) so the composition root can
-    // hand them to JellyPlayApp → MainContent. The coordinator construction
-    // timing is unchanged: building MainViewModel already forced these
-    // singles to exist.
-    private val sessionCoordinator: SessionCoordinator by lazy { KoinPlatform.getKoin()!!.get() }
-    private val updateCoordinator: UpdateCoordinator by lazy { KoinPlatform.getKoin()!!.get() }
-    private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator by lazy { KoinPlatform.getKoin()!!.get() }
-
     // Cross-cutting shell infrastructure, resolved from the Koin container
-    // instead of re-exported through MainViewModel —
-    // the ViewModel exposes only the signals it owns plus the coordinator
-    // seam. The four ShellInfra-bundled members
-    // became Lazy PROVIDERS (mirroring audioPlaybackManagerLazy below) so
-    // MainActivity.onCreate constructs none of them — JellyPlayApp resolves
-    // the bus/network pair at their composition branches and the
-    // remote-control pair inside their post-frame collection effects,
-    // keeping NetworkMonitor's connectivity-callback registration and the
-    // remote-control objects off the cold-start critical path (and out of
-    // auth/onboarding-only sessions entirely). Memoizing lazies preserve the
-    // old deferred field-inject timing.
+    // instead of re-exported through MainViewModel — the ViewModel exposes
+    // only the signals it owns. The bundle below is the composition's ONE
+    // coordinator resolution path too: the shell coordinators ride it as
+    // lazy providers (their former standalone lazy fields + the three-param
+    // threading through JellyPlayApp → MainContent are gone; MainViewModel
+    // keeps its constructor injection only for the start-on-scope side
+    // effects). Every ShellInfra member is a Lazy PROVIDER (mirroring
+    // audioPlaybackManagerLazy below) so MainActivity.onCreate constructs
+    // none of them — JellyPlayApp resolves the bus/network pair at their
+    // composition branches and the remote-control pair inside their
+    // post-frame collection effects, keeping NetworkMonitor's
+    // connectivity-callback registration and the remote-control objects off
+    // the cold-start critical path (and out of auth/onboarding-only
+    // sessions entirely). Memoizing lazies preserve the old deferred
+    // field-inject timing.
     private val userMessageBusLazy: kotlin.Lazy<UserMessageBus> =
         lazy { KoinPlatform.getKoin()!!.get() }
     private val pinRateLimiter: PinRateLimiter by lazy { KoinPlatform.getKoin()!!.get() }
@@ -162,6 +153,33 @@ class MainActivity : FragmentActivity() {
         // in landscape with no control to unlock it. UNSPECIFIED follows the
         // system auto-rotate setting, matching the fresh-install default.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        // Bundled once here (before the splash gate below reads the session
+        // coordinator's restore flag) so the shell host's cross-cutting
+        // services — the five infrastructure providers plus the three shell
+        // coordinators — travel to JellyPlayApp → MainContent as ONE value
+        // with ONE Koin resolution site. All eight are lazy providers —
+        // nothing here resolves any Koin single; each `.value` fires at the
+        // consumer's first real use (see ShellInfra's KDoc).
+        val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
+            userMessageBusLazy = userMessageBusLazy,
+            networkStatusLazy = lazy { networkMonitor.networkStatus },
+            audioPlaybackManagerLazy = audioPlaybackManagerLazy,
+            remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
+            remoteControlReceiverLazy = remoteControlReceiverLazy,
+            sessionCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            updateCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            syncPlayOpenCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            // Remote navigation ladder: synthesized D-pad/select/menu
+            // key events go through the activity's own dispatch (down + up),
+            // so Compose's existing key/focus handling interprets them —
+            // nothing here re-implements focus traversal. Returns whether
+            // anything consumed the pair, the fallback signal for the
+            // context-menu message.
+            keyDispatcher = { keyCode ->
+                dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)) ||
+                    dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+            },
+        )
         // The one-time CastContext initialization (Dynamite dex load +
         // hasSystemFeature binder call) used to run synchronously here, before
         // setContent, putting both straight into TTID — the splash cannot
@@ -170,7 +188,7 @@ class MainActivity : FragmentActivity() {
         // every later getSharedInstance caller (the hidden route button
         // there, CastManager, GoogleCastStrategy) still hits the cached
         // singleton.
-        splashScreen.setKeepOnScreenCondition { sessionCoordinator.isRestoring.value }
+        splashScreen.setKeepOnScreenCondition { shellInfra.sessionCoordinatorLazy.value.isRestoring.value }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
         // holds the splash view alive across an alpha fade, and because the
@@ -207,29 +225,6 @@ class MainActivity : FragmentActivity() {
         }
 
         handleIncomingIntent(intent)
-
-        // Bundled once here so the shell host's five cross-cutting services
-        // travel to JellyPlayApp → MainContent as one value. All
-        // five are lazy providers — nothing below resolves any Koin single;
-        // each `.value` fires at the consumer's first real use (see
-        // ShellInfra's KDoc).
-        val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
-            userMessageBusLazy = userMessageBusLazy,
-            networkStatusLazy = lazy { networkMonitor.networkStatus },
-            audioPlaybackManagerLazy = audioPlaybackManagerLazy,
-            remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
-            remoteControlReceiverLazy = remoteControlReceiverLazy,
-            // Remote navigation ladder: synthesized D-pad/select/menu
-            // key events go through the activity's own dispatch (down + up),
-            // so Compose's existing key/focus handling interprets them —
-            // nothing here re-implements focus traversal. Returns whether
-            // anything consumed the pair, the fallback signal for the
-            // context-menu message.
-            keyDispatcher = { keyCode ->
-                dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)) ||
-                    dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
-            },
-        )
 
         // Pre-Android 13 per-app language: observe the saved language and apply
         // it on cold start, then recreate when the user changes it at runtime.
@@ -415,9 +410,6 @@ class MainActivity : FragmentActivity() {
                     JellyPlayApp(
                         viewModel = viewModel,
                         infra = shellInfra,
-                        sessionCoordinator = sessionCoordinator,
-                        updateCoordinator = updateCoordinator,
-                        syncPlayOpenCoordinator = syncPlayOpenCoordinator,
                     )
                 }
             }

@@ -1835,6 +1835,11 @@
     <string name="settings_discover_row_sort_popularity">人気度</string>
     <string name="settings_discover_row_sort_rating">評価</string>
     <string name="settings_discover_row_sort_release_date">公開日</string>
+    <string name="settings_discover_row_template_unwatched_movies">未視聴の映画</string>
+    <string name="settings_discover_row_template_highly_rated">高評価の名作</string>
+    <string name="settings_discover_row_template_new_this_month">今月の新作</string>
+    <string name="settings_discover_row_template_random_surprise">ランダムサプライズ</string>
+    <string name="settings_discover_row_template_trending_seerr">Seerrのトレンド</string>
     <string name="settings_confirm_library_reset">ライブラリのリセット確認</string>
     <string name="settings_confirm_library_reset_subtitle">ライブラリを既定値にリセットする前に確認ダイアログを表示</string>
     <string name="settings_audio_device">オーディオデバイス</string>

@@ -36,20 +36,21 @@ import kotlinx.coroutines.launch
  * invalidation, focus edges, effects context) that must stay
  * behind lambdas, not template hooks.
  *
- * ## Declared divergence — Android is NOT an adopter (next-slice note)
+ * ## Android adoption (second adapter)
  *
- * `AudioPlaybackManager` (androidMain) keeps its inlined chassis. Its
- * mutation sites are not port-shaped: each one interleaves
- * playlist-owning media3 writes (`seekTo(next, 0)`, `moveMediaItem`,
- * `clearMediaItems` — the PLAYER owns the playlist there, the list here),
- * `queueLoadingJob` bail-outs during whole-queue MediaItem pre-warms, a
- * real crossfader and Play-On remote routing into the same bodies. Routing
- * those through this core would be a behavior redesign, not a fold — the
- * recorded reason this slice lands desktop-first (CONTEXT.md "audio queue
- * chassis": the Android manager deserves its own verified session). The
- * seams the core exposes (flows by reference, policy decisions, the
- * transition choreography) are the same ones an Android adoption would
- * need; nothing here is desktop-specific.
+ * `AudioPlaybackManager` (androidMain) now adopts the core as well. The
+ * structural difference from the desktop fold is playlist ownership: the
+ * media3 PLAYER owns the playlist there (the queue list mirrors it), so
+ * every adapter mutation is `state.<mutation>()` PLUS its per-mutation
+ * player write (`addMediaItem(s)`, `removeMediaItem`, `moveMediaItem`,
+ * `clearMediaItems` via [dispatch.stop], the rebuild in shuffle/undo) and
+ * the pre-warm `queueLoadingJob` bail-outs stay adapter-side (the core
+ * stays guard-free). The ONE chassis hook the adoption needed is
+ * [reportsRideEngineTransition]: media3 reports every row change (seek-
+ * driven skips, remove-current, rebuilds, natural auto-advance) through a
+ * single `onMediaItemTransition` listener which is the adapter's transition
+ * choreographer — so the chassis's built-in publish/report block must not
+ * also run, or every core-driven transition double-reports.
  *
  * ## Desktop divergences encoded here (manager-KDoc table still applies)
  *
@@ -110,6 +111,21 @@ class AudioQueueStateCore(
      * resolver + prefetch vs Android's browser + pre-warm).
      */
     private val onPlayRequested: (itemId: String) -> Unit = {},
+    /**
+     * Android-shaped adapters: media3 reports EVERY row change (seek-driven
+     * skips, remove-current, playlist rebuilds, natural auto-advance) to one
+     * Player.Listener `onMediaItemTransition`, which is the adapter's
+     * transition choreographer (publish + stop/start reports + lyrics +
+     * ReplayGain + auto-EQ, captured with the true previous item). When
+     * true, [transitionTo] therefore runs ONLY the cursor write + [dispatch.prepare]
+     * — the built-in publish/report block below is skipped so core-driven
+     * transitions are choreographed exactly once, by the engine's own
+     * transition event. The item claim ([currentItemId]) also stays
+     * adapter-owned here: rotating it eagerly would corrupt the listener's
+     * previous-item capture. Desktop keeps the default (false — built-in
+     * block, byte-identical to the pre-hook fold).
+     */
+    private val reportsRideEngineTransition: Boolean = false,
 ) {
 
     // ── State cells: initial values identical to both twins' managers ──────
@@ -457,11 +473,19 @@ class AudioQueueStateCore(
      * With no live engine this only updates the index — the exact Android
      * shape, where a null player means the seek never happens, so no player
      * transition (and therefore no metadata reconciliation) fires either.
+     *
+     * Under [reportsRideEngineTransition] (the Android adapter) the
+     * choreography block is skipped entirely: the engine's own transition
+     * event choreographs, so this is only cursor write + the player write.
      */
     private fun transitionTo(index: Int, startPositionMs: Long) {
         val item = _queue.value.getOrNull(index) ?: return
         _currentIndex.value = index
         if (!dispatch.isLive) return
+        if (reportsRideEngineTransition) {
+            dispatch.prepare(item, startPositionMs)
+            return
+        }
 
         val prevItemId = currentItemId
         val prevSessionId = playSessionId

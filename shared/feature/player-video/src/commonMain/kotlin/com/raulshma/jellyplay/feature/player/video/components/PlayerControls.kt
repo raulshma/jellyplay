@@ -47,7 +47,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -97,6 +96,8 @@ import com.raulshma.jellyplay.feature.player.video.PlatformCastButton
 import com.raulshma.jellyplay.feature.player.video.SeekBarBufferBands
 import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
 import com.raulshma.jellyplay.feature.player.video.rememberIsPortraitOrientation
+import com.raulshma.jellyplay.feature.player.video.state.rememberTvSeekController
+import com.raulshma.jellyplay.feature.player.video.state.tvSeekStepFraction
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
 import com.raulshma.jellyplay.core.ui.player.PlayerIconButton
 import com.raulshma.jellyplay.core.ui.player.playerBottomControlsEnter
@@ -1159,17 +1160,24 @@ private fun TvControllableSeekBar(
     val isPressed by interactionSource.collectIsPressedAsState()
     val density = LocalDensity.current
 
-    var dragFraction by remember { mutableFloatStateOf(0f) }
-    var isDragging by remember { mutableStateOf(false) }
-    var isSeekBarFocused by remember { mutableStateOf(false) }
-    var tvSeekPosition by remember { mutableFloatStateOf(0f) }
-    var tvSeekStarted by remember { mutableStateOf(false) }
+    // The seek state machine (focus seeding, D-pad accumulate-and-clamp,
+    // drag-vs-tv-vs-live priority, the seek-callback choreography) lives in
+    // TvSeekController; this composable keeps only drawing and event wiring.
+    val seekController = rememberTvSeekController(
+        onSeekStart = onSeekStart,
+        onSeekPreview = onSeekPositionChange,
+        onSeekEnd = onSeekEnd,
+    )
+    // DurationChanged: duration is a plain recomposition input — assigning it
+    // in the body keeps every handler's duration exactly as fresh as the
+    // former inline lambdas that captured the parameter per recomposition.
+    seekController.durationMs = duration
+    val isDragging by seekController.isDragging.collectAsStateWithLifecycle()
+    val dragFraction by seekController.dragFraction.collectAsStateWithLifecycle()
+    val isSeekBarFocused by seekController.isFocused.collectAsStateWithLifecycle()
+    val tvSeekPosition by seekController.tvSeekPosition.collectAsStateWithLifecycle()
 
-    val progress = if (duration > 0) {
-        if (isDragging) dragFraction
-        else if (isTv && isSeekBarFocused) tvSeekPosition
-        else currentPosition.toFloat() / duration
-    } else 0f
+    val progress = seekController.progress(currentPosition)
 
     val activeColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
@@ -1201,7 +1209,10 @@ private fun TvControllableSeekBar(
 
     val tvFocusState = rememberTvFocusState(focusedScale = 1f)
 
-    val seekStep = if (isTv) 30_000f / duration else 10_000f / duration
+    // The 30s-TV / 10s-touch seek-step divergence — the policy lives on
+    // TvSeekController.tvSeekStepFraction (jvmTest-pinned); the controller's
+    // D-pad handlers are clamped by this fraction per tick.
+    val seekStep = tvSeekStepFraction(isTv, duration)
 
     // Position-derived labels memoized by second to cut formatDuration allocations
     // during the 4 Hz position tick (most recomposes only move the playhead).
@@ -1274,44 +1285,24 @@ private fun TvControllableSeekBar(
                                 } else Modifier
                             )
                             .onFocusChanged { focusState ->
-                                val wasFocused = isSeekBarFocused
-                                isSeekBarFocused = focusState.isFocused
-                                if (focusState.isFocused && !wasFocused) {
-                                    tvSeekPosition = if (duration > 0) currentPosition.toFloat() / duration else 0f
-                                    tvSeekStarted = false
-                                }
-                                if (!focusState.isFocused && tvSeekStarted) {
-                                    tvSeekStarted = false
-                                    onSeekEnd()
+                                if (focusState.isFocused) {
+                                    // Seed only on the gain transition — a
+                                    // repeated focused callback must not
+                                    // clobber an in-flight seek.
+                                    if (!seekController.isFocused.value) {
+                                        seekController.onFocusGained(currentPosition)
+                                    }
+                                } else {
+                                    // Commits any unflushed D-pad seek.
+                                    seekController.onFocusLost()
                                 }
                             }
                             .focusable()
                             .onDpadKey(
-                                onRight = {
-                                    if (duration <= 0) return@onDpadKey false
-                                    if (!tvSeekStarted) {
-                                        tvSeekStarted = true
-                                        onSeekStart()
-                                    }
-                                    tvSeekPosition = (tvSeekPosition + seekStep).coerceAtMost(1f)
-                                    onSeekPositionChange((tvSeekPosition * duration).toLong())
-                                    true
-                                },
-                                onLeft = {
-                                    if (duration <= 0) return@onDpadKey false
-                                    if (!tvSeekStarted) {
-                                        tvSeekStarted = true
-                                        onSeekStart()
-                                    }
-                                    tvSeekPosition = (tvSeekPosition - seekStep).coerceAtLeast(0f)
-                                    onSeekPositionChange((tvSeekPosition * duration).toLong())
-                                    true
-                                },
+                                onRight = { seekController.onDpadTick(direction = +1, step = seekStep) },
+                                onLeft = { seekController.onDpadTick(direction = -1, step = seekStep) },
                                 onSelect = {
-                                    if (tvSeekStarted) {
-                                        tvSeekStarted = false
-                                        onSeekEnd()
-                                    }
+                                    seekController.flush()
                                     true
                                 },
                             )
@@ -1322,25 +1313,20 @@ private fun TvControllableSeekBar(
                                 while (true) {
                                     val downEvent = awaitFirstDown()
                                     downEvent.consume()
-                                    onSeekStart()
                                     var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
-                                    dragFraction = fraction
-                                    onSeekPositionChange((fraction * duration).toLong())
-                                    isDragging = true
+                                    seekController.onDragStart(fraction)
 
                                     do {
                                         val event = awaitPointerEvent()
                                         val change = event.changes.firstOrNull { it.id == downEvent.id }
                                         if (change != null) {
                                             fraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                                            dragFraction = fraction
-                                            onSeekPositionChange((fraction * duration).toLong())
+                                            seekController.onDragTo(fraction)
                                             change.consume()
                                         }
                                     } while (change?.pressed == true)
 
-                                    isDragging = false
-                                    onSeekEnd()
+                                    seekController.onDragEnd()
                                 }
                             }
                         }

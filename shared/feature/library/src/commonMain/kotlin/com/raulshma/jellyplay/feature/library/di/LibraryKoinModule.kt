@@ -3,8 +3,6 @@ package com.raulshma.jellyplay.feature.library.di
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.feature.library.FavoritesViewModel
 import com.raulshma.jellyplay.feature.library.LibraryViewModel
-import com.raulshma.jellyplay.feature.library.PhotoAlbumViewModel
-import com.raulshma.jellyplay.feature.library.PhotoViewerViewModel
 import com.raulshma.jellyplay.feature.library.StudioDetailViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -20,8 +18,10 @@ import org.koin.dsl.module
  *    composition root's Hilt interop module (dies at );
  *  - ImageUrlProvider (shared data) and LibraryStore (shared datastore)
  *    resolve from the C4 shared-module graph;
- *  - PhotoExport comes from the per-platform export module
- *    (androidPhotoExportModule / desktopPhotoExportModule).
+ *  - PhotoExport came from the per-platform export module
+ *    (androidPhotoExportModule / desktopPhotoExportModule) — the whole photo
+ *    suite (PhotoAlbum/PhotoViewer VMs + the export seam) since moved to
+ *    feature/photos' photosModule, which carries those platform modules now.
  *
  * StudioDetailViewModel's SavedStateHandle is pulled from the definition
  * parameters: on Android, Koin synthesizes it from the CreationExtras of the
@@ -57,12 +57,6 @@ val libraryModule: Module = module {
             photoFolderPrefetcher = get(),
         )
     }
-    viewModel {
-        PhotoAlbumViewModel(
-            mediaRepository = get(),
-            imageUrlProvider = get(),
-        )
-    }
     viewModel { params ->
         StudioDetailViewModel(
             savedStateHandle = params.get<SavedStateHandle>(),
@@ -70,13 +64,6 @@ val libraryModule: Module = module {
             userDataMutator = get(),
             imageUrlProvider = get(),
             quickDownloadActions = get(),
-        )
-    }
-    viewModel {
-        PhotoViewerViewModel(
-            mediaRepository = get(),
-            imageUrlProvider = get(),
-            photoExport = get(),
         )
     }
 }

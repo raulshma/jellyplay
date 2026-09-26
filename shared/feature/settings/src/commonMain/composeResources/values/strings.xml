@@ -785,6 +785,11 @@
     <string name="settings_discover_row_sort_popularity">Popularity</string>
     <string name="settings_discover_row_sort_rating">Rating</string>
     <string name="settings_discover_row_sort_release_date">Release date</string>
+    <string name="settings_discover_row_template_unwatched_movies">Unwatched Movies</string>
+    <string name="settings_discover_row_template_highly_rated">Highly Rated Gems</string>
+    <string name="settings_discover_row_template_new_this_month">New This Month</string>
+    <string name="settings_discover_row_template_random_surprise">Random Surprise</string>
+    <string name="settings_discover_row_template_trending_seerr">Trending on Seerr</string>
     <string name="settings_favorites">Favorites</string>
     <string name="settings_pinned_collection_desc">A curated box-set of items</string>
     <string name="settings_pinned_playlist_desc">A saved playback playlist</string>

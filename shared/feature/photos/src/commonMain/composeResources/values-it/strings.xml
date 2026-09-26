@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Photo-suite strings moved verbatim from feature/library at the photo-suite extraction (same resource names;
+         the two strings library still shares were re-keyed photos_reset / photos_failed_to_load_more). -->
+    <string name="photos_photo_saved_to_gallery">Salvata in galleria</string>
+    <string name="photos_photos">Foto</string>
+    <string name="photos_sort_options">Opzioni di ordinamento</string>
+    <string name="photos_failed_to_load_photos">Caricamento foto non riuscito</string>
+    <string name="photos_no_photos_found">Nessuna foto trovata</string>
+    <string name="photos_photo_adjustments">Regolazioni</string>
+    <string name="photos_photo_slideshow">Presentazione</string>
+    <string name="photos_photo_start_slideshow">Avvia presentazione</string>
+    <string name="photos_photo_stop_slideshow">Ferma presentazione</string>
+    <string name="photos_photo_brightness">Luminosità %1$d%</string>
+    <string name="photos_photo_contrast">Contrasto %1$d%</string>
+    <string name="photos_photo_saturation">Saturazione %1$d%</string>
+    <string name="photos_photo_failed_to_load">Impossibile caricare la foto</string>
+    <string name="photos_cd_close">Chiudi</string>
+    <string name="photos_cd_share">Condividi</string>
+    <string name="photos_cd_save">Salva</string>
+    <string name="photos_cd_info">Info</string>
+    <string name="photos_cd_adjust">Regola</string>
+    <string name="photos_cd_previous">Precedente</string>
+    <string name="photos_cd_next">Successivo</string>
+    <string name="photos_reset">Reimposta</string>
+    <string name="photos_failed_to_load_more">Caricamento di altri elementi non riuscito</string>
+</resources>

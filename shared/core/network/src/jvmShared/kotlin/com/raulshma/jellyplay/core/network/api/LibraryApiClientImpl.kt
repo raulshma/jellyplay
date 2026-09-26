@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.library.ChildItemImageRow
@@ -30,6 +31,7 @@ import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
+import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.buildChildItemImagesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildDiscoverRowQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
@@ -87,12 +89,30 @@ private fun Long?.toSdkLocalDateTime(): java.time.LocalDateTime? = this?.let {
     java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault())
 }
 
+/** The default-zone wall clock through the seam — the ONE "now" derivation every seam read in this file shares (mirrors [toSdkLocalDateTime]). */
+private fun TimeSource.nowLocalDateTime(): java.time.LocalDateTime =
+    java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(nowEpochMillis()), java.time.ZoneId.systemDefault())
+
 /** ImageType resolved by serial name once — [ImageType.fromNameOrNull] linear-scans per call and Coil binds run per item. Keys lowercased: [fromNameOrNull] matches serial names case-insensitively, so callers passing server-JSON casing ("primary") must resolve too. */
 private val IMAGE_TYPES_BY_SERIAL_NAME = ImageType.entries.associateBy { it.serialName.lowercase() }
 
 class LibraryApiClientImpl(
     private val engine: JellyfinApiEngine,
     private val lyricsApi: LyricsApi,
+    /**
+     * Clock seam (D3) for the discover-row window bound and the Next Up
+     * date cutoff — same reads as the bare System.currentTimeMillis() /
+     * LocalDateTime.now() before, through the injected clock.
+     */
+    private val timeSource: TimeSource,
+    /**
+     * The Seerr-side leaf source for the home fetcher's SEERR discover rows
+     * (satisfied by the Koin construction owner with the session-aware
+     * adapter; this client cannot supply it for free the way it supplies
+     * [HomeSectionSources] — Seerr session state lives in the datastore
+     * layer). Default null = this wiring fetches no Seerr rows (unit fakes).
+     */
+    private val seerrHomeSectionSources: SeerrHomeSectionSources? = null,
 ) : LibraryApiClient, HomeSectionSources {
 
     /**
@@ -130,14 +150,26 @@ class LibraryApiClientImpl(
 
     /**
      * The home feed's fetch choreography (sub-call fan-out, semaphore bounds,
-     * TTL sub-caches, recommendations chain) lives in the commonMain
-     * [HomeSectionsFetcher]; this client merely supplies the transport via
-     * [HomeSectionSources] (satisfied for free — the same overrides serve
-     * [LibraryApiClient]) and its atomic-session identity.
+     * TTL sub-caches, recommendations chain, both discover-row sources) lives
+     * in the commonMain [HomeSectionsFetcher]; this client merely supplies the
+     * transport via [HomeSectionSources] (satisfied for free — the same
+     * overrides serve [LibraryApiClient]), its atomic-session identity, and —
+     * for the SEERR-sourced rows — the separately-wired
+     * [seerrHomeSectionSources] adapter plus the today-string the row params
+     * need (derived from the same clock seam as every other wall-time read
+     * here: LocalDate.now() IS ofEpochMilli(nowEpochMillis()) in the default
+     * zone, so this is the exact value the feature layer's HomeClock
+     * produced).
      */
     private val homeSectionsFetcher = HomeSectionsFetcher(
         sources = this,
+        seerrSources = seerrHomeSectionSources,
         cacheIdentity = { currentHomeCacheIdentity() },
+        today = {
+            // ofInstant-then-toLocalDate (not LocalDate.ofInstant — a JDK 9 API
+            // this Android floor must not assume): [nowLocalDateTime].
+            timeSource.nowLocalDateTime().toLocalDate().toString()
+        },
     )
 
     /**
@@ -176,7 +208,7 @@ class LibraryApiClientImpl(
         // commonMain [buildDiscoverRowQuerySpec]; this adapter resolves the
         // spec against the SDK enums and the epoch-millis window bounds
         // against java.time — same split as getMediaItems/getNextUp.
-        val nowEpochMs = System.currentTimeMillis()
+        val nowEpochMs = timeSource.nowEpochMillis()
         // Empty scope = ONE catalog-wide query (null parentId); otherwise one
         // query per library, merged in library order. mapConcurrentCatching
         // drops a failing/deleted library instead of failing the whole row —
@@ -234,8 +266,12 @@ class LibraryApiClientImpl(
         // it with no kind narrowing); the cutoff CLOCK stays here (JVM-side
         // java.time).
         val spec = buildResumeQuerySpec(limit, isBooks = false)
+        // Same value LocalDateTime.now() produced, through the epoch seam —
+        // [nowLocalDateTime] (toSdkLocalDateTime uses the same derivation
+        // for the inbound bounds).
+        val now = timeSource.nowLocalDateTime()
         val cutoff = if (maxDays > 0) {
-            java.time.LocalDateTime.now().minusDays(maxDays.toLong())
+            now.minusDays(maxDays.toLong())
         } else {
             null
         }

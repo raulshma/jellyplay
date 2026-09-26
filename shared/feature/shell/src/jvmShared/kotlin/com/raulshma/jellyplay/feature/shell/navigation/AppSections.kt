@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.feature.music.musichome.MusicNavActions
 import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
+import com.raulshma.jellyplay.feature.photos.navigation.photosSection
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.book.navigation.bookReaderSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
@@ -80,6 +81,9 @@ fun EntryProviderScope<NavKey>.appSections(
         },
     )
     librarySection(navigator)
+    // The photo suite's Route.PhotoAlbum/Route.PhotoViewer entries — moved
+    // out of librarySection with the photo-suite extraction (feature/photos).
+    photosSection(navigator)
     searchSection(
         navigator = navigator,
         pendingSearchQuery = host.pendingSearchQuery,

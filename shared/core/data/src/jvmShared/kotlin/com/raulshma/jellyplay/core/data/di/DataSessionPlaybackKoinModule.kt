@@ -16,9 +16,9 @@ import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
-import com.raulshma.jellyplay.core.data.util.SystemTimeSource
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
+import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -40,6 +40,9 @@ internal val dataSessionPlaybackModule: Module = module {
     // (playback flips) PlaybackSourceResolverImpl all moved off that
     // list as their ctor deps became Koin-resolvable.
 
+    // D3: the seam types moved to :shared:core:model (so core:network below
+    // this module can adopt them); this module stays their Koin owner —
+    // core:model deliberately carries no Koin module.
     single<TimeSource> { SystemTimeSource() }
 
     // the commonMain-promoted repository impls (SearchHistory /

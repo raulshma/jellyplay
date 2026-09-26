@@ -18,8 +18,14 @@ import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.TtlCache
+import com.raulshma.jellyplay.core.model.cacheThrough
 import com.raulshma.jellyplay.core.model.descriptor
+import com.raulshma.jellyplay.core.model.monotonicNowMillis
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -68,6 +74,32 @@ internal interface HomeSectionSources {
 }
 
 /**
+ * The Seerr-side sibling of [HomeSectionSources]: exactly the two discover
+ * sub-calls the custom SEERR-sourced rows need (the transport twin of what
+ * the FEATURE layer used to call through `SeerrRepository.getDiscoverMovies/
+ * getDiscoverTv`), plus ONE availability probe. Signatures deliberately carry
+ * the [SeerrDiscoverParams] the fetcher builds from the row — the port stays
+ * a dumb transport, session resolution stays with the adapter that satisfies
+ * it (`LibraryApiClientImpl` cannot satisfy this one for free: Seerr session
+ * state lives in the datastore layer, so the Koin construction owner wires a
+ * dedicated adapter beside the client).
+ *
+ * [seerrAvailable] encodes the WHAT gate the feature layer used to own
+ * (Seerr enabled AND a resolvable connection): false means the fetcher skips
+ * the Seerr fan-out for that pass with no port calls — the feature's
+ * `!prefs.enabled` / not-configured early return, moved to the only layer
+ * that can still see it.
+ */
+public interface SeerrHomeSectionSources {
+    /** Connection + preference probe, read fresh on every home fetch. */
+    val seerrAvailable: Boolean
+
+    suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse>
+
+    suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse>
+}
+
+/**
  * The fetch half of the home feed, extracted from the hand-copied client
  * choreography (`LibraryApiClientImpl.getHomeSections` JVM-side)
  * into ONE commonMain orchestrator. It turns a [HomeSectionQuery] into
@@ -75,8 +107,8 @@ internal interface HomeSectionSources {
  * keeps the ordering policy (what fetched data BECOMES); this class owns the
  * fetching (what/when): the concurrent deferred schedule, the semaphore
  * bounds (4 for the latest-media and pinned fan-outs, 3 for the
- * similar-items fan-out), the two TTL sub-call caches and the recommendations
- * chain.
+ * similar-items and discover-row fan-outs), the TTL sub-call caches and the
+ * recommendations chain.
  *
  * Schedule (verbatim from the JVM impl it replaces):
  *  - Continue Watching / Continue Reading / Next Up / folders / pinned launch
@@ -90,6 +122,13 @@ internal interface HomeSectionSources {
  *    home-load wall clock is max(...) of the two chains.
  *  - The latest fan-out filters music folders, caps at 4 concurrent
  *    `/Items/Latest` calls and collects in folder order.
+ *  - Custom discover rows of BOTH sources fetch in one path (see
+ *    [fetchDiscoverRows]): Jellyfin rows per-row memoised behind the
+ *    dice-roll epoch guard, Seerr rows behind a whole-group TTL gate +
+ *    last-known-good (the policy the feature layer's
+ *    `fetchCustomSeerrRows` used to own, moved here when the parallel
+ *    reimplementation died), emitting the DISCOVER block ALREADY ordered by
+ *    row-config index so no downstream splice can disagree about order.
  *
  * Caching: the latest-media and similar-items sub-calls memoise in
  * [TtlCache]s with a [HomeFreshness.NETWORK_SUBCALL_TTL_MS] TTL, keyed
@@ -99,16 +138,34 @@ internal interface HomeSectionSources {
  * periodic refresh serves, instead of the pre-pull rows reverting for up to
  * the TTL. Identity note: memoisation now runs under
  * [CacheIdentity.UNKNOWN] before login; nothing cached under UNKNOWN can
- * leak across users, since no real identity ever collides with it.
+ * leak across users, since no real identity ever collides with it. All
+ * cache-through reads run the shared
+ * [com.raulshma.jellyplay.core.model.cacheThrough] engine (hit-check +
+ * optional force + optional epoch-guarded write).
  *
  * Error policy: partial failures ride [HomeSectionsResult.failedSectionTypes]
  * (a failing pin or per-folder latest row is dropped, never fatal); the
  * fetch throws the first error only when NOTHING rendered at all — the
  * caller wraps [fetch] in its retry/Result machinery.
+ *
+ * [seerrSources] is nullable only because construction sites without a Seerr
+ * transport (unit fakes, platforms that wire none) must keep compiling; a
+ * null source behaves exactly like [SeerrHomeSectionSources.seerrAvailable]
+ * == false — zero Seerr port calls, zero Seerr rows.
  */
 internal class HomeSectionsFetcher(
     private val sources: HomeSectionSources,
+    private val seerrSources: SeerrHomeSectionSources?,
     private val cacheIdentity: () -> CacheIdentity?,
+    /**
+     * Today's ISO `yyyy-MM-dd` for the Seerr rows' `upcomingOnly` date floor
+     * (`SeerrRowFilters.toSeerrDiscoverParams`) — the string the feature
+     * layer used to build from `HomeClock.today()`. A constructor seam (not
+     * computed here) because commonMain has no timezone-aware calendar: the
+     * JVM construction site supplies `LocalDate.now()` (system zone), the
+     * exact value the feature produced.
+     */
+    private val today: () -> String,
 ) {
 
     // ── Home hot-path sub-call caches ──────────────────────────────────────
@@ -132,15 +189,28 @@ internal class HomeSectionsFetcher(
     private val homeDiscoverRowCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.DISCOVER_ROW_TTL_MS)
 
     /**
-     * Bumped by the dice roll's [invalidateDiscoverRow] / [seedDiscoverRow]
-     * pair and read as the write guard in [cachedHomeSubCall]: a per-row
-     * sub-call that was already on the wire when the roll landed must not
-     * memoise its pre-roll response over the seeded items — the seed's put
-     * cannot stop a LATER write. Unguarded, the row would serve the pre-roll
-     * items from this TTL memo for up to [HomeFreshness.DISCOVER_ROW_TTL_MS],
-     * reverting the roll on every periodic refresh in that window.
+     * The dice roll's stall guard, consumed as [cacheThrough]'s write guard
+     * by the Jellyfin discover-row reads. Part of the roll protocol — see
+     * `MediaRepository.rerollDiscoverRow` (the protocol's single owner) for
+     * the three race windows and the bump-at-invalidate-AND-commit rule.
      */
     private val discoverRowEpoch = DiscoverRowEpoch()
+
+    // ── Seerr discover rows (moved from the feature layer's ─────────────────
+    // fetchCustomSeerrRows) ─────────────────────────────────────────────────
+    // Whole-GROUP freshness gate + last-known-good memo, the pair the feature
+    // used to own: the gate spares the Seerr round-trips on back-to-back
+    // refreshes; the memo keeps the last rendered rows visible across a total
+    // fetch failure (an outage can neither blank the rows nor pin the blank
+    // for the TTL — the gate only stamps on a partial-or-better success).
+    //
+    // lastKnownSeerrRows is deliberately NOT identity-scoped, matching the
+    // feature var it replaces: the Seerr connection is app-wide state (same
+    // Seerr instance for every Jellyfin user of this install), so a user
+    // switch neither voids nor needs to void it.
+    @Volatile
+    private var lastKnownSeerrRows: List<HomeSection> = emptyList()
+    private val seerrRowsGate = DiscoverRowsTtlGate(HomeFreshness.DISCOVER_TTL_MS)
 
     /**
      * Drops both sub-call caches so the next home fetch re-hits the server for the
@@ -159,12 +229,10 @@ internal class HomeSectionsFetcher(
      * Drops ONE discover row's memoised items (dice affordance): the next home
      * fetch re-queries that row — re-rolling a RANDOM sort — while sibling
      * rows keep their cached items. Identity-scoped like every entry, so the
-     * evict can never touch another user's row.
+     * evict can never touch another user's row. Ordering and the epoch bump
+     * are roll-protocol concerns — see `MediaRepository.rerollDiscoverRow`.
      */
     fun invalidateDiscoverRow(rowId: String) {
-        // Stall-guard the in-flight per-row sub-calls first (see
-        // [discoverRowEpoch]): their completions must not memoise the
-        // pre-roll response over the seed that follows the re-query.
         discoverRowEpoch.incrementAndGet()
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
         homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
@@ -184,12 +252,11 @@ internal class HomeSectionsFetcher(
      * rolled items from this cache instead of re-querying the server, so the
      * row the user sees survives the next periodic refresh rather than
      * reverting to the pre-roll payload (or silently re-rolling again).
+     * No-op on an empty list; the commit-time epoch bump is a roll-protocol
+     * rule — see `MediaRepository.rerollDiscoverRow`.
      */
     fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return
-        // Bump again at COMMIT time: a sub-call still on the wire across the
-        // whole roll (started before the invalidate above) stays stall-guarded
-        // against memoising its pre-roll response after this put.
         discoverRowEpoch.incrementAndGet()
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
         homeDiscoverRowCache.put(identity, discoverRowCacheKey(row.id, row.limit), items)
@@ -233,10 +300,10 @@ internal class HomeSectionsFetcher(
         // Fetched ALWAYS — regardless of enabledSections.
         val pinnedDeferred = async { fetchPinnedSections(query.pinnedSections) }
 
-        // Custom discover rows (JELLYFIN sources only — Seerr rows are fetched
-        // by the feature layer and spliced in after ordering). Concurrent with
-        // everything else; a disabled DISCOVER section or zero enabled
-        // Jellyfin rows resolves locally with no port calls.
+        // Custom discover rows of BOTH sources (Jellyfin + Seerr), fetched in
+        // one path and emitted in row-config order. Concurrent with
+        // everything else; a disabled DISCOVER section or zero enabled rows
+        // resolves locally with no port calls.
         val discoverDeferred = async {
             if (HomeSectionType.DISCOVER in enabledSections) {
                 fetchDiscoverRows(query.discoverRows, force = force, identity = identity)
@@ -314,28 +381,88 @@ internal class HomeSectionsFetcher(
     }
 
     /**
-     * Fetches the enabled JELLYFIN discover rows: semaphore-bounded at 3,
-     * memoised per row in [homeDiscoverRowCache] (RANDOM stability — see its
-     * KDoc), degraded per row (a failing row is dropped, never fatal — the
-     * pinned-section policy). Emits sections in row-config order; the
-     * assembler/OrderHomeSectionsUseCase keep them in that relative order
-     * within the DISCOVER block.
+     * Fetches the enabled discover rows of BOTH sources and emits the
+     * DISCOVER block ALREADY ordered by row-config index (list position in
+     * [HomeSectionQuery.discoverRows] — the single ordering authority across
+     * sources, previously enforced by the feature layer's splice; assembling
+     * in config order here removes the disagreeing twin).
+     *
+     * Per-source policy (each deliberately different, both preserved from the
+     * two implementations this unified):
+     *  - JELLYFIN rows: semaphore-bounded at 3, memoised per row in
+     *    [homeDiscoverRowCache] (RANDOM stability — see its KDoc) behind the
+     *    dice-roll epoch guard, degraded per row (a failing row is dropped,
+     *    never fatal — the pinned-section policy).
+     *  - SEERR rows: semaphore-bounded at 3 behind the whole-group TTL gate
+     *    ([seerrRowsGate]) with last-known-good on total failure — an outage
+     *    neither blanks the rows nor pins the blank; partial success keeps
+     *    the successes and stamps fresh; a failing row drops. One drift,
+     *    accepted when the fetch moved down from the feature layer: the old
+     *    `NetworkStatus.Local` fast-skip (rows vanish from that fetch on) is
+     *    not visible here, so on a LAN-only box the rows now degrade via the
+     *    ordinary failure policy (last-known-good KEEPS them) instead.
+     *
+     * The two fans run concurrently with each other (the feature fetched its
+     * Seerr rows alongside the whole home fetch; keeping the two fans parallel
+     * preserves that wall-clock shape within this deferred).
      */
     private suspend fun fetchDiscoverRows(
         rows: List<DiscoverRowConfig>,
         force: Boolean,
         identity: CacheIdentity,
     ): List<HomeSection> {
-        val jellyfinRows = rows.filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN }
-        if (jellyfinRows.isEmpty()) return emptyList()
-        // R is explicitly nullable: the transform legitimately yields null for
-        // an empty/failed row, and mapConcurrentCatching drops those.
+        val enabledRows = rows.filter { it.enabled }
+        if (enabledRows.isEmpty()) return emptyList()
+        val jellyfinRows = enabledRows.filter { it.source == DiscoverRowSource.JELLYFIN }
+        val seerrRows = enabledRows.filter { it.source == DiscoverRowSource.SEERR }
+        if (jellyfinRows.isEmpty() && seerrRows.isEmpty()) return emptyList()
+
+        val sectionsByRowId = HashMap<String, HomeSection>()
+        coroutineScope {
+            val jellyfinDeferred = if (jellyfinRows.isNotEmpty()) {
+                async { fetchJellyfinDiscoverRows(jellyfinRows, force, identity) }
+            } else null
+            // The Seerr WHAT gate (feature parity): no transport wired, or the
+            // probe says unavailable (Seerr disabled / no resolvable session) →
+            // zero port calls and zero rows this pass, memo + gate untouched.
+            // (The feature's `!prefs.enabled` early return left the memo
+            // intact too — a re-enable inside the TTL window re-serves it.)
+            val seerrDeferred = when {
+                seerrRows.isEmpty() -> {
+                    // No configured Seerr rows at all: the memo must not
+                    // outlive the configuration that produced it (the feature
+                    // cleared it in the same case) — a stale row set can never
+                    // re-serve after the user disabled their last Seerr row.
+                    lastKnownSeerrRows = emptyList()
+                    null
+                }
+                seerrSources == null || !seerrSources.seerrAvailable -> null
+                else -> async { fetchSeerrDiscoverRows(seerrRows, force) }
+            }
+            (jellyfinDeferred?.await().orEmpty() + seerrDeferred?.await().orEmpty()).forEach { section ->
+                sectionsByRowId[section.id] = section
+            }
+        }
+        // Config order by construction: emit in the row list's order, dropping
+        // rows the fetch didn't carry (disabled / empty / failed).
+        return enabledRows.mapNotNull { sectionsByRowId[HomeSectionType.DISCOVER.descriptor.idFor(it.id)] }
+    }
+
+    /**
+     * The JELLYFIN half of [fetchDiscoverRows] — the pre-unification body
+     * verbatim. R is explicitly nullable: the transform legitimately yields
+     * null for an empty/failed row, and mapConcurrentCatching drops those.
+     */
+    private suspend fun fetchJellyfinDiscoverRows(
+        jellyfinRows: List<DiscoverRowConfig>,
+        force: Boolean,
+        identity: CacheIdentity,
+    ): List<HomeSection> {
         val sections: List<HomeSection?> = Semaphore(3).mapConcurrentCatching(jellyfinRows) { row ->
-            cachedHomeSubCall(
-                homeDiscoverRowCache,
-                discoverRowCacheKey(row.id, row.limit),
-                force,
+            homeDiscoverRowCache.cacheThrough(
                 identity,
+                discoverRowCacheKey(row.id, row.limit),
+                force = force,
                 currentEpoch = discoverRowEpoch::get,
             ) {
                 sources.getDiscoverRowItems(row)
@@ -355,43 +482,61 @@ internal class HomeSectionsFetcher(
     }
 
     /**
-     * Shared read/write shape of the home sub-call caches: consult [cache]
-     * first unless [force] (pull-to-refresh), and memoise every successful
-     * fetch — including a forced one, so the freshly pulled rows survive the
-     * next periodic refresh instead of the pre-pull rows reverting for up to
-     * the TTL. Keys are scoped to the current [CacheIdentity] so a
-     * user/server switch can never serve the previous identity's rows.
-     *
-     * [currentEpoch], when supplied, guards the write: an epoch bump mid-fetch
-     * (the discover-row dice roll's invalidate/seed pair, see
-     * [discoverRowEpoch]) means the response is already stale and must not be
-     * pinned over the seeded items.
+     * The SEERR half of [fetchDiscoverRows] — the feature layer's
+     * `fetchCustomSeerrRows` policy, moved: TTL gate (force acts as the
+     * feature's Manual/PullToRefresh invalidation — and like that
+     * invalidation it leaves the gate unstamped on a failed forced fetch, so
+     * the next ORDINARY fetch retries instead of serving the blank), fan-out
+     * bounded at 3, drop-failed-rows, and the last-known-good memo swap ONLY
+     * on a partial-or-better success (which is also the only path that
+     * stamps the gate).
      */
-    private suspend fun cachedHomeSubCall(
-        cache: TtlCache<List<MediaItem>>,
-        cacheKey: String,
+    private suspend fun fetchSeerrDiscoverRows(
+        seerrRows: List<DiscoverRowConfig>,
         force: Boolean,
-        identity: CacheIdentity,
-        currentEpoch: (() -> Long)? = null,
-        fetch: suspend () -> Result<List<MediaItem>>,
-    ): Result<List<MediaItem>> {
-        if (!force) {
-            cache.get(identity, cacheKey)?.let { return Result.success(it) }
+    ): List<HomeSection> {
+        if (force) seerrRowsGate.invalidate()
+        if (!seerrRowsGate.shouldFetch(monotonicNowMillis())) return lastKnownSeerrRows
+        val todayString = today()
+        // R is explicitly nullable (an empty/failed row yields null) —
+        // mapConcurrentCatching drops those.
+        val fetched: List<HomeSection?> = Semaphore(3).mapConcurrentCatching(seerrRows) { row ->
+            seerrDiscoverSection(row, todayString)
         }
-        val epochAtStart = currentEpoch?.invoke()
-        return fetch().also { result ->
-            if (currentEpoch == null || currentEpoch() == epochAtStart) {
-                result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
-            }
+        val fetchedRows = fetched.filterNotNull()
+        if (fetchedRows.isNotEmpty()) {
+            lastKnownSeerrRows = fetchedRows
+            seerrRowsGate.markFetched(monotonicNowMillis())
         }
+        return lastKnownSeerrRows
     }
+
+    /** One Seerr row: builds the discover params from the row's filters, maps to a section (or null when empty/failed). */
+    private suspend fun seerrDiscoverSection(row: DiscoverRowConfig, today: String): HomeSection? {
+        val filters = row.seerrFilters
+        val params = filters.toSeerrDiscoverParams(today)
+        val response = when (filters.media) {
+            SeerrRowMedia.MOVIE -> seerrSources?.getDiscoverMovies(params)
+            SeerrRowMedia.TV -> seerrSources?.getDiscoverTv(params)
+        }?.getOrNull() ?: return null
+        val items = response.results.take(row.limit)
+        if (items.isEmpty()) return null
+        return HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),
+            title = row.title,
+            type = HomeSectionType.DISCOVER,
+            items = emptyList(),
+            seerrItems = items,
+        )
+    }
+
     /**
      * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
      * consults [homeLatestMediaCache] first. Only the home path uses this —
      * browse/library screens still go straight to the port for fresh data.
      */
     private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean, identity: CacheIdentity): Result<List<MediaItem>> =
-        cachedHomeSubCall(homeLatestMediaCache, "${parentId}_$limit", force, identity) { sources.getLatestMedia(parentId, limit) }
+        homeLatestMediaCache.cacheThrough(identity, "${parentId}_$limit", force = force) { sources.getLatestMedia(parentId, limit) }
 
     /**
      * Home-path wrapper around [HomeSectionSources.getSimilarItems] that
@@ -401,7 +546,7 @@ internal class HomeSectionsFetcher(
      * within the TTL window, so back-to-back refreshes skip it entirely.
      */
     private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean, identity: CacheIdentity): Result<List<MediaItem>> =
-        cachedHomeSubCall(homeSimilarCache, "${seedId}_$limit", force, identity) { sources.getSimilarItems(seedId, limit) }
+        homeSimilarCache.cacheThrough(identity, "${seedId}_$limit", force = force) { sources.getSimilarItems(seedId, limit) }
 
     /**
      * The recommendations ("Recommended For You") core. Preserved wart, kept
@@ -482,5 +627,42 @@ internal class HomeSectionsFetcher(
             .getOrNull()?.items.orEmpty()
         PinnedSectionType.STUDIO -> sources.getItemsByStudio(pinned.sourceId, mediaTypes = null, startIndex = 0, limit = 20)
             .getOrNull()?.items.orEmpty()
+    }
+}
+
+/**
+ * Whole-group freshness gate for the Seerr discover rows — the semantics of
+ * feature/home's `TtlCacheGate`, ported (that one stays in the feature module
+ * for its legacy discover-grid use; this copy serves the network-layer rows).
+ * The @Volatile fields matter here: unlike the feature twin (single-writer on
+ * a main-confined dispatcher), this gate is read/written from fetch
+ * coroutines on the caller's dispatcher, so cross-thread visibility is
+ * explicit. Racing fetchers may both pass [shouldFetch] and both stamp —
+ * benign (both writes are valid fresh results; last writer wins), the same
+ * not-single-flight doctrine as [TtlCache] itself.
+ */
+private class DiscoverRowsTtlGate(
+    private val ttlMs: Long,
+    private val clock: () -> Long = ::monotonicNowMillis,
+) {
+    @Volatile
+    private var lastFetchEpochMs: Long = 0L
+
+    @Volatile
+    private var invalidated: Boolean = true
+
+    /** True when the group is stale (never fetched, invalidated, or past the TTL). */
+    fun shouldFetch(now: Long = clock()): Boolean =
+        invalidated || now - lastFetchEpochMs >= ttlMs
+
+    /** Records a successful fetch at [now]; clears any pending invalidation. */
+    fun markFetched(now: Long = clock()) {
+        lastFetchEpochMs = now
+        invalidated = false
+    }
+
+    /** Forces the next [shouldFetch] to return true regardless of age. */
+    fun invalidate() {
+        invalidated = true
     }
 }

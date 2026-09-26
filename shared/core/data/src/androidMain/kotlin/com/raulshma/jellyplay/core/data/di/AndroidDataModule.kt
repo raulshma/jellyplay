@@ -92,6 +92,7 @@ fun androidDataModule(context: Context): Module {
                 // `.tv` applicationId suffix (see app/build.gradle.kts).
                 flavor = if (context.packageName.endsWith(".tv")) "tv" else "phone",
                 supportedAbis = android.os.Build.SUPPORTED_ABIS,
+                timeSource = get(),
             )
         }
     }

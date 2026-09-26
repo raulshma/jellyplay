@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.testfixtures
 
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -11,6 +11,9 @@ import java.time.ZoneId
  * :core:data keeps its own same-shaped local copy for its 14 consumer files;
  * per-touch adoption means those stay put until a touch migrates them — keep
  * the two in shape sync when editing either.
+ *
+ * D3: implements the core:model TimeSource (the seam moved there; the
+ * old core:data FQIN is a deprecated typealias).
  *
  * Semantics are the shape all the copies shared:
  *  - [nowEpochMillis] / [nowElapsedRealtimeMillis] both read [nowMs]

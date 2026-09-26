@@ -172,7 +172,7 @@ class LiveTvPlayerEnginePolicyTest {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(2))
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         scheduler.runCurrent()
         return vm
     }
@@ -240,7 +240,7 @@ class LiveTvPlayerEnginePolicyTest {
         // window is neither cancelled nor re-armed — the original 20 s window
         // still fires. (Pins the pre-refactor behavior: the hand-rolled job
         // was keyed on state flips, not tunes.)
-        vm.channelUp()
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp())
         scheduler.runCurrent()
         scheduler.advanceTimeBy(19_000L)
         scheduler.runCurrent()

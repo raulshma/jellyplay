@@ -420,9 +420,6 @@ fun DiscoverRowEditorScreen(
 
 // ── Jellyfin filter groups ─────────────────────────────────────────────────
 
-/** The rating/vote chip ladder shared by the Jellyfin min-rating and Seerr min-vote groups. */
-private val RatingChipSteps = listOf(0f, 6f, 7f, 7.5f, 8f)
-
 @Composable
 private fun JellyfinFilterGroups(
     row: DiscoverRowConfig,
@@ -471,7 +468,7 @@ private fun JellyfinFilterGroups(
         }
         // Min rating
         FilterChipFlow(label = stringResource(Res.string.settings_discover_row_min_rating)) {
-            RatingChipSteps.forEach { rating ->
+            DiscoverRowEditorChoices.ratingChipSteps.forEach { rating ->
                 FilterChip(
                     selected = filters.minRating == rating,
                     onClick = { onUpdate { it.copy(filters = it.filters.withMinRating(rating)) } },
@@ -510,7 +507,7 @@ private fun JellyfinFilterGroups(
                 onClick = { onUpdate { it.copy(filters = it.filters.withYears(emptyList())) } },
                 label = { Text(stringResource(Res.string.settings_discover_row_any)) },
             )
-            listOf(2020..2026, 2010..2019, 2000..2009, 1990..1999).forEach { range ->
+            DiscoverRowEditorChoices.yearRanges.forEach { range ->
                 FilterChip(
                     selected = filters.years.toSet() == range.toSet(),
                     onClick = { onUpdate { it.copy(filters = it.filters.withYears(range.toList())) } },
@@ -520,7 +517,7 @@ private fun JellyfinFilterGroups(
         }
         // Added within
         FilterChipFlow(label = stringResource(Res.string.settings_discover_row_added_within)) {
-            listOf(null, 7, 30, 90, 365).forEach { days ->
+            DiscoverRowEditorChoices.addedWithinDays.forEach { days ->
                 FilterChip(
                     selected = row.addedWithinDays == days,
                     onClick = { onUpdate { it.copy(addedWithinDays = days) } },
@@ -530,7 +527,7 @@ private fun JellyfinFilterGroups(
         }
         // Premiered within
         FilterChipFlow(label = stringResource(Res.string.settings_discover_row_premiered_within)) {
-            listOf(null, 1, 5, 10, 25).forEach { years ->
+            DiscoverRowEditorChoices.premieredWithinYears.forEach { years ->
                 FilterChip(
                     selected = row.premieredWithinYears == years,
                     onClick = { onUpdate { it.copy(premieredWithinYears = years) } },
@@ -586,7 +583,7 @@ private fun SeerrFilterGroups(
             }
         }
         FilterChipFlow(label = stringResource(Res.string.settings_discover_row_min_vote)) {
-            RatingChipSteps.forEach { vote ->
+            DiscoverRowEditorChoices.ratingChipSteps.forEach { vote ->
                 FilterChip(
                     selected = f.minVoteAverage == vote,
                     onClick = {

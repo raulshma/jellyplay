@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
+import com.raulshma.jellyplay.core.model.TimeSource
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +56,12 @@ class WatchHistoryRepositoryImpl constructor(
      * order.
      */
     private val statusStore: PlaybackReportingStatusStore,
+    /**
+     * Clock seam for the heatmap's calendar reads (`LocalDate.now()` before
+     * D3): the current-year day count and the malformed-date year fallback
+     * below — same reads, through the seam, so jvmTest pins a fixed today.
+     */
+    private val timeSource: TimeSource,
 ) : WatchHistoryRepository {
 
     override val playbackReportingStatus: StateFlow<PlaybackReportingStatus> get() = statusStore.status
@@ -128,10 +135,13 @@ class WatchHistoryRepositoryImpl constructor(
     }
 
     override suspend fun getDailyActivity(year: Int, filter: HeatmapFilter): List<DailyWatchActivity> {
-        val days = if (year == java.time.LocalDate.now().year) {
+        // Same read the bare LocalDate.now() made, through the seam (the
+        // system impl is LocalDate.now(zone), so identical at runtime).
+        val today = timeSource.today(java.time.ZoneId.systemDefault())
+        val days = if (year == today.year) {
             java.time.temporal.ChronoUnit.DAYS.between(
                 java.time.LocalDate.of(year, 1, 1),
-                java.time.LocalDate.now(),
+                today,
             ).toInt() + 1
         } else 365
 
@@ -187,8 +197,9 @@ class WatchHistoryRepositoryImpl constructor(
         } else emptyList()
 
         if (!isPluginAvailable || details.isEmpty()) {
-            // Fallback to basic watch history
-            val year = date.take(4).toIntOrNull() ?: java.time.LocalDate.now().year
+            // Fallback to basic watch history; a malformed date string falls
+            // back to the seam's current year (the old LocalDate.now().year).
+            val year = date.take(4).toIntOrNull() ?: timeSource.today(java.time.ZoneId.systemDefault()).year
             val items = getPlayedItems(year, filter)
             val filteredItems = items.filter { item ->
                 item.lastPlayedDate?.startsWith(date) == true

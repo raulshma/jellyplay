@@ -46,11 +46,15 @@ import java.util.concurrent.atomic.AtomicBoolean
  * re-exported: session lifecycle state ([SessionCoordinator.isRestoring] /
  * [isAuthenticated] / [libraryFolders] / [serverHealth]), logout, update
  * checks, and SyncPlay opens are consumed through the coordinator instances
- * threaded to the composition root (MainActivity resolves the same Koin
- * singles it injected here), not through this class. Stores and managers this
- * class merely wires (network monitor, message bus, audio playback, remote
- * navigation) are injected where they are consumed instead of exposed from
- * here.
+ * the composition root reads off its
+ * [com.raulshma.jellyplay.shell.ShellInfra] bundle — MainActivity bundles the
+ * same Koin singles this class constructor-injects, so the split is one
+ * resolution path per concern: startup (start-on-scope) stays here,
+ * consumption resolves once in the bundle, and the former second resolution
+ * (MainActivity lazy fields + three explicit parameters through JellyPlayApp
+ * → MainContent) is gone. Stores and managers this class merely wires
+ * (network monitor, message bus, audio playback, remote navigation) are
+ * injected where they are consumed instead of exposed from here.
  */
 class MainViewModel(
     private val authRepository: AuthRepository,

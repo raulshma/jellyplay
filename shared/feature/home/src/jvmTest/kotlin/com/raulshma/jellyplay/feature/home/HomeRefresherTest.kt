@@ -930,8 +930,9 @@ class HomeRefresherTest {
 
     @Test
     fun rollDiscoverRow_landingDuringBookFractionDecode_survivesTheFetchsSectionsWrite() = runTest {
-        // Pins the generation invariant at its riskiest suspension (see the
-        // rolledRowGenerations registry in HomeRefresher): the book-fraction
+        // Pins the generation invariant at its riskiest suspension (see
+        // DiscoverRowsCoordinator's rolledRowGenerations registry, constructed
+        // inside the refresher): the book-fraction
         // decode is the fetch's LAST suspension before the registry drain, so
         // a roll landing mid-decode must register into a not-yet-drained
         // registry and be re-applied by the fetch's sections write. The
@@ -993,7 +994,7 @@ class HomeRefresherTest {
         )
 
         try {
-            advanceTimeBy(HomeRefresher.ROLL_MIN_SPIN_FOR_TEST + 1)
+            advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
             runCurrent()
             assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
         } finally {

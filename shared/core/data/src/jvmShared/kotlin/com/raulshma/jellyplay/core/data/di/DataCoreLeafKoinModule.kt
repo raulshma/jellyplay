@@ -70,6 +70,7 @@ internal val dataCoreLeafModule: Module = module {
     // the receiver's screenshot/idle gates read it).
     single { com.raulshma.jellyplay.core.data.remote.ActivePlayerController() }
 
-    // NotificationStore resolves from :shared:core:datastore's Koin modules.
-    single { NewsletterTriggerManager(get()) }
+    // NotificationStore resolves from :shared:core:datastore's Koin modules;
+    // the TimeSource single from dataSessionPlaybackModule.
+    single { NewsletterTriggerManager(get(), get()) }
 }

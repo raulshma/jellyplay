@@ -1837,6 +1837,11 @@
     <string name="settings_discover_row_sort_popularity">热度</string>
     <string name="settings_discover_row_sort_rating">评分</string>
     <string name="settings_discover_row_sort_release_date">发布日期</string>
+    <string name="settings_discover_row_template_unwatched_movies">未看电影</string>
+    <string name="settings_discover_row_template_highly_rated">高分佳作</string>
+    <string name="settings_discover_row_template_new_this_month">本月新作</string>
+    <string name="settings_discover_row_template_random_surprise">随机惊喜</string>
+    <string name="settings_discover_row_template_trending_seerr">Seerr 热门</string>
     <string name="settings_confirm_library_reset">确认重置媒体库</string>
     <string name="settings_confirm_library_reset_subtitle">将媒体库重置为默认值前显示确认对话框</string>
     <string name="settings_audio_device">音频设备</string>

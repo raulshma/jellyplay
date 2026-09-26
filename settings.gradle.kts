@@ -67,6 +67,8 @@ include(":shared:core:test-fixtures")
 // PR, same shape as the shared core stack above.
 include(":shared:feature:search")
 include(":shared:feature:library")
+// Photo suite (album/viewer + PhotoExport seam), extracted from library.
+include(":shared:feature:photos")
 include(":shared:feature:music")
 include(":shared:feature:livetv")
 include(":shared:feature:downloads")

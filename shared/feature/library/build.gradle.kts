@@ -48,7 +48,9 @@ kotlin {
             // collectAsStateWithLifecycle in the screens.
             implementation(libs.lifecycle.runtime.compose)
             implementation(libs.paging.compose)
-            // coil3.size.Size + MediaImage sizing in PhotoViewerScreen.
+            // coil3.size.Size for MediaImage sizing in LibraryListItem/
+            // ThumbCard (the PhotoViewerScreen user moved to feature/photos
+            // with the photo-suite extraction, which carries its own edge).
             implementation(libs.coil.compose)
             implementation(libs.kotlinx.serialization.json)
             // Koin owns the library ViewModels (V3 feature conveyor: one

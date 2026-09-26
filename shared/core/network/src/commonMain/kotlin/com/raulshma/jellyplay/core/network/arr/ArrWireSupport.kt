@@ -5,9 +5,10 @@ import com.raulshma.jellyplay.core.network.seerr.arrSeerrWireJson
 
 /**
  * Pure, commonMain wire helpers for the Radarr/Sonarr clients —
- * the byte-level conventions of the jvmShared `RadarrApiClientImpl` /
- * `SonarrApiClientImpl` (OkHttp) extracted for commonTest. The
- * jvmShared impls keep their own private copies; the two MUST stay in sync.
+ * the byte-level conventions of the *arr v3 engine ([ArrV3Client], via its
+ * [ArrClientSupport] funnel): the /api/v3 URL join, the shared
+ * parseErrorMessage, the `X-Api-Key` header, and the queue-delete option
+ * query pairs.
  */
 
 /** `RadarrApiClientImpl`/`SonarrApiClientImpl.buildUrl`: `$base/api/v3$path` with the base trailing slash trimmed. */

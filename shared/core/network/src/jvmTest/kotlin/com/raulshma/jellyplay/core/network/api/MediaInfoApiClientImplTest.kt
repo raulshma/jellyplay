@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ContentBreakdown
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import io.mockk.mockk
@@ -54,7 +55,8 @@ class MediaInfoApiClientImplTest {
             ServerInfo(id = "server-1", name = "Test", address = mockWebServer.url("/").toString().trimEnd('/')),
         )
         engine.updateUser(UserInfo(id = "user-1", name = "testuser", serverAddress = "", accessToken = "token-123"))
-        client = MediaInfoApiClientImpl(engine)
+        // Real system clock — these suites pin payload decoding, not windows.
+        client = MediaInfoApiClientImpl(engine, SystemTimeSource())
     }
 
     @AfterTest

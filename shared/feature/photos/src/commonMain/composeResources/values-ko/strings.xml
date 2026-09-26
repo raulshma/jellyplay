@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Photo-suite strings moved verbatim from feature/library at the photo-suite extraction (same resource names;
+         the two strings library still shares were re-keyed photos_reset / photos_failed_to_load_more). -->
+    <string name="photos_photo_saved_to_gallery">갤러리에 저장됨</string>
+    <string name="photos_photos">사진</string>
+    <string name="photos_sort_options">정렬 옵션</string>
+    <string name="photos_failed_to_load_photos">사진을 불러오지 못했습니다</string>
+    <string name="photos_no_photos_found">사진을 찾을 수 없습니다</string>
+    <string name="photos_photo_adjustments">조정</string>
+    <string name="photos_photo_slideshow">슬라이드쇼</string>
+    <string name="photos_photo_start_slideshow">슬라이드쇼 시작</string>
+    <string name="photos_photo_stop_slideshow">슬라이드쇼 중지</string>
+    <string name="photos_photo_brightness">밝기 %1$d%</string>
+    <string name="photos_photo_contrast">대비 %1$d%</string>
+    <string name="photos_photo_saturation">채도 %1$d%</string>
+    <string name="photos_photo_failed_to_load">사진을 불러오지 못했습니다</string>
+    <string name="photos_cd_close">닫기</string>
+    <string name="photos_cd_share">공유</string>
+    <string name="photos_cd_save">저장</string>
+    <string name="photos_cd_info">정보</string>
+    <string name="photos_cd_adjust">조정</string>
+    <string name="photos_cd_previous">이전</string>
+    <string name="photos_cd_next">다음</string>
+    <string name="photos_reset">재설정</string>
+    <string name="photos_failed_to_load_more">더 불러오지 못했습니다</string>
+</resources>

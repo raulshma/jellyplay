@@ -3,20 +3,20 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
-import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.dao.personReferenceLikePattern
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.data.util.SystemTimeSource
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.mockkStatic
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
@@ -29,15 +29,22 @@ import java.io.File
 import kotlin.io.path.createTempDirectory
 
 /**
- * Unit tests for the local-artwork resolution in
- * [OfflineRepositoryImpl.getOfflineDetail].
+ * Unit tests for [OfflineArtworkResolver] — the disk-backed local-artwork
+ * resolution subsystem extracted verbatim from the offline repository's read
+ * paths (D4) — exercised DIRECTLY over its two DAO seams and a temp dir.
  *
  * The offline screens render `posterPath`/`backdropPath` verbatim, so rows that
  * persist blank or remote URLs (legacy downloads, or episodes that by design
  * store no backdrop of their own) must resolve their local-file fallback at
  * load time: episodes fall back to the series artwork (mirroring the online
  * detail screen's series-backdrop hero), and series rows fall back to the
- * artwork files written beside their downloaded episodes.
+ * artwork files written beside their downloaded episodes. Cast images resolve
+ * beside the same dirs, keyed by personId.
+ *
+ * The two repository-level delete pins at the bottom are kept as integration
+ * coverage: the delete scopes own the resolver's memo lifecycle through the
+ * deletion core's `evictArtworkMemo` hook, and the cast-image cleanup they pin
+ * runs behind that choreography.
  */
 class OfflineRepositoryImplArtworkTest {
 
@@ -48,56 +55,76 @@ class OfflineRepositoryImplArtworkTest {
         tempRoot.resolve(name).toFile().apply { mkdirs() }
 
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
-    private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
-    private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val downloadDao: DownloadDao = mockk(relaxed = true)
-    private val database: JellyPlayDatabase = mockk(relaxed = true)
 
-    private lateinit var repository: OfflineRepositoryImpl
+    private lateinit var resolver: OfflineArtworkResolver
 
     @BeforeTest
     fun setup() {
-        // deleteOfflineItem/Series/Season wrap their DAO deletes in a Room
-        // withTransaction block; mock the module's own KMP helper
-        // (repository/RoomTransactions.kt, the androidMain androidx.room
-        // extension's replacement) so the block runs inline.
-        mockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
-        coEvery { database.withTransaction(any<suspend () -> Any?>()) } coAnswers {
-            secondArg<suspend () -> Any?>().invoke()
-        }
-        // By default no surviving row references any candidate; each delete test
-        // overrides this when it needs a "still referenced" sibling.
-        coEvery { offlineMediaDao.isPersonReferenced(any()) } returns false
-        repository = OfflineRepositoryImpl(
-            offlineMediaDao,
-            playbackStateDao,
-            syncBaselineDao,
-            downloadDao,
-            database,
-            timeSource = SystemTimeSource(),
+        resolver = OfflineArtworkResolver(
+            offlineMediaDao = offlineMediaDao,
+            downloadDao = downloadDao,
         )
     }
 
     @AfterTest
     fun tearDown() {
-        io.mockk.unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
         tempRoot.toFile().deleteRecursively()
     }
 
-    private fun episodeEntity(
+    // ── Direct resolver fixtures ─────────────────────────────────────────────
+
+    private fun episodeItem(
         id: String = "ep-1",
         seriesId: String? = "series-1",
-        backdropPath: String? = null,
         posterPath: String? = null,
-    ) = OfflineMediaEntity(
+        backdropPath: String? = null,
+        dir: File? = null,
+        cast: List<OfflinePersonInfo> = emptyList(),
+    ) = OfflineMediaItem(
         id = id,
         name = "Episode",
-        mediaType = MediaType.EPISODE.name,
+        mediaType = MediaType.EPISODE,
         seriesId = seriesId,
-        backdropPath = backdropPath,
         posterPath = posterPath,
+        backdropPath = backdropPath,
+        downloadPath = dir?.let { File(it, "$id.mkv").absolutePath },
+        downloadStatus = if (dir != null) DownloadStatus.COMPLETED else null,
+        cast = cast,
     )
 
+    private fun seriesItem(
+        id: String = "series-1",
+        posterPath: String? = null,
+        backdropPath: String? = null,
+        cast: List<OfflinePersonInfo> = emptyList(),
+    ) = OfflineMediaItem(
+        id = id,
+        name = "Series",
+        mediaType = MediaType.SERIES,
+        posterPath = posterPath,
+        backdropPath = backdropPath,
+        cast = cast,
+    )
+
+    private fun movieItem(
+        id: String = "movie-1",
+        posterPath: String? = null,
+        backdropPath: String? = null,
+        dir: File? = null,
+        cast: List<OfflinePersonInfo> = emptyList(),
+    ) = OfflineMediaItem(
+        id = id,
+        name = "Movie",
+        mediaType = MediaType.MOVIE,
+        posterPath = posterPath,
+        backdropPath = backdropPath,
+        downloadPath = dir?.let { File(it, "$id.mkv").absolutePath },
+        downloadStatus = if (dir != null) DownloadStatus.COMPLETED else null,
+        cast = cast,
+    )
+
+    /** The offline_media row the episode→series ladder resolves via the DAO. */
     private fun seriesEntity(
         id: String = "series-1",
         backdropPath: String? = null,
@@ -126,60 +153,37 @@ class OfflineRepositoryImplArtworkTest {
         seriesId = "series-1",
     )
 
-    private fun movieEntity(
-        id: String = "movie-1",
-        backdropPath: String? = null,
+    private fun castJson(vararg people: OfflinePersonInfo): String =
+        encodeCast(people.toList())
+
+    private fun stubSeriesRow(
         posterPath: String? = null,
-    ) = OfflineMediaEntity(
-        id = id,
-        name = "Movie",
-        mediaType = MediaType.MOVIE.name,
-        backdropPath = backdropPath,
-        posterPath = posterPath,
-    )
-
-    private fun movieDownloadEntity(
-        mediaItemId: String,
-        dir: File,
-    ) = DownloadEntity(
-        id = "dl-$mediaItemId",
-        mediaItemId = mediaItemId,
-        name = "Movie Download",
-        mediaType = "MOVIE",
-        downloadPath = File(dir, "$mediaItemId.mkv").absolutePath,
-        downloadUrl = "https://stream",
-        totalSizeBytes = 0L,
-        downloadedBytes = 0L,
-        status = "COMPLETED",
-    )
-
-    private fun OfflineMediaEntity.withPlayback() = OfflineMediaWithPlayback(
-        media = this,
-        playbackPositionTicks = null,
-        playedPercentage = null,
-        isPlayed = null,
-        isFavorite = null,
-        lastPlayedDate = null,
-    )
-
-    private fun stubDetail(episode: OfflineMediaEntity, download: DownloadEntity?) {
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow(episode.id) } returns flowOf(episode.withPlayback())
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow(episode.id) } returns flowOf(download)
+        backdropPath: String? = null,
+        id: String = "series-1",
+    ) {
+        coEvery { offlineMediaDao.getById(id) } returns seriesEntity(
+            id = id,
+            posterPath = posterPath,
+            backdropPath = backdropPath,
+        )
     }
+
+    // ── Episode → series fallback ladder (detail paths) ──────────────────────
 
     @Test
     fun `episode with remote backdrop resolves the series local backdrop`() = runTest {
         val dir = newFolder("seriesArtwork")
         val seriesBackdrop = File(dir, DownloadArtifacts.backdropFile("series-1"))
         seriesBackdrop.writeText("backdrop-bytes")
-        val episode = episodeEntity(
-            backdropPath = "https://server/Items/ep-1/Images/Backdrop",
-            posterPath = File(dir, DownloadArtifacts.posterFile("ep-1")).absolutePath,
-        )
-        coEvery { offlineMediaDao.getById("series-1") } returns seriesEntity(backdropPath = seriesBackdrop.absolutePath)
-        stubDetail(episode, downloadEntity("ep-1", dir))
+        stubSeriesRow(backdropPath = seriesBackdrop.absolutePath)
 
-        val item = repository.getOfflineDetail("ep-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            episodeItem(
+                backdropPath = "https://server/Items/ep-1/Images/Backdrop",
+                posterPath = File(dir, DownloadArtifacts.posterFile("ep-1")).absolutePath,
+                dir = dir,
+            ),
+        )
 
         assertEquals(seriesBackdrop.absolutePath, item.backdropPath)
     }
@@ -187,11 +191,9 @@ class OfflineRepositoryImplArtworkTest {
     @Test
     fun `episode with null backdrop resolves the series local backdrop`() = runTest {
         val dir = newFolder("nullBackdrop")
-        coEvery { offlineMediaDao.getById("series-1") } returns
-            seriesEntity(backdropPath = File(dir, "seriesArtwork.jpg").absolutePath)
-        stubDetail(episodeEntity(), downloadEntity("ep-1", dir))
+        stubSeriesRow(backdropPath = File(dir, "seriesArtwork.jpg").absolutePath)
 
-        val item = repository.getOfflineDetail("ep-1").first()!!
+        val item = resolver.resolveItemArtwork(episodeItem(dir = dir))
 
         assertEquals(File(dir, "seriesArtwork.jpg").absolutePath, item.backdropPath)
     }
@@ -201,14 +203,11 @@ class OfflineRepositoryImplArtworkTest {
         val dir = newFolder("localArtwork")
         val localBackdrop = File(dir, DownloadArtifacts.backdropFile("ep-1")).absolutePath
         val localPoster = File(dir, DownloadArtifacts.posterFile("ep-1")).absolutePath
-        coEvery { offlineMediaDao.getById("series-1") } returns
-            seriesEntity(backdropPath = "https://server/Items/series-1/Images/Backdrop")
-        stubDetail(
-            episodeEntity(backdropPath = localBackdrop, posterPath = localPoster),
-            downloadEntity("ep-1", dir),
-        )
+        stubSeriesRow(backdropPath = "https://server/Items/series-1/Images/Backdrop")
 
-        val item = repository.getOfflineDetail("ep-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            episodeItem(posterPath = localPoster, backdropPath = localBackdrop, dir = dir),
+        )
 
         assertEquals(localBackdrop, item.backdropPath)
         assertEquals(localPoster, item.posterPath)
@@ -219,10 +218,11 @@ class OfflineRepositoryImplArtworkTest {
         val dir = newFolder("episodeDir")
         val seriesPoster = File(dir, DownloadArtifacts.posterFile("series-1"))
         seriesPoster.writeText("poster-bytes")
-        coEvery { offlineMediaDao.getById("series-1") } returns seriesEntity() // no artwork columns
-        stubDetail(episodeEntity(posterPath = "https://server/Items/ep-1/Images/Primary"), downloadEntity("ep-1", dir))
+        stubSeriesRow() // no artwork columns
 
-        val item = repository.getOfflineDetail("ep-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            episodeItem(posterPath = "https://server/Items/ep-1/Images/Primary", dir = dir),
+        )
 
         assertEquals(seriesPoster.absolutePath, item.posterPath)
         // No backdrop anywhere → the remote value is preserved, not blanked.
@@ -232,13 +232,19 @@ class OfflineRepositoryImplArtworkTest {
     @Test
     fun `episode without series link is left untouched`() = runTest {
         val dir = newFolder("noSeries")
-        val episode = episodeEntity(seriesId = null, backdropPath = "https://server/Items/ep-1/Images/Backdrop")
-        stubDetail(episode, downloadEntity("ep-1", dir))
 
-        val item = repository.getOfflineDetail("ep-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            episodeItem(
+                seriesId = null,
+                backdropPath = "https://server/Items/ep-1/Images/Backdrop",
+                dir = dir,
+            ),
+        )
 
         assertEquals("https://server/Items/ep-1/Images/Backdrop", item.backdropPath)
     }
+
+    // ── Series → downloaded-episode-dir fallback ladder ──────────────────────
 
     @Test
     fun `series row with remote artwork resolves files beside a downloaded episode`() = runTest {
@@ -247,16 +253,14 @@ class OfflineRepositoryImplArtworkTest {
         poster.writeText("poster-bytes")
         val backdrop = File(dir, DownloadArtifacts.backdropFile("series-1"))
         backdrop.writeText("backdrop-bytes")
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("series-1") } returns flowOf(
-            seriesEntity(
-                posterPath = "https://server/Items/series-1/Images/Primary",
-                backdropPath = "https://server/Items/series-1/Images/Backdrop",
-            ).withPlayback(),
-        )
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow("series-1") } returns flowOf(null)
         coEvery { downloadDao.getDownloadsForSeries("series-1") } returns listOf(downloadEntity("ep-1", dir))
 
-        val item = repository.getOfflineDetail("series-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            seriesItem(
+                posterPath = "https://server/Items/series-1/Images/Primary",
+                backdropPath = "https://server/Items/series-1/Images/Backdrop",
+            ),
+        )
 
         assertEquals(poster.absolutePath, item.posterPath)
         assertEquals(backdrop.absolutePath, item.backdropPath)
@@ -266,12 +270,8 @@ class OfflineRepositoryImplArtworkTest {
     fun `series row with local artwork is left untouched`() = runTest {
         val dir = newFolder("seriesLocal")
         val localPoster = File(dir, DownloadArtifacts.posterFile("series-1")).absolutePath
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("series-1") } returns flowOf(
-            seriesEntity(posterPath = localPoster).withPlayback(),
-        )
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow("series-1") } returns flowOf(null)
 
-        val item = repository.getOfflineDetail("series-1").first()!!
+        val item = resolver.resolveItemArtwork(seriesItem(posterPath = localPoster))
 
         assertEquals(localPoster, item.posterPath)
         assertNull(item.backdropPath)
@@ -290,16 +290,14 @@ class OfflineRepositoryImplArtworkTest {
         localPoster.writeText("poster-bytes")
         val localBackdrop = File(dir, DownloadArtifacts.backdropFile("movie-1"))
         localBackdrop.writeText("backdrop-bytes")
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
-            movieEntity(
+
+        val item = resolver.resolveItemArtwork(
+            movieItem(
                 posterPath = "https://server/Items/movie-1/Images/Primary",
                 backdropPath = "https://server/Items/movie-1/Images/Backdrop",
-            ).withPlayback(),
+                dir = dir,
+            ),
         )
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
-            flowOf(movieDownloadEntity("movie-1", dir))
-
-        val item = repository.getOfflineDetail("movie-1").first()!!
 
         assertEquals(localPoster.absolutePath, item.posterPath)
         assertEquals(localBackdrop.absolutePath, item.backdropPath)
@@ -308,36 +306,30 @@ class OfflineRepositoryImplArtworkTest {
     @Test
     fun `movie with no local artwork keeps the remote url`() = runTest {
         val dir = newFolder("movieNoArt")
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
-            movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary").withPlayback(),
-        )
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
-            flowOf(movieDownloadEntity("movie-1", dir))
 
-        val item = repository.getOfflineDetail("movie-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            movieItem(posterPath = "https://server/Items/movie-1/Images/Primary", dir = dir),
+        )
 
         // No disk file → remote URL preserved so it still loads online.
         assertEquals("https://server/Items/movie-1/Images/Primary", item.posterPath)
     }
 
     // ── List-path resolution (library grid, episode lists, album tracks) ─────
-    // Local-artwork resolution now runs in every read path, not just the detail
-    // screen, so legacy/remote-URL rows render offline in grids too.
+    // Local-artwork resolution runs in every read path, not just the detail
+    // screen, so legacy/remote-URL rows render offline in grids too. The list
+    // entry point bulk-prefetches the parent-series context: one getByIds /
+    // one getDownloadPathsForSeries per emission, never a per-item round-trip.
 
     @Test
     fun `library grid resolves a movie row with a remote poster to its local file`() = runTest {
         val dir = newFolder("libMovieDir")
         val localPoster = File(dir, DownloadArtifacts.posterFile("movie-1"))
         localPoster.writeText("poster-bytes")
-        coEvery { offlineMediaDao.getTopLevelItems() } returns flowOf(
-            listOf(
-                movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary").withPlayback(),
-            ),
-        )
-        coEvery { downloadDao.getDownloadsByMediaItemIdsFlow(listOf("movie-1")) } returns
-            flowOf(listOf(movieDownloadEntity("movie-1", dir)))
 
-        val items = repository.getOfflineLibrary().first()
+        val items = resolver.resolveArtworkList(
+            listOf(movieItem(posterPath = "https://server/Items/movie-1/Images/Primary", dir = dir)),
+        )
 
         assertEquals(localPoster.absolutePath, items.single().posterPath)
     }
@@ -347,20 +339,69 @@ class OfflineRepositoryImplArtworkTest {
         val dir = newFolder("epListDir")
         val localPoster = File(dir, DownloadArtifacts.posterFile("ep-1"))
         localPoster.writeText("poster-bytes")
-        coEvery { offlineMediaDao.getEpisodesForSeason("season-1") } returns flowOf(
+
+        val items = resolver.resolveArtworkList(
             listOf(
-                episodeEntity(
-                    id = "ep-1",
-                    posterPath = "https://server/Items/ep-1/Images/Primary",
-                ).copy(seasonId = "season-1").withPlayback(),
+                episodeItem(posterPath = "https://server/Items/ep-1/Images/Primary", dir = dir)
+                    .copy(seasonId = "season-1"),
             ),
         )
-        coEvery { downloadDao.getDownloadsByMediaItemIdsFlow(listOf("ep-1")) } returns
-            flowOf(listOf(downloadEntity("ep-1", dir)))
-
-        val items = repository.getEpisodesForSeason("season-1").first()
 
         assertEquals(localPoster.absolutePath, items.single().posterPath)
+    }
+
+    @Test
+    fun `season of episodes prefetches its parent series row once for the whole list`() = runTest {
+        // The list-path fallback ladder: all episodes of a season share one
+        // seriesId, so the parent series row must come from ONE getByIds
+        // prefetch — not a per-episode getById round-trip per emission.
+        val dir = newFolder("seasonPrefetch")
+        val seriesBackdrop = File(dir, DownloadArtifacts.backdropFile("series-1"))
+        seriesBackdrop.writeText("backdrop-bytes")
+        coEvery { offlineMediaDao.getByIds(listOf("series-1")) } returns listOf(
+            seriesEntity(backdropPath = seriesBackdrop.absolutePath),
+        )
+
+        val items = resolver.resolveArtworkList(
+            listOf(
+                episodeItem(id = "ep-1", dir = dir).copy(seasonId = "season-1"),
+                episodeItem(id = "ep-2", dir = dir).copy(seasonId = "season-1"),
+            ),
+        )
+
+        assertEquals(seriesBackdrop.absolutePath, items[0].backdropPath)
+        assertEquals(seriesBackdrop.absolutePath, items[1].backdropPath)
+        coVerify(exactly = 1) { offlineMediaDao.getByIds(listOf("series-1")) }
+        coVerify(exactly = 0) { offlineMediaDao.getById(any()) }
+    }
+
+    @Test
+    fun `episode list without the series fallback resolves own artwork only`() = runTest {
+        // The offline home's episodes flow resolves OWN artwork only (the
+        // repo's getOfflineEpisodes passes episodeSeriesArtworkFallback=false)
+        // so its Continue Watching cards match the online row's backdrop→
+        // primary fallback chain — the series substitution must not run.
+        val dir = newFolder("ownOnly")
+        val localPoster = File(dir, DownloadArtifacts.posterFile("ep-1"))
+        localPoster.writeText("poster-bytes")
+        // The series artifact exists beside the episode dir — but with the
+        // fallback off it must NOT be substituted (issue #147 image parity).
+        File(dir, DownloadArtifacts.backdropFile("series-1")).writeText("backdrop-bytes")
+        coEvery { offlineMediaDao.getByIds(listOf("series-1")) } returns emptyList()
+
+        val items = resolver.resolveArtworkList(
+            listOf(
+                episodeItem(
+                    posterPath = "https://server/Items/ep-1/Images/Primary",
+                    dir = dir,
+                ).copy(seasonId = "season-1"),
+            ),
+            episodeSeriesArtworkFallback = false,
+        )
+
+        assertEquals(localPoster.absolutePath, items.single().posterPath)
+        assertNull(items.single().backdropPath, "no own backdrop → stays null (no series substitution)")
+        coVerify(exactly = 0) { offlineMediaDao.getById(any()) }
     }
 
     // ── Cast/person image resolution (issue #109) ───────────────────────────
@@ -369,9 +410,6 @@ class OfflineRepositoryImplArtworkTest {
     // substitutes the local path on read; persons without a disk file keep a
     // null localImagePath and the detail screen falls back to the remote URL.
 
-    private fun castJson(vararg people: OfflinePersonInfo): String =
-        encodeCast(people.toList())
-
     @Test
     fun `movie detail resolves cast local images from beside the download`() = runTest {
         val dir = newFolder("movieCast")
@@ -379,18 +417,12 @@ class OfflineRepositoryImplArtworkTest {
         // never downloaded or its write failed).
         val actor1File = File(dir, DownloadArtifacts.personImageFile("person-1"))
         actor1File.writeText("actor1-bytes")
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
-            movieEntity().copy(
-                peopleJson = castJson(
-                    OfflinePersonInfo(id = "person-1", name = "Lead"),
-                    OfflinePersonInfo(id = "person-2", name = "Director", type = "Director"),
-                ),
-            ).withPlayback(),
+        val cast = listOf(
+            OfflinePersonInfo(id = "person-1", name = "Lead"),
+            OfflinePersonInfo(id = "person-2", name = "Director", type = "Director"),
         )
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
-            flowOf(movieDownloadEntity("movie-1", dir))
 
-        val item = repository.getOfflineDetail("movie-1").first()!!
+        val item = resolver.resolveItemArtwork(movieItem(dir = dir, cast = cast))
 
         assertEquals(actor1File.absolutePath, item.cast[0].localImagePath)
         // No disk file for person-2 → null, detail screen falls back to remote URL.
@@ -402,15 +434,11 @@ class OfflineRepositoryImplArtworkTest {
         val dir = newFolder("seriesCast")
         val actorFile = File(dir, DownloadArtifacts.personImageFile("person-1"))
         actorFile.writeText("actor-bytes")
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("series-1") } returns flowOf(
-            seriesEntity().copy(
-                peopleJson = castJson(OfflinePersonInfo(id = "person-1", name = "Lead")),
-            ).withPlayback(),
-        )
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow("series-1") } returns flowOf(null)
         coEvery { downloadDao.getDownloadsForSeries("series-1") } returns listOf(downloadEntity("ep-1", dir))
 
-        val item = repository.getOfflineDetail("series-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            seriesItem(cast = listOf(OfflinePersonInfo(id = "person-1", name = "Lead"))),
+        )
 
         assertEquals(actorFile.absolutePath, item.cast.single().localImagePath)
     }
@@ -418,31 +446,105 @@ class OfflineRepositoryImplArtworkTest {
     @Test
     fun `cast without disk files keeps null local paths`() = runTest {
         val dir = newFolder("noCastArt")
-        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
-            movieEntity().copy(
-                peopleJson = castJson(OfflinePersonInfo(id = "person-1", name = "Lead")),
-            ).withPlayback(),
-        )
-        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
-            flowOf(movieDownloadEntity("movie-1", dir))
 
-        val item = repository.getOfflineDetail("movie-1").first()!!
+        val item = resolver.resolveItemArtwork(
+            movieItem(dir = dir, cast = listOf(OfflinePersonInfo(id = "person-1", name = "Lead"))),
+        )
 
         assertNull(item.cast.single().localImagePath)
     }
 
-    // ── Cast-image cleanup on delete (issue #109 follow-up) ─────────────────
-    // cleanupCastArtwork is invoked by every delete path. A person's image file
-    // (keyed by personId) is shared across items, so deleting one item must only
-    // remove the file when no surviving row still references that person —
-    // otherwise a sibling item's offline cast row loses its image.
+    @Test
+    fun `memo hit skips re-resolution until evicted`() = runTest {
+        // Progress-tick pin: a repeated resolve with unchanged inputs replays
+        // the cached result without re-statting the artifacts (the eviction is
+        // the delete paths' job, handed over through the repo's hook below).
+        val dir = newFolder("memoHit")
+        val localPoster = File(dir, DownloadArtifacts.posterFile("movie-1"))
+        localPoster.writeText("poster-bytes")
+        val item = movieItem(posterPath = "https://server/Items/movie-1/Images/Primary", dir = dir)
+
+        resolver.resolveItemArtwork(item)
+        resolver.resolveItemArtwork(item)
+
+        // The resolver reads no DAO at all for a movie's own-artifact pass —
+        // the memo assertion lives on the episode ladder instead: one series
+        // lookup across two resolutions.
+        val epItem = episodeItem(dir = dir)
+        stubSeriesRow()
+        resolver.resolveItemArtwork(epItem)
+        resolver.resolveItemArtwork(epItem)
+        coVerify(exactly = 1) { offlineMediaDao.getById("series-1") }
+
+        resolver.evictMemo()
+        resolver.resolveItemArtwork(epItem)
+        coVerify(exactly = 2) { offlineMediaDao.getById("series-1") }
+        assertEquals(localPoster.absolutePath, resolver.resolveItemArtwork(item).posterPath)
+    }
+
+    // ── Repository-level delete pins (memo handover + cast cleanup) ──────────
+    // These exercise the full repository so the delete scopes' artwork-memo
+    // hook plumb (delete → OfflineDeletionCore → resolver.evictMemo) and the
+    // cast-image cleanup stay pinned at the integration seam.
+
+    private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
+    private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
+    private val database: JellyPlayDatabase = mockk(relaxed = true)
+    private lateinit var repository: OfflineRepositoryImpl
 
     private fun movieEntityWithCast(
         people: List<OfflinePersonInfo>,
         id: String = "movie-1",
-    ): OfflineMediaEntity = movieEntity(id = id).copy(
+    ): OfflineMediaEntity = OfflineMediaEntity(
+        id = id,
+        name = "Movie",
+        mediaType = MediaType.MOVIE.name,
+    ).copy(
         peopleJson = castJson(*people.toTypedArray()),
     )
+
+    private fun movieDownloadEntity(
+        mediaItemId: String,
+        dir: File,
+    ) = DownloadEntity(
+        id = "dl-$mediaItemId",
+        mediaItemId = mediaItemId,
+        name = "Movie Download",
+        mediaType = "MOVIE",
+        downloadPath = File(dir, "$mediaItemId.mkv").absolutePath,
+        downloadUrl = "https://stream",
+        totalSizeBytes = 0L,
+        downloadedBytes = 0L,
+        status = "COMPLETED",
+    )
+
+    @BeforeTest
+    fun setupRepository() {
+        // deleteOfflineItem/Series/Season wrap their DAO deletes in a Room
+        // withTransaction block; mock the module's own KMP helper
+        // (repository/RoomTransactions.kt, the androidMain androidx.room
+        // extension's replacement) so the block runs inline.
+        mockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+        coEvery { database.withTransaction(any<suspend () -> Any?>()) } coAnswers {
+            secondArg<suspend () -> Any?>().invoke()
+        }
+        // By default no surviving row references any candidate; each delete test
+        // overrides this when it needs a "still referenced" sibling.
+        coEvery { offlineMediaDao.isPersonReferenced(any()) } returns false
+        repository = OfflineRepositoryImpl(
+            offlineMediaDao,
+            playbackStateDao,
+            syncBaselineDao,
+            downloadDao,
+            database,
+            timeSource = SystemTimeSource(),
+        )
+    }
+
+    @AfterTest
+    fun tearDownRepository() {
+        io.mockk.unmockkStatic("com.raulshma.jellyplay.core.data.repository.RoomTransactionsKt")
+    }
 
     @Test
     fun `deleteOfflineItem removes an orphaned cast image`() = runTest {

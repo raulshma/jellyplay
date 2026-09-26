@@ -624,6 +624,29 @@ KDoc-relevant. Pinned by `SyncPlayPlaybackCoreReconcileTest`.
 
 ## State slices (`VideoPlayerUiState`)
 
+> **player VMs/screens** the god-VM funnel
+> cohort's two missing members landed: `VideoPlayerUiEvent` (56 events +
+> `onEvent`, 13 dead members deleted first; ownership ratchet ceiling 35)
+> and `LiveTvPlayerUiEvent` (17 events; live ratchet ceiling lowered
+> 26 → 10). The aggregate-prefs collector is **`PlayerPrefsFanout`**
+> (beside `SettingsProjector`; diff-guarded seeds, distinct rebuild
+> triggers, jvmTest-pinned). Player-live gained **`LiveSessionManager`**
+> (the VOD `PlayerSessionManager`'s twin for source resolution),
+> **`LiveFallbackPhase`** (the extracted ExoLiveEngine error-phase
+> machine, commonMain, pinned), and **`LiveMuteMemory`** (the pre-mute
+> remember/restore chip). `dischargePipDismissal`
+> (core:data, beside `PipTransportReArm`) is THE one PiP-dismissal
+> collector for both hosts (issue #145's story lives in its KDoc).
+> `TvSeekController` (beside `GestureSeekMath`) owns the TV seek-bar state
+> machine. `VideoPlayerScreen` got the section-host split the deferred
+> cohort recorded for the other four screens: root composition stays in
+> `VideoPlayerScreen.kt`; gesture tier → `VideoPlayerScreenGestures.kt`,
+> center/lock/trickplay overlays → `VideoPlayerScreenOverlays.kt`, status
+> badges → `VideoPlayerScreenInfo.kt`, sheet routing →
+> `VideoPlayerScreenSheets.kt` (composition-shape-only, bodies
+> byte-identical).
+
+
 `VideoPlayerUiState` (`shared/feature/player-video/src/commonMain/kotlin/.../VideoPlayerUiState.kt`)
 is seven stored slices — `gestures` (`GesturePrefsState`), `segmentState`
 (`SegmentState`), `media` (`MediaContentState`), `autoplay`
@@ -794,6 +817,34 @@ is the DI seam (`AppRuntimeStateStore` stays out of the VM ctor).
 `PlaylistTargetsTest` / `CollectionTargetsTest` pin the merged interface.
 
 ## Home feature
+
+> **deepening cohort (discover rows):** Seerr discover rows are now
+> FETCHED IN THE NETWORK LAYER — `HomeSectionsFetcher` owns one discover
+> fetch path for BOTH sources (Jellyfin + Seerr, via the
+> `SeerrHomeSectionSources` port satisfied by the Koin-wired
+> `SeerrHomeSectionSourcesImpl`), emitting the DISCOVER block already
+> ordered by row-config index; the feature-side `fetchCustomSeerrRows`/
+> `fetchSeerrDiscoverRow`/`spliceDiscoverSeerrRows` and their caches are
+> deleted (the Seerr last-known-good-on-total-failure semantics moved with
+> them). The dice-roll registry/roll jobs live in
+> **`DiscoverRowsCoordinator`** (`shared/feature/home/.../DiscoverRowsCoordinator.kt`),
+> constructed inside the refresher; the refresher keeps only the WHAT/WHEN
+> refresh policy and calls the coordinator's SYNCHRONOUS `drainRolls()` at
+> the drain point (the no-suspension window before the single sections
+> write is preserved by construction). The roll protocol's single owner is
+> the KDoc on `MediaRepository.rerollDiscoverRow` (three numbered race
+> windows, the invalidate→fetch→seed ordering, bump-at-invalidate-AND-commit);
+> the former per-layer restatements are now pointers to it. The
+> epoch-guarded cache-through write guard is ONE engine,
+> **`TtlCache.cacheThrough`** (core:model `CacheThrough.kt`, with the
+> `hitOf` hook for heterogeneous typed caches), shared by
+> `IdentityCacheFetch.getOrFetch` and `HomeSectionsFetcher`'s sub-call
+> caches. The discover-row editor VM (`DiscoverRowsViewModel`) now has a
+> REAL preview debounce + content-stamped stale guard (pinned by
+> `DiscoverRowsViewModelTest`), its chip ladders are declared data
+> (`DiscoverRowEditorChoices`), and its template titles are localized
+> `UiText`s.
+
 
 **`HomeRefresher`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
 is the Home feed's deep module. Its public interface is five members —
@@ -1727,6 +1778,33 @@ the client directly). The `PlaybackRepositorySurfaceTest` ratchet dropped to
 
 ## Core data repositories
 
+> **deepening cohort:** **`TimeSource` moved to core:model**
+> (`shared/core/model/src/jvmShared/.../TimeSource.kt`, with
+> `EpochMillisSource` in commonMain — the old core:data paths are deprecated
+> typealiases pending per-touch adoption), and seven behaviour-bearing clock
+> reads were converted to the injected seam (WatchHistoryRepository heatmap
+> day-count/year fallback, NewsletterTriggerManager digest gate,
+> NewMediaCheckWorker prune window, TvWatchNextPublisher, AppUpdateRepository
+> throttle, MediaInfoApiClientImpl + LibraryApiClientImpl — the network layer
+> can finally fake-clock test). **`AudioPlaybackManager` now constructs the
+> commonMain `AudioQueueStateCore`** (the recorded next slice): the ~14
+> hand-rolled queue bodies and the private queue/cursor/undo/shuffle cells
+> are gone; media3's playlist mirror rides an `EngineDispatch` and the
+> `reportsRideEngineTransition` hook keeps the transition listener as the
+> single reporter. The *arr network twins folded into one
+> **`ArrV3Client`** engine over a per-service descriptor
+> (`shared/core/network/.../arr/ArrV3Client.kt`) — `SonarrApiClientImpl`/
+> `RadarrApiClientImpl` are thin adapters, wire DTOs unified in
+> `ArrWireDto.kt` (@SerialName strings byte-identical). Three repository
+> extractions: **`OfflineArtworkResolver`** (the ~325-line artwork fallback
+> ladder + memo, direct-tested over two DAO lambdas), **`OfflineDownloadWriterCore`**
+> (the download write choreography over narrow deps — the
+> `DownloadRepositoryImpl → DownloadDelegate → writer → repo` `Lazy` cycle
+> is DISSOLVED, no back-reference), and `AdminRepositoryImpl`'s ctor
+> narrowed from the `JellyfinApiClient` union to the family singles its
+> members actually call.
+
+
 **`LyricsRepositoryImpl`** (`shared/core/data/src/jvmShared/kotlin/.../repository/LyricsRepositoryImpl.kt`)
 owns the whole LRC/LRCLIB fetch-parse-cache chain (cache read → Jellyfin
 endpoint → LRCLIB best-match, skipped on Local networks → negative-result
@@ -2557,6 +2635,28 @@ channel (deterministic there; past `maxAttempts` returns null, the
 caller's leave-the-schedule signal).
 
 ## Navigation destinations
+
+> **deepening cohort (shells):** `DesktopAppRoot` is split —
+> `DesktopNavScaffold.kt` + `DesktopRail.kt` own the scaffold/rail;
+> `DesktopNavGuard.kt` (guarded navigator + dead-end snackbar policy),
+> `DesktopOnboardingGate.runDesktopOnboardingGateOnce`, and
+> `DesktopUserMessages.desktopUserMessageSources` are pure, jvmTest-pinned
+> helpers; the E2E harness fleet moved to the `desktop.harness` subpackage
+> behind one `DesktopHarnessHost` composable. The desktop platform Koin
+> grab-bag got the family treatment (`desktopConnectivityModule`,
+> `desktopRemoteControlModule`, `desktopMediaSupportModule`,
+> `desktopAdminModule`, `desktopDownloadsSeamsModule`,
+> `desktopHomeConveyorModule`, `desktopUpdateModule` — the sentinel
+> override relationship with `desktopAppUpdateModule` is now a visible
+> two-module pointer pair); `DesktopDataModule` is the aggregate. The
+> Android shell's module list is extracted to
+> **`app/di/AndroidKoinModules.androidKoinModules(app)`** (the registration
+> guard test scans it), `ShellInfra` carries the three coordinators (one
+> resolution site; `MainContent` is down to five params), and the
+> UserMessageHost wiring is ONE shared composable,
+> **`rememberShellUserMessages(present, sources…)`** (feature/shell) — both
+> shells supply only their `present` adapter.
+
 
 The **`NavDestination` registry** (core/ui `navigation/`) is the single home
 for top-level destination facts — persisted customization key, icon, rail
@@ -4626,7 +4726,9 @@ both shells and pinned:
   re-verify + download-redirect landing, desktop browser handoff) throw
   `UpdateSecurityException` before any feed-controlled URL drives a
   download or browse. Amends `docs/adr/desktop-auto-update.md`
-  (implementation addendum there; design: `scratch/mpv-shim-implementation-plan.md`
+  (implementation addendum there; design:
+  `docs/design/mpv-shim-implementation-plan.md` — to be restored there; the
+  original sat in the machine-local `scratch/` tree and was never tracked)
   — jvmShared, not the recorded commonMain, because every
   enforcement point is JVM). Pinned by `GitHubRepoAllowListTest` +
   `GitHubReleasesApiImplTest` fail-closed arms.

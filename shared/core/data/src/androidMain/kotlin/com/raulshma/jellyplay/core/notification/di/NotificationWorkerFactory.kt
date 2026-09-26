@@ -28,6 +28,7 @@ class NotificationWorkerFactory : WorkerFactory() {
                 notificationStore = koin().get(),
                 dispatcher = koin().get(),
                 scheduler = koin().get(),
+                timeSource = koin().get(),
             )
             else -> null
         }

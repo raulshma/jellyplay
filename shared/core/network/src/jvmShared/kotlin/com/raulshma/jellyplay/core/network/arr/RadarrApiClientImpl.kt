@@ -4,35 +4,30 @@ import com.raulshma.jellyplay.core.model.arr.ArrBlocklistItem
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrCommand
 import com.raulshma.jellyplay.core.model.arr.ArrCommandName
-import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
-import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
-import com.raulshma.jellyplay.core.model.arr.ArrQueueMessage
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
-import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * OkHttp-backed implementation of [RadarrApiClient]. Mirrors
- * [com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl]:
- * injects the shared unqualified [OkHttpClient], reuses
- * [SeerrApiClientImpl.lenientJson] (same lenient config the Seerr + TMDB
- * clients use), and routes failures through [ApiException.fromHttp] /
- * [ApiException.fromNetwork] so [com.raulshma.jellyplay.core.network.RetryPolicy]
- * can classify retryability. The request preamble (URL join, auth header,
- * executions, failure texts) is shared with [SonarrApiClientImpl] via
- * [ArrClientSupport].
+ * OkHttp-backed implementation of [RadarrApiClient] — a thin adapter over the
+ * shared [ArrV3Client] engine: the twelve endpoint-method twins Sonarr
+ * exposes identically (queue read + delete, grab, manualimport, calendar,
+ * history, blocklist, wanted, command, system status) are the engine's
+ * methods parameterized by [ArrV3Service.RADARR] and Radarr's wire-row
+ * decoders ([ArrWireDto]); the genuinely Radarr-specific surface — the
+ * `/movie?tmdbId=` lookups, the movie-file delete, and the monitor toggle —
+ * stays here, riding the engine's list/PUT/DELETE arms so the request
+ * preamble still has exactly one copy.
+ *
+ * Structure mirrors [com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl]
+ * and [SonarrApiClientImpl]: injects the shared unqualified [OkHttpClient],
+ * reuses `SeerrApiClientImpl.lenientJson` (now via the engine), and routes
+ * failures through `ApiException.fromHttp` / `fromNetwork` so
+ * [com.raulshma.jellyplay.core.network.RetryPolicy] can classify retryability
+ * (all inside [ArrClientSupport], the engine's funnel).
  *
  * Radarr's v3 API uses `X-Api-Key` for auth — the same header name Seerr uses —
  * so no new credential type is required.
@@ -41,168 +36,71 @@ class RadarrApiClientImpl(
     private val okHttpClient: OkHttpClient,
 ) : RadarrApiClient {
 
-    private val json: Json = SeerrApiClientImpl.lenientJson
+    /** The one v3 endpoint engine, carrying Radarr's divergent bits. */
+    private val engine = ArrV3Client(okHttpClient, ArrV3Service.RADARR)
 
-    /**
-     * The request preamble Radarr and Sonarr share verbatim — /api/v3 URL
-     * join, `X-Api-Key` header, raw + stream-decoding executions, and the
-     * per-service failure texts (this file's only textual delta from Sonarr
-     * was the service name inside those strings).
-     */
-    private val support = ArrClientSupport(
-        okHttpClient = okHttpClient,
-        json = json,
-        serviceName = "Radarr",
-    )
-
-    override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> {
-        // includeMovie=true attaches the movie resource so we can pull tmdbId + title.
-        // Radarr v3 (like Sonarr) wraps the page in a { records, page, pageSize,
-        // totalRecords } envelope — decoded via RadarrQueueResponse and unwrapped here.
-        val url = support.buildUrl(baseUrl, "/queue")
-            .newBuilder()
-            .addQueryParameter("includeMovie", "true")
-            .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return support.parseRequest<RadarrQueueResponse>(request)
-            .map { resp -> resp.records.map { it.toModel() } }
-    }
+    override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> =
+        engine.getQueue(baseUrl, apiKey, RadarrQueueResource.serializer(), RadarrQueueResource::toArrQueueItem)
 
     override suspend fun deleteQueueItem(
         baseUrl: String,
         apiKey: String,
         id: Int,
         options: ArrQueueDeleteOptions,
-    ): Result<Unit> {
-        val url = support.buildUrl(baseUrl, "/queue/$id").newBuilder().withDeleteOptions(options).build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).delete().build()
-        return support.parseUnit(request)
-    }
+    ): Result<Unit> = engine.deleteQueueItem(baseUrl, apiKey, id, options)
 
     override suspend fun deleteQueueItems(
         baseUrl: String,
         apiKey: String,
         ids: List<Int>,
         options: ArrQueueDeleteOptions,
-    ): Result<Unit> {
-        if (ids.isEmpty()) return Result.success(Unit)
-        val url = support.buildUrl(baseUrl, "/queue/bulk").newBuilder().withDeleteOptions(options).build()
-        val body = json.encodeToString(RadarrQueueBulkRequest(ids = ids))
-        val request = Request.Builder()
-            .url(url)
-            .withApiKey(apiKey)
-            .delete(body.toRequestBody("application/json".toMediaType()))
-            .build()
-        return support.parseUnit(request)
-    }
+    ): Result<Unit> = engine.deleteQueueItems(baseUrl, apiKey, ids, options)
 
     override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        support.postEmpty(baseUrl, apiKey, "/queue/grab/$id")
+        engine.grabQueueItem(baseUrl, apiKey, id)
 
-    override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> {
-        // 2-step manualimport flow (the *arr v3 spec has no queue/import/{id}):
-        // 1) GET the candidate import rows for this download-client guid.
-        val getUrl = support.buildUrl(baseUrl, "/manualimport").newBuilder()
-            .addQueryParameter("downloadId", downloadId)
-            .build()
-        val getRequest = Request.Builder().url(getUrl).withApiKey(apiKey).get().build()
-        val rows = support.executeRequest(getRequest).mapCatching { json.decodeFromString<JsonArray>(it) }
-        val rowList = rows.getOrElse { return Result.failure(it) }
-        if (rowList.isEmpty()) {
-            return Result.failure(
-                ApiException.fromHttp(404, "No importable files found for this download in Radarr.")
-            )
-        }
-        // 2) Re-post the rows verbatim to trigger the import. The POST body
-        // schema is undocumented in the OpenAPI spec; passing the GET array
-        // through unchanged is both the documented usage and immune to schema
-        // drift on the 16-field ManualImportResource.
-        val postRequest = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/manualimport"))
-            .withApiKey(apiKey)
-            .post(rowList.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-        return support.parseUnit(postRequest)
-    }
+    override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> =
+        engine.importQueueItem(baseUrl, apiKey, downloadId)
 
     override suspend fun getCalendar(
         baseUrl: String,
         apiKey: String,
         start: String,
         end: String,
-    ): Result<List<ArrCalendarItem>> {
-        val url = support.buildUrl(baseUrl, "/calendar")
-            .newBuilder()
-            .addQueryParameter("start", start)
-            .addQueryParameter("end", end)
-            .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return support.parseRequest<List<RadarrMovieResource>>(request)
-            .map { list -> list.map { it.toCalendarItem() } }
-    }
+    ): Result<List<ArrCalendarItem>> =
+        engine.getCalendar(baseUrl, apiKey, start, end, RadarrMovieResource.serializer(), RadarrMovieResource::toCalendarItem)
 
     override suspend fun getHistory(
         baseUrl: String,
         apiKey: String,
         eventType: Int?,
-    ): Result<List<ArrHistoryItem>> {
-        val builder = support.buildUrl(baseUrl, "/history").newBuilder()
-        // includeMovie defaults to false; toModel() reads movie.tmdbId + title,
-        // so request the sub-object or history rows lose their movie identity.
-        builder.addQueryParameter("includeMovie", "true")
-        if (eventType != null) builder.addQueryParameter("eventType", eventType.toString())
-        val request = Request.Builder().url(builder.build()).withApiKey(apiKey).get().build()
-        return support.parseRequest<RadarrHistoryResponse>(request)
-            .map { resp -> resp.records.map { it.toModel() } }
-    }
+    ): Result<List<ArrHistoryItem>> =
+        engine.getHistory(baseUrl, apiKey, eventType, RadarrHistoryRecord.serializer(), RadarrHistoryRecord::toArrHistoryItem)
 
     override suspend fun getBlocklist(
         baseUrl: String,
         apiKey: String,
         page: Int,
         pageSize: Int,
-    ): Result<List<ArrBlocklistItem>> {
-        val url = support.buildUrl(baseUrl, "/blocklist").newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("pageSize", pageSize.toString())
-            .addQueryParameter("sortKey", "date")
-            .addQueryParameter("sortDirection", "descending")
-            .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return support.parseRequest<RadarrBlocklistResponse>(request)
-            .map { resp -> resp.records.map { it.toModel() } }
-    }
+    ): Result<List<ArrBlocklistItem>> =
+        engine.getBlocklist(
+            baseUrl, apiKey, page, pageSize,
+            RadarrBlocklistRecord.serializer(), RadarrBlocklistRecord::toArrBlocklistItem,
+        )
 
     override suspend fun deleteBlocklistItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        support.deleteRequest(baseUrl, apiKey, "/blocklist/$id")
+        engine.deleteBlocklistItem(baseUrl, apiKey, id)
 
-    override suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit> {
-        if (ids.isEmpty()) return Result.success(Unit)
-        val body = json.encodeToString(RadarrIdsBulkRequest(ids = ids))
-        val request = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/blocklist/bulk"))
-            .withApiKey(apiKey)
-            .delete(body.toRequestBody("application/json".toMediaType()))
-            .build()
-        return support.parseUnit(request)
-    }
+    override suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit> =
+        engine.deleteBlocklistItems(baseUrl, apiKey, ids)
 
     override suspend fun getWanted(
         baseUrl: String,
         apiKey: String,
         page: Int,
         pageSize: Int,
-    ): Result<List<ArrWantedItem>> {
-        val url = support.buildUrl(baseUrl, "/wanted/missing").newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("pageSize", pageSize.toString())
-            .addQueryParameter("sortKey", "inCinemas")
-            .addQueryParameter("sortDirection", "descending")
-            .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return support.parseRequest<RadarrWantedResponse>(request)
-            .map { resp -> resp.records.map { it.toWantedItem() } }
-    }
+    ): Result<List<ArrWantedItem>> =
+        engine.getWanted(baseUrl, apiKey, page, pageSize, RadarrMovieResource.serializer(), RadarrMovieResource::toArrWantedItem)
 
     override suspend fun postCommand(
         baseUrl: String,
@@ -210,52 +108,43 @@ class RadarrApiClientImpl(
         commandName: ArrCommandName,
         movieIds: List<Int>?,
         episodeIds: List<Int>?,
-    ): Result<ArrCommand> {
-        val body = RadarrCommandRequest(
-            name = commandName.serialName,
-            movieIds = movieIds,
-            movieId = movieIds?.firstOrNull(),
-        )
-        val request = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/command"))
-            .withApiKey(apiKey)
-            .post(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
-            .build()
-        return support.parseRequest<RadarrCommandResource>(request).map { it.toModel() }
-    }
+    ): Result<ArrCommand> = engine.postCommand(
+        baseUrl,
+        apiKey,
+        engine.json.encodeToString(
+            RadarrCommandRequest(
+                name = commandName.serialName,
+                movieIds = movieIds,
+                movieId = movieIds?.firstOrNull(),
+            ),
+        ),
+    )
 
     override suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?> {
         // /api/v3/movie?tmdbId= returns a single-element array (or empty when
         // no match). Decoded as a list rather than a bare object so the
         // not-tracked case is a clean empty list instead of a parse error.
-        val url = support.buildUrl(baseUrl, "/movie").newBuilder()
-            .addQueryParameter("tmdbId", tmdbId.toString())
-            .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return support.parseRequest<List<RadarrMovieResource>>(request)
-            .map { list -> list.firstOrNull()?.id }
+        return engine.getList(
+            baseUrl, apiKey, "/movie", listOf("tmdbId" to tmdbId.toString()), RadarrMovieResource.serializer(),
+        ).map { list -> list.firstOrNull()?.id }
     }
 
-    override suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?> {
-        val url = support.buildUrl(baseUrl, "/movie").newBuilder()
-            .addQueryParameter("tmdbId", tmdbId.toString())
-            .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return support.parseRequest<List<RadarrMovieResource>>(request)
-            .map { list ->
-                list.firstOrNull()?.let {
-                    RadarrMovieInfo(
-                        id = it.id,
-                        movieFileId = it.movieFileId,
-                        hasFile = it.hasFile,
-                        monitored = it.monitored,
-                    )
-                }
+    override suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?> =
+        engine.getList(
+            baseUrl, apiKey, "/movie", listOf("tmdbId" to tmdbId.toString()), RadarrMovieResource.serializer(),
+        ).map { list ->
+            list.firstOrNull()?.let {
+                RadarrMovieInfo(
+                    id = it.id,
+                    movieFileId = it.movieFileId,
+                    hasFile = it.hasFile,
+                    monitored = it.monitored,
+                )
             }
-    }
+        }
 
     override suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit> =
-        support.deleteRequest(baseUrl, apiKey, "/movieFile/$movieFileId")
+        engine.deletePath(baseUrl, apiKey, "/movieFile/$movieFileId")
 
     override suspend fun monitorMovies(
         baseUrl: String,
@@ -264,259 +153,16 @@ class RadarrApiClientImpl(
         monitored: Boolean,
     ): Result<Unit> {
         if (movieIds.isEmpty()) return Result.success(Unit)
-        val body = json.encodeToString(
-            RadarrMovieMonitorRequest(movieIds = movieIds, monitored = monitored),
-        )
-        val request = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/movie/monitor"))
-            .withApiKey(apiKey)
-            .put(body.toRequestBody("application/json".toMediaType()))
-            .build()
-        return support.parseUnit(request)
-    }
-
-    override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> {
-        val request = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/system/status"))
-            .withApiKey(apiKey)
-            .get()
-            .build()
-        return support.parseUnit(request)
-    }
-
-    // ── Radarr v3 DTOs (private; mapped to core/model types) ───────────────
-
-    @Serializable
-    private data class RadarrQueueResponse(
-        val records: List<RadarrQueueResource> = emptyList(),
-    )
-
-    @Serializable
-    private data class RadarrQueueResource(
-        val id: Int = 0,
-        val downloadId: String? = null,
-        val size: Double? = null,
-        val sizeleft: Double? = null,
-        val timeleft: String? = null,
-        val status: String? = null,
-        val trackedDownloadStatus: String? = null,
-        val trackedDownloadState: String? = null,
-        val protocol: String? = null,
-        val downloadClient: String? = null,
-        val indexer: String? = null,
-        val outputPath: String? = null,
-        val quality: RadarrQuality? = null,
-        val languages: List<RadarrLanguage> = emptyList(),
-        val customFormats: List<RadarrCustomFormat> = emptyList(),
-        val statusMessages: List<RadarrStatusMessage> = emptyList(),
-        val movie: RadarrMovieResource? = null,
-    )
-
-    @Serializable
-    private data class RadarrQuality(
-        @SerialName("quality") val quality: RadarrQualityName? = null,
-    ) {
-        val name: String? get() = quality?.name
-    }
-
-    @Serializable
-    private data class RadarrQualityName(val name: String? = null)
-
-    @Serializable
-    private data class RadarrLanguage(
-        val name: String? = null,
-    )
-
-    @Serializable
-    private data class RadarrCustomFormat(val name: String? = null)
-
-    @Serializable
-    private data class RadarrStatusMessage(
-        val title: String? = null,
-        val messages: List<String> = emptyList(),
-    )
-
-    @Serializable
-    private data class RadarrMovieResource(
-        val id: Int = 0,
-        val title: String = "",
-        val tmdbId: Int? = null,
-        val monitored: Boolean = false,
-        val hasFile: Boolean = false,
-        val movieFileId: Int = 0,
-        val inCinemas: String? = null,
-        val digitalRelease: String? = null,
-        val physicalRelease: String? = null,
-        val overview: String? = null,
-        val images: List<RadarrMediaCover> = emptyList(),
-    )
-
-    @Serializable
-    private data class RadarrMediaCover(
-        @SerialName("coverType") val coverType: String = "",
-        @SerialName("url") val url: String? = null,
-        @SerialName("remoteUrl") val remoteUrl: String? = null,
-    )
-
-    @Serializable
-    private data class RadarrHistoryResponse(
-        val records: List<RadarrHistoryRecord> = emptyList(),
-    )
-
-    @Serializable
-    private data class RadarrHistoryRecord(
-        val id: Int = 0,
-        val eventType: String? = null,
-        val date: String? = null,
-        val data: Map<String, String> = emptyMap(),
-        val movie: RadarrMovieResource? = null,
-    )
-
-    @Serializable
-    private data class RadarrQueueBulkRequest(val ids: List<Int>)
-
-    @Serializable
-    private data class RadarrIdsBulkRequest(val ids: List<Int>)
-
-    @Serializable
-    private data class RadarrBlocklistResponse(
-        val records: List<RadarrBlocklistRecord> = emptyList(),
-    )
-
-    @Serializable
-    private data class RadarrBlocklistRecord(
-        val id: Int = 0,
-        val date: String? = null,
-        val protocol: String? = null,
-        val indexer: String? = null,
-        val message: String? = null,
-        val movie: RadarrMovieResource? = null,
-    )
-
-    @Serializable
-    private data class RadarrWantedResponse(
-        val records: List<RadarrMovieResource> = emptyList(),
-    )
-
-    @Serializable
-    private data class RadarrCommandRequest(
-        val name: String,
-        val movieIds: List<Int>? = null,
-        val movieId: Int? = null,
-    )
-
-    /** Body for `PUT /api/v3/movie/monitor`. */
-    @Serializable
-    private data class RadarrMovieMonitorRequest(
-        val movieIds: List<Int>,
-        val monitored: Boolean,
-    )
-
-    @Serializable
-    private data class RadarrCommandResource(
-        val id: Int = 0,
-        val name: String = "",
-        val status: String = "",
-        val message: String? = null,
-        val queued: String? = null,
-        val started: String? = null,
-        val ended: String? = null,
-    )
-
-    private fun RadarrQueueResource.toModel(): ArrQueueItem {
-        val sizeBytes = size?.toLong()
-        val sizeLeft = sizeleft?.toLong()
-        // progress = (size - sizeleft) / size, guarded against zero / null.
-        val progress = if (size != null && size > 0.0 && sizeleft != null) {
-            ((size - sizeleft) / size).toFloat().coerceIn(0f, 1f)
-        } else 0f
-        return ArrQueueItem(
-            queueId = id,
-            downloadId = downloadId,
-            tmdbId = movie?.tmdbId,
-            title = movie?.title ?: "Unknown",
-            status = ArrDownloadStatus.fromApi(status, trackedDownloadStatus, trackedDownloadState),
-            trackedDownloadStatus = trackedDownloadStatus,
-            trackedDownloadState = trackedDownloadState,
-            progress = progress,
-            sizeBytes = sizeBytes,
-            sizeLeft = sizeLeft,
-            timeLeft = timeleft,
-            protocol = protocol,
-            downloadClient = downloadClient,
-            indexer = indexer,
-            outputPath = outputPath,
-            quality = quality?.name,
-            languages = languages.mapNotNull { it.name }.filter { it.isNotBlank() },
-            customFormats = customFormats.mapNotNull { it.name }.filter { it.isNotBlank() },
-            messages = statusMessages.flatMap { sm ->
-                sm.messages.map { msg -> ArrQueueMessage(title = sm.title, message = msg) }
-            },
+        return engine.putJson(
+            baseUrl,
+            apiKey,
+            "/movie/monitor",
+            engine.json.encodeToString(
+                RadarrMovieMonitorRequest(movieIds = movieIds, monitored = monitored),
+            ),
         )
     }
 
-    private fun RadarrMovieResource.toCalendarItem(): ArrCalendarItem {
-        // Calendar rows carry all three release dates; pick the most relevant
-        // for "coming soon" ordering (digital > physical > cinematic).
-        val airDate = digitalRelease ?: physicalRelease ?: inCinemas
-        return ArrCalendarItem(
-            tmdbId = tmdbId,
-            title = title,
-            mediaType = ArrMediaType.MOVIE,
-            airDateUtc = airDate,
-            hasFile = hasFile,
-            monitored = monitored,
-            overview = overview,
-            // Prefer remoteUrl (absolute); fall back to url, which behind a
-            // reverse proxy is often the only field populated (relative path).
-            posterPath = images.firstOrNull { it.coverType == "poster" }?.posterPreference(),
-        )
-    }
-
-    private fun RadarrBlocklistRecord.toModel(): ArrBlocklistItem = ArrBlocklistItem(
-        id = id,
-        tmdbId = movie?.tmdbId,
-        title = movie?.title ?: "Unknown",
-        dateUtc = date,
-        protocol = protocol,
-        indexer = indexer,
-        message = message,
-    )
-
-    private fun RadarrMovieResource.toWantedItem(): ArrWantedItem = ArrWantedItem(
-        id = id,
-        tmdbId = tmdbId,
-        title = title,
-        airDateUtc = digitalRelease ?: physicalRelease ?: inCinemas,
-        hasFile = hasFile,
-        monitored = monitored,
-        overview = overview,
-        posterPath = images.firstOrNull { it.coverType == "poster" }?.posterPreference(),
-        mediaType = ArrMediaType.MOVIE,
-    )
-
-    /**
-     * Picks the best available poster URL. `remoteUrl` is absolute and
-     * preferred; behind a reverse proxy Radarr often leaves `remoteUrl` null
-     * and populates only `url` (a path relative to the Radarr root), so fall
-     * back to it rather than rendering no poster.
-     */
-    private fun RadarrMediaCover.posterPreference(): String? = remoteUrl ?: url
-
-    private fun RadarrCommandResource.toModel(): ArrCommand = ArrCommand(
-        id = id,
-        name = name,
-        status = status,
-        message = message,
-        dateUtc = queued ?: started ?: ended,
-    )
-
-    private fun RadarrHistoryRecord.toModel(): ArrHistoryItem = ArrHistoryItem(
-        historyId = id,
-        eventType = eventType ?: "",
-        tmdbId = movie?.tmdbId,
-        title = movie?.title ?: "Unknown",
-        dateUtc = date,
-        data = data,
-    )
+    override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> =
+        engine.testConnection(baseUrl, apiKey)
 }

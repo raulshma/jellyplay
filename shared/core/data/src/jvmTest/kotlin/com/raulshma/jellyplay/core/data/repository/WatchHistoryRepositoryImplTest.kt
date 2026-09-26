@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import java.time.LocalDate
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,10 +40,17 @@ import kotlin.test.assertTrue
  *    points directly; unavailable plugin (or empty plugin payload) falls back
  *    to per-day aggregation over the user's played items;
  *  - the year-window pagination stop in [WatchHistoryRepositoryImpl.getPlayedItems].
+ *
+ * D3: the calendar reads went through the injected TimeSource, so the suite
+ * pins a fixed today (2026-03-10) — the current-year day count and the
+ * malformed-date year fallback are deterministic, not machine-calendar
+ * dependent.
  */
 class WatchHistoryRepositoryImplTest {
 
     private val apiClient: JellyfinApiClient = mockk()
+
+    private val timeSource = FakeTimeSource(todayDate = LocalDate.of(2026, 3, 10))
 
     private lateinit var repository: WatchHistoryRepositoryImpl
 
@@ -70,6 +79,7 @@ class WatchHistoryRepositoryImplTest {
         repository = WatchHistoryRepositoryImpl(
             apiClient,
             PlaybackReportingStatusStore(apiClient, sessionCacheRegistry),
+            timeSource,
         )
         coEvery { apiClient.currentUser } returns flowOf(user)
     }
@@ -128,6 +138,21 @@ class WatchHistoryRepositoryImplTest {
 
         repository.getDailyActivity(year = 2024, filter = HeatmapFilter.MUSIC)
         coVerify(exactly = 1) { apiClient.getPlaybackReportingPlayActivity(days = 365, dataType = "count", filter = "Audio") }
+    }
+
+    @Test
+    fun `current-year day count is pinned by the clock seam's today`() = runTest {
+        makePluginAvailable()
+        coEvery {
+            apiClient.getPlaybackReportingPlayActivity(days = any(), dataType = "count", filter = any())
+        } returns Result.success(listOf(PlaybackActivityPoint(date = "2026-03-01", value = 1)))
+
+        repository.getDailyActivity(year = 2026, filter = HeatmapFilter.ALL)
+
+        // Fake today = 2026-03-10: Jan 1 → Mar 10 spans 68 days, +1 inclusive
+        // = 69 — the current-year window comes from the injected clock, not
+        // the test machine's calendar.
+        coVerify(exactly = 1) { apiClient.getPlaybackReportingPlayActivity(days = 69, dataType = "count", filter = null) }
     }
 
     @Test
@@ -293,6 +318,23 @@ class WatchHistoryRepositoryImplTest {
         val details = repository.getItemsForDay("2024-03-01", HeatmapFilter.ALL)
 
         assertEquals("", details.single().time)
+    }
+
+    @Test
+    fun `malformed day-date scans the clock seam's year`() = runTest {
+        // Plugin unavailable → getItemsForDay takes the fallback; "bad!" has
+        // no parseable year prefix, so the scan year is the injected clock's
+        // today (2026). The returned day-filter is empty by construction
+        // (nothing starts with "bad!") — the pin is the memo: a direct
+        // getPlayedItems(2026) read lands in the entry the fallback just
+        // populated, so the network page runs exactly once.
+        coEvery {
+            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+        } returns Result.success(Pair(1, listOf(item("y2026", lastPlayedDate = "2026-02-02T00:00:00.000Z"))))
+
+        assertTrue(repository.getItemsForDay("bad!", HeatmapFilter.ALL).isEmpty())
+        assertEquals(listOf("y2026"), repository.getPlayedItems(year = 2026, filter = HeatmapFilter.ALL).map { it.id })
+        coVerify(exactly = 1) { apiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

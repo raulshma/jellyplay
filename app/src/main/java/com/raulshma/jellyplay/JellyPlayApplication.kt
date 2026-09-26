@@ -7,45 +7,13 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
 import com.raulshma.jellyplay.core.data.di.CoreDataWorkerFactory
-import com.raulshma.jellyplay.core.data.di.androidCoreDataModule
-import com.raulshma.jellyplay.core.data.di.androidDataModule
-import com.raulshma.jellyplay.core.data.di.dataJvmModule
 import com.raulshma.jellyplay.core.data.image.jellyPlayImageLoader
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
-import com.raulshma.jellyplay.core.datastore.di.androidDatastoreModule
-import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
-import com.raulshma.jellyplay.core.database.di.androidDatabaseModule
-import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.model.ImageCache
-import com.raulshma.jellyplay.core.network.di.androidNetworkModule
-import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
-import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
-import com.raulshma.jellyplay.core.ui.di.androidCoreUiModule
-import com.raulshma.jellyplay.di.androidAdminSeamsModule
-import com.raulshma.jellyplay.di.androidAppInteropAdaptersModule
-import com.raulshma.jellyplay.di.androidAppModule
-import com.raulshma.jellyplay.di.androidAppViewModelsModule
-import com.raulshma.jellyplay.di.androidDownloadSeamsModule
-import com.raulshma.jellyplay.di.androidSettingsSeamsModule
-import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
-import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
-import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
-import com.raulshma.jellyplay.feature.subtitle.tester.di.androidSubtitleTesterModule
-import com.raulshma.jellyplay.feature.player.live.di.androidPlayerLiveModule
-import com.raulshma.jellyplay.feature.player.video.di.androidPlayerVideoModule
-import com.raulshma.jellyplay.feature.shell.sharedFeatureModules
+import com.raulshma.jellyplay.di.androidKoinModules
 import com.raulshma.jellyplay.startup.AppStartupPrewarms
-
-
-import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
-import com.raulshma.jellyplay.feature.auth.di.androidAuthModule
-
-import com.raulshma.jellyplay.feature.details.androidDetailsModule
-import com.raulshma.jellyplay.feature.book.di.androidBookPlayerModule
-
-
 import androidx.work.Configuration
 import androidx.work.DelegatingWorkerFactory
 import com.raulshma.jellyplay.widget.AppWidgetWorkerFactory
@@ -121,126 +89,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // dependency: the lazy fields and every Activity/Service/widget entry
         // point reach into this container, and definitions are lazy, so this
         // adds no cold-start construction cost.
+        // The module list itself is AndroidKoinModules.kt (the fold): the
+        // shared core graph, this shell's platform actuals, and the ONE
+        // spread of sharedFeatureModules both JVM shells consume — every
+        // per-registration comment moved there with its registration.
         startKoin {
-            modules(
-                datastoreCommonModule,
-                androidDatastoreModule(this@JellyPlayApplication),
-                databaseDaosModule,
-                androidDatabaseModule(this@JellyPlayApplication),
-                networkJvmModule,
-                androidNetworkModule(this@JellyPlayApplication),
-                dataJvmModule,
-                androidDataModule(this@JellyPlayApplication),
-                // Legacy core:data remainder (Hilt-extinct — media3
-                // audio stack, cast, schedulers, remote control, workers) +
-                // core:notification and core:ui's UserMessageBus.
-                androidCoreDataModule(this@JellyPlayApplication),
-                androidNotificationModule(this@JellyPlayApplication),
-                androidCoreUiModule,
-                // V3 downloads conveyor: Android actuals of the portable
-                // download engine's seams (WorkManager enqueue/coordinator,
-                // Context/StatFs storage layout, notification summary, Coil
-                // preload). Koin owns these legacy-side impls so the
-                // DownloadRepository single in dataJvmModule resolves.
-                androidDownloadSeamsModule(this@JellyPlayApplication),
-                // Dev v0.10.7 quick-action download-outcome bridge lives in
-                // androidAppInteropAdaptersModule below (DownloadOutcomeMessenger
-                // -> core:ui UserMessageBus).
-                // Admin flip: Android actual of the admin-statistics
-                // label seam — legacy core:data R.string over the Koin-owned
-                // AdminStatisticsRepositoryImpl (dataJvmModule), byte-identical
-                // to the pre-move context.getString calls.
-                androidAdminSeamsModule(this@JellyPlayApplication),
-                // App Koin graph: the former Hilt-owned :app classes
-                // (shell coordinators, startup initializers, widget schedulers/
-                // updaters, DeepLinkHandler, FloatingPlayerState), the three
-                // former WidgetModule @Binds pairs, and the shared-feature seam
-                // adapters the deleted HiltInteropModule used to bridge
-                // (MusicMessageBus / DetailThemeMusic /
-                // AudioPlayerCast — direct Koin resolution
-                // now, no EntryPoint; AudioPlayerEngine moved into core/data
-                // and androidCoreDataModule aliases it onto the manager).
-                androidAppModule(this@JellyPlayApplication),
-                androidAppInteropAdaptersModule(this@JellyPlayApplication),
-                // App-shell ViewModels (Main/PlayOn/WidgetConfig): resolved
-                // through the AndroidX ViewModelStore via KoinViewModelFactory,
-                // so activity-scoped instance-sharing semantics are unchanged.
-                androidAppViewModelsModule,
-                // The shared commonMain feature Koin modules both JVM shells
-                // register, declared ONCE in shared/feature/shell
-                // (sharedFeatureModules);
-                // the per-module conveyor history rides that declaration.
-                // Registration order is inert in Koin (definitions are keyed);
-                // only Android's platform actuals below are order-sensitive,
-                // and they stay inline in THIS list.
-                *sharedFeatureModules.toTypedArray(),
-                // core:ui's UserMessageBus module — core, not feature, so it
-                // stays inline here rather than in sharedFeatureModules (the
-                // home/settings ViewModels post their feedback through it).
-                coreUiMessageModule,
-                // V3 settings conveyor (Android platform pick): the Android
-                // actuals of the shared settings ViewModels' seams (SAF backup
-                // IO, LocaleManager, storage walkers, About/Licenses sources).
-                // The four seams (auto-download sync, notification reschedule,
-                // TV watch-next, audio cache clear) wrap the legacy schedulers,
-                // resolved straight from the core Koin graph.
-                androidSettingsPlatformModule(this@JellyPlayApplication),
-                androidSettingsSeamsModule(),
-                // MediaStore/FileProvider photo-export actual for the library
-                // feature's PhotoExport seam (androidDataModule pattern).
-                androidPhotoExportModule(this@JellyPlayApplication),
-                // V3 admin conveyor (Android half): the Android-only
-                // plugin-config WebView ViewModel (Context ctor param);
-                // AdminRepository and AdminStatisticsRepository resolve from
-                // dataJvmModule (Koin-owned since the admin flip).
-                androidAdminModule(this@JellyPlayApplication),
-
-                // V3 subtitle-tester conveyor (final feature): the whole
-                // feature is Android-only (androidMain-heavy module — the
-                // preview engines, surface host, SAF font picker and raw-asset
-                // factory have no desktop halves), so this is the only
-                // registration. PlayerEngineFactory and FontProvider are
-                // Koin-owned by androidPlayerVideoModule below; the
-                // PlaybackRequestFactory single is constructed with the
-                // application context here.
-                androidSubtitleTesterModule(this@JellyPlayApplication),
-
-                // Player-video conveyor: the migrated video player
-                // (:feature:player:video + the absorbed :feature:player:core
-                // remains). Koin owns the engine stack, the font/cache/
-                // preview singletons and the VideoPlayerViewModel; the six
-                // legacy playback deps resolve from the core Koin graph
-                // (the legacy :core:data remainder). Sole entry
-                // point stays PlayerActivity — no desktop registration
-                // (latent feature, subtitle-tester precedent).
-                androidPlayerVideoModule(this@JellyPlayApplication),
-
-                //  auth cutover (Android platform half): the
-                // LocalNetworkStatus gate is Android-only here — it bridges
-                // the legacy :core:ui LocalNetworkAccess object with the
-                // application context (androidAdminModule pattern); desktop
-                // registers its own non-blaming pick from the shared module's
-                // jvmMain.
-                androidAuthModule(this@JellyPlayApplication),
-                // Details conveyor (Android platform half): the two media3
-                // playback seams (per-item audio play, ambient theme music)
-                // resolve through the androidAppInteropAdaptersModule adapters
-                // above; the storage probe is the StatFs androidMain actual
-                // below.
-                androidDetailsModule(this@JellyPlayApplication),
-                // Book reader conveyor (Android platform half): the reader
-                // engine seams are the module's android platform module.
-                androidBookPlayerModule(this@JellyPlayApplication),
-
-                // Player-live conveyor (Android platform half): the three
-                // platform seams replacing the legacy :feature:player:live
-                // module. The engine factory resolves the shared
-                // NetworkQualifiers.streamingHttpClient; the audio seam wraps
-                // the legacy PlayerAudioLifecycle; the transcode-reasons
-                // renderer delegates to the legacy core:ui formatter.
-                androidPlayerLiveModule(this@JellyPlayApplication),
-
-            )
+            modules(androidKoinModules(this@JellyPlayApplication))
         }
         super.onCreate()
         // The cold-start choreography — (a) the critical-path prewarms

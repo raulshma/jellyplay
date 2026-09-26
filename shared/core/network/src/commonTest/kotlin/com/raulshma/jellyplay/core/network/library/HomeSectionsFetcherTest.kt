@@ -3,6 +3,8 @@
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
@@ -12,6 +14,12 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.SeerrRowFilters
+import com.raulshma.jellyplay.core.model.SeerrRowMedia
+import com.raulshma.jellyplay.core.model.descriptor
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -33,6 +41,20 @@ import kotlin.test.assertTrue
  * throw-when-nothing-rendered error policy, always-fetched pinned rows, and
  * the identity-keyed TTL sub-call cache semantics (hit / force-bypass /
  * memoise / identity-switch miss).
+ *
+ * Also pins the custom discover rows of BOTH sources, which fetch here in one
+ * path since the feature layer's parallel reimplementation died:
+ *  - JELLYFIN rows: per-row memo behind the dice-roll epoch guard (seed /
+ *    stall-guard) and the shared engine's force nuance (a failed forced fetch
+ *    keeps the previous entry serving).
+ *  - SEERR rows: the whole-group TTL gate, last-known-good across a total
+ *    failure (and the gate staying unstamped so the next ordinary fetch
+ *    retries), drop-failed-rows on partial success, force-as-invalidation,
+ *    the WHAT gate (no transport / unavailable connection → zero calls), the
+ *    row limit, and the params built from the row's filters + [today].
+ *  - BOTH: the DISCOVER block emitted ALREADY ordered by row-config index —
+ *    the single ordering authority that used to be the feature layer's
+ *    splice (DiscoverRowSpliceTest's pin, re-homed here with its subject).
  */
 class HomeSectionsFetcherTest {
 
@@ -121,8 +143,38 @@ class HomeSectionsFetcherTest {
 
     private val identityA = CacheIdentity.ofOrNull("server-1", "user-1")
 
-    private fun fetcher(fake: FakeHomeSectionSources, identity: () -> CacheIdentity? = { identityA }) =
-        HomeSectionsFetcher(fake, identity)
+    /** The Seerr-side port double: availability flag, call log, scripted results, captured params. */
+    private class FakeSeerrHomeSectionSources : SeerrHomeSectionSources {
+
+        var available: Boolean = true
+        val calls = mutableListOf<String>()
+        val movieResults = ArrayDeque<Result<SeerrSearchResponse>>()
+        val tvResults = ArrayDeque<Result<SeerrSearchResponse>>()
+        val movieParams = mutableListOf<SeerrDiscoverParams?>()
+        val tvParams = mutableListOf<SeerrDiscoverParams?>()
+
+        override val seerrAvailable: Boolean
+            get() = available
+
+        override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> {
+            calls += "seerr-movies"
+            movieParams += params
+            return movieResults.removeFirstOrNull() ?: Result.success(SeerrSearchResponse())
+        }
+
+        override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> {
+            calls += "seerr-tv"
+            tvParams += params
+            return tvResults.removeFirstOrNull() ?: Result.success(SeerrSearchResponse())
+        }
+    }
+
+    private fun fetcher(
+        fake: FakeHomeSectionSources,
+        identity: () -> CacheIdentity? = { identityA },
+        seerr: FakeSeerrHomeSectionSources? = null,
+        today: () -> String = { "2026-09-25" },
+    ) = HomeSectionsFetcher(fake, seerr, identity, today)
 
     private fun latestRows(result: HomeSectionsResult) =
         result.sections.filter { it.type == HomeSectionType.LATEST_MEDIA }
@@ -465,7 +517,7 @@ class HomeSectionsFetcherTest {
         repeat(3) { fake.latestResults += Result.success(listOf(item("row-$it"))) }
 
         var identity: CacheIdentity? = identityA
-        val f = fetcher(fake) { identity }
+        val f = fetcher(fake, identity = { identity })
         val query = HomeSectionQuery(enabledSections = setOf(HomeSectionType.LATEST_MEDIA))
 
         f.fetch(query)                    // miss under A → fetch 1
@@ -560,5 +612,295 @@ class HomeSectionsFetcherTest {
         val after = f.fetch(query)
         assertEquals(1, fake.calls.count { it.startsWith("discover:") })
         assertEquals(listOf("rolled-1"), discoverRows(after).single().items.map { it.id })
+    }
+
+    @Test
+    fun `a failed forced discover-row fetch keeps the previous entry serving the next plain read`() = runTest {
+        // The shared engine's force nuance at the network call site: force
+        // SKIPS the cache read but does NOT evict, so a failed forced fetch
+        // (this pass drops the row) leaves the previous entry to serve the
+        // next plain read. (core:data's getOrFetch evicts before delegating —
+        // the one force nuance the two consumers deliberately keep apart.)
+        val fake = FakeHomeSectionSources()
+        fake.discoverRowResults += Result.success(listOf(item("good-1")))
+        fake.discoverRowResults += Result.failure(RuntimeException("blip"))
+        val f = fetcher(fake)
+        val row = discoverRow("r1")
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(row),
+        )
+
+        f.fetch(query)                    // good-1 memoised
+        val forced = f.fetch(query, force = true) // bypasses the read, fetch fails → row dropped this pass
+        assertTrue(discoverRows(forced).isEmpty(), "the failed forced pass drops the row")
+
+        val after = f.fetch(query)        // plain read → cache hit, no new port call
+        assertEquals(2, fake.calls.count { it.startsWith("discover:") })
+        assertEquals(
+            listOf("good-1"),
+            discoverRows(after).single().items.map { it.id },
+            "the failed forced fetch must not have evicted the previous entry",
+        )
+    }
+
+    // ── custom SEERR discover rows (moved from the feature layer) ────────────
+
+    private fun seerrRow(
+        id: String,
+        media: SeerrRowMedia,
+        limit: Int = 20,
+        upcomingOnly: Boolean = false,
+    ) = DiscoverRowConfig(
+        id = id,
+        title = "Seerr $id",
+        source = DiscoverRowSource.SEERR,
+        limit = limit,
+        seerrFilters = SeerrRowFilters(media = media, upcomingOnly = upcomingOnly),
+    )
+
+    private fun seerrResponse(vararg ids: Int, mediaType: String = "movie") = Result.success(
+        SeerrSearchResponse(results = ids.map { SeerrSearchItem(id = it, mediaType = mediaType, title = "s$it") }),
+    )
+
+    private fun seerrSections(result: HomeSectionsResult) =
+        result.sections.filter { it.type == HomeSectionType.DISCOVER }
+
+    @Test
+    fun `seerr rows render as discover sections carrying seerr items and the filters' params`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += seerrResponse(1, 2)
+        seerr.tvResults += seerrResponse(7, mediaType = "tv")
+        val f = fetcher(fake, seerr = seerr)
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(
+                seerrRow("m", SeerrRowMedia.MOVIE),
+                seerrRow("t", SeerrRowMedia.TV, upcomingOnly = true),
+            ),
+        )
+
+        val fetched = f.fetch(query)
+
+        assertEquals(listOf("seerr-movies", "seerr-tv"), seerr.calls)
+        assertEquals(0, fake.calls.count { it.startsWith("discover:") }, "no Jellyfin discover call for SEERR rows")
+        val movies = seerrSections(fetched).first { it.id == HomeSectionType.DISCOVER.descriptor.idFor("m") }
+        assertEquals("Seerr m", movies.title)
+        assertTrue(movies.items.isEmpty(), "seerr rows render from seerrItems, not items")
+        assertEquals(listOf(1, 2), movies.seerrItems.map { it.id })
+        // The params are built from the row's filters: the default sort is
+        // POPULARITY for both media kinds (only RELEASE_DATE is per-kind in
+        // SeerrRowSort.apiValueFor), and an upcomingOnly row gets the today
+        // string as its release-date floor.
+        assertEquals("popularity.desc", seerr.movieParams.single()?.sortBy)
+        val tvParams = seerr.tvParams.single()
+        assertEquals("popularity.desc", tvParams?.sortBy)
+        assertEquals("2026-09-25", tvParams?.releaseDateGte, "upcomingOnly floors at the injected today")
+    }
+
+    @Test
+    fun `the row limit caps the seerr items`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += seerrResponse(1, 2, 3, 4, 5)
+        val f = fetcher(fake, seerr = seerr)
+
+        val fetched = f.fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.DISCOVER),
+                discoverRows = listOf(seerrRow("m", SeerrRowMedia.MOVIE, limit = 3)),
+            ),
+        )
+
+        assertEquals(listOf(1, 2, 3), seerrSections(fetched).single().seerrItems.map { it.id })
+    }
+
+    @Test
+    fun `an empty seerr response drops the row`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += Result.success(SeerrSearchResponse()) // empty results
+        val f = fetcher(fake, seerr = seerr)
+
+        val fetched = f.fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.DISCOVER),
+                discoverRows = listOf(seerrRow("m", SeerrRowMedia.MOVIE)),
+            ),
+        )
+
+        assertTrue(seerrSections(fetched).isEmpty())
+        assertEquals(listOf("seerr-movies"), seerr.calls)
+    }
+
+    @Test
+    fun `discover block is emitted in row-config order across both sources`() = runTest {
+        // The pin DiscoverRowSpliceTest used to own at the feature layer: the
+        // user's row-config list position is the single ordering authority
+        // across JELLYFIN and SEERR rows — here enforced by emitting the
+        // block already ordered, so no downstream splice can disagree.
+        val fake = FakeHomeSectionSources()
+        fake.discoverRowResults += Result.success(listOf(item("j-a")))
+        fake.discoverRowResults += Result.success(listOf(item("j-c")))
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += seerrResponse(1)
+        seerr.tvResults += seerrResponse(2, mediaType = "tv")
+        val f = fetcher(fake, seerr = seerr)
+
+        val fetched = f.fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.DISCOVER),
+                discoverRows = listOf(
+                    discoverRow("a"),
+                    seerrRow("b", SeerrRowMedia.MOVIE),
+                    discoverRow("c"),
+                    seerrRow("d", SeerrRowMedia.TV),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf("discover_a", "discover_b", "discover_c", "discover_d"),
+            seerrSections(fetched).map { it.id },
+        )
+    }
+
+    @Test
+    fun `total seerr failure keeps the last-known-good rows and leaves the gate unstamped`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += seerrResponse(1, 2)
+        val f = fetcher(fake, seerr = seerr)
+        val row = seerrRow("m", SeerrRowMedia.MOVIE)
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(row),
+        )
+
+        suspend fun renderedIds() = seerrSections(f.fetch(query)).single().seerrItems.map { it.id }
+        f.fetch(query) // fetch 1: success → rows render, memo + gate stamped
+        assertEquals(1, seerr.calls.size)
+
+        // The outage, on a FORCED fetch (pull-to-refresh): every row fails —
+        // the previous rows must stay on screen instead of blanking, and the
+        // gate must stay UNSTAMPED so the next ordinary fetch retries.
+        seerr.movieResults += Result.failure(RuntimeException("seerr down"))
+        f.fetch(query, force = true) // fetch 2: fan-out fails, last-known-good served
+        assertEquals(2, seerr.calls.size)
+
+        seerr.movieResults += seerrResponse(9)
+        assertEquals(
+            listOf(9),
+            renderedIds(), // fetch 3: ordinary — the unstamped gate retried the rows
+            "a total failure must not pin the blank for the TTL: the next ordinary fetch retries",
+        )
+        assertEquals(3, seerr.calls.size)
+    }
+
+    @Test
+    fun `partial seerr failure keeps the successes, drops the failed row, and stamps fresh`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += seerrResponse(1)
+        seerr.tvResults += Result.failure(RuntimeException("tv endpoint down"))
+        val f = fetcher(fake, seerr = seerr)
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(
+                seerrRow("m", SeerrRowMedia.MOVIE),
+                seerrRow("t", SeerrRowMedia.TV),
+            ),
+        )
+
+        val first = f.fetch(query)
+        assertEquals(listOf("discover_m"), seerrSections(first).map { it.id }, "the failed TV row drops")
+
+        // Refetch with the same partial failure: the successes land and the
+        // gate stamps fresh — the next ORDINARY fetch serves the memo instead
+        // of re-fanning-out (a total failure would have retried).
+        seerr.movieResults += seerrResponse(1)
+        seerr.tvResults += Result.failure(RuntimeException("tv endpoint down"))
+        f.fetch(query, force = true)
+        assertEquals(2, seerr.calls.count { it == "seerr-movies" })
+        assertEquals(2, seerr.calls.count { it == "seerr-tv" }, "the failed row retried on the forced pass")
+
+        f.fetch(query)
+        assertEquals(2, seerr.calls.count { it == "seerr-movies" }, "the stamped gate serves the next ordinary fetch")
+    }
+
+    @Test
+    fun `back-to-back fetches serve the seerr rows from the group memo`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += seerrResponse(1, 2)
+        val f = fetcher(fake, seerr = seerr)
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(seerrRow("m", SeerrRowMedia.MOVIE)),
+        )
+
+        val first = f.fetch(query)
+        val second = f.fetch(query)
+
+        assertEquals(1, seerr.calls.size, "the whole-group TTL gate spares the Seerr round-trips")
+        assertEquals(
+            seerrSections(first).single().seerrItems.map { it.id },
+            seerrSections(second).single().seerrItems.map { it.id },
+        )
+    }
+
+    @Test
+    fun `no seerr transport or an unavailable connection makes zero seerr calls and emits zero rows`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(seerrRow("m", SeerrRowMedia.MOVIE)),
+        )
+
+        // No transport wired (platforms / fakes without one).
+        val without = fetcher(fake).fetch(query)
+        assertTrue(seerrSections(without).isEmpty())
+
+        // Transport wired but the WHAT gate says unavailable (disabled or not
+        // configured) — the feature's early return, moved beside the port.
+        val seerr = FakeSeerrHomeSectionSources().apply { available = false }
+        val gated = fetcher(fake, seerr = seerr).fetch(query)
+        assertTrue(seerrSections(gated).isEmpty())
+        assertTrue(seerr.calls.isEmpty(), "the gate must skip the fan-out with no port calls")
+    }
+
+    @Test
+    fun `removing every seerr row clears the last-known-good memo`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val seerr = FakeSeerrHomeSectionSources()
+        seerr.movieResults += seerrResponse(1)
+        fake.discoverRowResults += Result.success(listOf(item("j-1")))
+        val f = fetcher(fake, seerr = seerr)
+        val row = seerrRow("m", SeerrRowMedia.MOVIE)
+
+        f.fetch(
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.DISCOVER), discoverRows = listOf(row)),
+        ) // memo populated, gate stamped
+
+        // The user's last SEERR row goes away (a JELLYFIN row keeps the
+        // discover block alive): the memo must not outlive the configuration
+        // that produced it.
+        f.fetch(
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.DISCOVER), discoverRows = listOf(discoverRow("j"))),
+        )
+
+        // The Seerr row is re-enabled inside the TTL window: a stale memo
+        // would resurrect the pre-disable rows here for free (the group gate
+        // is still fresh, zero port calls); cleared, the row stays gone until
+        // the next real fetch.
+        val revived = f.fetch(
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.DISCOVER), discoverRows = listOf(row)),
+        )
+        assertTrue(
+            seerrSections(revived).none { it.id == HomeSectionType.DISCOVER.descriptor.idFor("m") },
+            "a re-enabled row must not resurrect the pre-disable memo",
+        )
+        assertEquals(1, seerr.calls.size, "the fresh gate still spares the round-trips")
     }
 }

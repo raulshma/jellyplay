@@ -1,6 +1,12 @@
 package com.raulshma.jellyplay.core.network.di
 
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
+import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.LrcLibApi
@@ -44,6 +50,7 @@ import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import com.raulshma.jellyplay.core.network.failover.ServerFailoverInterceptor
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
+import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import com.raulshma.jellyplay.core.network.interceptor.RandomSortCacheBusterInterceptor
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
@@ -116,7 +123,14 @@ val networkJvmModule: Module = module {
 
     single { AuthApiClientImpl(get(), get()) }
     single<AuthApiClient> { get<AuthApiClientImpl>() }
-    single { LibraryApiClientImpl(get(), get()) }
+    // The get()-resolved TimeSource single is dataJvmModule's SystemTimeSource
+    // (D3: the seam moved to core:model precisely so this module below
+    // core:data could adopt it; Koin resolves it from the merged graph).
+    // The 4th arg is the Seerr discover-row leaf source for the home fetcher
+    // (SeerrHomeSectionSourcesImpl below — session-aware, built here because
+    // only this module's jvmShared sees both the Seerr transport and the
+    // datastore-layer session stores).
+    single { LibraryApiClientImpl(get(), get(), get(), SeerrHomeSectionSourcesImpl(get(), get(), get())) }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
     single { PlaybackApiClientImpl(get(), get(), get()) }
     single<PlaybackApiClient> { get<PlaybackApiClientImpl>() }
@@ -130,7 +144,7 @@ val networkJvmModule: Module = module {
     single<UserApiClient> { get<UserApiClientImpl>() }
     single { MetadataApiClientImpl(get()) }
     single<MetadataApiClient> { get<MetadataApiClientImpl>() }
-    single { MediaInfoApiClientImpl(get()) }
+    single { MediaInfoApiClientImpl(get(), get()) }
     single<MediaInfoApiClient> { get<MediaInfoApiClientImpl>() }
     single { PluginApiClientImpl(get()) }
     single<PluginApiClient> { get<PluginApiClientImpl>() }
@@ -200,6 +214,70 @@ internal fun <T> memoizingLazy(provider: () -> T): LazyProvider<T> {
     val memoized = lazy(provider)
     return LazyProvider { memoized.value }
 }
+
+/**
+ * The session-aware transport satisfying [SeerrHomeSectionSources] for the
+ * home fetcher's SEERR discover rows: resolves the Seerr connection the way
+ * `SeerrRepositoryImpl`'s private `withSeerrSession` ladder does (server URL
+ * + credentials from the datastore-layer stores, both visible to this
+ * module's jvmShared) and backfills the mediaType the feature layer's
+ * repository hop used to backfill — the cards key on it, so dropping the hop
+ * must not drop the fill. Declared here — the Koin construction owner —
+ * because it is pure wiring-shaped glue between two singles; the row policy
+ * (params, TTL, last-known-good) stays in the fetcher.
+ */
+private class SeerrHomeSectionSourcesImpl(
+    private val client: SeerrApiClient,
+    private val preferences: SeerrPreferencesStore,
+    private val credentials: SeerrSecureCredentialsStore,
+) : SeerrHomeSectionSources {
+
+    override val seerrAvailable: Boolean
+        get() {
+            val prefs = preferences.preferences.value
+            if (!prefs.enabled || prefs.serverUrl.isBlank()) return false
+            return when (prefs.authMethod) {
+                SeerrAuthMethod.API_KEY -> credentials.getApiKey().isNotBlank()
+                SeerrAuthMethod.JELLYFIN,
+                SeerrAuthMethod.LOCAL,
+                -> credentials.getSessionCookie().isNotBlank()
+            }
+        }
+
+    override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> =
+        withSession { url, creds ->
+            client.getDiscoverMovies(url, creds, params = params).map { it.backfillMediaType("movie") }
+        }
+
+    override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> =
+        withSession { url, creds ->
+            client.getDiscoverTv(url, creds, params = params).map { it.backfillMediaType("tv") }
+        }
+
+    /** The one canonical not-configured failure, same message the repository's session guard reports. */
+    private inline fun <T> withSession(
+        block: (url: String, credentials: SeerrCredentials) -> Result<T>,
+    ): Result<T> {
+        val prefs = preferences.preferences.value
+        val url = prefs.serverUrl.ifBlank { return Result.failure(IllegalStateException("Seerr not configured")) }
+        val creds = when (prefs.authMethod) {
+            SeerrAuthMethod.API_KEY ->
+                SeerrCredentials.ApiKey(credentials.getApiKey()).takeIf { it.apiKey.isNotBlank() }
+            SeerrAuthMethod.JELLYFIN,
+            SeerrAuthMethod.LOCAL,
+            -> SeerrCredentials.SessionCookie(credentials.getSessionCookie()).takeIf { it.cookie.isNotBlank() }
+        } ?: return Result.failure(IllegalStateException("Seerr not configured"))
+        return block(url, creds)
+    }
+}
+
+/** Ports `SeerrRepositoryImpl.backfillMediaType` (kept private there): blank mediaTypes become [mediaType]. */
+private fun SeerrSearchResponse.backfillMediaType(mediaType: String): SeerrSearchResponse =
+    copy(
+        results = results.map { item ->
+            if (item.mediaType.isBlank()) item.copy(mediaType = mediaType) else item
+        },
+    )
 
 // Hoisted so the pattern compiles once at class load rather than on each
 // OkHttp client construction (low impact since the provider is a singleton,

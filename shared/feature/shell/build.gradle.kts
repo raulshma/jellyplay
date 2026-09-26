@@ -33,6 +33,14 @@ kotlin {
             // module except the two shells.
             implementation(project(":shared:feature:home"))
             implementation(project(":shared:feature:library"))
+            // The photo suite (PhotoAlbum/PhotoViewer screens + VMs, the
+            // PhotoExport seam) extracted out of library. api, not
+            // implementation: SharedFeatureModules/appSections below consume
+            // photos symbols, and the two shells' extracted startKoin lists
+            // (AndroidKoinModules.kt / DesktopKoinModules.kt) import photos'
+            // platform export modules directly — neither app declares its own
+            // photos edge, they resolve the module through this aggregator.
+            api(project(":shared:feature:photos"))
             implementation(project(":shared:feature:search"))
             implementation(project(":shared:feature:livetv"))
             implementation(project(":shared:feature:details"))

@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.core.network.di
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
+import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
@@ -49,7 +51,14 @@ class NetworkKoinModulesTest {
         val configDir = createTempDirectory("jellyplay-network-test-config").toString().toPath()
         val app = startKoin {
             modules(
-                module { single<OkHttpConfigProvider> { testConfigProvider } },
+                module {
+                    single<OkHttpConfigProvider> { testConfigProvider }
+                    // D3: Library/MediaInfoApiClientImpl read the clock seam;
+                    // the app graph supplies dataJvmModule's SystemTimeSource
+                    // single — this lane loads only the network family, so the
+                    // stub stands in for it.
+                    single<TimeSource> { SystemTimeSource() }
+                },
                 datastoreCommonModule,
                 desktopDatastoreModule(dataDir),
                 networkJvmModule,

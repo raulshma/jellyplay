@@ -122,7 +122,7 @@ fun LivePlayerScreen(
     LaunchedEffect(channelId) {
         if (tunedChannelId != null && tunedChannelId != channelId) viewModel.stop()
         tunedChannelId = channelId
-        viewModel.initialize(channelId, audioStreamIndex, subtitleStreamIndex)
+        viewModel.onEvent(LiveTvPlayerUiEvent.Initialize(channelId, audioStreamIndex, subtitleStreamIndex))
     }
 
     // Release the engine when the screen leaves composition — not just on
@@ -194,7 +194,7 @@ fun LivePlayerScreen(
     // correct while hidden via the engine's playback-state listener.
     LaunchedEffect(state.isPlaying, overlayVisible) {
         liveWindowRefreshLoop(active = { state.isPlaying && overlayVisible }) {
-            viewModel.refreshPosition()
+            viewModel.onEvent(LiveTvPlayerUiEvent.RefreshPosition)
         }
     }
 
@@ -252,7 +252,7 @@ fun LivePlayerScreen(
                     onUp = { key ->
                         if (activeSheet != null) return@onDpadKeyEvent false
                         if (key.isKeyUp) {
-                            viewModel.channelUp(audioStreamIndex, subtitleStreamIndex)
+                            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelUp(audioStreamIndex, subtitleStreamIndex))
                             overlayVisible = false
                             true
                         } else false
@@ -260,7 +260,7 @@ fun LivePlayerScreen(
                     onDown = { key ->
                         if (activeSheet != null) return@onDpadKeyEvent false
                         if (key.isKeyUp) {
-                            viewModel.channelDown(audioStreamIndex, subtitleStreamIndex)
+                            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelDown(audioStreamIndex, subtitleStreamIndex))
                             overlayVisible = false
                             true
                         } else false
@@ -340,7 +340,7 @@ fun LivePlayerScreen(
                         } ?: false,
                         canRecord = currentProgram != null,
                         onBack = onBack,
-                        onMute = viewModel::toggleMute,
+                        onMute = { viewModel.onEvent(LiveTvPlayerUiEvent.ToggleMute) },
                         onRecord = { activeSheet = LiveSheet.Record },
                     )
                 }
@@ -366,20 +366,20 @@ fun LivePlayerScreen(
                     isAtLiveEdge = state.isAtLiveEdge,
                     positionMs = positionMs,
                     durationMs = durationMs,
-                    onPlayPause = viewModel::togglePlayPause,
+                    onPlayPause = { viewModel.onEvent(LiveTvPlayerUiEvent.TogglePlayPause) },
                     onSeekBack = {
-                        viewModel.seekWithinDvr((positionMs - 10_000L).coerceAtLeast(0L))
+                        viewModel.onEvent(LiveTvPlayerUiEvent.SeekWithinDvr((positionMs - 10_000L).coerceAtLeast(0L)))
                     },
                     onSeekForward = {
-                        viewModel.seekWithinDvr(positionMs + 10_000L)
+                        viewModel.onEvent(LiveTvPlayerUiEvent.SeekWithinDvr(positionMs + 10_000L))
                     },
-                    onPlayFromStart = viewModel::playFromStart,
-                    onChannelUp = { viewModel.channelUp(audioStreamIndex, subtitleStreamIndex) },
-                    onChannelDown = { viewModel.channelDown(audioStreamIndex, subtitleStreamIndex) },
+                    onPlayFromStart = { viewModel.onEvent(LiveTvPlayerUiEvent.PlayFromStart) },
+                    onChannelUp = { viewModel.onEvent(LiveTvPlayerUiEvent.ChannelUp(audioStreamIndex, subtitleStreamIndex)) },
+                    onChannelDown = { viewModel.onEvent(LiveTvPlayerUiEvent.ChannelDown(audioStreamIndex, subtitleStreamIndex)) },
                     onMore = { activeSheet = LiveSheet.StreamOption },
                     onChannels = { activeSheet = LiveSheet.Channels },
-                    onSeek = viewModel::seekWithinDvr,
-                    onSeekToLiveEdge = viewModel::seekToLiveEdge,
+                    onSeek = { viewModel.onEvent(LiveTvPlayerUiEvent.SeekWithinDvr(it)) },
+                    onSeekToLiveEdge = { viewModel.onEvent(LiveTvPlayerUiEvent.SeekToLiveEdge) },
                 )
             }
 
@@ -411,27 +411,27 @@ fun LivePlayerScreen(
                         lastChannelId = state.lastChannelId,
                         logoUrlFor = viewModel::logoUrlFor,
                         onChannelSelected = { id ->
-                            viewModel.selectChannelById(id)
+                            viewModel.onEvent(LiveTvPlayerUiEvent.SelectChannelById(id))
                             overlayVisible = false
                         },
-                        onToggleFavorite = viewModel::toggleFavorite,
+                        onToggleFavorite = { viewModel.onEvent(LiveTvPlayerUiEvent.ToggleFavorite(it)) },
                         onDismiss = { activeSheet = null },
                     )
                 }
                 LiveSheet.StreamOption -> {
                     LiveStreamOptionSheet(
                         currentOption = state.liveStreamOption,
-                        onSelect = { viewModel.setLiveStreamOption(it) },
+                        onSelect = { viewModel.onEvent(LiveTvPlayerUiEvent.SetLiveStreamOption(it)) },
                         onDismiss = { activeSheet = null },
                     )
                 }
                 LiveSheet.Record -> {
                     LiveRecordSheet(
                         program = state.currentProgram,
-                        onRecordOnce = viewModel::recordCurrentProgramOnce,
-                        onRecordSeries = viewModel::recordCurrentProgramSeries,
-                        onCancelTimer = viewModel::cancelCurrentProgramTimer,
-                        onCancelSeries = viewModel::cancelCurrentProgramSeries,
+                        onRecordOnce = { viewModel.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce) },
+                        onRecordSeries = { viewModel.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramSeries) },
+                        onCancelTimer = { viewModel.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramTimer) },
+                        onCancelSeries = { viewModel.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramSeries) },
                         onDismiss = { activeSheet = null },
                     )
                 }
@@ -445,8 +445,8 @@ fun LivePlayerScreen(
                     errorMessage = errorMessageText,
                     errorDetail = state.errorDetail,
                     currentOption = state.liveStreamOption,
-                    onRetry = { viewModel.retry(audioStreamIndex, subtitleStreamIndex) },
-                    onRetryWithOption = { viewModel.setLiveStreamOption(it) },
+                    onRetry = { viewModel.onEvent(LiveTvPlayerUiEvent.Retry(audioStreamIndex, subtitleStreamIndex)) },
+                    onRetryWithOption = { viewModel.onEvent(LiveTvPlayerUiEvent.SetLiveStreamOption(it)) },
                     onBack = onBack,
                     retryFocusRequester = errorRetryFocusRequester,
                 )

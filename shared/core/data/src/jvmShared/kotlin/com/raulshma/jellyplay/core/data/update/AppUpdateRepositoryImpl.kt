@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.core.data.update
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
+import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
 import com.raulshma.jellyplay.core.network.github.GitHubRepoAllowList
@@ -40,6 +42,14 @@ class AppUpdateRepositoryImpl(
     private val currentVersionName: () -> String,
     private val flavor: String,
     private val supportedAbis: Array<String>,
+    /**
+     * Clock seam (D3) for the progress-report throttle and the sidecar's
+     * downloadedAt stamp — same reads as the bare System.currentTimeMillis()
+     * before. DEFAULTED because apps/desktop's DesktopAppUpdate constructs
+     * this impl manually outside Koin (out of D3's touch set); the Koin
+     * modules pass the shared single explicitly.
+     */
+    private val timeSource: TimeSource = SystemTimeSource(),
 ) : AppUpdateRepository {
 
     private val json = Json {
@@ -137,7 +147,7 @@ class AppUpdateRepositoryImpl(
                                 downloaded += bytesRead
                                 // Throttle progress callbacks to avoid flooding the
                                 // main thread through the collector.
-                                val now = System.currentTimeMillis()
+                                val now = timeSource.nowEpochMillis()
                                 if (now - lastReport >= PROGRESS_INTERVAL_MS) {
                                     lastReport = now
                                     val fraction = if (total > 0) downloaded.toFloat() / total else 0f
@@ -253,7 +263,7 @@ class AppUpdateRepositoryImpl(
             downloadUrl = info.downloadAssetUrl,
             assetName = info.downloadAssetName,
             releaseSize = info.releaseSize,
-            downloadedAtMs = System.currentTimeMillis(),
+            downloadedAtMs = timeSource.nowEpochMillis(),
         )
         val target = File(updatesDir, META_NAME)
         val tmp = File(updatesDir, "$META_NAME.tmp")

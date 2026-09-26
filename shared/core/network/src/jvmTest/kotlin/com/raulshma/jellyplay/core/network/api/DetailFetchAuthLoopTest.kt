@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
@@ -99,7 +100,7 @@ class DetailFetchAuthLoopTest {
         ))
         engine.updateUser(userInfo())
 
-        val client = LibraryApiClientImpl(engine, mockk<LyricsApi>(relaxed = true))
+        val client = LibraryApiClientImpl(engine, mockk<LyricsApi>(relaxed = true), SystemTimeSource())
         val result = client.getMediaDetail(itemId.toString())
 
         assertTrue(result.isSuccess, "detail fetch failed: ${result.exceptionOrNull()}")
@@ -126,7 +127,7 @@ class DetailFetchAuthLoopTest {
         ))
         engine.updateUser(userInfo())
 
-        val client = LibraryApiClientImpl(engine, mockk<LyricsApi>(relaxed = true))
+        val client = LibraryApiClientImpl(engine, mockk<LyricsApi>(relaxed = true), SystemTimeSource())
         val result = client.getMediaDetail(itemId.toString())
 
         val error = result.exceptionOrNull()

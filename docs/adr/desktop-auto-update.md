@@ -127,10 +127,9 @@ lane publishes `prerelease: true`); installers attached as
 kmp-release.yml naming). Unit tests pin the classification, suppression, and
 link-picking decisions (`apps/desktop/src/test/.../update/DesktopAppUpdateTest.kt`).
 
-## Implementation (2026-09-22, update-security hardening — v0.11.1)
+## Implementation update-security hardening
 
-The update gates (design: `scratch/mpv-shim-implementation-plan.md`)
-close the gap the 2026-09-12 phase left: every URL the feed controls is now
+The update gates close the gap the left: every URL the feed controls is now
 verified against a compiled-in allow-list before it can drive anything.
 
 - `GitHubRepoAllowList` (`core/network/github/`, jvmShared) pins the owner +

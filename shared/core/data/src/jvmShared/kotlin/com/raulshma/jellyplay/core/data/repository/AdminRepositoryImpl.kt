@@ -14,16 +14,35 @@ import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.UserEditorContext
 import com.raulshma.jellyplay.core.model.UsersOverview
 import com.raulshma.jellyplay.core.model.buildUserImageUrl
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * D5 ctor narrowed to the family singles the members actually call — the
+ * injected [JellyfinApiClient] union was a pure delegation over those same
+ * singles, so every forward here paid two extra hops
+ * (feature → AdminRepository → union → family single) for nothing:
+ *  - [AdminApiClient]: system/tasks/devices/sessions/logs/dashboard telemetry;
+ *  - [UserApiClient]: managed users, current user, parental ratings, and the
+ *    user-editor's library folders;
+ *  - [LiveTvApiClient]: the users-detail auxiliary channels tab;
+ *  - [LibraryApiClient]: tags (the editor's tag picker).
+ * The union's other injectors are unchanged — [JellyfinApiClient] itself keeps
+ * its composition and its remaining consumers.
+ */
 class AdminRepositoryImpl constructor(
-    private val apiClient: JellyfinApiClient,
+    private val adminApiClient: AdminApiClient,
+    private val userApiClient: UserApiClient,
+    private val liveTvApiClient: LiveTvApiClient,
+    private val libraryApiClient: LibraryApiClient,
     private val engine: JellyfinApiEngine,
     private val realtimeTasks: ScheduledTasksRealtimeChannel,
     private val activityLogRealtimeChannel: ActivityLogRealtimeChannel,
@@ -38,7 +57,7 @@ class AdminRepositoryImpl constructor(
     override val libraryScanTask: Flow<ScheduledTaskInfo?>
         get() = realtimeTasks.scanLibraryTask
 
-    override suspend fun getSystemInfo(): Result<SystemInfo> = apiClient.getSystemInfo()
+    override suspend fun getSystemInfo(): Result<SystemInfo> = adminApiClient.getSystemInfo()
 
     override fun getUserImageUrl(userId: String, tag: String?, maxWidth: Int): String =
         buildUserImageUrl(
@@ -55,8 +74,8 @@ class AdminRepositoryImpl constructor(
 
     override suspend fun getUsersOverview(): Result<UsersOverview> = coroutineScope {
         // Independent round-trips — run concurrently (sum → max latency).
-        val usersDeferred = async { apiClient.getManagedUsers() }
-        val meDeferred = async { apiClient.getCurrentUserId() }
+        val usersDeferred = async { userApiClient.getManagedUsers() }
+        val meDeferred = async { userApiClient.getCurrentUserId() }
         usersDeferred.await().map { users ->
             UsersOverview(
                 users = users,
@@ -67,17 +86,17 @@ class AdminRepositoryImpl constructor(
     }
 
     override suspend fun createUser(name: String, password: String?): Result<ManagedUser> =
-        apiClient.createUser(name, password)
+        userApiClient.createUser(name, password)
 
     override suspend fun deleteUser(userId: String): Result<Unit> =
-        apiClient.deleteUser(userId)
+        userApiClient.deleteUser(userId)
 
     override suspend fun getUserEditorContext(userId: String): Result<UserEditorContext> = coroutineScope {
         // All four round-trips are independent — run concurrently.
-        val userDeferred = async { apiClient.getManagedUser(userId) }
-        val libsDeferred = async { apiClient.getLibraryFoldersForEditor() }
-        val meDeferred = async { apiClient.getCurrentUserId() }
-        val allUsersDeferred = async { apiClient.getManagedUsers() }
+        val userDeferred = async { userApiClient.getManagedUser(userId) }
+        val libsDeferred = async { userApiClient.getLibraryFoldersForEditor() }
+        val meDeferred = async { userApiClient.getCurrentUserId() }
+        val allUsersDeferred = async { userApiClient.getManagedUsers() }
         userDeferred.await().map { user ->
             UserEditorContext(
                 user = user,
@@ -89,52 +108,52 @@ class AdminRepositoryImpl constructor(
     }
 
     override suspend fun getManagedUser(userId: String): Result<ManagedUser> =
-        apiClient.getManagedUser(userId)
+        userApiClient.getManagedUser(userId)
 
     override suspend fun renameUser(userId: String, newName: String): Result<ManagedUser> =
-        apiClient.renameUser(userId, newName)
+        userApiClient.renameUser(userId, newName)
 
     override suspend fun updateUserPolicy(userId: String, policy: ManagedUserPolicy): Result<Unit> =
-        apiClient.updateUserPolicy(userId, policy)
+        userApiClient.updateUserPolicy(userId, policy)
 
     override suspend fun updateUserPassword(userId: String, newPassword: String?): Result<Unit> =
-        apiClient.updateUserPassword(userId, newPassword)
+        userApiClient.updateUserPassword(userId, newPassword)
 
     override suspend fun getDevices(): Result<List<DeviceInfo>> =
-        apiClient.getDevices()
+        adminApiClient.getDevices()
 
     override suspend fun getLiveTvChannels(limit: Int): Result<List<LiveTvChannel>> =
-        apiClient.getLiveTvChannels(limit = limit)
+        liveTvApiClient.getLiveTvChannels(limit = limit)
 
     override suspend fun getParentalRatings(): Result<List<ParentalRatingOption>> =
-        apiClient.getParentalRatings()
+        userApiClient.getParentalRatings()
 
     override suspend fun getTags(limit: Int): Result<List<String>> =
-        apiClient.getTags(limit = limit)
+        libraryApiClient.getTags(limit = limit)
 
     override suspend fun renameDevice(deviceId: String, customName: String?): Result<Unit> =
-        apiClient.updateDeviceOptions(deviceId, customName)
+        adminApiClient.updateDeviceOptions(deviceId, customName)
 
     override suspend fun deleteDevice(deviceId: String): Result<Unit> =
-        apiClient.deleteDevice(deviceId)
+        adminApiClient.deleteDevice(deviceId)
 
     override suspend fun getScheduledTasks(isHidden: Boolean?): Result<List<ScheduledTaskInfo>> =
-        apiClient.getScheduledTasks(isHidden = isHidden)
+        adminApiClient.getScheduledTasks(isHidden = isHidden)
 
     override suspend fun startTask(taskId: String): Result<Unit> =
-        apiClient.startTask(taskId)
+        adminApiClient.startTask(taskId)
 
     override suspend fun cancelTask(taskId: String): Result<Unit> =
-        apiClient.cancelTask(taskId)
+        adminApiClient.cancelTask(taskId)
 
     override suspend fun getDashboardSummary(): Result<AdminDashboardSummary> = coroutineScope {
         // Each endpoint degrades independently: telemetry fields to null,
         // list fields to empty — a single failing card never blanks the screen.
-        val sysInfoDeferred = async { apiClient.getSystemInfo().getOrNull() }
-        val countsDeferred = async { apiClient.getItemCounts().getOrNull() }
-        val sessionsDeferred = async { apiClient.getSessions().getOrNull() }
-        val activityDeferred = async { apiClient.getActivityLogEntries(limit = 10).getOrNull() }
-        val tasksDeferred = async { apiClient.getScheduledTasks().getOrNull() }
+        val sysInfoDeferred = async { adminApiClient.getSystemInfo().getOrNull() }
+        val countsDeferred = async { adminApiClient.getItemCounts().getOrNull() }
+        val sessionsDeferred = async { adminApiClient.getSessions().getOrNull() }
+        val activityDeferred = async { adminApiClient.getActivityLogEntries(limit = 10).getOrNull() }
+        val tasksDeferred = async { adminApiClient.getScheduledTasks().getOrNull() }
 
         Result.success(
             AdminDashboardSummary(
@@ -147,37 +166,37 @@ class AdminRepositoryImpl constructor(
         )
     }
 
-    override suspend fun restartServer(): Result<Unit> = apiClient.restartServer()
+    override suspend fun restartServer(): Result<Unit> = adminApiClient.restartServer()
 
-    override suspend fun shutdownServer(): Result<Unit> = apiClient.shutdownServer()
+    override suspend fun shutdownServer(): Result<Unit> = adminApiClient.shutdownServer()
 
     override suspend fun stopSession(sessionId: String): Result<Unit> =
-        apiClient.stopSession(sessionId)
+        adminApiClient.stopSession(sessionId)
 
     override suspend fun startLibraryScan(): Result<Unit> {
-        val tasks = apiClient.getScheduledTasks().getOrNull().orEmpty()
+        val tasks = adminApiClient.getScheduledTasks().getOrNull().orEmpty()
         val taskId = tasks.firstOrNull { it.key == KEY_SCAN_LIBRARY }?.id
             ?: tasks.firstOrNull { it.name.equals(NAME_SCAN_LIBRARY, ignoreCase = true) }?.id
         return if (taskId != null) {
-            apiClient.startTask(taskId)
+            adminApiClient.startTask(taskId)
         } else {
             // No exposed task — fall back to the library refresh endpoint (no progress).
-            apiClient.scanLibrary()
+            adminApiClient.scanLibrary()
         }
     }
 
-    override suspend fun getSessions(): Result<List<SessionInfo>> = apiClient.getSessions()
+    override suspend fun getSessions(): Result<List<SessionInfo>> = adminApiClient.getSessions()
 
     override suspend fun sendMessageToSession(sessionId: String, header: String, text: String): Result<Unit> =
-        apiClient.sendMessageToSession(sessionId, header, text)
+        adminApiClient.sendMessageToSession(sessionId, header, text)
 
-    override suspend fun getLogFiles(): Result<List<LogFile>> = apiClient.getLogFiles()
+    override suspend fun getLogFiles(): Result<List<LogFile>> = adminApiClient.getLogFiles()
 
     override suspend fun getLogFileContent(fileName: String): Result<String> =
-        apiClient.getLogFileContent(fileName)
+        adminApiClient.getLogFileContent(fileName)
 
     override suspend fun getActivityLogEntries(startIndex: Int?, limit: Int?): Result<List<ActivityLogEntry>> =
-        apiClient.getActivityLogEntries(startIndex = startIndex, limit = limit)
+        adminApiClient.getActivityLogEntries(startIndex = startIndex, limit = limit)
 
     override fun liveActivityEntries(knownIds: Set<Long>): Flow<ActivityLogEntry> =
         activityLogRealtimeChannel.entries(knownIds)

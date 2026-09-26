@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import io.mockk.mockk
@@ -56,7 +57,7 @@ class LibraryApiClientImplTest {
         engine.updateServer(testServer)
         engine.updateUser(testUser)
 
-        client = LibraryApiClientImpl(engine, mockk(relaxed = true))
+        client = LibraryApiClientImpl(engine, mockk(relaxed = true), SystemTimeSource())
     }
 
     private val favoriteItemId = FAVORITE_ITEM_ID

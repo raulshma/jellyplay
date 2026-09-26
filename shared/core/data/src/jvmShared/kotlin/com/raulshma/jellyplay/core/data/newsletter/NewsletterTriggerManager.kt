@@ -1,20 +1,24 @@
 package com.raulshma.jellyplay.core.data.newsletter
 
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
+import com.raulshma.jellyplay.core.model.TimeSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
-import java.time.LocalDate
 import java.time.ZoneId
 
 class NewsletterTriggerManager(
     private val notificationStore: NotificationStore,
+    /** Clock seam for the weekly-digest `today` read (D3): same read, fakes pin it. */
+    private val timeSource: TimeSource,
 ) {
     fun shouldShowBanner(): Flow<Boolean> = notificationStore.notification.map { prefs ->
         if (!prefs.newsletterEnabled) return@map false
 
         val configuredDay = dayOfWeekFromPref(prefs.newsletterDayOfWeek)
-        val today = LocalDate.now()
+        // LocalDate.now() before D3; the system impl of today(zone) is the
+        // identical read.
+        val today = timeSource.today(ZoneId.systemDefault())
         val todayDow = today.dayOfWeek
 
         // The configured weekday is the *primary* trigger, but if the user never

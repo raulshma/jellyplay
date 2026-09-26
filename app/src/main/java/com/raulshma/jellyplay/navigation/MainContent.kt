@@ -66,13 +66,11 @@ import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
+import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerHost
 import com.raulshma.jellyplay.navigation.playbackhost.HostDecision
 import com.raulshma.jellyplay.navigation.playbackhost.PlaybackHostRouter
-import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.ShellInfra
-import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
-import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.launch
 
 @Composable
@@ -82,9 +80,6 @@ internal fun MainContent(
     preferences: MainPreferences,
     infra: ShellInfra,
     audioPlaybackManager: AudioPlaybackManager,
-    sessionCoordinator: SessionCoordinator,
-    updateCoordinator: UpdateCoordinator,
-    syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
 ) {
     val homeMode = preferences.homeMode
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
@@ -238,7 +233,7 @@ internal fun MainContent(
     }
 
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
-    val libraryFolders by sessionCoordinator.libraryFolders.collectAsStateWithLifecycle()
+    val libraryFolders by infra.sessionCoordinatorLazy.value.libraryFolders.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
     val showMiniPlayer by remember {
         derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
@@ -299,8 +294,11 @@ internal fun MainContent(
     // while no player is on top of any back stack → open the video player.
     // When a player IS already open, its SyncPlayBridge drives the item load
     // in place — the player-open guard lives in the collector's pure fold.
-    LaunchedEffect(syncPlayOpenCoordinator) {
-        navRequests.collectSyncPlayOpens(syncPlayOpenCoordinator.openRequests)
+    // The coordinator rides the infra bundle (lazy like its five peers;
+    // resolved inside the effect body for the same post-frame reason as the
+    // bridge above).
+    LaunchedEffect(infra.syncPlayOpenCoordinatorLazy) {
+        navRequests.collectSyncPlayOpens(infra.syncPlayOpenCoordinatorLazy.value.openRequests)
     }
 
     // Remote-control "now playing" snackbar; the title fallback + template
@@ -345,35 +343,35 @@ internal fun MainContent(
         if (previewBlur > 0.5f) Modifier.blur(previewBlur.dp) else Modifier
 
     // Single root collector pair for app-wide one-shot messages, behind the
-    // shared UserMessageHost seam: the merge→resolve→present choreography
-    // (serial presentation, queue-not-drop, exactly-once, per-source order)
-    // lives in feature/shell; the shell-side adaptation (the TV-Toast vs
-    // phone-Snackbar present fork and the legacy bus's severity projection)
-    // is constructed by shellUserMessageHost/legacySeverityOf in
-    // NavRequestCollector.kt. The host is rebuilt on isTv and both
-    // collectors key on (bus, isTv), so a TV/phone flip restarts collection
-    // exactly as the former hand-copied collectors did.
-    val userMessageHost = remember(isTv) {
-        shellUserMessageHost(context = context, isTv = isTv, snackbarHostState = snackbarHostState)
-    }
+    // shared rememberShellUserMessages seam: host construction and the
+    // collector effects live in feature/shell now; this shell supplies only
+    // the surface fork (the TV-Toast vs phone-Snackbar adapter, built by
+    // shellUserMessagePresent in NavRequestCollector.kt) and, for the legacy
+    // bus, the severity/resolver projection. Collection lives with this
+    // composition and restarts only if a bus instance is swapped; a TV/phone
+    // flip re-arms the surface adapter in place instead of cancelling and
+    // relaunching the collectors (the former (bus, isTv) keys — the
+    // deliberate delta documented on the seam).
+    val presentUserMessage = shellUserMessagePresent(
+        context = context,
+        isTv = isTv,
+        snackbarHostState = snackbarHostState,
+    )
 
     // Legacy (:core:ui feedback) bus — its Android payload type stays outside
-    // the seam via hostAdapted: the severity projection (legacySeverityOf)
-    // and the legacy UiText.resolve(context) resolution are supplied here,
-    // not the shared compose-resources resolver.
-    androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
-        userMessageHost.hostAdapted(
-            sources = listOf(userMessageBus.messages),
-            severityOf = ::legacySeverityOf,
-            resolveText = { message -> message.text.resolve(context) },
-        )
-    }
+    // the seam via the adapted overload: the severity projection
+    // (legacySeverityOf) and the legacy UiText.resolve(context) resolution are
+    // supplied here, not the shared compose-resources resolver.
+    rememberShellUserMessages(
+        presentUserMessage,
+        userMessageBus.messages,
+        severityOf = ::legacySeverityOf,
+        resolveText = { message -> message.text.resolve(context) },
+    )
 
     // Shared (commonMain) bus the migrated ViewModels post through — its
-    // payloads are already seam UserMessages, so plain host().
-    androidx.compose.runtime.LaunchedEffect(sharedUserMessageBus, isTv) {
-        userMessageHost.host(sharedUserMessageBus.messages)
-    }
+    // payloads are already seam UserMessages, so the plain overload.
+    rememberShellUserMessages(presentUserMessage, sharedUserMessageBus.messages)
 
     val adaptiveInfo = rememberAdaptiveInfo()
     val uiEnvironment = rememberJellyPlayUiEnvironment(
@@ -521,7 +519,7 @@ internal fun MainContent(
                     onNowPlayingClick = onNowPlayingClick,
                     onAmbientClick = onAmbientClick,
                     onLogout = onLogout,
-                    onCheckForUpdates = { updateCoordinator.manualCheckForUpdate() },
+                    onCheckForUpdates = { infra.updateCoordinatorLazy.value.manualCheckForUpdate() },
                     // Lazy .value reads — admin refreshes don't rebuild the graph.
                     isAdmin = { isAdminState.value },
                     isRefreshingAdmin = { isRefreshingAdminState.value },

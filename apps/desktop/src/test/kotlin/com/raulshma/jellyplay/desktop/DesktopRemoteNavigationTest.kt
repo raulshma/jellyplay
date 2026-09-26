@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop
 
+import androidx.compose.ui.focus.FocusDirection
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
@@ -14,7 +15,9 @@ import kotlin.test.assertEquals
  * and the Jellyfin-web "Stop" pop — live in shared/feature/shell and are
  * pinned by its `RemoteNavigationRoutingTest`): the ladder's back / focus /
  * select / context-menu dispatch through fake lambdas — the
- * NavRequestCollector shape.
+ * NavRequestCollector shape. Also pins [composeFocusDirection], the
+ * four-branch remote→Compose focus mapping extracted from the scaffold's
+ * moveFocus adapter (plain constant objects — no focus tree needed).
  */
 class DesktopRemoteNavigationTest {
 
@@ -59,5 +62,15 @@ class DesktopRemoteNavigationTest {
             ),
             shell.events,
         )
+    }
+
+    // ── composeFocusDirection ───────────────────────────────────────────
+
+    @Test
+    fun `the focus mapping covers all four remote directions`() {
+        assertEquals(FocusDirection.Up, composeFocusDirection(RemoteFocusDirection.UP))
+        assertEquals(FocusDirection.Down, composeFocusDirection(RemoteFocusDirection.DOWN))
+        assertEquals(FocusDirection.Left, composeFocusDirection(RemoteFocusDirection.LEFT))
+        assertEquals(FocusDirection.Right, composeFocusDirection(RemoteFocusDirection.RIGHT))
     }
 }

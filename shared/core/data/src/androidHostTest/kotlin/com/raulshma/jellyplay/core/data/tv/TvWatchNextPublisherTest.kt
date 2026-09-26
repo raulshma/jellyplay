@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -31,7 +32,7 @@ class TvWatchNextPublisherTest {
 
     @Test
     fun publish_onNonTvDevice_returnsSuccessWithoutProcessing() = runTest {
-        val publisher = TvWatchNextPublisher(context, mediaRepository, playbackRepository)
+        val publisher = TvWatchNextPublisher(context, mediaRepository, playbackRepository, SystemTimeSource())
         val result = publisher.publish()
 
         assertTrue(result.isSuccess)
@@ -39,7 +40,7 @@ class TvWatchNextPublisherTest {
 
     @Test
     fun clear_onNonTvDevice_returnsSuccessWithoutProcessing() = runTest {
-        val publisher = TvWatchNextPublisher(context, mediaRepository, playbackRepository)
+        val publisher = TvWatchNextPublisher(context, mediaRepository, playbackRepository, SystemTimeSource())
         val result = publisher.clear()
 
         assertTrue(result.isSuccess)

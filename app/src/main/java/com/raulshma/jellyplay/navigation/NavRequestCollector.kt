@@ -11,10 +11,8 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
-import com.raulshma.jellyplay.feature.shell.UserMessageHost
 import com.raulshma.jellyplay.feature.shell.navigation.popPlayerRoutes
 import com.raulshma.jellyplay.feature.shell.navigation.routeForNavigationTarget
-import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import kotlinx.coroutines.flow.Flow
 
@@ -22,9 +20,11 @@ import kotlinx.coroutines.flow.Flow
  * One home for the Android shell's nav-request collectors — the five
  * collect-then-dispatch loops JellyPlayApp's `MainContent` used to hand-copy
  * composable-inline: the pending-route (deep link / shortcut) dispatch, the
- * remote-navigation collector, the remote-control now-playing snackbar, the
- * SyncPlay auto-open guard, and (via [shellUserMessageHost] below) the
- * message-bus adaptation seams. Every loop is the same shape — collect an
+ * remote-navigation collector, the remote-control now-playing snackbar, and
+ * the SyncPlay auto-open guard. Beside them live the message-bus adaptation
+ * seams ([shellUserMessagePresent] / [legacySeverityOf] below) — the former
+ * sixth loop, the hand-copied message collectors, now reduced to feeding the
+ * shared `rememberShellUserMessages` seam. Every loop is the same shape — collect an
  * external request, apply one small policy fork, drive the navigator or the
  * snackbar host — and the forks are pure companion folds
  * ([pendingRouteDispatch], [syncPlayAutoOpenRoute],
@@ -43,9 +43,12 @@ import kotlinx.coroutines.flow.Flow
  * flow-keyed collectors hold their launch-time instance.
  *
  * NOT here: message-presentation POLICY (serial merge→resolve→present,
- * severity → duration) — that is [UserMessageHost]'s (shared/feature/shell);
- * the adapters at the bottom of this file only construct the host and
- * project the legacy bus's payload. The external-player launch protocol
+ * severity → duration) — that is
+ * [com.raulshma.jellyplay.feature.shell.UserMessageHost]'s
+ * (shared/feature/shell), whose composition wiring is the shared
+ * `rememberShellUserMessages` seam; the adapters at the bottom of this file
+ * only fork the surface ([shellUserMessagePresent]) and project the legacy
+ * bus's payload ([legacySeverityOf]). The external-player launch protocol
  * lives in `ExternalPlayerHost` (navigation/playbackhost, beside
  * `PlaybackHostRouter`) — it is STATEFUL (the pending-launch stash), so it
  * is remembered rather than constructed inline like this collector.
@@ -230,39 +233,36 @@ internal class NavRequestCollector(
 }
 
 /**
- * Constructs the Android shell's [UserMessageHost] — the present adapter the
- * shared host needs: TV renders a system Toast (the TV layout has no root
- * SnackbarHost), phone renders the shell's [SnackbarHostState] snackbar
- * (accessible, dismissible). Owns ONLY the surface fork and the duration
- * mappings; the serial merge→resolve→present choreography and the
- * severity → duration policy stay in the shared host (`UserMessageHost`).
- * `MainContent` remembers the result keyed on `isTv`, exactly as it did when
- * this adapter was inline.
+ * The Android shell's present adapter for the shared
+ * `rememberShellUserMessages` seam — the surface fork the host needs: TV
+ * renders a system Toast (the TV layout has no root SnackbarHost), phone
+ * renders the shell's [SnackbarHostState] snackbar (accessible,
+ * dismissible). Owns ONLY the surface fork and the duration mappings; host
+ * construction, the serial merge→resolve→present choreography and the
+ * severity → duration policy stay in the shared seam.
  */
-internal fun shellUserMessageHost(
+internal fun shellUserMessagePresent(
     context: Context,
     isTv: Boolean,
     snackbarHostState: SnackbarHostState,
-): UserMessageHost = UserMessageHost(
-    resolveText = ::resolveUiText,
-    present = { text, duration ->
-        if (isTv) {
-            Toast.makeText(context, text, toastDurationFor(duration)).show()
-        } else {
-            snackbarHostState.showSnackbar(
-                message = text,
-                withDismissAction = true,
-                duration = snackbarDurationFor(duration),
-            )
-        }
-    },
-)
+): suspend (String, UserMessageDuration) -> Unit = { text, duration ->
+    if (isTv) {
+        Toast.makeText(context, text, toastDurationFor(duration)).show()
+    } else {
+        snackbarHostState.showSnackbar(
+            message = text,
+            withDismissAction = true,
+            duration = snackbarDurationFor(duration),
+        )
+    }
+}
 
 /**
  * The legacy (`core:ui` feedback) bus's severity projected onto the shared
- * bus's vocabulary — the adaptation `UserMessageHost.hostAdapted` needs for
- * a shell-owned payload type the shared module cannot name. Exhaustive: a
- * new legacy arm is a compile-time decision.
+ * bus's vocabulary — the adaptation
+ * `com.raulshma.jellyplay.feature.shell.UserMessageHost.hostAdapted` needs
+ * for a shell-owned payload type the shared module cannot name. Exhaustive:
+ * a new legacy arm is a compile-time decision.
  */
 internal fun legacySeverityOf(message: UserMessage): SharedUserMessage.Severity = when (message) {
     is UserMessage.Error -> SharedUserMessage.Severity.Error

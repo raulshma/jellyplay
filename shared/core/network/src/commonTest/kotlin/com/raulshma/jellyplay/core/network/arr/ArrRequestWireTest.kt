@@ -63,8 +63,11 @@ class ArrRequestWireTest {
 
     @Test
     fun `bulk queue and blocklist delete bodies are bare ids objects`() {
-        assertEquals("""{"ids":[1,2,3]}""", json.encodeToString(RadarrQueueBulkRequest(ids = listOf(1, 2, 3))))
-        assertEquals("""{"ids":[]}""", json.encodeToString(SonarrIdsBulkRequest(ids = emptyList())))
+        // One shared DTO now serves both services' /queue/bulk AND
+        // /blocklist/bulk (the four former *BulkRequest classes were
+        // byte-identical).
+        assertEquals("""{"ids":[1,2,3]}""", json.encodeToString(ArrIdsBody(ids = listOf(1, 2, 3))))
+        assertEquals("""{"ids":[]}""", json.encodeToString(ArrIdsBody(ids = emptyList())))
     }
 
     @Test

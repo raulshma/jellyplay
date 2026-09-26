@@ -111,7 +111,7 @@ internal val dataRepositoriesModule: Module = module {
     // reset it. Declared BEFORE both consumer singles below.
     single { PlaybackReportingStatusStore(get(), get()) }
 
-    single { WatchHistoryRepositoryImpl(get(), get()) }
+    single { WatchHistoryRepositoryImpl(get(), get(), get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
     single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }

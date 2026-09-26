@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -79,6 +80,7 @@ class TvWatchNextWorkerTest {
                     mediaRepository,
                     playbackRepository,
                     playbackStore,
+                    SystemTimeSource(),
                 )
             })
             .setRunAttemptCount(runAttemptCount)

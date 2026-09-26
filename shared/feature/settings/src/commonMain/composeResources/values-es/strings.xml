@@ -1837,6 +1837,11 @@
     <string name="settings_discover_row_sort_popularity">Popularidad</string>
     <string name="settings_discover_row_sort_rating">Valoración</string>
     <string name="settings_discover_row_sort_release_date">Fecha de estreno</string>
+    <string name="settings_discover_row_template_unwatched_movies">Películas sin ver</string>
+    <string name="settings_discover_row_template_highly_rated">Joyas mejor valoradas</string>
+    <string name="settings_discover_row_template_new_this_month">Nuevo este mes</string>
+    <string name="settings_discover_row_template_random_surprise">Sorpresa aleatoria</string>
+    <string name="settings_discover_row_template_trending_seerr">Tendencias en Seerr</string>
     <string name="settings_confirm_library_reset">Confirmar restablecimiento de biblioteca</string>
     <string name="settings_confirm_library_reset_subtitle">Muestra un diálogo de confirmación antes de restablecer la biblioteca a los valores predeterminados</string>
     <string name="settings_audio_device">Dispositivo de audio</string>
