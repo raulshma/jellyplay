@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    API 36+ (Android 16 QPR) override of the home-screen widget metadata.
+    Android 16 QPR makes every widget lock-screen eligible by default; the
+    opt-OUT is WIDGET_CATEGORY_NOT_KEYGUARD. The grid widgets are data-heavy
+    4x2 surfaces designed for a home screen — the lock-screen picker shows
+    only the Now Playing and Continue Watching widgets (the curation), so
+    this override sets the not_keyguard category.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="250dp"
+    android:minResizeWidth="120dp"
+    android:minResizeHeight="120dp"
+    android:maxResizeWidth="500dp"
+    android:maxResizeHeight="400dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:previewImage="@drawable/widget_preview_library_recommendations"
+    android:previewLayout="@layout/library_recommendations_widget_preview"
+    android:initialLayout="@layout/library_recommendations_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen|not_keyguard"
+    android:description="@string/widget_library_recommendations_description"
+    android:configure="com.raulshma.jellyplay.widget.config.LibraryWidgetConfigActivity" />
