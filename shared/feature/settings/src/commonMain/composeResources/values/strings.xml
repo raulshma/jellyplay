@@ -1933,4 +1933,7 @@
     <string name="settings_certificate_pick_ca_title">Choose server CA certificate (.pem / .crt)</string>
     <string name="settings_whatsnew_title">What's New</string>
     <string name="settings_whatsnew_subtitle">Release highlights and what changed</string>
+    <string name="settings_live_updates">Live Updates</string>
+    <string name="settings_live_updates_on">On — download progress shows on your lock screen and status area</string>
+    <string name="settings_live_updates_off">Off — tap to allow live progress notifications in Android settings</string>
 </resources>

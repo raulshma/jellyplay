@@ -1914,4 +1914,7 @@
     <string name="diff_vlc_skip_frame">Salto de fotogramas de LibVLC</string>
     <string name="settings_whatsnew_title">Novedades</string>
     <string name="settings_whatsnew_subtitle">Aspectos destacados y cambios de la versión</string>
+    <string name="settings_live_updates">Novedades en vivo</string>
+    <string name="settings_live_updates_on">Activado — el progreso de descargas se muestra en la pantalla de bloqueo y el área de estado</string>
+    <string name="settings_live_updates_off">Desactivado — toca para permitir notificaciones de progreso en los ajustes de Android</string>
 </resources>

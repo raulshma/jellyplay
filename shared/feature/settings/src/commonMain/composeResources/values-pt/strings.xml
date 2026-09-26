@@ -1914,4 +1914,7 @@
     <string name="diff_vlc_skip_frame">Salto de quadros do LibVLC</string>
     <string name="settings_whatsnew_title">Novidades</string>
     <string name="settings_whatsnew_subtitle">Destaques e alterações da versão</string>
+    <string name="settings_live_updates">Atualizações em direto</string>
+    <string name="settings_live_updates_on">Ativado — o progresso das transferências aparece no ecrã de bloqueio</string>
+    <string name="settings_live_updates_off">Desativado — toque para permitir notificações de progresso nas definições do Android</string>
 </resources>

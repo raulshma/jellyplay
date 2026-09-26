@@ -1916,4 +1916,7 @@
     <string name="diff_vlc_skip_frame">Salto frame LibVLC</string>
     <string name="settings_whatsnew_title">Novità</string>
     <string name="settings_whatsnew_subtitle">Novità e modifiche della versione</string>
+    <string name="settings_live_updates">Aggiornamenti in tempo reale</string>
+    <string name="settings_live_updates_on">Attivo — l'avanzamento dei download appare su schermata di blocco e area di stato</string>
+    <string name="settings_live_updates_off">Disattivo — tocca per consentire le notifiche di avanzamento nelle impostazioni Android</string>
 </resources>

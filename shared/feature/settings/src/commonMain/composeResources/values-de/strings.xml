@@ -1912,4 +1912,7 @@
     <string name="diff_vlc_skip_frame">LibVLC Frame-Skip</string>
     <string name="settings_whatsnew_title">Was ist neu</string>
     <string name="settings_whatsnew_subtitle">Release-Highlights und Änderungen</string>
+    <string name="settings_live_updates">Live-Updates</string>
+    <string name="settings_live_updates_on">An — Downloadfortschritt erscheint auf Sperrbildschirm und Statusfläche</string>
+    <string name="settings_live_updates_off">Aus — tippe, um Live-Fortschrittsbenachrichtigungen in den Android-Einstellungen zuzulassen</string>
 </resources>

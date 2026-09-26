@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16 "Live Updates": user-granted special access letting the
+         download-progress notification be promoted to the top of the shade.
+         Declared so the Settings opt-in row can deep-link the grant screen. -->
+    <uses-permission android:name="android.permission.UPDATE_OWN_LIVE_UPDATE" />
 
     <application>
         <receiver

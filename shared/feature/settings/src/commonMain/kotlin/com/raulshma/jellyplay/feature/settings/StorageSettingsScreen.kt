@@ -56,6 +56,9 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_auto_delete_after_watch
 import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_auto_delete_after_watch_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_updates
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_updates_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_updates_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_cache
@@ -561,6 +564,11 @@ fun StorageSettingsScreen(
             }
 
             item {
+                // Android 16 Live Updates opt-in (the download-progress
+                // notification's promoted rendering). Null below API 36 /
+                // on desktop — the row does not exist there.
+                val liveUpdatesGate = rememberLiveUpdatesGate()
+                val showLiveUpdatesRow = liveUpdatesGate != null
                 SettingsGroup(
                     icon = Tabler.Outline.Download,
                     title = stringResource(Res.string.settings_downloads),
@@ -574,7 +582,8 @@ fun StorageSettingsScreen(
                     // is on (their declared WhenOn gate, which rowFlags
                     // carries — the emission `if`s below read it too).
                     SettingsItemList(
-                        total = rowTotalFor(SettingsScreenGroups.storageDownloads, rowFlags),
+                        total = rowTotalFor(SettingsScreenGroups.storageDownloads, rowFlags) +
+                            if (showLiveUpdatesRow) 1 else 0,
                     ) {
 
                     val downloadQualityTitle = rowTitle(StorageSettingsIds.DOWNLOAD_QUALITY)
@@ -750,6 +759,22 @@ fun StorageSettingsScreen(
                         highlighted = highlightSettingId == StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setAutoDeleteAfterWatch(it) } }
                     )
+
+                    if (liveUpdatesGate != null) {
+                        // Platform-conditional (API 36+), outside the search
+                        // registry: the deep-link target and the grant state
+                        // are device state, not persisted app preferences.
+                        SettingListItem(
+                            icon = Tabler.Outline.Rocket,
+                            title = stringResource(Res.string.settings_live_updates),
+                            subtitle = stringResource(
+                                if (liveUpdatesGate.isPromoted()) Res.string.settings_live_updates_on
+                                else Res.string.settings_live_updates_off,
+                            ),
+                            highlighted = false,
+                            onClick = { liveUpdatesGate.openGrantScreen() },
+                        )
+                    }
                     }
                 }
             }

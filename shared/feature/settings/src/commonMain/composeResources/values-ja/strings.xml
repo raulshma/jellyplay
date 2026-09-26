@@ -1912,4 +1912,7 @@
     <string name="diff_vlc_skip_frame">LibVLC フレームスキップ</string>
     <string name="settings_whatsnew_title">新機能</string>
     <string name="settings_whatsnew_subtitle">リリースのハイライトと変更点</string>
+    <string name="settings_live_updates">ライブアップデート</string>
+    <string name="settings_live_updates_on">オン — ロック画面とステータス領域にダウンロードの進行状況が表示されます</string>
+    <string name="settings_live_updates_off">オフ — タップしてAndroid設定でライブ通知を許可してください</string>
 </resources>

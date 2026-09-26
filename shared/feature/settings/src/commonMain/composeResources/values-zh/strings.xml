@@ -1914,4 +1914,7 @@
     <string name="diff_vlc_skip_frame">LibVLC 跳帧</string>
     <string name="settings_whatsnew_title">新功能</string>
     <string name="settings_whatsnew_subtitle">版本亮点与更改</string>
+    <string name="settings_live_updates">实时动态</string>
+    <string name="settings_live_updates_on">已开启 — 下载进度会显示在锁屏和状态区域</string>
+    <string name="settings_live_updates_off">已关闭 — 点按以在 Android 设置中允许实时进度通知</string>
 </resources>
