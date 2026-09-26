@@ -9,8 +9,7 @@ import kotlinx.coroutines.launch
 /**
  * The single home for identity reactions in `core:data`.
  *
- * A [SessionIdentityProvider] (android/desktop: [HomeSession]; wasmJs: the
- * AtomicSessionState-backed provider) classifies the engine's atomic session
+ * A [SessionIdentityProvider] (android/desktop: [HomeSession]) classifies the engine's atomic session
  * flow into [HomeSessionTransition]s; this registry is the ONE subscriber that turns
  * those transitions into cache drops. Before it, every identity-aware
  * repository hand-rolled the same `init {}` collector on its own
@@ -56,8 +55,8 @@ class SessionCacheRegistry(
 
     // LinkedHashMap, not a concurrent map: reactions run in REGISTRATION
     // order, which hash-bucket iteration would not give. Access is
-    // synchronized on the map ([guardUnderLock]; a pass-through on
-    // single-threaded wasmJs); the collector copies under the lock and runs
+    // synchronized on the map ([guardUnderLock]); the collector copies under
+    // the lock and runs
     // outside it because actions suspend.
     private val registeredCaches = LinkedHashMap<String, List<TtlCache<*>>>()
     private val registeredActions = LinkedHashMap<String, suspend (HomeSessionTransition) -> Unit>()

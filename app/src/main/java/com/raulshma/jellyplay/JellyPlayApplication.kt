@@ -7,82 +7,21 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
 import com.raulshma.jellyplay.core.data.di.CoreDataWorkerFactory
-import com.raulshma.jellyplay.core.data.di.androidCoreDataModule
-import com.raulshma.jellyplay.core.data.di.androidDataModule
-import com.raulshma.jellyplay.core.data.di.dataJvmModule
 import com.raulshma.jellyplay.core.data.image.jellyPlayImageLoader
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
-import com.raulshma.jellyplay.core.datastore.di.androidDatastoreModule
-import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
-import com.raulshma.jellyplay.core.database.di.androidDatabaseModule
-import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.model.ImageCache
-import com.raulshma.jellyplay.core.network.di.androidNetworkModule
-import com.raulshma.jellyplay.core.network.di.networkJvmModule
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
-import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
-import com.raulshma.jellyplay.core.ui.di.androidCoreUiModule
-import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
-import com.raulshma.jellyplay.di.androidAdminSeamsModule
-import com.raulshma.jellyplay.di.androidAppInteropAdaptersModule
-import com.raulshma.jellyplay.di.androidAppModule
-import com.raulshma.jellyplay.di.androidAppViewModelsModule
-import com.raulshma.jellyplay.di.androidDownloadSeamsModule
-import com.raulshma.jellyplay.di.androidSettingsSeamsModule
-import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
-import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
-import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
-import com.raulshma.jellyplay.feature.subtitle.tester.di.androidSubtitleTesterModule
-import com.raulshma.jellyplay.feature.player.live.di.androidPlayerLiveModule
-import com.raulshma.jellyplay.feature.player.video.di.androidPlayerVideoModule
-import com.raulshma.jellyplay.feature.shell.sharedFeatureModules
-
-
-import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
-import com.raulshma.jellyplay.feature.auth.di.androidAuthModule
-
-import com.raulshma.jellyplay.feature.details.androidDetailsModule
-import com.raulshma.jellyplay.feature.book.di.androidBookPlayerModule
-
-
+import com.raulshma.jellyplay.di.androidKoinModules
+import com.raulshma.jellyplay.startup.AppStartupPrewarms
 import androidx.work.Configuration
 import androidx.work.DelegatingWorkerFactory
 import com.raulshma.jellyplay.widget.AppWidgetWorkerFactory
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.context.startKoin
 import org.koin.mp.KoinPlatform
-
-/** Bound on the device-id prewarm await; see the launch in [onCreate]. */
-private const val DEVICE_ID_PREWARM_TIMEOUT_MS = 5_000L
-
-/**
- * Bound on the persisted-security-slice prewarm — DELIBERATELY the
- * same constant the lock-gate reader it exists to warm runs under
- * ([PlayerActivity.APP_LOCK_GATE_READ_TIMEOUT_MS]), so the prewarm can
- * never wait on the persisted read longer than the gate itself.
- */
-private const val SECURITY_SLICE_PREWARM_TIMEOUT_MS = PlayerActivity.APP_LOCK_GATE_READ_TIMEOUT_MS
-
-/**
- * Defers the audio/widget group and the background-scheduler group in
- * [onCreate] out of the t=0 first-frame window — the same idiom (and
- * duration) as SettingsSearchCatalogPrewarmer's default-pass deferral:
- * two seconds in, the first frame has long landed and both groups run
- * uncontended. Every WorkManager enqueue in the scheduler group is
- * KEEP-idempotent, so the deferral changes no semantics.
- */
-private const val BACKGROUND_START_DEFERRAL_MS = 2_000L
 
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
@@ -107,71 +46,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // exactly (definitions are lazy, and each resolved single is the same
     // memoized instance the rest of the graph sees).
     private val okHttpClient: OkHttpClient by lazyFromKoin()
-    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore by lazyFromKoin()
-    // Resolved ONLY inside the IO prewarm block
-    // below (same deferred-construction pattern as networkOfflineStore above).
-    // ServerIdentityStore.identity is stateIn(Eagerly) on Dispatchers.Default,
-    // so on a first-launch cold start the network single's `identity.value
-    // .deviceId ?: runBlocking { ensureDeviceId() }` fallback
-    // (AndroidNetworkModule) could win the race against that eager DataStore
-    // read and block MainViewModel construction on main. The prewarm calls the
-    // idempotent ensureDeviceId() itself and awaits the published id, so the
-    // runBlocking branch never fires — same UUID either way, and DataStore
-    // serializes the (first-launch-only) write.
-    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore by lazyFromKoin()
-    // Resolved ONLY inside the IO prewarm block
-    // below (same deferred-construction pattern as serverIdentityStore above).
-    // PlayerActivity's lock-gate check reads the PERSISTED security slice via
-    // `runBlocking { withTimeoutOrNull(1s) { firstPersistedSecurity() } }` on
-    // main (onCreate/onNewIntent/onResume/PiP-expand) — on a cold process that
-    // read pays DataStore's initial disk read, blocking main up to the full
-    // 1 s budget. firstPersistedSecurity() collects the same cold flow this
-    // prewarm collects, and DataStore caches the file snapshot in memory after
-    // the first read, so hydrating the slice here (off main, started at t=0 of
-    // the process) makes every later gate read a memory replay that resolves
-    // without disk IO. PlayerActivity keeps its bounded runBlocking EXACTLY as
-    // the fail-closed safety net (timeout ⇒ gate configured) — the prewarm
-    // only widens the warm window, it changes no gate semantics.
-    private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore by lazyFromKoin()
-    // (the FontProvider/VideoStreamCache prewarm Providers that used
-    // to live here left with the player-video migration — both impls are
-    // Koin-owned in shared/feature/player-video's androidPlayerVideoModule, so
-    // no bridged binding remains; the IO block below resolves them from the
-    // container directly, same deferred construction timing.)
-    // Lazy defers construction of AudioPlaybackManager (and its transitive
-    // 14-dep graph: AudioLibraryBrowser, AudioProgressReporter,
-    // AudioCrossfader, QueueUndoStack, LruCache(25), …) off the main thread
-    // until the IO launch block below actually resolves it. The start() body
-    // already offloads its real work to Dispatchers.IO, so behavior is
-    // unchanged; only the construction cost moves off the cold-start
-    // critical path.
-    private val audioPlaybackManager: com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager by lazyFromKoin()
-    // Lazy defers construction of NowPlayingWidgetUpdater, whose constructor
-    // pulls in AudioPlaybackManager — the same 14-dep graph above. A direct
-    // single access re-pulls that whole graph before onCreate returns;
-    // resolving it inside the IO launch block below keeps it off the
-    // cold-start critical path. start() only launches observers on its own
-    // scope, so behavior is unchanged.
-    private val nowPlayingWidgetUpdater: com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater by lazyFromKoin()
-    // The remaining schedulers/listeners are likewise deferred: resolving one
-    // constructs it (and its transitive graph — several pull Room, OkHttp,
-    // repository singletons) inside the IO launch blocks, not during
-    // onCreate before the first frame. Each .start()/.enqueue…()/sync() body
-    // already runs on its own scope or dispatches to IO, so construction is
-    // the only cost on the critical path.
-    private val notificationScheduler: NotificationScheduler by lazyFromKoin()
-    private val autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler by lazyFromKoin()
-    private val userDataSyncScheduler: com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler by lazyFromKoin()
-    private val playbackSyncScheduler: com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler by lazyFromKoin()
-    private val playbackSyncReconnectListener: com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener by lazyFromKoin()
-    private val downloadReconnectListener: com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener by lazyFromKoin()
-    private val notificationReconnectListener: com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectListener by lazyFromKoin()
-    private val widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler by lazyFromKoin()
-    private val downloadRecoveryInitializer: com.raulshma.jellyplay.startup.DownloadRecoveryInitializer by lazyFromKoin()
-    // Lazy defers construction of AppUpdateRepository (which pulls GitHub +
-    // OkHttp) off the cold-start path. cleanupDownloadedUpdate is a cheap file
-    // delete, but construction is the cost worth deferring.
-    private val appUpdateRepository: com.raulshma.jellyplay.core.data.update.AppUpdateRepository by lazyFromKoin()
+    // Read by the image loader's lazily-sized DiskCache below
+    // (maxCacheSizeMb); the cold-start prewarm of the same slice lives in
+    // AppStartupPrewarms, which owns the t=0 ordering.
+    private val networkOfflineStore: NetworkOfflineStore by lazyFromKoin()
+    // The cold-start prewarm choreography — critical DataStore/cache prewarms,
+    // the 2 s-deferred audio/widget and background-scheduler groups, download
+    // recovery + the self-update APK sweep — is composed in
+    // startup/AppStartupPrewarms (the CacheMaintenanceInitializer/
+    // DownloadRecoveryInitializer idiom), over the same memoizing lazy
+    // collaborator access the former inline fields provided.
+    private val appStartupPrewarms: AppStartupPrewarms by lazyFromKoin()
 
     private val applicationScope: CoroutineScope
         by lazy { KoinPlatform.getKoin()!!.get(DatastoreQualifiers.applicationScope) }
@@ -192,6 +77,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // backs installDebugStrictMode with real policies; the release source
         // set ships a no-op, so release builds compile none of it.
         installDebugStrictMode()
+        // LeakCanary self-installs via its own startup ContentProvider — this
+        // call is the debug-only seam for future config tweaks (twin-file
+        // idiom, no-op in release).
+        installLeakCanary()
     }
 
     override fun onCreate() {
@@ -200,243 +89,25 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // dependency: the lazy fields and every Activity/Service/widget entry
         // point reach into this container, and definitions are lazy, so this
         // adds no cold-start construction cost.
+        // The module list itself is AndroidKoinModules.kt (the fold): the
+        // shared core graph, this shell's platform actuals, and the ONE
+        // spread of sharedFeatureModules both JVM shells consume — every
+        // per-registration comment moved there with its registration.
         startKoin {
-            modules(
-                datastoreCommonModule,
-                androidDatastoreModule(this@JellyPlayApplication),
-                databaseDaosModule,
-                androidDatabaseModule(this@JellyPlayApplication),
-                networkJvmModule,
-                androidNetworkModule(this@JellyPlayApplication),
-                dataJvmModule,
-                androidDataModule(this@JellyPlayApplication),
-                // Legacy core:data remainder (Hilt-extinct — media3
-                // audio stack, cast, schedulers, remote control, workers) +
-                // core:notification and core:ui's UserMessageBus.
-                androidCoreDataModule(this@JellyPlayApplication),
-                androidNotificationModule(this@JellyPlayApplication),
-                androidCoreUiModule,
-                // V3 downloads conveyor: Android actuals of the portable
-                // download engine's seams (WorkManager enqueue/coordinator,
-                // Context/StatFs storage layout, notification summary, Coil
-                // preload). Koin owns these legacy-side impls so the
-                // DownloadRepository single in dataJvmModule resolves.
-                androidDownloadSeamsModule(this@JellyPlayApplication),
-                // Dev v0.10.7 quick-action download-outcome bridge lives in
-                // androidAppInteropAdaptersModule below (DownloadOutcomeMessenger
-                // -> core:ui UserMessageBus).
-                // Admin flip: Android actual of the admin-statistics
-                // label seam — legacy core:data R.string over the Koin-owned
-                // AdminStatisticsRepositoryImpl (dataJvmModule), byte-identical
-                // to the pre-move context.getString calls.
-                androidAdminSeamsModule(this@JellyPlayApplication),
-                // App Koin graph: the former Hilt-owned :app classes
-                // (shell coordinators, startup initializers, widget schedulers/
-                // updaters, DeepLinkHandler, FloatingPlayerState), the three
-                // former WidgetModule @Binds pairs, and the shared-feature seam
-                // adapters the deleted HiltInteropModule used to bridge
-                // (MusicMessageBus / DetailAudioPlayback / DetailThemeMusic /
-                // AudioPlayerCast — direct Koin resolution
-                // now, no EntryPoint; AudioPlayerEngine moved into core/data
-                // and androidCoreDataModule aliases it onto the manager).
-                androidAppModule(this@JellyPlayApplication),
-                androidAppInteropAdaptersModule(this@JellyPlayApplication),
-                // App-shell ViewModels (Main/PlayOn/WidgetConfig): resolved
-                // through the AndroidX ViewModelStore via KoinViewModelFactory,
-                // so activity-scoped instance-sharing semantics are unchanged.
-                androidAppViewModelsModule,
-                // The shared commonMain feature Koin modules both JVM shells
-                // register, declared ONCE in shared/feature/shell
-                // (sharedFeatureModules — the webFeatureModules precedent);
-                // the per-module conveyor history rides that declaration.
-                // Registration order is inert in Koin (definitions are keyed);
-                // only Android's platform actuals below are order-sensitive,
-                // and they stay inline in THIS list.
-                *sharedFeatureModules.toTypedArray(),
-                // core:ui's UserMessageBus module — core, not feature, so it
-                // stays inline here rather than in sharedFeatureModules (the
-                // home/settings ViewModels post their feedback through it).
-                coreUiMessageModule,
-                // V3 settings conveyor (Android platform pick): the Android
-                // actuals of the shared settings ViewModels' seams (SAF backup
-                // IO, LocaleManager, storage walkers, About/Licenses sources).
-                // The four seams (auto-download sync, notification reschedule,
-                // TV watch-next, audio cache clear) wrap the legacy schedulers,
-                // resolved straight from the core Koin graph.
-                androidSettingsPlatformModule(this@JellyPlayApplication),
-                androidSettingsSeamsModule(),
-                // MediaStore/FileProvider photo-export actual for the library
-                // feature's PhotoExport seam (androidDataModule pattern).
-                androidPhotoExportModule(this@JellyPlayApplication),
-                // V3 admin conveyor (Android half): the Android-only
-                // plugin-config WebView ViewModel (Context ctor param);
-                // AdminRepository and AdminStatisticsRepository resolve from
-                // dataJvmModule (Koin-owned since the admin flip).
-                androidAdminModule(this@JellyPlayApplication),
-
-                // V3 subtitle-tester conveyor (final feature): the whole
-                // feature is Android-only (androidMain-heavy module — the
-                // preview engines, surface host, SAF font picker and raw-asset
-                // factory have no desktop halves), so this is the only
-                // registration. PlayerEngineFactory and FontProvider are
-                // Koin-owned by androidPlayerVideoModule below; the
-                // PlaybackRequestFactory single is constructed with the
-                // application context here.
-                androidSubtitleTesterModule(this@JellyPlayApplication),
-
-                // Player-video conveyor: the migrated video player
-                // (:feature:player:video + the absorbed :feature:player:core
-                // remains). Koin owns the engine stack, the font/cache/
-                // preview singletons and the VideoPlayerViewModel; the six
-                // legacy playback deps resolve from the core Koin graph
-                // (the legacy :core:data remainder). Sole entry
-                // point stays PlayerActivity — no desktop registration
-                // (latent feature, subtitle-tester precedent).
-                androidPlayerVideoModule(this@JellyPlayApplication),
-
-                //  auth cutover (Android platform half): the
-                // LocalNetworkStatus gate is Android-only here — it bridges
-                // the legacy :core:ui LocalNetworkAccess object with the
-                // application context (androidAdminModule pattern); desktop
-                // registers its own non-blaming pick from the shared module's
-                // jvmMain.
-                androidAuthModule(this@JellyPlayApplication),
-                // Details conveyor (Android platform half): the two media3
-                // playback seams (per-item audio play, ambient theme music)
-                // resolve through the androidAppInteropAdaptersModule adapters
-                // above; the storage probe is the StatFs androidMain actual
-                // below.
-                androidDetailsModule(this@JellyPlayApplication),
-                // Book reader conveyor (Android platform half): the reader
-                // engine seams are the module's android platform module.
-                androidBookPlayerModule(this@JellyPlayApplication),
-
-                // Player-live conveyor (Android platform half): the three
-                // platform seams replacing the legacy :feature:player:live
-                // module. The engine factory resolves the shared
-                // NetworkQualifiers.streamingHttpClient; the audio seam wraps
-                // the legacy PlayerAudioLifecycle; the transcode-reasons
-                // renderer delegates to the legacy core:ui formatter.
-                androidPlayerLiveModule(this@JellyPlayApplication),
-
-            )
+            modules(androidKoinModules(this@JellyPlayApplication))
         }
         super.onCreate()
-        // Critical-path prewarms: (a) the network-offline DataStore slice —
-        // the real persisted read happens in the store's eager stateIn
-        // upstream, this keeps the flow warm for the imageLoader's
-        // lazily-sized DiskCache — (b) the identity slice (see the
-        // field comment above), and (c) the subtitle font byte cache and
-        // video stream cache so the first ASS playback doesn't read fonts
-        // on Main.
-        //
-        // This block used to await, strictly in
-        // order, offline read → font prewarm → stream-cache prewarm → audio
-        // start → widget start — off-main but serialized. The two cache
-        // prewarms now run concurrently (no shared state between the
-        // font byte cache and the video stream cache), and the audio+widget
-        // group moved to its own sibling launch below (this block's own
-        // original comment: "no dependency on the groups below"). The DataStore
-        // prewarms stay FIRST in this coroutine: the Coil DiskCache sizing in
-        // newImageLoader reads networkOffline.value lazily on the first
-        // networked image write, and the documented lazily-sized-DiskCache race
-        // needs this read to win that — both slices launch ahead of the async
-        // prewarms, preserving exactly the head start they had before.
-        applicationScope.launch(Dispatchers.IO) {
-            runCatchingRethrowingCancellation { networkOfflineStore.networkOffline.first() }
-            // Not a plain `identity.first()` — a
-            // stateIn(Eagerly) StateFlow always has its initial value
-            // available, so a plain first() returns the all-null placeholder
-            // instantly during the DataStore-read window and closes nothing;
-            // and a bare `first { deviceId != null }` would hang forever on a
-            // fresh install (nothing writes DEVICE_ID until ensureDeviceId
-            // runs). Calling the idempotent ensureDeviceId() here — the same
-            // call the network single's runBlocking fallback would make —
-            // reads-or-persists the UUID off main, and awaiting the non-null
-            // publication guarantees every later `.value.deviceId` read in
-            // AndroidNetworkModule resolves the fast path.
-            runCatchingRethrowingCancellation {
-                // Bounded wait: a wedged DataStore (corruption, upstream
-                // error stranding the Eagerly-started identity flow on its
-                // all-null placeholder) would suspend both ensureDeviceId()
-                // — itself a DataStore edit — and a bare first{} forever,
-                // gating the font/stream prewarms below, so both run inside
-                // the timeout. On timeout they proceed anyway; the network
-                // module readers keep their own runBlocking ensureDeviceId()
-                // fallback, and DataStore's atomic temp-file write makes a
-                // timeout mid-persist safe to abandon.
-                withTimeoutOrNull(DEVICE_ID_PREWARM_TIMEOUT_MS) {
-                    serverIdentityStore.ensureDeviceId()
-                    serverIdentityStore.identity.first { !it.deviceId.isNullOrEmpty() }
-                }
-            }
-            // Hydrate the persisted security slice for PlayerActivity's
-            // lock-gate read (see the field comment above). Shares the same
-            // "user_prefs" DataStore file as the two reads above, so this
-            // piggybacks their already-in-flight/completed initial read and is
-            // effectively free on a warm one. Bounded like the identity prewarm so a
-            // wedged read can never gate the font/stream prewarms below; on
-            // timeout we proceed anyway — PlayerActivity's own 1 s-bounded
-            // fail-closed read is unchanged and remains the gate's authority.
-            runCatchingRethrowingCancellation {
-                withTimeoutOrNull(SECURITY_SLICE_PREWARM_TIMEOUT_MS) {
-                    securityStore.firstPersistedSecurity()
-                }
-            }
-            // Koin-owned since the player-video migration (the Hilt
-            // javax.inject.Provider fields died with the module flip); still
-            // resolved here, inside the IO launcher, so the font-asset copy +
-            // cache-index open stay off the cold-start critical path.
-            val koin = org.koin.mp.KoinPlatform.getKoin()
-            coroutineScope {
-                // runCatching stays INSIDE each async so a failed prewarm
-                // neither cancels the sibling nor fails the outer launch —
-                // the same per-call swallow the sequential runCatching chain
-                // had.
-                // FontProvider.prewarm() suspends, so it needs the
-                // cancellation-rethrowing variant; VideoStreamCache.prewarm()
-                // doesn't, so plain runCatching still suffices there.
-                async { runCatchingRethrowingCancellation { koin?.get<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>()?.prewarm() } }
-                async { runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>()?.prewarm() } }
-            }
-        }
-        // The audio + widget updaters — launched as a sibling of the
-        // prewarm block above instead of serializing behind it. Resolves the
-        // same lazy fields as before (AudioPlaybackManager's 14-dep graph +
-        // Room queue restore, then NowPlayingWidgetUpdater), in the same
-        // order, just no longer gated on the DataStore reads and cache
-        // prewarms finishing first.
-        applicationScope.launch(Dispatchers.IO) {
-            delay(BACKGROUND_START_DEFERRAL_MS)
-            audioPlaybackManager.start()
-            nowPlayingWidgetUpdater.start()
-        }
-        // Background schedulers — independent enqueue calls, all KEEP-safe.
-        // Run concurrently with the critical path so cold start isn't gated on
-        // audio init. Each lazy resolution constructs its scheduler here (off
-        // the main thread) instead of during onCreate.
-        applicationScope.launch(Dispatchers.IO) {
-            delay(BACKGROUND_START_DEFERRAL_MS)
-            widgetWorkScheduler.enqueuePeriodic()
-            userDataSyncScheduler.enqueuePeriodic()
-            playbackSyncScheduler.enqueuePeriodic()
-            playbackSyncReconnectListener.start()
-            downloadReconnectListener.start()
-            notificationReconnectListener.start()
-            autoDownloadScheduler.sync()
-            notificationScheduler.scheduleOrUpdate()
-        }
-        // Best-effort download recovery — independent of the above groups.
-        applicationScope.launch(Dispatchers.IO) {
-            downloadRecoveryInitializer.recover()
-        }
-        // Sweep any APK left by a prior self-update. A successful install
-        // restarts the process (so this runs in the new version) and leaves the
-        // old APK orphaned; a cancelled/failed install also leaves it behind.
-        // Safe at startup: onCreate precedes any new download.
-        applicationScope.launch(Dispatchers.IO) {
-            runCatching { appUpdateRepository.cleanupDownloadedUpdate() }
-        }
+        // The cold-start choreography — (a) the critical-path prewarms
+        // (network-offline DataStore slice before the Coil DiskCache sizing
+        // reads it, identity slice, security slice, font/stream cache
+        // prewarms), (b) the 2 s-deferred audio + widget updaters, (c) the
+        // 2 s-deferred background schedulers (all KEEP-idempotent enqueues),
+        // (d) best-effort download recovery + the self-update APK sweep —
+        // is owned by [AppStartupPrewarms] beside the other startup
+        // initializers. start() fires the same applicationScope launches, in
+        // the same order, at the same point of onCreate as the former inline
+        // blocks; the per-group rationale lives there now.
+        appStartupPrewarms.start()
     }
 
     private val imageClient by lazy {

@@ -60,8 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * jvmShared (not commonMain): the marker is a `java.util.concurrent`
  * `AtomicBoolean`, and the consumers of this package
- * (`MediaRepositoryImpl`, `SingleFlightFetcher`) are jvmShared too — there
- * is no wasm consumer for the staleness ladder.
+ * (`MediaRepositoryImpl`, `SingleFlightFetcher`) are jvmShared too.
  */
 internal class StaleReadGroup {
 

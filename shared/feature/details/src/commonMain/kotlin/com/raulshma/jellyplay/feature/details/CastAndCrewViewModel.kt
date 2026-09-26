@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -36,7 +37,7 @@ class CastAndCrewViewModel constructor(
                         crew = partition.crew,
                     )
                 },
-                onFailure = { CastAndCrewUiState.Error(it.message ?: "Failed to load") },
+                onFailure = { CastAndCrewUiState.Error(UserErrorMessages.resolve(it, "Failed to load")) },
             )
         }
     }

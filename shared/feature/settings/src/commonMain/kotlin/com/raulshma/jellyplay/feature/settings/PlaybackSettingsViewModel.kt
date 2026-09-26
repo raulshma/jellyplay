@@ -1,33 +1,29 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.MpvAudioDevice
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.StateFlow
 
 class PlaybackSettingsViewModel(
-    private val store: UserPreferencesStore,
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val advancedSettings: AdvancedSettingsGate,
-    private val editor: PreferencesEditor,
+    advancedSettings: AdvancedSettingsGate,
+    editor: PreferencesEditor,
     private val watchNextRefresher: WatchNextRefresher,
-) : JellyPlayViewModel() {
+    /**
+     * Desktop-only mpv audio-device enumeration seam — `null` where
+     * the platform binds no enumerator (Android), which is exactly where
+     * `SettingsCapabilities.supportsAudioDeviceSelection` hides the row, so
+     * nothing on that platform reaches [audioDevices]. Koin resolves it via
+     * `getOrNull()`.
+     */
+    private val audioDeviceEnumerator: AudioDeviceEnumerator? = null,
+) : SettingsSectionViewModel(advancedSettings, editor) {
 
     /** Playback-screen slice — recomposes this screen only on playback-field writes. */
     val preferences: StateFlow<PlaybackPreferences> = projections.playbackPreferences
-
-    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
-
-    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
-
-    /**
-     * Single write command for this screen: `edit { it.videoPlayer.setTrickplayEnabled(true) }`.
-     * Fire-and-forget on the same application scope [PreferencesEditor.edit] uses.
-     */
-    fun edit(transform: suspend (PreferencesEditScope) -> Unit) = editor.edit { transform(this) }
 
     fun setAndroidTvWatchNextEnabled(enabled: Boolean) = editor.edit {
         playback.setAndroidTvWatchNextEnabled(enabled)
@@ -35,12 +31,19 @@ class PlaybackSettingsViewModel(
     }
 
     /**
-     * Resets a single preference category. Mirrors
-     * [AppearanceSettingsViewModel.resetCategory], delegating to the shared
-     * [PreferencesEditor] so the coverage-guarded key list stays the single
-     * source of truth.
+     * The mpv audio devices for the Engine group's device picker: enumerated
+     * on first ask (the seam spins up a throwaway mpv context) and cached for
+     * the rest of this ViewModel's life, so re-opening the picker within a
+     * settings visit costs nothing. Empty on platforms without the seam.
      */
-    fun resetCategory(category: PreferenceResetCategory) = editor.resetCategory(category)
+    suspend fun audioDevices(): List<MpvAudioDevice> {
+        audioDevicesCache?.let { return it }
+        val devices = audioDeviceEnumerator?.enumerateAudioDevices().orEmpty()
+        audioDevicesCache = devices
+        return devices
+    }
+
+    private var audioDevicesCache: List<MpvAudioDevice>? = null
 
     /**
      * Screen-level reset for the Playback settings screen. Resets every category

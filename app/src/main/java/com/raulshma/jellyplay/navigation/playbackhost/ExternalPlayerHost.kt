@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.navigation.playbackhost
 
 import android.content.Intent
-import com.raulshma.jellyplay.ExternalPlayerLaunch
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.navigation.externalPlayerPositionTicks
 

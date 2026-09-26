@@ -1,21 +1,18 @@
 package com.raulshma.jellyplay.core.network.playback
 
-import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.PlaybackMode
-import com.raulshma.jellyplay.core.network.library.toMediaSource
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the playback wire contract for the wasm client: PlaybackInfo
- * response→model mapping (via the shared library mappers), the
- * progress-report request bodies, the mode/live flag table, transcode-reason
- * name conversion, media-segment decode and the server-time passthrough.
+ * Pins the playback wire contract: the PlaybackInfo response decode, the
+ * progress-report request bodies, transcode-reason name conversion,
+ * media-segment decode and the server-time passthrough. DTO→model mapping
+ * semantics are pinned jvmShared-side (`JellyfinDtoMappers` /
+ * `PlaybackApiClientImplTest`).
  */
 class PlaybackWireMapperTest {
 
@@ -25,7 +22,7 @@ class PlaybackWireMapperTest {
     }
 
     @Test
-    fun `playback info response maps play session id and media sources`() {
+    fun `playback info response decodes play session id and pascalCase media sources`() {
         val response = json.decodeFromString<PlaybackInfoResponseDtoWire>(
             """
             {
@@ -49,14 +46,19 @@ class PlaybackWireMapperTest {
             """.trimIndent(),
         )
         assertEquals("ps-1", response.playSessionId)
-        val source = response.mediaSources.single().toMediaSource()
+        // The wire decode pin: PascalCase fields land on the right members
+        // (DTO→model mapping semantics are pinned jvmShared-side).
+        val source = response.mediaSources.single()
         assertEquals("ms1", source.id)
-        assertTrue(source.supportsTranscoding)
-        assertFalse(source.supportsDirectPlay)
-        assertEquals("/videos/i/master.m3u8?MediaSourceId=ms1", source.transcodeUrl)
-        assertEquals(3, source.mediaStreams.size)
-        assertEquals("srt", source.mediaStreams[2].codec)
-        assertTrue(source.mediaStreams[2].isExternal)
+        assertEquals("1080p", source.name)
+        assertEquals("mp4", source.container)
+        assertTrue(source.supportsTranscoding == true)
+        assertFalse(source.supportsDirectPlay == true)
+        assertEquals("/videos/i/master.m3u8?MediaSourceId=ms1", source.transcodingUrl)
+        assertEquals(3, source.mediaStreams?.size)
+        assertEquals("srt", source.mediaStreams?.get(2)?.codec)
+        assertTrue(source.mediaStreams?.get(2)?.isExternal == true)
+        assertEquals("/Videos/i/ms1/Subtitles/2/Stream.srt", source.mediaStreams?.get(2)?.deliveryUrl)
     }
 
     @Test
@@ -88,43 +90,16 @@ class PlaybackWireMapperTest {
     }
 
     @Test
-    fun `flag table mirrors the jvmshared resolve playback flags`() {
-        // AUTO (VOD + live): everything on, bitrate sent.
-        resolveWasmPlaybackFlags(PlaybackMode.AUTO, null, 8_000_000L).let {
-            assertTrue(it.enableDirectPlay && it.enableDirectStream && it.enableTranscoding && it.allowStreamCopy)
-            assertEquals(8_000_000L, it.sendBitrate)
-        }
-        // FORCE_DIRECT_PLAY: copy + transcode off, no bitrate cap.
-        resolveWasmPlaybackFlags(PlaybackMode.FORCE_DIRECT_PLAY, null, 8_000_000L).let {
-            assertTrue(it.enableDirectPlay)
-            assertFalse(it.enableDirectStream)
-            assertFalse(it.enableTranscoding)
-            assertFalse(it.allowStreamCopy)
-            assertNull(it.sendBitrate)
-        }
-        // FORCE_TRANSCODE: direct paths off, cap kept.
-        resolveWasmPlaybackFlags(PlaybackMode.FORCE_TRANSCODE, null, 4_000_000L).let {
-            assertFalse(it.enableDirectPlay)
-            assertFalse(it.enableDirectStream)
-            assertTrue(it.enableTranscoding)
-            assertFalse(it.allowStreamCopy)
-            assertEquals(4_000_000L, it.sendBitrate)
-        }
-        // Live overrides mode: DIRECT_STREAM keeps only direct stream, no cap.
-        resolveWasmPlaybackFlags(PlaybackMode.AUTO, LiveStreamOption.DIRECT_STREAM, 8_000_000L).let {
-            assertFalse(it.enableDirectPlay)
-            assertTrue(it.enableDirectStream)
-            assertFalse(it.enableTranscoding)
-            assertTrue(it.allowStreamCopy)
-            assertNull(it.sendBitrate)
-        }
-        // Live TRANSCODE: only transcoding, no copy.
-        resolveWasmPlaybackFlags(PlaybackMode.FORCE_DIRECT_PLAY, LiveStreamOption.TRANSCODE, null).let {
-            assertFalse(it.enableDirectPlay)
-            assertFalse(it.enableDirectStream)
-            assertTrue(it.enableTranscoding)
-            assertFalse(it.allowStreamCopy)
-        }
+    fun `failed stop body serializes the Failed flag on the wire`() {
+        // An error-aborted session's stop carries Failed=true so the
+        // server skips its own percentage-based played marking.
+        val stop = json.encodeToString(
+            PlaybackStopInfoDtoWire(itemId = "item-1", sessionId = "sess-1", positionTicks = 9000, failed = true),
+        )
+        assertEquals(
+            """{"ItemId":"item-1","SessionId":"sess-1","PositionTicks":9000,"Failed":true}""",
+            stop,
+        )
     }
 
     @Test

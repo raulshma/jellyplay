@@ -13,8 +13,8 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * Lives in `:shared:core:concurrency` (NOT core:network, where it was born) so
  * every layer — repositories, workers, feature modules, the API clients, the
- * legacy Android tree via shared:core:data — crosses the same seam, and the
- * wasm target can adopt it too (commonMain, no JVM types).
+ * legacy Android tree via shared:core:data — crosses the same seam
+ * (commonMain, no JVM types).
  *
  * Inline so callers keep `runCatching`'s ergonomics — non-local `return` /
  * `return@runCatchingRethrowingCancellation` from the block works exactly as

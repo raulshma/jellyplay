@@ -1,11 +1,14 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
+import org.jetbrains.compose.resources.StringResource
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -13,27 +16,37 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the explicitly pure diff/presentation layer of the Factory Reset /
- * Import Preview screens (PreferenceCategoryPresentation.kt — the KDoc on
- * [appRuntimeFields] notes "this pure function does not need a @Composable
- * context", and the whole registry is plain data in → [PreferenceField] out).
- *
- * Invariants under test: the current-vs-factory diff (unchanged passes
- * through, single/multiple changes detected with the exact label), the
- * registry's coverage of [PreferenceResetCategory], the value formatting the
- * UI renders verbatim (On/Off, enum prettifying, seconds/percent), and the
- * AppRuntime extras diff used by import-preview's "everything" card.
+ * Import Preview screens (PreferenceCategoryPresentation.kt). The rows are
+ * DERIVED from the [PreferenceSliceSnapshot] slices with localized label
+ * resources; the tests pin: the current-vs-baseline diff (unchanged passes
+ * through, single/multiple changes detected with the right resource→label
+ * binding), the registry's coverage of [PreferenceResetCategory], the value
+ * formatting the UI renders verbatim (On/Off, enum prettifying,
+ * seconds/percent), and the AppRuntime extras diff used by import-preview's
+ * "everything" card.
  */
 class PreferenceCategoryPresentationTest {
 
-    private val factory = UserPreferences()
+    private val factorySlices = PreferenceSliceSnapshot.FACTORY
+
+    private fun snapshot(slices: PreferenceSliceSnapshot, labels: Map<StringResource, String> = emptyMap()): PreferenceDiffSnapshot =
+        PreferenceDiffSnapshot(slices) { res -> labels[res] ?: res.toString() }
 
     private fun view(category: PreferenceResetCategory): PreferenceCategoryView =
         PreferenceCategoryViews.first { it.category == category }
+
+    /** The changed rows of a diff, with the test-mapped label for readability. */
+    private fun changedLabels(
+        current: PreferenceDiffSnapshot,
+        baseline: PreferenceDiffSnapshot,
+        category: PreferenceResetCategory,
+    ): List<String> = view(category).changedFields(current, baseline).map { it.label }
 
     // ---------------------------------------------------------------- diff
 
     @Test
     fun `unchanged prefs produce no changed fields in any category`() {
+        val factory = snapshot(factorySlices)
         PreferenceCategoryViews.forEach { view ->
             assertTrue(
                 view.changedFields(factory, factory).isEmpty(),
@@ -44,12 +57,16 @@ class PreferenceCategoryPresentationTest {
 
     @Test
     fun `single appearance change is detected with the exact label`() {
-        val prefs = factory.copy(themeMode = ThemeMode.DARK)
+        val prefs = snapshot(
+            factorySlices.copy(appearance = factorySlices.appearance.copy(themeMode = ThemeMode.DARK)),
+            labels = mapOf(Res.string.ss_theme_mode_title to "Theme Mode"),
+        )
+        val factory = snapshot(factorySlices, labels = mapOf(Res.string.ss_theme_mode_title to "Theme Mode"))
 
-        val changed = view(PreferenceResetCategory.APPEARANCE).changedFields(prefs, factory)
+        val changed = changedLabels(prefs, factory, PreferenceResetCategory.APPEARANCE)
 
-        assertEquals(listOf("Theme Mode"), changed.map { it.label })
-        val field = changed.single()
+        assertEquals(listOf("Theme Mode"), changed)
+        val field = view(PreferenceResetCategory.APPEARANCE).changedFields(prefs, factory).single()
         assertTrue(field.changed)
         assertEquals("Dark", field.currentValue, "plain enums prettify without a displayName")
         assertEquals("System", field.factoryValue)
@@ -57,34 +74,54 @@ class PreferenceCategoryPresentationTest {
 
     @Test
     fun `multiple changes in one category are all detected`() {
-        val prefs = factory.copy(themeMode = ThemeMode.DARK, oledMode = true)
+        val labels = mapOf(
+            Res.string.ss_theme_mode_title to "Theme Mode",
+            Res.string.ss_oled_mode_title to "OLED Mode",
+        )
+        val prefs = snapshot(
+            factorySlices.copy(
+                appearance = factorySlices.appearance.copy(themeMode = ThemeMode.DARK, oledMode = true),
+            ),
+            labels,
+        )
+        val factory = snapshot(factorySlices, labels)
 
-        val changed = view(PreferenceResetCategory.APPEARANCE).changedFields(prefs, factory)
-
-        assertEquals(setOf("Theme Mode", "OLED Mode"), changed.map { it.label }.toSet())
-        assertEquals(2, changed.size)
+        assertEquals(
+            setOf("Theme Mode", "OLED Mode"),
+            changedLabels(prefs, factory, PreferenceResetCategory.APPEARANCE).toSet(),
+        )
     }
 
     @Test
     fun `security pin state is surfaced as changed fields`() {
-        val prefs = factory.copy(pinLockEnabled = true, pinHash = "stored-hash")
+        val labels = mapOf(
+            Res.string.ss_pin_lock_title to "PIN Lock",
+            Res.string.diff_pin_set to "PIN Set",
+        )
+        val prefs = snapshot(
+            factorySlices.copy(security = factorySlices.security.copy(pinLockEnabled = true, pinHash = "stored-hash")),
+            labels,
+        )
+        val factory = snapshot(factorySlices, labels)
 
-        val changed = view(PreferenceResetCategory.SECURITY).changedFields(prefs, factory)
-
-        assertEquals(setOf("PIN Lock", "PIN Set"), changed.map { it.label }.toSet())
+        assertEquals(
+            setOf("PIN Lock", "PIN Set"),
+            changedLabels(prefs, factory, PreferenceResetCategory.SECURITY).toSet(),
+        )
     }
 
     @Test
     fun `every category surfaces fields and totals consistently`() {
+        val factory = snapshot(factorySlices)
         PreferenceCategoryViews.forEach { view ->
-            val fields = view.fields(factory, factory)
-            assertTrue(fields.isNotEmpty(), "${view.category} must surface user-facing fields")
-            assertEquals(fields.size, view.totalFields(factory, factory))
-            fields.forEach { field ->
-                assertTrue(field.label.isNotBlank(), "blank label in ${view.category}")
-                assertTrue(field.currentValue.isNotEmpty(), "blank current value for '${field.label}'")
-                assertTrue(field.factoryValue.isNotEmpty(), "blank factory value for '${field.label}'")
-                assertFalse(field.changed, "field '${field.label}' must diff clean against factory")
+            assertTrue(
+                view.changedFields(factory, factory).isEmpty(),
+                "${view.category} must diff clean against factory",
+            )
+            assertEquals(view.diffFields.size, view.totalFields(factory, factory), "${view.category} totals")
+            view.diffFields.forEach { field ->
+                val value = field.value(factorySlices)
+                assertTrue(value.isNotEmpty(), "blank current value for '${field.labelRes}' in ${view.category}")
             }
         }
     }
@@ -101,55 +138,87 @@ class PreferenceCategoryPresentationTest {
         assertEquals(PreferenceCategoryViews.size, PreferenceResetCategory.entries.size)
     }
 
+    @Test
+    fun `every row carries a distinct label resource within its category`() {
+        PreferenceCategoryViews.forEach { view ->
+            assertEquals(
+                view.diffFields.size,
+                view.diffFields.map { it.labelRes }.toSet().size,
+                "${view.category} must not repeat a label resource",
+            )
+        }
+    }
+
     // ---------------------------------------------------------------- formatting
 
     @Test
     fun `booleans render On and Off`() {
-        val prefs = factory.copy(oledMode = true)
+        val prefs = snapshot(factorySlices.copy(appearance = factorySlices.appearance.copy(oledMode = true)))
+        val factory = snapshot(factorySlices)
 
-        val field = view(PreferenceResetCategory.APPEARANCE)
-            .fields(prefs, factory)
-            .first { it.label == "OLED Mode" }
+        val fields = view(PreferenceResetCategory.APPEARANCE).changedFields(prefs, factory)
 
-        assertEquals("On", field.currentValue)
-        assertEquals("Off", field.factoryValue)
+        assertEquals("On", fields.first { it.label == Res.string.ss_oled_mode_title.toString() }.currentValue)
+        assertEquals("Off", fields.first { it.label == Res.string.ss_oled_mode_title.toString() }.factoryValue)
     }
 
     @Test
     fun `enum fields with displayName resolve the localized-style name`() {
-        // DecoderMode implements HasDisplayName → displayName wins over prettifying.
-        val prefs = factory.copy(decoderMode = DecoderMode.SW_ONLY)
+        val prefs = snapshot(factorySlices.copy(playback = factorySlices.playback.copy(decoderMode = DecoderMode.SW_ONLY)))
+        val factory = snapshot(factorySlices)
 
-        val field = view(PreferenceResetCategory.PLAYBACK)
-            .fields(prefs, factory)
-            .first { it.label == "Decoder Mode" }
+        val fields = view(PreferenceResetCategory.PLAYBACK).changedFields(prefs, factory)
 
-        assertEquals("Software Only", field.currentValue)
-        assertEquals("Hardware (Preferred)", field.factoryValue)
+        val decoder = fields.first { it.label == Res.string.ss_decoder_title.toString() }
+        assertEquals("Software Only", decoder.currentValue)
+        assertEquals("Hardware (Preferred)", decoder.factoryValue)
     }
 
     @Test
     fun `durations render in seconds and strengths in percent`() {
-        val field = view(PreferenceResetCategory.PLAYBACK)
-            .fields(factory, factory)
-            .first { it.label == "Seek Duration" }
-        assertEquals("10.0s", field.currentValue, "default videoSeekDurationMs is 10_000")
+        val fields = view(PreferenceResetCategory.PLAYBACK)
+            .changedFields(snapshot(factorySlices), snapshot(factorySlices))
+        assertEquals(0, fields.size, "sanity: no changes to diff on the factory baseline")
 
-        val blueLight = view(PreferenceResetCategory.APPEARANCE)
-            .fields(factory, factory)
-            .first { it.label == "Blue Light Strength" }
-        assertEquals("30%", blueLight.currentValue, "default blueLightFilterStrength is 0.3f")
+        val seek = view(PreferenceResetCategory.PLAYBACK).diffFields
+            .first { it.labelRes == Res.string.ss_seek_duration_title }
+        assertEquals("10.0s", seek.value(factorySlices), "default videoSeekDurationMs is 10_000")
+
+        val blueLight = view(PreferenceResetCategory.APPEARANCE).diffFields
+            .first { it.labelRes == Res.string.ss_blue_light_strength_title }
+        assertEquals("30%", blueLight.value(factorySlices), "default blueLightFilterStrength is 0.3f")
     }
 
     @Test
     fun `nullable strings fall back to System`() {
-        val prefs = factory.copy(preferredSubtitleLanguage = "eng")
+        val prefs = snapshot(
+            factorySlices.copy(subtitle = factorySlices.subtitle.copy(preferredSubtitleLanguage = "eng")),
+            labels = mapOf(Res.string.ss_subtitle_language_title to "Preferred Subtitle Language", Res.string.ss_audio_language_title to "Preferred Audio Language"),
+        )
+        val factory = snapshot(factorySlices, mapOf(Res.string.ss_subtitle_language_title to "Preferred Subtitle Language", Res.string.ss_audio_language_title to "Preferred Audio Language"))
 
         val fields = view(PreferenceResetCategory.SUBTITLES_LANGUAGE).fields(prefs, factory)
 
         assertEquals("eng", fields.first { it.label == "Preferred Subtitle Language" }.currentValue)
         assertEquals("System", fields.first { it.label == "Preferred Subtitle Language" }.factoryValue)
         assertEquals("System", fields.first { it.label == "Preferred Audio Language" }.currentValue)
+    }
+
+    @Test
+    fun `derived theme-variant flags diff like the former synthwave rows`() {
+        val labels = mapOf(
+            Res.string.diff_synthwave_mode to "Synthwave Mode",
+        )
+        val prefs = snapshot(
+            factorySlices.copy(appearance = factorySlices.appearance.copy(themeVariant = "synthwave")),
+            labels,
+        )
+        val factory = snapshot(factorySlices, labels)
+
+        assertEquals(
+            setOf("Synthwave Mode"),
+            changedLabels(prefs, factory, PreferenceResetCategory.APPEARANCE).toSet(),
+        )
     }
 
     // ---------------------------------------------------------------- app runtime extras

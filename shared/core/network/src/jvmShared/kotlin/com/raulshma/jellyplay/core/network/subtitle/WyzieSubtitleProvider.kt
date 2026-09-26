@@ -18,8 +18,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * [SubtitleProvider] for **Wyzie Subs** (`sub.wyzie.io`).
@@ -33,8 +31,7 @@ import javax.inject.Singleton
  * failures retry via [com.raulshma.jellyplay.core.network.RetryPolicy] in the
  * resilient wrapper.
  */
-@Singleton
-class WyzieSubtitleProvider @Inject constructor(
+class WyzieSubtitleProvider(
     private val okHttpClient: OkHttpClient,
 ) : SubtitleProvider {
 

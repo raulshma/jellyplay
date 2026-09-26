@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
+import com.raulshma.jellyplay.feature.player.live.LiveFallbackPhase
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
@@ -79,17 +80,14 @@ class ExoLiveEngine(
     private var currentMethod: LivePlayMethod = LivePlayMethod.DIRECT_STREAM
 
     /**
-     * Error/fallback substate. Encodes the previously-separate `errorTerminal`
-     * and `fallbackInvoked` booleans as a single explicit state machine:
-     *  - [ErrorPhase.IDLE] — no error this load; the transcode fallback has not fired.
-     *  - [ErrorPhase.FALLING_BACK] — a direct error fired [onTranscodeFallbackNeeded];
-     *    stay BUFFERING while the ViewModel re-resolves so the error overlay does not flash.
-     *  - [ErrorPhase.TERMINAL] — no fallback available (already on transcode, or the
-     *    fallback retry also failed); hold ERROR so the follow-up STATE_IDLE ExoPlayer
-     *    emits after a PlaybackException does not mask it as BUFFERING.
+     * The error/fallback phase machine (commonMain [LiveFallbackPhase],
+     * pinned by LiveFallbackPhaseTest): per-load reset so a reused engine can
+     * re-fire the transcode fallback, IDLE-gating against rebuffer-storm
+     * double-fires, stay-BUFFERING while the ViewModel re-resolves, and the
+     * TERMINAL latch that keeps the follow-up STATE_IDLE from masking ERROR.
+     * This engine only applies the machine's decisions to media3.
      */
-    @Volatile
-    private var errorPhase: ErrorPhase = ErrorPhase.IDLE
+    private val fallbackPhase = LiveFallbackPhase()
 
     /** Latch: once release() runs, every subsequent method short-circuits. */
     @Volatile
@@ -130,10 +128,11 @@ class ExoLiveEngine(
         _errorMessage.value = null
         _errorDetail.value = null
         currentMethod = request.playMethod
-        // Per-load reset: a previous channel's fallback latch must not carry
-        // over — otherwise a reused engine could never fire the transcode
-        // fallback for a new channel after one fallback fired on the old.
-        errorPhase = ErrorPhase.IDLE
+        // Per-load reset (the machine's arm 1): a previous channel's fallback
+        // latch must not carry over — otherwise a reused engine could never
+        // fire the transcode fallback for a new channel after one fallback
+        // fired on the old.
+        fallbackPhase.onLoadStarted()
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.url)
@@ -195,20 +194,18 @@ class ExoLiveEngine(
 
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            // After a terminal error ExoPlayer emits STATE_IDLE; ignore it so
-            // it doesn't overwrite ERROR (which would re-show the spinner and
-            // hide the error dialog). The latch clears on the next load().
-            if (errorPhase == ErrorPhase.TERMINAL) {
-                refreshLiveWindow()
-                return
-            }
-            _state.value = when (playbackState) {
+            val mapped = when (playbackState) {
                 Player.STATE_BUFFERING -> LiveEngineState.BUFFERING
                 Player.STATE_READY -> LiveEngineState.READY
                 Player.STATE_ENDED -> LiveEngineState.ENDED
                 Player.STATE_IDLE -> LiveEngineState.IDLE
                 else -> _state.value
             }
+            // After a terminal error ExoPlayer emits STATE_IDLE; the machine's
+            // TERMINAL latch masks it so it doesn't overwrite ERROR (which
+            // would re-show the spinner and hide the error dialog). The latch
+            // clears on the next load().
+            fallbackPhase.onStateChanged(mapped)?.let { _state.value = it }
             refreshLiveWindow()
         }
 
@@ -225,27 +222,19 @@ class ExoLiveEngine(
             // a null message to live_error_playback_fallback.)
             _errorMessage.value = error.localizedMessage
             _errorDetail.value = error.toString()
-            // Gate on IDLE — ExoPlayer can fire onPlayerError repeatedly during
-            // a rebuffer storm and we only want one fallback trigger.
-            if (errorPhase == ErrorPhase.IDLE && currentMethod != LivePlayMethod.TRANSCODE) {
-                // Stay in BUFFERING while the ViewModel re-resolves to
-                // transcode; flipping to ERROR here flashes the error overlay
-                // for a frame before the fallback clears it. If the fallback
-                // also fails, it surfaces the error itself.
-                errorPhase = ErrorPhase.FALLING_BACK
-                _state.value = LiveEngineState.BUFFERING
+            // The machine decides: the one fallback per load (hold BUFFERING
+            // while the ViewModel re-resolves — flipping to ERROR here would
+            // flash the overlay for a frame) or terminal (already on
+            // transcode / the retry failed — publish ERROR and latch).
+            val decision = fallbackPhase.onDirectError(
+                fallbackAvailable = currentMethod != LivePlayMethod.TRANSCODE,
+            )
+            _state.value = decision.stateToPublish
+            if (decision == LiveFallbackPhase.DirectError.InvokeFallback) {
                 onTranscodeFallbackNeeded.invoke()
-            } else {
-                // No fallback available (already on transcode, or already
-                // retried) — surface the error and stop. Latch so the
-                // follow-up STATE_IDLE does not mask it.
-                errorPhase = ErrorPhase.TERMINAL
-                _state.value = LiveEngineState.ERROR
             }
         }
     }
-
-    private enum class ErrorPhase { IDLE, FALLING_BACK, TERMINAL }
 
     private companion object {
         private const val LIVE_EDGE_TOLERANCE_MS = 10_000L

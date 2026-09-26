@@ -55,7 +55,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
  * the previous version in [com.raulshma.jellyplay.core.database.migration.allMigrations];
  * `allMigrations_coversContiguousRange` enforces that chain.
  */
-const val JELLY_PLAY_DATABASE_VERSION: Int = 56
+const val JELLY_PLAY_DATABASE_VERSION: Int = 57
 
 @Database(
     entities = [
@@ -113,7 +113,7 @@ abstract class JellyPlayDatabase : RoomDatabase() {
 
 /**
  * Room 3 KMP instantiation seam (required once the module targets non-Android
- * platforms): the wasmJs/jvm Room builders construct the database through
+ * platforms): the jvm Room builders construct the database through
  * this expect — each target's KSP run generates the actual that instantiates
  * the generated JellyPlayDatabase_Impl. Android keeps its Context-based
  * builder path, but the annotation applies commonMain-wide and Room's android

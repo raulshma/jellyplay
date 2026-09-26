@@ -5,9 +5,8 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * ("English") for [TrackLabelFormatter] track labels. Returns `null` when the
  * platform cannot resolve it — the caller then falls back to the raw tag.
  *
- * expect/actual seam added with the wasmJs target:
+ * expect/actual seam:
  * TrackLabelFormatter previously used `java.util.Locale` directly in
- * commonMain, which was legal while this module only shipped android+jvm
- * but breaks once wasmJs joins.
+ * commonMain, which was legal while this module only shipped android+jvm.
  */
 internal expect fun platformLanguageDisplayName(bcp47Tag: String): String?

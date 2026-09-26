@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -20,7 +20,6 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import java.time.LocalDate
-import java.time.ZoneId
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,7 +52,13 @@ class PlayedStateSyncImplTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var downloadRepository: DownloadRepository
-    private val fakeTimeSource = FakeTimeSource()
+    // The deleted local copy defaulted now one minute after the fixture
+    // server stamp ("2024-06-15T10:30:00Z") so the ladder tests that don't
+    // care about now still pass the skew guard; `today` pins to that date.
+    private val fakeTimeSource = FakeTimeSource(
+        nowMs = epochMillis("2024-06-15T10:31:00Z"),
+        todayDate = LocalDate.of(2024, 6, 15),
+    )
     private lateinit var sync: PlayedStateSyncImpl
 
     @BeforeTest
@@ -830,18 +835,5 @@ class PlayedStateSyncImplTest {
 
         fun epochMillis(iso: String): Long =
             java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
-    }
-
-    /**
-     * Controllable [TimeSource] for the reconcile ladder — same shape as the
-     * fake in LyricsRepositoryImplTest (core:data deliberately hosts no shared
-     * test fakes; see TimeSource's KDoc). The default now sits one minute
-     * after the fixture server stamp ("2024-06-15T10:30:00Z") so the ladder
-     * tests that don't care about now still pass the skew guard.
-     */
-    private class FakeTimeSource(var nowMs: Long = epochMillis("2024-06-15T10:31:00Z")) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2024, 6, 15)
     }
 }

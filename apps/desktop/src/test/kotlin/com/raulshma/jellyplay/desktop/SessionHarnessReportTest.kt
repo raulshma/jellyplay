@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.desktop
 
+import com.raulshma.jellyplay.desktop.harness.SessionHarnessReport
+import com.raulshma.jellyplay.desktop.harness.StepResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject

@@ -204,24 +204,6 @@ class AudioEffectsControllerTest {
         )
     }
 
-    // ── Crossfade / gapless: engine apply + audio-store persist ───────────────
-
-    @Test
-    fun updateCrossfadeDuration_appliesToEngine_andPersists() {
-        controller.updateCrossfadeDuration(4_000L)
-
-        verify(exactly = 1) { engine.setCrossfadeDurationMs(4_000L) }
-        coVerify(exactly = 1) { audioStore.setAudioCrossfadeDurationMs(4_000L) }
-    }
-
-    @Test
-    fun updateGaplessPlayback_appliesToEngine_andPersists() {
-        controller.updateGaplessPlayback(false)
-
-        verify(exactly = 1) { engine.setGaplessEnabled(false) }
-        coVerify(exactly = 1) { audioStore.setAudioGaplessEnabled(false) }
-    }
-
     // ── Seeding: the ONE prefs→effects field list ─────────────────────────────
 
     @Test

@@ -160,10 +160,11 @@
 
     /*
      * TOC labels are author-controlled markup (NCX navLabel is XML, nav docs
-     * are HTML). Regex tag-stripping is bypassable (`<scr<script>ipt>` or an
-     * unterminated `<script` survive `/<[^>]*>/g`), so parse the label as a
-     * real document instead and take its text — textContent cannot contain
-     * markup, and DOMParser never executes or loads anything it parses.
+     * are HTML). Regex tag-stripping is bypassable (a nested opener spelled
+     * 'scr' + '<' + 'script' + '>ipt', or an unterminated '<scr' + 'ipt',
+     * survives /<[^>]*>/g), so parse the label as a real document instead
+     * and take its text — textContent cannot contain markup, and DOMParser
+     * never executes or loads anything it parses.
      */
     function plainLabel(value) {
         var raw = String(value || '');

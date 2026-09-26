@@ -12,9 +12,8 @@ import com.raulshma.jellyplay.core.ui.components.shortMonthDayYear
  *
  * The parsing and formatting bodies live ONLY in core:ui's DateLabels
  * (jvmShared actual: the verbatim java.time pipelines — `OffsetDateTime.parse`
- * + `Duration.between`, `LocalDateTime.parse(ISO_DATE_TIME)` + "MMM d, yyyy";
- * wasmJs actual: strict regexes + integer math + the one English month
- * table). SEMANTIC EQUIVALENCE (both platforms, pinned by
+ * + `Duration.between`, `LocalDateTime.parse(ISO_DATE_TIME)` + "MMM d, yyyy").
+ * SEMANTIC EQUIVALENCE (pinned by
  * RequestTimeJvmSemanticsTest through these façades):
  *  - Relative time compares two ABSOLUTE instants (the stamp's offset vs
  *    now), so the result is time-zone independent everywhere.
@@ -23,8 +22,6 @@ import com.raulshma.jellyplay.core.ui.components.shortMonthDayYear
  *    `LocalDateTime.parse(..., ISO_DATE_TIME)` did on the JVM.
  *  - A stamp with NO zone offset fails the relative read (null) on both
  *    platforms; parse failures null out exactly where the old catch paths did.
- * The fixed-English web month-abbreviation degrade is documented once on the
- * core/ui seam.
  */
 
 /**
@@ -44,8 +41,8 @@ internal fun formatRequestedDate(dateStr: String): String? =
 /**
  * Substitutes the resource templates' count placeholder (`%1$d`, or plain
  * `%d` in some translations) with [value].: replaces the old
- * `String.format(template, n)` calls — kotlin.text.format has no wasmJs
- * actual, and `String.format("%1\$dm", 5L)` produces exactly the same string
+ * `String.format(template, n)` calls — `String.format("%1\$dm", 5L)` produces
+ * exactly the same string
  * as the substitution for these plain `%d` placeholders (no flags/width).
  */
 internal fun formatCount(template: String, value: Long): String =

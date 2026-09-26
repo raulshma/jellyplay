@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -91,7 +91,7 @@ class PluginsViewModel(
                 start = { _state.value = _state.value.copy(isLoading = true, error = null) },
             )
             // Final-update settle, the VM's legacy shape: the arms never touch
-            // the loading flag. Declared timing unification (see AdminLoad):
+            // the loading flag. Declared timing unification (see loadInto):
             // the old ladder fired the fetch fire-and-forget, so this flag
             // cleared before the fetch landed; the folded ladder awaits it.
             _state.value = _state.value.copy(isLoading = false)
@@ -120,7 +120,7 @@ class PluginsViewModel(
 
     /** The shared (fetch, arms) triple both installed-plugins ladders dispatch. */
     private suspend fun loadInstalledPluginsLadder(start: () -> Unit) {
-        AdminLoad.load(
+        loadInto(
             start = start,
             fetch = { pluginAdminRepository.getInstalledPlugins() },
             onSuccess = ::applyInstalledPlugins,

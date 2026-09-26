@@ -9,13 +9,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the wasm Radarr/Sonarr wire DTOs' decode behavior and the wire→model
- * mappers against the jvmShared `RadarrApiClientImpl` / `SonarrApiClientImpl`
- * behavior they substitute for (field-for-field, including every fallback:
- * "Unknown" titles, poster remoteUrl-then-url preference, the progress math,
- * the nested quality.language walk, and the hardcoded Sonarr wanted
- * `monitored = true`). Decoding runs through the same lenient Json
- * configuration the JVM impls use (`SeerrApiClientImpl.lenientJson`'s twin).
+ * Pins the Radarr/Sonarr wire DTOs' decode behavior and the wire→model
+ * mappers — the exact shapes [ArrV3Client] and the two client impls decode
+ * through (field-for-field, including every fallback: "Unknown" titles,
+ * poster remoteUrl-then-url preference, the progress math, the nested
+ * quality.language walk, and the hardcoded Sonarr wanted `monitored = true`).
+ * Decoding runs through the same lenient Json configuration the JVM impls use
+ * (`SeerrApiClientImpl.lenientJson`'s twin).
  */
 class ArrWireMapperTest {
 
@@ -25,7 +25,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `radarr queue envelope decodes and maps with movie identity`() {
-        val resp = json.decodeFromString<RadarrQueueResponse>(
+        val resp = json.decodeFromString<ArrRecords<RadarrQueueResource>>(
             """
             {"page":1,"pageSize":10,"totalRecords":1,
              "records":[{
@@ -64,7 +64,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `radarr queue row without movie falls back to Unknown title and zero progress`() {
-        val item = json.decodeFromString<RadarrQueueResponse>("""{"records":[{"id":5,"status":"queued"}]}""")
+        val item = json.decodeFromString<ArrRecords<RadarrQueueResource>>("""{"records":[{"id":5,"status":"queued"}]}""")
             .records[0].toArrQueueItem()
         assertEquals("Unknown", item.title)
         assertNull(item.tmdbId)
@@ -74,7 +74,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `radarr queue progress coerces into the zero-one band`() {
-        val item = json.decodeFromString<RadarrQueueResponse>(
+        val item = json.decodeFromString<ArrRecords<RadarrQueueResource>>(
             """{"records":[{"id":6,"size":10.0,"sizeleft":-5.0,"status":"downloading"}]}""",
         ).records[0].toArrQueueItem()
         assertEquals(1f, item.progress, "(10 - -5)/10 = 1.5 coerced to 1")
@@ -82,7 +82,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `tracked download state drives the collapsed status`() {
-        fun statusOf(jsonBody: String) = json.decodeFromString<RadarrQueueResponse>(jsonBody)
+        fun statusOf(jsonBody: String) = json.decodeFromString<ArrRecords<RadarrQueueResource>>(jsonBody)
             .records[0].toArrQueueItem().status
         assertEquals(
             ArrDownloadStatus.IMPORTED,
@@ -129,7 +129,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `radarr wanted keeps the movie's own monitored flag and poster preference`() {
-        val rows = json.decodeFromString<RadarrWantedResponse>(
+        val rows = json.decodeFromString<ArrRecords<RadarrMovieResource>>(
             """
             {"records":[{"id":9,"title":"Fight Club","tmdbId":550,"monitored":true,"hasFile":false,
                          "digitalRelease":"2026-09-01",
@@ -144,7 +144,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `radarr blocklist and history map movie identity with Unknown fallback`() {
-        val block = json.decodeFromString<RadarrBlocklistResponse>(
+        val block = json.decodeFromString<ArrRecords<RadarrBlocklistRecord>>(
             """{"records":[{"id":3,"date":"2026-01-01","protocol":"torrent","indexer":"Prowlarr",
                              "message":"rejected","movie":{"id":9,"title":"Fight Club","tmdbId":550}}]}""",
         ).records[0].toArrBlocklistItem()
@@ -152,7 +152,7 @@ class ArrWireMapperTest {
         assertEquals("Fight Club", block.title)
         assertEquals("rejected", block.message)
 
-        val history = json.decodeFromString<RadarrHistoryResponse>(
+        val history = json.decodeFromString<ArrRecords<RadarrHistoryRecord>>(
             """{"records":[{"id":77,"eventType":"grabbed","date":"2026-02-02",
                              "data":{"indexer":"Prowlarr","releaseGroup":"EMU"},
                              "movie":{"id":9,"title":"Fight Club","tmdbId":550}}]}""",
@@ -163,14 +163,14 @@ class ArrWireMapperTest {
         assertEquals("Prowlarr", history.data["indexer"])
         assertEquals(
             "Unknown",
-            json.decodeFromString<RadarrHistoryResponse>("""{"records":[{"id":1}]}""")
+            json.decodeFromString<ArrRecords<RadarrHistoryRecord>>("""{"records":[{"id":1}]}""")
                 .records[0].toArrHistoryItem().title,
         )
     }
 
     @Test
     fun `radarr command maps with queued-before-started-before-ended date preference`() {
-        val cmd = json.decodeFromString<RadarrCommandResource>(
+        val cmd = json.decodeFromString<ArrCommandResource>(
             """{"id":42,"name":"SearchMovie","status":"queued","message":null,
                 "queued":"2026-01-01T00:00:00Z","started":null,"ended":null}""",
         ).toArrCommand()
@@ -184,7 +184,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `sonarr queue title joins series and episode and falls back to Unknown`() {
-        val mapped = json.decodeFromString<SonarrQueueResponse>(
+        val mapped = json.decodeFromString<ArrRecords<SonarrQueueResource>>(
             """
             {"records":[
                {"id":201,"series":{"id":4,"title":"Breaking Bad","tvdbId":81189},
@@ -225,7 +225,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `sonarr wanted hardcodes monitored true like the JVM mapper`() {
-        val row = json.decodeFromString<SonarrWantedResponse>(
+        val row = json.decodeFromString<ArrRecords<SonarrEpisodeResource>>(
             """{"records":[{"id":61,"title":"","airDateUtc":"2026-01-27T00:00:00Z",
                              "series":{"id":4,"title":"Breaking Bad","tvdbId":81189}}]}""",
         ).records[0].toArrWantedItem()
@@ -286,7 +286,7 @@ class ArrWireMapperTest {
 
     @Test
     fun `sonarr command maps with the same queued-first date preference`() {
-        val cmd = json.decodeFromString<SonarrCommandResource>(
+        val cmd = json.decodeFromString<ArrCommandResource>(
             """{"id":7,"name":"EpisodeSearch","status":"completed",
                 "queued":"2026-01-01T00:00:00Z","started":"2026-01-01T00:00:05Z"}""",
         ).toArrCommand()

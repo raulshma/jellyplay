@@ -7,10 +7,11 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.toMediaItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -51,7 +52,7 @@ import java.util.concurrent.atomic.AtomicLong
  * ## Online vs offline
  *
  * [offline] is a parameter (the player's per-session state), not a monitor.
- * Online loads hit `apiClient.getSeasons` + `apiClient.getAllEpisodes`; offline
+ * Online loads hit `libraryApiClient.getSeasons` + `libraryApiClient.getAllEpisodes`; offline
  * loads read `OfflineRepository` flows with a fresh `.first()` per call (no
  * network, no caching across the offline boundary — matches today's
  * `OfflinePlaybackFacade`).
@@ -67,7 +68,12 @@ import java.util.concurrent.atomic.AtomicLong
  * the transplanted repo tests keep passing.
  */
 class EpisodeCatalogueImpl(
-    private val apiClient: JellyfinApiClient,
+    /**
+     * Seasons / per-season episodes / all-episodes reads (the PlaybackRepositoryImpl
+     * ctor precedent: the LibraryApiClient family seam, not the JellyfinApiClient
+     * union — the family single composes the same impl the union delegates to).
+     */
+    private val libraryApiClient: LibraryApiClient,
     private val offlineRepository: OfflineRepository,
     /**
      * The single owner of identity transitions (see [HomeSession]). Replaces
@@ -87,7 +93,11 @@ class EpisodeCatalogueImpl(
 
     private val cache = TtlCache<EpisodeCatalogueSnapshot>(
         maxSize = CACHE_MAX_ENTRIES,
-        ttlMs = CACHE_TTL_MS,
+        // Cites the named detail-cluster policy (FreshnessCeilings.DETAIL_TTL_MS,
+        // core:model) — the same home MediaRepositoryImpl's detail caches cite.
+        // The old hand-synced comment ("Matches MediaRepositoryImpl
+        // DETAIL_CACHE_TTL_MS") is replaced by the shared constant itself.
+        ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
     )
 
     init {
@@ -150,7 +160,7 @@ class EpisodeCatalogueImpl(
             }
         } else {
             val epochAtStart = epoch.get()
-            apiClient.getEpisodes(seriesId, seasonId).mapCatching { episodes ->
+            libraryApiClient.getEpisodes(seriesId, seasonId).mapCatching { episodes ->
                 mergeSeasonIntoSnapshot(identity, cacheKey, seriesId, seasonId, episodes, epochAtStart)
                 episodes
             }
@@ -221,11 +231,11 @@ class EpisodeCatalogueImpl(
         seriesId: String,
         epochAtStart: Long,
     ): Result<EpisodeCatalogueSnapshot> = coroutineScope {
-        val seasonsDeferred = async { apiClient.getSeasons(seriesId) }
+        val seasonsDeferred = async { libraryApiClient.getSeasons(seriesId) }
         // Single round-trip for the full episode set, grouped by season id —
         // exact groupBy semantics of MediaRepositoryImpl.getAllEpisodesGrouped.
         val grouped = async {
-            apiClient.getAllEpisodes(seriesId).map { all -> all.groupBy { it.seasonId ?: "" } }
+            libraryApiClient.getAllEpisodes(seriesId).map { all -> all.groupBy { it.seasonId ?: "" } }
         }.await().getOrElse {
             // Fall back to per-season fan-out (older server that rejected the
             // unfiltered query). Caps concurrency at MAX_PARALLEL_SEASON_FETCHES.
@@ -252,7 +262,7 @@ class EpisodeCatalogueImpl(
         epochAtStart: Long,
     ): EpisodeCatalogueSnapshot {
         val grouped = seasonSemaphore.mapConcurrent(seasons) { season ->
-            val episodesResult = apiClient.getEpisodes(seriesId, season.id)
+            val episodesResult = libraryApiClient.getEpisodes(seriesId, season.id)
             if (epoch.get() == epochAtStart) {
                 episodesResult.getOrNull()?.let { season.id to it }
             } else {
@@ -320,8 +330,6 @@ class EpisodeCatalogueImpl(
 
     companion object {
         private const val CACHE_MAX_ENTRIES = 30
-        /** Matches `MediaRepositoryImpl.DETAIL_CACHE_TTL_MS` (2 minutes). */
-        private const val CACHE_TTL_MS = 2 * 60 * 1000L
         /** Matches `DetailViewModel.MAX_PARALLEL_SEASON_FETCHES`. */
         private const val MAX_PARALLEL_SEASON_FETCHES = 5
     }

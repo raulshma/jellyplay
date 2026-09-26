@@ -33,7 +33,7 @@
 
 
     <string name="home_settings">Paramètres</string>
-    <string name="home_switch_user">Changer d\'utilisateur</string>
+    <string name="home_switch_user">Changer d'utilisateur</string>
     <string name="home_go_online">Se connecter</string>
     <string name="home_go_offline">Se déconnecter</string>
 
@@ -47,6 +47,8 @@
     <!-- Home section headers. -->
     <string name="home_because_you_watched">Parce que vous avez regardé %1$s</string>
     <string name="home_discover">Découvrir</string>
+    <string name="home_discover_reroll">Relancer cette rangée</string>
+    <string name="home_discover_reroll_failed">Impossible de relancer cette rangée</string>
     <string name="home_coming_soon">Bientôt disponible</string>
     <string name="home_continue_watching">Reprendre le visionnage</string>
     <string name="home_continue_reading">Continuer la lecture</string>
@@ -78,7 +80,7 @@
     <string name="home_movie">Film</string>
     <string name="home_tv_show">Série</string>
     <string name="home_request_via_seerr">Demander via Seerr</string>
-    <string name="home_clear_search_history_title">Effacer l\'historique de recherche ?</string>
+    <string name="home_clear_search_history_title">Effacer l'historique de recherche ?</string>
     <string name="home_clear_search_history_message">Cela supprimera toutes vos recherches récentes. Action irréversible.</string>
     <string name="home_clear">Effacer</string>
     <string name="home_cancel">Annuler</string>
@@ -97,4 +99,5 @@
     <string name="home_download_started">Téléchargement lancé</string>
     <string name="home_download_start_failed">Impossible de lancer le téléchargement</string>
     <string name="home_series_download_queued">Épisodes mis en file d'attente pour le téléchargement</string>
+    <string name="home_see_all">Tout voir</string>
 </resources>

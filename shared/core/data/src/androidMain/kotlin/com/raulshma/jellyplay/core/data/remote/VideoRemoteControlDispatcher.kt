@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.data.remote
 
-import com.raulshma.jellyplay.core.data.util.DataBuildFlags
 import android.util.Log
+import com.raulshma.jellyplay.core.data.util.DataBuildFlags
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
 import com.raulshma.jellyplay.core.model.remote.PlaybackDomain
 import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
@@ -20,11 +21,16 @@ import kotlinx.coroutines.withContext
  * [Dispatchers.Default] and ExoPlayer rejects player mutations from any
  * other thread (`IllegalStateException: Player is accessed on the wrong
  * thread`).
+ *
+ * Renamed `AndroidVideoRemoteControlDispatcher` with the jvmShared
+ * extraction: `VideoRemoteControlDispatcher` is now the commonMain INTERFACE
+ * this class implements (desktop's jvmMain twin drives the per-session
+ * MpvDesktopEngine through the same [ActivePlayerController] registry).
  */
-class VideoRemoteControlDispatcher(
+class AndroidVideoRemoteControlDispatcher(
     private val activePlayerController: ActivePlayerController,
     private val remoteNavigationBridge: RemoteNavigationBridge,
-) : RemoteControlDispatcher {
+) : VideoRemoteControlDispatcher {
 
     override val domain: PlaybackDomain = PlaybackDomain.VIDEO
 
@@ -125,6 +131,23 @@ class VideoRemoteControlDispatcher(
                 GeneralCommand.ToggleFullscreen -> {
                     // TV is always fullscreen; the phone player is itself fullscreen.
                 }
+                // Nav-ladder + DisplayContent + TakeScreenshot are UI-level
+                // commands the receiver routes to the RemoteNavigationBridge /
+                // the controller's screenshot flow BEFORE any dispatcher sees
+                // them — these arms are the exhaustiveness backstop, not a
+                // second execution path.
+                GeneralCommand.Back,
+                GeneralCommand.Select,
+                GeneralCommand.MoveUp,
+                GeneralCommand.MoveDown,
+                GeneralCommand.MoveLeft,
+                GeneralCommand.MoveRight,
+                GeneralCommand.GoHome,
+                GeneralCommand.GoToSettings,
+                GeneralCommand.GoToSearch,
+                GeneralCommand.ToggleContextMenu,
+                is GeneralCommand.DisplayContent,
+                GeneralCommand.TakeScreenshot -> Unit
                 is GeneralCommand.DisplayMessage -> {
                     if (DataBuildFlags.debugBuild) {
                         Log.d(TAG, "DisplayMessage: ${command.header} ${command.text}")

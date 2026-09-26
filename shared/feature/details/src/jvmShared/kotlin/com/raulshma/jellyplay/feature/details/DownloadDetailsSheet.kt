@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.SheetSection
 import com.raulshma.jellyplay.core.ui.components.SheetTabRow
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.episodeCode
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
@@ -951,18 +952,12 @@ private fun WrappedInfoLine(label: String, value: String) {
 /** "S1E2 · Series Name" style context for an episode; null for non-episodes. */
 private fun episodeContext(item: MediaItem): String? {
     if (item.mediaType != MediaType.EPISODE) return null
-    val parts = buildList {
-        val s = item.seasonNumber
-        val e = item.episodeNumber
-        if (s != null && e != null) {
-            add("S${s.toString().padStart(2, '0')}E${e.toString().padStart(2, '0')}")
-        } else if (e != null) {
-            add("E${e.toString().padStart(2, '0')}")
-        }
-    }
-    val label = parts.joinToString(" · ")
+    // The sheet's ladder only shows a code when an episode number exists
+    // (season-only adds nothing) — the leg guard stays here, the string
+    // shape is episodeCode's.
+    val label = item.episodeNumber?.let { episodeCode(item.seasonNumber, it, padded = true) }
     val series = item.seriesName?.takeIf { it.isNotBlank() }
-    return listOfNotNull(label.takeIf { it.isNotBlank() }, series).joinToString(" · ").ifBlank { null }
+    return listOfNotNull(label?.takeIf { it.isNotBlank() }, series).joinToString(" · ").ifBlank { null }
 }
 
 private fun formatDate(epochMillis: Long): String =

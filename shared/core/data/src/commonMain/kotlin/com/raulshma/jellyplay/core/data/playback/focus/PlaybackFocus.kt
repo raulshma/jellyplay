@@ -86,7 +86,7 @@ interface PlaybackFocus {
 }
 
 /**
- * Honest fallback where no focus authority is bound (wasmJs; desktop until
+ * Honest fallback where no focus authority is bound (desktop until
  * slice 2; test harnesses without a focus fixture). Arbitration is vacuously
  * GRANTED: on platforms where only ONE sound-maker can exist, "exclusive by
  * default" is the truthful answer — there is no second surface to pause, and

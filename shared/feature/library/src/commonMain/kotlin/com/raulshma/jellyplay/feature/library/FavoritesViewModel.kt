@@ -81,7 +81,7 @@ internal class FavoritesViewModel(
 
     /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
     // Whether this platform has a download pipeline — screens gate the
-    // download CTA on it (hidden rather than Failed-toasting on web).
+    // download CTA on it (hidden rather than Failed-toasting).
     val downloadSupported = quickDownloadActions.isSupported
 
     val downloadedIds = quickDownloadActions.downloadedIds

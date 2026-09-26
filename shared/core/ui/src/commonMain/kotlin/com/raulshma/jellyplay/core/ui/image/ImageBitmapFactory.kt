@@ -22,7 +22,6 @@ expect fun argbPixelsToImageBitmap(pixels: IntArray, width: Int, height: Int): I
  * into a bitmap; null on failure. The decoded bitmap's longest edge stays
  * within [maxEdgePx] (power-of-two subsampling on Android, post-decode
  * downscale on desktop) — archive scans without it decode at native size,
- * where a single page costs ~100 MB. The wasmJs actual returns null (honest
- * degradation: callers treat it as "failed page" and keep their placeholder).
+ * where a single page costs ~100 MB.
  */
 expect fun decodeImageBytes(bytes: ByteArray, maxEdgePx: Int): ImageBitmap?

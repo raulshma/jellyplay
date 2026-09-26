@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -128,6 +129,7 @@ class PlayerSessionManagerTest {
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
+            playbackIdentity = mockk(relaxed = true),
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             aggregateStore = aggregateStore,
@@ -272,6 +274,135 @@ class PlayerSessionManagerTest {
         )
 
         assertTrue(sessionManager.sessionState.value.isDirectPlayForced)
+    }
+
+    // ── Client certificate × engine selection ────────────────
+
+    /**
+     * Builds a manager whose preferred engine and client-TLS read are the two
+     * variables under test (everything else mirrors [setUp]). The factory
+     * hands out [engine] for [playerType] and every `load` onto it is
+     * recorded, so the tests can pin BOTH halves of the contract: the
+     * VLC notice emission AND that the engines' [PlaybackRequest] carries
+     * (or omits) the TLS file paths.
+     */
+    private fun clientCertSessionManager(
+        playerType: PlayerType,
+        clientTls: com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls?,
+        engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
+        loadedRequests: MutableList<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>,
+    ): PlayerSessionManager {
+        val agg = VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = playerType))
+        every { aggregateStore.aggregate } returns MutableStateFlow(agg)
+        every { aggregateStore.aggregateRaw } returns flowOf(agg)
+
+        every { engine.load(any()) } answers {
+            loadedRequests += firstArg<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        }
+        val factory = io.mockk.mockk<com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory> {
+            coEvery { create(playerType) } returns engine
+        }
+        val identity = mockk<com.raulshma.jellyplay.core.data.playback.PlaybackIdentity>(relaxed = true)
+        every { identity.clientTls() } returns clientTls
+
+        return PlayerSessionManager(
+            scope = CoroutineScope(testDispatcher + SupervisorJob()),
+            mediaRepository = mediaRepository,
+            playbackRepository = playbackRepository,
+            playbackIdentity = identity,
+            downloadRepository = downloadRepository,
+            offlineRepository = offlineRepository,
+            aggregateStore = aggregateStore,
+            playerLifecycleManager = playerLifecycleManager,
+            pipController = mockk(relaxed = true),
+            adaptiveBitrateManager = adaptiveBitrateManager,
+            playerEngineFactory = factory,
+            playbackSourceResolver = playbackSourceResolver,
+            streamingSubtitleStore = noOpStreamingSubtitleStore(),
+            offlineMediaProbe = mockk(relaxed = true),
+            offlineModeManager = offlineModeManager,
+            userMessageBus = messageBus,
+        )
+    }
+
+    /** Loads one online session against [manager] with a minimal playable detail. */
+    private suspend fun loadOneOnlineSession(manager: PlayerSessionManager) {
+        val itemId = "item-movie"
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
+        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(
+            MediaDetail(
+                item = MediaItem(id = itemId, name = "Test Movie", mediaType = MediaType.MOVIE),
+                mediaSources = listOf(MediaSource(id = "ms-1", name = "Test Source")),
+            ),
+        )
+        manager.loadMedia(PlaybackSource.Online(itemId, "ms-1"), startPositionTicks = 0L)
+    }
+
+    private val activeTls = com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls(
+        clientCertificatePath = "/certs/client.crt",
+        clientKeyPath = "/certs/client.key",
+        caPath = "/certs/server-ca.pem",
+    )
+
+    @Test
+    fun libVlcLoad_withActiveClientCertificate_notifiesOnceAndDoesNotBlock() = runTest(testDispatcher) {
+        val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        val manager = clientCertSessionManager(
+            playerType = PlayerType.LIBVLC,
+            clientTls = activeTls,
+            engine = mockk(relaxed = true),
+            loadedRequests = loaded,
+        )
+
+        loadOneOnlineSession(manager)
+
+        // The documented-unsupported notice fires exactly once and names the
+        // alternatives; the load itself proceeds (not blocked — the server
+        // decides whether a certificate-less VLC connection lives).
+        assertEquals(1, messageBus.infos.count { it.contains("VLC") })
+        assertEquals(1, loaded.size)
+        assertEquals(activeTls, loaded.single().tls)
+
+        // Second load of another item: still one notice (one-time per session
+        // manager), still loading.
+        loadOneOnlineSession(manager)
+        assertEquals(1, messageBus.infos.count { it.contains("VLC") })
+        assertEquals(2, loaded.size)
+    }
+
+    @Test
+    fun libVlcLoad_withoutClientCertificate_isSilent() = runTest(testDispatcher) {
+        val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        val manager = clientCertSessionManager(
+            playerType = PlayerType.LIBVLC,
+            clientTls = null,
+            engine = mockk(relaxed = true),
+            loadedRequests = loaded,
+        )
+
+        loadOneOnlineSession(manager)
+
+        assertEquals(0, messageBus.infos.size)
+        assertEquals(1, loaded.size)
+        assertEquals(null, loaded.single().tls)
+    }
+
+    @Test
+    fun mpvLoad_withActiveClientCertificate_isSilentAndCarriesTheTlsPaths() = runTest(testDispatcher) {
+        val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        val manager = clientCertSessionManager(
+            playerType = PlayerType.MPV,
+            clientTls = activeTls,
+            engine = mockk(relaxed = true),
+            loadedRequests = loaded,
+        )
+
+        loadOneOnlineSession(manager)
+
+        // mpv CONSUMES the certificate (via the tls-* options) — no notice.
+        assertEquals(0, messageBus.infos.size)
+        assertEquals(1, loaded.size)
+        assertEquals(activeTls, loaded.single().tls)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

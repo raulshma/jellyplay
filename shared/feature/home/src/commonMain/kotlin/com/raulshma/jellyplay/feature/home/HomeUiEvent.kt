@@ -105,6 +105,12 @@ sealed interface HomeUiEvent {
         val visible: Boolean,
     ) : HomeUiEvent
 
+    /**
+     * The dice affordance on a RANDOM-sorted custom discover row: re-rolls
+     * that row's items in place (see [HomeRefresher.rollDiscoverRow]).
+     */
+    data class RollDiscoverRow(val rowId: String) : HomeUiEvent
+
     /** Prefetches the child-image URLs for the visible photo-folder rows. */
     data class PrefetchPhotoFolderChildUrls(val items: List<MediaItem>) : HomeUiEvent
 

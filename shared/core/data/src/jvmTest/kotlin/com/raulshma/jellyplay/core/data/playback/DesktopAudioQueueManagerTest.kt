@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,7 +81,12 @@ class DesktopAudioQueueManagerTest {
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
             sleepTimerManager = SleepTimerManager(TestTimeSource()),
             scope = scope,
-            engineFactory = { FakeMediaEngine().also { engines += it } },
+            // The shared union fake in its AUTO_PLAY (desktop-mpv) personality:
+            // auto-play on load, READY parks, play-from-ENDED replays at zero.
+            engineFactory = {
+                FakeMediaEngine(loadBehavior = FakeMediaEngine.LoadBehavior.AUTO_PLAY)
+                    .also { engines += it }
+            },
             mainThreadGuard = false,
             progressReportIntervalMs = 40L,
             effectsManager = effects,

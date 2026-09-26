@@ -31,6 +31,19 @@ data class DesktopPaths(
      */
     val logsDirNio: NioPath get() = NioPathOf("$dataDir/logs")
 
+    /**
+     * GLSL shader-pack root: the appdata root's `shaders` folder —
+     * literally `%APPDATA%/JellyPlay/shaders/` on Windows. The bundled
+     * Anime4K chains are extracted here at startup (manifest-versioned,
+     * re-extracted on version bump) because mpv's `glsl-shaders` option needs
+     * real file paths; user-dropped `*.glsl` files live in the same folder
+     * and are listable as custom shaders.
+     */
+    val shadersDirNio: NioPath
+        get() = dataDir.parent
+            ?.let { NioPathOf(it.toString()).resolve("shaders") }
+            ?: NioPathOf("$dataDir/shaders")
+
     companion object {
         fun resolve(): DesktopPaths {
             //  measurement hook: the perf harness overrides the whole

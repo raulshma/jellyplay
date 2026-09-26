@@ -9,7 +9,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -52,6 +50,7 @@ import com.raulshma.jellyplay.core.model.StorageBytesUnit
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.toStorageBytesValue
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -446,12 +445,6 @@ private fun SubtitleToggleRow(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "subtitleToggleScale",
-    )
     val focusState = rememberTvFocusState(focusedScale = 1.02f)
     val container by animateColorAsState(
         targetValue = if (isChecked) {
@@ -466,10 +459,11 @@ private fun SubtitleToggleRow(
             .fillMaxWidth()
             .clip(ShapeCache.smooth12)
             .background(container)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.97f,
+                spec = MaterialTheme.motionScheme.fastEffectsSpec(),
+            )
             .then(focusState.focusModifier)
             .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12))
             .clickable(

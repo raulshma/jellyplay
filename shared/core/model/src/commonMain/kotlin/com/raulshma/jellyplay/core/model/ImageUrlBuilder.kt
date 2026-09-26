@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
 /**
- * Pure item-image URL builder for the wasm library client — a verbatim port
+ * Pure item-image URL builder — a verbatim port
  * of the Jellyfin SDK 1.8.12 `ImageApi.getItemImageUrl` +
  * `UrlBuilder.buildUrl` behavior for exactly the parameters the app uses
  * (`maxWidth` / `tag` / `imageIndex`; the other query keys keep their SDK
@@ -16,11 +16,6 @@ package com.raulshma.jellyplay.core.model
  *  - NO `api_key` query parameter and NO token: the SDK's `createUrl` never
  *    appends the access token (auth travels on the request layer), so image
  *    URLs are bearer-less exactly like the JVM/desktop ones.
- *
- * wasm v1 note: the Coil wasm engine landed and a
- * browser pass VERIFIED these bearer-less URLs decode end-to-end — no
- * credential-bearing variant is needed (the earlier open question is
- * closed; see the harness notes in apps/web and tools/e2e/web-verify).
  *
  * Lives in core:model (promoted from core:network's library package):
  * pure URL math with no transport dependency, consumed by feature modules

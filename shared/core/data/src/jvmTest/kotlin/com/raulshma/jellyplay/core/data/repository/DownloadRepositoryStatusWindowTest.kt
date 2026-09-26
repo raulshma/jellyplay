@@ -41,17 +41,16 @@ class DownloadRepositoryStatusWindowTest {
         mediaRepository = mockk(relaxed = true),
         episodeCatalogue = mockk(relaxed = true),
         playbackRepository = mockk(relaxed = true),
-        httpClient = mockk(relaxed = true),
         downloadsStore = mockk(relaxed = true),
-        json = mockk(relaxed = true),
-        downloadDelegate = lazy { mockk(relaxed = true) },
         storagePolicy = mockk(relaxed = true),
         downloadEnqueuer = mockk(relaxed = true),
-        storageLayout = mockk(relaxed = true),
-        syncComparator = mockk(relaxed = true),
         progressNotifier = mockk(relaxed = true),
-        imagePreloader = mockk(relaxed = true),
-        timeSource = mockk(relaxed = true),
+        // The D6 writer-core extraction narrowed the ctor: the artifact-write
+        // half (and the sidecar surface) lives in the writer; the reads this
+        // suite pins run straight off the DAO. Neither collaborator is
+        // touched here, so relaxed mocks suffice.
+        writer = mockk(relaxed = true),
+        downloadDelegate = mockk(relaxed = true),
     )
 
     private fun entity(mediaItemId: String) = DownloadEntity(

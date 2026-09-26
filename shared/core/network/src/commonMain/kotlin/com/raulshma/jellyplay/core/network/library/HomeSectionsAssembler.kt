@@ -12,8 +12,8 @@ import com.raulshma.jellyplay.core.model.descriptor
 /**
  * Pure assembly of [HomeSectionsResult] from already-fetched sub-call
  * results — the section-building/ordering half of the jvmShared
- * `LibraryApiClientImpl.getHomeSections`, extracted so the wasm client shares
- * the exact ordering logic and commonTest can pin it without a server.
+ * `LibraryApiClientImpl.getHomeSections`, extracted so
+ * commonTest can pin it without a server.
  *
  * Emission order (verbatim from the JVM impl):
  * Continue Watching → Continue Reading → Next Up → one Latest Media row per
@@ -44,6 +44,13 @@ internal class HomeSectionsAssemblyInputs(
      */
     val suggestions: List<MediaItem> = emptyList(),
     val pinnedSections: List<HomeSection> = emptyList(),
+    /**
+     * User-configured JELLYFIN discover rows, already built as sections by the
+     * fetcher (row order preserved). Emitted ahead of the pinned sections so
+     * OrderHomeSectionsUseCase's stable sort places the DISCOVER block at the
+     * user's configured type position with rows in config order.
+     */
+    val discoverSections: List<HomeSection> = emptyList(),
 )
 
 internal class HomeSectionsAssemblyOutput(
@@ -193,6 +200,10 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
             if (firstError == null) firstError = it
             failedTypes.add(HomeSectionType.RECOMMENDATIONS)
         }
+
+    // User-configured discover rows (Jellyfin sources; Seerr rows are spliced
+    // in by the feature layer after ordering). Config order within the block.
+    input.discoverSections.forEach { section -> sections.add(section) }
 
     // Append user-pinned sections (collections / playlists / favorites /
     // genres / studios) — always fetched regardless of enabledSections, and

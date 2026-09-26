@@ -25,7 +25,7 @@
     <string name="audio_topbar_now_playing">Lecture en cours</string>
     <string name="audio_topbar_minimize">Réduire</string>
     <string name="audio_topbar_lyrics">Paroles</string>
-    <string name="audio_topbar_queue">File d\'attente</string>
+    <string name="audio_topbar_queue">File d'attente</string>
     <string name="audio_topbar_more">Plus</string>
     <string name="audio_menu_speed">Vitesse (%1$s)</string>
     <string name="audio_menu_equalizer">Égaliseur</string>
@@ -70,7 +70,7 @@
 
     <!-- Sleep timer -->
     <string name="audio_sleep_timer_title">Minuteur de veille</string>
-    <string name="audio_sleep_timer_end_of_episode">Fin de l\'épisode</string>
+    <string name="audio_sleep_timer_end_of_episode">Fin de l'épisode</string>
     <string name="audio_sleep_timer_duration">Durée</string>
 
     <!-- Equalizer -->
@@ -91,10 +91,10 @@
     <string name="audio_effects_pitch_original">Original</string>
     <string name="audio_effects_pitch_value">%1$s demi-ton(s)</string>
     <string name="audio_effects_auto_eq">Auto-EQ par genre</string>
-    <string name="audio_effects_auto_eq_description">Applique un préréglage d\'égaliseur selon le genre du morceau</string>
+    <string name="audio_effects_auto_eq_description">Applique un préréglage d'égaliseur selon le genre du morceau</string>
 
     <!-- Queue sheet -->
-    <string name="audio_queue_title">File d\'attente</string>
+    <string name="audio_queue_title">File d'attente</string>
     <string name="audio_queue_remove">Retirer de la file</string>
     <string name="audio_queue_position">%1$d sur %2$d</string>
 
@@ -107,7 +107,7 @@
     <string name="audio_speed_title">Vitesse de lecture</string>
 
     <!-- Ambient -->
-    <string name="audio_ambient_tap_to_exit">Appuyez n\'importe où pour quitter</string>
+    <string name="audio_ambient_tap_to_exit">Appuyez n'importe où pour quitter</string>
 
     <!-- Download delete dialog -->
     <string name="audio_download_delete_title">Supprimer le téléchargement</string>
@@ -123,7 +123,7 @@
     <!-- Cast -->
     <string name="audio_cast">Diffuser</string>
     <string name="audio_cast_connected">Diffusion connectée</string>
-    <string name="audio_cast_to_device">Diffuser vers l\'appareil</string>
+    <string name="audio_cast_to_device">Diffuser vers l'appareil</string>
     <string name="audio_cast_no_devices">Aucun appareil de diffusion trouvé. Assurez-vous que votre appareil est sur le même réseau.</string>
     <string name="audio_cast_ok">OK</string>
 </resources>

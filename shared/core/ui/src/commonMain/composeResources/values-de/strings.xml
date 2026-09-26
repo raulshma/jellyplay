@@ -139,6 +139,7 @@
     <string name="ss_cat_audio_player">Audio-Player</string>
     <string name="ss_cat_backup_restore">Backup &amp; Wiederherstellung</string>
     <string name="ss_cat_experimental">Experimentell</string>
+    <string name="ss_cat_home">Startbildschirm</string>
     <string name="ss_cat_integrations">Integrationen</string>
     <string name="ss_cat_language_subtitles">Sprache &amp; Untertitel</string>
     <string name="ss_cat_notifications">Benachrichtigungen</string>
@@ -252,4 +253,20 @@
     <string name="core_remove_download_confirm">Löschen</string>
     <string name="core_ui_read_more">Mehr anzeigen</string>
     <string name="core_ui_show_less">Weniger anzeigen</string>
+    <string name="core_media_folder">Ordner</string>
+    <string name="core_media_folder_plural">Ordner</string>
+    <string name="core_ui_auth_use_screen_lock">Gerätesperre verwenden</string>
+    <string name="core_ui_auth_unlock_screen_lock">Mit Gerätesperre entsperren</string>
+    <string name="core_ui_auth_device_credential_prompt">Gerätesperre zum Entsperren verwenden</string>
+    <string name="core_show_password">Passwort anzeigen</string>
+    <string name="core_hide_password">Passwort ausblenden</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">Was ist neu</string>
+    <string name="core_ui_whatsnew_release_title">Neu in v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">Neu</string>
+    <string name="core_ui_whatsnew_category_improvement">Verbessert</string>
+    <string name="core_ui_whatsnew_category_fix">Behoben</string>
+    <string name="core_ui_whatsnew_take_me_there">Direkt hin</string>
+    <string name="core_ui_whatsnew_got_it">Verstanden</string>
+    <string name="core_ui_whatsnew_archive_empty">Noch keine Release-Highlights.</string>
 </resources>

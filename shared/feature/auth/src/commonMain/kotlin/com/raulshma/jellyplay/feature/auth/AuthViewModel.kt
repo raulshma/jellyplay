@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -48,15 +49,6 @@ class AuthViewModel(
 
     private var quickConnectPollingJob: Job? = null
 
-    fun addServer(address: String, onResult: (Result<ServerInfo>) -> Unit) {
-        launch {
-            _isLoading.set(true)
-            val result = authRepository.addServer(address)
-            _isLoading.set(false)
-            onResult(result)
-        }
-    }
-
     fun removeServer(serverId: String) {
         launch {
             authRepository.removeServer(serverId)
@@ -82,9 +74,8 @@ class AuthViewModel(
         _serverHealth.set(servers.associate { it.address to ServerHealth.Checking })
         healthCheckJob = launch {
             servers.forEach { server ->
-                // Monotonic elapsed read (stdlib) — the web target has no
-                // System.currentTimeMillis, and latency wants the wall-clock-
-                // independent measure anyway.
+                // Monotonic elapsed read (stdlib) — latency wants the
+                // wall-clock-independent measure anyway.
                 val probeClock = TimeSource.Monotonic.markNow()
                 val addresses = listOf(server.address) + server.alternateAddresses
                 val reachable = addresses.any { address ->
@@ -137,7 +128,7 @@ class AuthViewModel(
             if (enabledResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        enabledResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                        UserErrorMessages.rawOrNull(enabledResult)?.let { AuthMessage.Raw(it) }
                             ?: AuthMessage.Resource(Res.string.auth_qc_error_check_availability)
                     )
                 )
@@ -156,7 +147,7 @@ class AuthViewModel(
             if (initiateResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        initiateResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                        UserErrorMessages.rawOrNull(initiateResult)?.let { AuthMessage.Raw(it) }
                             ?: AuthMessage.Resource(Res.string.auth_qc_error_initiate)
                     )
                 )
@@ -182,7 +173,7 @@ class AuthViewModel(
                     if (pollResult.isFailure) {
                         _quickConnectState.set(
                             QuickConnectUiState.Error(
-                                pollResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                                UserErrorMessages.rawOrNull(pollResult)?.let { AuthMessage.Raw(it) }
                                     ?: AuthMessage.Resource(Res.string.auth_qc_error_polling)
                             )
                         )
@@ -200,7 +191,7 @@ class AuthViewModel(
                         } else {
                             _quickConnectState.set(
                                 QuickConnectUiState.Error(
-                                    loginResult.exceptionOrNull()?.message?.let { AuthMessage.Raw(it) }
+                                    UserErrorMessages.rawOrNull(loginResult)?.let { AuthMessage.Raw(it) }
                                         ?: AuthMessage.Resource(Res.string.auth_qc_error_auth)
                                 )
                             )

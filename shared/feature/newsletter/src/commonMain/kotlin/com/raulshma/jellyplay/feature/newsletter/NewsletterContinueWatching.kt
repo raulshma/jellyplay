@@ -34,7 +34,10 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.hasMeaningfulRuntime
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.progressFraction
+import com.raulshma.jellyplay.core.ui.components.episodeCode
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
@@ -87,8 +90,11 @@ private fun ContinueWatchingCard(
 ) {
     val progress = item.progressFraction() ?: 0f
 
-    val remainingText = if (item.runTimeTicks != null && item.playbackPositionTicks != null) {
-        remember(item.runTimeTicks, item.playbackPositionTicks) {
+    // The model's time-remaining pair: watch progress (a real, unfinished
+    // position — a finished item must not claim time left) over a meaningful
+    // runtime (the remaining math needs a non-zero runtime anyway).
+    val remainingText = if (item.hasWatchProgress && item.hasMeaningfulRuntime) {
+        remember(item.runTimeTicks, item.playbackPositionTicks, item.isPlayed) {
             formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
         }
     } else null
@@ -143,11 +149,7 @@ private fun ContinueWatchingCard(
                 )
                 if (item.mediaType == MediaType.EPISODE && item.seriesName != null) {
                     Text(
-                        text = buildString {
-                            append(item.seriesName)
-                            item.seasonNumber?.let { s -> append(" S${s}") }
-                            item.episodeNumber?.let { e -> append("E${e}") }
-                        },
+                        text = episodeSeriesSubtitle(item),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.8f),
                         maxLines = 1,
@@ -173,7 +175,7 @@ private fun ContinueWatchingCard(
                     )
                 }
 
-                if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
+                if (item.hasMeaningfulRuntime) {
                     item.year?.let {
                         Text(
                             text = "\u00B7",
@@ -347,11 +349,7 @@ private fun NextUpCard(
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                 ) {
                     Text(
-                        text = buildString {
-                            append(item.seriesName)
-                            item.seasonNumber?.let { s -> append(" S${s}") }
-                            item.episodeNumber?.let { e -> append("E${e}") }
-                        },
+                        text = episodeSeriesSubtitle(item),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = Color.White,
                         maxLines = 1,
@@ -385,7 +383,7 @@ private fun NextUpCard(
                     )
                 }
 
-                if (item.runTimeTicks != null && item.runTimeTicks!! > 0 && item.mediaType != MediaType.SERIES) {
+                if (item.hasMeaningfulRuntime) {
                     item.year?.let {
                         Text(
                             text = "\u00B7",
@@ -435,5 +433,22 @@ private fun NextUpCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * The newsletter rows' `SeriesName S1E2` context line — [episodeCode]'s
+ * unpadded form appended after the series name, one space before the
+ * S-leg (the episode-only leg butts the code straight against the name,
+ * as these rows have always rendered it). Shared by the recently-added
+ * rows so the newsletter spells the context one way; callers guard on
+ * `mediaType == EPISODE && seriesName != null`.
+ */
+internal fun episodeSeriesSubtitle(item: MediaItem): String = buildString {
+    append(item.seriesName ?: "")
+    val code = episodeCode(item.seasonNumber, item.episodeNumber, padded = false)
+    if (code != null) {
+        if (item.seasonNumber != null) append(' ')
+        append(code)
     }
 }

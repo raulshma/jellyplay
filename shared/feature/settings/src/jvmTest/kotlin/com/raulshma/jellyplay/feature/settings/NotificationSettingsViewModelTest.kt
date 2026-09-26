@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
@@ -43,7 +42,6 @@ class NotificationSettingsViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var store: UserPreferencesStore
     private lateinit var projections: PreferenceProjections
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var editor: PreferencesEditor
@@ -55,7 +53,6 @@ class NotificationSettingsViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        store = mockk(relaxed = true)
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
@@ -75,7 +72,7 @@ class NotificationSettingsViewModelTest {
     }
 
     private fun viewModel() = NotificationSettingsViewModel(
-        store, projections, AdvancedSettingsGate(appearanceStore, editor), editor, mediaRepository, notificationSync,
+        projections, AdvancedSettingsGate(appearanceStore, editor), editor, mediaRepository, notificationSync,
     )
 
     @Test

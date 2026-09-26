@@ -13,12 +13,15 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Pins [PipController]'s state-holder contract:
+ * Pins [AndroidPipController]'s state-holder contract (the production impl of
+ * the commonMain [PipController] port):
  *
  * - Every mirror flow starts at its idle value and reflects the last setter
  *   call (pip mode, playing, auto-enter, aspect ratio, source rect, controls
  *   locked).
  * - Auto-exit and pip-dismissed are one-shot flags: set → consumed/cleared.
+ * - The port's `(width, height)` aspect pairs and 4-int source rects map onto
+ *   the Android-typed extras the host Activity reads.
  * - `reset()` clears everything, including the registered [PipTransport],
  *   hasNext flag and the locked flag — playback-end must not leak state into
  *   the next session.
@@ -29,7 +32,7 @@ class PipControllerTest {
 
     @Test
     fun `initial state is idle`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
 
         assertFalse(pip.isInPipMode.value)
         assertFalse(pip.shouldAutoEnterPip.value)
@@ -45,26 +48,25 @@ class PipControllerTest {
 
     @Test
     fun `mirrored state reflects the latest setter call`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
 
         pip.setPipMode(true)
         pip.setPlaying(true)
         pip.requestAutoEnterPip(true)
         pip.pipHasNext = true
-        val ratio = Rational(16, 9)
-        pip.setPipAspectRatio(ratio)
+        pip.setPipAspectRatio(16 to 9)
 
         assertTrue(pip.isInPipMode.value)
         assertTrue(pip.isPlaying.value)
         assertTrue(pip.shouldAutoEnterPip.value)
         assertTrue(pip.pipHasNext)
-        assertSame(ratio, pip.pipAspectRatio.value)
+        assertEquals(Rational(16, 9), pip.pipAspectRatio.value)
     }
 
     @Test
     fun `a null aspect ratio clears the flow`() {
-        val pip = PipController()
-        pip.setPipAspectRatio(Rational(2, 3))
+        val pip = AndroidPipController()
+        pip.setPipAspectRatio(2 to 3)
 
         pip.setPipAspectRatio(null)
 
@@ -73,7 +75,7 @@ class PipControllerTest {
 
     @Test
     fun `source rect hint stores and clears`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
         val rect = Rect(0, 0, 100, 50)
 
         pip.updatePipSourceRect(rect)
@@ -84,8 +86,17 @@ class PipControllerTest {
     }
 
     @Test
+    fun `port surface-rect ints map onto the stored rect`() {
+        val pip = AndroidPipController()
+
+        pip.updatePipSourceRect(1, 2, 3, 4)
+
+        assertEquals(Rect(1, 2, 3, 4), pip.pipSourceRect)
+    }
+
+    @Test
     fun `auto-exit is a one-shot request consumed by the host`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
 
         pip.requestAutoExitPip()
         assertTrue(pip.autoExitPip.value)
@@ -96,7 +107,7 @@ class PipControllerTest {
 
     @Test
     fun `pip dismissed is a sticky flag cleared by the UI`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
 
         pip.notifyPipDismissed()
         assertTrue(pip.pipDismissed.value)
@@ -110,7 +121,7 @@ class PipControllerTest {
 
     @Test
     fun `controls lock mirrors the player UI state`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
 
         pip.setControlsLocked(true)
         assertTrue(pip.isControlsLocked)
@@ -121,7 +132,7 @@ class PipControllerTest {
 
     @Test
     fun `reset clears every piece of state including the transport`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
         val dispatched = mutableListOf<PipAction>()
         pip.pipTransport = PipTransport { dispatched.add(it) }
         pip.setPipMode(true)
@@ -129,8 +140,8 @@ class PipControllerTest {
         pip.requestAutoEnterPip(true)
         pip.requestAutoExitPip()
         pip.notifyPipDismissed()
-        pip.setPipAspectRatio(Rational(16, 9))
-        pip.updatePipSourceRect(Rect(1, 2, 3, 4))
+        pip.setPipAspectRatio(16 to 9)
+        pip.updatePipSourceRect(1, 2, 3, 4)
         pip.pipHasNext = true
         pip.setControlsLocked(true)
 
@@ -150,7 +161,7 @@ class PipControllerTest {
 
     @Test
     fun `transport dispatches pip actions to the registered handler`() {
-        val pip = PipController()
+        val pip = AndroidPipController()
         val dispatched = mutableListOf<PipAction>()
         pip.pipTransport = PipTransport { dispatched.add(it) }
 

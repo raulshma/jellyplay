@@ -1,30 +1,34 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+
 /**
- * Per-group row-admission totals — the `audioScreenRowTotal` shape extended to
- * every screen group that used to hand-run the count (or hand-bump a row
- * index): a pure function of the catalog group declaration plus the flag
- * inputs that genuinely gate rows (advanced toggle, parent toggles, platform
- * visibility), so the `SettingsItemList(total = …)` a screen feeds can never
- * drift from the rows it actually emits. The per-row index is owned by
- * `SettingsItemList` itself (the core auto-indexing container), which leaves
+ * The single row-total derivation — the per-group `*ScreenRowTotal` functions
+ * collapsed into one: a pure function of the catalog group declaration plus
+ * the flag inputs that genuinely gate rows (advanced toggle, parent toggles,
+ * platform visibility), so the `SettingsItemList(total = …)` a screen feeds
+ * can never drift from the rows it actually emits. The per-row index is owned
+ * by `SettingsItemList` itself (the core auto-indexing container), which leaves
  * the screens with no mutable counters at all.
  *
  * Every function here is pure (and internal) so
  * `SettingsCatalogScreenContractTest` can pin each gate against the
- * declaration; the screens consume them (consumption is itself pinned by the
- * test's `requiredDerivationUsage`).
+ * declaration.
  *
  * A gated row's admission is declared ONCE, per id, beside the group item
  * declaration ([SettingsSearchItemGroup.admissions] — decision Q11a:
- * `SettingsSearchItem` in core/ui is not widened): the totals below and the
+ * `SettingsSearchItem` in core/ui is not widened): [rowTotalFor] and the
  * screens' emission `if`s (via `SettingsSearchItemGroup.rowAdmitted`) both
- * read that one [RowAdmission] value.
+ * read that one [RowAdmission] value. Coverage is total: every id a group's
+ * screen feeds a total from declares its gate (the strict unknown-id default
+ * counts nothing, so a missing declaration fails the count loudly), with the
+ * base gate derived from the record's own `isAdvanced` flag
+ * ([admissionsByAdvancedFlag]) and only the genuinely-gated rows overridden.
  */
 
 /**
  * One gated row's admission predicate — the single declaration both the
- * row-total counts and the emission `if`s evaluate. Exactly today's gate
+ * row-total derivation and the emission `if`s evaluate. Exactly today's gate
  * shapes, nothing speculative.
  */
 internal sealed interface RowAdmission {
@@ -36,6 +40,13 @@ internal sealed interface RowAdmission {
         override fun admitted(flags: RowAdmissionFlags): Boolean = when (capability) {
             RowAdmissionCapability.ScreenOrientation -> flags.supportsScreenOrientation
             RowAdmissionCapability.TouchGestures -> flags.supportsTouchGestures
+            RowAdmissionCapability.SystemNotificationSettings -> flags.supportsSystemNotificationSettings
+            RowAdmissionCapability.Biometric -> flags.supportsBiometric
+            RowAdmissionCapability.AudioDeviceSelection -> flags.supportsAudioDeviceSelection
+            RowAdmissionCapability.MpvRenderProfiles -> flags.supportsMpvRenderProfiles
+            RowAdmissionCapability.VolumeMemory -> flags.supportsVolumeMemory
+            RowAdmissionCapability.IdleAmbientScreen -> flags.supportsIdleAmbientScreen
+            RowAdmissionCapability.AppLocaleOverride -> flags.supportsAppLocaleOverride
         }
     }
 
@@ -59,21 +70,43 @@ internal sealed interface RowAdmission {
         constructor(vararg gates: RowAdmission) : this(gates.toList())
         override fun admitted(flags: RowAdmissionFlags): Boolean = gates.all { it.admitted(flags) }
     }
+
+    /**
+     * Always admitted — the explicit "no gate": the declaration states the
+     * row renders unconditionally instead of relying on any default.
+     */
+    data object Always : RowAdmission {
+        override fun admitted(flags: RowAdmissionFlags): Boolean = true
+    }
 }
 
 /** The [RowAdmission.Platform] capability vocabulary — one entry per gating flag. */
-internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures }
+internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures, SystemNotificationSettings, Biometric, AudioDeviceSelection, MpvRenderProfiles, VolumeMemory, IdleAmbientScreen, AppLocaleOverride }
 
 /**
  * The inputs a [RowAdmission] evaluates against. The capability flags default
  * to this binary's seam so screen call sites stay small; the contract test
  * injects both sides.
  */
-internal class RowAdmissionFlags(
+internal data class RowAdmissionFlags(
     val isTv: Boolean = false,
     val showAdvanced: Boolean = false,
     val supportsScreenOrientation: Boolean = settingsCapabilities.supportsScreenOrientation,
     val supportsTouchGestures: Boolean = settingsCapabilities.supportsTouchGestures,
+    /** The system-notification-settings row's platform-intent capability. */
+    val supportsSystemNotificationSettings: Boolean = settingsCapabilities.supportsSystemNotificationSettings,
+    /** The biometric row's capability flag — the screen passes its gate-aware computed value. */
+    val supportsBiometric: Boolean = settingsCapabilities.supportsBiometric,
+    /** The desktop mpv audio-device rows' capability flag. */
+    val supportsAudioDeviceSelection: Boolean = settingsCapabilities.supportsAudioDeviceSelection,
+    /** The desktop mpv render rows' capability flag. */
+    val supportsMpvRenderProfiles: Boolean = settingsCapabilities.supportsMpvRenderProfiles,
+    /** The per-content-type volume-memory toggle's capability flag. */
+    val supportsVolumeMemory: Boolean = settingsCapabilities.supportsVolumeMemory,
+    /** The desktop idle ambient screen rows' capability flag. */
+    val supportsIdleAmbientScreen: Boolean = settingsCapabilities.supportsIdleAmbientScreen,
+    /** The per-app display-language row's capability flag (the `AppLocaleSetter` seam). */
+    val supportsAppLocaleOverride: Boolean = settingsCapabilities.supportsAppLocaleOverride,
     /** Parent row ids whose toggle is currently on — [RowAdmission.WhenOn] resolution. */
     val parentsOn: Set<String> = emptySet(),
 )
@@ -82,172 +115,71 @@ internal class RowAdmissionFlags(
 internal fun rowParentsOn(vararg toggles: Pair<String, Boolean>): Set<String> =
     toggles.toMap().filterValues { it }.keys
 
-// ── StorageSettingsScreen ───────────────────────────────────────────────
+/**
+ * The default admission of every record a group declares: the record's own
+ * `isAdvanced` flag — an advanced row rides the advanced toggle, the rest
+ * always render. This is the exact predicate the retired per-screen counts
+ * fell back to for undeclared ids (`!isAdvanced || showAdvanced`), promoted
+ * to an explicit declaration so the strict derivation needs no fallback. The
+ * `*RowAdmissions` maps spread this base and override the genuinely-gated
+ * ids.
+ */
+internal fun List<SettingsRowRecord>.admissionsByAdvancedFlag(): Map<String, RowAdmission> =
+    associate { record -> record.id to if (record.isAdvanced) RowAdmission.Advanced else RowAdmission.Always }
 
 /**
- * The storage screen's "Storage" (cache) group: the cache-used info row (a
- * screen-local row with no search entry) plus the declared cache rows, the
- * advanced ones only behind the advanced toggle.
+ * THE row-total derivation: how many of [SettingsSearchItemGroup.items] the
+ * screen emits under [flags] — every included row's declared
+ * [RowAdmission] evaluated, strict about ids that declare no gate (they are
+ * NOT counted: a row added to a declaration without an admission fails the
+ * count loudly instead of silently matching the rows that declare one).
+ * Group-shaped rows whose screen renders only a subset pass an [include]
+ * filter (the playback engine group's per-engine prefix).
+ *
+ * Screens whose group carries screen-local rows outside the declaration (the
+ * storage cache-used info row, the confirm-library-reset action row) add the
+ * `+ 1` explicitly at the call site, with a comment; rows gated by content
+ * state with no admission vocabulary (the home display group's unhide row)
+ * stay undeclared and ride the same explicit-term shape.
  */
-internal fun storageCacheScreenRowTotal(showAdvanced: Boolean): Int =
-    1 + SettingsScreenGroups.storageCache.items.count { item ->
-        showAdvanced || !item.isAdvanced
-    }
-
-/**
- * The storage screen's "Downloads" group: the three declared
- * `download_schedule_*` window rows only render when scheduling is on (the
- * `download_schedule` toggle itself always does) — the declared
- * [RowAdmission.WhenOn] gate the screen's emission `if` reads too.
- */
-internal fun storageDownloadsScreenRowTotal(downloadScheduleEnabled: Boolean): Int =
-    SettingsScreenGroups.storageDownloads.items.count { item ->
-        SettingsScreenGroups.storageDownloads.rowAdmitted(
-            item.id,
-            RowAdmissionFlags(parentsOn = rowParentsOn("download_schedule" to downloadScheduleEnabled)),
-        )
-    }
+internal fun rowTotalFor(
+    group: SettingsSearchItemGroup,
+    flags: RowAdmissionFlags,
+    include: (SettingsSearchItem) -> Boolean = { true },
+): Int = group.items.count { item -> include(item) && (group.admissionOf(item.id)?.admitted(flags) ?: false) }
 
 // ── PlaybackSettingsScreen ──────────────────────────────────────────────
 
 /**
- * The playback screen's player group: the platform-gated rows drop where the
- * capability is missing, the TV rows need the TV form factor, and isAdvanced
- * rows only render behind the advanced toggle — each via the row's declared
- * [RowAdmission], the same predicate the screen's emission `if`s read. The
- * capability flags default to this binary's seam so call sites stay
- * two-argument; the contract test injects both sides.
+ * The playback screen's engine-config branch for one engine: the branch's
+ * declared rows (every id carrying [idPrefix], e.g. `"mpv_"`) that their
+ * declared admissions admit — the desktop-gated mpv audio-device rows
+ * drop where the platform has no enumerator; every engine row declares
+ * [RowAdmission.Advanced] (the branch only composes behind the advanced
+ * toggle, which the flags carry) — plus the one reset row (the declared
+ * `reset_engine_defaults` item renders as that row in every engine branch,
+ * a screen-local +1 like the storage cache-used info row).
  */
-internal fun playbackPlayerScreenRowTotal(
-    isTv: Boolean,
-    showAdvanced: Boolean,
-    supportsScreenOrientation: Boolean = settingsCapabilities.supportsScreenOrientation,
-    supportsTouchGestures: Boolean = settingsCapabilities.supportsTouchGestures,
+internal fun playbackEngineScreenRowTotal(
+    idPrefix: String,
+    supportsAudioDeviceSelection: Boolean = settingsCapabilities.supportsAudioDeviceSelection,
+    supportsMpvRenderProfiles: Boolean = settingsCapabilities.supportsMpvRenderProfiles,
 ): Int {
     val flags = RowAdmissionFlags(
-        isTv = isTv,
-        showAdvanced = showAdvanced,
-        supportsScreenOrientation = supportsScreenOrientation,
-        supportsTouchGestures = supportsTouchGestures,
+        showAdvanced = true,
+        supportsAudioDeviceSelection = supportsAudioDeviceSelection,
+        supportsMpvRenderProfiles = supportsMpvRenderProfiles,
     )
-    return SettingsScreenGroups.playbackPlayer.items.count { item ->
-        SettingsScreenGroups.playbackPlayer.admissionOf(item.id)?.admitted(flags)
-            ?: (showAdvanced || !item.isAdvanced)
-    }
-}
-
-/**
- * The playback screen's advanced-video group: the dialogue-boost strength row
- * only renders while the dialogue-boost toggle is on (its declared
- * [RowAdmission.WhenOn] gate).
- */
-internal fun playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled: Boolean): Int =
-    SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
-        SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(
-            item.id,
-            RowAdmissionFlags(parentsOn = rowParentsOn("dialogue_boost" to dialogueBoostEnabled)),
-        )
-    }
-
-/**
- * The playback screen's engine-config branch for one engine: the branch's
- * declared rows (every id carrying [idPrefix], e.g. `"mpv_"`) plus the one
- * reset row — the declared `reset_engine_defaults` item renders as that row
- * in every engine branch.
- */
-internal fun playbackEngineScreenRowTotal(idPrefix: String): Int =
-    SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith(idPrefix) } + 1
-
-// ── NotificationSettingsScreen ──────────────────────────────────────────
-
-/**
- * The notification screen's single group: the master toggle always renders;
- * the four rows behind it (check frequency, sound, vibrate, lights) ride the
- * toggle; the quiet-hours trio and DND/max-per-check/libraries rows ride
- * advanced mode (the start/end pair additionally the quiet-hours toggle, the
- * system-settings row the platform intent). The hand-run arithmetic this
- * replaces (`1 + 4 + 4 + cap + 2`) never drifted from these gates — now it
- * cannot.
- */
-internal fun notificationScreenRowTotal(
-    enabled: Boolean,
-    showAdvanced: Boolean,
-    quietHoursEnabled: Boolean,
-    canOpenSystemNotificationSettings: Boolean,
-): Int = SettingsScreenGroups.notifications.items.count { item ->
-    when (item.id) {
-        "notifications_enable" -> true
-        "notification_check_frequency", "notification_sound",
-        "notification_vibrate", "notification_lights",
-        -> enabled
-        "quiet_hours", "respect_system_dnd", "max_per_check", "notification_libraries" ->
-            enabled && showAdvanced
-        "quiet_start", "quiet_end" ->
-            enabled && showAdvanced && quietHoursEnabled
-        "system_notification_settings" ->
-            enabled && showAdvanced && canOpenSystemNotificationSettings
-        else -> false
-    }
-}
-
-// ── LanguageSettingsScreen ──────────────────────────────────────────────
-
-/**
- * The language screen's "Language" group (the declared leading trio): the
- * per-app display-language row only renders where the `AppLocaleSetter` seam
- * is real.
- */
-internal fun languageGeneralScreenRowTotal(showsAppLocaleRow: Boolean): Int =
-    SettingsScreenGroups.languageGeneral.items.count { item ->
-        showsAppLocaleRow || item.id != "app_language"
-    }
-
-/**
- * The language screen's "Subtitles" group: the tester/font-size/forced-only
- * rows always render — as does high-contrast subtitles, which the declaration
- * marks advanced but every mode shows — while the style rows only render
- * behind the advanced toggle and the HDR font-size row additionally behind
- * the HDR-style toggle.
- */
-internal fun languageSubtitlesScreenRowTotal(
-    showAdvanced: Boolean,
-    hdrSubtitleStyleEnabled: Boolean,
-): Int = SettingsScreenGroups.languageSubtitles.items.count { item ->
-    when (item.id) {
-        "high_contrast_subtitles" -> true
-        "hdr_subtitle_font_size" -> showAdvanced && hdrSubtitleStyleEnabled
-        else -> !item.isAdvanced || showAdvanced
-    }
+    return rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith(idPrefix) } + 1
 }
 
 // ── AppearanceSettingsScreen ────────────────────────────────────────────
 
 /**
  * The appearance screen's "Library & Cards" group: the declared library rows
- * plus the confirm-library-reset action row (a screen-local row with no
- * search entry).
+ * (every row renders unconditionally, so the declaration size is the whole
+ * gate state) plus the confirm-library-reset action row (a screen-local row
+ * with no search entry — the explicit +1 term).
  */
 internal fun appearanceLibraryScreenRowTotal(): Int =
     SettingsScreenGroups.appearanceLibrary.items.size + 1
-
-// ── SecuritySettingsScreen ──────────────────────────────────────────────
-
-/**
- * The security screen's lock group: the pin row always renders, the biometric
- * row rides the platform+gate flag, and the auto-lock timer row rides the
- * advanced toggle. Two shipped count quirks are preserved verbatim (the
- * rendered rows may legitimately differ — these gates are the count the
- * screen has always fed): `pin_for_player_lock` renders behind the pin
- * toggle but was never admitted into the count, and the biometric row's
- * render gate additionally requires the runtime gate to exist while the
- * count only ever saw [canShowBiometric].
- */
-internal fun securityScreenRowTotal(canShowBiometric: Boolean, showAdvanced: Boolean): Int =
-    SettingsScreenGroups.security.items.count { item ->
-        when (item.id) {
-            "pin_lock" -> true
-            "biometric_lock" -> canShowBiometric
-            "auto_lock_timer" -> showAdvanced
-            else -> false
-        }
-    }

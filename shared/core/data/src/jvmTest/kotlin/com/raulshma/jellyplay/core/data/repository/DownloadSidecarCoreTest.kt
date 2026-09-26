@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
@@ -48,6 +49,7 @@ class DownloadSidecarCoreTest {
     val tmp = TemporaryFolder()
 
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val playbackIdentity: PlaybackIdentity = mockk(relaxed = true)
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
     private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
@@ -58,6 +60,7 @@ class DownloadSidecarCoreTest {
 
     private fun core() = DownloadSidecarCore(
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         downloadDao = downloadDao,
         offlineMediaDao = offlineMediaDao,
         syncBaselineDao = syncBaselineDao,

@@ -11,7 +11,7 @@ import org.koin.dsl.module
 /**
  * The JVM adapter over core:data's `StreamingSubtitleStore` single — the
  * store's file-backed behavior (Android filesDir / desktop appdata dir) is
- * consumed verbatim; the adapter only bridges the wasm-safe seam types.
+ * consumed verbatim; the adapter only bridges the seam types.
  *
  * The attribution call rebuilds a `SavedSubtitle` from the request's identity
  * fields with placeholder disk fields (`fileRelativePath = ""`,

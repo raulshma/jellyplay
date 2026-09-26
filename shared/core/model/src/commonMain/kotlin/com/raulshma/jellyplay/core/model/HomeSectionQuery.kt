@@ -25,6 +25,13 @@ data class HomeSectionQuery(
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
     val pinnedSections: List<PinnedHomeSection> = emptyList(),
+    /**
+     * The user's configured Discover rows (all sources; list order is the
+     * within-block render order). Only ENABLED JELLYFIN rows are fetched by
+     * the home fetcher — Seerr rows ride the feature-layer discover path and
+     * are spliced in at the DISCOVER block position afterwards.
+     */
+    val discoverRows: List<DiscoverRowConfig> = emptyList(),
 ) {
     /**
      * Structural fingerprint of the query params, used as the `cacheKey` for both
@@ -38,6 +45,6 @@ data class HomeSectionQuery(
     fun cacheKey(): String = cachedKey
 
     private val cachedKey by lazy {
-        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
+        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections|$discoverRows"
     }
 }

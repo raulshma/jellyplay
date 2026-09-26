@@ -127,7 +127,7 @@ class OnboardingViewModelTest {
             appearance = appearanceStore,
             videoPlayer = videoPlayerStore,
             // Stores the wizard never touches — relaxed filler for the
-            // 19-store scope ctor.
+            // 20-store scope ctor.
             downloads = mockk(relaxed = true),
             engine = mockk(relaxed = true),
             homeDiscovery = homeDiscoveryStore,
@@ -143,6 +143,7 @@ class OnboardingViewModelTest {
             subtitle = subtitleStore,
             syncPlayCast = mockk(relaxed = true),
             experimental = mockk(relaxed = true),
+            volumeProfile = mockk(relaxed = true),
             appRuntimeState = appRuntimeStateStore,
         ),
         store = mockk<UserPreferencesStore>(relaxed = true),

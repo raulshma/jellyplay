@@ -1,6 +1,12 @@
 package com.raulshma.jellyplay.core.network.di
 
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
+import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.LrcLibApi
@@ -35,14 +41,18 @@ import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClientImpl
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
+import com.raulshma.jellyplay.core.network.config.ClientCertificateProvider
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
-import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
+import com.raulshma.jellyplay.core.network.config.ServerTrustConfig
+import com.raulshma.jellyplay.core.network.config.applyTls
 import com.raulshma.jellyplay.core.network.config.selfSignedTrustHostsReader
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import com.raulshma.jellyplay.core.network.failover.ServerFailoverInterceptor
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
+import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
+import com.raulshma.jellyplay.core.network.interceptor.RandomSortCacheBusterInterceptor
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
@@ -72,16 +82,19 @@ import org.koin.dsl.module
  * [androidNetworkModule] / [desktopNetworkModule]; everything here resolves
  * them via cross-module `get()`.
  *
- * The impl classes keep their `@Inject` constructors on the classpath (the
- * legacy Hilt shim reads them from binaries while its bridges route to these
- * Koin definitions), but Koin is now the single construction owner.
+ * Koin is the single construction owner for every impl bound here — the
+ * vestigial javax decoration annotations (kept for the deleted Hilt shim)
+ * have been stripped along with their compile-only dependency.
  */
 val networkJvmModule: Module = module {
     single { Json { ignoreUnknownKeys = true } }
-    // Resolves OkHttpConfigProvider cross-module (dataJvmModule provides the
-    // impl): the router's probe client installs the SAME self-signed trust
-    // layer as the app client so granted servers probe as reachable.
-    single { ServerAddressRouter(get()) }
+    // Resolves OkHttpConfigProvider + ClientCertificateProvider cross-module
+    // (dataJvmModule provides the config impl; the platform network modules
+    // provide the certificate manager): the router's probe client installs
+    // the SAME TLS layer (self-signed grants + client certificate, both live
+    // at handshake time) as the app client so granted / mTLS-requiring
+    // servers probe as reachable.
+    single { ServerAddressRouter(get(), get()) }
     single { BandwidthInterceptor() }
     single { DeviceProfileProvider(get()) }
     single {
@@ -110,7 +123,14 @@ val networkJvmModule: Module = module {
 
     single { AuthApiClientImpl(get(), get()) }
     single<AuthApiClient> { get<AuthApiClientImpl>() }
-    single { LibraryApiClientImpl(get(), get()) }
+    // The get()-resolved TimeSource single is dataJvmModule's SystemTimeSource
+    // (D3: the seam moved to core:model precisely so this module below
+    // core:data could adopt it; Koin resolves it from the merged graph).
+    // The 4th arg is the Seerr discover-row leaf source for the home fetcher
+    // (SeerrHomeSectionSourcesImpl below — session-aware, built here because
+    // only this module's jvmShared sees both the Seerr transport and the
+    // datastore-layer session stores).
+    single { LibraryApiClientImpl(get(), get(), get(), SeerrHomeSectionSourcesImpl(get(), get(), get())) }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
     single { PlaybackApiClientImpl(get(), get(), get()) }
     single<PlaybackApiClient> { get<PlaybackApiClientImpl>() }
@@ -124,7 +144,7 @@ val networkJvmModule: Module = module {
     single<UserApiClient> { get<UserApiClientImpl>() }
     single { MetadataApiClientImpl(get()) }
     single<MetadataApiClient> { get<MetadataApiClientImpl>() }
-    single { MediaInfoApiClientImpl(get()) }
+    single { MediaInfoApiClientImpl(get(), get()) }
     single<MediaInfoApiClient> { get<MediaInfoApiClientImpl>() }
     single { PluginApiClientImpl(get()) }
     single<PluginApiClient> { get<PluginApiClientImpl>() }
@@ -142,6 +162,7 @@ val networkJvmModule: Module = module {
         GitHubReleasesApiImpl(
             okHttpClient = get(),
             latestReleaseUrl = GitHubReleasesApiImpl.LATEST_RELEASE_URL,
+            releasesListUrl = GitHubReleasesApiImpl.RELEASES_LIST_URL,
         )
     }
     single<GitHubReleasesApi> { get<GitHubReleasesApiImpl>() }
@@ -195,6 +216,70 @@ internal fun <T> memoizingLazy(provider: () -> T): LazyProvider<T> {
     return LazyProvider { memoized.value }
 }
 
+/**
+ * The session-aware transport satisfying [SeerrHomeSectionSources] for the
+ * home fetcher's SEERR discover rows: resolves the Seerr connection the way
+ * `SeerrRepositoryImpl`'s private `withSeerrSession` ladder does (server URL
+ * + credentials from the datastore-layer stores, both visible to this
+ * module's jvmShared) and backfills the mediaType the feature layer's
+ * repository hop used to backfill — the cards key on it, so dropping the hop
+ * must not drop the fill. Declared here — the Koin construction owner —
+ * because it is pure wiring-shaped glue between two singles; the row policy
+ * (params, TTL, last-known-good) stays in the fetcher.
+ */
+private class SeerrHomeSectionSourcesImpl(
+    private val client: SeerrApiClient,
+    private val preferences: SeerrPreferencesStore,
+    private val credentials: SeerrSecureCredentialsStore,
+) : SeerrHomeSectionSources {
+
+    override val seerrAvailable: Boolean
+        get() {
+            val prefs = preferences.preferences.value
+            if (!prefs.enabled || prefs.serverUrl.isBlank()) return false
+            return when (prefs.authMethod) {
+                SeerrAuthMethod.API_KEY -> credentials.getApiKey().isNotBlank()
+                SeerrAuthMethod.JELLYFIN,
+                SeerrAuthMethod.LOCAL,
+                -> credentials.getSessionCookie().isNotBlank()
+            }
+        }
+
+    override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> =
+        withSession { url, creds ->
+            client.getDiscoverMovies(url, creds, params = params).map { it.backfillMediaType("movie") }
+        }
+
+    override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> =
+        withSession { url, creds ->
+            client.getDiscoverTv(url, creds, params = params).map { it.backfillMediaType("tv") }
+        }
+
+    /** The one canonical not-configured failure, same message the repository's session guard reports. */
+    private inline fun <T> withSession(
+        block: (url: String, credentials: SeerrCredentials) -> Result<T>,
+    ): Result<T> {
+        val prefs = preferences.preferences.value
+        val url = prefs.serverUrl.ifBlank { return Result.failure(IllegalStateException("Seerr not configured")) }
+        val creds = when (prefs.authMethod) {
+            SeerrAuthMethod.API_KEY ->
+                SeerrCredentials.ApiKey(credentials.getApiKey()).takeIf { it.apiKey.isNotBlank() }
+            SeerrAuthMethod.JELLYFIN,
+            SeerrAuthMethod.LOCAL,
+            -> SeerrCredentials.SessionCookie(credentials.getSessionCookie()).takeIf { it.cookie.isNotBlank() }
+        } ?: return Result.failure(IllegalStateException("Seerr not configured"))
+        return block(url, creds)
+    }
+}
+
+/** Ports `SeerrRepositoryImpl.backfillMediaType` (kept private there): blank mediaTypes become [mediaType]. */
+private fun SeerrSearchResponse.backfillMediaType(mediaType: String): SeerrSearchResponse =
+    copy(
+        results = results.map { item ->
+            if (item.mediaType.isBlank()) item.copy(mediaType = mediaType) else item
+        },
+    )
+
 // Hoisted so the pattern compiles once at class load rather than on each
 // OkHttp client construction (low impact since the provider is a singleton,
 // but removes an unnecessary per-cold-start Regex allocation).
@@ -224,6 +309,7 @@ internal fun baseOkHttpClient(
     okHttpConfigProvider: OkHttpConfigProvider,
     bandwidthInterceptor: BandwidthInterceptor,
     serverAddressRouter: ServerAddressRouter,
+    clientCertificateProvider: ClientCertificateProvider = ClientCertificateProvider.NONE,
 ): OkHttpClient {
     // Read config synchronously via StateFlow.value — no runBlocking.
     // On a cold start the Eagerly-shared StateFlow may still hold the
@@ -275,16 +361,28 @@ internal fun baseOkHttpClient(
         .readTimeout(initialTimeout.readSec, TimeUnit.SECONDS)
         .writeTimeout(initialTimeout.writeSec, TimeUnit.SECONDS)
         .cache(Cache(cacheDir, cacheSize))
+        // RANDOM-sorted /Items queries (dice re-roll, Random library sort) must
+        // never be served from the response cache above: the query is
+        // byte-identical every time and the shuffle happens server-side, so a
+        // cache hit replays the previous shuffle — see the interceptor's KDoc.
+        .addInterceptor(RandomSortCacheBusterInterceptor())
         .connectionPool(ConnectionPool(16, 15, TimeUnit.MINUTES))
         .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
         .retryOnConnectionFailure(true)
-        // Self-signed trust layer: SSLContext + hostname verifier that read
-        // the granted set from the config StateFlow AT HANDSHAKE TIME (same
-        // dynamic-config contract as the timeout interceptor below), so the
-        // base client — and every client derived from it via newBuilder(),
-        // which shares this sslSocketFactory/hostnameVerifier — honors grants
-        // and revokes without any rebuild.
-        .applySelfSignedTrust(selfSignedTrustHostsReader(okHttpConfigProvider))
+        // TLS layer (self-signed grants + client certificate): the
+        // SSLContext + hostname verifier read the granted set AND the client
+        // certificate from the config StateFlow / provider AT HANDSHAKE TIME
+        // (same dynamic-config contract as the timeout interceptor below), so
+        // the base client — and every client derived from it via
+        // newBuilder(), which shares this sslSocketFactory/hostnameVerifier —
+        // honors grants, cert import/toggle/remove, and revokes without any
+        // rebuild.
+        .applyTls(
+            ServerTrustConfig(
+                grantedHosts = selfSignedTrustHostsReader(okHttpConfigProvider),
+                clientCertificate = clientCertificateProvider,
+            ),
+        )
         // Outermost interceptor: every derived client (SDK, Coil,
         // streaming, downloads, WebSocket) inherits it, so requests
         // targeting an unreachable primary address are transparently

@@ -88,7 +88,7 @@ internal class FakePlaybackRepository : PlaybackRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit> {
+    override suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long, failed: Boolean): Result<Unit> {
         stops += Triple(itemId, sessionId, positionTicks)
         return Result.success(Unit)
     }
@@ -126,8 +126,6 @@ internal class FakePlaybackRepository : PlaybackRepository {
     ) = "stream://$itemId/$mediaSourceId"
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String) = deliveryUrl
-    override fun getServerUrl(): String? = null
-    override fun getAccessToken(): String? = null
     override fun buildSubtitleDeliveryUrl(itemId: String, mediaSourceId: String, index: Int, codec: String?) = ""
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> = emptyList()

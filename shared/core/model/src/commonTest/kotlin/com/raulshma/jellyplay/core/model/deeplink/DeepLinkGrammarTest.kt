@@ -127,7 +127,7 @@ class DeepLinkGrammarTest {
         assertNull(DeepLinkGrammar.parseCustom(null, listOf("abc123")))
     }
 
-    // --- web-mirror parsing ---
+    // --- https-mirror parsing ---
 
     @Test
     fun webMediaParsesItemId() {

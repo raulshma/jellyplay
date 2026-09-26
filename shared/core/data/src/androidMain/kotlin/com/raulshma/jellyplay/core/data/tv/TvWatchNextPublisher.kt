@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -36,6 +37,8 @@ class TvWatchNextPublisher(
     private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    /** Clock seam (D3) for the row's last-engagement timestamp. */
+    private val timeSource: TimeSource,
 ) {
     private val prefs by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -179,7 +182,7 @@ class TvWatchNextPublisher(
             setDurationMillis((it / TICKS_PER_MS).toInt())
         }
 
-        setLastEngagementTimeUtcMillis(System.currentTimeMillis())
+        setLastEngagementTimeUtcMillis(timeSource.nowEpochMillis())
         setTitle(item.name)
         setDescription(item.overview)
         if (item.mediaType == MediaType.EPISODE) {

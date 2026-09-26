@@ -8,9 +8,10 @@ package com.raulshma.jellyplay.feature.player.video
  * screen reaches it through the androidMain `androidCastManager` extension.
  *
  * The androidMain adapter ([AndroidCastManager], module androidMain) wraps
- * the Hilt-owned legacy singleton; `castPlayerForSession` is surfaced as the
- * opaque [Any] because the platform player handle (media3 `Player`) must not
- * leak into common code. The jvmMain actual is a no-op stub.
+ * the Hilt-owned legacy singleton. The jvmMain actual is a no-op stub. The
+ * cast receiver's player is NOT surfaced here — the media-session seam
+ * resolves it behind `VideoMediaSessionFactory`'s androidMain wiring, so no
+ * member of this interface carries an opaque platform handle.
  */
 interface CastManager {
 
@@ -31,10 +32,4 @@ interface CastManager {
      * session alive for the receiver).
      */
     fun softRelease()
-
-    /**
-     * The cast receiver's player for the active session (opaque platform
-     * handle; media3 `Player?` on Android), or null when playing locally.
-     */
-    val castPlayerForSession: Any?
 }

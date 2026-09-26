@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.CultureInfo
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -63,7 +64,7 @@ class PlaybackRepositoryImpl(
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
         maxSize = MAX_CACHE_ENTRIES,
-        ttlMs = SEGMENTS_CACHE_TTL_MS,
+        ttlMs = FreshnessCeilings.SEGMENTS_TTL_MS,
     )
 
     // Single-flight dedup for the segments read (the MediaRepositoryImpl
@@ -128,6 +129,7 @@ class PlaybackRepositoryImpl(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
+        failed: Boolean,
     ): Result<Unit> {
         // Pre-send purge pairs with the post-send one below — the same double
         // eviction the played/favorite wrapper runs around its write: a home
@@ -137,7 +139,7 @@ class PlaybackRepositoryImpl(
         val result = reportOrStage(
             stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
             send = {
-                playbackApiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
+                playbackApiClient.reportPlaybackStopped(itemId, sessionId, positionTicks, failed).onSuccess {
                     // A delivered STOP supersedes any pending START/PROGRESS/STOP for
                     // this item — the server now has the authoritative final position.
                     // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
@@ -399,9 +401,10 @@ class PlaybackRepositoryImpl(
         return buildBookDownloadUrl(baseUrl = baseUrl, apiKey = apiKey, itemId = itemId)
     }
 
-    override fun getServerUrl(): String? = authApiClient.getServerUrl()
-
-    override fun getAccessToken(): String? = authApiClient.getAccessToken()
+    // The former getServerUrl()/getAccessToken() overrides are gone from the
+    // surface: identity readers inject the PlaybackIdentity module (bound to
+    // the same AuthApiClient this impl already holds) instead of this
+    // repository. The internal uses above keep reading the client directly.
 
     override fun buildSubtitleDeliveryUrl(
         itemId: String,
@@ -483,6 +486,8 @@ class PlaybackRepositoryImpl(
     companion object {
         private const val TAG = "PlaybackRepository"
         private const val MAX_CACHE_ENTRIES = 50
-        private const val SEGMENTS_CACHE_TTL_MS = 5 * 60 * 1000L
+        // The segments TTL used to be the private const SEGMENTS_CACHE_TTL_MS
+        // (5 minutes) declared here; it now cites the named policy
+        // FreshnessCeilings.SEGMENTS_TTL_MS at the construction site above.
     }
 }

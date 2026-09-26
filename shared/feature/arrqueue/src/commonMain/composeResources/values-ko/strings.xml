@@ -38,17 +38,17 @@
 
     <!-- Grab -->
     <string name="arrqueue_grab_title">릴리스 강제 가져오기</string>
-    <string name="arrqueue_grab_message">지금 \"%1$s\"을(를) 다운로드 클라이언트로 보내시겠습니까?</string>
-    <string name="arrqueue_grab_sent">\"%1$s\" 가져오기를 보냈습니다</string>
+    <string name="arrqueue_grab_message">지금 "%1$s"을(를) 다운로드 클라이언트로 보내시겠습니까?</string>
+    <string name="arrqueue_grab_sent">"%1$s" 가져오기를 보냈습니다</string>
 
     <!-- Import -->
     <string name="arrqueue_import_title">가져오기 강제</string>
-    <string name="arrqueue_import_message">지금 \"%1$s\"을(를) %2$s로 가져오시겠습니까?</string>
-    <string name="arrqueue_import_sent">\"%1$s\" 가져오기를 보냈습니다</string>
+    <string name="arrqueue_import_message">지금 "%1$s"을(를) %2$s로 가져오시겠습니까?</string>
+    <string name="arrqueue_import_sent">"%1$s" 가져오기를 보냈습니다</string>
 
     <!-- Remove / delete dialog -->
     <string name="arrqueue_remove_selected_title">선택 항목을 삭제하시겠습니까?</string>
-    <string name="arrqueue_remove_item_title">\"%1$s\"을(를) 삭제하시겠습니까?</string>
+    <string name="arrqueue_remove_item_title">"%1$s"을(를) 삭제하시겠습니까?</string>
     <string name="arrqueue_remove_body_bulk">이 항목들을 대기열에서 제거하는 방법을 선택하세요.</string>
     <string name="arrqueue_remove_body_single">이 항목을 대기열에서 제거하는 방법을 선택하세요.</string>
     <string name="arrqueue_remove_only">제거만</string>

@@ -519,8 +519,16 @@ private class FakeSeerrRepository : SeerrRepository {
     override fun isDiscoverEnabled(): Flow<Boolean> = unused()
     override fun getPreferences(): Flow<SeerrPreferences> = unused()
     override suspend fun getTrending(page: Int): Result<SeerrSearchResponse> = unused()
-    override suspend fun getDiscoverMovies(page: Int, primaryReleaseDateGte: String?): Result<SeerrSearchResponse> = unused()
-    override suspend fun getDiscoverTv(page: Int, firstAirDateGte: String?): Result<SeerrSearchResponse> = unused()
+    override suspend fun getDiscoverMovies(
+        page: Int,
+        primaryReleaseDateGte: String?,
+        params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
+    ): Result<SeerrSearchResponse> = unused()
+    override suspend fun getDiscoverTv(
+        page: Int,
+        firstAirDateGte: String?,
+        params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
+    ): Result<SeerrSearchResponse> = unused()
     override fun isAdmin(): Flow<Boolean> = unused()
     override val currentUser: StateFlow<SeerrCurrentUser?> get() = unused()
     override val pendingRequestCount: StateFlow<Int> get() = unused()

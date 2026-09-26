@@ -292,7 +292,7 @@ class CastManager(
             // polling the remote renderer while nothing was playing.
             castPollingIntervalMs.value = if (isDlna || isJellyfin) 1000L else 500L
             tickerJob = EnginePositionTicker(
-                scope = coroutineScope,
+                scopeProvider = { coroutineScope },
                 pollingIntervalMs = castPollingIntervalMs,
                 isPlayingFlow = _castIsPlaying,
                 isCurrentlyPlaying = { _castIsPlaying.value },
@@ -353,9 +353,8 @@ class CastManager(
 
     /**
      * Watches discovered devices and auto-connects to the user's
-     * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.preferredRenderer]
-     * when it appears, so frequently-used renderers are selected without
-     * manual intervention.
+     * `preferredRenderer` when it appears, so frequently-used renderers are
+     * selected without manual intervention.
      */
     private fun startPreferredRendererWatcher() {
         preferredRendererJob?.cancel()

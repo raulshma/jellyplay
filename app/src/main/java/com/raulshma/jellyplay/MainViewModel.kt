@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay
 
 import android.content.Intent
-import android.net.Uri
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -12,18 +11,27 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MainPreferences
+import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
+import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
+import com.raulshma.jellyplay.navigation.MainShellModel
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
+import com.raulshma.jellyplay.navigation.playbackhost.externalPlayerLaunch
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -39,14 +47,19 @@ import java.util.concurrent.atomic.AtomicBoolean
  * preferences, the external-player reporting contract, one-shot messages — and
  * starts the cross-cutting shell coordinators on its scope.
  *
- * The coordinators themselves are the only service surface: session lifecycle
- * state ([SessionCoordinator.isRestoring] / [isAuthenticated] /
- * [libraryFolders] / [serverHealth]), logout, update checks, and SyncPlay opens
- * are all reached through [sessionCoordinator] / [updateCoordinator] /
- * [syncPlayOpenCoordinator] — never re-exported here. Stores and managers this
- * class merely wires (network monitor, message bus, audio playback, remote
- * navigation) are injected where they are consumed instead of exposed from
- * here.
+ * The three shell coordinators are started here on [scope] and never
+ * re-exported: session lifecycle state ([SessionCoordinator.isRestoring] /
+ * [isAuthenticated] / [libraryFolders] / [serverHealth]), logout, update
+ * checks, and SyncPlay opens are consumed through the coordinator instances
+ * the composition root reads off its
+ * [com.raulshma.jellyplay.shell.ShellInfra] bundle — MainActivity bundles the
+ * same Koin singles this class constructor-injects, so the split is one
+ * resolution path per concern: startup (start-on-scope) stays here,
+ * consumption resolves once in the bundle, and the former second resolution
+ * (MainActivity lazy fields + three explicit parameters through JellyPlayApp
+ * → MainContent) is gone. Stores and managers this class merely wires
+ * (network monitor, message bus, audio playback, remote navigation) are
+ * injected where they are consumed instead of exposed from here.
  */
 class MainViewModel(
     private val authRepository: AuthRepository,
@@ -62,10 +75,11 @@ class MainViewModel(
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
-    val sessionCoordinator: SessionCoordinator,
-    val updateCoordinator: UpdateCoordinator,
-    val syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
-) : JellyPlayViewModel() {
+    private val sessionCoordinator: SessionCoordinator,
+    private val updateCoordinator: UpdateCoordinator,
+    private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator,
+    private val whatsNewCoordinator: WhatsNewCoordinator,
+) : JellyPlayViewModel(), MainShellModel {
 
     /**
      * App-wide offline mode. Collected by [com.raulshma.jellyplay.navigation.JellyPlayApp]
@@ -73,14 +87,14 @@ class MainViewModel(
      * that have no offline fallback and would otherwise land on a dead-end
      * [com.raulshma.jellyplay.core.ui.components.ErrorScreen].
      */
-    val offlineMode = offlineModeManager.offlineMode
+    override val offlineMode: StateFlow<OfflineMode> = offlineModeManager.offlineMode
 
     /**
      * Count of downloads actively in flight (PENDING/QUEUED/DOWNLOADING/PAUSED).
      * Surfaced to the app-shell nav so the ⋮ "More" toggle and the "Downloads"
      * overflow item can badge themselves while transfers are running.
      */
-    val activeDownloadCount = downloadRepository.getActiveDownloadCount()
+    override val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
@@ -93,14 +107,16 @@ class MainViewModel(
      * shell used to keep a hand-synced mirror with its own clear collector;
      * that second owner is exactly what stuck-spinner bugs bred on.
      */
-    val isGoingOnline: StateFlow<Boolean> = offlineModeManager.goingOnline
+    override val isGoingOnline: StateFlow<Boolean> = offlineModeManager.goingOnline
 
     init {
         // Shell coordinators: session restore completes → run the launch-time
-        // update check; the session, update, and SyncPlay-open collectors each
-        // live inside their coordinator.
+        // update check + the post-update What's New decision; the session,
+        // update, and SyncPlay-open collectors each live inside their
+        // coordinator.
         sessionCoordinator.start(scope) {
             updateCoordinator.onSessionRestored()
+            whatsNewCoordinator.onSessionRestored()
         }
         updateCoordinator.start(scope)
         syncPlayOpenCoordinator.start(scope)
@@ -127,12 +143,12 @@ class MainViewModel(
      * online, and the mode flow clears it — [isGoingOnline] is the
      * pass-through the UI collects.
      */
-    fun toggleOfflineMode() {
+    override fun toggleOfflineMode() {
         offlineModeManager.toggleManualOffline()
     }
 
     /** Persists the Home mode (Video / Music) switch from the app-shell nav. */
-    fun setHomeMode(mode: com.raulshma.jellyplay.core.model.HomeMode) {
+    override fun setHomeMode(mode: HomeMode) {
         sessionController.setHomeMode(mode)
     }
 
@@ -148,10 +164,10 @@ class MainViewModel(
      * + featured candidates) and can't be hoisted to the app shell.
      */
     private val _surpriseRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val surpriseRequests = _surpriseRequests.asSharedFlow()
+    override val surpriseRequests: SharedFlow<Unit> = _surpriseRequests.asSharedFlow()
 
     /** Fire the Surprise-Me signal (see [surpriseRequests]). */
-    fun requestSurprise() {
+    override fun requestSurprise() {
         _surpriseRequests.tryEmit(Unit)
     }
 
@@ -179,7 +195,7 @@ class MainViewModel(
         },
     )
 
-    val isAdmin: StateFlow<Boolean> get() = sessionController.isAdmin
+    override val isAdmin: StateFlow<Boolean> get() = sessionController.isAdmin
 
     /**
      * True while a server admin-status refresh is in flight. Collected by the
@@ -187,7 +203,7 @@ class MainViewModel(
      * guard so it can show a brief loading state instead of flashing the
      * access-denied screen before the first refresh completes.
      */
-    val isRefreshingAdmin: StateFlow<Boolean> get() = sessionController.isRefreshingAdmin
+    override val isRefreshingAdmin: StateFlow<Boolean> get() = sessionController.isRefreshingAdmin
 
     /**
      * Ends the session through [sessionCoordinator]: `revoke = true` also
@@ -218,7 +234,7 @@ class MainViewModel(
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), MainPreferences())
 
     private val _pendingRoute = stateFlow<Route?>(null)
-    val pendingRoute = _pendingRoute.flow
+    override val pendingRoute: StateFlow<Route?> = _pendingRoute.flow
 
     /**
      * One-shot signal fired by the "Surprise Me" launcher shortcut. The Home
@@ -241,10 +257,10 @@ class MainViewModel(
      * See [com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState].
      */
     private val _isStateLossRestore = AtomicBoolean(true)
-    fun consumeStateLossRestore(): Boolean = _isStateLossRestore.getAndSet(false)
+    override fun consumeStateLossRestore(): Boolean = _isStateLossRestore.getAndSet(false)
 
     private val _pendingSearchQuery = stateFlow<String?>(null)
-    val pendingSearchQuery = _pendingSearchQuery.flow
+    override val pendingSearchQuery: StateFlow<String?> = _pendingSearchQuery.flow
 
     /**
      * Re-validates the current user's admin status against the server. Called
@@ -256,32 +272,29 @@ class MainViewModel(
      * server. Failures other than access-denied are swallowed (the cached
      * value is kept) — see [AuthRepository.refreshCurrentUser].
      */
-    fun refreshAdminStatus() {
+    override fun refreshAdminStatus() {
         sessionController.refreshAdminStatusNow()
     }
 
-    fun handleShortcutIntent(intent: Intent) {
-        val route = when (intent.action) {
-            AppShortcutManager.ACTION_CONTINUE_WATCHING ->
-                Route.NewsletterSectionList("CONTINUE_WATCHING")
-            AppShortcutManager.ACTION_SEARCH -> Route.Search
-            AppShortcutManager.ACTION_PLAY_MUSIC -> Route.MusicBrowse
-            AppShortcutManager.ACTION_DOWNLOADS -> Route.Downloads
-            AppShortcutManager.ACTION_PLAY_AUDIO -> {
-                val itemId = intent.getStringExtra(AppShortcutManager.EXTRA_ITEM_ID)
-                if (!itemId.isNullOrBlank()) Route.AudioPlayer(itemId) else null
-            }
-            // Static launcher shortcuts
-            AppShortcutManager.ACTION_SETTINGS -> Route.Settings
-            AppShortcutManager.ACTION_SURPRISE_ME -> {
-                // Route home and arm the surprise signal the Home screen consumes.
-                _surpriseOnLaunch.set(true)
-                Route.Home
-            }
-            else -> null
+    /**
+     * Shell entry point for an already-classified launcher-shortcut
+     * disposition: MainActivity folds the raw [Intent] through the pure
+     * [com.raulshma.jellyplay.deeplink.IncomingIntentRequest] and hands the
+     * resulting [IncomingIntentDisposition.Shortcut] here — Android types
+     * never travel past that fold. The action→Route table lives in the same
+     * fold (deeplink package, the dispatch's single source of truth); this
+     * member only applies the classified outcome: arm the one-shot surprise
+     * signal first, then publish the route. A `null` route (an unknown
+     * shortcut action, or a PLAY_AUDIO without an item id) leaves the
+     * pending route untouched.
+     */
+    fun handleShortcutIntent(disposition: IncomingIntentDisposition.Shortcut) {
+        if (disposition.armsSurpriseOnLaunch) {
+            // Route home and arm the surprise signal the Home screen consumes.
+            _surpriseOnLaunch.set(true)
         }
-        if (route != null) {
-            _pendingRoute.set(route)
+        if (disposition.route != null) {
+            _pendingRoute.set(disposition.route)
         }
     }
 
@@ -332,11 +345,20 @@ class MainViewModel(
         data class MediaDetail(val mediaId: String) : SharedTextTarget()
     }
 
-    fun consumePendingRoute() {
+    override fun consumePendingRoute() {
         _pendingRoute.set(null)
     }
 
-    fun consumePendingSearchQuery() {
+    /**
+     * Publishes a shell-overlay navigation request (the What's New sheet's
+     * "take me there" deep links) through the same pending-route channel the
+     * shortcut/deep-link paths use, so MainNavDisplay consumes it identically.
+     */
+    fun navigateFromShell(route: Route) {
+        _pendingRoute.set(route)
+    }
+
+    override fun consumePendingSearchQuery() {
         _pendingSearchQuery.set(null)
     }
 
@@ -351,12 +373,16 @@ class MainViewModel(
      * ([Route.LiveTvChannelPlayer]) since the underlying repository calls
      * handle channel ids identically to the internal-engine path.
      *
-     * The returned intent advertises `return_result`, so the app-level
+     * The launch advertises `return_result`, so the app-level
      * `ActivityResultLauncher` in [com.raulshma.jellyplay.navigation.JellyPlayApp]
      * can read the external player's final position and credit watched progress
-     * via [reportExternalPlaybackStopped].
+     * via [reportExternalPlaybackStopped]. The launch construction itself —
+     * the ACTION_VIEW intent, the extras vocabulary ("title"/"return_result"/
+     * "position") and the per-launch playSessionId — is the pure
+     * [externalPlayerLaunch] fold in navigation/playbackhost (beside
+     * [ExternalPlayerHost]); this member owns only the resolver injection.
      */
-    suspend fun buildExternalPlayerLaunch(
+    override suspend fun buildExternalPlayerLaunch(
         itemId: String,
         mediaSourceId: String?,
         startPositionTicks: Long,
@@ -373,29 +399,18 @@ class MainViewModel(
             startPositionTicks = startPositionTicks,
         ) ?: return null
 
-        val url = when (resolved) {
-            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Local -> resolved.uri
-            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Stream -> resolved.url
-        }
-        val title = resolved.title
-
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
-            putExtra("title", title)
-            putExtra("return_result", true)
-            val startMs = startPositionTicks / 10_000
-            if (startMs > 0) putExtra("position", startMs)
-        }
-
-        return ExternalPlayerLaunch(
-            intent = intent,
+        return externalPlayerLaunch(
             itemId = itemId,
+            resolvedUrl = when (resolved) {
+                is ResolvedPlaybackSource.Local -> resolved.uri
+                is ResolvedPlaybackSource.Stream -> resolved.url
+            },
+            title = resolved.title,
             startPositionTicks = startPositionTicks,
-            playSessionId = java.util.UUID.randomUUID().toString(),
         )
     }
 
-    fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch) {
+    override fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch) {
         launch {
             runCatchingRethrowingCancellation {
                 playbackRepository.reportPlaybackStart(
@@ -409,7 +424,7 @@ class MainViewModel(
         }
     }
 
-    fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, finalPositionTicks: Long) {
+    override fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, finalPositionTicks: Long) {
         val positionTicks = if (finalPositionTicks > 0) finalPositionTicks else playerLaunch.startPositionTicks
         launch {
             runCatchingRethrowingCancellation {
@@ -429,10 +444,3 @@ class MainViewModel(
         val ANY_URL_REGEX = Regex("""https?://[^\s]+""")
     }
 }
-
-data class ExternalPlayerLaunch(
-    val intent: Intent,
-    val itemId: String,
-    val startPositionTicks: Long,
-    val playSessionId: String,
-)

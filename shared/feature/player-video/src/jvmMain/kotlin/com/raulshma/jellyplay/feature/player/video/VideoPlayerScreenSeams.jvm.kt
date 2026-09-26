@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
@@ -262,7 +263,7 @@ internal actual fun requestVideoFrameCapture(
             return@thread
         }
         val message = runCatching { saveCapture(image, titleHint) }
-            .getOrElse { "Capture failed: ${it.message ?: it.javaClass.simpleName}" }
+            .getOrElse { "Capture failed: ${UserErrorMessages.resolve(it, it.javaClass.simpleName)}" }
         onMessage(message)
     }
 }

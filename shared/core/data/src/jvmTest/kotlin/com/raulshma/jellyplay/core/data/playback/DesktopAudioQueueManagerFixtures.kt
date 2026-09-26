@@ -85,7 +85,7 @@ internal class FakePlaybackRepository : PlaybackRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit> {
+    override suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long, failed: Boolean): Result<Unit> {
         stops += Triple(itemId, sessionId, positionTicks)
         return Result.success(Unit)
     }
@@ -123,8 +123,6 @@ internal class FakePlaybackRepository : PlaybackRepository {
     ) = "stream://$itemId/$mediaSourceId"
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String) = deliveryUrl
-    override fun getServerUrl(): String? = null
-    override fun getAccessToken(): String? = null
     override fun buildSubtitleDeliveryUrl(itemId: String, mediaSourceId: String, index: Int, codec: String?) = ""
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> = emptyList()
@@ -246,15 +244,15 @@ internal fun resolvedTrack(
 /**
  * State-core-backed [AudioEffectsSession] — the test twin of the app-side
  * `DesktopAudioEffectsManager`: the full [AudioEffectsStateCore] machine
- * (same guarded-band configuration) plus the port's three members, so the
- * suite drives the REAL state machine through the manager's effects seam.
+ * plus the port's three members, so the suite drives the REAL state
+ * machine through the manager's effects seam.
  * [snapshotConfig] folds exactly the fields the suite asserts reach the
  * engine config; the production fold (and its mpv `af` parity) stays
  * pinned app-side (DesktopAudioEffectsManagerTest + the real-engine
  * suite).
  */
 internal class FakeEffectsSession :
-    AudioEffectsStateCore(rejectOutOfRangeEqualizerBands = true),
+    AudioEffectsStateCore(),
     AudioEffectsSession {
 
     override var onEffectsChanged: (() -> Unit)? = null

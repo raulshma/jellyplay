@@ -529,8 +529,7 @@ private fun TrackItem(
             val durationText = remember(ticks) {
                 val minutes = (ticks / 600_000_000)
                 val seconds = ((ticks / 10_000_000) % 60)
-                // Manual render — java.lang.String.format has no wasm
-                // surface.
+                // Manual render.
                 "$minutes:${seconds.toString().padStart(2, '0')}"
             }
             Text(

@@ -10,8 +10,8 @@ package com.raulshma.jellyplay.core.data.download
  * mismatch; the sniffer lets the offline playback path recover the real
  * container so the correct MIME type can be attached to the MediaItem.
  *
- * Byte-level and pure common on purpose: this module's commonMain also builds
- * for wasmJs, so the API takes already-read header bytes and all file IO stays
+ * Byte-level and pure common on purpose: the API takes already-read header
+ * bytes and all file IO stays
  * in caller-side glue (this module's jvmShared `sniffContainerFile` backs the
  * database backfill probe; player-video's PlayerSessionManager has its own
  * JVM glue for the playback fallback). Formerly lived in

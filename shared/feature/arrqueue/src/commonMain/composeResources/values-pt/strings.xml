@@ -38,17 +38,17 @@
 
     <!-- Grab -->
     <string name="arrqueue_grab_title">Forçar captura do release</string>
-    <string name="arrqueue_grab_message">Enviar \"%1$s\" ao seu cliente de download agora?</string>
-    <string name="arrqueue_grab_sent">Captura enviada para \"%1$s\"</string>
+    <string name="arrqueue_grab_message">Enviar "%1$s" ao seu cliente de download agora?</string>
+    <string name="arrqueue_grab_sent">Captura enviada para "%1$s"</string>
 
     <!-- Import -->
     <string name="arrqueue_import_title">Forçar importação</string>
-    <string name="arrqueue_import_message">Importar \"%1$s\" em %2$s agora?</string>
-    <string name="arrqueue_import_sent">Importação enviada para \"%1$s\"</string>
+    <string name="arrqueue_import_message">Importar "%1$s" em %2$s agora?</string>
+    <string name="arrqueue_import_sent">Importação enviada para "%1$s"</string>
 
     <!-- Remove / delete dialog -->
     <string name="arrqueue_remove_selected_title">Remover selecionados?</string>
-    <string name="arrqueue_remove_item_title">Remover \"%1$s\"?</string>
+    <string name="arrqueue_remove_item_title">Remover "%1$s"?</string>
     <string name="arrqueue_remove_body_bulk">Escolha como remover estes itens da fila.</string>
     <string name="arrqueue_remove_body_single">Escolha como remover este item da fila.</string>
     <string name="arrqueue_remove_only">Apenas remover</string>

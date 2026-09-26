@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
@@ -43,7 +42,6 @@ class SearchViewModelHistoryTest {
     private val seerrRepository: SeerrRepository = mockk(relaxed = true)
     private val seerrRequestDelegate: SeerrRequestDelegate = mockk(relaxed = true)
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
-    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val searchFiltersStore: SearchFiltersStore = mockk(relaxed = true)
     private val quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions = mockk(relaxed = true)
 
@@ -54,7 +52,7 @@ class SearchViewModelHistoryTest {
         Dispatchers.setMain(mainDispatcher)
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
-        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns false
+        every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
         every { seerrRepository.getPreferences() } returns flowOf(
             com.raulshma.jellyplay.core.model.seerr.SeerrPreferences()
@@ -66,7 +64,6 @@ class SearchViewModelHistoryTest {
         coEvery { mediaRepository.getSearchSuggestions(any()) } returns Result.success(
             com.raulshma.jellyplay.core.model.SearchResult(emptyList(), 0, 0)
         )
-        coEvery { offlineRepository.searchOffline(any(), any()) } returns emptyList()
 
         viewModel = SearchViewModel(
             mediaRepository,
@@ -75,7 +72,6 @@ class SearchViewModelHistoryTest {
             seerrRepository,
             seerrRequestDelegate,
             mediaSearchEngine,
-            offlineRepository,
             searchFiltersStore, quickDownloadActions,
         )
     }

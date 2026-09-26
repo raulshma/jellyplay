@@ -153,7 +153,7 @@ fun AboutScreen(
 
             SettingsGroup(
                 icon = Tabler.Outline.InfoCircle,
-                title = stringResource(Res.string.settings_app_info),
+                title = rowTitle(AboutScreenIds.ABOUT_VERSION),
                 initiallyExpanded = true,
             ) {
                 SettingInfoItem(

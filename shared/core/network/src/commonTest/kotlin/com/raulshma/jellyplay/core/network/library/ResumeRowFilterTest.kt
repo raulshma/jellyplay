@@ -8,10 +8,8 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the #157 rule shared by every `getContinueWatching` /
- * `getContinueReading` implementation (JVM + wasm): a played row must never
- * survive into a resume row, even though /Items/Resume reports it. The wasm
- * client has no test runner of its own — it delegates here, so this is the
- * coverage for both.
+ * `getContinueReading` implementation: a played row must never
+ * survive into a resume row, even though /Items/Resume reports it.
  */
 class ResumeRowFilterTest {
 

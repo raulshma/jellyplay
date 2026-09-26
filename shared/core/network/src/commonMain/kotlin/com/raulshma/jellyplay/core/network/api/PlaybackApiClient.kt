@@ -24,10 +24,16 @@ interface PlaybackApiClient {
         playMethod: com.raulshma.jellyplay.core.model.PlayMethod = com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY,
     ): Result<Unit>
 
+    /**
+     * Reports the session Stop. [failed] marks an error-aborted session so
+     * the server skips its own percentage-based played marking for the stop;
+     * defaults to `false` for the well-formed stops.
+     */
     suspend fun reportPlaybackStopped(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
+        failed: Boolean = false,
     ): Result<Unit>
 
     /**

@@ -301,6 +301,33 @@ fun AuthChallengeScreen(
                     labelRes = R.string.core_ui_auth_unlock_screen_lock,
                     onClick = launchDeviceCredential,
                 )
+            } else {
+                // Dead-end guard (issue #162): the biometric lock is enabled but
+                // NO unlock method is currently usable — no app PIN, the biometric
+                // prompt cannot be resolved or biometrics became unavailable, and
+                // the device screen-lock credential is not an option either.
+                // Composing nothing here renders a blank/black screen and
+                // hard-locks the user out, so always surface the state instead.
+                Icon(
+                    imageVector = Tabler.Outline.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.core_ui_auth_no_unlock_method),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }

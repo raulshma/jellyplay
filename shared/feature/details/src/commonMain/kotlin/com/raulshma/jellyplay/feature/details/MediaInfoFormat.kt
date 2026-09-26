@@ -15,12 +15,12 @@ internal object MediaInfoFormat {
     /**
      * Formats a bitrate (bits/sec) into Mbps / Kbps / bps.
      *
-     *  purification: `"%.1f".format` / `"%.0f".format` are JVM-API
-     * (default-locale formatting, no wasm variant). Replaced with integer
-     * HALF_UP math (floor(x + 0.5) — java Formatter's ties-away-from-zero,
-     * NOT kotlin.math.round's ties-to-even; `0.25f` → "0.3" here as in java,
-     * where round(2.5) would give "0.2"), and the decimal point no longer
-     * flips to a comma under non-English JVM default locales.
+     * Renders via integer HALF_UP math rather than `"%.1f".format`
+     * (default-locale JVM formatting): floor(x + 0.5) — java Formatter's
+     * ties-away-from-zero, NOT kotlin.math.round's ties-to-even; `0.25f` →
+     * "0.3" here as in java, where round(2.5) would give "0.2" — and the
+     * decimal point never flips to a comma under non-English JVM default
+     * locales.
      */
     fun formatBitrate(bps: Long): String = when {
         bps >= 1_000_000 -> formatTenths(bps / 1_000_000.0) + " Mbps"

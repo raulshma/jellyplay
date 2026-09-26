@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.desktop
 
+import com.raulshma.jellyplay.desktop.harness.DesktopNativeDialogHarness
+import com.raulshma.jellyplay.desktop.harness.DesktopSessionHarness
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test

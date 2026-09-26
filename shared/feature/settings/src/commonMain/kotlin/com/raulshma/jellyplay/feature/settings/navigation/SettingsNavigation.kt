@@ -18,6 +18,9 @@ import com.raulshma.jellyplay.feature.settings.IntegrationsScreen
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
 import com.raulshma.jellyplay.feature.settings.HomeLayoutPresetsScreen
+import com.raulshma.jellyplay.feature.settings.HomeSettingsScreen
+import com.raulshma.jellyplay.feature.settings.DiscoverRowsScreen
+import com.raulshma.jellyplay.feature.settings.DiscoverRowEditorScreen
 import com.raulshma.jellyplay.feature.settings.LibraryHomeSectionsScreen
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsScreen
 import com.raulshma.jellyplay.feature.settings.PinnedHomeSectionsScreen
@@ -30,6 +33,7 @@ import com.raulshma.jellyplay.feature.settings.SettingsNavActions
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
+import com.raulshma.jellyplay.feature.settings.WhatsNewScreen
 
 fun EntryProviderScope<NavKey>.settingsSection(
     navigator: Navigator,
@@ -84,12 +88,27 @@ fun EntryProviderScope<NavKey>.settingsSection(
     }
 
     entry<Route.AppearanceSettings> { entry ->
-        // Same navigator-backed facade as the main Settings entry, so the
-        // Appearance drill-ins navigate through the same onNavigate seam.
+        // Navigator-backed facade: the moved-settings pointer card on the
+        // Appearance screen deep-links into the Home hub through the same
+        // onNavigate seam.
         val navActions = remember(navigator) {
             SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
         }
         AppearanceSettingsScreen(
+            onBack = { navigator.goBack() },
+            navActions = navActions,
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.HomeSettings> { entry ->
+        // Same navigator-backed facade as the main Settings entry, so the
+        // Home hub's drill-ins (pinned sections, presets, libraries, discover
+        // rows) navigate through the same onNavigate seam.
+        val navActions = remember(navigator) {
+            SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
+        }
+        HomeSettingsScreen(
             onBack = { navigator.goBack() },
             navActions = navActions,
             highlightSettingId = entry.highlightSettingId,
@@ -114,6 +133,22 @@ fun EntryProviderScope<NavKey>.settingsSection(
         LibraryHomeSectionsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.DiscoverRows> { entry ->
+        DiscoverRowsScreen(
+            onBack = { navigator.goBack() },
+            onEditRow = { rowId -> navigator.navigate(Route.DiscoverRowEditor(rowId)) },
+            onAddRow = { navigator.navigate(Route.DiscoverRowEditor()) },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.DiscoverRowEditor> { entry ->
+        DiscoverRowEditorScreen(
+            onBack = { navigator.goBack() },
+            rowId = entry.rowId,
         )
     }
 
@@ -232,6 +267,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
     entry<Route.Licenses> {
         LicensesScreen(
             onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.WhatsNew> {
+        WhatsNewScreen(
+            onBack = { navigator.goBack() },
+            onNavigate = { route -> navigator.navigate(route) },
         )
     }
 }

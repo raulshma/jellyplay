@@ -17,7 +17,18 @@ interface PlaybackRepository {
 
     suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit>
 
-    suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit>
+    /**
+     * Reports the end of a playback session. [failed] marks an error-aborted
+     * session: the server then skips its own "≥X % = played" rule
+     * for the stop, so a crash near the end cannot mark the item watched.
+     * Defaults to `false` — every well-formed stop is a successful one.
+     */
+    suspend fun reportPlaybackStopped(
+        itemId: String,
+        sessionId: String,
+        positionTicks: Long,
+        failed: Boolean = false,
+    ): Result<Unit>
 
     /**
      * Reader page-position report for a book ([positionTicks] =
@@ -131,9 +142,11 @@ interface PlaybackRepository {
      */
     fun getBookDownloadUrl(itemId: String): String
 
-    fun getServerUrl(): String?
-
-    fun getAccessToken(): String?
+    // getServerUrl()/getAccessToken() were retired from this surface: the two
+    // session-credential reads moved to the narrow
+    // [com.raulshma.jellyplay.core.data.playback.PlaybackIdentity] module the
+    // actual readers inject (the interface-wide coupling this ratchet exists
+    // to prevent).
 
     fun buildSubtitleDeliveryUrl(
         itemId: String,

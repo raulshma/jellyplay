@@ -1,11 +1,12 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.livetv.components.RecordAction
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
@@ -47,7 +48,7 @@ class ChannelDetailViewModel(
             //    ChannelsViewModel so channels beyond rank 50 are still found.
             //    A meta failure settles the error here and — via the returned
             //    Result — skips leg 2 entirely.
-            val meta = LiveTvLoad.load(
+            val meta = loadInto(
                 start = {
                     _uiState.update { it.copy(channelId = channelId, channelName = channelName, isLoading = true, error = null) }
                 },
@@ -67,7 +68,7 @@ class ChannelDetailViewModel(
                     }
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load channel") }
+                    _uiState.update { it.copy(isLoading = false, error = UserErrorMessages.resolve(e, "Failed to load channel")) }
                 },
             )
             if (meta.isFailure) return@launch
@@ -126,7 +127,7 @@ class ChannelDetailViewModel(
             }
             .onFailure { e ->
                 if (isInitialLoad) {
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load programs") }
+                    _uiState.update { it.copy(isLoading = false, error = UserErrorMessages.resolve(e, "Failed to load programs")) }
                 }
             }
     }

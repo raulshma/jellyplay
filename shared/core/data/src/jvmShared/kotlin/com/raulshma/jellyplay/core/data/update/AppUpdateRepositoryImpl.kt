@@ -2,8 +2,12 @@ package com.raulshma.jellyplay.core.data.update
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
+import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
+import com.raulshma.jellyplay.core.network.github.GitHubRepoAllowList
+import com.raulshma.jellyplay.core.network.github.UpdateSecurityException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -38,6 +42,14 @@ class AppUpdateRepositoryImpl(
     private val currentVersionName: () -> String,
     private val flavor: String,
     private val supportedAbis: Array<String>,
+    /**
+     * Clock seam (D3) for the progress-report throttle and the sidecar's
+     * downloadedAt stamp — same reads as the bare System.currentTimeMillis()
+     * before. DEFAULTED because apps/desktop's DesktopAppUpdate constructs
+     * this impl manually outside Koin (out of D3's touch set); the Koin
+     * modules pass the shared single explicitly.
+     */
+    private val timeSource: TimeSource = SystemTimeSource(),
 ) : AppUpdateRepository {
 
     private val json = Json {
@@ -60,6 +72,15 @@ class AppUpdateRepositoryImpl(
     ): Result<File> {
         val url = info.downloadAssetUrl
             ?: return Result.failure(java.io.IOException("Download failed: no asset URL"))
+        // Defense-in-depth: info may be a CACHED AppUpdateInfo (the
+        // sidecar JSON round-trips through disk), so the asset URL is
+        // re-verified against the compiled-in GitHub allow-list before
+        // anything streams.
+        if (!GitHubRepoAllowList.isAssetEndpoint(url)) {
+            return Result.failure(
+                UpdateSecurityException("Download asset URL left the pinned GitHub repo: $url"),
+            )
+        }
         // Clone once with no cache. A binary APK must not pollute the shared
         // JSON/asset cache, and we want a clean connection for streaming.
         val client = downloadClient.newBuilder()
@@ -79,6 +100,18 @@ class AppUpdateRepositoryImpl(
                     response.close()
                     return@withContext Result.failure<File>(
                         java.io.IOException("Download failed: HTTP ${response.code}"),
+                    )
+                }
+                // The stored URL may legitimately redirect (github.com
+                // → the release-assets CDN); wherever the chain actually
+                // LANDED must still be on the allow-list before its bytes go
+                // into the APK file.
+                if (!GitHubRepoAllowList.isAssetEndpoint(response.request.url)) {
+                    response.close()
+                    return@withContext Result.failure<File>(
+                        UpdateSecurityException(
+                            "Download redirected off the pinned GitHub hosts: ${response.request.url}",
+                        ),
                     )
                 }
                 val total = response.body?.contentLength()?.coerceAtLeast(0L) ?: 0L
@@ -114,7 +147,7 @@ class AppUpdateRepositoryImpl(
                                 downloaded += bytesRead
                                 // Throttle progress callbacks to avoid flooding the
                                 // main thread through the collector.
-                                val now = System.currentTimeMillis()
+                                val now = timeSource.nowEpochMillis()
                                 if (now - lastReport >= PROGRESS_INTERVAL_MS) {
                                     lastReport = now
                                     val fraction = if (total > 0) downloaded.toFloat() / total else 0f
@@ -230,7 +263,7 @@ class AppUpdateRepositoryImpl(
             downloadUrl = info.downloadAssetUrl,
             assetName = info.downloadAssetName,
             releaseSize = info.releaseSize,
-            downloadedAtMs = System.currentTimeMillis(),
+            downloadedAtMs = timeSource.nowEpochMillis(),
         )
         val target = File(updatesDir, META_NAME)
         val tmp = File(updatesDir, "$META_NAME.tmp")

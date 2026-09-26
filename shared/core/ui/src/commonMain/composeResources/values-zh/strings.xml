@@ -138,6 +138,7 @@
     <string name="ss_cat_audio_player">音频播放器</string>
     <string name="ss_cat_backup_restore">备份与还原</string>
     <string name="ss_cat_experimental">实验性</string>
+    <string name="ss_cat_home">主屏幕</string>
     <string name="ss_cat_integrations">集成</string>
     <string name="ss_cat_language_subtitles">语言与字幕</string>
     <string name="ss_cat_notifications">通知</string>
@@ -250,4 +251,21 @@
     <string name="core_remove_download_confirm">删除</string>
     <string name="core_ui_read_more">查看更多</string>
     <string name="core_ui_show_less">收起</string>
+    <string name="core_media_folder">文件夹</string>
+    <string name="core_media_folder_plural">文件夹</string>
+    <string name="core_ui_auth_use_screen_lock">使用屏幕锁</string>
+    <string name="core_ui_auth_unlock_screen_lock">通过屏幕锁解锁</string>
+    <string name="core_ui_auth_device_credential_prompt">使用设备屏幕锁解锁</string>
+    <string name="core_ui_read">阅读</string>
+    <string name="core_show_password">显示密码</string>
+    <string name="core_hide_password">隐藏密码</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">新功能</string>
+    <string name="core_ui_whatsnew_release_title">v%1$s 的新功能</string>
+    <string name="core_ui_whatsnew_category_new">新增</string>
+    <string name="core_ui_whatsnew_category_improvement">改进</string>
+    <string name="core_ui_whatsnew_category_fix">修复</string>
+    <string name="core_ui_whatsnew_take_me_there">带我去</string>
+    <string name="core_ui_whatsnew_got_it">知道了</string>
+    <string name="core_ui_whatsnew_archive_empty">暂无版本亮点。</string>
 </resources>

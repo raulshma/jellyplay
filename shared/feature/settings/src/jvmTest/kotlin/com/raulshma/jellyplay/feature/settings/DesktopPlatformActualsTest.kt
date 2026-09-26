@@ -145,6 +145,65 @@ class DesktopPlatformActualsTest {
     }
 
     @Test
+    fun `desktop is the one platform backing the mpv audio-device rows`() {
+        // The inverse of the hides-everything pin above: the audio-device
+        // trio is DESKTOP-backed — the desktop composition root binds
+        // a real AudioDeviceEnumerator (DesktopAudioDeviceEnumerator over a
+        // throwaway idle mpv context), while Android's mpv binding exposes no
+        // device-list surface, binds nothing, and the row is structurally
+        // absent there. The mirror half of this pin lives where the seam's
+        // truth lives: apps/desktop's DesktopPlayerModule binding.
+        assertTrue(
+            settingsCapabilities.supportsAudioDeviceSelection,
+            "desktop mpv backs the audio-device rows",
+        )
+    }
+
+    @Test
+    fun `desktop is the one platform backing the mpv render rows`() {
+        // the render rows (shader pack, tone mapping, quality
+        // profile, HDR passthrough, tscale) are DESKTOP-backed — the Anime4K
+        // extraction surface and the HWND-embed `vo=gpu-next` HDR path have
+        // no Android counterpart, so the rows are structurally absent there.
+        // Mirror half: apps/desktop's DesktopPlayerModule wiring.
+        assertTrue(
+            settingsCapabilities.supportsMpvRenderProfiles,
+            "desktop mpv backs the render rows",
+        )
+    }
+
+    @Test
+    fun `desktop is the one platform backing per-content-type volume memory`() {
+        // the volume-memory toggle is DESKTOP-backed — only there does
+        // the app own a volume scalar (mpv's `volume` property; applied at
+        // item start by VideoPlayerViewModel's applyVolumeMemory path,
+        // captured on user changes through MpvDesktopEngine's
+        // onUserVolumeChange hook). Android video volume is deliberately the
+        // system STREAM_MUSIC stream and the audio player exposes no volume
+        // control, so the row is structurally absent there. Mirror half: the
+        // VolumeProfileStore binding in the datastore module and the player
+        // feature's DesktopPlayerVideoModule wiring.
+        assertTrue(
+            settingsCapabilities.supportsVolumeMemory,
+            "desktop mpv owns the volume scalar the memory rides on",
+        )
+    }
+
+    @Test
+    fun `desktop is the one platform backing the idle ambient screen`() {
+        // the idle "Ready to play" screen is DESKTOP-backed —
+        // DesktopIdleMonitor + the DesktopNavScaffold overlay live in the
+        // desktop shell only (the window-active premise is AWT-specific and
+        // Android already owns idle display through its lock-screen /
+        // screensaver story). Mirror half: apps/desktop's DesktopIdleMonitor
+        // construction over the ScreensaverStore idle-ambient slice.
+        assertTrue(
+            settingsCapabilities.supportsIdleAmbientScreen,
+            "the desktop shell owns the idle ambient monitor + overlay",
+        )
+    }
+
+    @Test
     fun `capability flags stay equal to their behavior seams`() {
         // The visibility flag must never outlive the seam's null-ness / query —
         // the pairs are pinned together here so one platform's truth has one

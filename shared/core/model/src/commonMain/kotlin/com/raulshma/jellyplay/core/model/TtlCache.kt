@@ -12,9 +12,7 @@ package com.raulshma.jellyplay.core.model
  * (android + desktop) the backing map is a `Collections.synchronizedMap`
  * wrapper — the exact historical shape — and [withMapMonitor] takes that
  * wrapper's monitor, so every compound section below is mutually exclusive
- * exactly as before. On wasmJs (single-threaded: no SharedArrayBuffer worker
- * threads in Kotlin/wasm today) the actuals are the plain LRU map and a
- * pass-through "lock", so the identical body runs lock-free. One JVM-only
+ * exactly as before. One JVM-only
  * footnote: `withMapMonitor` cannot be `inline` (expect functions may not be),
  * so each section now allocates its lambda where the inline `synchronized`
  * previously did not — a negligible cost next to the cache-miss network reads
@@ -162,13 +160,11 @@ internal data class TtlEntry<V>(val value: V, val fetchedAt: Long)
  * The [TtlCache] backing map. JVM actual: `Collections.synchronizedMap` over
  * [lruMapOf] — the exact historical construction, whose monitor is the
  * returned wrapper itself (which is what makes [withMapMonitor] sections
- * mutually exclusive against the wrapper's own per-call guards). wasmJs
- * actual: the plain [lruMapOf]; single-threaded target, nothing to exclude.
+ * mutually exclusive against the wrapper's own per-call guards).
  */
 internal expect fun <V> ttlBackingMap(maxSize: Int): MutableMap<String, TtlEntry<V>>
 
 /**
- * Runs [block] while holding [monitor]'s lock (JVM actual: `synchronized`;
- * wasmJs actual: pass-through — see the [TtlCache] thread-safety KDoc).
+ * Runs [block] while holding [monitor]'s lock (JVM actual: `synchronized`).
  */
 internal expect fun <R> withMapMonitor(monitor: Any, block: () -> R): R

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.update
 
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
+import com.raulshma.jellyplay.core.network.github.UpdateSecurityException
 import io.mockk.mockk
 import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
@@ -9,26 +10,39 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.File
 
 /**
  * kotlin.test port of the legacy Robolectric AppUpdateRepositoryImplTest
- * (AppUpdate split,): the moved ctor made the PackageManager/filesDir
+ * (AppUpdate split): the moved ctor made the PackageManager/filesDir
  * Context stubs unnecessary — the updates dir is a temp directory and the
- * installed version is a mutable lambda capture. Uses a MockWebServer to
- * exercise the actual download path end-to-end; download/.part/sidecar logic
- * is unchanged from the legacy impl.
+ * installed version is a mutable lambda capture. The download fake is an
+ * application interceptor (no socket, no loopback MockWebServer — a loopback
+ * origin cannot pass the compiled-in GitHubRepoAllowList the download path
+ * verifies): downloads run against the REAL allow-listed github.com release
+ * URL, so the production allow-list is exercised end-to-end. The
+ * download/.part/sidecar logic itself is unchanged from the legacy impl.
  */
 class AppUpdateRepositoryImplTest {
 
-    private lateinit var server: MockWebServer
+    companion object {
+        /** The allow-listed production download shape (github.com + owner/repo path). */
+        private val DOWNLOAD_URL =
+            "https://github.com/raulshma/jellyplay/releases/download/v2.0/jellyplay-v2.0-phone-arm64-v8a.apk"
+    }
+
+    private lateinit var interceptor: CannedDownload
     private lateinit var repo: AppUpdateRepositoryImpl
     private lateinit var updatesDir: File
 
@@ -40,9 +54,32 @@ class AppUpdateRepositoryImplTest {
     private var installedVersion = "1.0"
     private val orphanVersion: String get() = installedVersion
 
-    private fun updateInfo(version: String, url: String? = null) = AppUpdateInfo(
+    /**
+     * The download fake: canned responses from an application interceptor.
+     * [boundTo] pins the canned response to a DIFFERENT request — the final
+     * post-redirect shape OkHttp hands the impl after transparently
+     * following github.com → release-assets CDN (or, in the attack test, an
+     * off-list host).
+     */
+    private class CannedDownload(
+        var code: Int = 200,
+        var body: String = "fake-apk-bytes",
+        private val boundTo: Request? = null,
+    ) : Interceptor {
+        val requests = mutableListOf<Request>()
+
+        override fun intercept(chain: Interceptor.Chain): Response = Response.Builder()
+            .request(boundTo ?: chain.request().also { requests += it })
+            .protocol(Protocol.HTTP_1_1)
+            .code(code)
+            .message(if (code < 300) "OK" else "Redirected")
+            .body(body.toResponseBody(null))
+            .build()
+    }
+
+    private fun updateInfo(version: String, url: String? = DOWNLOAD_URL) = AppUpdateInfo(
         latestVersion = version,
-        htmlUrl = "https://example.com/release",
+        htmlUrl = "https://github.com/raulshma/jellyplay/releases/tag/v$version",
         releaseNotes = "notes",
         isUpdateAvailable = true,
         downloadAssetUrl = url,
@@ -52,14 +89,13 @@ class AppUpdateRepositoryImplTest {
 
     @BeforeTest
     fun setUp() {
-        server = MockWebServer()
-        server.start()
+        interceptor = CannedDownload()
         updatesDir = createTempDirectory("jellyplay-update-test").toFile()
         // Start clean so tests don't see leftovers from one another.
         updatesDir.deleteRecursively()
         repo = AppUpdateRepositoryImpl(
             gitHubReleasesApi = mockk<GitHubReleasesApi>(),
-            downloadClient = OkHttpClient(),
+            downloadClient = OkHttpClient.Builder().addInterceptor(interceptor).build(),
             updatesDir = updatesDir,
             currentVersionName = { installedVersion },
             flavor = "phone",
@@ -69,16 +105,12 @@ class AppUpdateRepositoryImplTest {
 
     @AfterTest
     fun tearDown() {
-        server.shutdown()
         updatesDir.deleteRecursively()
     }
 
     @Test
     fun `download writes apk and sidecar`() = runBlocking {
-        server.enqueue(MockResponse().setBody("fake-apk-bytes"))
-        val info = updateInfo("2.0", server.url("/apk").toString())
-
-        val result = repo.downloadUpdate(info)
+        val result = repo.downloadUpdate(updateInfo("2.0"))
 
         assertTrue(result.isSuccess)
         val apk = File(updatesDir, "jellyplay-update.apk")
@@ -88,13 +120,52 @@ class AppUpdateRepositoryImplTest {
         val sidecar = File(updatesDir, "jellyplay-update.meta.json")
         assertTrue(sidecar.exists())
         assertTrue(sidecar.readText().contains("\"version\":\"2.0\""))
+        // Sanity: the request went to the pinned download URL.
+        assertEquals(DOWNLOAD_URL, interceptor.requests.single().url.toString())
+    }
+
+    @Test
+    fun `download fails closed on a poisoned asset url before anything streams`() = runBlocking {
+        // The poisoned-cache defense: a tampered/cached AppUpdateInfo
+        // whose asset URL is off the compiled-in allow-list must be rejected
+        // BEFORE the stream opens (no request, no .part, no sidecar).
+        val result = repo.downloadUpdate(updateInfo("2.0", url = "https://evil.example.com/apk.apk"))
+
+        val error = result.exceptionOrNull()
+        assertIs<UpdateSecurityException>(error)
+        assertFalse(File(updatesDir, "jellyplay-update.apk").exists())
+        assertTrue(interceptor.requests.isEmpty(), "the poisoned URL must never reach the wire")
+    }
+
+    @Test
+    fun `download fails closed when the redirect chain lands off the allow-list`() = runBlocking {
+        // Simulates OkHttp having followed the download redirect onto a host
+        // outside ALLOWED_ASSET_HOSTS: the final URL is checked before a byte
+        // is written.
+        val redirectInterceptor = CannedDownload(
+            boundTo = Request.Builder().url("https://evil.example.com/apk.apk").build(),
+        )
+        repo = AppUpdateRepositoryImpl(
+            gitHubReleasesApi = mockk<GitHubReleasesApi>(),
+            downloadClient = OkHttpClient.Builder().addInterceptor(redirectInterceptor).build(),
+            updatesDir = updatesDir,
+            currentVersionName = { installedVersion },
+            flavor = "phone",
+            supportedAbis = arrayOf("arm64-v8a"),
+        )
+
+        val result = repo.downloadUpdate(updateInfo("2.0"))
+
+        val error = result.exceptionOrNull()
+        assertIs<UpdateSecurityException>(error)
+        assertTrue(error.message!!.contains("redirected"), "unexpected message: $error")
+        assertFalse(File(updatesDir, "jellyplay-update.apk").exists())
+        assertFalse(File(updatesDir, "jellyplay-update.apk.part").exists())
     }
 
     @Test
     fun `getPendingUpdate returns pending when sidecar newer than installed`() = runBlocking {
-        server.enqueue(MockResponse().setBody("apk"))
-        val info = updateInfo("2.0", server.url("/apk").toString())
-        repo.downloadUpdate(info)
+        repo.downloadUpdate(updateInfo("2.0"))
 
         val pending = repo.getPendingUpdate()
 
@@ -106,21 +177,16 @@ class AppUpdateRepositoryImplTest {
 
     @Test
     fun `getPendingUpdate returns null when sidecar version not newer`() = runBlocking {
-        server.enqueue(MockResponse().setBody("apk"))
         // Equal to installed: simulates a completed install where the process
         // restarted in the new build (sidecar version now <= installed).
-        val info = updateInfo(orphanVersion, server.url("/apk").toString())
-        repo.downloadUpdate(info)
+        repo.downloadUpdate(updateInfo(orphanVersion))
 
-        val pending = repo.getPendingUpdate()
-
-        assertNull(pending)
+        assertNull(repo.getPendingUpdate())
     }
 
     @Test
     fun `getPendingUpdate returns null when apk missing`() = runBlocking {
-        server.enqueue(MockResponse().setBody("apk"))
-        repo.downloadUpdate(updateInfo("2.0", server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo("2.0"))
         // Delete the APK but leave the sidecar — must not surface a ghost state.
         File(updatesDir, "jellyplay-update.apk").delete()
 
@@ -129,8 +195,7 @@ class AppUpdateRepositoryImplTest {
 
     @Test
     fun `cleanup keeps genuinely pending apk`() = runBlocking {
-        server.enqueue(MockResponse().setBody("apk"))
-        repo.downloadUpdate(updateInfo("2.0", server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo("2.0"))
 
         repo.cleanupDownloadedUpdate()
 
@@ -140,8 +205,7 @@ class AppUpdateRepositoryImplTest {
 
     @Test
     fun `cleanup deletes orphan when version is not newer`() = runBlocking {
-        server.enqueue(MockResponse().setBody("apk"))
-        repo.downloadUpdate(updateInfo(orphanVersion, server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo(orphanVersion))
 
         repo.cleanupDownloadedUpdate()
 
@@ -164,11 +228,10 @@ class AppUpdateRepositoryImplTest {
     @Test
     fun `redownload overwrites prior apk and sidecar`() = runBlocking {
         // First download: version 2.0.
-        server.enqueue(MockResponse().setBody("apk-v2"))
-        repo.downloadUpdate(updateInfo("2.0", server.url("/apk").toString()))
+        repo.downloadUpdate(updateInfo("2.0"))
         // Second download: version 3.0, reusing the same output path.
-        server.enqueue(MockResponse().setBody("apk-v3"))
-        repo.downloadUpdate(updateInfo("3.0", server.url("/apk").toString()))
+        interceptor.body = "apk-v3"
+        repo.downloadUpdate(updateInfo("3.0", url = DOWNLOAD_URL.replace("/v2.0/", "/v3.0/")))
 
         val apk = File(updatesDir, "jellyplay-update.apk")
         assertEquals("apk-v3", apk.readText())
@@ -180,10 +243,9 @@ class AppUpdateRepositoryImplTest {
 
     @Test
     fun `failed download deletes apk and leaves no sidecar`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(500))
-        val info = updateInfo("2.0", server.url("/apk").toString())
+        interceptor.code = 500
 
-        val result = repo.downloadUpdate(info)
+        val result = repo.downloadUpdate(updateInfo("2.0"))
 
         assertTrue(result.isFailure)
         // No APK, no sidecar — nothing for the next launch to mistake as pending.

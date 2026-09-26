@@ -21,11 +21,8 @@ import org.jellyfin.sdk.model.api.UploadSubtitleDto
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.model.toFileInfo
 import org.jellyfin.sdk.api.client.extensions.*
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class MetadataApiClientImpl @Inject constructor(
+class MetadataApiClientImpl(
     private val engine: JellyfinApiEngine,
 ) : MetadataApiClient {
 
@@ -69,8 +66,7 @@ class MetadataApiClientImpl @Inject constructor(
         preferredMetadataLanguage: String?, preferredMetadataCountryCode: String?,
         taglines: List<String>, productionLocations: List<String>, dateCreated: String?,
         type: String,
-    ): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Unit> = engine.withApi { api ->
         val dto = BaseItemDto(
             id = itemIdOrRandom(itemId),
             name = name,
@@ -112,8 +108,7 @@ class MetadataApiClientImpl @Inject constructor(
         api.itemUpdateApi.updateItem(itemId = requireItemUuid(itemId), data = dto)
     }
 
-    override suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         val dto = api.itemUpdateApi.getMetadataEditorInfo(itemId = uuid).content
         MetadataEditorInfo(
@@ -145,8 +140,7 @@ class MetadataApiClientImpl @Inject constructor(
         replaceAllMetadata: Boolean,
         replaceAllImages: Boolean,
         regenerateTrickplay: Boolean,
-    ): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Unit> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         api.itemRefreshApi.refreshItem(
             itemId = uuid,
@@ -158,8 +152,7 @@ class MetadataApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         api.imageApi.getItemImageInfos(itemId = uuid).content.map { dto ->
             ImageInfo(
@@ -173,8 +166,7 @@ class MetadataApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun setItemImage(itemId: String, imageType: String, imageBytes: ByteArray): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun setItemImage(itemId: String, imageType: String, imageBytes: ByteArray): Result<Unit> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         val type = requireImageType(imageType)
         api.imageApi.setItemImage(
@@ -227,8 +219,7 @@ class MetadataApiClientImpl @Inject constructor(
         else -> "image/png"
     }
 
-    override suspend fun deleteItemImage(itemId: String, imageType: String, imageIndex: Int?): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun deleteItemImage(itemId: String, imageType: String, imageIndex: Int?): Result<Unit> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         val type = requireImageType(imageType)
         api.imageApi.deleteItemImage(itemId = uuid, imageType = type, imageIndex = imageIndex)
@@ -240,8 +231,7 @@ class MetadataApiClientImpl @Inject constructor(
         provider: String?,
         startIndex: Int?,
         limit: Int?,
-    ): Result<RemoteImageResult> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<RemoteImageResult> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         val dto = api.remoteImageApi.getRemoteImages(
             itemId = uuid,
@@ -258,8 +248,7 @@ class MetadataApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun getRemoteImageProviders(itemId: String): Result<List<ImageProviderInfo>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getRemoteImageProviders(itemId: String): Result<List<ImageProviderInfo>> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         api.remoteImageApi.getRemoteImageProviders(itemId = uuid).content.map { dto ->
             ImageProviderInfo(
@@ -269,8 +258,7 @@ class MetadataApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun downloadRemoteImage(itemId: String, imageType: String, imageUrl: String): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun downloadRemoteImage(itemId: String, imageType: String, imageUrl: String): Result<Unit> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         val type = requireImageType(imageType)
         api.remoteImageApi.downloadRemoteImage(itemId = uuid, type = type, imageUrl = imageUrl)
@@ -283,8 +271,7 @@ class MetadataApiClientImpl @Inject constructor(
         language: String?,
         isForced: Boolean,
         isHearingImpaired: Boolean,
-    ): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Unit> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         api.subtitleApi.uploadSubtitle(
             itemId = uuid,
@@ -298,14 +285,12 @@ class MetadataApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         api.subtitleApi.deleteSubtitle(itemId = uuid, index = index)
     }
 
-    override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         api.subtitleApi.searchRemoteSubtitles(itemId = uuid, language = language, isPerfectMatch = null).content.map { dto ->
             RemoteSubtitleInfo(

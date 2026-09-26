@@ -14,13 +14,20 @@ import kotlin.test.assertTrue
  * TranscodeReasonsRefresher / LiveStreamResolution seam shape — with the VM
  * left a thin caller that owns the uiState writes and the logging.
  *
- * Baseline: 26 members. Lower the ceiling when a slice moves out and
+ * Baseline: 10 members (26 before the LiveTvPlayerUiEvent intent fold, the
+ * VideoPlayerUiEvent / AudioPlayerUiEvent precedent: the 15 per-action
+ * command funs the funnel replaced became private handlers behind the single
+ * `onEvent` — no member died, every command had a live screen caller). The
+ * remaining surface is the four state flows, `onEvent`, the two queries
+ * (`engineForRendering` / `logoUrlFor`), the media3 relay
+ * `onVideoSizeChanged` and the lifecycle `stop` + the `onCleared` override.
+ * Lower the ceiling when a slice moves out and
  * deletes members; never raise it to admit new ones.
  */
 class LiveTvPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 26
+    private val maxPublicInternalMembers = 10
 
     /**
      * A class-body declaration line at the ViewModel's single level of

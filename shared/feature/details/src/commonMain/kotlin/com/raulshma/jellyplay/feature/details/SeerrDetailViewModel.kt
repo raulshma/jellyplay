@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.isAvailable
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.withPendingRequest
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -168,10 +169,9 @@ class SeerrDetailViewModel constructor(
         val tv = state.tvDetails
         val mediaInfo = movie?.mediaInfo ?: tv?.mediaInfo
         val status = mediaInfo?.status ?: 0
-        val mediaStatus = SeerrMediaStatus.fromValue(status)
-        if (mediaStatus != SeerrMediaStatus.AVAILABLE &&
-            mediaStatus != SeerrMediaStatus.PARTIALLY_AVAILABLE
-        ) return
+        // Availability folds through core/model's SeerrStatusDecisions
+        // (partial availability counts as present), not a hand-rolled pair.
+        if (!SeerrMediaStatus.fromValue(status).isAvailable) return
 
         // Provider candidates in priority order. tmdb is the primary id Seerr tracks;
         // tvdb/imdb are fallbacks that may be present on the detail's externalIds.

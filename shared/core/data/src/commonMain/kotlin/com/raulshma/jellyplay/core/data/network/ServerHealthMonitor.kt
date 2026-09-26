@@ -29,11 +29,9 @@ import kotlinx.coroutines.launch
  * [EpochMillisSource] seam (JVM [TimeSource] fakes in jvmTest still satisfy
  * it through the supertype), the loop dispatcher moved to the module's
  * [ioDispatcher] expect/actual (`Dispatchers.IO` on android/desktop — the
- * identical production dispatcher; `Dispatchers.Default` on wasmJs, where
- * kotlinx.coroutines has no IO pool), and `@Volatile` became the common
+ * identical production dispatcher), and `@Volatile` became the common
  * kotlin.concurrent annotation. [JellyfinApiClient] is a commonMain
- * interface, so the class crosses; its Koin single stays in dataJvmModule
- * (nothing on web resolves it yet).
+ * interface, so the class crosses; its Koin single stays in dataJvmModule.
  */
 private const val MONITOR_LOOP = "ServerHealthMonitor.loop"
 

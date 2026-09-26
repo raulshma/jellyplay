@@ -3,11 +3,9 @@ package com.raulshma.jellyplay.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetRequestCodes
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetUi
 import com.raulshma.jellyplay.widget.skeleton.updateRecommendationGridWidget
-import org.koin.mp.KoinPlatform
 
 /**
  * Home-screen widget that surfaces Seerr (Jellyseerr/Overseerr)
@@ -30,19 +28,6 @@ import org.koin.mp.KoinPlatform
  * 7_500_0xx request-code namespace); the Seerr-only empty-state texts ride
  * the template's extra-binding hook.
  */
-/**
- * Koin accessors (Hilt removal): resolved straight from the
- * application container, same try/catch shape the EntryPoint call used.
- */
-private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
-    KoinPlatform.getKoin()!!.get()
-
-private fun koinSeerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore =
-    KoinPlatform.getKoin()!!.get()
-
-private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
-    KoinPlatform.getKoin()!!.get()
-
 class SeerrRecommendationsWidget : GridWidgetProvider() {
 
     override val gridViewId: Int = R.id.sr_widget_grid
@@ -71,7 +56,7 @@ class SeerrRecommendationsWidget : GridWidgetProvider() {
     }
 
     override suspend fun refreshNow(context: Context) {
-        koinWidgetWorkScheduler().refreshSeerrNow()
+        WidgetKoin.widgetWorkScheduler.refreshSeerrNow()
     }
 
     companion object {
@@ -91,7 +76,7 @@ class SeerrRecommendationsWidget : GridWidgetProvider() {
                 context = context,
                 appWidgetManager = appWidgetManager,
                 appWidgetId = appWidgetId,
-                subtitleText = readSourceLabel(context, appWidgetId),
+                subtitleText = readSeerrSourceLabel(appWidgetId),
                 ui = GridWidgetUi(
                     layoutRes = R.layout.seerr_recommendations_widget,
                     headerViewId = R.id.sr_widget_header,
@@ -133,19 +118,13 @@ class SeerrRecommendationsWidget : GridWidgetProvider() {
             )
         }
 
-        private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {
-            // Sync snapshot accessor — `onUpdate`/`onAppWidgetOptionsChanged` run
-            // on the main thread, so a blocking DataStore read is not acceptable.
-            koinWidgetDataStore().getWidgetConfigForIdSync(appWidgetId).seerrSource.displayName
-        }.getOrDefault(SeerrWidgetSource.TRENDING.displayName)
-
         // Widget-independent server-configured read (serverUrl pref is set) —
         // callers looping over widget IDs should hoist this out of the loop.
         // `preferences` is an eagerly-started StateFlow, so `.value` is a
         // memory read safe for the main thread.
         private fun hasServerConfigured(context: Context): Boolean {
             return runCatching {
-                koinSeerrPreferencesStore().preferences.value.serverUrl.isNotBlank()
+                WidgetKoin.seerrPreferencesStore.preferences.value.serverUrl.isNotBlank()
             }.getOrDefault(false)
         }
     }

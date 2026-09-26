@@ -24,9 +24,8 @@ const val VIDEO_CACHE_DIR_NAME = "video_cache"
 
 /**
  * Manages the application's HTTP/image caches and honours the
- * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDeleteCache]
- * preference: when enabled, caches are cleared when the app goes to the
- * background (process `ON_STOP`).
+ * `autoDeleteCache` preference: when enabled, caches are cleared when the app
+ * goes to the background (process `ON_STOP`).
  *
  * The clear operation only deletes the contents of [Context.cacheDir] and
  * [Context.externalCacheDir] — both of which are private to the app and

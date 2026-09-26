@@ -20,8 +20,8 @@ val LocalAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> 
  *
  * expect/actual because androidx.navigation3:navigation3-ui 1.1.5's *metadata*
  * klib ships an empty `androidx.navigation3.ui` package: every platform
- * artifact (android, the desktop jvmstubs, the JetBrains fork's desktop/wasm
- * klibs) declares `LocalNavAnimatedContentScope`, but referencing it from
+ * artifact (android, the desktop jvmstubs) declares
+ * `LocalNavAnimatedContentScope`, but referencing it from
  * commonMain fails the metadata compilation of any consumer module. Same
  * shape as the core:database sqlite shims.
  */

@@ -36,7 +36,7 @@
 
     <!-- Clear history dialog -->
     <string name="search_clear_search_history">Clear search history</string>
-    <string name="search_clear_history_confirm">Remove all recent searches? This can\'t be undone.</string>
+    <string name="search_clear_history_confirm">Remove all recent searches? This can't be undone.</string>
     <string name="search_action_clear">Clear</string>
     <string name="search_action_cancel">Cancel</string>
 

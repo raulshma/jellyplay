@@ -1,70 +1,40 @@
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.syncplay"
-        compileSdk = 37
-        minSdk = 28
-        // Compose-resources packaging (device-pass finding): with the
-        // AGP-9 KMP library plugin, android resources are OFF by default, so
-        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
-        // app APK ships this module's Res accessors with NO backing .cvr
-        // assets — runtime MissingResourceException on the first string read.
-        androidResources {
-            enable = true
-        }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
+        // Rehomed :app androidTest suite (SyncPlayScreenTest) — withHostTest
+        // creates the androidUnitTest variant bound to the Kotlin test tree
+        // (AGP-9 KMP library plugin). Flags mirrored verbatim from
+        // shared/core/ui: real resource serving for compose-resources string
+        // lookups and unstubbed-Context tolerance.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
         }
     }
-
-    // web breadth: the target compiles. The manager the feature
-    // rides (SyncPlayManager — OkHttp api client + WebSocket + TimeSync, all
-    // JVM-bound in core:data's jvmShared half) went behind the feature-local
-    // SyncPlaySession seam (QuickDownloadActions template): the jvmShared
-    // fragment binds a 1:1 adapter over the process-wide manager single
-    // (android/desktop behavior unchanged), the wasmJs fragment binds the
-    // honest unsupported session — join/leave fail with an explicit cause,
-    // events never emit, no group state is fabricated. The web stack still
-    // registers no screen routing — web wiring stays with the orchestrator's
-    // integration pass. The VM's one System.currentTimeMillis() read (the
-    // reconnect-grace window) ported to core:model's commonMain
-    // wallNowMillis() platform seam. The karma/Chrome browser run stays off
-    // like core:ui/core:network — jvmTest pins the semantics.
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // The manager the feature rides (SyncPlayManager — OkHttp api client
+        // + WebSocket + TimeSync, all JVM-bound in core:data's jvmShared half)
+        // went behind the feature-local SyncPlaySession seam
+        // (QuickDownloadActions template): the jvmShared fragment binds a 1:1
+        // adapter over the process-wide manager single (android/desktop
+        // behavior unchanged). The VM's one System.currentTimeMillis() read
+        // (the reconnect-grace window) ported to core:model's commonMain
+        // wallNowMillis() platform seam.
+        //
         // The JVM-side binding (SyncPlaySession -> the JvmSyncPlaySession
         // adapter over the SyncPlayManager single) — the player-audio
-        // PlayerAudioPlatformModule jvmShared pattern.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // PlayerAudioPlatformModule jvmShared pattern. (The jvmShared middle
+        // source set comes from the convention plugin.)
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
@@ -99,11 +69,8 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-        }
+        // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
         }
@@ -117,20 +84,25 @@ kotlin {
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.syncplay.generated.resources"
 
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface. Scoped
-// to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before (the
-// identical block lives in shared/core/ui, shared/feature/requests and the
-// other web modules).
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+// Robolectric lane for the rehomed SyncPlayScreenTest. AGP 9.4's withHostTest
+// names the lane's source set androidHostTest (src/androidHostTest/kotlin)
+// and materializes it only in afterEvaluate, so the dependency wiring rides a
+// configureEach — an eager lookup would run before the source set exists
+// (same pattern as shared/core/ui).
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+            implementation(libs.androidx.test.core)
+            // Compose UI tests under Robolectric (the rehomed screen
+            // regression suite; mockk doubles the SyncPlayViewModel ctor
+            // seams — same setup as the jvmTest ViewModel suite).
+            implementation(project.dependencies.platform(libs.compose.bom))
+            implementation(libs.compose.ui.test)
+            implementation(libs.compose.ui.test.manifest)
+            implementation(libs.mockk)
         }
     }
 }

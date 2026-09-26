@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.model
 
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.test.assertEquals
@@ -9,57 +8,6 @@ import kotlin.test.Test
 class ModelSerializationTest {
 
     private val json = Json { ignoreUnknownKeys = true }
-
-    @Test
-    fun `user preferences serialization roundtrip`() {
-        val original = UserPreferences(
-            preferredPlayer = PlayerType.EXTERNAL,
-            preferredSubtitleLanguage = "eng",
-            preferredAudioLanguage = "jpn",
-            dynamicTheming = false,
-            subtitleStyle = SubtitleStyle(
-                fontSize = 32,
-                fontColor = SubtitleColor.YELLOW,
-                backgroundColor = SubtitleColor.BLACK,
-                backgroundOpacity = 0.8f,
-                edgeType = SubtitleEdgeType.OUTLINE,
-                edgeColor = SubtitleColor.BLACK,
-                offsetMs = 1500L,
-            ),
-            streamingQuality = StreamingQuality.FHD_1080P,
-            maxCacheSizeMb = 2048,
-            autoDeleteCache = false,
-            pinLockEnabled = true,
-            pinHash = "abc123",
-            dialogueBoostEnabled = true,
-            dialogueBoostStrength = EffectStrength.HIGH,
-            nightModeStrength = EffectStrength.LOW,
-        )
-
-        val serialized = json.encodeToString(original)
-        val deserialized = json.decodeFromString<UserPreferences>(serialized)
-
-        assertEquals(original, deserialized)
-    }
-
-    @Test
-    fun `user preferences default values`() {
-        val defaults = UserPreferences()
-
-        assertEquals(PlayerType.EXO_PLAYER, defaults.preferredPlayer)
-        assertEquals(null, defaults.preferredSubtitleLanguage)
-        assertEquals(null, defaults.preferredAudioLanguage)
-        assertEquals(true, defaults.dynamicTheming)
-        assertEquals(SubtitleStyle(), defaults.subtitleStyle)
-        assertEquals(StreamingQuality.AUTO, defaults.streamingQuality)
-        assertEquals(0, defaults.maxCacheSizeMb)
-        assertEquals(true, defaults.autoDeleteCache)
-        assertEquals(false, defaults.pinLockEnabled)
-        assertEquals(null, defaults.pinHash)
-        assertEquals(false, defaults.dialogueBoostEnabled)
-        assertEquals(EffectStrength.MODERATE, defaults.dialogueBoostStrength)
-        assertEquals(EffectStrength.MODERATE, defaults.nightModeStrength)
-    }
 
     @Test
     fun `subtitle style serialization roundtrip`() {

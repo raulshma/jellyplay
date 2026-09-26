@@ -20,11 +20,8 @@ import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
 import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.api.UserApiClientImpl
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class JellyfinApiClientImpl @Inject constructor(
+class JellyfinApiClientImpl(
     private val authClient: AuthApiClientImpl,
     private val libraryClient: LibraryApiClientImpl,
     private val playbackClient: PlaybackApiClientImpl,

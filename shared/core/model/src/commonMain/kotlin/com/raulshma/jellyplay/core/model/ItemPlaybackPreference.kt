@@ -24,6 +24,11 @@ enum class PlaybackPrefScope {
  * pick (e.g. "English · 5.1") survives an app restart and carries to the next
  * episode instead of being remembered only in-process. `null` index means
  * "unknown / not comparable".
+ *
+ * [codec] is the selected stream's container codec: an extra re-match
+ * rung for episodes whose track layout changed (label churn) — "English +
+ * eac3" still resolves when "English · 5.1 · EAC3" became "English (EAC3)".
+ * `null` (legacy rows / streams without a codec) skips the rung.
  */
 @Immutable
 @Serializable
@@ -31,6 +36,7 @@ data class RememberedTrack(
     val label: String,
     val language: String?,
     val indexWithinLanguage: Int = -1,
+    val codec: String? = null,
 )
 
 /**
@@ -73,6 +79,10 @@ data class RememberedTrack(
  *   episode via track scoring, or null to not remember one.
  * @param rememberedSubtitleTrack the last-selected subtitle track to carry to the
  *   next episode via track scoring, or null to not remember one.
+ * @param renderProfile an optional per-item/series rendering override (
+ *   shader pack + tone mapping), or null to follow the global settings. Persisted
+ *   as JSON in the nullable `renderProfile` column (migration 56→57); "Inherit"
+ *   in the player's Rendering sheet clears it back to null.
  * @param updatedAt epoch millis of the last write.
  */
 @Immutable
@@ -88,5 +98,6 @@ data class ItemPlaybackPreference(
     val dialogueBoostStrength: EffectStrength? = null,
     val rememberedAudioTrack: RememberedTrack? = null,
     val rememberedSubtitleTrack: RememberedTrack? = null,
+    val renderProfile: MpvRenderOverrides? = null,
     val updatedAt: Long = wallNowMillis(),
 )

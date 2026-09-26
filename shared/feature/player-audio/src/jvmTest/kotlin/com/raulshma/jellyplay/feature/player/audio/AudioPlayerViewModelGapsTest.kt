@@ -237,7 +237,7 @@ class AudioPlayerViewModelGapsTest {
             secondArg<(Result<List<LrcLibTrack>>) -> Unit>()(Result.success(listOf(track)))
         }
 
-        viewModel.searchLyrics("song")
+        viewModel.onEvent(AudioPlayerUiEvent.SearchLyrics("song"))
 
         verify { engine.searchLyrics("song", any()) }
         with(viewModel.uiState.value.lyrics) {
@@ -254,7 +254,7 @@ class AudioPlayerViewModelGapsTest {
             )
         }
 
-        viewModel.searchLyrics("song")
+        viewModel.onEvent(AudioPlayerUiEvent.SearchLyrics("song"))
 
         assertTrue(viewModel.uiState.value.lyrics.searchResults.isEmpty())
         assertFalse(viewModel.uiState.value.lyrics.isSearching)
@@ -266,10 +266,10 @@ class AudioPlayerViewModelGapsTest {
         every { engine.searchLyrics(any(), any()) } answers {
             secondArg<(Result<List<LrcLibTrack>>) -> Unit>()(Result.success(listOf(track)))
         }
-        viewModel.searchLyrics("song")
+        viewModel.onEvent(AudioPlayerUiEvent.SearchLyrics("song"))
         assertFalse(viewModel.uiState.value.lyrics.searchResults.isEmpty())
 
-        viewModel.applyLyrics(track)
+        viewModel.onEvent(AudioPlayerUiEvent.ApplyLyrics(track))
 
         verify { engine.applyLyrics(42L) }
         assertTrue(viewModel.uiState.value.lyrics.searchResults.isEmpty())
@@ -277,7 +277,7 @@ class AudioPlayerViewModelGapsTest {
 
     @Test
     fun setLyricsOffset_delegatesToEngine() {
-        viewModel.setLyricsOffset(250L)
+        viewModel.onEvent(AudioPlayerUiEvent.SetLyricsOffset(250L))
         verify { engine.setLyricsOffset(250L) }
     }
 
@@ -320,7 +320,7 @@ class AudioPlayerViewModelGapsTest {
         currentItemIdFlow.value = "track-1"
         currentPosition.value = 42_000L
 
-        viewModel.castToDevice()
+        viewModel.onEvent(AudioPlayerUiEvent.CastToDevice)
 
         verify(exactly = 1) { cast.loadMedia("track-1", 42_000L) }
         verify(exactly = 1) { engine.pause() }
@@ -335,7 +335,7 @@ class AudioPlayerViewModelGapsTest {
         val locked = Playlist(id = "p2", name = "Theirs", canEdit = false)
         coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(listOf(editable, locked))
 
-        viewModel.openPlaylistPicker()
+        viewModel.onEvent(AudioPlayerUiEvent.OpenPlaylistPicker)
 
         val picker = viewModel.playlistPicker.state.value
         assertTrue(picker.visible)
@@ -347,7 +347,7 @@ class AudioPlayerViewModelGapsTest {
     fun openPlaylistPicker_withoutCurrentItem_neverOpens() {
         currentItemIdFlow.value = null
 
-        viewModel.openPlaylistPicker()
+        viewModel.onEvent(AudioPlayerUiEvent.OpenPlaylistPicker)
 
         assertFalse(viewModel.playlistPicker.state.value.visible)
         coVerify(exactly = 0) { playlistRepository.getPlaylists(any()) }
@@ -358,7 +358,7 @@ class AudioPlayerViewModelGapsTest {
         currentItemIdFlow.value = "track-1"
         coEvery { playlistRepository.getPlaylists(any()) } returns Result.failure(RuntimeException("offline"))
 
-        viewModel.openPlaylistPicker()
+        viewModel.onEvent(AudioPlayerUiEvent.OpenPlaylistPicker)
 
         val picker = viewModel.playlistPicker.state.value
         assertTrue(picker.visible, "the picker still opens on failure")
@@ -372,7 +372,7 @@ class AudioPlayerViewModelGapsTest {
         val playlist = Playlist(id = "p1", name = "Road Trip", canEdit = true)
         coEvery { playlistRepository.addItemsToPlaylist("p1", listOf("track-1")) } returns Result.success(Unit)
 
-        viewModel.addToPlaylist(playlist)
+        viewModel.onEvent(AudioPlayerUiEvent.AddToPlaylist(playlist))
 
         with(viewModel.playlistPicker.state.value) {
             assertFalse(adding)
@@ -386,12 +386,12 @@ class AudioPlayerViewModelGapsTest {
     fun addToPlaylist_failure_keepsPickerOpenAndSurfacesTheError() {
         currentItemIdFlow.value = "track-1"
         coEvery { playlistRepository.getPlaylists(limit = 100) } returns Result.success(emptyList())
-        viewModel.openPlaylistPicker()
+        viewModel.onEvent(AudioPlayerUiEvent.OpenPlaylistPicker)
         val playlist = Playlist(id = "p1", name = "Road Trip", canEdit = true)
         coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns
             Result.failure(RuntimeException("server rejected"))
 
-        viewModel.addToPlaylist(playlist)
+        viewModel.onEvent(AudioPlayerUiEvent.AddToPlaylist(playlist))
 
         val picker = viewModel.playlistPicker.state.value
         assertFalse(picker.adding)
@@ -408,18 +408,18 @@ class AudioPlayerViewModelGapsTest {
             gate.await()
             Result.success(Unit)
         }
-        viewModel.openPlaylistPicker()
-        viewModel.addToPlaylist(Playlist(id = "p1", name = "Road Trip"))
+        viewModel.onEvent(AudioPlayerUiEvent.OpenPlaylistPicker)
+        viewModel.onEvent(AudioPlayerUiEvent.AddToPlaylist(Playlist(id = "p1", name = "Road Trip")))
 
         // The add is in flight: a scrim tap must not close the picker.
-        viewModel.dismissPlaylistPicker()
+        viewModel.onEvent(AudioPlayerUiEvent.DismissPlaylistPicker)
         assertTrue(viewModel.playlistPicker.state.value.visible)
 
         gate.complete(Unit)
         // The completed add closes the picker itself; a post-add dismiss is a
         // harmless no-op reset.
         assertFalse(viewModel.playlistPicker.state.value.visible)
-        viewModel.dismissPlaylistPicker()
+        viewModel.onEvent(AudioPlayerUiEvent.DismissPlaylistPicker)
         with(viewModel.playlistPicker.state.value) {
             assertFalse(visible)
             assertTrue(playlists.isEmpty())
@@ -431,7 +431,7 @@ class AudioPlayerViewModelGapsTest {
     fun clearMessage_clearsOnlyTheMessage() {
         currentItemIdFlow.value = "track-1"
         coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
-        viewModel.addToPlaylist(Playlist(id = "p1", name = "Road Trip"))
+        viewModel.onEvent(AudioPlayerUiEvent.AddToPlaylist(Playlist(id = "p1", name = "Road Trip")))
         assertEquals("Road Trip", viewModel.playlistPicker.state.value.message)
 
         viewModel.playlistPicker.clearMessage()
@@ -446,7 +446,7 @@ class AudioPlayerViewModelGapsTest {
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.COMPLETED))
         currentItemIdFlow.value = "track-1"
 
-        viewModel.downloadCurrentTrack()
+        viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
         coVerify(exactly = 1) { downloads.remove("dl-1") }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
@@ -457,7 +457,7 @@ class AudioPlayerViewModelGapsTest {
         currentItemIdFlow.value = "track-1"
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.DOWNLOADING))
 
-        viewModel.downloadCurrentTrack()
+        viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
         coVerify(exactly = 0) { downloads.remove(any()) }
         coVerify(exactly = 1) { trackDownloadActions.flip("track-1") }
@@ -467,7 +467,7 @@ class AudioPlayerViewModelGapsTest {
     fun downloadCurrentTrack_withoutCurrentItem_isNoOp() {
         currentItemIdFlow.value = null
 
-        viewModel.downloadCurrentTrack()
+        viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
         coVerify(exactly = 0) { downloads.remove(any()) }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
@@ -497,11 +497,11 @@ class AudioPlayerViewModelGapsTest {
         coEvery { mediaRepository.getMediaDetail("track-1", any()) } returns
             Result.success(detail("track-1", blurHash = "L6PZfSi_.AyE"))
 
-        viewModel.play("track-1")
+        viewModel.onEvent(AudioPlayerUiEvent.Play("track-1"))
         assertEquals("L6PZfSi_.AyE", viewModel.uiState.value.albumArtBlurHash)
 
         // A replay (e.g. after the queue wraps) must not re-fetch the detail.
-        viewModel.play("track-1")
+        viewModel.onEvent(AudioPlayerUiEvent.Play("track-1"))
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("track-1", any()) }
         assertEquals("L6PZfSi_.AyE", viewModel.uiState.value.albumArtBlurHash)
@@ -512,10 +512,10 @@ class AudioPlayerViewModelGapsTest {
         coEvery { mediaRepository.getMediaDetail("track-2", any()) } returns
             Result.success(detail("track-2", blurHash = null))
 
-        viewModel.play("track-2")
+        viewModel.onEvent(AudioPlayerUiEvent.Play("track-2"))
         assertNull(viewModel.uiState.value.albumArtBlurHash)
 
-        viewModel.play("track-2")
+        viewModel.onEvent(AudioPlayerUiEvent.Play("track-2"))
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("track-2", any()) }
     }
@@ -523,7 +523,7 @@ class AudioPlayerViewModelGapsTest {
     @Test
     fun sleepTimerExpiry_pausesTheEngine_ratherThanToggling() {
         val onExpired = slot<() -> Unit>()
-        viewModel.startSleepTimer(60_000L)
+        viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimer(60_000L))
         verify { sleepTimerManager.setOnTimerExpired(capture(onExpired)) }
 
         // Simulate the manager firing after the countdown: the callback must
@@ -546,7 +546,7 @@ class AudioPlayerViewModelGapsTest {
         every { effectsManager.nightModeEnabled } returns nightMode
         every { effectsManager.toggleNightMode() } answers { nightMode.value = !nightMode.value }
 
-        viewModel.toggleNightMode()
+        viewModel.onEvent(AudioPlayerUiEvent.ToggleNightMode)
 
         // The manager flipped synchronously inside the setter and no mirror
         // collector has re-emitted: persisting the mirror would write `false`

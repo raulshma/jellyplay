@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.toMediaItem
 import kotlinx.coroutines.CancellationException
@@ -36,8 +37,7 @@ import kotlinx.coroutines.flow.map
 // (MediaRepository / SeerrRepository / SearchHistoryRepository /
 // ServerIdentityStore / ExperimentalStore / OfflineModeManager /
 // OfflineRepository), so the impl crosses verbatim. Its Koin single stays in
-// dataJvmModule — on wasm MediaRepository/OfflineRepository have no binding
-// yet, so dataWasmModule does not wire it.
+// dataJvmModule.
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class MediaSearchEngineImpl(
     private val mediaRepository: MediaRepository,
@@ -69,6 +69,67 @@ class MediaSearchEngineImpl(
                     }
                 }
             }
+
+    override fun sideSearch(
+        queries: Flow<String>,
+        seerrLimit: Int,
+    ): Flow<MediaSideSearchState> =
+        queries.flatMapLatest { query ->
+            if (query.isBlank()) {
+                flowOf(MediaSideSearchState(query, emptyList(), seerrError = false, offline = emptyList()))
+            } else {
+                flow {
+                    // Cleared hop: the side rows never linger on the previous
+                    // query's results while the new round is in flight.
+                    emit(MediaSideSearchState(query, emptyList(), seerrError = false, offline = emptyList()))
+                    emit(runSideSearch(query, seerrLimit))
+                }
+            }
+        }
+
+    /**
+     * One side-search round: the gated Seerr companion and the offline library
+     * scan in parallel. The Seerr failure policy is the preview's swallow plus
+     * a mark — a failed round sets [MediaSideSearchState.seerrError] so the
+     * search screen can render its retry row, while a closed gate stays
+     * silent (no error row when Seerr is merely unavailable). The offline scan
+     * keeps the preview's plain swallow: best-effort, its failure renders as
+     * an empty row.
+     */
+    private suspend fun runSideSearch(query: String, seerrLimit: Int): MediaSideSearchState =
+        coroutineScope {
+            val seerr = async { runSeerrSideSearch(query, seerrLimit) }
+            val offline = async {
+                swallowErrors { offlineRepository.searchOffline(query, MediaSearchEngine.SIDE_SEARCH_LIMIT) }
+                    ?: emptyList<OfflineMediaItem>()
+            }
+            val (seerrItems, seerrError) = seerr.await()
+            MediaSideSearchState(
+                query = query,
+                seerr = seerrItems,
+                seerrError = seerrError,
+                offline = offline.await(),
+            )
+        }
+
+    /**
+     * One gated Seerr side round: `(results, failed)`. Gate off → empty and
+     * NOT failed; a failed call (Result.failure or a thrown transport) →
+     * empty and failed. Cancellation is rethrown.
+     */
+    private suspend fun runSeerrSideSearch(query: String, seerrLimit: Int): Pair<List<SeerrSearchItem>, Boolean> {
+        if (!isSeerrSearchAvailable()) return emptyList<SeerrSearchItem>() to false
+        return try {
+            seerrRepository.search(query).fold(
+                onSuccess = { it.results.take(seerrLimit) to false },
+                onFailure = { emptyList<SeerrSearchItem>() to true },
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList<SeerrSearchItem>() to true
+        }
+    }
 
     /**
      * The preview contract's failure policy: rethrow cancellation, swallow

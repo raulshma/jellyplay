@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_sign_in
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_sign_in_title
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_signing_in
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_username
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -139,7 +140,7 @@ fun LoginScreen(
                 }.onFailure {
                     // Ambiguous auth failure (likely credentials/server); surface
                     // the message but don't redden a specific field.
-                    setError(LoginFieldError.SERVER, it.message ?: loginFailedError)
+                    setError(LoginFieldError.SERVER, UserErrorMessages.resolve(it, loginFailedError))
                 }
             }
         }

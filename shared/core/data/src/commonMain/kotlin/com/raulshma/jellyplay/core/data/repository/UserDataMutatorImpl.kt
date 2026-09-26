@@ -16,8 +16,7 @@ import kotlinx.coroutines.sync.withLock
 //
 // promotion from jvmShared: every ctor dep (MediaRepository,
 // MediaDetailProvider) is a commonMain interface, so the impl crosses with
-// zero body changes. Its Koin single stays in dataJvmModule — on wasm no
-// MediaRepository impl is bound yet, so dataWasmModule does not wire it.
+// zero body changes. Its Koin single stays in dataJvmModule.
 
 /**
  * Production adapter over [MediaRepository] (the write — including

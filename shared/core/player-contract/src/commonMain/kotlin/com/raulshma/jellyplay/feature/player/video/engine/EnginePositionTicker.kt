@@ -43,6 +43,12 @@ const val POSITION_NOT_READY_MAX_WAIT_MS = POSITION_PAUSED_RECHECK_MS
  *  - [onActive]: work to run on a tick where playback is active or just
  *    changed — typically pushing the position + buffered position downstream
  *    and, conditionally, refreshing stats.
+ *  - [scopeProvider]: the scope the loop launches on, re-read by every
+ *    [launch] — a lookup (the mpv track-refresh coalescer's shape), not a
+ *    captured value, so an engine whose scope accessor self-heals after an
+ *    internal release-as-reset inside `load()` never launches the loop onto a
+ *    cancelled generation (a captured ref would die with the generation it
+ *    pinned and freeze the flow's output mid-collection).
  *
  * The paused-wait wakes on the engine's [isPlayingFlow] (so a resume is
  * detected immediately) but is bounded by [POSITION_PAUSED_RECHECK_MS] so
@@ -59,7 +65,7 @@ const val POSITION_NOT_READY_MAX_WAIT_MS = POSITION_PAUSED_RECHECK_MS
  * `MediaEngine` contract and engine-shared machinery)".
  */
 class EnginePositionTicker(
-    private val scope: CoroutineScope,
+    private val scopeProvider: () -> CoroutineScope,
     private val pollingIntervalMs: StateFlow<Long>,
     private val isPlayingFlow: StateFlow<Boolean>,
     private val isCurrentlyPlaying: () -> Boolean,
@@ -85,7 +91,7 @@ class EnginePositionTicker(
     private var lastPlayingState: Boolean = isCurrentlyPlaying()
 
     /** Launches the ticker loop. Returns the [Job] for cancellation. */
-    fun launch(): Job = scope.launch {
+    fun launch(): Job = scopeProvider().launch {
         var notReadyWaitMs = notReadyInitialWaitMs
         while (isActive) {
             if (isReady?.invoke() == false) {

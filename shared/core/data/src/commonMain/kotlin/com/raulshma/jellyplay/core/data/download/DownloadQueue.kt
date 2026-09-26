@@ -14,14 +14,6 @@ import kotlinx.coroutines.flow.Flow
  * precedent — it crosses verbatim and its natural JVM source,
  * [com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl],
  * implements it directly (bound in dataJvmModule over the repository single).
- * The wasmJs actual — [WasmDownloadQueue] in wasmJsMain, bound in
- * dataWasmModule — is an honest no-op.
- *
- * Web behavior: the browser has no local download pipeline, so the wasm
- * actual reports [isSupported] = false — the screen hides its transfer
- * controls — while the list/progress flows stay empty (a genuinely empty
- * queue: nothing was ever downloaded in this browser) and the controls are
- * inert. No offline artifacts are ever fabricated.
  */
 interface DownloadQueue {
 

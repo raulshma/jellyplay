@@ -4,7 +4,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * nonWeb (android/jvm) actuals for the [SubtitleLanguageCodes] resolvers:
+ * JVM (android/jvm) actuals for the [SubtitleLanguageCodes] resolvers:
  * everything derives from the runtime locale set (`Locale.getAvailableLocales()`
  * — the JDK table on desktop, ICU on Android), preserving the historical
  * behavior byte-for-byte. `forLanguageTag` is used only for 2-letter/BCP-47

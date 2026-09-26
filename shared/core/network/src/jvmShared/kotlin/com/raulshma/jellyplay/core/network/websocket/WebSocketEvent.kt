@@ -10,7 +10,7 @@ import org.json.JSONObject
  * fields are org.json types consumed AS SUCH by :shared:core:data
  * (RemoteControlReceiver / SyncPlayManager / SyncPlayEventHandler read
  * `event.data` as a JSONObject) — those files must keep compiling unchanged,
- * and org.json cannot appear in a wasm-compiled commonMain source set.
+ * and org.json is JVM-only.
  *
  * @param type raw Jellyfin `MessageType` string (e.g. `"ScheduledTasksInfo"`, `"Sessions"`)
  * @param data the `Data` payload as a [JSONObject] for object-payload message types. Empty

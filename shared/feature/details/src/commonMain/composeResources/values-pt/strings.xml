@@ -103,10 +103,10 @@
     <string name="detail_playlist_create">Criar</string>
     <string name="detail_msg_no_playlists">Ainda não há listas de reprodução</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_added_to_playlist">Adicionado a \"%1$s\"</string>
+    <string name="detail_msg_added_to_playlist">Adicionado a "%1$s"</string>
     <string name="detail_msg_added_to_watch_later">Adicionado a Ver mais tarde</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_playlist_created">Criada \"%1$s\" e item adicionado</string>
+    <string name="detail_msg_playlist_created">Criada "%1$s" e item adicionado</string>
     <string name="detail_msg_couldnt_add_to_playlist">Não foi possível adicionar à lista de reprodução</string>
     <plurals name="detail_playlist_item_count">
         <item quantity="one">%1$d item</item>
@@ -122,9 +122,9 @@
     <string name="detail_collection_create">Criar</string>
     <string name="detail_msg_no_collections">Ainda não há coleções</string>
     <!-- %1$s = nome da coleção -->
-    <string name="detail_msg_added_to_collection">Adicionado a \"%1$s\"</string>
+    <string name="detail_msg_added_to_collection">Adicionado a "%1$s"</string>
     <!-- %1$s = nome da coleção -->
-    <string name="detail_msg_collection_created">Criada \"%1$s\" e item adicionado</string>
+    <string name="detail_msg_collection_created">Criada "%1$s" e item adicionado</string>
     <string name="detail_msg_couldnt_add_to_collection">Não foi possível adicionar à coleção</string>
     <plurals name="detail_collection_item_count">
         <item quantity="one">%1$d item</item>
@@ -242,7 +242,7 @@
     <string name="detail_manage_delete_file">Eliminar ficheiro</string>
     <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
     <string name="detail_manage_delete_title">Eliminar ficheiro do episódio</string>
-    <string name="detail_manage_delete_message">Eliminar o ficheiro de \"%1$s\" (%2$s)? O Sonarr irá removê-lo e poderá procurar uma substituição.</string>
+    <string name="detail_manage_delete_message">Eliminar o ficheiro de "%1$s" (%2$s)? O Sonarr irá removê-lo e poderá procurar uma substituição.</string>
     <string name="detail_manage_delete_confirm">Eliminar</string>
     <!-- Empty / error states -->
     <string name="detail_manage_no_episodes">Nenhum episódio encontrado no Sonarr para esta série.</string>
@@ -340,10 +340,10 @@
     <string name="detail_close">Fechar</string>
     <string name="detail_delete">Excluir</string>
     <string name="detail_delete_download_title">Excluir download</string>
-    <string name="detail_delete_download_message">Remover \"%1$s\" do seu dispositivo? Isso libera %2$s.</string>
+    <string name="detail_delete_download_message">Remover "%1$s" do seu dispositivo? Isso libera %2$s.</string>
     <string name="detail_delete_episode_title">Excluir episódio</string>
     <string name="detail_delete_episode_cd">Excluir episódio</string>
-    <string name="detail_delete_episode_message">Remover \"%1$s\" do seu dispositivo?</string>
+    <string name="detail_delete_episode_message">Remover "%1$s" do seu dispositivo?</string>
     <string name="detail_delete_downloads_title">Excluir downloads</string>
     <string name="detail_select_episodes_to_remove">Selecione os episódios a serem removidos do dispositivo.</string>
     <string name="detail_episodes_selected">%1$d de %2$d episódios selecionados</string>
@@ -439,4 +439,12 @@
         <item quantity="one">%1$d destaque</item>
         <item quantity="other">%1$d destaques</item>
     </plurals>
+    <string name="detail_book_download_only">Apenas transferir</string>
+    <string name="detail_cd_hide_up_next">Ocultar secção A seguir</string>
+    <string name="detail_option_hide_detail_up_next">Ocultar secção A seguir</string>
+    <string name="detail_option_show_detail_up_next">Mostrar secção A seguir</string>
+    <string name="detail_download_advanced">Avançado</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">Todas as legendas</string>
+    <string name="detail_download_subtitles_none">Sem legendas</string>
 </resources>

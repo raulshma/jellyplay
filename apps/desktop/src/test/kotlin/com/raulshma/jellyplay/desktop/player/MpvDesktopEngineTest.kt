@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilityMatrix
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import kotlin.test.Test
@@ -114,6 +115,30 @@ class MpvDesktopEngineTest {
             engine.play()
             // play-from-ENDED must seek back to 0 and actually resume.
             waitUntil(15_000) { engine.isPlaying.value && engine.currentPositionMs < 4_000 }
+        } finally {
+            engine.release()
+        }
+    }
+
+    @Test
+    fun capabilities_deriveFromEngineCapabilityMatrix_withDesktopWindowingDivergences() {
+        // Ratchet: the engine must publish the matrix's MPV row verbatim
+        // except the two declared desktop windowing flags. The former
+        // hand-typed copy omitted supportsImageSubtitles (matrix: true),
+        // silently disabling offline image-subtitle side-loading on desktop.
+        assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
+        val engine = MpvDesktopEngine(
+            extraOptions = mapOf("vo" to "null", "ao" to "null"),
+        )
+        try {
+            assertEquals(
+                EngineCapabilityMatrix.MPV.copy(
+                    supportsPip = false,
+                    supportsMiniMode = false,
+                ),
+                engine.capabilities,
+            )
+            assertTrue(engine.capabilities.supportsImageSubtitles)
         } finally {
             engine.release()
         }

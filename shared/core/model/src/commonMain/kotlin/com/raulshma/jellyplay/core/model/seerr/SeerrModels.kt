@@ -765,6 +765,30 @@ enum class DiscoverSectionType {
     UPCOMING_TV,
 }
 
+/**
+ * The extra query dimensions a custom Seerr discover row adds on top of the
+ * fixed [DiscoverSectionType] sections — the Seerr/Overseerr
+ * `/api/v1/discover/movies|tv` camelCase vocabulary. Dates are ISO
+ * `yyyy-MM-dd`; the year window is folded into the date bounds by the wire
+ * path builder (Jan 1 / Dec 31 of the boundary years).
+ */
+@Immutable
+@Serializable
+data class SeerrDiscoverParams(
+    val genreIds: List<Int> = emptyList(),
+    /** Inclusive release-year window; null bounds are open-ended. */
+    val yearFrom: Int? = null,
+    val yearTo: Int? = null,
+    /** Minimum TMDB vote average; 0 = no floor. */
+    val minVoteAverage: Float = 0f,
+    /** TMDB sortBy vocabulary (e.g. "popularity.desc"); null = server default. */
+    val sortBy: String? = null,
+    /** Release-date lower bound (inclusive), ISO yyyy-MM-dd. */
+    val releaseDateGte: String? = null,
+    /** Release-date upper bound (inclusive), ISO yyyy-MM-dd. */
+    val releaseDateLte: String? = null,
+)
+
 @Immutable
 @Serializable
 enum class SeerrMediaStatus(val value: Int) {

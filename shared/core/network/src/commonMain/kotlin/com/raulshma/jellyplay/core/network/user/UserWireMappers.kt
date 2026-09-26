@@ -8,12 +8,11 @@ import com.raulshma.jellyplay.core.model.UnratedItemOption
 import com.raulshma.jellyplay.core.model.UserAccessSchedule
 
 /**
- * DTO → core.model mappers for the wasm user-management client — commonMain
+ * DTO → core.model mappers for the user-management client — commonMain
  * pure functions mirroring the jvmShared `JellyfinDtoMappers` field-for-field
  * (`UserDto.toManagedUser`, `UserPolicy.toManagedPolicy`,
  * `UserPolicy.overlayWith`, the parental-rating grouping in
- * `UserApiClientImpl.getParentalRatings`), so commonTest can pin the parity
- * the wasm client substitutes the SDK with.
+ * `UserApiClientImpl.getParentalRatings`), so commonTest can pin the parity.
  */
 
 /** Mirrors `UserDto.toManagedUser` (jvmShared) field-for-field. */
@@ -73,8 +72,8 @@ internal fun ManagedUserPolicyDtoWire.toManagedPolicy() = ManagedUserPolicy(
  * public sharing, sync-transcoding/conversion/lyric flags, blocked
  * media-folders/channels). [userId] is the target user's id, required to
  * re-stamp [AccessScheduleDtoWire.userId] — the wire stand-in for the JVM
- * `AccessSchedule.userId` UUID. Used by the wasm
- * `KtorWasmUserApiClient.updateUserPolicy` so non-edited server state is
+ * `AccessSchedule.userId` UUID. Used by
+ * `updateUserPolicy` so non-edited server state is
  * never reset; port of `UserPolicy.overlayWith` (jvmShared).
  */
 internal fun ManagedUserPolicyDtoWire.overlayWith(

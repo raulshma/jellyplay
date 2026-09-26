@@ -41,4 +41,8 @@
     <string name="shortcuts_item_setup_wizard_description">Executar o fluxo de configuração inicial.</string>
     <string name="shortcuts_item_about_title">Sobre</string>
     <string name="shortcuts_item_about_description">Versão, licenças e informações do app.</string>
+    <string name="shortcuts_search_placeholder">Pesquisar atalhos…</string>
+    <string name="shortcuts_search_no_results">Nenhum atalho corresponde a «%1$s»</string>
+    <string name="shortcuts_search_clear">Limpar pesquisa</string>
+    <string name="shortcuts_admin_badge">Admin</string>
 </resources>

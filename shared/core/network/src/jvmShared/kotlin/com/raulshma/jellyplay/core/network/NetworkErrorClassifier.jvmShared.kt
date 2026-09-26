@@ -10,7 +10,7 @@ import java.net.UnknownHostException
  * RetryPolicy.kt in commonMain). The checks are verbatim from the pre-split
  * jvmShared RetryPolicy.isRetryable `when` block — androidMain and jvmMain
  * both see this source set through jvmShared, so one actual serves both
- * targets and neither compiles ktor (wasmJsMain owns the Ktor mapping).
+ * targets.
  */
 internal actual fun isRetryableNetworkError(exception: Throwable): Boolean = when (exception) {
     is SocketTimeoutException -> true

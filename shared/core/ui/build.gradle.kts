@@ -1,30 +1,16 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.ui"
-        compileSdk = 37
-        minSdk = 28
-        // Compose-resources packaging (device-pass finding): with the
-        // AGP-9 KMP library plugin, android resources are OFF by default, so
-        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
-        // app APK ships this module's Res accessors with NO backing .cvr
-        // assets — runtime MissingResourceException on the first string read.
-        androidResources {
-            enable = true
-        }
+        // Compose-resources packaging: androidResources.enable comes from the
+        // convention plugin (see its KDoc for the device-pass
+        // MissingResourceException story).
         // cutover: the legacy :core:ui module's Robolectric suites
         // moved here — withHostTest creates the androidUnitTest variant bound
         // to the Kotlin test tree (AGP-9 KMP library plugin). The two flags
@@ -34,53 +20,12 @@ kotlin {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    // Web UI target: paging 3.5.0 / lifecycle 2.11 / tabler /
-    // coil 3.4.0 ship readable wasm klibs; nav3-ui and mikepenz need the
-    // substitutions/scopes configured below. Shares commonMain with android+jvm.
-    wasmJs {
-        browser {
-            testTask {
-                // The karma/Chrome browser run stays opt-in/off: `gradlew
-                // build`/`check` must not fail on Chrome-less machines (same
-                // deliberate disable as :shared:core:network).
-                enabled = false
-            }
-        }
-        // Headless wasm test lane: wasmJsNodeTest compiles the full
-        // main+test wasm graphs headlessly — no Karma, no Chrome — but CANNOT
-        // EXECUTE this module's tests under plain Node: the Compose graph
-        // links skiko.mjs and Node cannot fetch/prepare its wasm ("both async
-        // and sync fetching of the wasm failed"). Execution is proven green
-        // only for skiko-free modules (:shared:core:model). Kept as a compile
-        // gate plus future hook; runs under FAIL_ON_PROJECT_REPOS — the
-        // settings.gradle.kts node/yarn governance (no flips needed).
-        nodejs()
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // JVM-semantics code shared verbatim by android + desktop: the
-        // SimpleDateFormat pipeline, the markdown renderer body, the LRU lock
-        // actual, and the PlatformTime JVM actuals. Wasm gets pure-Kotlin
-        // replacements in wasmJsMain for everything commonMain references.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // The jvmShared middle source set comes from the convention plugin.
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             // DateLabels.kt's public seam shapes take/return kotlinx-datetime
@@ -105,12 +50,12 @@ kotlin {
             implementation(libs.tabler.icons.filled)
             implementation(libs.coil.compose)
             // MarkdownText's engine: the mikepenz 0.41.0 pin
-            // publishes Kotlin-2.3-built wasm klibs, so the SAME GFM pipeline
-            // renders on android + desktop + wasm (see the catalog note).
+            // publishes Kotlin-2.3-built klibs, so the SAME GFM pipeline
+            // renders on android + desktop (see the catalog note).
             implementation(libs.multiplatform.markdown.renderer)
             implementation(libs.multiplatform.markdown.renderer.m3)
             // Nav3 ships KMP variants from google maven directly (desktop/iOS/
-            // js/wasm variants in the same androidx coordinates) — no mirror.
+            // js variants in the same androidx coordinates) — no mirror.
             implementation(libs.navigation3.runtime)
             implementation(libs.navigation3.ui)
             implementation(libs.lifecycle.viewmodel)
@@ -123,14 +68,10 @@ kotlin {
             // UserMessageBus single (see di/CoreUiMessageModule.kt).
             implementation(libs.koin.core)
         }
-        getByName("jvmShared").dependencies {
-        }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-        }
         // BlurHashCache byte-budget regression tests construct real ImageBitmaps;
         // the skiko JVM artifacts on main are code-only, natives (dll.sha256)
         // ride compose.desktop.currentOs. Host-OS only: jvmTest runs on it.
+        // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
             implementation(compose.desktop.currentOs)
             // runTest/UnconfinedTestDispatcher for the Channel/StateFlow pure-logic tests.
@@ -171,23 +112,6 @@ kotlin.sourceSets.configureEach {
     }
 }
 
-// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
-// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
-// this module fails dependency resolution unless it points at JetBrains'
-// fork of the same release line — same package, ABI-stable surface; the
-// fork's 1.1.1 already covers this repo on desktop (see apps/desktop).
-// Scoped to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before.
-configurations.configureEach {
-    if (name.lowercase().contains("wasmjs")) {
-        resolutionStrategy.dependencySubstitution {
-            substitute(module("androidx.navigation3:navigation3-ui"))
-                .using(module(libs.jb.navigation3.ui.get().toString()))
-                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
-        }
-    }
-}
-
 // `compose.resources` is a nested extension with no generated Kotlin-DSL
 // accessor; configure it explicitly. Same package as the legacy :core:ui so
 // migrated files keep their `com.raulshma.jellyplay.core.ui` imports; generated
@@ -198,4 +122,3 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.core.ui.generated.r
 // core strings (core_delete/core_cancel, ...) directly, which requires the
 // generated Res object + accessors to be public (internal by default).
 composeResources.publicResClass = true
-

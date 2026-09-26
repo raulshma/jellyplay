@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
@@ -41,6 +42,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onSizeChanged
@@ -49,6 +51,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
@@ -62,13 +65,16 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -76,6 +82,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
@@ -201,7 +208,6 @@ private fun MainHomeContent(
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val currentServerUsers by viewModel.currentServerUsers.collectAsStateWithLifecycle()
     var showSyncDetails by remember { mutableStateOf(false) }
-    val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
     // Stabilize the user-switch lambda so HomeTopDock stays skippable on
     // recompositions that reach it (scroll, search focus). Mirrors the
     // dock lambda memoization above.
@@ -423,6 +429,7 @@ private fun MainHomeContent(
     // TV-only: the card currently holding D-pad focus, so the Menu key can open
     // its quick actions. Rows report via HomeContentCallbacks.
     var tvFocusedItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
+    val onFocusedMediaItem = remember { { item: MediaItem -> tvFocusedItem = item } }
 
     // Only photo-folder items are relevant to the prefetcher (it filters to
     // PHOTO_FOLDER internally), so narrow the list to those items. This keeps
@@ -554,205 +561,56 @@ private fun MainHomeContent(
                 // The render branch is one exhaustive `when` over the folded
                 // surface (see [homeSurface]) — this scope decides nothing
                 // about WHICH surface renders; each case only renders it.
-                when (val s = surface) {
-                    is HomeSurface.HardError -> {
-                        ErrorScreen(
-                            message = stringResource(Res.string.home_error_load_content),
-                            onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
-                            modifier = Modifier.padding(horizontal = contentPad),
-                        )
-                    }
-                    // Explicitly offline (manual or auto) with nothing downloaded.
-                    is HomeSurface.NoDownloads -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(backgroundColor),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            ScreenEmptyState(
-                                icon = Tabler.Outline.Download,
-                                title = stringResource(Res.string.home_no_downloads_yet),
-                                description = stringResource(Res.string.home_no_downloads_description),
-                                actionLabel = stringResource(Res.string.home_go_online_action),
-                                onAction = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
-                                actionLoading = s.isGoingOnline,
-                                modifier = Modifier.padding(horizontal = contentPad),
-                            )
-                        }
-                    }
-                    HomeSurface.Music -> {
-                        musicContent()
-                    }
-                    is HomeSurface.Content -> {
-                        HomeContentList(
-                            state = HomeContentState(
-                                // WHAT renders was decided by the fold — the
-                                // feed carries the online or offline surface
-                                // with the offline-only masks (spinner,
-                                // banners) and the FallbackPending loading
-                                // window already applied.
-                                feed = s.feed,
-                                homeHeroEnabled = state.homeHeroEnabled,
-                                homeBackdropEnabled = state.homeBackdropEnabled,
-                                discoverEnabled = state.discoverEnabled,
-                                experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
-                                featuredItem = heroController.featuredItem,
-                                backgroundColor = backgroundColor,
-                                contentPad = contentPad,
-                                headerHeight = headerHeight,
-                                isLightTheme = isLightTheme,
-                                continueWatchingClickBehavior = state.continueWatchingClickBehavior,
-                                // The CR progress bars ride the fold too —
-                                // the surface carries whichever map belongs
-                                // to the carried feed (online vs offline
-                                // gate decodes, FallbackPending included).
-                                bookProgressFractions = s.bookProgressFractions,
-                                discoverRows = discoverRows,
-                                allDiscoverItems = allDiscoverItems,
-                                recentlyGrabbed = state.recentlyGrabbed,
-                                statusBanner = implicitOfflineBanner,
-                            ),
-                            callbacks = HomeContentCallbacks(
-                                onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },
-                                onDismissNewsletterBanner = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) } },
-                                onNewsletterClick = callbacks.onNewsletterClick,
-                                onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
-                                onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
-                                onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },
-                                mediaOnItemClick = mediaOnItemClick,
-                                mediaOnPlayClick = mediaOnPlayClick,
-                                mediaImageUrlBuilder = mediaImageUrlBuilder,
-                                mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
-                                getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
-                                getBackdropUrl = onlineBackdropResolver,
-                                heroBackdropUrlBuilder = heroBackdropUrlBuilder,
-                                fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                                photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
-                                onSeerrItemClick = callbacks.onSeerrItemClick,
-                                onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
-                                seerrPrefetch = seerrPrefetch,
-                                onConfigureSection = onConfigureSection,
-                                onConfigureHomeLayout = onConfigureHomeLayout,
-                                onConfigureLibraries = onConfigureLibraries,
-                                onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
-                                onFocusedMediaItem = remember { { item: MediaItem -> tvFocusedItem = item } },
-                            ),
-                            listState = listState,
-                            density = density,
-                            seerrCardLoadingState = seerrCardLoadingState,
-                            heroFocusRequester = heroFocusRequester,
-                        )
-                    }
-                }
+                HomeSurfaceContent(
+                    surface = surface,
+                    state = state,
+                    viewModel = viewModel,
+                    callbacks = callbacks,
+                    musicContent = musicContent,
+                    contentPad = contentPad,
+                    backgroundColor = backgroundColor,
+                    isLightTheme = isLightTheme,
+                    headerHeight = headerHeight,
+                    heroController = heroController,
+                    implicitOfflineBanner = implicitOfflineBanner,
+                    discoverRows = discoverRows,
+                    allDiscoverItems = allDiscoverItems,
+                    mediaOnItemClick = mediaOnItemClick,
+                    mediaOnPlayClick = mediaOnPlayClick,
+                    mediaImageUrlBuilder = mediaImageUrlBuilder,
+                    mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+                    onlineBackdropResolver = onlineBackdropResolver,
+                    heroBackdropUrlBuilder = heroBackdropUrlBuilder,
+                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                    seerrPrefetch = seerrPrefetch,
+                    onConfigureSection = onConfigureSection,
+                    onConfigureHomeLayout = onConfigureHomeLayout,
+                    onConfigureLibraries = onConfigureLibraries,
+                    onFocusedMediaItem = onFocusedMediaItem,
+                    listState = listState,
+                    density = density,
+                    seerrCardLoadingState = seerrCardLoadingState,
+                    heroFocusRequester = heroFocusRequester,
+                )
             }
 
-                // Lift the search-results-overlay lambdas (recreated per keystroke
-                // below) into remembered locals so HomeSearchResultsOverlay's
-                // results LazyColumn stops being re-scored each keystroke.
-                val searchGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
-                val searchOnJellyfinClick = remember(viewModel, callbacks, closeSearch) {
-                    { item: com.raulshma.jellyplay.core.model.MediaItem ->
-                        closeSearch()
-                        callbacks.onItemClick(item.id, item.mediaType, item.parentId, item.name)
-                    }
-                }
-                val searchOnSeerrClick = remember(viewModel, callbacks, closeSearch) {
-                    { item: SeerrSearchItem ->
-                        closeSearch()
-                        callbacks.onSearchSeerrClick(item.id, item.mediaType)
-                    }
-                }
-                val searchOnHistoryClick = remember(viewModel) {
-                    { query: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query)) }
-                }
-                val searchOnDeleteHistoryItem = remember(viewModel) {
-                    { id: Long -> viewModel.onEvent(HomeUiEvent.DeleteSearchHistoryItem(id)) }
-                }
-                val searchOnClearHistory = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ClearSearchHistory) } }
-                val searchOnSettingsClick = remember(viewModel, callbacks, closeSearch) {
-                    { item: com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem ->
-                        closeSearch()
-                        viewModel.onEvent(HomeUiEvent.SettingsResultClicked(item))
-                        // Inject the matched setting's id as the deep-link scroll/
-                        // focus target so the destination screen scrolls to and
-                        // highlights it — same behavior as the in-settings search.
-                        callbacks.onSettingsSearchItemClick(item.route.withHighlightSettingId(item.id))
-                    }
-                }
-
-                // Lift the HomeTopDock lambdas. The per-keystroke query string
-                // no longer flows through MainHomeContent (it's collected in the
-                // HomeTopDockScrim leaf via viewModel.searchQuery), but the
-                // lambdas are still hoisted so HomeTopDock stays skippable on
-                // the recompositions that DO reach it (scroll, search focus).
-                val dockOnSearchExpanded = remember(searchSession, closeSearch) {
-                    { v: Boolean -> if (v) searchSession.open() else closeSearch() }
-                }
-                val dockOnSearchQueryChange = remember(viewModel) {
-                    { q: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(q)) }
-                }
-                val dockOnClearSearch = remember(viewModel, closeSearch) {
-                    { closeSearch() }
-                }
-                val dockOnToggleOffline = remember(viewModel) {
-                    { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) }
-                }
-                val dockOnShowSyncDetails = remember(viewModel) {
-                    { showSyncDetails = true }
-                }
-
-                HomeTopDockScrim(
-                    settingsSearch = viewModel::settingsSearchResults,
+                HomeDockArea(
+                    viewModel = viewModel,
+                    callbacks = callbacks,
+                    state = state,
                     homeScrollState = homeScrollState,
                     isLightTheme = isLightTheme,
-                    searchQuery = viewModel.searchQuery,
-                    includeSettingsResults = state.showSettingsInHomeSearch,
                     isTv = isTv,
-                    dockState = HomeDockState(
-                        offlineMode = state.offlineMode,
-                        homeMode = state.homeMode,
-                        headerStatus = headerStatus,
-                        pendingSyncCount = pendingSyncCount,
-                        showClock = state.showClock,
-                        currentUser = state.currentUser,
-                        currentServerUsers = currentServerUsers,
-                        isSearchFocused = isSearchFocused,
-                        isGoingOnline = state.isGoingOnline,
-                        homeHeroEnabled = state.homeHeroEnabled,
-                        hasFeaturedItem = heroController.featuredItem != null,
-                        hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
-                    ),
-                    dockCallbacks = HomeDockCallbacks(
-                        onUserSwitch = onUserSwitch,
-                        onModeChange = callbacks.onModeChange,
-                        onSearchExpanded = dockOnSearchExpanded,
-                        onSearchQueryChange = dockOnSearchQueryChange,
-                        onClearSearch = dockOnClearSearch,
-                        onToggleOffline = dockOnToggleOffline,
-                        onShowSyncDetails = dockOnShowSyncDetails,
-                    ),
-                    onHeroFocusDown = remember(heroFocusRequester) {
-                        { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
-                    },
-                    searchResultsContent = { settingsResults ->
-                        if (state.isSearchActive || searchHistory.isNotEmpty()) {
-                            HomeSearchResultsOverlay(
-                                jellyfinResults = state.searchState.jellyfinResults,
-                                seerrResults = state.searchState.seerrResults,
-                                isSearching = state.searchState.isSearching,
-                                getImageUrl = searchGetImageUrl,
-                                onJellyfinClick = searchOnJellyfinClick,
-                                onSeerrClick = searchOnSeerrClick,
-                                searchHistory = searchHistory,
-                                onHistoryClick = searchOnHistoryClick,
-                                onDeleteHistoryItem = searchOnDeleteHistoryItem,
-                                onClearHistory = searchOnClearHistory,
-                                settingsResults = settingsResults,
-                                onSettingsClick = searchOnSettingsClick,
-                            )
-                        }
-                    },
+                    isSearchFocused = isSearchFocused,
+                    headerStatus = headerStatus,
+                    pendingSyncCount = pendingSyncCount,
+                    currentServerUsers = currentServerUsers,
+                    heroHasFeaturedItem = heroController.featuredItem != null,
+                    heroFocusRequester = heroFocusRequester,
+                    onUserSwitch = onUserSwitch,
+                    searchSession = searchSession,
+                    closeSearch = closeSearch,
+                    onShowSyncDetails = { showSyncDetails = true },
                 )
 
 
@@ -773,6 +631,301 @@ private fun MainHomeContent(
         onConfirmRemove = { item -> viewModel.onEvent(HomeUiEvent.DeleteOfflineMedia(item)) },
     )
 
+    // The home tail overlays: the advanced series delete-episodes /
+    // download sheets, the Seerr request dialog, the pending playback-sync
+    // details sheet and the inline section-config sheet.
+    HomeTailSheets(
+        state = state,
+        viewModel = viewModel,
+        dialogSession = dialogSession,
+        showSyncDetails = showSyncDetails,
+        onDismissSyncDetails = { showSyncDetails = false },
+        sectionConfigTarget = sectionConfigTarget,
+        onDismissSectionConfig = dismissSectionConfig,
+        onConfigureHomeLayout = onConfigureHomeLayout,
+        onConfigureLibraries = onConfigureLibraries,
+    )
+}
+
+/** Renders whichever surface the [homeSurface] fold selected — each arm only renders, decides nothing. */
+@Composable
+private fun HomeSurfaceContent(
+    surface: HomeSurface,
+    state: HomeUiState,
+    viewModel: HomeViewModel,
+    callbacks: HomeCallbacks,
+    musicContent: @Composable () -> Unit,
+    contentPad: Dp,
+    backgroundColor: Color,
+    isLightTheme: Boolean,
+    headerHeight: Dp,
+    heroController: HeroController,
+    implicitOfflineBanner: String?,
+    discoverRows: List<List<SeerrSearchItem>>,
+    allDiscoverItems: List<SeerrSearchItem>,
+    mediaOnItemClick: (MediaItem) -> Unit,
+    mediaOnPlayClick: (MediaItem) -> Unit,
+    mediaImageUrlBuilder: (MediaItem) -> String,
+    mediaBackdropUrlBuilder: (MediaItem) -> String,
+    onlineBackdropResolver: (String) -> String,
+    heroBackdropUrlBuilder: (String) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String>,
+    seerrPrefetch: (Int, String, () -> Unit) -> Unit,
+    onConfigureSection: (HomeSectionType, String?) -> Unit,
+    onConfigureHomeLayout: () -> Unit,
+    onConfigureLibraries: () -> Unit,
+    onFocusedMediaItem: (MediaItem) -> Unit,
+    listState: LazyListState,
+    density: Density,
+    seerrCardLoadingState: SeerrCardLoadingState,
+    heroFocusRequester: FocusRequester,
+) {
+    when (val s = surface) {
+        is HomeSurface.HardError -> {
+            ErrorScreen(
+                message = stringResource(Res.string.home_error_load_content),
+                onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
+                modifier = Modifier.padding(horizontal = contentPad),
+            )
+        }
+        // Explicitly offline (manual or auto) with nothing downloaded.
+        is HomeSurface.NoDownloads -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(backgroundColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                ScreenEmptyState(
+                    icon = Tabler.Outline.Download,
+                    title = stringResource(Res.string.home_no_downloads_yet),
+                    description = stringResource(Res.string.home_no_downloads_description),
+                    actionLabel = stringResource(Res.string.home_go_online_action),
+                    onAction = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                    actionLoading = s.isGoingOnline,
+                    modifier = Modifier.padding(horizontal = contentPad),
+                )
+            }
+        }
+        HomeSurface.Music -> {
+            musicContent()
+        }
+        is HomeSurface.Content -> {
+            HomeContentList(
+                state = HomeContentState(
+                    // WHAT renders was decided by the fold — the
+                    // feed carries the online or offline surface
+                    // with the offline-only masks (spinner,
+                    // banners) and the FallbackPending loading
+                    // window already applied.
+                    feed = s.feed,
+                    homeHeroEnabled = state.homeHeroEnabled,
+                    homeBackdropEnabled = state.homeBackdropEnabled,
+                    discoverEnabled = state.discoverEnabled,
+                    experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
+                    featuredItem = heroController.featuredItem,
+                    backgroundColor = backgroundColor,
+                    contentPad = contentPad,
+                    headerHeight = headerHeight,
+                    isLightTheme = isLightTheme,
+                    continueWatchingClickBehavior = state.continueWatchingClickBehavior,
+                    // The CR progress bars ride the fold too —
+                    // the surface carries whichever map belongs
+                    // to the carried feed (online vs offline
+                    // gate decodes, FallbackPending included).
+                    bookProgressFractions = s.bookProgressFractions,
+                    discoverRows = discoverRows,
+                    allDiscoverItems = allDiscoverItems,
+                    recentlyGrabbed = state.recentlyGrabbed,
+                    randomDiscoverRowIds = remember(state.sectionConfig.discoverRows) {
+                        state.sectionConfig.discoverRows
+                            .filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN && it.filters.sortBy == SortOption.RANDOM }
+                            .mapTo(mutableSetOf()) { it.id }
+                    },
+                    // The dice-roll in-flight mirror: tumbles the
+                    // matching row's dice icon while the re-fetch runs.
+                    rollingDiscoverRowIds = state.rollingDiscoverRowIds,
+                    statusBanner = implicitOfflineBanner,
+                ),
+                callbacks = HomeContentCallbacks(
+                    onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },
+                    onDismissNewsletterBanner = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) } },
+                    onNewsletterClick = callbacks.onNewsletterClick,
+                    onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
+                    onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
+                    onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },
+                    mediaOnItemClick = mediaOnItemClick,
+                    mediaOnPlayClick = mediaOnPlayClick,
+                    mediaImageUrlBuilder = mediaImageUrlBuilder,
+                    mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+                    getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                    getBackdropUrl = onlineBackdropResolver,
+                    heroBackdropUrlBuilder = heroBackdropUrlBuilder,
+                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                    photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
+                    onSeerrItemClick = callbacks.onSeerrItemClick,
+                    onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
+                    seerrPrefetch = seerrPrefetch,
+                    onConfigureSection = onConfigureSection,
+                    onConfigureHomeLayout = onConfigureHomeLayout,
+                    onConfigureLibraries = onConfigureLibraries,
+                    onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
+                    onFocusedMediaItem = onFocusedMediaItem,
+                    onRollDiscoverRow = remember(viewModel) { { rowId: String -> viewModel.onEvent(HomeUiEvent.RollDiscoverRow(rowId)) } },
+                ),
+                listState = listState,
+                density = density,
+                seerrCardLoadingState = seerrCardLoadingState,
+                heroFocusRequester = heroFocusRequester,
+            )
+        }
+    }
+}
+
+/** The top dock scrim plus the hoisted search/dock lambdas only it consumes. */
+@Composable
+private fun HomeDockArea(
+    viewModel: HomeViewModel,
+    callbacks: HomeCallbacks,
+    state: HomeUiState,
+    homeScrollState: HomeScrollState,
+    isLightTheme: Boolean,
+    isTv: Boolean,
+    isSearchFocused: Boolean,
+    headerStatus: HeaderStatus,
+    pendingSyncCount: Int,
+    currentServerUsers: List<UserInfo>,
+    heroHasFeaturedItem: Boolean,
+    heroFocusRequester: FocusRequester,
+    onUserSwitch: (String) -> Unit,
+    searchSession: HomeSearchSession,
+    closeSearch: () -> Unit,
+    onShowSyncDetails: () -> Unit,
+) {
+    val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
+
+    // Lift the search-results-overlay lambdas (recreated per keystroke
+    // below) into remembered locals so HomeSearchResultsOverlay's
+    // results LazyColumn stops being re-scored each keystroke.
+    val searchGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+    val searchOnJellyfinClick = remember(viewModel, callbacks, closeSearch) {
+        { item: com.raulshma.jellyplay.core.model.MediaItem ->
+            closeSearch()
+            callbacks.onItemClick(item.id, item.mediaType, item.parentId, item.name)
+        }
+    }
+    val searchOnSeerrClick = remember(viewModel, callbacks, closeSearch) {
+        { item: SeerrSearchItem ->
+            closeSearch()
+            callbacks.onSearchSeerrClick(item.id, item.mediaType)
+        }
+    }
+    val searchOnHistoryClick = remember(viewModel) {
+        { query: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(query)) }
+    }
+    val searchOnDeleteHistoryItem = remember(viewModel) {
+        { id: Long -> viewModel.onEvent(HomeUiEvent.DeleteSearchHistoryItem(id)) }
+    }
+    val searchOnClearHistory = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ClearSearchHistory) } }
+    val searchOnSettingsClick = remember(viewModel, callbacks, closeSearch) {
+        { item: com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem ->
+            closeSearch()
+            viewModel.onEvent(HomeUiEvent.SettingsResultClicked(item))
+            // Inject the matched setting's id as the deep-link scroll/
+            // focus target so the destination screen scrolls to and
+            // highlights it — same behavior as the in-settings search.
+            callbacks.onSettingsSearchItemClick(item.route.withHighlightSettingId(item.id))
+        }
+    }
+
+    // Lift the HomeTopDock lambdas. The per-keystroke query string
+    // no longer flows through MainHomeContent (it's collected in the
+    // HomeTopDockScrim leaf via viewModel.searchQuery), but the
+    // lambdas are still hoisted so HomeTopDock stays skippable on
+    // the recompositions that DO reach it (scroll, search focus).
+    val dockOnSearchExpanded = remember(searchSession, closeSearch) {
+        { v: Boolean -> if (v) searchSession.open() else closeSearch() }
+    }
+    val dockOnSearchQueryChange = remember(viewModel) {
+        { q: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(q)) }
+    }
+    val dockOnClearSearch = remember(viewModel, closeSearch) {
+        { closeSearch() }
+    }
+    val dockOnToggleOffline = remember(viewModel) {
+        { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) }
+    }
+    val dockOnShowSyncDetails = remember(viewModel) {
+        { onShowSyncDetails() }
+    }
+
+    HomeTopDockScrim(
+        settingsSearch = viewModel::settingsSearchResults,
+        homeScrollState = homeScrollState,
+        isLightTheme = isLightTheme,
+        searchQuery = viewModel.searchQuery,
+        includeSettingsResults = state.showSettingsInHomeSearch,
+        isTv = isTv,
+        dockState = HomeDockState(
+            offlineMode = state.offlineMode,
+            homeMode = state.homeMode,
+            headerStatus = headerStatus,
+            pendingSyncCount = pendingSyncCount,
+            showClock = state.showClock,
+            currentUser = state.currentUser,
+            currentServerUsers = currentServerUsers,
+            isSearchFocused = isSearchFocused,
+            isGoingOnline = state.isGoingOnline,
+            homeHeroEnabled = state.homeHeroEnabled,
+            hasFeaturedItem = heroHasFeaturedItem,
+            hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
+        ),
+        dockCallbacks = HomeDockCallbacks(
+            onUserSwitch = onUserSwitch,
+            onModeChange = callbacks.onModeChange,
+            onSearchExpanded = dockOnSearchExpanded,
+            onSearchQueryChange = dockOnSearchQueryChange,
+            onClearSearch = dockOnClearSearch,
+            onToggleOffline = dockOnToggleOffline,
+            onShowSyncDetails = dockOnShowSyncDetails,
+        ),
+        onHeroFocusDown = remember(heroFocusRequester) {
+            { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
+        },
+        searchResultsContent = { settingsResults ->
+            if (state.isSearchActive || searchHistory.isNotEmpty()) {
+                HomeSearchResultsOverlay(
+                    jellyfinResults = state.searchState.jellyfinResults,
+                    seerrResults = state.searchState.seerrResults,
+                    isSearching = state.searchState.isSearching,
+                    getImageUrl = searchGetImageUrl,
+                    onJellyfinClick = searchOnJellyfinClick,
+                    onSeerrClick = searchOnSeerrClick,
+                    searchHistory = searchHistory,
+                    onHistoryClick = searchOnHistoryClick,
+                    onDeleteHistoryItem = searchOnDeleteHistoryItem,
+                    onClearHistory = searchOnClearHistory,
+                    settingsResults = settingsResults,
+                    onSettingsClick = searchOnSettingsClick,
+                )
+            }
+        },
+    )
+}
+
+/** The home tail overlays: series delete/download sheets, Seerr request dialog, sync-details sheet, section-config sheet. */
+@Composable
+private fun HomeTailSheets(
+    state: HomeUiState,
+    viewModel: HomeViewModel,
+    dialogSession: HomeDialogSession,
+    showSyncDetails: Boolean,
+    onDismissSyncDetails: () -> Unit,
+    sectionConfigTarget: SectionConfigTarget?,
+    onDismissSectionConfig: () -> Unit,
+    onConfigureHomeLayout: () -> Unit,
+    onConfigureLibraries: () -> Unit,
+) {
     // Advanced series delete-episodes sheet — the same one the media-detail
     // screen uses. Shown when a series card's quick-action Delete is tapped;
     // the ViewModel loads the series' seasons/downloaded episodes.
@@ -837,7 +990,7 @@ private fun MainHomeContent(
             itemDetails = itemDetails,
             offlineMode = state.offlineMode,
             onSyncNow = { viewModel.onEvent(HomeUiEvent.SyncNow) },
-            onDismiss = { showSyncDetails = false },
+            onDismiss = onDismissSyncDetails,
         )
     }
 
@@ -875,7 +1028,7 @@ private fun MainHomeContent(
             onMoveUp = remember(viewModel, target) { { viewModel.onEvent(HomeUiEvent.MoveSection(target.type, up = true)) } },
             onMoveDown = remember(viewModel, target) { { viewModel.onEvent(HomeUiEvent.MoveSection(target.type, up = false)) } },
             onConfigureLayout = if (capabilities.perLibrary) onConfigureLibraries else onConfigureHomeLayout,
-            onDismiss = dismissSectionConfig,
+            onDismiss = onDismissSectionConfig,
         )
     }
 }

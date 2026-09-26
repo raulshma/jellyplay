@@ -48,6 +48,8 @@ class ScreensaverStore constructor(
         val DREAM_KEN_BURNS_ENABLED = booleanPreferencesKey("dream_ken_burns_enabled")
         val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
         val DREAM_SHOW_TITLE = booleanPreferencesKey("dream_show_title")
+        val IDLE_AMBIENT_ENABLED = booleanPreferencesKey("idle_ambient_enabled")
+        val IDLE_AMBIENT_TIMEOUT_MIN = longPreferencesKey("idle_ambient_timeout_min")
     }
 
     /**
@@ -67,6 +69,8 @@ class ScreensaverStore constructor(
         dreamKenBurnsEnabled = PreferenceCodec.readBool(prefs, Keys.DREAM_KEN_BURNS_ENABLED, "dream_ken_burns_enabled", true),
         dreamTransitionStyle = readDreamTransitionStyle(prefs),
         dreamShowTitle = PreferenceCodec.readBool(prefs, Keys.DREAM_SHOW_TITLE, "dream_show_title", true),
+        idleAmbientEnabled = PreferenceCodec.readBool(prefs, Keys.IDLE_AMBIENT_ENABLED, "idle_ambient_enabled", true),
+        idleAmbientTimeoutMin = PreferenceCodec.readLong(prefs, Keys.IDLE_AMBIENT_TIMEOUT_MIN, "idle_ambient_timeout_min", DEFAULT_IDLE_AMBIENT_TIMEOUT_MIN),
     )
 
     // MemoizeNull (this store's pre-promotion policy): a null raw is a
@@ -110,6 +114,18 @@ class ScreensaverStore constructor(
     }
 
     /**
+     * The desktop idle "Ready to play" ambient screen. Timeout is in
+     * MINUTES; 0 disables regardless of the toggle (the picker's "Off" entry).
+     */
+    suspend fun setIdleAmbientEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.IDLE_AMBIENT_ENABLED] = enabled }
+    }
+
+    suspend fun setIdleAmbientTimeoutMin(minutes: Long) {
+        dataStore.edit { it[Keys.IDLE_AMBIENT_TIMEOUT_MIN] = minutes }
+    }
+
+    /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
      * those lists are what the facade actually resets, so deriving from them
@@ -130,6 +146,8 @@ class ScreensaverStore constructor(
             Keys.DREAM_KEN_BURNS_ENABLED,
             Keys.DREAM_SHOW_TITLE,
             Keys.DREAM_SLIDESHOW_INTERVAL_MS,
+            Keys.IDLE_AMBIENT_ENABLED,
+            Keys.IDLE_AMBIENT_TIMEOUT_MIN,
         )
         else -> emptyList()
     }
@@ -146,12 +164,17 @@ class ScreensaverStore constructor(
             it[Keys.DREAM_KEN_BURNS_ENABLED] = slice.dreamKenBurnsEnabled
             it[Keys.DREAM_TRANSITION_STYLE] = slice.dreamTransitionStyle.name
             it[Keys.DREAM_SHOW_TITLE] = slice.dreamShowTitle
+            it[Keys.IDLE_AMBIENT_ENABLED] = slice.idleAmbientEnabled
+            it[Keys.IDLE_AMBIENT_TIMEOUT_MIN] = slice.idleAmbientTimeoutMin
         }
     }
 }
 
 private val DEFAULT_DREAM_IMAGE_CATEGORIES: Set<DreamImageCategory> =
     setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
+
+/** Default: the desktop idle ambient screen appears after 5 idle minutes. */
+internal const val DEFAULT_IDLE_AMBIENT_TIMEOUT_MIN = 5L
 
 /**
  * The screensaver / dream preference slice. Plain data class. Defaults mirror
@@ -165,4 +188,7 @@ data class ScreensaverSlice(
     val dreamKenBurnsEnabled: Boolean = true,
     val dreamTransitionStyle: DreamTransitionStyle = DreamTransitionStyle.CROSSFADE,
     val dreamShowTitle: Boolean = true,
+    /** Desktop idle ambient screen toggle + timeout (minutes; 0 = off). */
+    val idleAmbientEnabled: Boolean = true,
+    val idleAmbientTimeoutMin: Long = 5L,
 )

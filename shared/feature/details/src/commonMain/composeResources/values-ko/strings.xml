@@ -102,10 +102,10 @@
     <string name="detail_playlist_create">만들기</string>
     <string name="detail_msg_no_playlists">아직 재생목록이 없습니다</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_added_to_playlist">\"%1$s\"에 추가됨</string>
+    <string name="detail_msg_added_to_playlist">"%1$s"에 추가됨</string>
     <string name="detail_msg_added_to_watch_later">나중에 볼 작품에 추가됨</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_playlist_created">\"%1$s\" 재생목록을 만들고 항목을 추가했습니다</string>
+    <string name="detail_msg_playlist_created">"%1$s" 재생목록을 만들고 항목을 추가했습니다</string>
     <string name="detail_msg_couldnt_add_to_playlist">재생목록에 추가할 수 없습니다</string>
     <plurals name="detail_playlist_item_count">
         <item quantity="other">항목 %1$d개</item>
@@ -120,9 +120,9 @@
     <string name="detail_collection_create">만들기</string>
     <string name="detail_msg_no_collections">컬렉션이 없습니다</string>
     <!-- %1$s = 컬렉션 이름 -->
-    <string name="detail_msg_added_to_collection">\"%1$s\"에 추가했습니다</string>
+    <string name="detail_msg_added_to_collection">"%1$s"에 추가했습니다</string>
     <!-- %1$s = 컬렉션 이름 -->
-    <string name="detail_msg_collection_created">\"%1$s\" 컬렉션을 만들고 항목을 추가했습니다</string>
+    <string name="detail_msg_collection_created">"%1$s" 컬렉션을 만들고 항목을 추가했습니다</string>
     <string name="detail_msg_couldnt_add_to_collection">컬렉션에 추가할 수 없습니다</string>
     <plurals name="detail_collection_item_count">
         <item quantity="other">항목 %1$d개</item>
@@ -238,7 +238,7 @@
     <string name="detail_manage_delete_file">파일 삭제</string>
     <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
     <string name="detail_manage_delete_title">에피소드 파일 삭제</string>
-    <string name="detail_manage_delete_message">\"%1$s\" (%2$s)의 파일을 삭제하시겠습니까? Sonarr에서 제거되며, 교체본을 검색할 수 있습니다.</string>
+    <string name="detail_manage_delete_message">"%1$s" (%2$s)의 파일을 삭제하시겠습니까? Sonarr에서 제거되며, 교체본을 검색할 수 있습니다.</string>
     <string name="detail_manage_delete_confirm">삭제</string>
     <!-- Empty / error states -->
     <string name="detail_manage_no_episodes">Sonarr에서 이 시리즈의 에피소드를 찾을 수 없습니다.</string>
@@ -336,10 +336,10 @@
     <string name="detail_close">닫기</string>
     <string name="detail_delete">삭제</string>
     <string name="detail_delete_download_title">다운로드 삭제</string>
-    <string name="detail_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
+    <string name="detail_delete_download_message">"%1$s"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
     <string name="detail_delete_episode_title">에피소드 삭제</string>
     <string name="detail_delete_episode_cd">에피소드 삭제</string>
-    <string name="detail_delete_episode_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
+    <string name="detail_delete_episode_message">"%1$s"을(를) 기기에서 제거하시겠습니까?</string>
     <string name="detail_delete_downloads_title">다운로드 삭제</string>
     <string name="detail_select_episodes_to_remove">기기에서 제거할 에피소드를 선택하세요.</string>
     <string name="detail_episodes_selected">에피소드 %2$d개 중 %1$d개 선택됨</string>
@@ -429,4 +429,12 @@
     <plurals name="detail_book_highlights">
         <item quantity="other">밑줄 %1$d개</item>
     </plurals>
+    <string name="detail_book_download_only">다운로드만</string>
+    <string name="detail_cd_hide_up_next">'다음 에피소드' 섹션 숨기기</string>
+    <string name="detail_option_hide_detail_up_next">'다음 에피소드' 섹션 숨기기</string>
+    <string name="detail_option_show_detail_up_next">'다음 에피소드' 섹션 표시</string>
+    <string name="detail_download_advanced">고급</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">모든 자막</string>
+    <string name="detail_download_subtitles_none">자막 없음</string>
 </resources>

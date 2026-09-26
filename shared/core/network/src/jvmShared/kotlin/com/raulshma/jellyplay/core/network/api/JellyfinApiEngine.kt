@@ -24,11 +24,8 @@ import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.ClientCapabilitiesDto
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class JellyfinApiEngine @Inject constructor(
+class JellyfinApiEngine(
     // LazyProvider ctor params (the local seam in LazyProvider.kt — this used
     // to be dagger.Lazy, back when a Hilt graph constructed this class)
     // defer construction of both the Jellyfin SDK instance and the shared
@@ -118,8 +115,7 @@ class JellyfinApiEngine @Inject constructor(
         _api ?: throw IllegalStateException("Not connected to server")
 
     /**
-     * The authenticated user's id, throwing when no session is established —
-     * the engine-side twin of the wasm support's `requireCurrentUser()`
+     * The authenticated user's id, throwing when no session is established
      * (message-aligned: "Not authenticated"). Reads the ATOMIC [session]
      * value, never the separate [currentUser] flow alone: a user published
      * without a server is no identity (see [publishSession]), and the
@@ -235,6 +231,27 @@ class JellyfinApiEngine @Inject constructor(
         }
     }
 
+    /**
+     * THE way to call a Jellyfin SDK endpoint from the api clients: the
+     * [requireApi] guard plus [apiResultWithRetry] (IO dispatch, typed
+     * [ApiException] wrapping, retry with failover re-selection) composed in
+     * one place, so a new endpoint never re-derives the guard/retry ritual
+     * per method. The guard resolves exactly where the call sites it replaces
+     * resolved it — inside the retry block — so a disconnected call fails
+     * with the same classified [ApiException] as before, and a non-retryable
+     * one still short-circuits without burning retries. The block receives
+     * the guarded [ApiClient] and returns its raw value; `.content`
+     * unwrapping and DTO-to-model mapping stay in the block so each endpoint
+     * keeps its exact shape. Direct [apiResultWithRetry] / [requireApi] calls
+     * remain only for deliberately irregular flows: bespoke retry counts,
+     * raw-requester paths, fresh-client login/quick-connect legs, and
+     * non-Result best-effort fetches.
+     */
+    suspend fun <T> withApi(
+        maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,
+        block: suspend (ApiClient) -> T,
+    ): Result<T> = apiResultWithRetry(maxRetries) { block(requireApi()) }
+
     val currentMaxParentalRating: Int?
         get() = _currentUser.value?.maxParentalAgeRating
 
@@ -254,7 +271,13 @@ class JellyfinApiEngine @Inject constructor(
         /** Minimum spacing between failure-triggered address re-selections. */
         private const val RESELECT_THROTTLE_MS = 5_000L
 
-        private val SUPPORTED_REMOTE_COMMANDS = listOf(
+        // The command vocabulary this client advertises to the server —
+        // server-side remote UIs (jellyfin-web's d-pad, the official apps'
+        // remote sheet) render exactly these. MUST stay in lockstep with the
+        // serial-name mirror in core/network's AuthWireDto
+        // (SUPPORTED_REMOTE_COMMANDS) — a jvmTest pins the two sets equal.
+        // Internal (not private) so that mirror test can read it.
+        internal val SUPPORTED_REMOTE_COMMANDS = listOf(
             GeneralCommandType.SET_VOLUME,
             GeneralCommandType.VOLUME_UP,
             GeneralCommandType.VOLUME_DOWN,
@@ -270,6 +293,19 @@ class JellyfinApiEngine @Inject constructor(
             GeneralCommandType.TOGGLE_FULLSCREEN,
             GeneralCommandType.DISPLAY_MESSAGE,
             GeneralCommandType.PLAY,
+            // Navigation ladder + DisplayContent + TakeScreenshot.
+            GeneralCommandType.BACK,
+            GeneralCommandType.SELECT,
+            GeneralCommandType.MOVE_UP,
+            GeneralCommandType.MOVE_DOWN,
+            GeneralCommandType.MOVE_LEFT,
+            GeneralCommandType.MOVE_RIGHT,
+            GeneralCommandType.GO_HOME,
+            GeneralCommandType.GO_TO_SETTINGS,
+            GeneralCommandType.GO_TO_SEARCH,
+            GeneralCommandType.TOGGLE_CONTEXT_MENU,
+            GeneralCommandType.DISPLAY_CONTENT,
+            GeneralCommandType.TAKE_SCREENSHOT,
         )
     }
 }

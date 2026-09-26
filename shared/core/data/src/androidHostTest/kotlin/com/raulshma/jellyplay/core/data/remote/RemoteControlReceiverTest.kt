@@ -67,14 +67,24 @@ class RemoteControlReceiverTest {
     private val uiDispatcher: UiRemoteControlDispatcher = mockk(relaxed = true)
     private val activePlayerController: ActivePlayerController = mockk(relaxed = true)
     private val securityStore: SecurityStore = mockk(relaxed = true)
+    private val audioQueueManager: com.raulshma.jellyplay.core.data.playback.AudioQueueManager = mockk(relaxed = true)
+    private val bridge = RemoteNavigationBridge()
 
     private val events = MutableSharedFlow<WebSocketEvent>(extraBufferCapacity = 16)
+    private val security = MutableStateFlow(
+        SecuritySlice(remoteControlEnabled = true, remoteDisplayContentEnabled = false),
+    )
 
     @Before
     fun setUp() {
         every { webSocketClient.events } returns events
         every { authRepository.isAuthenticated } returns MutableStateFlow(true)
-        every { securityStore.security } returns MutableStateFlow(SecuritySlice(remoteControlEnabled = true))
+        every { securityStore.security } returns security
+        // Both persisted-read gates (start()'s remote-control check and
+        // DisplayContent's opt-in) go through firstPersistedSecurity — answer
+        // from the same flow the tests toggle via `security.value = …`.
+        coEvery { securityStore.firstPersistedSecurity() } answers { security.value }
+        every { audioQueueManager.currentPlayingItemId } returns MutableStateFlow(null)
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(IOException("down"))
     }
 
@@ -87,6 +97,8 @@ class RemoteControlReceiverTest {
         uiDispatcher = uiDispatcher,
         activePlayerController = activePlayerController,
         securityStore = securityStore,
+        remoteNavigationBridge = bridge,
+        audioQueueManager = audioQueueManager,
     )
 
     private fun startAndAwaitSubscription(r: RemoteControlReceiver) {
@@ -114,7 +126,7 @@ class RemoteControlReceiverTest {
 
     @Test
     fun `remote control disabled in preferences ignores every event`() {
-        every { securityStore.security } returns MutableStateFlow(SecuritySlice(remoteControlEnabled = false))
+        security.value = SecuritySlice(remoteControlEnabled = false)
         val r = receiver()
         startAndAwaitSubscription(r)
 

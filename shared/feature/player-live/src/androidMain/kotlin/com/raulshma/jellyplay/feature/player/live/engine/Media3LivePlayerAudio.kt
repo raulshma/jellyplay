@@ -31,7 +31,7 @@ internal class Media3LivePlayerAudio(
                     volume = { player.volume },
                     pause = { player.pause() },
                     play = { player.play() },
-                    setVolume = { player.volume = it },
+                    setVolume = { volume, _ -> player.volume = volume },
                     setMuted = { if (it) player.volume = 0f },
                 )
             }

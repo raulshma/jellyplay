@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
@@ -128,7 +129,7 @@ class ManageSeriesViewModel internal constructor(
                     )
                 }
             }.onFailure { e ->
-                _uiState.update { it.copy(error = e.message ?: "Couldn't load episodes from Sonarr.") }
+                _uiState.update { it.copy(error = UserErrorMessages.resolve(e, "Couldn't load episodes from Sonarr.")) }
             }
         }
     }
@@ -151,7 +152,10 @@ class ManageSeriesViewModel internal constructor(
                 }
             }.onFailure { e ->
                 _uiState.update {
-                    it.copy(isLoading = false, error = e.message ?: "Couldn't load episodes from Sonarr.")
+                    it.copy(
+                        isLoading = false,
+                        error = UserErrorMessages.resolve(e, "Couldn't load episodes from Sonarr."),
+                    )
                 }
             }
         }
@@ -168,7 +172,7 @@ class ManageSeriesViewModel internal constructor(
                 .onFailure { e ->
                     // Revert on failure.
                     _uiState.update { it.updateEpisode(episode) }
-                    _uiState.update { it.copy(userMessage = e.message ?: "Couldn't update monitoring.") }
+                    _uiState.update { it.copy(userMessage = UserErrorMessages.resolve(e, "Couldn't update monitoring.")) }
                 }
         }
     }
@@ -185,7 +189,7 @@ class ManageSeriesViewModel internal constructor(
                 }
                 .onFailure { e ->
                     _uiState.update {
-                        it.copy(actionTarget = null, userMessage = e.message ?: "Search failed.")
+                        it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Search failed."))
                     }
                 }
         }
@@ -216,7 +220,7 @@ class ManageSeriesViewModel internal constructor(
                 }
                 .onFailure { e ->
                     _uiState.update {
-                        it.copy(actionTarget = null, userMessage = e.message ?: "Couldn't delete the file.")
+                        it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Couldn't delete the file."))
                     }
                 }
             // Settle arm: the flag drops on BOTH outcomes and [PendingConfirmation.clear]
@@ -238,7 +242,7 @@ class ManageSeriesViewModel internal constructor(
                 }
                 .onFailure { e ->
                     _uiState.update {
-                        it.copy(actionTarget = null, userMessage = e.message ?: "Search failed.")
+                        it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Search failed."))
                     }
                 }
         }
@@ -261,7 +265,7 @@ class ManageSeriesViewModel internal constructor(
                     _uiState.update {
                         it.updateSeason(seasonNumber) { ep -> ep.copy(monitored = !targetMonitored) }
                     }
-                    _uiState.update { it.copy(userMessage = e.message ?: "Couldn't update monitoring.") }
+                    _uiState.update { it.copy(userMessage = UserErrorMessages.resolve(e, "Couldn't update monitoring.")) }
                 }
         }
     }
@@ -275,7 +279,7 @@ class ManageSeriesViewModel internal constructor(
                     _uiState.update { it.copy(actionTarget = null, userMessage = "Refreshing series metadata…") }
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(actionTarget = null, userMessage = e.message ?: "Refresh failed.") }
+                    _uiState.update { it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Refresh failed.")) }
                 }
         }
     }
@@ -291,7 +295,7 @@ class ManageSeriesViewModel internal constructor(
                     _uiState.update { it.copy(actionTarget = null, userMessage = "Refreshing & scanning series…") }
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(actionTarget = null, userMessage = e.message ?: "Scan failed.") }
+                    _uiState.update { it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Scan failed.")) }
                 }
         }
     }
@@ -305,7 +309,7 @@ class ManageSeriesViewModel internal constructor(
                     _uiState.update { it.copy(actionTarget = null, userMessage = "Searching all monitored missing episodes…") }
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(actionTarget = null, userMessage = e.message ?: "Search failed.") }
+                    _uiState.update { it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Search failed.")) }
                 }
         }
     }

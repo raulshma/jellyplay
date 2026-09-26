@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.feature.player.video.engine.FakeMediaEngine
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -45,10 +45,12 @@ import kotlinx.coroutines.test.runTest
  * the session's `scope.launch` blocks run synchronously on the test thread;
  * repositories are relaxed mocks and the VM-facing seams
  * ([SessionLifecycleHooks], [SessionPositionStore]) are recording fakes. The
- * release-scope work ([PlaybackSession.releaseScope], a real IO scope built
- * inside the session) is awaited with mockk's timeout verification — that
+ * release scope is injected too — a real IO scope, built by the test like the
+ * production VM does — and cancelled after its work was verified: that
  * teardown must outlive the caller's scope, so it cannot run on the test
- * dispatcher.
+ * dispatcher. The wall clock is injected as a controllable fake
+ * ([nowMs]), so the seek-freshness window and the persist throttle are pinned
+ * deterministically instead of against real time.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackSessionReportingTest {
@@ -56,9 +58,19 @@ class PlaybackSessionReportingTest {
     /** The session's injected scope — Unconfined so launches run synchronously. */
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
+    /**
+     * The session's injected release scope — a real IO scope, so release()'s
+     * NonCancellable teardown keeps running after the test body returns.
+     */
+    private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** The injected wall clock's current reading; [buildSession] resets it. */
+    private var nowMs = 0L
+
     private lateinit var playerSessionManager: PlayerSessionManager
     private lateinit var sessionStateFlow: MutableStateFlow<PlayerSessionState>
     private lateinit var engine: FakeMediaEngine
+    private lateinit var progressReporter: PlaybackProgressReporter
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var offlinePlaybackFacade: OfflinePlaybackFacade
     private lateinit var hooks: RecordingHooks
@@ -67,8 +79,9 @@ class PlaybackSessionReportingTest {
 
     @kotlin.test.AfterTest
     fun tearDown() {
-        // Cancel the session-owned release scope AFTER its IO work was verified.
-        session.onOwnerCleared()
+        // Cancel the injected release scope AFTER its IO work was verified —
+        // the owner's teardown path, as in the VM's onCleared.
+        releaseScope.cancel()
         sessionScope.cancel()
     }
 
@@ -89,6 +102,7 @@ class PlaybackSessionReportingTest {
         mirrorQuality: StreamingQuality = StreamingQuality.AUTO,
         mirrorMode: PlaybackMode = PlaybackMode.AUTO,
     ) {
+        nowMs = 1_000_000L
         engine = FakeMediaEngine().apply {
             durationValue = 100_000L
             advanceTo(30_000L)
@@ -104,11 +118,14 @@ class PlaybackSessionReportingTest {
         offlinePlaybackFacade = mockk(relaxed = true)
         hooks = RecordingHooks()
         positionStore = FakePositionStore()
+        progressReporter = mockk(relaxed = true)
 
         session = PlaybackSession(
             scope = sessionScope,
+            releaseScope = releaseScope,
+            clock = { nowMs },
             playerSessionManager = playerSessionManager,
-            progressReporter = mockk(relaxed = true),
+            progressReporter = progressReporter,
             sessionLoadPipeline = mockk(relaxed = true),
             hooks = hooks,
             mediaSessionController = mockk(relaxed = true),
@@ -146,7 +163,7 @@ class PlaybackSessionReportingTest {
         // A seek followed by an immediate teardown must report the seek
         // position, not the engine's not-yet-caught-up position.
         session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = System.currentTimeMillis()
+        session.lastSeekTimestamp = nowMs // the latch was stamped "just now"
 
         assertEquals(42_000L, session.getReportPositionMs())
     }
@@ -155,7 +172,7 @@ class PlaybackSessionReportingTest {
     fun getReportPositionMs_staleSeek_fallsBackToEnginePosition() {
         engine.advanceTo(50_000L)
         session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = System.currentTimeMillis() - 60_000L // far past the 3 s window
+        session.lastSeekTimestamp = nowMs - 60_000L // far past the 3 s window
 
         assertEquals(50_000L, session.getReportPositionMs())
     }
@@ -174,7 +191,7 @@ class PlaybackSessionReportingTest {
         assertEquals("item-1", persist.itemId)
         assertEquals(10_000L, persist.positionMs)
         assertEquals("server-1", persist.playSessionId)
-        assertTrue(persist.nowMs > 0L)
+        assertEquals(nowMs, persist.nowMs, "the snapshot carries the injected clock's reading")
         assertEquals(10_000L, session.lastPersistedPositionMs)
 
         // The offline mirror runs on the session scope (Unconfined → synchronous).
@@ -266,6 +283,72 @@ class PlaybackSessionReportingTest {
         // the latch stays open so a real position can still be reported later.
         coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any()) }
         assertNull(session.stopReportedForSession)
+    }
+
+    // ── Failed flag + stalled-finish stop dedup ────────────────────
+
+    @Test
+    fun reportCurrentPlaybackStopped_errorLatched_reportsFailedTrue() = runTest {
+        every { progressReporter.isErrorLatched() } returns true
+        engine.advanceTo(60_000L)
+
+        session.reportCurrentPlaybackStopped()
+
+        // An error-aborted session must carry failed=true so the server
+        // skips its own "≥X % = played" rule on the stop.
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L, true)
+        }
+    }
+
+    @Test
+    fun reportCurrentPlaybackStopped_errorLatchHeld_reportsFailedFalse() = runTest {
+        engine.advanceTo(60_000L)
+
+        session.reportCurrentPlaybackStopped()
+
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L, false)
+        }
+    }
+
+    @Test
+    fun reportCurrentPlaybackStopped_stalledFinishAlreadyReported_isSkippedAndLatched() = runTest {
+        every { progressReporter.hasReportedStopFor("server-1") } returns true
+        engine.advanceTo(60_000L)
+
+        session.reportCurrentPlaybackStopped()
+
+        // The reporter already stop-reported this session at the FULL
+        // duration (stalled-finish): a second stop at the stalled position
+        // would only downgrade it.
+        coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any(), any()) }
+        assertEquals("server-1", session.stopReportedForSession)
+    }
+
+    @Test
+    fun release_errorLatched_reportsFailedTrue() = runTest {
+        every { progressReporter.isErrorLatched() } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L, true)
+        }
+    }
+
+    @Test
+    fun release_stalledFinishAlreadyReported_doesNotDuplicateTheStop() = runTest {
+        every { progressReporter.hasReportedStopFor("server-1") } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 0) {
+            playbackRepository.reportPlaybackStopped(any(), any(), any(), any())
+        }
+        assertEquals("server-1", session.stopReportedForSession)
     }
 
     // ── reloadForMode: SessionEvent.InformUser notices ──────────────────────

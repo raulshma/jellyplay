@@ -63,28 +63,9 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
-      - name: Build shared targets (JVM + wasm + Android)
+      - name: Build shared targets (JVM + Android)
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
-        # wasmJs target exists on model/datastore/designsystem/ui/network/
-        # data/player-contract/database plus the calendar/requests/details
-        # feature modules and the apps:web shell — database joined at:
-        # Room 3 over sqlite-web's WebWorkerSQLiteDriver (vendored OPFS
-        # worker, kspWasmJs codegen). Its wasmJsTest suite is compile-gated
-        # here the same way apps/web's is, while the runnable
-        # wasmJsBrowserTest lane stays local (see the apps/web note below).
-        # data gained wasm when the Room-backed repositories moved to
-        # its jvmShared source set (the lane line below caught up later —
-        # the target existed but was never compiled here, so wasm-only
-        # breakage in core:data surfaced only via :apps:web).
-        # player-contract gained wasm when MediaEngine's supertypes
-        # (PlayerLifecycleCallbacks, RemotePlayableEngine) moved into it from
-        # shared core:data in the same packages.
-        # :apps:web:compileTestKotlinWasmJs compile-gates the web shell's
-        # wasmJsTest suite (6 files incl. the only pins of WebBackStackMirror
-        # and WebConnectFailurePolicy) — previously not even compiled here;
-        # the runnable wasmJsBrowserTest lane stays local (karma/webpack +
-        # headless-Chrome npm graph is too heavy for this 3-OS matrix).
         # Keep this ONE folded scalar: a blank line inside `run: >` is a hard
         # newline that splits the invocation into separate shell commands —
         # blank lines left by the dev/v0.10.7 merge made bash die on an
@@ -104,103 +85,69 @@ jobs:
         run: >
           ./gradlew
           :shared:core:concurrency:jvmJar
-          :shared:core:concurrency:compileKotlinWasmJs
           :shared:core:concurrency:compileAndroidMain
           :shared:core:model:jvmJar
-          :shared:core:model:compileKotlinWasmJs
           :shared:core:model:compileAndroidMain
           :shared:core:designsystem:jvmJar
-          :shared:core:designsystem:compileKotlinWasmJs
           :shared:core:designsystem:compileAndroidMain
           :shared:core:datastore:jvmJar
-          :shared:core:datastore:compileKotlinWasmJs
           :shared:core:datastore:compileAndroidMain
           :shared:core:database:jvmJar
-          :shared:core:database:compileKotlinWasmJs
-          :shared:core:database:compileTestKotlinWasmJs
           :shared:core:database:compileAndroidMain
           :shared:core:network:jvmJar
-          :shared:core:network:compileKotlinWasmJs
           :shared:core:network:compileAndroidMain
           :shared:core:data:jvmJar
-          :shared:core:data:compileKotlinWasmJs
           :shared:core:data:compileAndroidMain
           :shared:core:ui:jvmJar
-          :shared:core:ui:compileKotlinWasmJs
           :shared:core:ui:compileAndroidMain
           :shared:core:player-contract:jvmJar
-          :shared:core:player-contract:compileKotlinWasmJs
           :shared:core:player-contract:compileAndroidMain
           :shared:feature:search:jvmJar
           :shared:feature:search:compileAndroidMain
-          :shared:feature:search:compileKotlinWasmJs
           :shared:feature:library:jvmJar
           :shared:feature:library:compileAndroidMain
-          :shared:feature:library:compileKotlinWasmJs
           :shared:feature:music:jvmJar
           :shared:feature:music:compileAndroidMain
-          :shared:feature:music:compileKotlinWasmJs
           :shared:feature:livetv:jvmJar
           :shared:feature:livetv:compileAndroidMain
-          :shared:feature:livetv:compileKotlinWasmJs
           :shared:feature:downloads:jvmJar
           :shared:feature:downloads:compileAndroidMain
-          :shared:feature:downloads:compileKotlinWasmJs
           :shared:feature:syncplay:jvmJar
           :shared:feature:syncplay:compileAndroidMain
-          :shared:feature:syncplay:compileKotlinWasmJs
           :shared:feature:settings:jvmJar
           :shared:feature:settings:compileAndroidMain
-          :shared:feature:settings:compileKotlinWasmJs
           :shared:feature:admin:jvmJar
           :shared:feature:admin:compileAndroidMain
-          :shared:feature:admin:compileKotlinWasmJs
           :shared:feature:editor:jvmJar
           :shared:feature:editor:compileAndroidMain
-          :shared:feature:editor:compileKotlinWasmJs
           :shared:feature:calendar:jvmJar
           :shared:feature:calendar:compileAndroidMain
-          :shared:feature:calendar:compileKotlinWasmJs
           :shared:feature:requests:jvmJar
           :shared:feature:requests:compileAndroidMain
-          :shared:feature:requests:compileKotlinWasmJs
           :shared:feature:shortcuts:jvmJar
           :shared:feature:shortcuts:compileAndroidMain
-          :shared:feature:shortcuts:compileKotlinWasmJs
           :shared:feature:newsletter:jvmJar
           :shared:feature:newsletter:compileAndroidMain
-          :shared:feature:newsletter:compileKotlinWasmJs
           :shared:feature:insights:jvmJar
           :shared:feature:insights:compileAndroidMain
-          :shared:feature:insights:compileKotlinWasmJs
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
-          :shared:feature:onboarding:compileKotlinWasmJs
-          :shared:feature:player-book:compileKotlinWasmJs
           :shared:feature:subtitle-tester:jvmJar
           :shared:feature:subtitle-tester:compileAndroidMain
           :shared:feature:arrqueue:jvmJar
           :shared:feature:arrqueue:compileAndroidMain
-          :shared:feature:arrqueue:compileKotlinWasmJs
           :shared:feature:auth:jvmJar
           :shared:feature:auth:compileAndroidMain
-          :shared:feature:auth:compileKotlinWasmJs
           :shared:feature:details:jvmJar
           :shared:feature:details:compileAndroidMain
-          :shared:feature:details:compileKotlinWasmJs
           :shared:feature:home:jvmJar
           :shared:feature:home:compileAndroidMain
-          :shared:feature:home:compileKotlinWasmJs
           :shared:feature:player-live:jvmJar
           :shared:feature:player-live:compileAndroidMain
-          :shared:feature:player-live:compileKotlinWasmJs
           :shared:feature:player-audio:jvmJar
           :shared:feature:player-audio:compileAndroidMain
-          :shared:feature:player-audio:compileKotlinWasmJs
           :shared:feature:player-video:jvmJar
           :shared:feature:player-video:compileAndroidMain
-          :apps:web:compileKotlinWasmJs
-          :apps:web:compileTestKotlinWasmJs
           --stacktrace
           --max-workers=2
           "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"

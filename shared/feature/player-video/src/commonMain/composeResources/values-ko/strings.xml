@@ -158,7 +158,9 @@
     <string name="player_video_av_sync">A/V 동기화</string>
     <string name="player_video_playback_mode">재생 모드</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 켜짐</string>
-    <string name="player_video_decoder">디코더</string>
+    <string name="player_video_decoder">렌더링</string>
+    <string name="player_video_rendering">렌더링</string>
+    <string name="player_video_deinterlace">디인터레이스 · %1$s</string>
     <string name="player_video_passthrough">패스스루</string>
     <string name="player_video_stats_for_nerds">전문가 통계</string>
     <string name="player_video_stats_for_nerds_on">전문가 통계 \u00B7 켜짐</string>
@@ -270,9 +272,11 @@
     <string name="player_video_stats_position">위치</string>
     <string name="player_video_stats_progress">진행</string>
     <string name="player_video_stats_buffer_health">버퍼 상태</string>
+    <string name="player_video_stats_buffered_ranges">버퍼 범위</string>
     <string name="player_video_stats_buffered">버퍼됨</string>
     <string name="player_video_stats_clock">시계</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">HDR 출력 활성</string>
     <string name="player_video_stats_color_range">색상 범위</string>
     <string name="player_video_stats_color_depth">색상 심도</string>
     <string name="player_video_stats_sample_rate">샘플링 레이트</string>
@@ -301,6 +305,10 @@
     <string name="player_video_adaptive_bitrate_on">종량제 네트워크에서 품질 제한</string>
     <string name="player_video_adaptive_bitrate_off">꺼짐 - 최고 품질(다이렉트 재생)</string>
     <string name="player_video_skip_intro">인트로 건너뛰기</string>
+    <string name="player_video_skipped_segment">%1$s 건너뜀</string>
+    <string name="player_video_mark_watched_and_skip">시청 완료로 표시 후 건너뛰기</string>
+    <string name="player_video_mark_watched_and_exit">시청 완료로 표시 후 종료</string>
+    <string name="player_video_mark_unwatched_and_exit">시청 전으로 표시 후 종료</string>
     <string name="player_video_overview_tab">개요</string>
     <string name="player_video_lyrics_subtitles_tab">가사 / 자막</string>
     <string name="player_video_synopsis">시놉시스</string>

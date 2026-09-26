@@ -20,7 +20,7 @@ import kotlin.math.max
  *
  * Trigger: when the current track's playhead crosses ~50% of its duration
  * (tracks with unknown/indefinite duration are skipped — no threshold
- * reachable). Bounded by [UserPreferences.audioPrefetchLookahead] and gated
+ * reachable). Bounded by `AudioCacheSlice.audioPrefetchLookahead` and gated
  * by [AudioCachePolicyGuard]. Cancels stale warming jobs on queue mutation.
  *
  * Back-fill is implicit: recently-played tracks remain in the LRU cache and

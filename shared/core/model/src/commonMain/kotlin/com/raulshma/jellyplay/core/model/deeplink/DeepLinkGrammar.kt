@@ -13,7 +13,7 @@ package com.raulshma.jellyplay.core.model.deeplink
  *                                             ?type= or default to movie at
  *                                             parse time)
  *   jellyplay://search|settings|downloads|library   (argument-less)
- *   https://{HOST_WEB}/{PATH_PREFIX}/{...}   (web mirror of the same paths)
+ *   https://{HOST_WEB}/{PATH_PREFIX}/{...}   (https mirror of the same paths)
  *
  * Builders and parsers round-trip; the emitted strings are byte-identical to
  * the literals this grammar replaced.
@@ -25,7 +25,7 @@ object DeepLinkGrammar {
     const val SCHEME_HTTPS = "https"
     const val HOST_WEB = "raulshma.github.io"
 
-    /** First path segment of the web mirror, e.g. https://{HOST_WEB}/jellyplay/... */
+    /** First path segment of the https mirror, e.g. https://{HOST_WEB}/jellyplay/... */
     const val PATH_PREFIX = "jellyplay"
 
     // --- destinations ---
@@ -109,7 +109,7 @@ object DeepLinkGrammar {
     }
 
     /**
-     * Parses the web mirror from its path segments; the caller must first
+     * Parses an https-mirror link from its path segments; the caller must first
      * verify the host is [HOST_WEB]. Only [PATH_PREFIX] + destination type are
      * required: item-bearing routes (media/newsletter) take the trailing id
      * segment, argument-less routes ignore it (absent → empty string,

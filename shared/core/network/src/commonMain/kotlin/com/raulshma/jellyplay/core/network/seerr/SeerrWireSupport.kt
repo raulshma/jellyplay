@@ -1,13 +1,14 @@
 package com.raulshma.jellyplay.core.network.seerr
 
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
 /**
- * Pure, commonMain wire helpers for the wasm Seerr/TMDB client —
+ * Pure, commonMain wire helpers for the Seerr/TMDB client —
  * every byte-level convention of the jvmShared `SeerrApiClientImpl`
- * (OkHttp) extracted so the wasm client consumes them unchanged and
+ * (OkHttp) extracted so
  * commonTest can pin them. The jvmShared impl keeps its own private copies;
  * the two MUST stay in sync (same paths, same error strings, same encodings).
  *
@@ -22,8 +23,7 @@ import kotlinx.serialization.json.jsonObject
  * `encodeDefaults = false` — which is load-bearing on the encode side: the
  * JVM builds `SeerrRequestPayload`/`SeerrEditRequestPayload` and encodes them
  * with THIS configuration, so `is4k = false` and every null field are
- * omitted from the POST body. Any wasm Json that flips encodeDefaults would
- * put `\"is4k\":false` on the wire where the JVM sends nothing.
+ * omitted from the POST body.
  */
 internal val arrSeerrWireJson: Json = Json {
     ignoreUnknownKeys = true
@@ -92,12 +92,6 @@ internal fun urlFormEncode(value: String): String {
 /**
  * `SeerrApiClientImpl.withAuth` as data: `X-Api-Key` for
  * [SeerrCredentials.ApiKey], `Cookie` for [SeerrCredentials.SessionCookie].
- * WASM BROWSER CAVEAT (documented delta, code kept faithful): `Cookie` is a
- * forbidden request-header name for browser `fetch` (the Ktor Js/wasmJs
- * engine), so the browser silently strips it — session-cookie credentials
- * cannot authenticate from a browser tab the way OkHttp does on JVM. The
- * header set here is correct for non-restricted contexts (Node/wasm test
- * runtimes) and for the header-selection contract itself.
  */
 internal fun seerrAuthHeaders(credentials: SeerrCredentials): List<Pair<String, String>> =
     when (credentials) {
@@ -130,20 +124,84 @@ internal fun seerrRequestsPath(
     }
 }
 
-/** `getDiscoverMovies`' path: `page` always, `primaryReleaseDateGte` URLEncoder-encoded when present. */
-internal fun seerrDiscoverMoviesPath(page: Int, primaryReleaseDateGte: String?): String = buildString {
+/**
+ * `getDiscoverMovies`' path: `page` always; `primaryReleaseDateGte`
+ * URLEncoder-encoded when present; custom-row [params] (genre / vote floor /
+ * sort / year window folded into date bounds) appended after. Param names are
+ * Seerr/Overseerr's camelCase discover vocabulary.
+ */
+internal fun seerrDiscoverMoviesPath(
+    page: Int,
+    primaryReleaseDateGte: String?,
+    params: SeerrDiscoverParams? = null,
+): String = buildString {
     append("/discover/movies?page=$page")
     if (primaryReleaseDateGte != null) {
         append("&primaryReleaseDateGte=")
         append(urlFormEncode(primaryReleaseDateGte))
     }
+    appendSeerrDiscoverParams(
+        dateGteName = "primaryReleaseDateGte",
+        dateLteName = "primaryReleaseDateLte",
+        explicitGte = primaryReleaseDateGte,
+        params = params,
+    )
 }
 
-/** `getDiscoverTv`' path: `page` always, `firstAirDateGte` URLEncoder-encoded when present. */
-internal fun seerrDiscoverTvPath(page: Int, firstAirDateGte: String?): String = buildString {
+/** `getDiscoverTv`' path: the TV twin of [seerrDiscoverMoviesPath] (firstAirDate bounds). */
+internal fun seerrDiscoverTvPath(
+    page: Int,
+    firstAirDateGte: String?,
+    params: SeerrDiscoverParams? = null,
+): String = buildString {
     append("/discover/tv?page=$page")
     if (firstAirDateGte != null) {
         append("&firstAirDateGte=")
         append(urlFormEncode(firstAirDateGte))
+    }
+    appendSeerrDiscoverParams(
+        dateGteName = "firstAirDateGte",
+        dateLteName = "firstAirDateLte",
+        explicitGte = firstAirDateGte,
+        params = params,
+    )
+}
+
+/**
+ * Appends the custom-row discover params common to the movie/TV endpoints.
+ * The year window folds into the SAME date-bound params Seerr already
+ * understands (ISO yyyy-MM-dd compares lexicographically): the effective gte
+ * is the LATER of the explicit bound and Jan 1 of [SeerrDiscoverParams.yearFrom];
+ * the effective lte the EARLIER of the explicit bound and Dec 31 of yearTo.
+ */
+private fun StringBuilder.appendSeerrDiscoverParams(
+    dateGteName: String,
+    dateLteName: String,
+    explicitGte: String?,
+    params: SeerrDiscoverParams?,
+) {
+    if (params == null) return
+    val yearFromBound = params.yearFrom?.let { "$it-01-01" }
+    val yearToBounds = params.yearTo?.let { "$it-12-31" }
+    val effectiveGte = listOfNotNull(explicitGte ?: params.releaseDateGte, yearFromBound).maxOrNull()
+    val effectiveLte = listOfNotNull(params.releaseDateLte, yearToBounds).minOrNull()
+    // The explicit gte (if any) was already appended by the caller — only
+    // append when the fold changed it.
+    if (effectiveGte != null && effectiveGte != explicitGte) {
+        append('&').append(dateGteName).append('=').append(urlFormEncode(effectiveGte))
+    }
+    if (effectiveLte != null) {
+        append('&').append(dateLteName).append('=').append(urlFormEncode(effectiveLte))
+    }
+    if (params.genreIds.isNotEmpty()) {
+        append("&genre=")
+        append(urlFormEncode(params.genreIds.joinToString(",")))
+    }
+    if (params.minVoteAverage > 0f) {
+        append("&voteAverageGte=").append(params.minVoteAverage)
+    }
+    params.sortBy?.let {
+        append("&sortBy=")
+        append(urlFormEncode(it))
     }
 }

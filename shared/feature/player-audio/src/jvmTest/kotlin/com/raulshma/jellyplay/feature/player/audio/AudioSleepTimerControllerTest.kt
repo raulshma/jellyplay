@@ -110,11 +110,4 @@ class AudioSleepTimerControllerTest {
         )
         assertFalse(slice.active)
     }
-
-    @Test
-    fun triggerSleepTimerEndOfEpisode_delegatesToTheManager() {
-        controller.triggerSleepTimerEndOfEpisode()
-
-        verify(exactly = 1) { sleepTimerManager.triggerEndOfEpisode() }
-    }
 }

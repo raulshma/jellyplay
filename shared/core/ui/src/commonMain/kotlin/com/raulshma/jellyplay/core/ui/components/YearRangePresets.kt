@@ -15,7 +15,7 @@ data class YearRangePreset(val id: String, val label: String, val years: IntRang
  * Returns the standard preset catalog. The final preset is anchored to the
  * current year so "2020s" always extends to "now" rather than a frozen 2029.
  * The default `now` resolves through the [currentYear] platform seam (the
- * pre-wasm body read `Calendar.YEAR` directly).
+ * original body read `Calendar.YEAR` directly).
  */
 fun yearRangePresets(
     now: Int = currentYear(),

@@ -121,21 +121,13 @@ class ExoPlayerEngine(
     // Nullable + defaulted so non-Hilt constructions (contract tests) compile
     // unchanged; a null cache simply disables byte caching (passthrough).
     private val videoStreamCache: VideoStreamCache? = null,
-) : ReloadablePlayerEngine(context), AndroidSurfaceProvider {
+) : ReloadablePlayerEngine(context), AndroidSurfaceProvider, Media3PlayerHost {
 
     @Volatile
     private var cachedVolume: Float = 1f
 
     @Volatile
     private var lastAppliedAudioSessionId: Int = -1
-
-    // Mirrors MPV/LibVLC: remembers play state across Activity pause so the
-    // engine pauses on lock/home (unless background audio is enabled) and
-    // resumes only if it was actually playing. Without this override the
-    // inherited PlayerLifecycleCallbacks default is a no-op, so ExoPlayer
-    // would keep playing audio silently when the screen locks.
-    @Volatile
-    private var wasPlayingBeforeActivityPause = false
 
     private inline fun runOnPlayerThread(crossinline block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -219,7 +211,7 @@ class ExoPlayerEngine(
     private val currentSubtitleConfigs =
         java.util.concurrent.CopyOnWriteArrayList<MediaItem.SubtitleConfiguration>()
 
-    override val underlyingPlayer: androidx.media3.common.Player? get() = player
+    override val media3Player: Player? get() = player
 
     /**
      * Per-track ReplayGain (dB) from the current [PlaybackRequest], used
@@ -400,7 +392,6 @@ class ExoPlayerEngine(
 
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
-        recreateEngineScopeIfInactive()
 
         currentNormalizationGain = request.normalizationGain
 
@@ -435,12 +426,11 @@ class ExoPlayerEngine(
             return
         }
 
+        // Full teardown-as-reset before the rebuild. release() still cancels
+        // engineScope (terminal semantics unchanged); BasePlayerEngine's
+        // self-healing engineScope hands positionFlow's ticker a fresh live
+        // generation on its next read, so no paired revive is needed here.
         release()
-        // release() cancels engineScope, and positionFlow's EnginePositionTicker
-        // launches on that scope when the flow is first collected — a dead scope
-        // means the ticker loop never runs and the seek bar freezes at its seed
-        // position. Revive it here so load() always returns with a live scope.
-        recreateEngineScopeIfInactive()
         lastRebuildInputs = inputs
 
         val selector = DefaultTrackSelector(context)
@@ -987,20 +977,10 @@ class ExoPlayerEngine(
     }
     override fun pause() = runOnPlayerThread { player?.pause() }
 
-    // Activity lifecycle bridge: unlike MPV/LibVLC, ExoPlayer does not detach
-    // views here (PlayerView handles the surface lifecycle). Pausing keeps the
-    // seek position; onActivityResume restores play only if it was active.
-    override fun onActivityPause() {
-        wasPlayingBeforeActivityPause = _isPlaying.value
-        pause()
-    }
-
-    override fun onActivityResume() {
-        if (wasPlayingBeforeActivityPause) {
-            wasPlayingBeforeActivityPause = false
-            play()
-        }
-    }
+    // Activity pause/resume rides the final BasePlayerEngine template
+    // (remember isPlaying → pause; restore-on-resume only if it was playing).
+    // ExoPlayer needs no [onPausedNative]/[onResumingNative] work — PlayerView
+    // handles the surface lifecycle itself, and pausing keeps the seek position.
 
     override fun stop() = runOnPlayerThread { player?.stop() }
     override fun seekTo(positionMs: Long) = runOnPlayerThread { player?.seekTo(positionMs) }
@@ -1445,7 +1425,10 @@ class ExoPlayerEngine(
         trySend(p.currentPosition)
 
         val ticker = EnginePositionTicker(
-            scope = engineScope,
+            // Provider, not capture: launch() re-reads the accessor, so an
+            // internal release-as-reset inside load() cannot leave this
+            // collection's ticker on the cancelled generation.
+            scopeProvider = { engineScope },
             pollingIntervalMs = _pollingIntervalMs,
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = { p.isPlaying },
@@ -1455,6 +1438,15 @@ class ExoPlayerEngine(
                 if (buffered != _bufferedPositionMs.value) {
                     _bufferedPositionMs.value = buffered
                 }
+                // conservative single range [position, buffered] v1 —
+                // DefaultLoadControl's back-buffer extent is not exposed
+                // per-range, so the contiguous ahead-window is the honest
+                // band. Normalizes + dedups into the shared flow.
+                _bufferedRanges.value = BufferedRanges.contiguous(
+                    startMs = p.currentPosition,
+                    endMs = buffered,
+                    durationMs = durationMs,
+                )
                 if (_videoStatsEnabled.value) {
                     updateVideoStats()
                 }

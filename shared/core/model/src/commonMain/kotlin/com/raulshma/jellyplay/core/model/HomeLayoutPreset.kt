@@ -18,6 +18,8 @@ data class HomeLayoutConfig(
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
     val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
+    /** The user's Discover rows — presets capture/restore the full home layout including them. */
+    val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeHeroEnabled: Boolean = true,
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
 ) {

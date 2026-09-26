@@ -28,7 +28,7 @@
     <string name="arrqueue_status_unknown">Sconosciuto</string>
 
     <!-- Feature disabled state -->
-    <string name="arrqueue_disabled_title">L\'integrazione *arr diretta è disattivata</string>
+    <string name="arrqueue_disabled_title">L'integrazione *arr diretta è disattivata</string>
     <string name="arrqueue_disabled_body">Abilitala in Impostazioni → Integrazioni per visualizzare la coda di download combinata.</string>
     <string name="arrqueue_open_settings">Apri impostazioni *arr</string>
 
@@ -38,17 +38,17 @@
 
     <!-- Grab -->
     <string name="arrqueue_grab_title">Forza recupero release</string>
-    <string name="arrqueue_grab_message">Inviare \"%1$s\" al suo client di download ora?</string>
-    <string name="arrqueue_grab_sent">Recupero inviato per \"%1$s\"</string>
+    <string name="arrqueue_grab_message">Inviare "%1$s" al suo client di download ora?</string>
+    <string name="arrqueue_grab_sent">Recupero inviato per "%1$s"</string>
 
     <!-- Import -->
     <string name="arrqueue_import_title">Forza importazione</string>
-    <string name="arrqueue_import_message">Importare \"%1$s\" in %2$s ora?</string>
-    <string name="arrqueue_import_sent">Importazione inviata per \"%1$s\"</string>
+    <string name="arrqueue_import_message">Importare "%1$s" in %2$s ora?</string>
+    <string name="arrqueue_import_sent">Importazione inviata per "%1$s"</string>
 
     <!-- Remove / delete dialog -->
     <string name="arrqueue_remove_selected_title">Eliminare i selezionati?</string>
-    <string name="arrqueue_remove_item_title">Eliminare \"%1$s\"?</string>
+    <string name="arrqueue_remove_item_title">Eliminare "%1$s"?</string>
     <string name="arrqueue_remove_body_bulk">Scegli come rimuovere questi elementi dalla coda.</string>
     <string name="arrqueue_remove_body_single">Scegli come rimuovere questo elemento dalla coda.</string>
     <string name="arrqueue_remove_only">Solo rimuovi</string>

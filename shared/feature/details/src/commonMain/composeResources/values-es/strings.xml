@@ -103,10 +103,10 @@
     <string name="detail_playlist_create">Crear</string>
     <string name="detail_msg_no_playlists">Aún no hay listas de reproducción</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_added_to_playlist">Añadido a \"%1$s\"</string>
+    <string name="detail_msg_added_to_playlist">Añadido a "%1$s"</string>
     <string name="detail_msg_added_to_watch_later">Añadido a Ver más tarde</string>
     <!-- %1$s = playlist name -->
-    <string name="detail_msg_playlist_created">Se creó \"%1$s\" y se añadió el elemento</string>
+    <string name="detail_msg_playlist_created">Se creó "%1$s" y se añadió el elemento</string>
     <string name="detail_msg_couldnt_add_to_playlist">No se pudo añadir a la lista de reproducción</string>
     <plurals name="detail_playlist_item_count">
         <item quantity="one">%1$d elemento</item>
@@ -122,9 +122,9 @@
     <string name="detail_collection_create">Crear</string>
     <string name="detail_msg_no_collections">Aún no hay colecciones</string>
     <!-- %1$s = nombre de la colección -->
-    <string name="detail_msg_added_to_collection">Añadido a \"%1$s\"</string>
+    <string name="detail_msg_added_to_collection">Añadido a "%1$s"</string>
     <!-- %1$s = nombre de la colección -->
-    <string name="detail_msg_collection_created">Se creó \"%1$s\" y se añadió el elemento</string>
+    <string name="detail_msg_collection_created">Se creó "%1$s" y se añadió el elemento</string>
     <string name="detail_msg_couldnt_add_to_collection">No se pudo añadir a la colección</string>
     <plurals name="detail_collection_item_count">
         <item quantity="one">%1$d elemento</item>
@@ -242,7 +242,7 @@
     <string name="detail_manage_delete_file">Eliminar archivo</string>
     <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
     <string name="detail_manage_delete_title">Eliminar archivo del episodio</string>
-    <string name="detail_manage_delete_message">¿Eliminar el archivo de \"%1$s\" (%2$s)? Sonarr lo eliminará y podrás buscar un reemplazo.</string>
+    <string name="detail_manage_delete_message">¿Eliminar el archivo de "%1$s" (%2$s)? Sonarr lo eliminará y podrás buscar un reemplazo.</string>
     <string name="detail_manage_delete_confirm">Eliminar</string>
     <!-- Empty / error states -->
     <string name="detail_manage_no_episodes">No se encontraron episodios en Sonarr para esta serie.</string>
@@ -340,10 +340,10 @@
     <string name="detail_close">Cerrar</string>
     <string name="detail_delete">Eliminar</string>
     <string name="detail_delete_download_title">Eliminar descarga</string>
-    <string name="detail_delete_download_message">¿Quitar \"%1$s\" de tu dispositivo? Esto libera %2$s.</string>
+    <string name="detail_delete_download_message">¿Quitar "%1$s" de tu dispositivo? Esto libera %2$s.</string>
     <string name="detail_delete_episode_title">Eliminar episodio</string>
     <string name="detail_delete_episode_cd">Eliminar episodio</string>
-    <string name="detail_delete_episode_message">¿Quitar \"%1$s\" de tu dispositivo?</string>
+    <string name="detail_delete_episode_message">¿Quitar "%1$s" de tu dispositivo?</string>
     <string name="detail_delete_downloads_title">Eliminar descargas</string>
     <string name="detail_select_episodes_to_remove">Selecciona los episodios que quieres quitar del dispositivo.</string>
     <string name="detail_episodes_selected">%1$d de %2$d episodios seleccionados</string>
@@ -440,4 +440,12 @@
         <item quantity="one">%1$d subrayado</item>
         <item quantity="other">%1$d subrayados</item>
     </plurals>
+    <string name="detail_book_download_only">Solo descargar</string>
+    <string name="detail_cd_hide_up_next">Ocultar sección A continuación</string>
+    <string name="detail_option_hide_detail_up_next">Ocultar sección A continuación</string>
+    <string name="detail_option_show_detail_up_next">Mostrar sección A continuación</string>
+    <string name="detail_download_advanced">Avanzado</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">Todos los subtítulos</string>
+    <string name="detail_download_subtitles_none">Sin subtítulos</string>
 </resources>

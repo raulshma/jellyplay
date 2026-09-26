@@ -45,7 +45,7 @@
 
     <!-- Delete dialogs -->
     <string name="downloads_delete_download_title">다운로드 삭제</string>
-    <string name="downloads_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
+    <string name="downloads_delete_download_message">"%1$s"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
     <string name="downloads_delete_downloads_title">다운로드 삭제</string>
     <plurals name="downloads_delete_downloads_message">
         <item quantity="other">선택한 다운로드 %1$d개를 기기에서 제거하시겠습니까?</item>

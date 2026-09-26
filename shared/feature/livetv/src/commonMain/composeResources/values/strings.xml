@@ -27,7 +27,7 @@
     <string name="livetv_delete">Delete</string>
     <string name="livetv_delete_recording_cd">Delete recording</string>
     <string name="livetv_delete_recording_title">Delete recording?</string>
-    <string name="livetv_delete_recording_body">Delete \"%1$s\"? This cannot be undone.</string>
+    <string name="livetv_delete_recording_body">Delete "%1$s"? This cannot be undone.</string>
     <string name="livetv_record_success">Recording scheduled</string>
     <string name="livetv_record_failed">Failed to set recording</string>
     <string name="livetv_record_canceled">Recording canceled</string>
@@ -45,7 +45,7 @@
     <string name="livetv_no_guide_available">No program guide available</string>
     <string name="livetv_record_program_prompt">Record program?</string>
     <string name="livetv_record_single_timer_note">A single timer will be scheduled on the server.</string>
-    <string name="livetv_record_schedule_failed">Couldn\'t schedule recording</string>
+    <string name="livetv_record_schedule_failed">Couldn't schedule recording</string>
     <string name="livetv_recording_in_progress">Recording…</string>
     <string name="livetv_scheduling_timer">Scheduling timer</string>
 

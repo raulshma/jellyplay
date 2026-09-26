@@ -31,3 +31,22 @@ interface RemoteControlDispatcher {
 
     suspend fun handleGeneral(command: GeneralCommand)
 }
+
+/**
+ * The VIDEO-domain dispatcher seam (jvmShared extraction): the
+ * receiver types its video dispatch against this INTERFACE so the androidMain
+ * (ExoPlayer/mpv-over-surface engines via [ActivePlayerController]) and the
+ * desktop jvmMain (per-session MpvDesktopEngine via the same controller)
+ * implementations are interchangeable. Marker sub-interface — every member is
+ * inherited from [RemoteControlDispatcher]; the split exists so Koin can bind
+ * per-domain without the receiver naming concrete classes.
+ */
+interface VideoRemoteControlDispatcher : RemoteControlDispatcher
+
+/**
+ * The AUDIO-domain dispatcher seam — the receiver's audio dispatch target.
+ * Android's implementation drives the media3 AudioPlaybackManager; desktop's
+ * drives the shared-contract DesktopAudioQueueManager. See
+ * [VideoRemoteControlDispatcher] for why this is a marker interface.
+ */
+interface AudioRemoteControlDispatcher : RemoteControlDispatcher

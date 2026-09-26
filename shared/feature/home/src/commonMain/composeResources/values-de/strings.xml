@@ -47,6 +47,8 @@
     <!-- Home section headers. -->
     <string name="home_because_you_watched">Weil du %1$s angesehen hast</string>
     <string name="home_discover">Entdecken</string>
+    <string name="home_discover_reroll">Diese Reihe neu würfeln</string>
+    <string name="home_discover_reroll_failed">Diese Reihe konnte nicht neu gewürfelt werden</string>
     <string name="home_coming_soon">Demnächst</string>
     <string name="home_continue_watching">Weiter ansehen</string>
     <string name="home_continue_reading">Weiterlesen</string>
@@ -97,4 +99,5 @@
     <string name="home_download_started">Download gestartet</string>
     <string name="home_download_start_failed">Download konnte nicht gestartet werden</string>
     <string name="home_series_download_queued">Folgen für den Download vorgemerkt</string>
+    <string name="home_see_all">Alle ansehen</string>
 </resources>

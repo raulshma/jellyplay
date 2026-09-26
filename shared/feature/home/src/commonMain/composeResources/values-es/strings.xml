@@ -47,6 +47,8 @@
     <!-- Home section headers. -->
     <string name="home_because_you_watched">Porque viste %1$s</string>
     <string name="home_discover">Descubrir</string>
+    <string name="home_discover_reroll">Tirar los dados de esta fila</string>
+    <string name="home_discover_reroll_failed">No se pudieron tirar los dados de esta fila</string>
     <string name="home_coming_soon">Próximamente</string>
     <string name="home_continue_watching">Seguir viendo</string>
     <string name="home_continue_reading">Seguir leyendo</string>
@@ -97,4 +99,5 @@
     <string name="home_download_started">Descarga iniciada</string>
     <string name="home_download_start_failed">No se pudo iniciar la descarga</string>
     <string name="home_series_download_queued">Episodios en cola para descargar</string>
+    <string name="home_see_all">Ver todo</string>
 </resources>

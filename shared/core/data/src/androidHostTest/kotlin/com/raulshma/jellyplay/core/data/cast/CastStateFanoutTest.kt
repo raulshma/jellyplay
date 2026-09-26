@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  *
  *  - DLNA contributes position / duration / isPlaying / volume only;
  *  - Jellyfin contributes those four plus title / subtitle;
- *  - every other name (google, the libvlc fallback, ad-hoc registrations)
+ *  - every other name (google, unknown / ad-hoc registrations)
  *    rides the local CastPlayer payload and contributes position / duration /
  *    buffered / isPlaying / volume;
  *  - title / subtitle are Jellyfin-only (Google Cast titles ride MediaItem
@@ -117,10 +117,9 @@ class CastStateFanoutTest {
 
     @Test
     fun `unknown strategy names ride the local player fan-out`() {
-        // Same else-arm as the manager's transport dispatch: the libvlc
-        // fallback and ad-hoc registered strategies all ride the
-        // manager-owned CastPlayer.
-        for (name in listOf(CastStrategyNames.LIBVLC, "custom-strategy")) {
+        // Same else-arm as the manager's transport dispatch: unknown /
+        // ad-hoc registered strategies all ride the manager-owned CastPlayer.
+        for (name in listOf("custom-strategy")) {
             val fanout = castStateFanout(name, player = player)
 
             assertEquals(5_000L, fanout.positionMs)

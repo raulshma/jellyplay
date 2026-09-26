@@ -34,7 +34,7 @@
 
     <!-- Server connection errors -->
     <string name="auth_error_server_address_required">Inserisci un indirizzo del server</string>
-    <string name="auth_error_resolve_address">Impossibile risolvere l\'indirizzo del server</string>
+    <string name="auth_error_resolve_address">Impossibile risolvere l'indirizzo del server</string>
     <string name="auth_error_could_not_connect">Impossibile connettersi al server</string>
     <string name="auth_error_connection_timeout">Timeout della connessione</string>
     <string name="auth_error_ssl">Errore SSL/TLS: controlla il certificato del server</string>
@@ -45,9 +45,9 @@
     <string name="auth_tls_trust_confirm">Considera attendibile e connetti</string>
 
     <!-- Android 17+ local network permission -->
-    <string name="auth_error_local_network_denied">L\'accesso alla rete locale è bloccato. Concedi l\'autorizzazione per la rete locale per raggiungere i server sul tuo Wi-Fi.</string>
+    <string name="auth_error_local_network_denied">L'accesso alla rete locale è bloccato. Concedi l'autorizzazione per la rete locale per raggiungere i server sul tuo Wi-Fi.</string>
     <string name="auth_local_network_rationale_title">Accesso alla rete locale</string>
-    <string name="auth_local_network_rationale_body">JellyPlay ha bisogno dell\'accesso alla rete locale per scoprire e connettersi ai server Jellyfin sul tuo Wi-Fi.</string>
+    <string name="auth_local_network_rationale_body">JellyPlay ha bisogno dell'accesso alla rete locale per scoprire e connettersi ai server Jellyfin sul tuo Wi-Fi.</string>
     <string name="auth_local_network_allow">Consenti accesso</string>
 
     <!-- Quick Connect screen -->
@@ -74,7 +74,7 @@
     <string name="auth_no_servers_added_desc">Aggiungi il tuo server Jellyfin per iniziare</string>
     <string name="auth_remove_server">Rimuovi server</string>
     <string name="auth_remove_server_title">Rimuovere il server?</string>
-    <string name="auth_remove_server_message">Questo rimuove \"%1$s\" e tutti gli utenti salvati al suo interno. L\'operazione non può essere annullata.</string>
+    <string name="auth_remove_server_message">Questo rimuove "%1$s" e tutti gli utenti salvati al suo interno. L'operazione non può essere annullata.</string>
     <string name="auth_remove">Rimuovi</string>
 
     <!-- User selection screen -->
@@ -84,8 +84,8 @@
     <string name="auth_add_user">Aggiungi utente</string>
     <string name="auth_user_placeholder">Utente</string>
     <string name="auth_remove_user">Rimuovi utente</string>
-    <string name="auth_remove_user_title">Rimuovere l\'utente?</string>
-    <string name="auth_remove_user_message">Rimuovere \"%1$s\" da questo server? Dovrai accedere di nuovo per utilizzarlo.</string>
+    <string name="auth_remove_user_title">Rimuovere l'utente?</string>
+    <string name="auth_remove_user_message">Rimuovere "%1$s" da questo server? Dovrai accedere di nuovo per utilizzarlo.</string>
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="auth_quick_connect">Connessione rapida</string>

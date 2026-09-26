@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +48,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_health
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffer_size
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffered
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_buffered_ranges
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_clock
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_color_depth
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_color_range
@@ -57,6 +59,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_est_bandwidth
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_hdr
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_hdr_output_active
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_network
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_performance
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_playback
@@ -125,6 +128,8 @@ fun VideoStatsOverlay(
     // only while "Stats for Nerds" is enabled) recomposes on position ticks.
     statsFlow: StateFlow<EngineVideoStats>,
     currentPositionFlow: StateFlow<Long>,
+    /** range-level buffered surface — the readout row below. */
+    bufferedRangesFlow: StateFlow<List<LongRange>> = MutableStateFlow(emptyList()),
     durationMs: Long,
     playbackSpeed: Float,
     isPlaying: Boolean,
@@ -141,6 +146,7 @@ fun VideoStatsOverlay(
 ) {
     val stats by statsFlow.collectAsStateWithLifecycle()
     val currentPositionMs by currentPositionFlow.collectAsStateWithLifecycle()
+    val bufferedRanges by bufferedRangesFlow.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -170,11 +176,31 @@ fun VideoStatsOverlay(
             val bufferHealthMs = (stats.bufferedPositionMs - currentPositionMs).coerceAtLeast(0L)
             StatsRow(stringResource(Res.string.player_video_stats_buffer_health), formatDurationMsLocal(bufferHealthMs))
             StatsRow(stringResource(Res.string.player_video_stats_buffered), formatDurationMsLocal(stats.bufferedPositionMs))
+            // the multi-range readout — count of distinct cached
+            // windows plus their total span, so a dropped window after a
+            // forward seek is visible as "2 ranges" rather than one scalar.
+            if (bufferedRanges.isNotEmpty()) {
+                val totalBufferedMs = bufferedRanges.sumOf { it.last - it.first }
+                StatsRow(
+                    stringResource(Res.string.player_video_stats_buffered_ranges),
+                    "${bufferedRanges.size} · ${formatDurationMsLocal(totalBufferedMs)}",
+                )
+            }
             StatsRow(stringResource(Res.string.player_video_stats_clock), rememberCurrentTimeString())
         }
 
         if (stats.videoCodec != null || stats.videoResolution != null) {
             StatsSection(stringResource(Res.string.player_video_video)) {
+                // the HDR passthrough badge leads the video block —
+                // active (display switched to an HDR target) or, when the
+                // display stayed SDR, the one-line tone-mapping fallback
+                // notice. Both come from the engine's target-params probe.
+                if (stats.hdrOutputActive) {
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_hdr_output_active),
+                        "● HDR",
+                    )
+                }
                 stats.videoCodec?.let { StatsRow(stringResource(Res.string.player_video_codec), it.uppercase()) }
                 stats.videoDecoder?.let { StatsRow(stringResource(Res.string.player_video_decoder), it) }
                 stats.videoResolution?.let { StatsRow(stringResource(Res.string.player_video_resolution), it) }
@@ -183,6 +209,16 @@ fun VideoStatsOverlay(
                 stats.videoHdrType?.let { StatsRow(stringResource(Res.string.player_video_stats_hdr), it) }
                 stats.videoColorRange?.let { StatsRow(stringResource(Res.string.player_video_stats_color_range), it) }
                 stats.videoColorDepth?.let { StatsRow(stringResource(Res.string.player_video_stats_color_depth), it) }
+                stats.hdrOutputNotice?.let { notice ->
+                    Text(
+                        text = notice,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                        ),
+                        color = playerOnScrim().copy(alpha = 0.8f),
+                    )
+                }
             }
         }
 

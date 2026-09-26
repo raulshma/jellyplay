@@ -43,17 +43,13 @@ import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
-import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
-import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
-import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
-import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -114,7 +110,7 @@ fun MediaDetailScreen(
     var activeTrailerKey by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(itemId) {
-        viewModel.loadItem(itemId)
+        viewModel.onEvent(DetailUiEvent.LoadItem(itemId))
         // Dismiss any open trailer dialog when navigating to a different item
         // (previously a separate LaunchedEffect(itemId) block).
         activeTrailerKey = null
@@ -233,11 +229,11 @@ fun MediaDetailScreen(
                 markPlayedConfirm.request {
                     when (val scope = request.scope) {
                         MarkPlayedConfirmRequest.Scope.Item ->
-                            if (toWatched) viewModel.markPlayed()
-                            else viewModel.markUnplayed()
+                            if (toWatched) viewModel.onEvent(DetailUiEvent.MarkPlayed)
+                            else viewModel.onEvent(DetailUiEvent.MarkUnplayed)
                         is MarkPlayedConfirmRequest.Scope.Season ->
-                            if (toWatched) viewModel.markSeasonPlayed(scope.seasonId)
-                            else viewModel.markSeasonUnplayed(scope.seasonId)
+                            if (toWatched) viewModel.onEvent(DetailUiEvent.MarkSeasonPlayed(scope.seasonId))
+                            else viewModel.onEvent(DetailUiEvent.MarkSeasonUnplayed(scope.seasonId))
                     }
                 }
                 markPlayedRequest = request
@@ -246,8 +242,8 @@ fun MediaDetailScreen(
             // movies/episodes (the season row of the gate always confirms, so
             // the season callbacks never take this branch).
             val action: () -> Unit = {
-                if (toWatched) viewModel.markPlayed()
-                else viewModel.markUnplayed()
+                if (toWatched) viewModel.onEvent(DetailUiEvent.MarkPlayed)
+                else viewModel.onEvent(DetailUiEvent.MarkUnplayed)
             }
             DetailPlayPolicies.dispatchMarkPlayedAction(
                 mediaType = uiState.detail?.item?.mediaType,
@@ -284,9 +280,15 @@ fun MediaDetailScreen(
                     )
                 },
                 onOpenDetail = { item -> onItemClick(item.id) },
-                onMarkPlayed = viewModel::markRowItemPlayed,
-                onDownload = { item -> viewModel.downloadRowItem(item, onOpenDetail = onItemClick) },
-                onRemoveDownload = viewModel::removeRowItemDownload,
+                onMarkPlayed = { item, played ->
+                    viewModel.onEvent(DetailUiEvent.MarkRowItemPlayed(item = item, played = played))
+                },
+                onDownload = { item ->
+                    viewModel.onEvent(DetailUiEvent.DownloadRowItem(item = item, onOpenDetail = onItemClick))
+                },
+                onRemoveDownload = { item ->
+                    viewModel.onEvent(DetailUiEvent.RemoveRowItemDownload(item = item))
+                },
             )
         },
     )
@@ -397,22 +399,13 @@ fun MediaDetailScreen(
             // into uiState as-is — its dialogItem gates the request dialog)
             val seerrRequest = uiState.seerrRequest
 
-            // Seerr card loading state for prefetch animation
-            val seerrLoadingState = rememberSeerrCardLoadingState()
-            val seerrPrefetchCallback: SeerrPrefetchCallback =
-                remember(seerrLoadingState, viewModel) {
-                    { tmdbId, mediaType, onDone ->
-                        seerrLoadingState.startLoading(tmdbId)
-                        viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType) {
-                            seerrLoadingState.stopLoading(tmdbId)
-                            onDone()
-                        }
-                    }
+            // Seerr card loading state for prefetch animation: one root-level
+            // bundle of the callback + loading state; descendant rows read them
+            // via the composition locals.
+            com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+                prefetchDetail = { tmdbId, mediaType, onDone ->
+                    viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType, onDone)
                 }
-
-            CompositionLocalProvider(
-                LocalSeerrPrefetch provides seerrPrefetchCallback,
-                LocalSeerrCardLoadingState provides seerrLoadingState,
             ) {
                 val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
@@ -558,11 +551,11 @@ fun MediaDetailScreen(
                         onReadClick = { readItemId: String, jumpHref: String?, jumpPage: Int? ->
                             onReadClick(readItemId, jumpHref, jumpPage)
                         },
-                        onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
-                        onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
-                        onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
-                        onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
-                        onStartInstantMix = { viewModel.startInstantMix() },
+                        onPlayAlbumTrack = { index: Int -> viewModel.onEvent(DetailUiEvent.PlayAlbum(startIndex = index)) },
+                        onSubtitleSelect = { idx: Int? -> viewModel.onEvent(DetailUiEvent.SelectSubtitle(idx)) },
+                        onAudioSelect = { idx: Int? -> viewModel.onEvent(DetailUiEvent.SelectAudio(idx)) },
+                        onSelectLocalSubtitle = { index -> viewModel.onEvent(DetailUiEvent.SelectLocalSubtitle(index)) },
+                        onStartInstantMix = { viewModel.onEvent(DetailUiEvent.StartInstantMix) },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
                     )
                 }
@@ -614,16 +607,20 @@ fun MediaDetailScreen(
                 val seasonsCallbacks = remember(viewModel, seriesIdForSeasons, dispatchMarkPlayedAction) {
                     SeasonsCallbacks(
                         onSeasonSelected = { seasonId: String ->
-                            viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
+                            viewModel.onEvent(
+                                DetailUiEvent.LoadEpisodesForSeason(seriesId = seriesIdForSeasons, seasonId = seasonId),
+                            )
                         },
                         onSeasonPinned = { seasonId: String ->
-                            viewModel.setLastViewedSeason(seriesIdForSeasons, seasonId)
+                            viewModel.onEvent(
+                                DetailUiEvent.SetLastViewedSeason(seriesId = seriesIdForSeasons, seasonId = seasonId),
+                            )
                         },
                         onEpisodesDescendingChange = { descending: Boolean ->
-                            viewModel.setEpisodesDescending(descending)
+                            viewModel.onEvent(DetailUiEvent.SetEpisodesDescending(descending))
                         },
                         onCompactEpisodeListChange = { enabled: Boolean ->
-                            viewModel.setCompactEpisodeList(enabled)
+                            viewModel.onEvent(DetailUiEvent.SetCompactEpisodeList(enabled))
                         },
                         onMarkSeasonPlayed = { seasonId -> dispatchMarkPlayedAction(true, true, seasonId) },
                         onMarkSeasonUnplayed = { seasonId -> dispatchMarkPlayedAction(true, false, seasonId) },
@@ -632,16 +629,16 @@ fun MediaDetailScreen(
 
                 val userDataCallbacks = remember(viewModel, dispatchMarkPlayedAction) {
                     UserDataCallbacks(
-                        onToggleFavorite = { viewModel.toggleFavorite() },
+                        onToggleFavorite = { viewModel.onEvent(DetailUiEvent.ToggleFavorite) },
                         // dispatchMarkPlayedAction(isSeasonAction, toWatched, seasonId)
                         onMarkPlayed = { dispatchMarkPlayedAction(false, true, null) },
                         onMarkUnplayed = { dispatchMarkPlayedAction(false, false, null) },
-                        onHideFromNextUp = { viewModel.hideFromNextUp() },
-                        onShowFromNextUp = { viewModel.showFromNextUp() },
-                        onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
-                        onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
-                        onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
-                        onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
+                        onHideFromNextUp = { viewModel.onEvent(DetailUiEvent.HideFromNextUp) },
+                        onShowFromNextUp = { viewModel.onEvent(DetailUiEvent.ShowFromNextUp) },
+                        onHideFromContinueWatching = { viewModel.onEvent(DetailUiEvent.HideFromContinueWatching) },
+                        onShowFromContinueWatching = { viewModel.onEvent(DetailUiEvent.ShowFromContinueWatching) },
+                        onShowDetailUpNext = { viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(enabled = true)) },
+                        onHideDetailUpNext = { viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(enabled = false)) },
                     )
                 }
 
@@ -681,8 +678,8 @@ fun MediaDetailScreen(
 
                 val screenCallbacks = remember(viewModel, itemId, quickActionIntake) {
                     ScreenCallbacks(
-                        onRetry = { viewModel.loadItem(itemId) },
-                        onRefresh = { viewModel.forceRefresh() },
+                        onRetry = { viewModel.onEvent(DetailUiEvent.LoadItem(itemId)) },
+                        onRefresh = { viewModel.onEvent(DetailUiEvent.ForceRefresh) },
                         onMediaQuickActions = { item -> quickActionIntake.controller.show(item) },
                         onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
                     )

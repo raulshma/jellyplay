@@ -15,14 +15,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Platform-neutral pins for the DateLabels seam (this commonTest suite runs
- * on the jvmTest lane of every target that executes tests). Only assertions
- * that hold byte-for-byte on BOTH actuals live here: the Today/Yesterday
+ * Platform-neutral pins for the DateLabels seam. Only assertions
+ * that hold byte-for-byte on every actual live here: the Today/Yesterday
  * ladder (fixed-English everywhere), the strict-offset/no-parse null
  * contracts of the ISO parses, and parse-failure passthrough. The
  * locale-sensitive month/day SHAPES are pinned per-platform: jvmTest pins
- * the JVM host-locale output under a pinned locale, and the jvmTest
- * source-scan contract pins the wasmJs fixed-English degrade.
+ * the JVM host-locale output under a pinned locale.
  */
 class DateLabelsTest {
 
@@ -70,13 +68,12 @@ class DateLabelsTest {
 
     @Test
     fun offsetStampsWithoutAZoneOffsetReturnNull() {
-        // Strict-offset on BOTH platforms (the JVM's OffsetDateTime.parse
-        // throws; the wasm regex requires the offset) — the relative-time
-        // buckets' null contract.
+        // Strict-offset (the JVM's OffsetDateTime.parse throws on
+        // offset-less stamps) — the relative-time buckets' null contract.
         assertNull(isoOffsetMinutesAgo("2024-01-05T14:30:00"))
         assertNull(isoOffsetMinutesAgo("not a timestamp"))
         assertNull(isoOffsetMinutesAgo(""))
-        // Impossible civil date — java.time rejects it; so does the wasm table.
+        // Impossible civil date — java.time rejects it.
         assertNull(isoOffsetMinutesAgo("2024-02-30T12:00:00Z"))
     }
 

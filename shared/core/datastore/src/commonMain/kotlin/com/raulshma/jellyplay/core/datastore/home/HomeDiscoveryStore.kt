@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
@@ -25,6 +26,8 @@ import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.withDiscoverRowEnabled
+import com.raulshma.jellyplay.core.model.withDiscoverRowMoved
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -145,7 +148,7 @@ class HomeDiscoveryStore constructor(
          * then disables the section keeps that choice.
          */
         val HOME_ENABLED_SECTION_TYPES_VERSION = intPreferencesKey("home_enabled_section_types_version")
-        const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 1
+        const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 2
         /**
          * The version at which [HomeSectionType.CONTINUE_READING] shipped —
          * a persisted set stamped older than this unions it in on read (see
@@ -155,11 +158,25 @@ class HomeDiscoveryStore constructor(
          * shipped-at entry, never editing this one.
          */
         const val CONTINUE_READING_SHIPPED_AT_VERSION = 1
+        /**
+         * The version at which [HomeSectionType.DISCOVER] (the custom discover
+         * rows block) shipped — same union-in mechanics as
+         * [CONTINUE_READING_SHIPPED_AT_VERSION]: without the entry, every
+         * user whose enabled-set predates the section would never see the
+         * DISCOVER block render, no matter their row config.
+         */
+        const val DISCOVER_SHIPPED_AT_VERSION = 2
         val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
         val HOME_LIBRARY_SECTION_OVERRIDES = stringPreferencesKey("home_library_section_overrides")
         /** Legacy all-or-nothing "hide library from home" key — kept only to migrate. */
         val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
         val PINNED_HOME_SECTIONS = stringPreferencesKey("pinned_home_sections")
+        /**
+         * The user's custom Discover rows, as one JSON `List<DiscoverRowConfig>`
+         * blob (list order = within-block render order). Same lifecycle as the
+         * pinned sections blob.
+         */
+        val HOME_DISCOVER_ROWS = stringPreferencesKey("home_discover_rows")
         val HOME_LAYOUT_PRESETS = stringPreferencesKey("home_layout_presets")
         val CONTINUE_WATCHING_CLICK_BEHAVIOR = stringPreferencesKey("continue_watching_click_behavior")
         val SHOW_UNWATCHED_BADGE = booleanPreferencesKey("show_unwatched_badge")
@@ -225,6 +242,7 @@ class HomeDiscoveryStore constructor(
     private val stringLegacyKeys: List<Preferences.Key<String>> = listOf(
         Keys.HOME_MODE, Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
         Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.PINNED_HOME_SECTIONS,
+        Keys.HOME_DISCOVER_ROWS,
         Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
         Keys.NEXT_UP_EXCLUDED_SERIES_IDS, Keys.HIDDEN_CW_ITEM_IDS,
         Keys.LAST_VIEWED_SEASON_BY_SERIES,
@@ -387,6 +405,7 @@ class HomeDiscoveryStore constructor(
         private val sectionOrderKey = userStringKey(userId, Keys.HOME_SECTION_ORDER)
         private val librarySectionOverridesKey = userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)
         private val pinnedSectionsKey = userStringKey(userId, Keys.PINNED_HOME_SECTIONS)
+        private val discoverRowsKey = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
         private val layoutPresetsKey = userStringKey(userId, Keys.HOME_LAYOUT_PRESETS)
         private val continueWatchingClickBehaviorKey = userStringKey(userId, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR)
         private val showUnwatchedBadgeKey = userBooleanKey(userId, Keys.SHOW_UNWATCHED_BADGE)
@@ -408,6 +427,7 @@ class HomeDiscoveryStore constructor(
         private var cachedHomeSectionOrder = ParsedCache<List<HomeSectionType>>(null, HomeSectionType.CONFIGURABLE)
         private var cachedLibraryHomeSectionOverrides = ParsedCache<Map<String, Set<HomeSectionType>>>(null, emptyMap())
         private var cachedPinnedHomeSections = ParsedCache<List<PinnedHomeSection>>(null, emptyList())
+        private var cachedDiscoverRows = ParsedCache<List<DiscoverRowConfig>>(null, emptyList())
         private var cachedHomeLayoutPresets = ParsedCache<List<HomeLayoutPreset>>(null, emptyList())
         private var cachedNextUpExcludedSeriesIds = ParsedCache<Set<String>>(null, emptySet())
         private var cachedHiddenCwItemIds = ParsedCache<Set<String>>(null, emptySet())
@@ -428,6 +448,7 @@ class HomeDiscoveryStore constructor(
             homeSectionOrder = readHomeSectionOrder(prefs),
             libraryHomeSectionOverrides = readLibraryHomeSectionOverrides(prefs),
             pinnedHomeSections = readPinnedHomeSections(prefs),
+            discoverRows = readDiscoverRows(prefs),
             homeLayoutPresets = readHomeLayoutPresets(prefs),
             continueWatchingClickBehavior = readContinueWatchingClickBehavior(prefs),
             showUnwatchedBadge = readBool(prefs, showUnwatchedBadgeKey, true),
@@ -463,6 +484,8 @@ class HomeDiscoveryStore constructor(
         private val sectionsShippedByVersion: List<Pair<Int, HomeSectionType>> = listOf(
             // v1: reading-experience 2.0's Continue Reading row
             Keys.CONTINUE_READING_SHIPPED_AT_VERSION to HomeSectionType.CONTINUE_READING,
+            // v2: the custom discover rows block (Home Screen settings hub)
+            Keys.DISCOVER_SHIPPED_AT_VERSION to HomeSectionType.DISCOVER,
         )
 
         /**
@@ -572,6 +595,16 @@ class HomeDiscoveryStore constructor(
                 default = emptyList(),
                 parse = { json.decodeFromString<List<PinnedHomeSection>>(it) },
                 cacheRef = { cachedPinnedHomeSections = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
+
+        private fun readDiscoverRows(prefs: Preferences): List<DiscoverRowConfig> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[discoverRowsKey],
+                cache = cachedDiscoverRows,
+                default = emptyList(),
+                parse = { json.decodeFromString<List<DiscoverRowConfig>>(it) },
+                cacheRef = { cachedDiscoverRows = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
@@ -736,6 +769,44 @@ class HomeDiscoveryStore constructor(
         val key = userStringKey(userId, Keys.PINNED_HOME_SECTIONS)
         val current = decodeOrDefault(prefs, key, emptyList<PinnedHomeSection>())
         prefs[key] = json.encodeToString(current.filterNot { it.id == sectionId })
+    }
+
+    // ── Custom Discover rows ────────────────────────────────────────────────
+
+    /** Wholesale replace (layout presets, reset). */
+    suspend fun setDiscoverRows(rows: List<DiscoverRowConfig>) = editForUser { prefs, userId ->
+        prefs[userStringKey(userId, Keys.HOME_DISCOVER_ROWS)] = json.encodeToString(rows)
+    }
+
+    /** Add-or-replace by id — the editor's save. */
+    suspend fun upsertDiscoverRow(row: DiscoverRowConfig) = editForUser { prefs, userId ->
+        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
+        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        val next = if (current.any { it.id == row.id }) {
+            current.map { if (it.id == row.id) row else it }
+        } else {
+            current + row
+        }
+        prefs[key] = json.encodeToString(next)
+    }
+
+    suspend fun removeDiscoverRow(rowId: String) = editForUser { prefs, userId ->
+        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
+        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        prefs[key] = json.encodeToString(current.filterNot { it.id == rowId })
+    }
+
+    suspend fun setDiscoverRowEnabled(rowId: String, enabled: Boolean) = editForUser { prefs, userId ->
+        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
+        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        prefs[key] = json.encodeToString(current.withDiscoverRowEnabled(rowId, enabled))
+    }
+
+    suspend fun moveDiscoverRow(rowId: String, up: Boolean) = editForUser { prefs, userId ->
+        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
+        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        val moved = current.withDiscoverRowMoved(rowId, up) ?: return@editForUser
+        prefs[key] = json.encodeToString(moved)
     }
 
     suspend fun setHomeLayoutPresets(presets: List<HomeLayoutPreset>) = editForUser { prefs, userId ->
@@ -924,6 +995,7 @@ class HomeDiscoveryStore constructor(
             it[userStringKey(userId, Keys.HOME_SECTION_ORDER)] = json.encodeToString(slice.homeSectionOrder.map { section -> section.name })
             it[userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)] = json.encodeToString(slice.libraryHomeSectionOverrides)
             it[userStringKey(userId, Keys.PINNED_HOME_SECTIONS)] = json.encodeToString(slice.pinnedHomeSections)
+            it[userStringKey(userId, Keys.HOME_DISCOVER_ROWS)] = json.encodeToString(slice.discoverRows)
             it[userStringKey(userId, Keys.HOME_LAYOUT_PRESETS)] = json.encodeToString(slice.homeLayoutPresets)
             it[userStringKey(userId, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR)] = slice.continueWatchingClickBehavior.name
             it[userBooleanKey(userId, Keys.SHOW_UNWATCHED_BADGE)] = slice.showUnwatchedBadge
@@ -957,6 +1029,8 @@ data class HomeDiscoverySlice(
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
+    /** The user's custom Discover rows; empty until the user creates one. */
+    val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
     val showUnwatchedBadge: Boolean = true,
@@ -1002,6 +1076,7 @@ fun HomeDiscoverySlice.toSectionPrefs(): HomeSectionPrefs = HomeSectionPrefs(
         nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
         hiddenCwItemIds = hiddenCwItemIds,
         pinnedSections = pinnedHomeSections,
+        discoverRows = discoverRows,
     ),
     homeSectionOrder = homeSectionOrder,
     mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,

@@ -147,33 +147,32 @@ internal fun audioRowAdmissionFlags(showAdvanced: Boolean, preferences: AudioPre
     RowAdmissionFlags(
         showAdvanced = showAdvanced,
         parentsOn = rowParentsOn(
-            "volume_normalization" to (
+            AudioSettingsIds.VOLUME_NORMALIZATION to (
                 preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
                     preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
                 ),
-            "equalizer" to preferences.equalizerEnabled,
-            "dialogue_boost" to preferences.dialogueBoostEnabled,
-            "night_mode" to preferences.nightModeEnabled,
-            "bass_boost" to preferences.bassBoostEnabled,
-            "virtualizer" to preferences.virtualizerEnabled,
-            "volume_boost" to preferences.volumeBoostEnabled,
-            "channel_mixing" to preferences.channelMixEnabled,
+            AudioSettingsIds.EQUALIZER to preferences.equalizerEnabled,
+            PlaybackSettingsIds.DIALOGUE_BOOST to preferences.dialogueBoostEnabled,
+            AudioSettingsIds.NIGHT_MODE to preferences.nightModeEnabled,
+            AudioSettingsIds.BASS_BOOST to preferences.bassBoostEnabled,
+            AudioSettingsIds.VIRTUALIZER to preferences.virtualizerEnabled,
+            AudioSettingsIds.VOLUME_BOOST to preferences.volumeBoostEnabled,
+            AudioSettingsIds.CHANNEL_MIXING to preferences.channelMixEnabled,
         ),
     )
 
 /**
- * The audio group's `SettingsItemList(total = …)` row count, derived from the
- * [SettingsScreenGroups.audio] declaration (the Playback screen's landed
- * shape): non-advanced rows always render; an advanced row renders only
- * behind the advanced toggle — and the effect-dependent strength rows (plus
- * the replaygain pre-amp and the equalizer preset) only while their parent
- * effect is enabled, each via its declared [RowAdmission] (the same predicate
- * the screen's emission `if`s read). The dialogue-boost pair renders inside
- * this screen's equalizer block too, but its declaration lives with the
- * playback advanced-video group (both screens render the shared
- * audio-effects rows), so it is counted from that group: the toggle rides
- * the equalizer block (read through the preset row's declared gate), the
- * strength row its own declared dialogue-boost gate.
+ * The audio group's `SettingsItemList(total = …)` row count, derived by
+ * [rowTotalFor] from the [SettingsScreenGroups.audio] declaration (full
+ * per-id admission coverage — the base gate is each record's `isAdvanced`
+ * flag, the effect-dependent rows override with `All(Advanced, WhenOn)`).
+ * The dialogue-boost pair renders inside this screen's equalizer block too,
+ * but its declaration lives with the playback advanced-video group (both
+ * screens render the shared audio-effects rows), so it is added from that
+ * group through its declared gates: the toggle rides the equalizer block
+ * (read through the preset row's declared gate), the strength row its own
+ * declared `All(Advanced, WhenOn)` gate — the two screen-local terms
+ * [rowTotalFor] cannot see.
  *
  * Pure (and internal) so the contract test can pin each conditional against
  * the declaration.
@@ -183,17 +182,9 @@ internal fun audioScreenRowTotal(
     preferences: AudioPreferences,
 ): Int {
     val flags = audioRowAdmissionFlags(showAdvanced, preferences)
-    return SettingsScreenGroups.audio.items.count { item ->
-        SettingsScreenGroups.audio.admissionOf(item.id)?.admitted(flags)
-            ?: (!item.isAdvanced || showAdvanced)
-    } + SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
-        when (item.id) {
-            "dialogue_boost" -> SettingsScreenGroups.audio.rowAdmitted("equalizer_preset", flags)
-            "dialogue_boost_strength" -> showAdvanced &&
-                SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(item.id, flags)
-            else -> false
-        }
-    }
+    return rowTotalFor(SettingsScreenGroups.audio, flags) +
+        (if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.EQUALIZER_PRESET, flags)) 1 else 0) +
+        (if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH, flags)) 1 else 0)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -258,13 +249,13 @@ fun AudioSettingsScreen(
                     initiallyExpanded = true,
                 ) {
                     SettingsItemList(total = audioScreenRowTotal(showAdvanced, preferences)) {
-                    val audioDefaultSpeedTitle = stringResource(Res.string.settings_audio_default_speed)
+                    val audioDefaultSpeedTitle = rowTitle(AudioSettingsIds.AUDIO_DEFAULT_SPEED)
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,
-                        title = stringResource(Res.string.settings_audio_default_speed),
+                        title = rowTitle(AudioSettingsIds.AUDIO_DEFAULT_SPEED),
                         subtitle = if (preferences.audioDefaultSpeed == 1.0f) stringResource(Res.string.settings_audio_default_speed_normal) else stringResource(Res.string.settings_audio_default_speed_value, "${preferences.audioDefaultSpeed}x"),
                         trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
-                        highlighted = highlightSettingId == "audio_default_speed",
+                        highlighted = highlightSettingId == AudioSettingsIds.AUDIO_DEFAULT_SPEED,
                         onClick = {
                 val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
                 activePicker = pickerChip(
@@ -278,18 +269,18 @@ fun AudioSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.PlaylistAdd,
-                        title = stringResource(Res.string.settings_audio_auto_play_next),
+                        title = rowTitle(AudioSettingsIds.AUDIO_AUTOPLAY_NEXT),
                         subtitle = if (preferences.audioAutoplayNext) stringResource(Res.string.settings_audio_auto_play_on) else stringResource(Res.string.settings_audio_auto_play_off),
                         checked = preferences.audioAutoplayNext,
-                        highlighted = highlightSettingId == "audio_autoplay_next",
+                        highlighted = highlightSettingId == AudioSettingsIds.AUDIO_AUTOPLAY_NEXT,
                         onCheckedChange = { viewModel.edit { scope -> scope.audio.setAudioAutoplayNext(it) } },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Eye,
-                        title = stringResource(Res.string.settings_audio_visualizer),
+                        title = rowTitle(AudioSettingsIds.AUDIO_VISUALIZER),
                         subtitle = if (preferences.audioVisualizerEnabled) stringResource(Res.string.settings_audio_visualizer_on) else stringResource(Res.string.settings_audio_visualizer_off),
                         checked = preferences.audioVisualizerEnabled,
-                        highlighted = highlightSettingId == "audio_visualizer",
+                        highlighted = highlightSettingId == AudioSettingsIds.AUDIO_VISUALIZER,
                         onCheckedChange = { viewModel.edit { scope -> scope.audio.setAudioVisualizerEnabled(it) } },
                     )
                     val sleepTimerOffLabel = stringResource(Res.string.settings_off)
@@ -301,10 +292,10 @@ fun AudioSettingsScreen(
                     val sleepTimerDurationTitle = stringResource(Res.string.settings_sleep_timer_duration)
                     SettingListItem(
                         icon = Tabler.Outline.Clock,
-                        title = stringResource(Res.string.settings_sleep_timer),
+                        title = rowTitle(AudioSettingsIds.SLEEP_TIMER),
                         subtitle = if (preferences.sleepTimerDurationMs == 0L) stringResource(Res.string.settings_sleep_timer_off) else stringResource(Res.string.settings_sleep_timer_minutes, preferences.sleepTimerDurationMs / 60000),
                         trailingText = if (preferences.sleepTimerDurationMs == 0L) stringResource(Res.string.settings_off) else "${preferences.sleepTimerDurationMs / 60000}m",
-                        highlighted = highlightSettingId == "sleep_timer",
+                        highlighted = highlightSettingId == AudioSettingsIds.SLEEP_TIMER,
                         onClick = {
                             val options = listOf(0L, 15 * 60000L, 30 * 60000L, 45 * 60000L, 60 * 60000L, 120 * 60000L)
                             val sleepTimerLabels = listOf(
@@ -326,20 +317,20 @@ fun AudioSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Speakerphone,
-                        title = stringResource(Res.string.settings_audio_description),
+                        title = rowTitle(AudioSettingsIds.AUDIO_DESCRIPTION),
                         subtitle = if (preferences.preferAudioDescription) stringResource(Res.string.settings_audio_description_on) else stringResource(Res.string.settings_audio_description_off),
                         checked = preferences.preferAudioDescription,
-                        highlighted = highlightSettingId == "audio_description",
+                        highlighted = highlightSettingId == AudioSettingsIds.AUDIO_DESCRIPTION,
                         onCheckedChange = { viewModel.edit { scope -> scope.subtitle.setPreferAudioDescription(it) } },
                     )
                     if (showAdvanced) {
-                        val nightModeVolumeTitle = stringResource(Res.string.settings_night_mode_volume)
+                        val nightModeVolumeTitle = rowTitle(AudioSettingsIds.NIGHT_MODE_VOLUME)
                         SettingListItem(
                             icon = Tabler.Outline.Music,
-                            title = stringResource(Res.string.settings_night_mode_volume),
+                            title = rowTitle(AudioSettingsIds.NIGHT_MODE_VOLUME),
                             subtitle = stringResource(Res.string.settings_night_mode_volume_subtitle),
                             trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
-                            highlighted = highlightSettingId == "night_mode_volume",
+                            highlighted = highlightSettingId == AudioSettingsIds.NIGHT_MODE_VOLUME,
                             onClick = {
                                 activePicker = PickerState.Slider(
                                     title = nightModeVolumeTitle,
@@ -353,13 +344,13 @@ fun AudioSettingsScreen(
                                 )
                             },
                         )
-                        val nightModeGainTitle = stringResource(Res.string.settings_night_mode_gain)
+                        val nightModeGainTitle = rowTitle(AudioSettingsIds.NIGHT_MODE_GAIN)
                         SettingListItem(
                             icon = Tabler.Outline.Adjustments,
-                            title = stringResource(Res.string.settings_night_mode_gain),
+                            title = rowTitle(AudioSettingsIds.NIGHT_MODE_GAIN),
                             subtitle = stringResource(Res.string.settings_night_mode_gain_subtitle),
                             trailingText = "${preferences.audioNightModeGain}",
-                            highlighted = highlightSettingId == "night_mode_gain",
+                            highlighted = highlightSettingId == AudioSettingsIds.NIGHT_MODE_GAIN,
                             onClick = {
                                 activePicker = PickerState.Slider(
                                     title = nightModeGainTitle,
@@ -373,13 +364,13 @@ fun AudioSettingsScreen(
                                 )
                             },
                         )
-                        val skipPrevThresholdTitle = stringResource(Res.string.settings_skip_prev_threshold)
+                        val skipPrevThresholdTitle = rowTitle(AudioSettingsIds.AUDIO_SKIP_PREV_THRESHOLD)
                         SettingListItem(
                             icon = Tabler.Outline.PlayerSkipForward,
-                            title = stringResource(Res.string.settings_skip_prev_threshold),
+                            title = rowTitle(AudioSettingsIds.AUDIO_SKIP_PREV_THRESHOLD),
                             subtitle = stringResource(Res.string.settings_skip_prev_threshold_subtitle),
                             trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
-                            highlighted = highlightSettingId == "audio_skip_prev_threshold",
+                            highlighted = highlightSettingId == AudioSettingsIds.AUDIO_SKIP_PREV_THRESHOLD,
                             onClick = {
                                 val thresholds = listOf(1_000L, 2_000L, 3_000L, 5_000L, 7_000L, 10_000L)
                                 activePicker = pickerChip(
@@ -393,20 +384,20 @@ fun AudioSettingsScreen(
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.PlaylistAdd,
-                            title = stringResource(Res.string.settings_gapless_playback),
+                            title = rowTitle(AudioSettingsIds.GAPLESS_PLAYBACK),
                             subtitle = if (preferences.audioGaplessEnabled) stringResource(Res.string.settings_gapless_on) else stringResource(Res.string.settings_gapless_off),
                             checked = preferences.audioGaplessEnabled,
-                            highlighted = highlightSettingId == "gapless_playback",
+                            highlighted = highlightSettingId == AudioSettingsIds.GAPLESS_PLAYBACK,
                             onCheckedChange = { viewModel.edit { scope -> scope.audio.setAudioGaplessEnabled(it) } },
                         )
                         val crossfadeOffLabel = stringResource(Res.string.settings_off)
-                        val crossfadeDurationTitle = stringResource(Res.string.settings_crossfade_duration)
+                        val crossfadeDurationTitle = rowTitle(AudioSettingsIds.CROSSFADE)
                         SettingListItem(
                             icon = Tabler.Outline.Music,
-                            title = stringResource(Res.string.settings_crossfade_duration),
+                            title = rowTitle(AudioSettingsIds.CROSSFADE),
                             subtitle = if (preferences.audioCrossfadeDurationMs > 0) stringResource(Res.string.settings_crossfade_on, preferences.audioCrossfadeDurationMs / 1000) else stringResource(Res.string.settings_crossfade_off),
                             trailingText = if (preferences.audioCrossfadeDurationMs > 0) "${preferences.audioCrossfadeDurationMs / 1000}s" else stringResource(Res.string.settings_off),
-                            highlighted = highlightSettingId == "crossfade",
+                            highlighted = highlightSettingId == AudioSettingsIds.CROSSFADE,
                             onClick = {
                                 val durations = listOf(0L, 2000L, 3000L, 5000L, 8000L, 12000L)
                                 activePicker = pickerChip(
@@ -418,13 +409,13 @@ fun AudioSettingsScreen(
                                 )
                             },
                         )
-                        val preloadBufferTitle = stringResource(Res.string.settings_preload_buffer)
+                        val preloadBufferTitle = rowTitle(AudioSettingsIds.AUDIO_PRELOAD_BUFFER)
                         SettingListItem(
                             icon = Tabler.Outline.Refresh,
-                            title = stringResource(Res.string.settings_preload_buffer),
+                            title = rowTitle(AudioSettingsIds.AUDIO_PRELOAD_BUFFER),
                             subtitle = stringResource(Res.string.settings_preload_buffer_subtitle),
                             trailingText = preferences.audioPreloadBufferSize.displayName,
-                            highlighted = highlightSettingId == "audio_preload_buffer",
+                            highlighted = highlightSettingId == AudioSettingsIds.AUDIO_PRELOAD_BUFFER,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = preloadBufferTitle,
@@ -436,10 +427,10 @@ fun AudioSettingsScreen(
                                 )
                             },
                         )
-                        val volumeNormalizationTitle = stringResource(Res.string.settings_volume_normalization)
+                        val volumeNormalizationTitle = rowTitle(AudioSettingsIds.VOLUME_NORMALIZATION)
                         SettingListItem(
                             icon = Tabler.Outline.Adjustments,
-                            title = stringResource(Res.string.settings_volume_normalization),
+                            title = rowTitle(AudioSettingsIds.VOLUME_NORMALIZATION),
                             subtitle = when (preferences.audioNormalizationMode) {
                                 AudioNormalizationMode.NONE -> stringResource(Res.string.settings_norm_off)
                                 AudioNormalizationMode.DYNAMIC -> stringResource(Res.string.settings_norm_dynamic)
@@ -452,7 +443,7 @@ fun AudioSettingsScreen(
                                 AudioNormalizationMode.TRACK -> stringResource(Res.string.settings_norm_track_short)
                                 AudioNormalizationMode.ALBUM -> stringResource(Res.string.settings_norm_album_short)
                             },
-                            highlighted = highlightSettingId == "volume_normalization",
+                            highlighted = highlightSettingId == AudioSettingsIds.VOLUME_NORMALIZATION,
                             onClick = {
                                 val modes = AudioNormalizationMode.entries
                                 activePicker = pickerChip(
@@ -464,14 +455,14 @@ fun AudioSettingsScreen(
                                 )
                             },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted("replaygain_preamp", rowFlags)) {
-                            val replayGainPreAmpTitle = stringResource(Res.string.settings_replaygain_preamp)
+                        if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.REPLAYGAIN_PREAMP, rowFlags)) {
+                            val replayGainPreAmpTitle = rowTitle(AudioSettingsIds.REPLAYGAIN_PREAMP)
                             SettingListItem(
                                 icon = Tabler.Outline.Adjustments,
-                                title = stringResource(Res.string.settings_replaygain_preamp),
+                                title = rowTitle(AudioSettingsIds.REPLAYGAIN_PREAMP),
                                 subtitle = stringResource(Res.string.settings_replaygain_preamp_subtitle),
                                 trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${formatOneDecimal(preferences.replayGainPreAmpDb.toDouble())} dB",
-                                highlighted = highlightSettingId == "replaygain_preamp",
+                                highlighted = highlightSettingId == AudioSettingsIds.REPLAYGAIN_PREAMP,
                                 onClick = {
                                     activePicker = PickerState.Slider(
                                         title = replayGainPreAmpTitle,
@@ -488,21 +479,21 @@ fun AudioSettingsScreen(
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.Adjustments,
-                            title = stringResource(Res.string.settings_equalizer),
+                            title = rowTitle(AudioSettingsIds.EQUALIZER),
                             subtitle = if (preferences.equalizerEnabled) stringResource(Res.string.settings_equalizer_on) else stringResource(Res.string.settings_equalizer_off),
                             checked = preferences.equalizerEnabled,
-                            highlighted = highlightSettingId == "equalizer",
+                            highlighted = highlightSettingId == AudioSettingsIds.EQUALIZER,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setEqualizerEnabled(it) } },
                             onClick = { showEqualizerEditor = true },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted("equalizer_preset", rowFlags)) {
-                            val equalizerPresetTitle = stringResource(Res.string.settings_equalizer_preset)
+                        if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.EQUALIZER_PRESET, rowFlags)) {
+                            val equalizerPresetTitle = rowTitle(AudioSettingsIds.EQUALIZER_PRESET)
                             SettingListItem(
                                 icon = Tabler.Outline.Adjustments,
-                                title = stringResource(Res.string.settings_equalizer_preset),
+                                title = rowTitle(AudioSettingsIds.EQUALIZER_PRESET),
                                 subtitle = stringResource(Res.string.settings_equalizer_preset_subtitle, preferences.equalizerPreset.displayName),
                                 trailingText = preferences.equalizerPreset.displayName,
-                                highlighted = highlightSettingId == "equalizer_preset",
+                                highlighted = highlightSettingId == AudioSettingsIds.EQUALIZER_PRESET,
                                 onClick = {
                                     val presets = EqualizerPreset.entries
                                     activePicker = PickerState.List(
@@ -516,17 +507,17 @@ fun AudioSettingsScreen(
                             )
                             SettingToggleItem(
                                 icon = Tabler.Outline.Microphone2,
-                                title = stringResource(Res.string.settings_dialogue_boost),
+                                title = rowTitle(PlaybackSettingsIds.DIALOGUE_BOOST),
                                 subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else stringResource(Res.string.settings_off),
                                 checked = preferences.dialogueBoostEnabled,
                                 onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setDialogueBoostEnabled(it) } },
                             )
                         }
-                        if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted("dialogue_boost_strength", rowFlags)) {
+                        if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH, rowFlags)) {
                             val dialogueBoostStrengthTitle = stringResource(Res.string.settings_dialogue_boost_strength)
                             SettingListItem(
                                 icon = Tabler.Outline.Music,
-                                title = stringResource(Res.string.settings_dialogue_boost_strength),
+                                title = rowTitle(PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH),
                                 subtitle = preferences.dialogueBoostStrength.displayName,
                                 trailingText = preferences.dialogueBoostStrength.displayName,
                                 onClick = {
@@ -543,20 +534,20 @@ fun AudioSettingsScreen(
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.Gauge,
-                            title = stringResource(Res.string.settings_night_mode),
+                            title = rowTitle(AudioSettingsIds.NIGHT_MODE),
                             subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else stringResource(Res.string.settings_off),
                             checked = preferences.nightModeEnabled,
-                            highlighted = highlightSettingId == "night_mode",
+                            highlighted = highlightSettingId == AudioSettingsIds.NIGHT_MODE,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setNightModeEnabled(it) } },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted("night_mode_strength", rowFlags)) {
-                                val nightModeStrengthTitle = stringResource(Res.string.settings_night_mode_strength)
+                        if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.NIGHT_MODE_STRENGTH, rowFlags)) {
+                                val nightModeStrengthTitle = rowTitle(AudioSettingsIds.NIGHT_MODE_STRENGTH)
                                 SettingListItem(
                                     icon = Tabler.Outline.Moon,
-                                    title = stringResource(Res.string.settings_night_mode_strength),
+                                    title = rowTitle(AudioSettingsIds.NIGHT_MODE_STRENGTH),
                                 subtitle = preferences.nightModeStrength.displayName,
                                 trailingText = preferences.nightModeStrength.displayName,
-                                highlighted = highlightSettingId == "night_mode_strength",
+                                highlighted = highlightSettingId == AudioSettingsIds.NIGHT_MODE_STRENGTH,
                                 onClick = {
                                     val strengths = EffectStrength.entries
                                     activePicker = pickerChip(
@@ -571,20 +562,20 @@ fun AudioSettingsScreen(
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.WaveSine,
-                            title = stringResource(Res.string.settings_bass_boost),
+                            title = rowTitle(AudioSettingsIds.BASS_BOOST),
                             subtitle = if (preferences.bassBoostEnabled) preferences.bassBoostStrength.displayName else stringResource(Res.string.settings_off),
                             checked = preferences.bassBoostEnabled,
-                            highlighted = highlightSettingId == "bass_boost",
+                            highlighted = highlightSettingId == AudioSettingsIds.BASS_BOOST,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setBassBoostEnabled(it) } },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted("bass_boost_strength", rowFlags)) {
-                                val bassBoostStrengthTitle = stringResource(Res.string.settings_bass_boost_strength)
+                        if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.BASS_BOOST_STRENGTH, rowFlags)) {
+                                val bassBoostStrengthTitle = rowTitle(AudioSettingsIds.BASS_BOOST_STRENGTH)
                                 SettingListItem(
                                     icon = Tabler.Outline.WaveSine,
-                                    title = stringResource(Res.string.settings_bass_boost_strength),
+                                    title = rowTitle(AudioSettingsIds.BASS_BOOST_STRENGTH),
                                 subtitle = preferences.bassBoostStrength.displayName,
                                 trailingText = preferences.bassBoostStrength.displayName,
-                                highlighted = highlightSettingId == "bass_boost_strength",
+                                highlighted = highlightSettingId == AudioSettingsIds.BASS_BOOST_STRENGTH,
                                 onClick = {
                                     val strengths = EffectStrength.entries
                                     activePicker = pickerChip(
@@ -600,20 +591,20 @@ fun AudioSettingsScreen(
                         val virtualizerStrengthSuffix = stringResource(Res.string.settings_strength_suffix)
                         SettingToggleItem(
                             icon = Tabler.Outline.Speakerphone,
-                            title = stringResource(Res.string.settings_virtualizer),
+                            title = rowTitle(AudioSettingsIds.VIRTUALIZER),
                             subtitle = if (preferences.virtualizerEnabled) "${preferences.virtualizerStrength / 10}%$virtualizerStrengthSuffix" else stringResource(Res.string.settings_off),
                             checked = preferences.virtualizerEnabled,
-                            highlighted = highlightSettingId == "virtualizer",
+                            highlighted = highlightSettingId == AudioSettingsIds.VIRTUALIZER,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVirtualizerEnabled(it) } },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted("virtualizer_strength", rowFlags)) {
-                                val virtualizerStrengthTitle = stringResource(Res.string.settings_virtualizer_strength)
+                        if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.VIRTUALIZER_STRENGTH, rowFlags)) {
+                                val virtualizerStrengthTitle = rowTitle(AudioSettingsIds.VIRTUALIZER_STRENGTH)
                                 SettingListItem(
                                     icon = Tabler.Outline.Speakerphone,
-                                    title = stringResource(Res.string.settings_virtualizer_strength),
+                                    title = rowTitle(AudioSettingsIds.VIRTUALIZER_STRENGTH),
                                 subtitle = "${preferences.virtualizerStrength / 10}%",
                                 trailingText = "${preferences.virtualizerStrength / 10}%",
-                                highlighted = highlightSettingId == "virtualizer_strength",
+                                highlighted = highlightSettingId == AudioSettingsIds.VIRTUALIZER_STRENGTH,
                                 onClick = {
                                     val stepsList = listOf(0, 200, 400, 500, 600, 800, 1000)
                                     activePicker = PickerState.List(
@@ -629,20 +620,20 @@ fun AudioSettingsScreen(
                         val volumeBoostGainSuffix = stringResource(Res.string.settings_gain_suffix)
                         SettingToggleItem(
                             icon = Tabler.Outline.Speakerphone,
-                            title = stringResource(Res.string.settings_volume_boost),
+                            title = rowTitle(AudioSettingsIds.VOLUME_BOOST),
                             subtitle = if (preferences.volumeBoostEnabled) "+${formatOneDecimal(preferences.volumeBoostGain / 100.0)} $volumeBoostGainSuffix" else stringResource(Res.string.settings_off),
                             checked = preferences.volumeBoostEnabled,
-                            highlighted = highlightSettingId == "volume_boost",
+                            highlighted = highlightSettingId == AudioSettingsIds.VOLUME_BOOST,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostEnabled(it) } },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted("volume_boost_gain", rowFlags)) {
-                                val volumeBoostGainTitle = stringResource(Res.string.settings_volume_boost_gain)
+                        if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.VOLUME_BOOST_GAIN, rowFlags)) {
+                                val volumeBoostGainTitle = rowTitle(AudioSettingsIds.VOLUME_BOOST_GAIN)
                             SettingListItem(
                                 icon = Tabler.Outline.Speakerphone,
-                                title = stringResource(Res.string.settings_volume_boost_gain),
+                                title = rowTitle(AudioSettingsIds.VOLUME_BOOST_GAIN),
                                 subtitle = stringResource(Res.string.settings_volume_boost_gain_subtitle),
                                 trailingText = "+${formatOneDecimal(preferences.volumeBoostGain / 100.0)} dB",
-                                highlighted = highlightSettingId == "volume_boost_gain",
+                                highlighted = highlightSettingId == AudioSettingsIds.VOLUME_BOOST_GAIN,
                                 onClick = {
                                     activePicker = PickerState.Slider(
                                         title = volumeBoostGainTitle,
@@ -657,13 +648,13 @@ fun AudioSettingsScreen(
                                 },
                             )
                         }
-                        val reverbTitle = stringResource(Res.string.settings_reverb)
+                        val reverbTitle = rowTitle(AudioSettingsIds.REVERB)
                         SettingListItem(
                             icon = Tabler.Outline.WaveSine,
-                            title = stringResource(Res.string.settings_reverb),
+                            title = rowTitle(AudioSettingsIds.REVERB),
                             subtitle = preferences.reverbPreset.displayName,
                             trailingText = preferences.reverbPreset.displayName,
-                            highlighted = highlightSettingId == "reverb",
+                            highlighted = highlightSettingId == AudioSettingsIds.REVERB,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = reverbTitle,
@@ -676,28 +667,28 @@ fun AudioSettingsScreen(
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Wand,
-                            title = stringResource(Res.string.settings_auto_eq_genre),
+                            title = rowTitle(AudioSettingsIds.AUTO_EQ_BY_GENRE),
                             subtitle = if (preferences.autoEqByGenre) stringResource(Res.string.settings_auto_eq_genre_on) else stringResource(Res.string.settings_off),
                             checked = preferences.autoEqByGenre,
-                            highlighted = highlightSettingId == "auto_eq_by_genre",
+                            highlighted = highlightSettingId == AudioSettingsIds.AUTO_EQ_BY_GENRE,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setAutoEqByGenre(it) } },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Speakerphone,
-                            title = stringResource(Res.string.settings_channel_mixing),
+                            title = rowTitle(AudioSettingsIds.CHANNEL_MIXING),
                             subtitle = if (preferences.channelMixEnabled) stringResource(Res.string.settings_channel_mixing_on) else stringResource(Res.string.settings_channel_mixing_off),
                             checked = preferences.channelMixEnabled,
-                            highlighted = highlightSettingId == "channel_mixing",
+                            highlighted = highlightSettingId == AudioSettingsIds.CHANNEL_MIXING,
                             onCheckedChange = { viewModel.edit { scope -> scope.audio.setChannelMixEnabled(it) } },
                         )
-                        if (SettingsScreenGroups.audio.rowAdmitted("channel_mix_mode", rowFlags)) {
-                                val channelMixModeTitle = stringResource(Res.string.settings_channel_mix_mode)
+                        if (SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.CHANNEL_MIX_MODE, rowFlags)) {
+                                val channelMixModeTitle = rowTitle(AudioSettingsIds.CHANNEL_MIX_MODE)
                                 SettingListItem(
                                     icon = Tabler.Outline.Speakerphone,
-                                    title = stringResource(Res.string.settings_channel_mix_mode),
+                                    title = rowTitle(AudioSettingsIds.CHANNEL_MIX_MODE),
                                 subtitle = preferences.channelMixMode.displayName,
                                 trailingText = preferences.channelMixMode.displayName,
-                                highlighted = highlightSettingId == "channel_mix_mode",
+                                highlighted = highlightSettingId == AudioSettingsIds.CHANNEL_MIX_MODE,
                                 onClick = {
                                     val modes = ChannelMixMode.entries
                                     activePicker = PickerState.List(
@@ -713,13 +704,13 @@ fun AudioSettingsScreen(
                         val balanceCenter = stringResource(Res.string.settings_balance_center)
                         val balanceLeft = stringResource(Res.string.settings_balance_left)
                         val balanceRight = stringResource(Res.string.settings_balance_right)
-                        val lrBalanceTitle = stringResource(Res.string.settings_lr_balance)
+                        val lrBalanceTitle = rowTitle(AudioSettingsIds.LR_BALANCE)
                         SettingListItem(
                             icon = Tabler.Outline.Adjustments,
-                            title = stringResource(Res.string.settings_lr_balance),
+                            title = rowTitle(AudioSettingsIds.LR_BALANCE),
                             subtitle = if (preferences.lrBalance == 0f) balanceCenter else if (preferences.lrBalance < 0f) balanceLeft else balanceRight,
                             trailingText = if (preferences.lrBalance == 0f) balanceCenter else formatTwoDecimals(preferences.lrBalance.toDouble()),
-                            highlighted = highlightSettingId == "lr_balance",
+                            highlighted = highlightSettingId == AudioSettingsIds.LR_BALANCE,
                             onClick = {
                                 activePicker = PickerState.Slider(
                                     title = lrBalanceTitle,
@@ -734,13 +725,13 @@ fun AudioSettingsScreen(
                             },
                         )
                         val normalPitch = stringResource(Res.string.settings_pitch_normal)
-                        val pitchShiftTitle = stringResource(Res.string.settings_pitch_shift)
+                        val pitchShiftTitle = rowTitle(AudioSettingsIds.PITCH_SHIFT)
                         SettingListItem(
                             icon = Tabler.Outline.WaveSine,
-                            title = stringResource(Res.string.settings_pitch_shift),
+                            title = rowTitle(AudioSettingsIds.PITCH_SHIFT),
                             subtitle = if (preferences.pitchSemitones == 0f) normalPitch else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones} semitones",
                             trailingText = if (preferences.pitchSemitones == 0f) "0" else "${if (preferences.pitchSemitones > 0) "+" else ""}${preferences.pitchSemitones}",
-                            highlighted = highlightSettingId == "pitch_shift",
+                            highlighted = highlightSettingId == AudioSettingsIds.PITCH_SHIFT,
                             onClick = {
                                 activePicker = PickerState.Slider(
                                     title = pitchShiftTitle,
@@ -782,22 +773,22 @@ fun AudioSettingsScreen(
                 ) {
                     SettingToggleItem(
                             icon = Tabler.Outline.Database,
-                            title = stringResource(Res.string.settings_audio_caching_enable),
+                            title = rowTitle(AudioSettingsIds.AUDIO_CACHING_ENABLED),
                             subtitle = if (preferences.audioCachingEnabled)
                                 stringResource(Res.string.settings_audio_caching_on)
                             else stringResource(Res.string.settings_audio_caching_off),
                             checked = preferences.audioCachingEnabled,
-                            highlighted = highlightSettingId == "audio_caching_enabled",
+                            highlighted = highlightSettingId == AudioSettingsIds.AUDIO_CACHING_ENABLED,
                             onCheckedChange = { viewModel.edit { scope -> scope.audioCache.setAudioCachingEnabled(it) } },
                         )
                         if (preferences.audioCachingEnabled) {
-                            val cacheSizeTitle = stringResource(Res.string.settings_audio_cache_size)
+                            val cacheSizeTitle = rowTitle(AudioSettingsIds.AUDIO_CACHE_SIZE)
                             SettingListItem(
                                 icon = Tabler.Outline.DeviceFloppy,
                                 title = cacheSizeTitle,
                                 subtitle = stringResource(Res.string.settings_audio_cache_size_subtitle),
                                 trailingText = "${preferences.audioCacheSizeMb} MB",
-                                highlighted = highlightSettingId == "audio_cache_size",
+                                highlighted = highlightSettingId == AudioSettingsIds.AUDIO_CACHE_SIZE,
                                 onClick = {
                                     val sizes = listOf(128, 256, 512, 1024, 2048, 4096)
                                     activePicker = pickerChip(
@@ -809,14 +800,14 @@ fun AudioSettingsScreen(
                                     )
                                 },
                             )
-                            val lookaheadTitle = stringResource(Res.string.settings_audio_prefetch_lookahead)
+                            val lookaheadTitle = rowTitle(AudioSettingsIds.AUDIO_PREFETCH_LOOKAHEAD)
                             val lookaheadOffLabel = stringResource(Res.string.settings_off)
                             SettingListItem(
                                 icon = Tabler.Outline.ListNumbers,
                                 title = lookaheadTitle,
                                 subtitle = stringResource(Res.string.settings_audio_prefetch_lookahead_subtitle),
                                 trailingText = "${preferences.audioPrefetchLookahead}",
-                                highlighted = highlightSettingId == "audio_prefetch_lookahead",
+                                highlighted = highlightSettingId == AudioSettingsIds.AUDIO_PREFETCH_LOOKAHEAD,
                                 onClick = {
                                     val lookahead = listOf(0, 1, 2, 3, 5, 8)
                                     activePicker = pickerChip(
@@ -828,14 +819,14 @@ fun AudioSettingsScreen(
                                     )
                                 },
                             )
-                            val backfillTitle = stringResource(Res.string.settings_audio_prefetch_backfill)
+                            val backfillTitle = rowTitle(AudioSettingsIds.AUDIO_PREFETCH_BACKFILL)
                             val backfillOffLabel = stringResource(Res.string.settings_off)
                             SettingListItem(
                                 icon = Tabler.Outline.History,
                                 title = backfillTitle,
                                 subtitle = stringResource(Res.string.settings_audio_prefetch_backfill_subtitle),
                                 trailingText = "${preferences.audioPrefetchBackfill}",
-                                highlighted = highlightSettingId == "audio_prefetch_backfill",
+                                highlighted = highlightSettingId == AudioSettingsIds.AUDIO_PREFETCH_BACKFILL,
                                 onClick = {
                                     val backfill = listOf(0, 1, 2, 5, 10, 20)
                                     activePicker = pickerChip(
@@ -847,13 +838,13 @@ fun AudioSettingsScreen(
                                     )
                                 },
                             )
-                            val policyTitle = stringResource(Res.string.settings_audio_cache_network_policy)
+                            val policyTitle = rowTitle(AudioSettingsIds.AUDIO_CACHE_NETWORK_POLICY)
                             SettingListItem(
                                 icon = Tabler.Outline.Wifi,
                                 title = policyTitle,
                                 subtitle = preferences.audioCacheNetworkPolicy.displayName,
                                 trailingText = preferences.audioCacheNetworkPolicy.displayName,
-                                highlighted = highlightSettingId == "audio_cache_network_policy",
+                                highlighted = highlightSettingId == AudioSettingsIds.AUDIO_CACHE_NETWORK_POLICY,
                                 onClick = {
                                     val policies = AudioCacheNetworkPolicy.entries
                                     activePicker = PickerState.List(
@@ -867,10 +858,10 @@ fun AudioSettingsScreen(
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Trash,
-                                title = stringResource(Res.string.settings_audio_cache_clear),
+                                title = rowTitle(AudioSettingsIds.AUDIO_CACHE_CLEAR),
                                 subtitle = stringResource(Res.string.settings_audio_cache_clear_subtitle),
                                 trailingText = "",
-                                highlighted = highlightSettingId == "audio_cache_clear",
+                                highlighted = highlightSettingId == AudioSettingsIds.AUDIO_CACHE_CLEAR,
                                 onClick = { viewModel.clearAudioCache() },
                             )
                         }

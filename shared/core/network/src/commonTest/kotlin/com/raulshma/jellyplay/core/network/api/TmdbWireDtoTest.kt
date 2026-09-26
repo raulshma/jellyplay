@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the wasm TMDB wire DTOs + mappers against the jvmShared
+ * Pins the TMDB wire DTOs + mappers against the jvmShared
  * `TmdbApiClientImpl` behavior: snake_case review decoding, the YouTube-only
  * watch-URL synthesis (case-insensitive site match), and the results-list
  * unwrapping through the shared lenient Json.

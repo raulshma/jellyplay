@@ -10,8 +10,6 @@ import org.koin.core.module.Module
  * so the app composition roots keep registering the single `editorModule`):
  *  - jvmShared actual: wraps the process-wide `StreamingSubtitleStore` single
  *    (dataJvmModule's binding — Android filesDir / desktop appdata dir) so
- *    android + desktop behavior is unchanged;
- *  - wasmJs actual: the no-op archive (see the seam's KDoc for the web
- *    behavior).
+ *    android + desktop behavior is unchanged.
  */
 internal expect fun platformEditorModule(): Module

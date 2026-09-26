@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.cache
 
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.TtlCache
+import com.raulshma.jellyplay.core.model.cacheThrough
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -19,6 +20,13 @@ import kotlin.test.assertTrue
  * HomeSession shape the sibling [com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcherTest]
  * uses. The fake clock drives [TtlCache]'s TTL exactly like the sibling's
  * expiry pin.
+ *
+ * The final section pins [cacheThrough] — the shared engine this module and
+ * core:network's home sub-call caches both delegate the miss path to — at its
+ * engine level, most importantly the force nuance the two consumers
+ * deliberately keep apart: the engine's bare force SKIPS the read but does
+ * NOT evict (this module's [getOrFetch] adds the evict-before-delegate
+ * preamble).
  */
 class IdentityCacheFetchTest {
 
@@ -269,5 +277,60 @@ class IdentityCacheFetchTest {
         assertEquals("fetched", refetched.getOrNull())
         assertEquals(1, fetches)
         assertEquals("fetched", anyCache.get(identity, "movie_1"))
+    }
+
+    // ── the shared engine (cacheThrough) itself ─────────────────────────
+    // Pinned here because the engine is shared with core:network's home
+    // sub-call caches (HomeSectionsFetcher): its contract is load-bearing in
+    // both modules, and these are the nuances the consumers do NOT restate.
+
+    @Test
+    fun `engine force skips the read but does not evict on failure`() = runTest {
+        cache.put(identity, "k", "cached")
+        var fetches = 0
+
+        val failed = cache.cacheThrough(identity, "k", force = true) {
+            fetches++; Result.failure(IllegalStateException("blip"))
+        }
+
+        assertTrue(failed.isFailure)
+        assertEquals(1, fetches, "force must skip the cache read and run the fetch")
+        assertEquals(
+            "cached",
+            cache.get(identity, "k"),
+            "the engine's bare force leaves the previous entry — getOrFetch's evict-first preamble is the data-layer nuance",
+        )
+
+        // And the next plain read still serves the survivor without fetching.
+        assertEquals("cached", cache.cacheThrough(identity, "k") { fetches++; Result.success("fresh") }.getOrNull())
+        assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `engine with a null epoch writes unguarded`() = runTest {
+        var fetches = 0
+
+        val result = cache.cacheThrough(identity, "k", currentEpoch = null) {
+            fetches++; Result.success("v1")
+        }
+
+        assertEquals("v1", result.getOrNull(), "epoch == null means the plain memoise")
+        assertEquals("v1", cache.get(identity, "k"))
+        assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `engine hit serves without fetching and never reads the epoch`() = runTest {
+        cache.put(identity, "k", "cached")
+        var epochReads = 0
+        var fetches = 0
+
+        val hit = cache.cacheThrough(identity, "k", currentEpoch = { epochReads++ }) {
+            fetches++; Result.success("fresh")
+        }
+
+        assertEquals("cached", hit.getOrNull())
+        assertEquals(0, fetches)
+        assertEquals(0, epochReads, "the epoch is captured only after a miss, before the fetch")
     }
 }

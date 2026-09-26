@@ -11,6 +11,8 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -24,13 +26,12 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
-import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
-import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
@@ -60,7 +61,8 @@ import kotlinx.coroutines.withContext
 // surfaces moved out to their own impls (LiveTvRepositoryImpl,
 // NewsletterRepositoryImpl, PlaylistRepositoryImpl — same package), each
 // over the narrow API family client (the PlaybackRepositoryImpl ctor
-// precedent). SyncPlayRepository STAYS here by decision: its eleven members
+// precedent). SyncPlayRepository STAYS here by decision: its members (four
+// after the transport-command census retired the ignored-Result twins)
 // interleave with the user-data channel's invalidation choreography, not
 // with any family boundary. The one piece of shared state an extracted
 // surface observes — the detail-cache cluster — moved to the
@@ -142,10 +144,10 @@ class MediaRepositoryImpl internal constructor(
     // not a captured reference, so the sharing stays visible at every use.
     private val detailCaches get() = internals.detailCaches
 
-    private val libraryFoldersCache = TtlCache<List<LibraryFolder>>(ttlMs = FOLDERS_CACHE_TTL_MS)
-    private val genresCache = TtlCache<List<Genre>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
-    private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
-    private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = LATEST_CACHE_TTL_MS)
+    private val libraryFoldersCache = TtlCache<List<LibraryFolder>>(ttlMs = FreshnessCeilings.FOLDERS_TTL_MS)
+    private val genresCache = TtlCache<List<Genre>>(maxSize = 64, ttlMs = FreshnessCeilings.FOLDERS_TTL_MS)
+    private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FreshnessCeilings.FOLDERS_TTL_MS)
+    private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = FreshnessCeilings.LATEST_MEDIA_TTL_MS)
 
     // Series-scoped seasons/episodes caches used to live here; they've moved
     // into [episodeCatalogue], the single owner of the series snapshot. The
@@ -153,14 +155,14 @@ class MediaRepositoryImpl internal constructor(
     // (they co-evict with the detail cache through one epoch); the
     // collection-items cache stays — a plain page-shaped cache with no
     // detail-epoch coupling.
-    private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
 
     // Child-photo URLs for a photo folder (player backdrop fan-out); declared
     // with the other caches so the identity registration in the init block
     // below can enumerate every cache in one place.
     private val photoFolderChildUrlCache = TtlCache<List<String>>(
         maxSize = 200,
-        ttlMs = 5 * 60 * 1000L,
+        ttlMs = FreshnessCeilings.PHOTO_URLS_TTL_MS,
     )
 
     // Plan 08: private — the detail-cache group is repo-internal machinery;
@@ -230,6 +232,15 @@ class MediaRepositoryImpl internal constructor(
         ttlMs = HomeFreshness.REPO_MEMORY_TTL_MS,
         clock = { timeSource.nowElapsedRealtimeMillis() },
     )
+
+    /**
+     * The dice roll's stall guard for the repo's assembled-payload cache —
+     * roll-protocol window 2 of 3; the bump-at-invalidate-AND-commit rule and
+     * the full ordering live on [rerollDiscoverRow] (the protocol's single
+     * owner). Read as the write guard in [getHomeSections]. Same idiom as
+     * [MediaRepositoryInternals]' detail epoch.
+     */
+    private val discoverRollEpoch = java.util.concurrent.atomic.AtomicLong(0L)
 
     // Lazy staleness for the announced-user-data read groups (#157): the
     // eager eviction this replaces cleared caches at every user-data
@@ -365,6 +376,7 @@ class MediaRepositoryImpl internal constructor(
                 // never on a cache hit, so a hit cannot slide the persisted row's
                 // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
                 onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
+                currentEpoch = discoverRollEpoch::get,
             ) {
                 // The query value object crosses the repo → network seam intact;
                 // effectiveForce (not force) so a consumed staleness marker
@@ -373,6 +385,49 @@ class MediaRepositoryImpl internal constructor(
                 apiClient.getHomeSections(query, effectiveForce)
             }
         }
+    }
+
+    override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> =
+        apiClient.getDiscoverRowItems(row)
+
+    override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
+        // The roll protocol's implementation: invalidate → fetch → seed. The
+        // ordering contract, the three race windows and the epoch bump rule
+        // are owned by the interface KDoc (MediaRepository.rerollDiscoverRow).
+        invalidateDiscoverRowCache(row.id)
+        val result = getDiscoverRowItems(row)
+        // Commit only a real roll: seedDiscoverRowCache no-ops on an empty
+        // list, so a failed/empty fetch leaves nothing behind but the
+        // pre-fetch drop — the next home fetch re-queries the row instead of
+        // replaying or pinning pre-roll items.
+        result.onSuccess { seedDiscoverRowCache(row, it) }
+        return result
+    }
+
+    /**
+     * Reroll half 1 (see the roll protocol on
+     * [MediaRepository.rerollDiscoverRow]): repo-epoch bump + network per-row
+     * memo drop + assembled-payload drop (maxSize is 1, so the clear is
+     * exactly the one cached payload — nothing else pays for the roll).
+     */
+    private fun invalidateDiscoverRowCache(rowId: String) {
+        discoverRollEpoch.incrementAndGet()
+        apiClient.invalidateDiscoverRowCache(rowId)
+        homeSectionsCache.clear()
+    }
+
+    /**
+     * Reroll half 3 (see the roll protocol on
+     * [MediaRepository.rerollDiscoverRow]): network row-memo write + the
+     * commit-time epoch bump (a fetch in flight across the whole roll stays
+     * stall-guarded) + the assembled-payload drop again. Cheap (maxSize 1).
+     * No-op on an empty list.
+     */
+    private fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        discoverRollEpoch.incrementAndGet()
+        apiClient.seedDiscoverRowCache(row, items)
+        homeSectionsCache.clear()
     }
 
     override suspend fun getCachedHomeSections(
@@ -644,6 +699,11 @@ class MediaRepositoryImpl internal constructor(
             apiClient.getStudios(parentId)
         }
 
+    // Uncached by design: the People picker is a live search-as-you-type
+    // surface, so a TTL would only serve stale keystrokes.
+    override suspend fun getPeople(searchTerm: String?, limit: Int): Result<List<PersonRef>> =
+        apiClient.getPeople(searchTerm, limit)
+
     override suspend fun getItemsByStudio(
         studioId: String,
         mediaTypes: List<MediaType>?,
@@ -788,23 +848,12 @@ class MediaRepositoryImpl internal constructor(
     override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
         apiClient.getSyncPlayInfo(groupId)
 
-    override suspend fun syncPlayPause(): Result<Unit> =
-        apiClient.syncPlayPause()
-
-    override suspend fun syncPlayUnpause(): Result<Unit> =
-        apiClient.syncPlayUnpause()
-
-    override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> =
-        apiClient.syncPlaySeek(positionTicks)
-
-    override suspend fun syncPlayStop(): Result<Unit> =
-        apiClient.syncPlayStop()
-
-    override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> =
-        apiClient.syncPlaySetRepeatMode(mode)
-
-    override suspend fun syncPlaySetShuffleMode(mode: SyncPlayShuffleMode): Result<Unit> =
-        apiClient.syncPlaySetShuffleMode(mode)
+    // Transport commands (pause/unpause/seek/stop/setRepeat/setShuffle/
+    // setIgnoreWait) used to be one-line pass-throughs here; the second wire
+    // census retired them from the seam — their only repository-typed caller
+    // (SyncPlayViewModel) ignored the Result and now rides SyncPlaySession →
+    // SyncPlayController.safe(). setNewQueue stays: WatchPartyActions awaits
+    // and inspects its Result.
 
     override suspend fun syncPlaySetNewQueue(
         itemIds: List<String>,
@@ -813,9 +862,6 @@ class MediaRepositoryImpl internal constructor(
         startPositionTicks: Long,
     ): Result<Unit> =
         apiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
-
-    override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> =
-        apiClient.syncPlaySetIgnoreWait(ignore)
 
     private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
         extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,
@@ -1050,13 +1096,16 @@ class MediaRepositoryImpl internal constructor(
          * be pointless to tune. DROP_OLDEST keeps the tryEmit non-suspending.
          */
         private const val SYNTHETIC_CHANGES_BUFFER = 64
-        /** 10 minutes — library folders change rarely during a session. */
-        private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
+
+        // The cache TTLs this repository used to declare as private literals
+        // (FOLDERS_CACHE_TTL_MS 10 min, LATEST_CACHE_TTL_MS 2 min) now cite
+        // the named policies FreshnessCeilings.FOLDERS_TTL_MS /
+        // LATEST_MEDIA_TTL_MS / PHOTO_URLS_TTL_MS (plus DETAIL_TTL_MS via
+        // MediaRepositoryInternals) at their construction sites above — same
+        // values, one readable answer for "what is stale where".
 
         /** Window within which a byte-identical home SWR persist is skipped (foreground refresh cadence). */
         private const val HOME_PERSIST_DEDUP_WINDOW_MS = 60 * 1000L
-        /** 2 minutes — "latest" content should feel fresh on re-entry. */
-        private const val LATEST_CACHE_TTL_MS = 2 * 60 * 1000L
     }
 
     override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> =

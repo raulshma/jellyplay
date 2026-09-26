@@ -8,7 +8,7 @@
     <string name="syncplay_create_group_together">Crea un gruppo per guardare insieme</string>
     <string name="syncplay_create_group">Crea gruppo</string>
     <string name="syncplay_join_group_question">Unirsi al gruppo?</string>
-    <string name="syncplay_join_group_confirm">Unirsi a \"%1$s\"?</string>
+    <string name="syncplay_join_group_confirm">Unirsi a "%1$s"?</string>
     <string name="syncplay_join">Unisciti</string>
     <string name="syncplay_cancel">Annulla</string>
     <string name="syncplay_playing_item">In riproduzione: %1$s</string>
@@ -27,7 +27,7 @@
     <string name="syncplay_create">Crea</string>
 
     <string name="syncplay_error_load_groups">Impossibile caricare i gruppi</string>
-    <string name="syncplay_join_disabled">L\'unione ai gruppi SyncPlay è disattivata nelle impostazioni</string>
+    <string name="syncplay_join_disabled">L'unione ai gruppi SyncPlay è disattivata nelle impostazioni</string>
     <string name="syncplay_error_join_group">Impossibile unirsi al gruppo</string>
     <string name="syncplay_error_leave_group">Impossibile uscire dal gruppo</string>
     <string name="syncplay_error_create_group">Impossibile creare il gruppo</string>

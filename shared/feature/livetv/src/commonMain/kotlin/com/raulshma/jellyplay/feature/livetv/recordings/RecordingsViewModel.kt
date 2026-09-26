@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 
 @Immutable
 data class RecordingsUiState(
@@ -39,7 +39,7 @@ class RecordingsViewModel(
 
     fun load() {
         launch {
-            LiveTvLoad.load(
+            loadInto(
                 start = { _uiState.update { it.copy(isLoading = true, error = null) } },
                 fetch = { mediaRepository.getRecordings(limit = LATEST_LIMIT) },
                 onSuccess = { recordings ->

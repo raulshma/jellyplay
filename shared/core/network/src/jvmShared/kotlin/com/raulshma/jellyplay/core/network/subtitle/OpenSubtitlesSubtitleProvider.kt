@@ -33,8 +33,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.Base64
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * [SubtitleProvider] for **OpenSubtitles** (`api.opensubtitles.com/api/v1`).
@@ -58,8 +56,7 @@ import javax.inject.Singleton
  *
  * See https://opensubtitles.stoplight.io/ + the Apidog guide for the spec.
  */
-@Singleton
-class OpenSubtitlesSubtitleProvider @Inject constructor(
+class OpenSubtitlesSubtitleProvider(
     private val okHttpClient: OkHttpClient,
     private val credentialsStore: SubtitleProviderPreferencesStore,
 ) : SubtitleProvider {

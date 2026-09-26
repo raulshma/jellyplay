@@ -21,6 +21,22 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_experiment
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_experimental_title
 
 /**
+ * The single-source row ids of this file's settings-search declarations.
+ * Every consumer — the `SettingsSearchItem` declarations below, the screen
+ * rows' `highlighted` comparisons, the admissions keys and the row-total
+ * derivations — references these constants, so each id literal exists
+ * exactly once. The values are the persisted deep-link/recents contract:
+ * they change only deliberately, here.
+ */
+internal object ExperimentalSettingsIds {
+    const val EXPERIMENTAL = "experimental"
+    const val HOME_CARD_CLIPPING = "HOME_CARD_CLIPPING"
+    const val MEDIA_CARD_PEEK = "MEDIA_CARD_PEEK"
+    const val DIRECT_ARR_INTEGRATION = "DIRECT_ARR_INTEGRATION"
+    const val ARR_SETTINGS = "arr_settings"
+}
+
+/**
  * Settings-search items for the "Experimental" group, derived (Stage A
  * pilot) from the domain's spec declarations in
  * [ExperimentalPreferenceSpecs.searchEntries]: the semantics (ids, keywords,
@@ -45,35 +61,35 @@ internal val ExperimentalSettingsSearchItems: List<SettingsSearchItem> =
         routes = searchRoutes,
         bindings = listOf(
             SettingsSearchBinding(
-                id = "experimental",
+                id = ExperimentalSettingsIds.EXPERIMENTAL,
                 titleRes = Res.string.ss_experimental_title,
                 subtitleRes = Res.string.ss_experimental_subtitle,
                 categoryRes = CoreUiRes.string.ss_cat_experimental,
                 icon = Tabler.Outline.Flask,
             ),
             SettingsSearchBinding(
-                id = "HOME_CARD_CLIPPING",
+                id = ExperimentalSettingsIds.HOME_CARD_CLIPPING,
                 titleRes = Res.string.ss_HOME_CARD_CLIPPING_title,
                 subtitleRes = Res.string.ss_HOME_CARD_CLIPPING_subtitle,
                 categoryRes = CoreUiRes.string.ss_cat_experimental,
                 icon = Tabler.Outline.Photo,
             ),
             SettingsSearchBinding(
-                id = "MEDIA_CARD_PEEK",
+                id = ExperimentalSettingsIds.MEDIA_CARD_PEEK,
                 titleRes = Res.string.ss_MEDIA_CARD_PEEK_title,
                 subtitleRes = Res.string.ss_MEDIA_CARD_PEEK_subtitle,
                 categoryRes = CoreUiRes.string.ss_cat_experimental,
                 icon = Tabler.Outline.HandFinger,
             ),
             SettingsSearchBinding(
-                id = "DIRECT_ARR_INTEGRATION",
+                id = ExperimentalSettingsIds.DIRECT_ARR_INTEGRATION,
                 titleRes = Res.string.ss_DIRECT_ARR_INTEGRATION_title,
                 subtitleRes = Res.string.ss_DIRECT_ARR_INTEGRATION_subtitle,
                 categoryRes = CoreUiRes.string.ss_cat_experimental,
                 icon = Tabler.Outline.Download,
             ),
             SettingsSearchBinding(
-                id = "arr_settings",
+                id = ExperimentalSettingsIds.ARR_SETTINGS,
                 titleRes = Res.string.ss_arr_settings_title,
                 subtitleRes = Res.string.ss_arr_settings_subtitle,
                 categoryRes = CoreUiRes.string.ss_cat_integrations,

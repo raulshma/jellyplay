@@ -218,6 +218,12 @@ dependencies {
     // wall clocks — mpv runs its own threads — but no polling races there.
     testImplementation(libs.coroutines.test)
     testImplementation(kotlin("test"))
+    // Real org.json for the WebSocketEvent fixtures (DesktopIdleAmbientControllerTest):
+    // WebSocketEvent.data is a non-null org.json.JSONObject — the same
+    // "real org.json for the desktop target" edge shared:core:network /
+    // shared:core:data declare, scoped here to tests because the app code
+    // deliberately parses the Sessions push with kotlinx instead.
+    testImplementation(libs.org.json)
 }
 
 // ── Bundled libmpv (out-of-the-box desktop playback) ────────────────────────

@@ -4,8 +4,8 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 
 /**
- * One external-provider subtitle's durable-save request — the wasm-safe
- * parameter bundle for [EditorSubtitleStore]. Carries exactly the identity the
+ * One external-provider subtitle's durable-save request — the parameter
+ * bundle for [EditorSubtitleStore]. Carries exactly the identity the
  * core:data store keys its manifest entries and upload attribution off; the
  * JVM adapter reconstructs core:model's jvmShared `SavedSubtitle` from it
  * (safe: attribution matches on language/codec/role flags and the manifest
@@ -25,17 +25,10 @@ internal class ProviderSubtitleSave(
 )
 
 /**
- * Web seam over core:data's jvmShared
+ * Common seam over core:data's jvmShared
  * `StreamingSubtitleStore` (its `fileFor(): java.io.File` surface keeps the
  * interface JVM-bound, so commonMain cannot name it — same treatment as
  * search/library's quick-download seam over `MediaDownloadActions`).
- *
- * Web behavior: the browser has no durable app-data directory for subtitle
- * files, so the wasm actual is a no-op archive — the editor's external
- * provider download still uploads to the Jellyfin server (that path is pure
- * repository traffic), but no device-local copy is persisted. Purge-on-delete
- * and upload attribution are accordingly no-ops on web (there is nothing
- * local to purge or attribute).
  */
 internal interface EditorSubtitleStore {
 

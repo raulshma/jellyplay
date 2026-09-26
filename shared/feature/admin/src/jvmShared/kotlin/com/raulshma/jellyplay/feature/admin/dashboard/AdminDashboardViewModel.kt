@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.dashboard
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.PendingConfirmation
@@ -10,7 +11,7 @@ import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -75,13 +76,13 @@ class AdminDashboardViewModel(
         launch {
             // Access control is enforced by AdminRouteContainer before this
             // screen is reached; the server still 403s as a backstop.
-            // Declared variant (see AdminLoad): this VM's historical ladder was
+            // Declared variant (see loadInto): this VM's historical ladder was
             // try/catch + getOrThrow with a persisted-error settle — expressed
             // here as a getOrThrow fetch over runCatchingRethrowingCancellation
             // so a thrown exception lands in the failure arm exactly like the
             // old catch did, while cancellation propagates instead of settling
             // as a persisted error.
-            AdminLoad.load(
+            loadInto(
                 start = { _uiState.update { it.copy(isLoading = true, error = null) } },
                 fetch = { runCatchingRethrowingCancellation { adminRepository.getDashboardSummary().getOrThrow() } },
                 onSuccess = { summary ->
@@ -163,7 +164,7 @@ class AdminDashboardViewModel(
                 _uiState.update {
                     it.copy(
                         isRestarting = false,
-                        error = "Restart failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                        error = "Restart failed: ${UserErrorMessages.resolve(result, "unknown error")}",
                     )
                 }
             }
@@ -180,7 +181,7 @@ class AdminDashboardViewModel(
                 _uiState.update {
                     it.copy(
                         isShuttingDown = false,
-                        error = "Shutdown failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                        error = "Shutdown failed: ${UserErrorMessages.resolve(result, "unknown error")}",
                     )
                 }
             }
@@ -226,7 +227,7 @@ class AdminDashboardViewModel(
                 _uiState.update {
                     it.copy(
                         isStoppingSession = false,
-                        error = "Stop failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                        error = "Stop failed: ${UserErrorMessages.resolve(result, "unknown error")}",
                     )
                 }
             }

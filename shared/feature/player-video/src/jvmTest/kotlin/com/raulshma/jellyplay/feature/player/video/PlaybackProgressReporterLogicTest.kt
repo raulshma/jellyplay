@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
@@ -228,6 +229,83 @@ class PlaybackProgressReporterLogicTest {
         }
         checkSecond()
         assertFalse(secondCallInvoked) // was blocked by the flag
+    }
+
+    // ─── Stalled-finish predicate ─────────────────────────────────────
+
+    /** Reference stall: inside the last 2 s, frozen ≥ 10 s, playing, READY. */
+    private fun stalled(
+        positionMs: Long = 3_598_500L, // 1 h runtime − 1.5 s
+        durationMs: Long = 3_600_000L,
+        stalledForMs: Long = STALLED_FINISH_NO_ADVANCE_MS,
+        isPlaying: Boolean = true,
+        playbackState: EnginePlaybackState = EnginePlaybackState.READY,
+    ) = shouldTreatAsStalledFinish(positionMs, durationMs, stalledForMs, isPlaying, playbackState)
+
+    @Test
+    fun stalledFinish_referenceStall_triggers() {
+        assertTrue(stalled())
+    }
+
+    @Test
+    fun stalledFinish_exactlyAtWindowEdge_triggers() {
+        // duration − 2_000 is the inclusive boundary of the end window.
+        assertTrue(stalled(positionMs = 3_600_000L - STALLED_FINISH_END_WINDOW_MS))
+    }
+
+    @Test
+    fun stalledFinish_justOutsideWindow_doesNotTrigger() {
+        assertFalse(stalled(positionMs = 3_600_000L - STALLED_FINISH_END_WINDOW_MS - 1L))
+    }
+
+    @Test
+    fun stalledFinish_frozenForExactly10s_triggers() {
+        assertTrue(stalled(stalledForMs = 10_000L))
+    }
+
+    @Test
+    fun stalledFinish_frozenForJustUnder10s_doesNotTrigger() {
+        assertFalse(stalled(stalledForMs = 9_999L))
+    }
+
+    @Test
+    fun stalledFinish_paused_doesNotTrigger() {
+        assertFalse(stalled(isPlaying = false))
+    }
+
+    @Test
+    fun stalledFinish_errorState_doesNotTrigger() {
+        assertFalse(stalled(playbackState = EnginePlaybackState.ERROR))
+    }
+
+    @Test
+    fun stalledFinish_idleState_doesNotTrigger() {
+        assertFalse(stalled(playbackState = EnginePlaybackState.IDLE))
+    }
+
+    @Test
+    fun stalledFinish_endedState_doesNotTrigger() {
+        // The genuine-EOF path owns a real ENDED — the stall detector must
+        // not double-complete it.
+        assertFalse(stalled(playbackState = EnginePlaybackState.ENDED))
+    }
+
+    @Test
+    fun stalledFinish_bufferingState_triggers() {
+        // A starved cache is exactly what an end-of-file demuxer stall
+        // looks like from the outside.
+        assertTrue(stalled(playbackState = EnginePlaybackState.BUFFERING))
+    }
+
+    @Test
+    fun stalledFinish_zeroDuration_doesNotTrigger() {
+        assertFalse(stalled(durationMs = 0L, positionMs = 0L))
+    }
+
+    @Test
+    fun stalledFinish_windowConstants_matchThePlan() {
+        assertTrue(STALLED_FINISH_END_WINDOW_MS == 2_000L)
+        assertTrue(STALLED_FINISH_NO_ADVANCE_MS == 10_000L)
     }
 
     // ─── Progress reporting interval ──────────────────────────────────────────

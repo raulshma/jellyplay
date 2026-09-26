@@ -48,7 +48,7 @@
     <string name="admin_stop">Stopp</string>
     <string name="admin_stop_session_cd">Wiedergabe stoppen</string>
     <string name="admin_stop_session_title">Wiedergabe stoppen?</string>
-    <string name="admin_stop_session_body">Die aktuell auf \"%1$s\" laufende Medienwiedergabe stoppen?</string>
+    <string name="admin_stop_session_body">Die aktuell auf "%1$s" laufende Medienwiedergabe stoppen?</string>
     <string name="admin_run">Ausführen</string>
 
     <!-- Relative time -->
@@ -86,7 +86,7 @@
     <!-- DevicesScreen -->
     <string name="admin_devices_title">Geräte</string>
     <string name="admin_delete_device_title">Gerät löschen</string>
-    <string name="admin_delete_device_body">„%1$s\" löschen? Dadurch werden alle zugehörigen Sitzungen abgemeldet.</string>
+    <string name="admin_delete_device_body">„%1$s" löschen? Dadurch werden alle zugehörigen Sitzungen abgemeldet.</string>
     <string name="admin_edit_device_name_title">Gerätenamen bearbeiten</string>
     <string name="admin_custom_name">Benutzerdefinierter Name</string>
     <string name="admin_no_devices">Keine Geräte gefunden</string>
@@ -159,7 +159,7 @@
     <string name="admin_password_optional">Passwort (optional)</string>
     <string name="admin_create">Erstellen</string>
     <string name="admin_delete_user_title">Benutzer löschen</string>
-    <string name="admin_delete_user_body">„%1$s\" löschen? Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="admin_delete_user_body">„%1$s" löschen? Dies kann nicht rückgängig gemacht werden.</string>
     <string name="admin_new_password">Neues Passwort</string>
     <string name="admin_discard">Verwerfen</string>
     <string name="admin_save_changes">Änderungen speichern</string>

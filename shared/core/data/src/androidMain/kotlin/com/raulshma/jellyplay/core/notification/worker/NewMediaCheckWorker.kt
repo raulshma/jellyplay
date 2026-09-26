@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import kotlinx.coroutines.flow.first
@@ -31,6 +32,8 @@ class NewMediaCheckWorker(
     private val notificationStore: NotificationStore,
     private val dispatcher: NotificationDispatcher,
     private val scheduler: NotificationScheduler,
+    /** Clock seam (D3) for the seen-media pruning window + seenAt stamps. */
+    private val timeSource: TimeSource,
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -101,7 +104,7 @@ class NewMediaCheckWorker(
             .filterNotNull()
             .toMap()
 
-        val thirtyDaysAgo = System.currentTimeMillis() - THIRTY_DAYS_MS
+        val thirtyDaysAgo = timeSource.nowEpochMillis() - THIRTY_DAYS_MS
         seenMediaRepository.pruneOlderThan(thirtyDaysAgo)
 
         // Reconcile seen_media against the live ids gathered this run. Skipped on
@@ -167,7 +170,7 @@ class NewMediaCheckWorker(
                     itemId = item.id,
                     libraryId = folder.id,
                     mediaType = item.mediaType.name,
-                    seenAtEpochMs = System.currentTimeMillis(),
+                    seenAtEpochMs = timeSource.nowEpochMillis(),
                 )
             }
         )

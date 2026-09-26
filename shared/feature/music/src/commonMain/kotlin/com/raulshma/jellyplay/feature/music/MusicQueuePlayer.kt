@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Web seam over core:data's jvmShared `AudioQueueFacade` —
+ * Common seam over core:data's jvmShared `AudioQueueFacade` —
  * the build-a-queue-then-play/enqueue pipeline nine music ViewModels share
  * (play/enqueue tracks and playlists, instant-mix starts). The facade's
  * constructor closure reaches the JVM audio pipeline (the media3-backed
@@ -19,15 +19,7 @@ import kotlinx.coroutines.flow.Flow
  * template: this interface carries exactly the host-facing surface, the
  * jvmShared actual delegates to the process-wide `AudioQueueFacade` single
  * and maps the outcome 1:1 onto the [MusicQueueOutcome] mirror
- * (android/desktop behavior unchanged), and the wasmJs actual is an honest
- * unsupported player: start/enqueue fail with an explicit cause (never a
- * fabricated start) and the inert enqueue drops silently.
- *
- * Web behavior: the browser has no audio playback pipeline (the web stack
- * registers no queue/player bindings — web wiring stays with the
- * orchestrator's shared-wiring pass), so [MusicQueueOutcome.Failed] with an
- * [UnsupportedOperationException] cause is the only outcome the wasm actual
- * can honestly produce.
+ * (android/desktop behavior unchanged).
  */
 interface MusicQueuePlayer {
 
@@ -86,7 +78,7 @@ interface MusicQueuePlayer {
     /** Plays playlist items as a fresh queue (imageless mapper applies). */
     suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int = 0): MusicQueueOutcome
 
-    /** Appends a single playlist item to the current queue (inert on web). */
+    /** Appends a single playlist item to the current queue. */
     suspend fun enqueuePlaylistItem(item: PlaylistItem)
 }
 

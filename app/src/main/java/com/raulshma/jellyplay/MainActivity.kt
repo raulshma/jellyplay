@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.graphics.Color
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,6 +50,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.di.KoinViewModelFactory
+import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
+import com.raulshma.jellyplay.deeplink.IncomingIntentRequest
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
@@ -58,22 +60,31 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity is load-bearing: androidx.biometric.BiometricPrompt hosts its
+// dialog in a support fragment, so AuthChallengeScreen's findFragmentActivity()
+// resolves the prompt host from this activity. The v0.11.0 ComponentActivity
+// migration returned null there and left fingerprint-only users on an empty
+// (black) lock screen — see issue #162.
+class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
 
     // Cross-cutting shell infrastructure, resolved from the Koin container
-    // instead of re-exported through MainViewModel —
-    // the ViewModel exposes only the signals it owns plus the coordinator
-    // seam. The four ShellInfra-bundled members
-    // became Lazy PROVIDERS (mirroring audioPlaybackManagerLazy below) so
-    // MainActivity.onCreate constructs none of them — JellyPlayApp resolves
-    // the bus/network pair at their composition branches and the
-    // remote-control pair inside their post-frame collection effects,
-    // keeping NetworkMonitor's connectivity-callback registration and the
-    // remote-control objects off the cold-start critical path (and out of
-    // auth/onboarding-only sessions entirely). Memoizing lazies preserve the
-    // old deferred field-inject timing.
+    // instead of re-exported through MainViewModel — the ViewModel exposes
+    // only the signals it owns. The bundle below is the composition's ONE
+    // coordinator resolution path too: the shell coordinators ride it as
+    // lazy providers (their former standalone lazy fields + the three-param
+    // threading through JellyPlayApp → MainContent are gone; MainViewModel
+    // keeps its constructor injection only for the start-on-scope side
+    // effects). Every ShellInfra member is a Lazy PROVIDER (mirroring
+    // audioPlaybackManagerLazy below) so MainActivity.onCreate constructs
+    // none of them — JellyPlayApp resolves the bus/network pair at their
+    // composition branches and the remote-control pair inside their
+    // post-frame collection effects, keeping NetworkMonitor's
+    // connectivity-callback registration and the remote-control objects off
+    // the cold-start critical path (and out of auth/onboarding-only
+    // sessions entirely). Memoizing lazies preserve the old deferred
+    // field-inject timing.
     private val userMessageBusLazy: kotlin.Lazy<UserMessageBus> =
         lazy { KoinPlatform.getKoin()!!.get() }
     private val pinRateLimiter: PinRateLimiter by lazy { KoinPlatform.getKoin()!!.get() }
@@ -142,6 +153,34 @@ class MainActivity : ComponentActivity() {
         // in landscape with no control to unlock it. UNSPECIFIED follows the
         // system auto-rotate setting, matching the fresh-install default.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        // Bundled once here (before the splash gate below reads the session
+        // coordinator's restore flag) so the shell host's cross-cutting
+        // services — the five infrastructure providers plus the three shell
+        // coordinators — travel to JellyPlayApp → MainContent as ONE value
+        // with ONE Koin resolution site. All eight are lazy providers —
+        // nothing here resolves any Koin single; each `.value` fires at the
+        // consumer's first real use (see ShellInfra's KDoc).
+        val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
+            userMessageBusLazy = userMessageBusLazy,
+            networkStatusLazy = lazy { networkMonitor.networkStatus },
+            audioPlaybackManagerLazy = audioPlaybackManagerLazy,
+            remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
+            remoteControlReceiverLazy = remoteControlReceiverLazy,
+            sessionCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            updateCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            syncPlayOpenCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            whatsNewCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            // Remote navigation ladder: synthesized D-pad/select/menu
+            // key events go through the activity's own dispatch (down + up),
+            // so Compose's existing key/focus handling interprets them —
+            // nothing here re-implements focus traversal. Returns whether
+            // anything consumed the pair, the fallback signal for the
+            // context-menu message.
+            keyDispatcher = { keyCode ->
+                dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)) ||
+                    dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+            },
+        )
         // The one-time CastContext initialization (Dynamite dex load +
         // hasSystemFeature binder call) used to run synchronously here, before
         // setContent, putting both straight into TTID — the splash cannot
@@ -150,7 +189,7 @@ class MainActivity : ComponentActivity() {
         // every later getSharedInstance caller (the hidden route button
         // there, CastManager, GoogleCastStrategy) still hits the cached
         // singleton.
-        splashScreen.setKeepOnScreenCondition { viewModel.sessionCoordinator.isRestoring.value }
+        splashScreen.setKeepOnScreenCondition { shellInfra.sessionCoordinatorLazy.value.isRestoring.value }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
         // holds the splash view alive across an alpha fade, and because the
@@ -187,19 +226,6 @@ class MainActivity : ComponentActivity() {
         }
 
         handleIncomingIntent(intent)
-
-        // Bundled once here so the shell host's five cross-cutting services
-        // travel to JellyPlayApp → MainContent as one value. All
-        // five are lazy providers — nothing below resolves any Koin single;
-        // each `.value` fires at the consumer's first real use (see
-        // ShellInfra's KDoc).
-        val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
-            userMessageBusLazy = userMessageBusLazy,
-            networkStatusLazy = lazy { networkMonitor.networkStatus },
-            audioPlaybackManagerLazy = audioPlaybackManagerLazy,
-            remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
-            remoteControlReceiverLazy = remoteControlReceiverLazy,
-        )
 
         // Pre-Android 13 per-app language: observe the saved language and apply
         // it on cold start, then recreate when the user changes it at runtime.
@@ -397,34 +423,20 @@ class MainActivity : ComponentActivity() {
         handleIncomingIntent(intent)
     }
 
+    /**
+     * One dispatch line over the pure [IncomingIntentRequest] fold (deeplink
+     * package): the fold owns the action vocabulary and classifies the intent
+     * into the shell entry point; the string-literal when-chain used to live
+     * inline here.
+     */
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent == null) return
-        val action = intent.action ?: return
-        val isShortcutAction = action.startsWith("com.raulshma.jellyplay.action.")
-        if (isShortcutAction) {
-            viewModel.handleShortcutIntent(intent)
-            return
-        }
-        if (action == Intent.ACTION_VIEW && intent.data != null) {
-            viewModel.handleDeepLink(intent)
-        } else if (action == Intent.ACTION_SEND && intent.type == "text/plain") {
-            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-            if (sharedText != null) {
-                viewModel.handleSharedText(sharedText)
-            }
-        } else if (action == Intent.ACTION_SEARCH || action == "android.search.action.GLOBAL_SEARCH") {
-            val query = intent.getStringExtra(android.app.SearchManager.QUERY)
-            if (!query.isNullOrBlank()) {
-                viewModel.handleSearchQuery(query)
-            }
-        } else if (action == Intent.ACTION_ASSIST) {
-            // ACTION_ASSIST uses hidden extras (android.intent.extra.ASSIST_INPUT); fall back to
-            // SearchManager.QUERY for some launchers.
-            val query = intent.getStringExtra("android.intent.extra.ASSIST_INPUT")
-                ?: intent.getStringExtra(android.app.SearchManager.QUERY)
-            if (!query.isNullOrBlank()) {
-                viewModel.handleSearchQuery(query)
-            }
+        when (val disposition = IncomingIntentRequest.from(intent).classify()) {
+            is IncomingIntentDisposition.Shortcut -> viewModel.handleShortcutIntent(disposition)
+            IncomingIntentDisposition.DeepLink -> viewModel.handleDeepLink(intent)
+            is IncomingIntentDisposition.SharedText -> viewModel.handleSharedText(disposition.sharedText)
+            is IncomingIntentDisposition.Search -> viewModel.handleSearchQuery(disposition.query)
+            IncomingIntentDisposition.None -> Unit
         }
     }
 

@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.network.library
 
 /**
- * Request-level policies shared by BOTH [com.raulshma.jellyplay.core.network.api.LibraryApiClient]
- * implementations (the jvmShared SDK client and the wasmJs Ktor client),
+ * Request-level policies for [com.raulshma.jellyplay.core.network.api.LibraryApiClient]
+ * (the jvmShared SDK client),
  * extracted from the hand-copied twins the same way [HomeSectionsFetcher]
  * extracted the home-feed choreography and [EmptyLibraryFallback] /
  * [FavoriteFlagCache] (own files) extracted the response-side ladders.
@@ -33,8 +33,7 @@ internal val DETAIL_PROJECTION_FIELDS: List<String> = listOf(
  * clients attach to their list-shaped queries (latest media, next up, resume,
  * search hints, studio/artist/album/person/collection/favorite/playlist
  * listings; wire serial names; the JVM client resolves them against the SDK
- * [org.jellyfin.sdk.model.api.ItemFields] enum, the wasm client sends them
- * as-is). The genre-rendering queries (the library grid and the empty-library
+ * [org.jellyfin.sdk.model.api.ItemFields] enum). The genre-rendering queries (the library grid and the empty-library
  * fallback's latest probe) and the playlists listing compose on top of it
  * (`LIST_PROJECTION_FIELDS + "Genres"` /
  * `LIST_PROJECTION_FIELDS + listOf("CanDelete", "DateCreated")`); documented
@@ -64,9 +63,8 @@ internal val SEARCH_SUGGESTIONS_FIELDS = listOf("PrimaryImageAspectRatio", "Genr
  * were explicitly included. Jellyfin would otherwise receive contradictory
  * include+exclude for the same kind (e.g. section mode for a TV library
  * includes EPISODE to match /Items/Latest) and return an empty result.
- * Generic over the kind token because the JVM client speaks SDK
- * [org.jellyfin.sdk.model.api.BaseItemKind] enums and the wasm client speaks
- * their wire serial names — the POLICY is identical.
+ * Generic over the kind token — the JVM client speaks SDK
+ * [org.jellyfin.sdk.model.api.BaseItemKind] enums.
  */
 internal fun <K> libraryExcludeKinds(
     seasonKind: K,

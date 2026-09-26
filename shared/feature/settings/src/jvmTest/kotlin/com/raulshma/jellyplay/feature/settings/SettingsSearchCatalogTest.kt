@@ -52,7 +52,7 @@ class SettingsSearchCatalogTest {
     }
 
     @Test
-    fun `aggregation preserves the verbatim move - all 258 items in flat order`() {
+    fun `aggregation preserves the verbatim move - all 276 items in flat order`() {
         val items = SettingsSearchCatalog.items
         // The old core/ui registry held 259 items; the aggregation must have
         // kept every one (the 260th is the video-cache-size row).
@@ -60,8 +60,21 @@ class SettingsSearchCatalogTest {
         // + accent entries into theme_style + style_accent (257); the
         // missing auto_delete_after_watch declaration followed its existing
         // storage row (258).
+        // Added the media-segment group's skip-on-seek toggle (259).
+        // Added the track-selection group: preset + two ordered
+        // language editors + advanced rules (263).
+        // Added the desktop-gated mpv audio-device trio: device picker
+        // + exclusive toggle + output mode (266).
+        // Added the desktop-gated mpv render rows: shader pack +
+        // tone mapping + quality profile + HDR passthrough + tscale (271).
+        // Added the desktop-gated volume-memory toggle (272).
+        // Added the security group's remote display-content toggle and
+        // the desktop-gated idle-ambient pair (toggle + timeout): 275.
+        // The home config hub moved its rows off Appearance into the three
+        // home groups (same ids) and indexed the previously-unsearchable
+        // Discover Rows row (+1): 276.
         // Bump this count when you deliberately add items.
-        assertEquals(258, items.size)
+        assertEquals(276, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).
@@ -69,8 +82,10 @@ class SettingsSearchCatalogTest {
         assertEquals(
             AccountSearchItems.size + IntegrationsSearchItems.size +
                 ActivityInsightsSearchItems.size + SystemSearchItems.size +
+                HomeDisplaySearchItems.size + HomeNextUpSearchItems.size +
+                HomeLayoutSearchItems.size +
                 AppearanceThemeSearchItems.size + AppearanceNavigationSearchItems.size +
-                AppearanceLibrarySearchItems.size + AppearanceHomeLayoutSearchItems.size +
+                AppearanceLibrarySearchItems.size +
                 AppearancePerformanceSearchItems.size + AppearanceEyeCareSearchItems.size +
                 AppearanceNewsletterSearchItems.size +
                 PlaybackSettingsSearchItems.size + PlaybackAdvancedVideoSearchItems.size +
@@ -78,7 +93,8 @@ class SettingsSearchCatalogTest {
                 ExoPlayerEngineSearchItems.size + SyncPlaySearchItems.size +
                 CastingSearchItems.size + LiveTvSearchItems.size +
                 AudioSettingsSearchItems.size + AudioCacheSearchItems.size +
-                LanguageSettingsSearchItems.size + NotificationSettingsSearchItems.size +
+                LanguageSettingsSearchItems.size + TrackSelectionSearchItems.size +
+                NotificationSettingsSearchItems.size +
                 StorageCacheSearchItems.size + StorageNetworkSearchItems.size +
                 StorageDownloadsSearchItems.size +
                 SecuritySettingsSearchItems.size + BackupSettingsSearchItems.size +

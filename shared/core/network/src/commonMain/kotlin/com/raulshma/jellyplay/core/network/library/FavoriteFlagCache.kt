@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.TtlCache
 
 /** LRU bound of the favorite-flag cache (the old `LruCache(200)` size). */
@@ -10,21 +11,23 @@ internal const val FAVORITE_CACHE_MAX_ENTRIES = 200
  * TTL of the favorite-flag cache — generous (the flags only seed a toggle's
  * "current" value until the first real read refreshes them), and the
  * identity-keyed composite key already guarantees a switched user never sees
- * the previous user's flags within any window.
+ * the previous user's flags within any window. Named by
+ * [com.raulshma.jellyplay.core.model.FreshnessCeilings.FAVORITE_FLAGS_TTL_MS];
+ * this alias keeps the file-private name the library clients already read.
  */
-internal const val FAVORITE_CACHE_TTL_MS = 15 * 60_000L
+internal val FAVORITE_CACHE_TTL_MS = FreshnessCeilings.FAVORITE_FLAGS_TTL_MS
 
 /**
- * The favorite-flag cache-aside choreography shared by both library clients:
+ * The favorite-flag cache-aside choreography the library clients share:
  * seed the "current" flag from the identity-keyed [TtlCache] (a user/server
  * switch misses by construction), fall back to ONE item read when the caller
  * supplies no guess and nothing is cached, then write the flipped value back
  * after the transport mutation succeeds. Parameterized by the transport calls
- * each platform performs (SDK typed calls on the JVM; raw POST/DELETE
- * /UserFavoriteItems on wasm) — the read→maybe-fetch→mutate→write-through
- * POLICY lives here once. The cache key derivation stays with each client
- * (the JVM normalises via `UUID.toString()`, wasm keeps the raw item id) so
- * each platform's keys stay byte-identical to its historical ones.
+ * the platform performs (SDK typed calls on the JVM) — the
+ * read→maybe-fetch→mutate→write-through
+ * POLICY lives here once. The cache key derivation stays with the client
+ * (the JVM normalises via `UUID.toString()`) so
+ * the platform's keys stay byte-identical to its historical ones.
  */
 internal class FavoriteFlagCache(
     private val currentIdentity: () -> CacheIdentity,

@@ -21,23 +21,13 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * Home note: this file moved verbatim from shared/core:data's
  * commonMain (SAME package, so no consumer import changes) because `MediaEngine`
- * extends it and this module needs a wasmJs target for `HtmlVideoEngine` —
- * shared/core:data has no wasm build (Room). The core:data consumers
+ * extends it. The core:data consumers
  * (`ActivePlayerController`, `VideoMiniPlayerState`, remote-control
  * dispatchers) now reach it through core:data's `api(player-contract)` edge.
  */
 interface RemotePlayableEngine {
     val currentPositionMs: Long
     val isPlaying: StateFlow<Boolean>
-
-    /**
-     * Opaque native player handle for platform integrations, or `null` when
-     * the engine has no exposed native player. Android consumers cast to
-     * `androidx.media3.common.Player` (ExoPlayer); implementations may narrow
-     * the type via val covariance. Was a media3 `Player?` before the 
-     * common-ization — kept type-erased so this interface stays commonMain-pure.
-     */
-    val underlyingPlayer: Any?
 
     val volume: Float
 
@@ -48,10 +38,33 @@ interface RemotePlayableEngine {
     fun selectTrack(type: TrackType, index: Int)
     fun setMaxVideoBitrate(bps: Int?)
 
-    fun setVolume(value: Float)
+    /**
+     * Sets the engine's volume (normalized 0..1).
+     *
+     * [isUserChange] distinguishes USER-initiated changes (a slider,
+     * a key, a remote "SetVolume") from PROGRAMMATIC ones (sleep-timer fades,
+     * audio-focus duck/restore). Engines that remember the volume per content
+     * type capture ONLY user changes — a fade must never overwrite the
+     * remembered level. Defaults to `true`: every pre-existing call site is
+     * user-shaped, and the programmatic paths pass `false` explicitly.
+     */
+    fun setVolume(value: Float, isUserChange: Boolean = true)
     fun increaseVolume(delta: Float = 0.05f)
     fun decreaseVolume(delta: Float = 0.05f)
     fun setMuted(muted: Boolean)
+
+    /**
+     * Per-content-type volume-memory capture hook. Engines whose
+     * volume apply path distinguishes user changes (see [setVolume]'s
+     * [isUserChange]) invoke the handler for USER-initiated levels only —
+     * programmatic fades (sleep timer, duck/restore) never fire it. The
+     * session host assigns it with the active item's volume bucket; the
+     * default accessors are inert so engines without a memory surface (and
+     * every fake) need no override.
+     */
+    var onUserVolumeChange: ((level: Float) -> Unit)?
+        get() = null
+        set(value) {}
 
     /**
      * Releases all native resources held by this engine. After this call returns, the engine

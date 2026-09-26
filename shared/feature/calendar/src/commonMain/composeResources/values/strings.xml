@@ -21,7 +21,7 @@
     <string name="calendar_empty_title">Nothing upcoming</string>
     <string name="calendar_empty_desc">No releases scheduled in this month.</string>
     <string name="calendar_go_today">Go to today</string>
-    <string name="calendar_error_unknown">Couldn\'t load the calendar.</string>
+    <string name="calendar_error_unknown">Couldn't load the calendar.</string>
     <string name="calendar_no_detail">No detail available for this item.</string>
 
     <!-- Feature disabled -->

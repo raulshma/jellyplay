@@ -158,7 +158,9 @@
     <string name="player_video_av_sync">A/V 同期</string>
     <string name="player_video_playback_mode">再生モード</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 オン</string>
-    <string name="player_video_decoder">デコーダー</string>
+    <string name="player_video_decoder">レンダリング</string>
+    <string name="player_video_rendering">レンダリング</string>
+    <string name="player_video_deinterlace">インターレース解除 · %1$s</string>
     <string name="player_video_passthrough">パススルー</string>
     <string name="player_video_stats_for_nerds">詳細統計</string>
     <string name="player_video_stats_for_nerds_on">詳細統計 \u00B7 オン</string>
@@ -270,9 +272,11 @@
     <string name="player_video_stats_position">位置</string>
     <string name="player_video_stats_progress">進行</string>
     <string name="player_video_stats_buffer_health">バッファ状態</string>
+    <string name="player_video_stats_buffered_ranges">バッファ範囲</string>
     <string name="player_video_stats_buffered">バッファ済み</string>
     <string name="player_video_stats_clock">時計</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">HDR出力アクティブ</string>
     <string name="player_video_stats_color_range">色域</string>
     <string name="player_video_stats_color_depth">色深度</string>
     <string name="player_video_stats_sample_rate">サンプリングレート</string>
@@ -301,6 +305,10 @@
     <string name="player_video_adaptive_bitrate_on">従量制ネットワークで品質を制限</string>
     <string name="player_video_adaptive_bitrate_off">オフ - 最高品質（ダイレクトプレイ）</string>
     <string name="player_video_skip_intro">イントロをスキップ</string>
+    <string name="player_video_skipped_segment">%1$sをスキップしました</string>
+    <string name="player_video_mark_watched_and_skip">視聴済みにして次へ</string>
+    <string name="player_video_mark_watched_and_exit">視聴済みにして終了</string>
+    <string name="player_video_mark_unwatched_and_exit">未視聴にして終了</string>
     <string name="player_video_overview_tab">概要</string>
     <string name="player_video_lyrics_subtitles_tab">歌詞 / 字幕</string>
     <string name="player_video_synopsis">あらすじ</string>

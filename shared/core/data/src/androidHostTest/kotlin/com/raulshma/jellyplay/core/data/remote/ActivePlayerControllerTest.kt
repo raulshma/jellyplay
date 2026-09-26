@@ -31,7 +31,6 @@ class ActivePlayerControllerTest {
         val name = name
         override val currentPositionMs: Long = 0L
         override val isPlaying: MutableStateFlow<Boolean> = MutableStateFlow(initialPlaying)
-        override val underlyingPlayer: Any? = null
 
         // Backing field + val override: a `var` would generate a JVM
         // setVolume(Float) clashing with the interface method.
@@ -44,7 +43,7 @@ class ActivePlayerControllerTest {
         override fun seekTo(positionMs: Long) = Unit
         override fun selectTrack(type: TrackType, index: Int) = Unit
         override fun setMaxVideoBitrate(bps: Int?) = Unit
-        override fun setVolume(value: Float) { volumeField = value }
+        override fun setVolume(value: Float, isUserChange: Boolean) { volumeField = value }
         override fun increaseVolume(delta: Float) { volumeField += delta }
         override fun decreaseVolume(delta: Float) { volumeField -= delta }
         override fun setMuted(muted: Boolean) = Unit

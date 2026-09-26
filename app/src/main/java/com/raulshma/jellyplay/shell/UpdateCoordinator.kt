@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.shell
 
 import android.content.Intent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.PendingAppUpdate
@@ -140,7 +141,7 @@ class UpdateCoordinator (
                     _updateState.value = UpdateState.Downloaded(pending.info, pending.apkFile)
                 // Network failed, nothing pending.
                 else -> _updateState.value =
-                    UpdateState.Error(result.exceptionOrNull()?.message ?: "Update check failed")
+                    UpdateState.Error(UserErrorMessages.resolve(result, "Update check failed"))
             }
         }
     }
@@ -170,7 +171,7 @@ class UpdateCoordinator (
                 }
                 result
                     .onSuccess { file -> _updateState.value = UpdateState.Downloaded(info, file) }
-                    .onFailure { _updateState.value = UpdateState.Error(it.message ?: "Download failed") }
+                    .onFailure { _updateState.value = UpdateState.Error(UserErrorMessages.resolve(it, "Download failed")) }
             } finally {
                 if (downloadJob == coroutineContext[Job]) {
                     downloadJob = null

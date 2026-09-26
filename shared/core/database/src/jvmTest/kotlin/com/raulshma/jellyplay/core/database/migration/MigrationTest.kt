@@ -880,6 +880,102 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v56→v57 migration adds the three nullable columns to
+     * `item_playback_preferences`: `rememberedAudioCodec` /
+     * `rememberedSubtitleCodec` (the codec tiebreak in remembered-track
+     * re-matching) and `renderProfile` (the per-series/per-item rendering
+     * override blob, shared with the desktop render profile). All three
+     * are additive: pre-existing rows pick up NULL. The starting schema is
+     * created from the tracked `56.json` via room3's [MigrationTestHelper]
+     * (see [room3Helper]) and the migrated result is validated against the
+     * tracked `57.json` with the same TableInfo comparison Room 3 itself runs
+     * when opening a migrated database — so a drift between
+     * [MIGRATION_56_57]'s DDL and the entity declarations fails loudly here.
+     */
+    @Test
+    fun migrateV56_57_addsTrackMemoryCodecAndRenderProfileColumns() = runTest {
+        val helper = room3Helper("migrate-v56-57.db")
+        val v56 = helper.createDatabase(56)
+        v56.execSQL(
+            "INSERT INTO item_playback_preferences (scope, key, audioLanguage, subtitleLanguage, updatedAt) " +
+                "VALUES ('SERIES', 'series-1', 'deu', 'eng', 1)"
+        )
+        v56.close()
+
+        val db = helper.runMigrationsAndValidate(57, listOf(MIGRATION_56_57))
+
+        // Pre-existing rows pick up NULL for all three new columns.
+        db.prepare(
+            "SELECT scope, key, rememberedAudioCodec, rememberedSubtitleCodec, renderProfile " +
+                "FROM item_playback_preferences ORDER BY id"
+        ).use { c ->
+            assertTrue(c.step())
+            assertEquals("SERIES", c.getText(0))
+            assertEquals("series-1", c.getText(1))
+            assertTrue(c.isNull(2))
+            assertTrue(c.isNull(3))
+            assertTrue(c.isNull(4))
+            assertFalse(c.step())
+        }
+        db.close()
+    }
+
+    /**
+     * The same 56→57 step through the full chain (v56 tracked schema →
+     * [openWithMigrations]), proving the new columns round-trip through the
+     * generated DAO/entity mapping — Room reads and writes
+     * `rememberedAudioCodec` / `rememberedSubtitleCodec` / `renderProfile`,
+     * not just that the columns exist.
+     */
+    @Test
+    fun migrateAllFromV56_roundTripsCodecAndRenderProfileColumns() = runTest {
+        createDatabase(56) { db ->
+            execSchema(db, 56)
+            db.execSQL(
+                "INSERT INTO item_playback_preferences (scope, key, audioLanguage, subtitleLanguage, updatedAt) " +
+                    "VALUES ('SERIES', 'series-1', 'deu', 'eng', 1)"
+            )
+        }
+
+        val db = openWithMigrations()
+        // The pre-existing row reads back with NULL codec/render columns.
+        val migrated = db.itemPlaybackPreferenceDao().getByKey("SERIES", "series-1")
+        assertNotNull(migrated)
+        assertEquals("deu", migrated!!.audioLanguage)
+        assertNull(migrated.rememberedAudioCodec)
+        assertNull(migrated.rememberedSubtitleCodec)
+        assertNull(migrated.renderProfile)
+        // A fresh write round-trips all three columns through the mapping.
+        db.itemPlaybackPreferenceDao().upsert(
+            com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity(
+                scope = "SERIES",
+                key = "series-2",
+                audioLanguage = null,
+                subtitleLanguage = null,
+                rememberedAudioLabel = "German 5.1",
+                rememberedAudioLanguage = "ger",
+                rememberedAudioIndex = 0,
+                rememberedAudioCodec = "eac3",
+                rememberedSubtitleLabel = "English",
+                rememberedSubtitleLanguage = "eng",
+                rememberedSubtitleIndex = 1,
+                rememberedSubtitleCodec = "srt",
+                renderProfile = """{"shaderPack":"ANIME4K_A","toneMapping":"BT2390"}""",
+                updatedAt = 2L,
+            )
+        )
+        val saved = db.itemPlaybackPreferenceDao().getByKey("SERIES", "series-2")
+        assertNotNull(saved)
+        assertEquals("eac3", saved!!.rememberedAudioCodec)
+        assertEquals("srt", saved.rememberedSubtitleCodec)
+        assertEquals(
+            """{"shaderPack":"ANIME4K_A","toneMapping":"BT2390"}""",
+            saved.renderProfile,
+        )
+        db.close()
+    }
+
     @Test
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = JvmTokenCipher.forTestingWithPersistentKey()

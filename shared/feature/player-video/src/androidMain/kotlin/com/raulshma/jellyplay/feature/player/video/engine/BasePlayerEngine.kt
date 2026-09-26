@@ -67,6 +67,14 @@ abstract class BasePlayerEngine : MediaEngine {
     protected val _bufferedPositionMs = MutableStateFlow(0L)
     override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
 
+    /**
+     * Multi-band buffered surface — the range-level generalization of
+     * [_bufferedPositionMs]. Maintained by each adapter alongside the scalar;
+     * both reset together in [resetItemScopedPublishedState].
+     */
+    protected val _bufferedRanges = MutableStateFlow<List<LongRange>>(emptyList())
+    override val bufferedRanges: StateFlow<List<LongRange>> = _bufferedRanges.asStateFlow()
+
     protected val _videoStats = MutableStateFlow(EngineVideoStats())
     override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
@@ -78,6 +86,48 @@ abstract class BasePlayerEngine : MediaEngine {
 
     final override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
     final override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
+
+    // -------------------------------------------------------------------------------------------
+    // Activity pause/resume template. The three engines used to carry byte-
+    // identical bodies: remember isPlaying → pause on pause; restore play on
+    // resume only if the engine was playing before. ExoPlayer does not detach
+    // views here (PlayerView owns the surface lifecycle), mpv has no view
+    // churn either — only libVLC must detach/attach its preview views around
+    // the pause, which is what the [onPausedNative]/[onResumingNative] hooks
+    // exist for. The resume hook runs BEFORE the play restore (VLC's views
+    // must be re-attached before playback restarts).
+    // -------------------------------------------------------------------------------------------
+
+    // `var` (not private-set) because ExoPlayer's onResetItemScopedState clears
+    // it alongside the item-scoped residue — a stale latch must never survive
+    // into the next item's pause.
+    protected var wasPlayingBeforeActivityPause = false
+
+    final override fun onActivityPause() {
+        wasPlayingBeforeActivityPause = _isPlaying.value
+        pause()
+        onPausedNative()
+    }
+
+    final override fun onActivityResume() {
+        onResumingNative()
+        if (wasPlayingBeforeActivityPause) {
+            wasPlayingBeforeActivityPause = false
+            play()
+        }
+    }
+
+    /**
+     * Engine-specific work after the pause in [onActivityPause] — libVLC
+     * detaches its preview views. No-op by default (ExoPlayer / mpv).
+     */
+    protected open fun onPausedNative() {}
+
+    /**
+     * Engine-specific work before the play restore in [onActivityResume] —
+     * libVLC re-attaches its preview views. No-op by default (ExoPlayer / mpv).
+     */
+    protected open fun onResumingNative() {}
 
     // -------------------------------------------------------------------------------------------
     // Published-state resets (C5). Each adapter's release() used to re-derive
@@ -96,6 +146,7 @@ abstract class BasePlayerEngine : MediaEngine {
         _currentCues.value = emptyList()
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
+        _bufferedRanges.value = emptyList()
         _videoStats.value = EngineVideoStats()
         onResetItemScopedState()
     }
@@ -127,25 +178,37 @@ abstract class BasePlayerEngine : MediaEngine {
     // -------------------------------------------------------------------------------------------
 
     /**
-     * Main-thread coroutine scope. Cancelled on [release] and recreated in
-     * [load] (see [recreateEngineScopeIfInactive]). `protected var` so each
-     * engine can recreate it on its own load/release schedule.
+     * The scope invariant, held structurally by this base instead of by a
+     * per-adapter convention: a live coroutine scope per load; only the
+     * terminal release teardown kills one.
+     *
+     * Every read of [engineScope] returns a LIVE scope — a generation
+     * cancelled by `release()` (or by an internal release()-as-reset inside
+     * a load) is replaced on the next read. No load path can ever run on a
+     * cancelled scope, and downstream consumers that capture the scope
+     * (positionFlow's [EnginePositionTicker], mpv's track-refresh coalescer)
+     * can never launch into a dead one — the frozen-seek-bar failure mode
+     * the per-engine revive choreography (d6b764964) used to patch one call
+     * site at a time. Those per-engine revive calls are deleted; the
+     * invariant lives here, at the only place the scope is handed out.
+     *
+     * The only cancel sites remain the engines' own `release()` bodies
+     * (terminal teardown); their semantics are unchanged by this refactor.
+     *
+     * Threading: unchanged — main-thread-affine like the `protected var` it
+     * replaces. The check-then-replace is unsynchronized exactly like the
+     * former helper; a hypothetical concurrent double-replace leaks one
+     * childless SupervisorJob to GC, which is benign.
      */
-    protected var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        private set
+    private var scopeGeneration = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /**
-     * Recreate [engineScope] when the previous one has been cancelled (e.g.
-     * after [release]). Guards against the case where load() is called on an
-     * already-cancelled scope. The guarded form is the safe common denominator
-     * across engines — Exo previously recreated unconditionally (equivalent
-     * because release cancels first), MPV/libVLC guarded.
-     */
-    protected fun recreateEngineScopeIfInactive() {
-        if (!engineScope.isActive) {
-            engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    protected val engineScope: CoroutineScope
+        get() {
+            if (!scopeGeneration.isActive) {
+                scopeGeneration = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+            }
+            return scopeGeneration
         }
-    }
 
     protected val mainHandler = Handler(Looper.getMainLooper())
 

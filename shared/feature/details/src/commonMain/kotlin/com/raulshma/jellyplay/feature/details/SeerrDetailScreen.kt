@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,8 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -80,8 +77,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
+import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.model.MediaType
@@ -98,6 +96,9 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrWatchProvider
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
+import com.raulshma.jellyplay.core.model.seerr.isAvailable
+import com.raulshma.jellyplay.core.model.seerr.isPending
+import com.raulshma.jellyplay.core.model.seerr.isProcessing
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -107,14 +108,15 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
-import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
+import com.raulshma.jellyplay.core.ui.components.seerrCardClickHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.FocusRestoringItemRow
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -129,9 +131,7 @@ import com.composables.icons.tabler.outline.CalendarEvent
 import com.composables.icons.tabler.outline.Cash
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronDown
-import com.composables.icons.tabler.outline.Circle
 import com.composables.icons.tabler.outline.Clock
-import com.composables.icons.tabler.outline.CloudDownload
 import com.composables.icons.tabler.outline.Hourglass
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.Language
@@ -139,16 +139,14 @@ import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Plus
+import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Star
-import com.composables.icons.tabler.outline.Ticket
 import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.Wallet
 import com.composables.icons.tabler.outline.World
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_available
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_digital
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_physical
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_theatrical
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_imdb
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_tmdb
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_tvdb
@@ -225,21 +223,12 @@ fun SeerrDetailScreen(
         colorStyle = preferences.theme.colorStyle,
         accentColorSwatch = preferences.theme.accentColorSwatch,
     ) {
-        val seerrLoadingState = rememberSeerrCardLoadingState()
-        val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback =
-            remember(seerrLoadingState, viewModel) {
-                { tmdbId, mediaType, onDone ->
-                    seerrLoadingState.startLoading(tmdbId)
-                    viewModel.prefetchRelatedDetails(tmdbId, mediaType) {
-                        seerrLoadingState.stopLoading(tmdbId)
-                        onDone()
-                    }
-                }
+        // One root-level bundle of the Seerr card-loading state + prefetch
+        // callback; descendant rows read them via the composition locals.
+        com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+            prefetchDetail = { tmdbId, mediaType, onDone ->
+                viewModel.prefetchRelatedDetails(tmdbId, mediaType, onDone)
             }
-
-        androidx.compose.runtime.CompositionLocalProvider(
-            com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch provides prefetchCallback,
-            com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState provides seerrLoadingState,
         ) {
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -387,35 +376,17 @@ private fun SeerrDetailContent(
     val isTv = LocalTvMode.current
     val density = LocalDensity.current
 
-    val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
-    val isAurora = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current ==
-        com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.AURORA
+    val themeVariant = LocalThemeVariant.current
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val outline = MaterialTheme.colorScheme.outline
-    // Rebuilt only when the theme flags / palette change so the consuming
-    // Cards see a stable BorderStroke instance between scroll frames.
-    val cardBorder = remember(isSynthwave, isSoothing, isAurora, primary, secondary, outline) {
-        when {
-            isSynthwave -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 1.5.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(primary, secondary)
-                    )
-                )
-            }
-            isSoothing -> {
-                androidx.compose.foundation.BorderStroke(
-                    width = 0.8.dp,
-                    color = outline.copy(alpha = 0.35f)
-                )
-            }
-            // Aurora: soft accent glow border matching the gradient background.
-            isAurora -> com.raulshma.jellyplay.core.designsystem.theme.auroraCardBorder(primary)
-            else -> null
-        }
+    // Rebuilt only when the variant / palette change so the consuming Cards
+    // see a stable BorderStroke instance between scroll frames. This screen
+    // includes the Aurora arm; the other detail-card borders opt out via
+    // includeAurora = false to keep their historical no-border Aurora look.
+    val cardBorder = remember(themeVariant, primary, secondary, outline) {
+        themeVariant.detailCardBorder(primary, secondary, outline)
     }
 
     val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
@@ -807,9 +778,11 @@ private fun SeerrActionButtons(
     val mediaInfo = movieDetail?.mediaInfo ?: tvDetail?.mediaInfo
     val status = mediaInfo?.status ?: 0
     val mediaStatus = remember(status) { SeerrMediaStatus.fromValue(status) }
-    val isAvailable = mediaStatus == SeerrMediaStatus.AVAILABLE || mediaStatus == SeerrMediaStatus.PARTIALLY_AVAILABLE
-    val isPending = mediaStatus == SeerrMediaStatus.PENDING
-    val isProcessing = mediaStatus == SeerrMediaStatus.PROCESSING
+    // Availability predicates folded into core/model's SeerrStatusDecisions
+    // (beside the enum) — same decisions the requests list renders through.
+    val isAvailable = mediaStatus.isAvailable
+    val isPending = mediaStatus.isPending
+    val isProcessing = mediaStatus.isProcessing
     val hasRequest = mediaInfo?.requests?.isNotEmpty() == true
     val isRequested = isPending || isProcessing || hasRequest
     val buttonFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -1098,34 +1071,29 @@ private fun SeerrHorizontalSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = uniqueItems,
+            key = { it.id },
+            contentType = { "seerrSearchItem" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(uniqueItems, key = { it.id }, contentType = { "seerrSearchItem" }) { item ->
-                SeerrMediaCard(
-                    item = item,
-                    imageUrl = item.posterUrl,
-                    isLoading = loadingState?.isLoading(item.id) == true,
-                    onClick = {
-                        if (loadingState != null && prefetch != null) {
-                            loadingState.startLoading(item.id)
-                            prefetch(item.id, item.mediaType) {
-                                loadingState.stopLoading(item.id)
-                                onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
-                            }
-                        } else {
-                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
-                        }
-                    },
-                    modifier = Modifier.width(
-                        LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
-                    )
+        ) { item ->
+            SeerrMediaCard(
+                item = item,
+                imageUrl = item.posterUrl,
+                isLoading = loadingState?.isLoading(item.id) == true,
+                onClick = seerrCardClickHandler(
+                    loadingState = loadingState,
+                    prefetch = prefetch,
+                    id = item.id,
+                    mediaType = item.mediaType,
+                ) {
+                    onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.SeerrDetail(item.id, item.mediaType))
+                },
+                modifier = Modifier.width(
+                    LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
                 )
-            }
+            )
         }
     }
 }
@@ -1196,14 +1164,13 @@ private fun CastSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = uniqueCast,
+            key = { it.id },
+            contentType = { "castMember" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(uniqueCast, key = { it.id }, contentType = { "castMember" }) { member ->
+        ) { member ->
                 val name = member.name
                 val character = member.character
                 val profileUrl = member.profileUrl
@@ -1244,7 +1211,6 @@ private fun CastSection(
                         textAlign = TextAlign.Center
                     )
                 }
-            }
         }
     }
 }
@@ -1271,14 +1237,13 @@ private fun SeasonsSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = sortedSeasons,
+            key = { it.seasonNumber },
+            contentType = { "season" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(sortedSeasons, key = { it.seasonNumber }, contentType = { "season" }) { season ->
+        ) { season ->
                 val isSelected = selectedSeasonNumber == season.seasonNumber
                 val borderModifier = if (isSelected) {
                     Modifier.border(
@@ -1400,7 +1365,6 @@ private fun SeasonsSection(
                         }
                     }
                 }
-            }
         }
     }
 }
@@ -1670,14 +1634,13 @@ private fun VideosSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        LazyRow(
+        FocusRestoringItemRow(
+            items = uniqueVideos,
+            key = { it.key!! },
+            contentType = { "video" },
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
-            modifier = Modifier
-                .focusGroup()
-                .tvFocusRestorer(),
-        ) {
-            items(uniqueVideos, key = { it.key!! }, contentType = { "video" }) { video ->
+        ) { video ->
                 val thumbnailUrl = youTubeThumbnailUrl(video.site, video.key)
 
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -1737,7 +1700,6 @@ private fun VideosSection(
                         )
                     }
                 }
-            }
         }
     }
 }
@@ -2041,26 +2003,15 @@ private fun ReleaseDateRow(
 
 @Composable
 private fun ReleaseTypeIcon(type: Int) {
-    when (type) {
-        3 -> Icon(
-            imageVector = Tabler.Outline.Ticket,
-            contentDescription = stringResource(Res.string.detail_cd_release_theatrical),
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-        4 -> Icon(
-            imageVector = Tabler.Outline.CloudDownload,
-            contentDescription = stringResource(Res.string.detail_cd_release_digital),
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-        5 -> Icon(
-            imageVector = Tabler.Outline.Circle,
-            contentDescription = stringResource(Res.string.detail_cd_release_physical),
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-    }
+    // Mapping table lives in SeerrDetailUtils (releaseTypePresentation);
+    // only the Icon shell stays in composition.
+    val presentation = releaseTypePresentation(type) ?: return
+    Icon(
+        imageVector = presentation.icon,
+        contentDescription = stringResource(presentation.labelRes),
+        modifier = Modifier.size(16.dp),
+        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    )
 }
 
 @Composable
@@ -2154,43 +2105,4 @@ private fun MediaInfoRow(
             )
         }
     }
-}
-
-// ──  formatting seams (java.text purification) ───────────────────────
-// java.text.NumberFormat/String.format have no wasmJs variant; these integer-
-// math helpers replicate the Locale.US output shapes the two replaced call
-// sites produced. Same body as core:ui's wasmJs formatOneDecimal actual (wave
-// 11), which is `internal` to that module — hence the private copies here.
-
-/**
- * "%.1f" formatting contract (the two former `String.format("%.1f", …)` /
- * `String.format(Locale.US, "%.1f", …)` sites): HALF_UP rounding at the first
- * decimal — computed as floor(|v|·10 + 0.5), i.e. ties round AWAY from zero,
- * the same rule java's Formatter applies to the same binary value — with the
- * decimal point always rendered and the sign applied symmetrically.
- *
- * Side benefit worth noting (review round): the episode-row site used
- * default-locale `String.format` at HEAD, so de/fr/ru/pt-BR JVM devices saw
- * "8,7" — this helper always renders the dot.
- *
- * Known-inert delta: -0.0f renders "0.0" (java emitted "-0.0"); unreachable
- * for Seerr ratings, kept documented for the next consumer.
- */
-private fun formatRatingOneDecimal(value: Float): String {
-    val magnitude = (kotlin.math.abs(value) * 10 + 0.5).toLong()
-    val rendered = "${magnitude / 10}.${magnitude % 10}"
-    return if (value < 0) "-$rendered" else rendered
-}
-
-/**
- * `NumberFormat.getCurrencyInstance(Locale.US)` output shape for whole-dollar
- * Longs ("$8.99" family: "$" prefix — "-" before the "$" for negatives —
- * comma-grouped thousands, exactly two decimals). Seerr budget/revenue are
- * whole dollar amounts, so the cents are always "00", exactly as
- * NumberFormat.format(Long) rendered them.
- */
-private fun formatUsCurrency(amount: Long): String {
-    val digits = if (amount < 0) amount.toString().removePrefix("-") else amount.toString()
-    val grouped = digits.reversed().chunked(3).joinToString(",").reversed()
-    return (if (amount < 0) "-$" else "$") + grouped + ".00"
 }

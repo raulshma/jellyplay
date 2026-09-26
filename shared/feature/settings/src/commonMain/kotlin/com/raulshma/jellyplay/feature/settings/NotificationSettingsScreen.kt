@@ -121,6 +121,20 @@ fun NotificationSettingsScreen(
     // Capability flag (pinned == the intents seam's query in
     // DesktopPlatformActualsTest); the intents object stays for the open call.
     val canOpenSystemNotificationSettings = settingsCapabilities.supportsSystemNotificationSettings
+    // The declared row admissions both the SettingsItemList total and the
+    // emission `if`s below read — one gate per id, declared beside the group
+    // items (SettingsScreenGroups.notifications.rowAdmitted). The `enabled`
+    // and `showAdvanced` structural wrappers around the gated rows carry
+    // those halves of their All(...) gates, exactly the playback
+    // advanced-video precedent.
+    val rowFlags = RowAdmissionFlags(
+        showAdvanced = showAdvanced,
+        supportsSystemNotificationSettings = canOpenSystemNotificationSettings,
+        parentsOn = rowParentsOn(
+            NotificationSettingsIds.NOTIFICATIONS_ENABLE to preferences.enabled,
+            NotificationSettingsIds.QUIET_HOURS to preferences.quietHoursEnabled,
+        ),
+    )
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }
@@ -170,37 +184,32 @@ fun NotificationSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    // Derived from the notifications group declaration via the
-                    // admission total beside SettingsScreenGroups (the hand-run
-                    // `1 + 4 + 4 + cap + 2` arithmetic this replaces never
-                    // drifted from these gates — now it cannot).
+                    // Derived by rowTotalFor from the notifications group
+                    // declaration (the hand-run `1 + 4 + 4 + cap + 2`
+                    // arithmetic this replaces never drifted from these
+                    // gates — now it cannot).
                     SettingsItemList(
-                        total = notificationScreenRowTotal(
-                            enabled = notifPrefs.enabled,
-                            showAdvanced = showAdvanced,
-                            quietHoursEnabled = notifPrefs.quietHoursEnabled,
-                            canOpenSystemNotificationSettings = canOpenSystemNotificationSettings,
-                        ),
+                        total = rowTotalFor(SettingsScreenGroups.notifications, rowFlags),
                     ) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Bell,
-                        title = stringResource(Res.string.settings_enable_notifications),
+                        title = rowTitle(NotificationSettingsIds.NOTIFICATIONS_ENABLE),
                         subtitle = stringResource(Res.string.settings_enable_notifications_subtitle),
                         checked = notifPrefs.enabled,
-                        highlighted = highlightSettingId == "notifications_enable",
+                        highlighted = highlightSettingId == NotificationSettingsIds.NOTIFICATIONS_ENABLE,
                         onCheckedChange = { enabled ->
                             viewModel.updateNotificationPreferences { it.copy(enabled = enabled) }
                         },
                     )
                     if (notifPrefs.enabled) {
-                        val frequencyTitle = stringResource(Res.string.settings_check_frequency)
+                        val frequencyTitle = rowTitle(NotificationSettingsIds.NOTIFICATION_CHECK_FREQUENCY)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
                             title = frequencyTitle,
                             subtitle = stringResource(Res.string.settings_check_frequency_subtitle),
                             trailingText = notifPrefs.checkFrequency.displayName,
-                            highlighted = highlightSettingId == "notification_check_frequency",
+                            highlighted = highlightSettingId == NotificationSettingsIds.NOTIFICATION_CHECK_FREQUENCY,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = frequencyTitle,
@@ -218,84 +227,86 @@ fun NotificationSettingsScreen(
                         if (showAdvanced) {
                             SettingToggleItem(
                                 icon = Tabler.Outline.Moon,
-                                title = stringResource(Res.string.settings_quiet_hours),
+                                title = rowTitle(NotificationSettingsIds.QUIET_HOURS),
                                 subtitle = stringResource(Res.string.settings_quiet_hours_subtitle),
                                 checked = notifPrefs.quietHoursEnabled,
-                                highlighted = highlightSettingId == "quiet_hours",
+                                highlighted = highlightSettingId == NotificationSettingsIds.QUIET_HOURS,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(quietHoursEnabled = enabled) }
                                 },
                             )
-                            if (notifPrefs.quietHoursEnabled) {
+                            if (SettingsScreenGroups.notifications.rowAdmitted(NotificationSettingsIds.QUIET_START, rowFlags)) {
                                 SettingListItem(
                                     icon = Tabler.Outline.Sunset,
-                                    title = stringResource(Res.string.settings_quiet_start),
+                                    title = rowTitle(NotificationSettingsIds.QUIET_START),
                                     subtitle = stringResource(Res.string.settings_quiet_start_subtitle),
                                     trailingText = formatMinutes(notifPrefs.quietHoursStart),
-                                    highlighted = highlightSettingId == "quiet_start",
+                                    highlighted = highlightSettingId == NotificationSettingsIds.QUIET_START,
                                     onClick = { activeDialog = NotificationSettingsDialog.QuietStartPicker },
                                 )
+                            }
+                            if (SettingsScreenGroups.notifications.rowAdmitted(NotificationSettingsIds.QUIET_END, rowFlags)) {
                                 SettingListItem(
                                     icon = Tabler.Outline.Sunrise,
-                                    title = stringResource(Res.string.settings_quiet_end),
+                                    title = rowTitle(NotificationSettingsIds.QUIET_END),
                                     subtitle = stringResource(Res.string.settings_quiet_end_subtitle),
                                     trailingText = formatMinutes(notifPrefs.quietHoursEnd),
-                                    highlighted = highlightSettingId == "quiet_end",
+                                    highlighted = highlightSettingId == NotificationSettingsIds.QUIET_END,
                                     onClick = { activeDialog = NotificationSettingsDialog.QuietEndPicker },
                                 )
                             }
                             SettingToggleItem(
                                 icon = Tabler.Outline.BellOff,
-                                title = stringResource(Res.string.settings_respect_system_dnd),
+                                title = rowTitle(NotificationSettingsIds.RESPECT_SYSTEM_DND),
                                 subtitle = stringResource(Res.string.settings_respect_system_dnd_subtitle),
                                 checked = notifPrefs.respectSystemDnd,
-                                highlighted = highlightSettingId == "respect_system_dnd",
+                                highlighted = highlightSettingId == NotificationSettingsIds.RESPECT_SYSTEM_DND,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(respectSystemDnd = enabled) }
                                 },
                             )
-                            if (canOpenSystemNotificationSettings) {
+                            if (SettingsScreenGroups.notifications.rowAdmitted(NotificationSettingsIds.SYSTEM_NOTIFICATION_SETTINGS, rowFlags)) {
                                 SettingListItem(
                                     icon = Tabler.Outline.Settings,
-                                    title = stringResource(Res.string.settings_system_notification_settings),
+                                    title = rowTitle(NotificationSettingsIds.SYSTEM_NOTIFICATION_SETTINGS),
                                     subtitle = stringResource(Res.string.settings_system_notification_settings_subtitle),
-                                    highlighted = highlightSettingId == "system_notification_settings",
+                                    highlighted = highlightSettingId == NotificationSettingsIds.SYSTEM_NOTIFICATION_SETTINGS,
                                     onClick = platformIntents::openSystemNotificationSettings,
                                 )
                             }
                         }
                         SettingToggleItem(
                             icon = Tabler.Outline.Volume,
-                            title = stringResource(Res.string.settings_sound),
+                            title = rowTitle(NotificationSettingsIds.NOTIFICATION_SOUND),
                             subtitle = stringResource(Res.string.settings_sound_subtitle),
                             checked = notifPrefs.soundEnabled,
-                            highlighted = highlightSettingId == "notification_sound",
+                            highlighted = highlightSettingId == NotificationSettingsIds.NOTIFICATION_SOUND,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(soundEnabled = enabled) }
                             },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Bell,
-                            title = stringResource(Res.string.settings_vibrate),
+                            title = rowTitle(NotificationSettingsIds.NOTIFICATION_VIBRATE),
                             subtitle = stringResource(Res.string.settings_vibrate_subtitle),
                             checked = notifPrefs.vibrateEnabled,
-                            highlighted = highlightSettingId == "notification_vibrate",
+                            highlighted = highlightSettingId == NotificationSettingsIds.NOTIFICATION_VIBRATE,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(vibrateEnabled = enabled) }
                             },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Bulb,
-                            title = stringResource(Res.string.settings_notification_lights),
+                            title = rowTitle(NotificationSettingsIds.NOTIFICATION_LIGHTS),
                             subtitle = stringResource(Res.string.settings_notification_lights_subtitle),
                             checked = notifPrefs.lightsEnabled,
-                            highlighted = highlightSettingId == "notification_lights",
+                            highlighted = highlightSettingId == NotificationSettingsIds.NOTIFICATION_LIGHTS,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(lightsEnabled = enabled) }
                             },
                         )
                         if (showAdvanced) {
-                            val maxPerCheckTitle = stringResource(Res.string.settings_max_per_check)
+                            val maxPerCheckTitle = rowTitle(NotificationSettingsIds.MAX_PER_CHECK)
                             // Pre-substituted with 0 like the legacy screen — the
                             // picker rows therefore all show this one label
                             // (legacy-identical; common stdlib has no
@@ -306,7 +317,7 @@ fun NotificationSettingsScreen(
                                 title = maxPerCheckTitle,
                                 subtitle = stringResource(Res.string.settings_max_per_check_subtitle),
                                 trailingText = "${notifPrefs.maxPerCheck}",
-                                highlighted = highlightSettingId == "max_per_check",
+                                highlighted = highlightSettingId == NotificationSettingsIds.MAX_PER_CHECK,
                                 onClick = {
                                     val options = listOf(5, 10, 15, 20, 30, 50, 100)
                                     activePicker = PickerState.List(
@@ -326,9 +337,9 @@ fun NotificationSettingsScreen(
                             }
                             SettingListItem(
                                 icon = Tabler.Outline.Folders,
-                                title = stringResource(Res.string.settings_libraries),
+                                title = rowTitle(NotificationSettingsIds.NOTIFICATION_LIBRARIES),
                                 subtitle = stringResource(Res.string.settings_libraries_subtitle, enabledLibraries, libraryCount),
-                                highlighted = highlightSettingId == "notification_libraries",
+                                highlighted = highlightSettingId == NotificationSettingsIds.NOTIFICATION_LIBRARIES,
                                 onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
                             )
                         }

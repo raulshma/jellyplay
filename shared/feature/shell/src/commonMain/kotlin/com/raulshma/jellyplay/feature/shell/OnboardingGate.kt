@@ -9,10 +9,11 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * the shared onboarding section ([Route.Onboarding]) pushed once.
  *
  * Gate ORDER mirrors the Android shell exactly: Android composes its
- * signed-out AuthContent first and evaluates the gate only inside the
- * authenticated branch, so a brand-new install signs in first and meets the
- * wizard after. Desktop keeps the same sequence for free — its gate lives in
- * a scaffold that only composes once authentication has flipped true.
+ * signed-out auth host (SignedOutAuthHost) first and evaluates the gate only
+ * inside the authenticated branch, so a brand-new install signs in first and
+ * meets the wizard after. Desktop keeps the same sequence for free — its gate
+ * lives in a scaffold that only composes once authentication has flipped
+ * true.
  *
  * The [isTv] delta is Android's: the TV build auto-completes onboarding (a
  * call-site LaunchedEffect marks the pref) and must never gate, so TV returns

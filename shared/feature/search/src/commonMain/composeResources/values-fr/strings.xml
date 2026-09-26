@@ -2,7 +2,7 @@
 <resources>
     <!-- Search feature user-facing strings (enhancements §2.2) -->
     <string name="search_no_results_found">Aucun résultat trouvé</string>
-    <string name="search_try_adjusting_filters">Essayez d\'ajuster vos filtres</string>
+    <string name="search_try_adjusting_filters">Essayez d'ajuster vos filtres</string>
     <string name="search_did_you_mean">Vouliez-vous dire ?</string>
     <string name="search_failed">Échec de la recherche</string>
     <string name="search_failed_to_load_more">Échec du chargement supplémentaire</string>
@@ -22,7 +22,7 @@
 
     <!-- Sections -->
     <string name="search_suggestions">Suggestions</string>
-    <string name="search_on_device">Sur l\'appareil</string>
+    <string name="search_on_device">Sur l'appareil</string>
     <string name="search_recent_searches">Recherches récentes</string>
     <string name="search_remove">Retirer</string>
 
@@ -34,7 +34,7 @@
     <string name="search_retry">Réessayer</string>
 
     <!-- Clear history dialog -->
-    <string name="search_clear_search_history">Effacer l\'historique de recherche</string>
+    <string name="search_clear_search_history">Effacer l'historique de recherche</string>
     <string name="search_clear_history_confirm">Supprimer toutes les recherches récentes ? Cette action est irréversible.</string>
     <string name="search_action_clear">Effacer</string>
     <string name="search_action_cancel">Annuler</string>
@@ -43,7 +43,7 @@
     <string name="search_filters_title">Filtres</string>
     <string name="search_filter_media_type">Type de média</string>
     <string name="search_filter_genres">Genres</string>
-    <string name="search_filter_year_range">Plage d\'années</string>
+    <string name="search_filter_year_range">Plage d'années</string>
     <string name="search_filter_tags">Étiquettes</string>
     <string name="search_filter_minimum_rating">Note minimale</string>
     <string name="search_filter_any">Tous</string>

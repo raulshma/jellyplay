@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -15,16 +14,16 @@ import kotlin.test.assertTrue
  * [kotlinx.coroutines.Dispatchers.Default]:
  *
  *  - A pure-data engine can implement the interface without any platform
- *    dependency (the interface is commonMain-pure: `underlyingPlayer` is
- *    type-erased to `Any?` and defaults-independent).
+ *    dependency (the interface is commonMain-pure and defaults-independent;
+ *    platform player handles left the contract — the retired type-erased
+ *    `underlyingPlayer` moved to platform capability seams, e.g. the
+ *    androidMain `Media3PlayerHost`).
  *  - `increaseVolume`/`decreaseVolume` carry default deltas of `0.05f` in the
  *    signature — a caller may invoke them with no argument (the remote
  *    "VolumeUp"/"VolumeDown" commands do exactly that).
  *  - Every control call is a plain function the implementation may record and
  *    replay from any thread (thread-marshalling is an implementation duty the
  *    interface cannot enforce — but the signatures must stay non-suspending).
- *  - [RemotePlayableEngine.underlyingPlayer] is nullable: an engine with no
- *    native handle reports `null` rather than throwing.
  */
 class RemotePlayableEngineContractTest {
 
@@ -43,7 +42,6 @@ class RemotePlayableEngineContractTest {
 
         override val currentPositionMs: Long get() = positionMs
         override val isPlaying: StateFlow<Boolean> = playingFlow
-        override val underlyingPlayer: Any? get() = null
 
         override fun play() {
             calls += "play"
@@ -73,7 +71,7 @@ class RemotePlayableEngineContractTest {
             calls += "setMaxVideoBitrate($bps)"
         }
 
-        override fun setVolume(value: Float) {
+        override fun setVolume(value: Float, isUserChange: Boolean) {
             calls += "setVolume($value)"
             currentVolume = value
             volumeValues += value
@@ -101,7 +99,7 @@ class RemotePlayableEngineContractTest {
     @Test
     fun `a pure-data engine implements the full contract`() {
         val engine = RecordingEngine()
-        assertNull(engine.underlyingPlayer)
+        assertEquals(0.5f, engine.volume)
         assertEquals(0L, engine.currentPositionMs)
         assertTrue(!engine.isPlaying.value)
     }

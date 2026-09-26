@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Pins the wasm Seerr client's DECODE + ENCODE wire contract. The JVM impl
+ * Pins the Seerr client's DECODE + ENCODE wire contract. The JVM impl
  * has no intermediate DTOs on this seam — it decodes the commonMain
  * `core.model.seerr` types straight through its lenient Json and encodes the
  * request payloads with the SAME instance, so the pins here are exactly the

@@ -2,25 +2,29 @@ package com.raulshma.jellyplay.feature.syncplay
 
 import com.raulshma.jellyplay.core.model.SyncPlayPlaybackCommand
 import com.raulshma.jellyplay.core.model.SyncPlayQueueUpdateData
+import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
+import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Web seam over core:data's jvmShared `SyncPlayManager` —
+ * Common seam over core:data's jvmShared `SyncPlayManager` —
  * the group-session handle the screen's ViewModel reads (join/leave, the
- * active group id, the reconnect timestamp, and the WebSocket event stream).
- * The manager's constructor closure is the JVM SyncPlay stack (OkHttp
- * `JellyfinApiClient` + `JellyfinWebSocketClient` + `TimeSyncManager` +
- * `java.util.concurrent` mirrors), so commonMain cannot name the class.
+ * active group id, the reconnect timestamp, the WebSocket event stream) and
+ * the transport commands it fires (pause/unpause/seek/stop/repeat/shuffle/
+ * ignore-wait). The manager's constructor closure is the JVM SyncPlay stack
+ * (OkHttp `JellyfinApiClient` + `JellyfinWebSocketClient` + `TimeSyncManager`
+ * + `java.util.concurrent` mirrors), so commonMain cannot name the class.
  * Promoted-interface precedent (DownloadIntake/DownloadQueue): the interface
- * carries exactly the host-facing surface, the jvmShared actual delegates to the process-wide
- * `SyncPlayManager` single (same DI graph — android/desktop behavior
- * unchanged), and the wasmJs actual is an honest "unsupported" session.
+ * carries exactly the host-facing surface, the jvmShared actual delegates to
+ * the process-wide `SyncPlayManager` single (same DI graph — android/desktop
+ * behavior unchanged).
  *
- * Web behavior: the browser has no SyncPlay transport (the manager's
- * WebSocket client is JVM-only and the web stack registers no binding), so
- * the wasm actual reports the failure to join/leave with an explicit cause,
- * an always-null [activeGroupId] and a never-emitting [events] flow — no
- * group state is ever fabricated.
+ * The transport members are the second wire census's landing spot: the
+ * ignored-Result `SyncPlayRepository.syncPlay*` twins were retired, and these
+ * commands now converge on `SyncPlayController.safe()` — the ONE
+ * fire-and-forget wrapper home — via the jvmShared adapter's plain delegation
+ * (the adapter never wraps; errors are logged inside the controller, so a
+ * failed command cannot crash the VM's launch).
  */
 interface SyncPlaySession {
 
@@ -47,6 +51,22 @@ interface SyncPlaySession {
 
     /** Leaves the current group (no-op failure when not in one — see the manager). */
     suspend fun leaveGroup(): Result<Unit>
+
+    // ── fire-and-forget transport commands (delegate to SyncPlayController) ──
+
+    suspend fun pause()
+
+    suspend fun unpause()
+
+    suspend fun seek(positionTicks: Long)
+
+    suspend fun stop()
+
+    suspend fun setRepeatMode(mode: SyncPlayRepeatMode)
+
+    suspend fun setShuffleMode(mode: SyncPlayShuffleMode)
+
+    suspend fun setIgnoreWait(ignore: Boolean)
 }
 
 /**

@@ -135,6 +135,9 @@ data class SettingsScreenPreferences(
     val dreamShowTitle: Boolean = true,
     val dreamKenBurnsEnabled: Boolean = true,
     val dreamTransitionStyle: DreamTransitionStyle = DreamTransitionStyle.CROSSFADE,
+    /** Desktop idle ambient screen toggle + timeout (minutes; 0 = off). */
+    val idleAmbientEnabled: Boolean = true,
+    val idleAmbientTimeoutMin: Long = 5L,
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
 )
 

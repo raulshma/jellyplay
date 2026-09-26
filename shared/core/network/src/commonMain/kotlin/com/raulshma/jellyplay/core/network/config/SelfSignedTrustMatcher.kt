@@ -3,10 +3,11 @@ package com.raulshma.jellyplay.core.network.config
 /**
  * Pure, string-only host-matching decision for the self-signed-certificate
  * trust feature — the **commonMain single home** of "does a granted entry
- * cover this peer?". Lives beside [OkHttpConfig] so non-JVM callers (e.g. the
- * Server Management view model, which renders the per-server trust toggle)
- * can ask exactly the question the handshake-time trust layer answers,
- * without the JVM-only trust manager types: the jvmShared
+ * cover this peer?". Lives beside [OkHttpConfig] so non-JVM callers (e.g.
+ * core:data's `SelfSignedTrustRepository`, the feature-visible seam the
+ * Server Management trust toggle calls through — feature modules never
+ * import this type) can ask exactly the question the handshake-time trust
+ * layer answers, without the JVM-only trust manager types: the jvmShared
  * `SelfSignedTrustHosts` facade (and through it the trust manager / hostname
  * verifier in `SelfSignedTrust.kt`) delegates here, so the two answers can
  * never drift.

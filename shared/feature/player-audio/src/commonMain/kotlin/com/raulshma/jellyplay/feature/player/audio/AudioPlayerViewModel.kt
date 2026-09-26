@@ -333,7 +333,68 @@ class AudioPlayerViewModel(
         }
     }
 
-    fun play(itemId: String) {
+    /**
+     * The VM's single command surface: every user intent arrives here as an
+     * [AudioPlayerUiEvent] (the HomeViewModel precedent). Each arm routes to
+     * the former command fun, now private with its body byte-identical — the
+     * pure-forwarding delegates onto [effects] / [sleepTimer] /
+     * [playlistPicker] keep their one-line shape, and the two funs with
+     * internal callers ([toggleKaraokeMode] → [setKaraokeModeEnabled]) stay
+     * callable. The VM's other public members are flows, sync getters, and
+     * the controller slices — there is no per-action command method to keep
+     * in sync with the screen.
+     */
+    fun onEvent(event: AudioPlayerUiEvent) {
+        when (event) {
+            is AudioPlayerUiEvent.Play -> play(event.itemId)
+            is AudioPlayerUiEvent.RemoveFromQueue -> removeFromQueue(event.index)
+            is AudioPlayerUiEvent.UndoLastQueueOperation -> undoLastQueueOperation()
+            is AudioPlayerUiEvent.CycleAbLoop -> cycleAbLoop()
+            is AudioPlayerUiEvent.SkipToNext -> skipToNext()
+            is AudioPlayerUiEvent.SkipToPrevious -> skipToPrevious()
+            is AudioPlayerUiEvent.SeekTo -> seekTo(event.positionMs)
+            is AudioPlayerUiEvent.TogglePlayPause -> togglePlayPause()
+            is AudioPlayerUiEvent.CastToDevice -> castToDevice()
+            is AudioPlayerUiEvent.ChangePlaybackSpeed -> changePlaybackSpeed(event.value)
+            is AudioPlayerUiEvent.ToggleShuffle -> toggleShuffle()
+            is AudioPlayerUiEvent.CycleRepeatMode -> cycleRepeatMode()
+            is AudioPlayerUiEvent.PlayFromQueue -> playFromQueue(event.index)
+            is AudioPlayerUiEvent.ToggleDialogueBoost -> toggleDialogueBoost()
+            is AudioPlayerUiEvent.SetDialogueBoostStrength -> setDialogueBoostStrength(event.strength)
+            is AudioPlayerUiEvent.ToggleNightMode -> toggleNightMode()
+            is AudioPlayerUiEvent.SetNightModeStrength -> setNightModeStrength(event.strength)
+            is AudioPlayerUiEvent.SetReplayGainMode -> setReplayGainMode(event.mode)
+            is AudioPlayerUiEvent.ToggleEqualizer -> toggleEqualizer()
+            is AudioPlayerUiEvent.SetEqualizerBand -> setEqualizerBand(event.bandIndex, event.levelDb)
+            is AudioPlayerUiEvent.ResetEqualizer -> resetEqualizer()
+            is AudioPlayerUiEvent.SetEqualizerPreset -> setEqualizerPreset(event.preset)
+            is AudioPlayerUiEvent.ToggleBassBoost -> toggleBassBoost()
+            is AudioPlayerUiEvent.SetBassBoostStrength -> setBassBoostStrength(event.strength)
+            is AudioPlayerUiEvent.ToggleVirtualizer -> toggleVirtualizer()
+            is AudioPlayerUiEvent.SetVirtualizerStrength -> setVirtualizerStrength(event.strength)
+            is AudioPlayerUiEvent.SetReverbPreset -> setReverbPreset(event.preset)
+            is AudioPlayerUiEvent.SetLrBalance -> setLrBalance(event.balance)
+            is AudioPlayerUiEvent.SetPitchSemitones -> setPitchSemitones(event.semitones)
+            is AudioPlayerUiEvent.SetAutoEqByGenre -> setAutoEqByGenre(event.enabled)
+            is AudioPlayerUiEvent.SearchLyrics -> searchLyrics(event.query)
+            is AudioPlayerUiEvent.ApplyLyrics -> applyLyrics(event.track)
+            is AudioPlayerUiEvent.ClearLyricsSearch -> clearLyricsSearch()
+            is AudioPlayerUiEvent.SetLyricsOffset -> setLyricsOffset(event.offsetMs)
+            is AudioPlayerUiEvent.StartSleepTimer -> startSleepTimer(event.durationMs)
+            is AudioPlayerUiEvent.StartSleepTimerEndOfEpisode -> startSleepTimerEndOfEpisode()
+            is AudioPlayerUiEvent.CancelSleepTimer -> cancelSleepTimer()
+            is AudioPlayerUiEvent.ToggleFavorite -> toggleFavorite()
+            is AudioPlayerUiEvent.OpenPlaylistPicker -> openPlaylistPicker()
+            is AudioPlayerUiEvent.DismissPlaylistPicker -> dismissPlaylistPicker()
+            is AudioPlayerUiEvent.AddToPlaylist -> addToPlaylist(event.playlist)
+            is AudioPlayerUiEvent.SetKaraokeModeEnabled -> setKaraokeModeEnabled(event.enabled)
+            is AudioPlayerUiEvent.ToggleKaraokeMode -> toggleKaraokeMode()
+            is AudioPlayerUiEvent.SetLyricsVisible -> setLyricsVisible(event.enabled)
+            is AudioPlayerUiEvent.DownloadCurrentTrack -> downloadCurrentTrack()
+        }
+    }
+
+    private fun play(itemId: String) {
         engine.play(itemId)
 
         launch {
@@ -371,7 +432,7 @@ class AudioPlayerViewModel(
         }
     }
 
-    fun removeFromQueue(index: Int) {
+    private fun removeFromQueue(index: Int) {
         queueManager.removeFromQueue(index)
     }
 
@@ -380,7 +441,7 @@ class AudioPlayerViewModel(
         get() = engine.undoEvents
 
     /** Restores the queue to before the most recent destructive op, if any. */
-    fun undoLastQueueOperation(): Boolean =
+    private fun undoLastQueueOperation(): Boolean =
         engine.undoLastQueueOperation()
 
     /** A→B loop markers (null = unset). */
@@ -388,21 +449,21 @@ class AudioPlayerViewModel(
     val abLoopEndMs: StateFlow<Long?> get() = engine.abLoopEndMs
 
     /** Cycles A→B loop: set A → set B → clear. */
-    fun cycleAbLoop() = engine.cycleAbLoop()
+    private fun cycleAbLoop() = engine.cycleAbLoop()
 
-    fun skipToNext() {
+    private fun skipToNext() {
         queueManager.skipToNext()
     }
 
-    fun skipToPrevious() {
+    private fun skipToPrevious() {
         queueManager.skipToPrevious()
     }
 
-    fun seekTo(positionMs: Long) {
+    private fun seekTo(positionMs: Long) {
         engine.seekTo(positionMs)
     }
 
-    fun togglePlayPause() {
+    private fun togglePlayPause() {
         engine.togglePlayPause()
     }
 
@@ -412,7 +473,7 @@ class AudioPlayerViewModel(
     // subtitle/quality variants to carry, so the cast options are empty.
     // ------------------------------------------------------------------
 
-    fun castToDevice() {
+    private fun castToDevice() {
         val itemId = queueManager.currentPlayingItemId.value ?: return
         val positionMs = currentPosition
         // MediaItem/CastMediaOptions construction lives app-side in the
@@ -421,73 +482,63 @@ class AudioPlayerViewModel(
         engine.pause()
     }
 
-    fun castPlay() = cast.play()
-    fun castPause() = cast.pause()
-    fun castSeekTo(positionMs: Long) = cast.seekTo(positionMs)
-    fun setCastVolume(volume: Float) = cast.setVolume(volume)
-    fun onCastDisconnected() {
-        // No local teardown needed — the singleton owns the session lifecycle.
-    }
-
-    fun changePlaybackSpeed(value: Float) {
+    private fun changePlaybackSpeed(value: Float) {
         engine.changePlaybackSpeed(value)
     }
 
-    fun toggleShuffle() {
+    private fun toggleShuffle() {
         queueManager.toggleShuffle()
     }
 
-    fun cycleRepeatMode() {
+    private fun cycleRepeatMode() {
         queueManager.cycleRepeatMode()
     }
 
-    fun playFromQueue(index: Int) {
+    private fun playFromQueue(index: Int) {
         queueManager.playFromQueue(index)
     }
 
     // Effects setters: one-line delegates — the apply→mirror→persist
     // choreography lives on [effects] (AudioEffectsController).
 
-    fun toggleDialogueBoost() = effects.toggleDialogueBoost()
+    private fun toggleDialogueBoost() = effects.toggleDialogueBoost()
 
-    fun setDialogueBoostStrength(strength: EffectStrength) = effects.setDialogueBoostStrength(strength)
+    private fun setDialogueBoostStrength(strength: EffectStrength) = effects.setDialogueBoostStrength(strength)
 
-    fun toggleNightMode() = effects.toggleNightMode()
+    private fun toggleNightMode() = effects.toggleNightMode()
 
-    fun setNightModeStrength(strength: EffectStrength) = effects.setNightModeStrength(strength)
+    private fun setNightModeStrength(strength: EffectStrength) = effects.setNightModeStrength(strength)
 
-    fun setReplayGainMode(mode: AudioNormalizationMode) = effects.setReplayGainMode(mode)
+    private fun setReplayGainMode(mode: AudioNormalizationMode) = effects.setReplayGainMode(mode)
 
-    fun setReplayGainPreAmpDb(db: Float) = effects.setReplayGainPreAmpDb(db)
+    private fun toggleEqualizer() = effects.toggleEqualizer()
 
-    fun toggleEqualizer() = effects.toggleEqualizer()
+    private fun setEqualizerBand(bandIndex: Int, levelDb: Int) = effects.setEqualizerBand(bandIndex, levelDb)
 
-    fun setEqualizerBand(bandIndex: Int, levelDb: Int) = effects.setEqualizerBand(bandIndex, levelDb)
+    private fun resetEqualizer() = effects.resetEqualizer()
 
-    fun resetEqualizer() = effects.resetEqualizer()
+    private fun setEqualizerPreset(preset: EqualizerPreset) = effects.setEqualizerPreset(preset)
 
-    fun setEqualizerPreset(preset: EqualizerPreset) = effects.setEqualizerPreset(preset)
+    private fun toggleBassBoost() = effects.toggleBassBoost()
 
-    fun toggleBassBoost() = effects.toggleBassBoost()
+    private fun setBassBoostStrength(strength: EffectStrength) = effects.setBassBoostStrength(strength)
 
-    fun setBassBoostStrength(strength: EffectStrength) = effects.setBassBoostStrength(strength)
+    private fun toggleVirtualizer() = effects.toggleVirtualizer()
 
-    fun toggleVirtualizer() = effects.toggleVirtualizer()
+    private fun setVirtualizerStrength(strength: Int) = effects.setVirtualizerStrength(strength)
 
-    fun setVirtualizerStrength(strength: Int) = effects.setVirtualizerStrength(strength)
+    private fun setReverbPreset(preset: ReverbPreset) = effects.setReverbPreset(preset)
 
-    fun setReverbPreset(preset: ReverbPreset) = effects.setReverbPreset(preset)
+    private fun setLrBalance(balance: Float) = effects.setLrBalance(balance)
 
-    fun setLrBalance(balance: Float) = effects.setLrBalance(balance)
+    private fun setPitchSemitones(semitones: Float) = effects.setPitchSemitones(semitones)
 
-    fun setPitchSemitones(semitones: Float) = effects.setPitchSemitones(semitones)
-
-    fun setAutoEqByGenre(enabled: Boolean) = effects.setAutoEqByGenre(enabled)
+    private fun setAutoEqByGenre(enabled: Boolean) = effects.setAutoEqByGenre(enabled)
 
     fun getImageUrl(itemId: String): String =
         engine.getImageUrl(itemId)
 
-    fun searchLyrics(query: String) {
+    private fun searchLyrics(query: String) {
         _uiState.update { it.copy(lyrics = it.lyrics.copy(isSearching = true)) }
         engine.searchLyrics(query) { result ->
             _uiState.update {
@@ -501,41 +552,31 @@ class AudioPlayerViewModel(
         }
     }
 
-    fun applyLyrics(track: LrcLibTrack) {
+    private fun applyLyrics(track: LrcLibTrack) {
         engine.applyLyrics(track.id)
         _uiState.update { it.copy(lyrics = it.lyrics.copy(searchResults = emptyList())) }
     }
 
-    fun clearLyricsSearch() {
+    private fun clearLyricsSearch() {
         _uiState.update { it.copy(lyrics = it.lyrics.copy(searchResults = emptyList())) }
     }
 
-    fun setLyricsOffset(offsetMs: Long) {
+    private fun setLyricsOffset(offsetMs: Long) {
         engine.setLyricsOffset(offsetMs)
     }
-
-    fun updateCrossfadeDuration(ms: Long) = effects.updateCrossfadeDuration(ms)
-
-    fun updateGaplessPlayback(enabled: Boolean) = effects.updateGaplessPlayback(enabled)
 
     // Sleep timer: delegates onto [sleepTimer] (AudioSleepTimerController),
     // which owns the store writes, the expiry callback (explicit pause, in ONE
     // place), and the synchronous uiState slice updates. The flow collectors in
     // init keep mirroring manager/prefs state into the same slice.
 
-    fun startSleepTimer(durationMs: Long) = sleepTimer.startSleepTimer(durationMs)
+    private fun startSleepTimer(durationMs: Long) = sleepTimer.startSleepTimer(durationMs)
 
-    fun startSleepTimerEndOfEpisode() = sleepTimer.startSleepTimerEndOfEpisode()
+    private fun startSleepTimerEndOfEpisode() = sleepTimer.startSleepTimerEndOfEpisode()
 
-    fun cancelSleepTimer() = sleepTimer.cancelSleepTimer()
+    private fun cancelSleepTimer() = sleepTimer.cancelSleepTimer()
 
-    fun triggerSleepTimerEndOfEpisode() = sleepTimer.triggerSleepTimerEndOfEpisode()
-
-    fun stopPlayback() {
-        engine.stopAndRelease()
-    }
-
-    fun toggleFavorite() {
+    private fun toggleFavorite() {
         val itemId = queueManager.currentPlayingItemId.value ?: return
         launch {
             // Silent mode (no containers — the player exposes a scalar, not a
@@ -557,24 +598,24 @@ class AudioPlayerViewModel(
     // playlistPicker.state, not this VM's uiState.
 
     /** Opens the playlist picker and loads the user's editable playlists. */
-    fun openPlaylistPicker() = playlistPicker.open()
+    private fun openPlaylistPicker() = playlistPicker.open()
 
-    fun dismissPlaylistPicker() = playlistPicker.dismiss()
+    private fun dismissPlaylistPicker() = playlistPicker.dismiss()
 
     /** Adds the current track to [playlist]; success posts its name as the message. */
-    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) = playlistPicker.addTo(playlist)
+    private fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) = playlistPicker.addTo(playlist)
 
-    fun setKaraokeModeEnabled(enabled: Boolean) {
+    private fun setKaraokeModeEnabled(enabled: Boolean) {
         karaokeMode = enabled
         _uiState.update { it.copy(lyrics = it.lyrics.copy(karaokeMode = enabled)) }
     }
 
-    fun toggleKaraokeMode() {
+    private fun toggleKaraokeMode() {
         setKaraokeModeEnabled(!karaokeMode)
     }
 
     /** Persists the lyrics overlay visibility so it survives across sessions. */
-    fun setLyricsVisible(enabled: Boolean) {
+    private fun setLyricsVisible(enabled: Boolean) {
         launch { audioStore.setAudioLyricsVisible(enabled) }
     }
 
@@ -592,7 +633,7 @@ class AudioPlayerViewModel(
     // a COMPLETED download flips the CTA to remove only after the screen's
     // confirm dialog — the module must not swallow that policy.
 
-    fun downloadCurrentTrack() {
+    private fun downloadCurrentTrack() {
         val itemId = currentPlayingItemId ?: return
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {

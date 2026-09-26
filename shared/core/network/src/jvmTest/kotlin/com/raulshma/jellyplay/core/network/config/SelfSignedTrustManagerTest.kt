@@ -69,7 +69,7 @@ class SelfSignedTrustManagerTest {
     private val emptyChain = arrayOf<X509Certificate>()
     private var granted: Set<String> = emptySet()
     private fun newManager(delegate: javax.net.ssl.X509TrustManager) =
-        SelfSignedTrustManager(delegate) { granted }
+        SelfSignedTrustManager(delegate, grantedHosts = { granted })
 
     private fun engineFor(host: String, port: Int): SSLEngine =
         SSLContext.getDefault().createSSLEngine(host, port)
@@ -179,7 +179,7 @@ class SelfSignedTrustManagerTest {
             override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
         }
         granted = emptySet()
-        val manager = SelfSignedTrustManager(plain) { granted }
+        val manager = SelfSignedTrustManager(plain, grantedHosts = { granted })
 
         manager.checkServerTrusted(emptyChain, "RSA", engineFor("media.example.com", 443))
         manager.checkClientTrusted(emptyChain, "RSA", engineFor("media.example.com", 443))

@@ -1,8 +1,16 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Circle
+import com.composables.icons.tabler.outline.CloudDownload
+import com.composables.icons.tabler.outline.Ticket
 import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrRole
+import com.raulshma.jellyplay.feature.details.generated.resources.Res
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_digital
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_physical
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_theatrical
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -189,5 +197,95 @@ class SeerrDetailUtilsTest {
         // the regional-indicator range (0x1F1E6–0x1F1FF) and produces a different
         // codepoint — the caller must pass uppercase ISO codes.
         assertFalse(getFlagEmoji("gb") == "🇬🇧")
+    }
+
+    // ── Rating formatting (moved from SeerrDetailScreen) ──────────────
+
+    @Test
+    fun `formatRatingOneDecimal renders one decimal with trailing zero`() {
+        assertEquals("8.0", formatRatingOneDecimal(8.0f))
+        assertEquals("0.0", formatRatingOneDecimal(0f))
+        assertEquals("10.0", formatRatingOneDecimal(10.0f))
+    }
+
+    @Test
+    fun `formatRatingOneDecimal truncates toward the rendered tenth`() {
+        // 8.74f is 8.7399…96 in binary: ·10+0.5 → 87.89… → 87 → "8.7".
+        assertEquals("8.7", formatRatingOneDecimal(8.74f))
+        // 8.76f is 8.7600…09 in binary: ·10+0.5 → 88.10… → 88 → "8.8".
+        assertEquals("8.8", formatRatingOneDecimal(8.76f))
+    }
+
+    @Test
+    fun `formatRatingOneDecimal rounds exact binary ties away from zero`() {
+        // 0.25f/8.25f are exact binary fractions, so ·10 lands on the exact
+        // tie 2.5/82.5; HALF_UP pushes it to 3/83 (java's "%.1f" rule on the
+        // same value — and the magnitude arithmetic is symmetric for 8.75f).
+        assertEquals("0.3", formatRatingOneDecimal(0.25f))
+        assertEquals("0.8", formatRatingOneDecimal(0.75f))
+        assertEquals("8.3", formatRatingOneDecimal(8.25f))
+        assertEquals("8.8", formatRatingOneDecimal(8.75f))
+    }
+
+    @Test
+    fun `formatRatingOneDecimal applies the sign symmetrically for negatives`() {
+        assertEquals("-8.7", formatRatingOneDecimal(-8.74f))
+    }
+
+    @Test
+    fun `formatRatingOneDecimal always renders the dot never a locale comma`() {
+        // The former episode-row site used default-locale String.format, so
+        // de/fr JVM devices saw "8,7" — the helper pins the dot.
+        assertEquals("8.7", formatRatingOneDecimal(8.74f))
+    }
+
+    // ── US currency formatting (moved from SeerrDetailScreen) ─────────
+
+    @Test
+    fun `formatUsCurrency renders plain dollar amounts with two decimals`() {
+        assertEquals("$8.00", formatUsCurrency(8))
+        assertEquals("$0.00", formatUsCurrency(0))
+        assertEquals("$1.00", formatUsCurrency(1))
+    }
+
+    @Test
+    fun `formatUsCurrency comma-groups thousands`() {
+        assertEquals("$1,000.00", formatUsCurrency(1_000))
+        assertEquals("$999.00", formatUsCurrency(999))
+        assertEquals("$250,000,000.00", formatUsCurrency(250_000_000))
+    }
+
+    @Test
+    fun `formatUsCurrency puts the minus before the dollar sign`() {
+        // NumberFormat.getCurrencyInstance(Locale.US) renders "-$5,000.00".
+        assertEquals("-$5,000.00", formatUsCurrency(-5_000))
+    }
+
+    // ── Release-type marker table (moved from SeerrDetailScreen) ──────
+
+    @Test
+    fun `releaseTypePresentation maps theatrical digital and physical`() {
+        assertEquals(
+            ReleaseTypePresentation(Tabler.Outline.Ticket, Res.string.detail_cd_release_theatrical),
+            releaseTypePresentation(3),
+        )
+        assertEquals(
+            ReleaseTypePresentation(Tabler.Outline.CloudDownload, Res.string.detail_cd_release_digital),
+            releaseTypePresentation(4),
+        )
+        assertEquals(
+            ReleaseTypePresentation(Tabler.Outline.Circle, Res.string.detail_cd_release_physical),
+            releaseTypePresentation(5),
+        )
+    }
+
+    @Test
+    fun `releaseTypePresentation renders nothing outside TMDB types 3 to 5`() {
+        // The row filters to 3..5 upstream; the table keeps the old `when`'s
+        // fall-through (no marker) for everything else.
+        assertNull(releaseTypePresentation(1))
+        assertNull(releaseTypePresentation(2))
+        assertNull(releaseTypePresentation(6))
+        assertNull(releaseTypePresentation(0))
     }
 }

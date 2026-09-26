@@ -53,7 +53,11 @@ class SyncPlayManagerTest {
         coEvery { apiClient.getSyncPlayInfo(any()) } returns Result.failure(Exception("Not in group"))
 
         manager = SyncPlayManager(
-            apiClient = apiClient,
+            // The union mock satisfies both family seams (JellyfinApiClient
+            // extends SyncPlayApiClient + AuthApiClient); the production
+            // graph injects the two family singles.
+            syncPlayApiClient = apiClient,
+            authApiClient = apiClient,
             webSocketClient = webSocketClient,
             authRepository = authRepository,
             timeSyncManager = timeSyncManager,

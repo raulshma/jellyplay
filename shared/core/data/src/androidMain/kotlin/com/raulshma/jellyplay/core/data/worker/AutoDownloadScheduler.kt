@@ -17,9 +17,8 @@ import java.time.Duration
 /**
  * Schedules the periodic background auto-download worker that fetches new
  * episodes of series the user has already downloaded. The schedule is only
- * active while the
- * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDownloadNewEpisodes]
- * preference is enabled; disabling it cancels the periodic work.
+ * active while the `autoDownloadNewEpisodes` preference is enabled; disabling
+ * it cancels the periodic work.
  */
 class AutoDownloadScheduler(
     private val context: Context,

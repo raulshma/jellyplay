@@ -29,6 +29,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.isAvailable
+import com.raulshma.jellyplay.core.model.seerr.isPending
+import com.raulshma.jellyplay.core.model.seerr.isProcessing
 
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
@@ -58,17 +61,15 @@ fun SeerrMediaCard(
         }
     }
 
+    // Status decisions fold through core/model's SeerrStatusDecisions (the ONE
+    // table) — the card used to hand-roll isAvailable and merge PROCESSING
+    // into isPending, rendering an in-flight download under the pending glyph.
     val mediaStatus = remember(item.mediaInfo?.status) {
         item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) } ?: SeerrMediaStatus.UNKNOWN
     }
-    val isAvailable = remember(mediaStatus) {
-        mediaStatus == SeerrMediaStatus.AVAILABLE ||
-            mediaStatus == SeerrMediaStatus.PARTIALLY_AVAILABLE
-    }
-    val isPending = remember(mediaStatus) {
-        mediaStatus == SeerrMediaStatus.PENDING ||
-            mediaStatus == SeerrMediaStatus.PROCESSING
-    }
+    val isAvailable = remember(mediaStatus) { mediaStatus.isAvailable }
+    val isProcessing = remember(mediaStatus) { mediaStatus.isProcessing }
+    val isPending = remember(mediaStatus) { mediaStatus.isPending }
     val hasRequest = item.mediaInfo?.requests?.isNotEmpty() == true
 
     // --- Peek preview via the generalized factory overload ------------------
@@ -154,10 +155,9 @@ fun SeerrMediaCard(
                         .padding(6.dp),
                 )
 
-                if (isAvailable || isPending || hasRequest) {
+                if (isAvailable || isProcessing || isPending || hasRequest) {
                     SeerrStatusBadge(
-                        isAvailable = isAvailable,
-                        isPending = isPending,
+                        mediaStatus = mediaStatus,
                         hasRequest = hasRequest,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -252,33 +252,41 @@ private fun SeerrMediaLabelBadge(
 }
 
 /**
- * Top-end availability/status glyph (✓ available, ⏳ pending, → requested) for
- * Seerr cards. Built on [GlassBadge].
+ * The Seerr card's status-corner presentation table — (glyph, badge color)
+ * per media status, the card-badge counterpart of the requests feature's
+ * `requestStatusPresentation` and the Seerr detail screen's action-button
+ * `when`: every branch is a static [StatusColors] value, PROCESSING renders
+ * as its own in-flight state (info blue, matching both of those tables)
+ * instead of masquerading as pending. Precedence: available (partial
+ * counts) > processing > pending > bare "requested" (a request entry
+ * without a recognizable media status).
+ */
+internal fun seerrStatusBadgePresentation(
+    mediaStatus: SeerrMediaStatus,
+    hasRequest: Boolean,
+): Pair<String, Color> = when {
+    mediaStatus.isAvailable -> "✓" to StatusColors.available
+    mediaStatus.isProcessing -> "⟳" to StatusColors.info
+    mediaStatus.isPending -> "⏳" to StatusColors.pending
+    hasRequest -> "→" to StatusColors.requested
+    else -> "" to Color.Transparent
+}
+
+/**
+ * Top-end availability/status glyph (✓ available, ⟳ processing, ⏳ pending,
+ * → requested) for Seerr cards. Built on [GlassBadge]; the decision is
+ * [seerrStatusBadgePresentation]'s.
  */
 @Composable
 private fun SeerrStatusBadge(
-    isAvailable: Boolean,
-    isPending: Boolean,
+    mediaStatus: SeerrMediaStatus,
     hasRequest: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val badgeColor = remember(isAvailable, isPending, hasRequest) {
-        when {
-            isAvailable -> StatusColors.available
-            isPending -> StatusColors.pending
-            hasRequest -> StatusColors.requested
-            else -> Color.Transparent
-        }
-    }
+    val (glyph, badgeColor) = seerrStatusBadgePresentation(mediaStatus, hasRequest)
     if (badgeColor == Color.Transparent) return
     val badgeTextColor = remember(badgeColor) {
         if (isLightColor(badgeColor)) Color.Black else Color.White
-    }
-    val glyph = when {
-        isAvailable -> "✓"
-        isPending -> "⏳"
-        hasRequest -> "→"
-        else -> ""
     }
     GlassBadge(
         modifier = modifier,

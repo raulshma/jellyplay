@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,12 +32,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
-import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
+import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberInlineConfirm
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_approve
@@ -53,21 +52,12 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_dial
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_dialog_decline_title
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_fallback_title
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_metadata_modified
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_available
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_declined
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_deleted
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_failed
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_partially_available
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_pending
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_processing
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_status_unknown
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_days_ago
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_hours_ago
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_just_now
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_minutes_ago
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_months_ago
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_time_years_ago
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -87,33 +77,19 @@ fun RequestListItem(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
-    var isConfirmingDelete by remember(request.id) { mutableStateOf(false) }
     var pendingApproval by remember(request.id) { mutableStateOf<SeerrRequestStatus?>(null) }
+    val deleteConfirm = rememberInlineConfirm(request.id)
 
-    LaunchedEffect(isConfirmingDelete) {
-        if (isConfirmingDelete) {
-            delay(3000)
-            isConfirmingDelete = false
-        }
+    val mediaStatus = remember(request.is4k, request.media.status, request.media.status4k) {
+        request.effectiveMediaStatus()
     }
-
-    val effectiveMediaStatus = if (request.is4k) request.media.status4k else request.media.status
-    val mediaStatus = remember(effectiveMediaStatus) { SeerrMediaStatus.fromValue(effectiveMediaStatus) }
     val displayTitle = mediaInfo?.title ?: stringResource(Res.string.requests_fallback_title, request.media.tmdbId)
 
-    val (statusLabelRes, statusColor) = when {
-        requestStatus == SeerrRequestStatus.DECLINED -> Res.string.requests_status_declined to StatusColors.error
-        requestStatus == SeerrRequestStatus.FAILED -> Res.string.requests_status_failed to StatusColors.error
-        requestStatus == SeerrRequestStatus.PENDING && mediaStatus == SeerrMediaStatus.DELETED -> Res.string.requests_status_pending to StatusColors.pending
-        else -> when (mediaStatus) {
-            SeerrMediaStatus.AVAILABLE -> Res.string.requests_status_available to StatusColors.available
-            SeerrMediaStatus.PROCESSING -> Res.string.requests_status_processing to StatusColors.info
-            SeerrMediaStatus.PARTIALLY_AVAILABLE -> Res.string.requests_status_partially_available to StatusColors.pendingLight
-            SeerrMediaStatus.PENDING -> Res.string.requests_status_pending to StatusColors.pending
-            SeerrMediaStatus.DELETED -> Res.string.requests_status_deleted to StatusColors.error
-            SeerrMediaStatus.UNKNOWN -> Res.string.requests_status_unknown to colorScheme.onSurfaceVariant
-        }
-    }
+    val (statusLabelRes, statusColor) = requestStatusPresentation(
+        requestStatus = requestStatus,
+        mediaStatus = mediaStatus,
+        unknownStatusColor = colorScheme.onSurfaceVariant,
+    )
     val statusLabel = stringResource(statusLabelRes)
 
     Surface(
@@ -316,12 +292,8 @@ fun RequestListItem(
                         else -> {
                             FilledTonalButton(
                                 onClick = {
-                                    if (isConfirmingDelete) {
-                                        onDelete()
-                                        isConfirmingDelete = false
-                                    } else {
-                                        isConfirmingDelete = true
-                                    }
+                                    if (deleteConfirm.isConfirming) deleteConfirm.confirm(onDelete)
+                                    else deleteConfirm.arm()
                                 },
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
@@ -334,7 +306,7 @@ fun RequestListItem(
                                 ),
                             ) {
                                 Text(
-                                    stringResource(if (isConfirmingDelete) Res.string.requests_action_delete_confirm else Res.string.requests_action_delete),
+                                    stringResource(if (deleteConfirm.isConfirming) Res.string.requests_action_delete_confirm else Res.string.requests_action_delete),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             }
@@ -389,8 +361,7 @@ private fun rememberRelativeTimeFormats(): RelativeTimeFormats {
 /**
  * the java.time body moved to the [requestAgeMinutes] seam (routed through
  * core:ui's DateLabels actuals — the verbatim `OffsetDateTime`/`Duration`
- * pipeline is the jvmShared actual; wasmJs gets strict-regex + integer-math;
- * see RequestTime.kt). The buckets
+ * pipeline is the jvmShared actual; see RequestTime.kt). The buckets
  * are integer-math over whole minutes and provably match the old
  * `Duration`-based thresholds:
  *  - `toMinutes() < 1`            -> minutes < 1 (also absorbs every negative

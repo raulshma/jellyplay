@@ -435,10 +435,9 @@ dependencies {
 
     implementation(libs.media3.session)
 
-    // Android keeps Coil line (3.5.0 BOM) so artwork→Palette
-    // swatches stay byte-identical to the shipped build; the shared modules'
-    // 3.4.0 pin exists only for the wasm klib toolchain and does not apply to
-    // Android class files.
+    // Android keeps the Coil 3.5.0 BOM so artwork→Palette
+    // swatches stay byte-identical to the shipped build; the shared
+    // modules' 3.4.0 pin does not apply to Android class files.
     implementation(platform(libs.coil.bom.android))
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
@@ -457,6 +456,12 @@ dependencies {
     // which encodes/decodes via kotlinx.serialization Json.
     androidTestImplementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.compose.ui.test.manifest)
+
+    // LeakCanary self-installs its watcher via a startup ContentProvider and
+    // auto-reports retained Activities/Fragments/ViewModels/Services. Debug
+    // builds only (phoneDebug + tvDebug); runtime tweaks live in
+    // app/src/debug .../DebugLeakCanary.kt next to installDebugStrictMode().
+    debugImplementation(libs.leakcanary.android)
 
     // Baseline profile producers are wired per flavor in the `baselineProfile`
     // extension block above (:baselineprofile for phone only — tv ships

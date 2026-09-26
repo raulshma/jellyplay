@@ -149,7 +149,7 @@ fun AudioPlayerScreen(
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
-                viewModel.undoLastQueueOperation()
+                viewModel.onEvent(AudioPlayerUiEvent.UndoLastQueueOperation)
             }
         }
     }
@@ -166,7 +166,7 @@ fun AudioPlayerScreen(
     val playFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(itemId) {
-        viewModel.play(itemId)
+        viewModel.onEvent(AudioPlayerUiEvent.Play(itemId))
         artworkScale.animateTo(1f, artworkScaleSpec)
     }
 
@@ -298,13 +298,13 @@ fun AudioPlayerScreen(
                                 ) {
                                     AudioHorizontalSwipeAction.SkipNext -> { // Swipe Left -> Next
                                         coroutineScope.launch {
-                                            viewModel.skipToNext()
+                                            viewModel.onEvent(AudioPlayerUiEvent.SkipToNext)
                                             horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     }
                                     AudioHorizontalSwipeAction.SkipPrevious -> { // Swipe Right -> Prev
                                         coroutineScope.launch {
-                                            viewModel.skipToPrevious()
+                                            viewModel.onEvent(AudioPlayerUiEvent.SkipToPrevious)
                                             horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     }
@@ -364,15 +364,15 @@ fun AudioPlayerScreen(
                                 DoubleTapSeekAction.SeekBack -> {
                                     val target = (viewModel.currentPositionState.value - DOUBLE_TAP_SEEK_MS)
                                         .coerceAtLeast(0L)
-                                    viewModel.seekTo(target)
+                                    viewModel.onEvent(AudioPlayerUiEvent.SeekTo(target))
                                 }
                                 DoubleTapSeekAction.SeekForward -> {
                                     val duration = uiState.duration
                                     val target = (viewModel.currentPositionState.value + DOUBLE_TAP_SEEK_MS)
                                         .coerceAtMost(duration)
-                                    viewModel.seekTo(target)
+                                    viewModel.onEvent(AudioPlayerUiEvent.SeekTo(target))
                                 }
-                                DoubleTapSeekAction.TogglePlayPause -> viewModel.togglePlayPause()
+                                DoubleTapSeekAction.TogglePlayPause -> viewModel.onEvent(AudioPlayerUiEvent.TogglePlayPause)
                             }
                         },
                     )
@@ -395,7 +395,7 @@ fun AudioPlayerScreen(
                     lyricsVisible = sheets.showLyrics,
                     onLyricsClick = {
                         sheets.showLyrics = !sheets.showLyrics
-                        viewModel.setLyricsVisible(sheets.showLyrics)
+                        viewModel.onEvent(AudioPlayerUiEvent.SetLyricsVisible(sheets.showLyrics))
                     },
                     onQueueClick = { sheets.show(AudioPlayerSheet.Queue) },
                     onMenuToggle = { sheets.showMenu = it },
@@ -408,18 +408,18 @@ fun AudioPlayerScreen(
                     onSpeedClick = { sheets.showFromMenu(AudioPlayerSheet.SpeedPicker) },
                     onEqualizerClick = { sheets.showFromMenu(AudioPlayerSheet.Equalizer) },
                     onEffectsClick = { sheets.showFromMenu(AudioPlayerSheet.Effects) },
-                    onDialogueBoostClick = { sheets.showMenu = false; viewModel.toggleDialogueBoost() },
-                    onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
-                    onNightModeClick = { sheets.showMenu = false; viewModel.toggleNightMode() },
-                    onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
+                    onDialogueBoostClick = { sheets.showMenu = false; viewModel.onEvent(AudioPlayerUiEvent.ToggleDialogueBoost) },
+                    onDialogueBoostStrengthChange = { viewModel.onEvent(AudioPlayerUiEvent.SetDialogueBoostStrength(it)) },
+                    onNightModeClick = { sheets.showMenu = false; viewModel.onEvent(AudioPlayerUiEvent.ToggleNightMode) },
+                    onNightModeStrengthChange = { viewModel.onEvent(AudioPlayerUiEvent.SetNightModeStrength(it)) },
                     onAmbientClick = { sheets.showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
-                    onAddToPlaylistClick = { sheets.showMenu = false; viewModel.openPlaylistPicker() },
+                    onAddToPlaylistClick = { sheets.showMenu = false; viewModel.onEvent(AudioPlayerUiEvent.OpenPlaylistPicker) },
                     sleepTimerActive = sleepTimer.active,
                     sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
                     sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
                     onSleepTimerClick = { sheets.showFromMenu(AudioPlayerSheet.SleepTimer) },
                     karaokeMode = lyricsState.karaokeMode,
-                    onKaraokeToggle = { viewModel.setKaraokeModeEnabled(it) },
+                    onKaraokeToggle = { viewModel.onEvent(AudioPlayerUiEvent.SetKaraokeModeEnabled(it)) },
                     hasKaraokeLyrics = lyricsState.hasKaraokeLyrics,
                     castController = viewModel.castController,
                 )
@@ -452,7 +452,7 @@ fun AudioPlayerScreen(
                                 karaokeMode = lyricsState.karaokeMode,
                                 currentPositionMs = viewModel.currentPositionState,
                                 lyricsOffsetMs = lyricsState.lyricsOffsetMs,
-                                onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
+                                onLyricsOffsetChange = { viewModel.onEvent(AudioPlayerUiEvent.SetLyricsOffset(it)) },
                             )
                         }
                         Spacer(Modifier.width(32.dp))
@@ -476,16 +476,16 @@ fun AudioPlayerScreen(
                                 isPlaying = uiState.isPlaying,
                                 accentColor = accentColor,
                                 onSeek = { frac ->
-                                    if (uiState.duration > 0) viewModel.seekTo((frac * uiState.duration).toLong())
+                                    if (uiState.duration > 0) viewModel.onEvent(AudioPlayerUiEvent.SeekTo((frac * uiState.duration).toLong()))
                                 },
                             )
                             Spacer(Modifier.height(16.dp))
                             PixelTransportControls(
                                 isPlaying = uiState.isPlaying,
                                 isLoading = uiState.isLoading,
-                                onTogglePlayPause = { viewModel.togglePlayPause() },
-                                onSkipPrevious = { viewModel.skipToPrevious() },
-                                onSkipNext = { viewModel.skipToNext() },
+                                onTogglePlayPause = { viewModel.onEvent(AudioPlayerUiEvent.TogglePlayPause) },
+                                onSkipPrevious = { viewModel.onEvent(AudioPlayerUiEvent.SkipToPrevious) },
+                                onSkipNext = { viewModel.onEvent(AudioPlayerUiEvent.SkipToNext) },
                                 pillSurface = pillSurface,
                                 accentColor = accentColor,
                                 playFocusRequester = playFocusRequester,
@@ -499,17 +499,17 @@ fun AudioPlayerScreen(
                                 abLoopStartMs = abLoopStart,
                                 abLoopEndMs = abLoopEnd,
                                 showDownload = viewModel.isDownloadSupported,
-                                onToggleShuffle = { viewModel.toggleShuffle() },
-                                onCycleRepeatMode = { viewModel.cycleRepeatMode() },
-                                onToggleFavorite = { viewModel.toggleFavorite() },
+                                onToggleShuffle = { viewModel.onEvent(AudioPlayerUiEvent.ToggleShuffle) },
+                                onCycleRepeatMode = { viewModel.onEvent(AudioPlayerUiEvent.CycleRepeatMode) },
+                                onToggleFavorite = { viewModel.onEvent(AudioPlayerUiEvent.ToggleFavorite) },
                                 onDownloadClick = {
                                     if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
                                         sheets.show(AudioPlayerSheet.DeleteConfirm)
                                     } else {
-                                        viewModel.downloadCurrentTrack()
+                                        viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
                                     }
                                 },
-                                onAbLoopClick = { viewModel.cycleAbLoop() },
+                                onAbLoopClick = { viewModel.onEvent(AudioPlayerUiEvent.CycleAbLoop) },
                                 pillSurfaceDark = pillSurfaceDark,
                                 accentColor = accentColor,
                             )
@@ -517,7 +517,7 @@ fun AudioPlayerScreen(
                             NextTrackSection(
                                 queue = queueState.queue,
                                 currentIndex = queueState.currentIndex,
-                                onSkipTrack = { viewModel.removeFromQueue(it) },
+                                onSkipTrack = { viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(it)) },
                                 accentColor = accentColor,
                             )
                         }
@@ -541,7 +541,7 @@ fun AudioPlayerScreen(
                         karaokeMode = lyricsState.karaokeMode,
                         currentPositionMs = viewModel.currentPositionState,
                         lyricsOffsetMs = lyricsState.lyricsOffsetMs,
-                        onLyricsOffsetChange = { viewModel.setLyricsOffset(it) },
+                        onLyricsOffsetChange = { viewModel.onEvent(AudioPlayerUiEvent.SetLyricsOffset(it)) },
                     )
 
                     Spacer(Modifier.weight(0.4f))
@@ -566,16 +566,16 @@ fun AudioPlayerScreen(
                             isPlaying = uiState.isPlaying,
                             accentColor = accentColor,
                             onSeek = { frac ->
-                                if (uiState.duration > 0) viewModel.seekTo((frac * uiState.duration).toLong())
+                                if (uiState.duration > 0) viewModel.onEvent(AudioPlayerUiEvent.SeekTo((frac * uiState.duration).toLong()))
                             },
                         )
                         Spacer(Modifier.height(20.dp))
                         PixelTransportControls(
                             isPlaying = uiState.isPlaying,
                             isLoading = uiState.isLoading,
-                            onTogglePlayPause = { viewModel.togglePlayPause() },
-                            onSkipPrevious = { viewModel.skipToPrevious() },
-                            onSkipNext = { viewModel.skipToNext() },
+                            onTogglePlayPause = { viewModel.onEvent(AudioPlayerUiEvent.TogglePlayPause) },
+                            onSkipPrevious = { viewModel.onEvent(AudioPlayerUiEvent.SkipToPrevious) },
+                            onSkipNext = { viewModel.onEvent(AudioPlayerUiEvent.SkipToNext) },
                             pillSurface = pillSurface,
                             accentColor = accentColor,
                             playFocusRequester = playFocusRequester,
@@ -589,17 +589,17 @@ fun AudioPlayerScreen(
                             abLoopStartMs = abLoopStart,
                             abLoopEndMs = abLoopEnd,
                             showDownload = viewModel.isDownloadSupported,
-                            onToggleShuffle = { viewModel.toggleShuffle() },
-                            onCycleRepeatMode = { viewModel.cycleRepeatMode() },
-                            onToggleFavorite = { viewModel.toggleFavorite() },
+                            onToggleShuffle = { viewModel.onEvent(AudioPlayerUiEvent.ToggleShuffle) },
+                            onCycleRepeatMode = { viewModel.onEvent(AudioPlayerUiEvent.CycleRepeatMode) },
+                            onToggleFavorite = { viewModel.onEvent(AudioPlayerUiEvent.ToggleFavorite) },
                             onDownloadClick = {
                                 if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
                                     sheets.show(AudioPlayerSheet.DeleteConfirm)
                                 } else {
-                                    viewModel.downloadCurrentTrack()
+                                    viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
                                 }
                             },
-                            onAbLoopClick = { viewModel.cycleAbLoop() },
+                            onAbLoopClick = { viewModel.onEvent(AudioPlayerUiEvent.CycleAbLoop) },
                             pillSurfaceDark = pillSurfaceDark,
                             accentColor = accentColor,
                         )
@@ -607,7 +607,7 @@ fun AudioPlayerScreen(
                         NextTrackSection(
                             queue = queueState.queue,
                             currentIndex = queueState.currentIndex,
-                            onSkipTrack = { viewModel.removeFromQueue(it) },
+                            onSkipTrack = { viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(it)) },
                             accentColor = accentColor,
                         )
                         Spacer(Modifier.height(16.dp))
@@ -710,7 +710,7 @@ fun AudioPlayerScreen(
                         TextButton(
                             onClick = {
                                 showErrorOverlay = false
-                                viewModel.play(itemId)
+                                viewModel.onEvent(AudioPlayerUiEvent.Play(itemId))
                             },
                             modifier = Modifier
                                 .then(retryFocusState.focusModifier)
@@ -730,10 +730,10 @@ fun AudioPlayerScreen(
             queue = queueState.queue,
             currentIndex = queueState.currentIndex,
             onSelect = { index ->
-                viewModel.playFromQueue(index)
+                viewModel.onEvent(AudioPlayerUiEvent.PlayFromQueue(index))
                 sheets.hide(AudioPlayerSheet.Queue)
             },
-            onRemove = { index -> viewModel.removeFromQueue(index) },
+            onRemove = { index -> viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(index)) },
             onDismiss = { sheets.hide(AudioPlayerSheet.Queue) },
         )
     }
@@ -741,7 +741,7 @@ fun AudioPlayerScreen(
     if (sheets.showSpeedPicker) {
         SpeedPickerSheet(
             currentSpeed = uiState.speed,
-            onSelect = { viewModel.changePlaybackSpeed(it) },
+            onSelect = { viewModel.onEvent(AudioPlayerUiEvent.ChangePlaybackSpeed(it)) },
             onDismiss = { sheets.hide(AudioPlayerSheet.SpeedPicker) },
         )
     }
@@ -751,10 +751,10 @@ fun AudioPlayerScreen(
             enabled = effects.equalizerEnabled,
             bandLevels = effects.equalizerSettings.bandLevels,
             currentPreset = effects.equalizerPreset,
-            onToggle = { viewModel.toggleEqualizer() },
-            onBandChange = { index, level -> viewModel.setEqualizerBand(index, level) },
-            onReset = { viewModel.resetEqualizer() },
-            onPresetChange = { viewModel.setEqualizerPreset(it) },
+            onToggle = { viewModel.onEvent(AudioPlayerUiEvent.ToggleEqualizer) },
+            onBandChange = { index, level -> viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerBand(index, level)) },
+            onReset = { viewModel.onEvent(AudioPlayerUiEvent.ResetEqualizer) },
+            onPresetChange = { viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerPreset(it)) },
             onDismiss = { sheets.hide(AudioPlayerSheet.Equalizer) },
         )
     }
@@ -765,9 +765,9 @@ fun AudioPlayerScreen(
             title = uiState.title,
             searchResults = lyricsState.searchResults,
             isSearching = lyricsState.isSearching,
-            onSearch = { viewModel.searchLyrics(it) },
-            onApplyTrack = { viewModel.applyLyrics(it) },
-            onDismiss = { sheets.hide(AudioPlayerSheet.LyricsSearch); viewModel.clearLyricsSearch() },
+            onSearch = { viewModel.onEvent(AudioPlayerUiEvent.SearchLyrics(it)) },
+            onApplyTrack = { viewModel.onEvent(AudioPlayerUiEvent.ApplyLyrics(it)) },
+            onDismiss = { sheets.hide(AudioPlayerSheet.LyricsSearch); viewModel.onEvent(AudioPlayerUiEvent.ClearLyricsSearch) },
         )
     }
 
@@ -778,9 +778,9 @@ fun AudioPlayerScreen(
             isEndOfEpisodeMode = sleepTimer.endOfEpisode,
             remainingMs = sleepTimerRemainingMs,
             lastUsedDurationMs = sleepTimer.lastUsedDurationMs,
-            onSelectDuration = { viewModel.startSleepTimer(it) },
-            onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
-            onCancel = { viewModel.cancelSleepTimer() },
+            onSelectDuration = { viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimer(it)) },
+            onSelectEndOfEpisode = { viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimerEndOfEpisode) },
+            onCancel = { viewModel.onEvent(AudioPlayerUiEvent.CancelSleepTimer) },
             onDismiss = { sheets.hide(AudioPlayerSheet.SleepTimer) },
         )
     }
@@ -788,7 +788,7 @@ fun AudioPlayerScreen(
     // Add-to-playlist picker.
     if (playlistPicker.visible) {
         com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet(
-            onDismissRequest = { viewModel.dismissPlaylistPicker() },
+            onDismissRequest = { viewModel.onEvent(AudioPlayerUiEvent.DismissPlaylistPicker) },
             sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
         ) {
             androidx.compose.foundation.layout.Column(
@@ -832,7 +832,7 @@ fun AudioPlayerScreen(
                                         { Text(stringResource(Res.string.audio_playlist_items_count, count)) }
                                     },
                                     modifier = Modifier.clickable {
-                                        viewModel.addToPlaylist(playlist)
+                                        viewModel.onEvent(AudioPlayerUiEvent.AddToPlaylist(playlist))
                                     },
                                 )
                             }
@@ -848,19 +848,19 @@ fun AudioPlayerScreen(
             state = effects,
             onDismiss = { sheets.hide(AudioPlayerSheet.Effects) },
             onOpenEqualizer = { sheets.hide(AudioPlayerSheet.Effects); sheets.show(AudioPlayerSheet.Equalizer) },
-            onToggleEqualizer = { viewModel.toggleEqualizer() },
-            onToggleBassBoost = { viewModel.toggleBassBoost() },
-            onBassBoostStrength = { viewModel.setBassBoostStrength(it) },
-            onToggleVirtualizer = { viewModel.toggleVirtualizer() },
-            onVirtualizerStrength = { viewModel.setVirtualizerStrength(it) },
-            onReverbPreset = { viewModel.setReverbPreset(it) },
-            onToggleDialogueBoost = { viewModel.toggleDialogueBoost() },
-            onDialogueBoostStrength = { viewModel.setDialogueBoostStrength(it) },
-            onToggleNightMode = { viewModel.toggleNightMode() },
-            onNightModeStrength = { viewModel.setNightModeStrength(it) },
-            onLrBalance = { viewModel.setLrBalance(it) },
-            onPitchSemitones = { viewModel.setPitchSemitones(it) },
-            onAutoEqByGenre = { viewModel.setAutoEqByGenre(it) },
+            onToggleEqualizer = { viewModel.onEvent(AudioPlayerUiEvent.ToggleEqualizer) },
+            onToggleBassBoost = { viewModel.onEvent(AudioPlayerUiEvent.ToggleBassBoost) },
+            onBassBoostStrength = { viewModel.onEvent(AudioPlayerUiEvent.SetBassBoostStrength(it)) },
+            onToggleVirtualizer = { viewModel.onEvent(AudioPlayerUiEvent.ToggleVirtualizer) },
+            onVirtualizerStrength = { viewModel.onEvent(AudioPlayerUiEvent.SetVirtualizerStrength(it)) },
+            onReverbPreset = { viewModel.onEvent(AudioPlayerUiEvent.SetReverbPreset(it)) },
+            onToggleDialogueBoost = { viewModel.onEvent(AudioPlayerUiEvent.ToggleDialogueBoost) },
+            onDialogueBoostStrength = { viewModel.onEvent(AudioPlayerUiEvent.SetDialogueBoostStrength(it)) },
+            onToggleNightMode = { viewModel.onEvent(AudioPlayerUiEvent.ToggleNightMode) },
+            onNightModeStrength = { viewModel.onEvent(AudioPlayerUiEvent.SetNightModeStrength(it)) },
+            onLrBalance = { viewModel.onEvent(AudioPlayerUiEvent.SetLrBalance(it)) },
+            onPitchSemitones = { viewModel.onEvent(AudioPlayerUiEvent.SetPitchSemitones(it)) },
+            onAutoEqByGenre = { viewModel.onEvent(AudioPlayerUiEvent.SetAutoEqByGenre(it)) },
         )
     }
 
@@ -873,7 +873,7 @@ fun AudioPlayerScreen(
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
                 sheets.hide(AudioPlayerSheet.DeleteConfirm)
-                viewModel.downloadCurrentTrack()
+                viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
             },
             onDismiss = { sheets.hide(AudioPlayerSheet.DeleteConfirm) },
         )

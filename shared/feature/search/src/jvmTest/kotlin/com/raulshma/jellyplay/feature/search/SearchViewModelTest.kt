@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
+import com.raulshma.jellyplay.core.data.search.MediaSideSearchState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -20,7 +20,6 @@ import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
@@ -33,7 +32,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -52,7 +53,8 @@ import kotlin.test.assertTrue
 /**
  * Coverage for [SearchViewModel]'s public surface NOT exercised by
  * [SearchViewModelHistoryTest] (which focuses on `onSearchResultsShown` query
- * persistence): filter toggling, the paged search pipeline (Seerr + offline),
+ * persistence): filter toggling, the paged search pipeline, side-search
+ * mirroring (the Seerr + offline rows ride [MediaSearchEngine.sideSearch]),
  * discovery suggestions, genre/tag loading + retry, and Seerr request
  * delegation to [SeerrRequestStateHolder].
  */
@@ -71,9 +73,8 @@ class SearchViewModelTest {
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
 
-    /** Search choreography (history, gate, debounce) delegates here. */
+    /** Search choreography (history, side rows, debounce) delegates here. */
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
-    private lateinit var offlineRepository: OfflineRepository
     private lateinit var searchFiltersStore: SearchFiltersStore
     private val quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions = mockk(relaxed = true)
 
@@ -86,12 +87,11 @@ class SearchViewModelTest {
         imageUrlProvider = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
-        offlineRepository = mockk(relaxed = true)
         searchFiltersStore = mockk(relaxed = true)
 
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
-        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns false
+        every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
@@ -99,7 +99,6 @@ class SearchViewModelTest {
         coEvery { mediaRepository.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
         )
-        coEvery { offlineRepository.searchOffline(any(), any()) } returns emptyList()
 
         viewModel = SearchViewModel(
             mediaRepository,
@@ -108,7 +107,6 @@ class SearchViewModelTest {
             seerrRepository,
             seerrRequestDelegate,
             mediaSearchEngine,
-            offlineRepository,
             searchFiltersStore, quickDownloadActions,
         )
     }
@@ -192,7 +190,7 @@ class SearchViewModelTest {
         // Recreate so the init-time suggestion load picks up the stub.
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
 
         // Warm the flow; the empty initial query triggers loadDiscoverySuggestions().
@@ -235,7 +233,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
         advanceUntilIdle()
@@ -253,7 +251,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
         advanceUntilIdle()
@@ -269,7 +267,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.tags.collect { } }
         advanceUntilIdle()
@@ -286,7 +284,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrConnected.collect { } }
         advanceUntilIdle()
@@ -301,7 +299,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrSearchEnabled.collect { } }
         advanceUntilIdle()
@@ -309,157 +307,101 @@ class SearchViewModelTest {
         assertTrue(viewModel.isSeerrSearchEnabled.value)
     }
 
-    // ── Seerr search pipeline ──────────────────────────────────────────
+    // ── Side-search mirroring (the engine's sideSearch seam) ───────────
 
     @Test
-    fun `seerr search publishes up to 10 results when connected and enabled`() = runTest(mainDispatcher) {
-        val items = (1..12).map { SeerrSearchItem(id = it, title = "Item $it") }
-        every { seerrRepository.getPreferences() } returns flowOf(
-            SeerrPreferences(serverUrl = "https://seerr.example", searchEnabled = true)
+    fun `side search mirrors engine seerr and offline rows into the row states`() = runTest(mainDispatcher) {
+        val seerrItems = (1..10).map { SeerrSearchItem(id = it, title = "Item $it") }
+        val offline = listOf(
+            OfflineMediaItem(id = "o1", name = "Offline Movie", mediaType = MediaType.MOVIE),
         )
-        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns true
-        coEvery { seerrRepository.search(any(), any()) } returns Result.success(
-            SeerrSearchResponse(results = items, totalResults = items.size)
+        every { mediaSearchEngine.sideSearch(any()) } returns flowOf(
+            MediaSideSearchState(query = "matrix", seerr = seerrItems, seerrError = false, offline = offline)
         )
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
-        // searchSeerr()/searchOffline() are launched from the pagedResults
-        // pipeline, so that flow must be collected for the search to run. The
-        // collector must be a FOREGROUND child of the test scope: under
-        // kotlinx-coroutines 1.11, advanceUntilIdle() skips background-scope
-        // tasks once no foreground work remains, so a backgroundScope collector
-        // would never see its debounce fire.
-        val pagedJob = launch { viewModel.pagedResults.collect { } }
-        try {
-            viewModel.onEvent(SearchUiEvent.Search("matrix"))
-            advanceUntilIdle()
+        advanceUntilIdle()
 
-            assertEquals(10, viewModel.seerrResults.value.size)
-            assertFalse(viewModel.seerrSearchError.value)
-        } finally {
-            pagedJob.cancel()
-        }
+        assertEquals(seerrItems, viewModel.seerrResults.value)
+        assertFalse(viewModel.seerrSearchError.value)
+        assertEquals(offline, viewModel.offlineResults.value)
     }
 
     @Test
-    fun `seerr search sets error flag on repository failure`() = runTest(mainDispatcher) {
-        every { seerrRepository.getPreferences() } returns flowOf(
-            SeerrPreferences(serverUrl = "https://seerr.example", searchEnabled = true)
+    fun `side search mirrors the engine error flag into seerrSearchError`() = runTest(mainDispatcher) {
+        every { mediaSearchEngine.sideSearch(any()) } returns flowOf(
+            MediaSideSearchState(query = "matrix", seerr = emptyList(), seerrError = true, offline = emptyList())
         )
-        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns true
-        coEvery { seerrRepository.search(any(), any()) } returns Result.failure(RuntimeException("500"))
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
-        val pagedJob = launch { viewModel.pagedResults.collect { } }
-        try {
-            viewModel.onEvent(SearchUiEvent.Search("matrix"))
-            advanceUntilIdle()
+        advanceUntilIdle()
 
-            assertTrue(viewModel.seerrSearchError.value)
-            assertTrue(viewModel.seerrResults.value.isEmpty())
-        } finally {
-            pagedJob.cancel()
-        }
+        assertTrue(viewModel.seerrSearchError.value)
+        assertTrue(viewModel.seerrResults.value.isEmpty())
     }
 
     @Test
-    fun `seerr search no-op when not connected`() = runTest(mainDispatcher) {
-        every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
+    fun `retrySeerrSearch re-kicks the engine round for the current query`() = runTest(mainDispatcher) {
+        // A stateful stub that consumes the queries argument — the retry is a
+        // re-emission of the unchanged query into the engine, so the stub must
+        // observe the query flow to react to it.
+        var failing = true
+        every { mediaSearchEngine.sideSearch(any()) } answers {
+            val queries: Flow<String> = firstArg()
+            queries.mapLatest { q ->
+                if (failing) {
+                    MediaSideSearchState(q, emptyList(), seerrError = true, offline = emptyList())
+                } else {
+                    MediaSideSearchState(q, listOf(SeerrSearchItem(id = 1, title = "X")), seerrError = false, offline = emptyList())
+                }
+            }
+        }
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
-        val pagedJob = launch { viewModel.pagedResults.collect { } }
-        try {
-            viewModel.onEvent(SearchUiEvent.Search("matrix"))
-            advanceUntilIdle()
+        viewModel.onEvent(SearchUiEvent.Search("matrix"))
+        advanceUntilIdle()
+        assertTrue(viewModel.seerrSearchError.value)
 
-            coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
-            assertTrue(viewModel.seerrResults.value.isEmpty())
-            assertFalse(viewModel.seerrSearchError.value)
-        } finally {
-            pagedJob.cancel()
-        }
-    }
+        // The retry re-kicks the query flow; the engine's cancel-and-replace
+        // re-runs the round and the recovered state lands.
+        failing = false
+        viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
+        advanceUntilIdle()
 
-    @Test
-    fun `retrySeerrSearch re-runs search for the current query`() = runTest(mainDispatcher) {
-        every { seerrRepository.getPreferences() } returns flowOf(
-            SeerrPreferences(serverUrl = "https://seerr.example", searchEnabled = true)
-        )
-        coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns true
-        coEvery { seerrRepository.search(any(), any()) } returns Result.success(
-            SeerrSearchResponse(results = listOf(SeerrSearchItem(id = 1, title = "X")))
-        )
-        viewModel = SearchViewModel(
-            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
-        )
-        val pagedJob = launch { viewModel.pagedResults.collect { } }
-        try {
-            viewModel.onEvent(SearchUiEvent.Search("matrix"))
-            advanceUntilIdle()
-            viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
-            advanceUntilIdle()
-
-            assertEquals(1, viewModel.seerrResults.value.size)
-            assertFalse(viewModel.seerrSearchError.value)
-        } finally {
-            pagedJob.cancel()
-        }
+        assertEquals(1, viewModel.seerrResults.value.size)
+        assertFalse(viewModel.seerrSearchError.value)
     }
 
     @Test
     fun `retrySeerrSearch is a no-op for a blank query`() = runTest(mainDispatcher) {
+        // Drain the setUp VM's queued init work against the setUp stub first —
+        // otherwise its collector would also consume the answers stub below
+        // and pollute the emission count.
+        advanceUntilIdle()
+        var emissions = 0
+        every { mediaSearchEngine.sideSearch(any()) } answers {
+            val queries: Flow<String> = firstArg()
+            queries.mapLatest { q ->
+                emissions++
+                MediaSideSearchState(q, emptyList(), seerrError = false, offline = emptyList())
+            }
+        }
+        viewModel = SearchViewModel(
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
+        )
         viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
-    }
-
-    // ── Offline search ─────────────────────────────────────────────────
-
-    @Test
-    fun `search publishes offline results alongside paged results`() = runTest(mainDispatcher) {
-        val offline = listOf(
-            OfflineMediaItem(id = "o1", name = "Offline Movie", mediaType = MediaType.MOVIE),
-        )
-        coEvery { offlineRepository.searchOffline(any(), any()) } returns offline
-        viewModel = SearchViewModel(
-            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
-        )
-        val pagedJob = launch { viewModel.pagedResults.collect { } }
-        try {
-            viewModel.onEvent(SearchUiEvent.Search("offline"))
-            advanceUntilIdle()
-
-            assertEquals(offline, viewModel.offlineResults.value)
-        } finally {
-            pagedJob.cancel()
-        }
-    }
-
-    @Test
-    fun `search swallows offline failures and clears offline results`() = runTest(mainDispatcher) {
-        coEvery { offlineRepository.searchOffline(any(), any()) } throws RuntimeException("db locked")
-        viewModel = SearchViewModel(
-            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
-        )
-        val pagedJob = launch { viewModel.pagedResults.collect { } }
-        try {
-            viewModel.onEvent(SearchUiEvent.Search("offline"))
-            advanceUntilIdle()
-
-            assertTrue(viewModel.offlineResults.value.isEmpty())
-        } finally {
-            pagedJob.cancel()
-        }
+        // Only the initial blank emission ever reached the engine — a blank
+        // retry never re-kicks the round.
+        assertEquals(1, emissions)
     }
 
     // ── Deferred refresh (user-data changes while off-screen) ───────────────
@@ -474,7 +416,7 @@ class SearchViewModelTest {
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
@@ -504,7 +446,7 @@ class SearchViewModelTest {
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
@@ -548,7 +490,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
-            mediaSearchEngine, offlineRepository, searchFiltersStore, quickDownloadActions,
+            mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.searchHistory.collect { } }
         advanceUntilIdle()

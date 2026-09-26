@@ -13,12 +13,11 @@ package com.raulshma.jellyplay.core.model
 enum class PlatformKind {
     ANDROID,
     DESKTOP,
-    WEB,
 }
 
 /**
  * The [PlatformKind] of the running binary. One constant per target actual
- * (androidMain → ANDROID, jvmMain → DESKTOP, wasmJsMain → WEB); see
+ * (androidMain → ANDROID, jvmMain → DESKTOP); see
  * [PlatformKind] for why form factor must not join this axis.
  */
 expect val currentPlatform: PlatformKind

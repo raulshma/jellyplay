@@ -71,6 +71,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.core.model.hasPlaybackPosition
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
@@ -658,7 +659,7 @@ fun HeroHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.ifElse(isTv, Modifier.tvHeroFocusExitHandler()),
             ) {
-                val hasProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0
+                val hasProgress = item.hasPlaybackPosition
 
                 Box(
                     modifier = Modifier

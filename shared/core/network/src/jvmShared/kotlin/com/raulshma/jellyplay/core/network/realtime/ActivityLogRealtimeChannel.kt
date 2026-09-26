@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.WebSocketBackoffPolicy
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.toActivityLogEntry
 import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
@@ -33,9 +34,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * token travels in the `Authorization` header (never a query param; the
  * legacy `X-Emby-Token` header 401s against Jellyfin 12 servers, which gate
  * it behind `EnableLegacyAuthorization`), the device id is the app's stable
- * id, [onFailure] retries with exponential backoff, and after
- * [MAX_RECONNECT_ATTEMPTS] failures the channel falls back to REST polling
- * of the activity-log endpoint.
+ * id, [onFailure] retries with the module's exponential
+ * [WebSocketBackoffPolicy] (deterministic here — no jitter), and once that
+ * budget is exhausted the channel falls back to REST polling of the
+ * activity-log endpoint.
  *
  * [knownIds] seeds dedupe for the polling fallback so the first poll does not
  * replay entries the caller already shows.
@@ -45,6 +47,15 @@ class ActivityLogRealtimeChannel(
     private val engine: JellyfinApiEngine,
     private val serverIdentityStore: ServerIdentityStore,
 ) {
+
+    /**
+     * The reconnect schedule (1s → 2s → 4s → 8s → 16s, capped at 30s) — the
+     * module's one backoff law. No jitter: this channel keeps its previous
+     * deterministic behavior. A `null` delay (past
+     * [WebSocketBackoffPolicy.maxAttempts] failures) is the leave-the-socket
+     * signal → the polling fallback below.
+     */
+    internal val backoff = WebSocketBackoffPolicy()
 
     fun entries(knownIds: Set<Long> = emptySet()): Flow<ActivityLogEntry> = channelFlow {
         val attempts = AtomicInteger(0)
@@ -102,15 +113,15 @@ class ActivityLogRealtimeChannel(
         }
 
         fun scheduleReconnect() {
-            val attempt = attempts.incrementAndGet()
-            if (attempt > MAX_RECONNECT_ATTEMPTS) {
+            val delayMs = backoff.delayMs(attempts.incrementAndGet())
+            if (delayMs == null) {
                 // Give up on the socket; poll REST instead until the collector cancels.
                 launch { pollingFallbackFlow(seenIds).collect { trySend(it) } }
                 return
             }
             reconnectJob?.cancel()
             reconnectJob = launch {
-                delay(reconnectDelayMs(attempt))
+                delay(delayMs)
                 connect()
             }
         }
@@ -145,7 +156,6 @@ class ActivityLogRealtimeChannel(
     }
 
     internal companion object {
-        internal const val MAX_RECONNECT_ATTEMPTS = 5
         internal const val POLL_INTERVAL_MS = 5_000L
         internal const val POLL_PAGE_SIZE = 10
 
@@ -154,10 +164,6 @@ class ActivityLogRealtimeChannel(
          * ~10 ids / 5 s for the life of the channel (~7k/hour).
          */
         internal const val MAX_SEEN_IDS = 1_000
-
-        /** Exponential backoff: 1s, 2s, 4s, 8s, 16s — capped at 30s. */
-        internal fun reconnectDelayMs(attempt: Int): Long =
-            (1000L * (1L shl (attempt - 1).coerceAtMost(4))).coerceAtMost(30_000L)
     }
 }
 

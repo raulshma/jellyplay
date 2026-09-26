@@ -16,9 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
  * surface is core:model + [DownloadRequestResult] only, so no verbatim-
  * forward adapter is needed) and dataJvmModule binds the interface over that
  * single (same messenger routing, same shared downloadedIds flow —
- * android/desktop behavior unchanged). The wasmJs actual —
- * [WasmQuickDownloadActions] in wasmJsMain, bound in dataWasmModule — is an
- * honest no-op.
+ * android/desktop behavior unchanged).
  *
  * IDIOM RULE (declared with the download-actions seam consolidation,
  * tightened by the promoted-interface pass): a download read a feature needs
@@ -28,11 +26,6 @@ import kotlinx.coroutines.flow.StateFlow
  * precedent; never through a per-read adapter triplet again. Features never
  * grow their own wall-crossing template (the deleted feature twins this
  * replaced were exactly that mistake).
- *
- * Web behavior: the browser has no local download pipeline, so the wasm
- * actual reports [isSupported] = false — web hosts should hide/disable the
- * download CTAs — while `downloadedIds` stays empty and download/remove calls
- * are inert (download resolves to [DownloadRequestResult.Failed]).
  */
 interface QuickDownloadActions {
 

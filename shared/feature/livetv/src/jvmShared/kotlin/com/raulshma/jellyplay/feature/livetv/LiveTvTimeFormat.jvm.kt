@@ -8,7 +8,7 @@ import java.util.Locale
  * JVM actuals for the Live-TV wall-clock/date-label renderers: format
  * through java.time with the default FORMAT locale, preserving the localized
  * AM/PM markers and month/day abbreviations the former java.time formatters
- * produced (the wasm actual pins English — kotlinx has no CLDR data there).
+ * produced.
  * [LiveTvTimeFormatTest] pins the en-US renderings under a forced US FORMAT
  * locale.
  */

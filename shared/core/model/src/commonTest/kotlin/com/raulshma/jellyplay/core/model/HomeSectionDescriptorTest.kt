@@ -93,6 +93,7 @@ descriptor.idFor("COLLECTION_7"),
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,
+                HomeSectionType.DISCOVER,
             ),
             HomeSectionType.CONFIGURABLE,
         )

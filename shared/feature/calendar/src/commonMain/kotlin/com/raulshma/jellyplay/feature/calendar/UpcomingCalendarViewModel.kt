@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
@@ -108,8 +109,8 @@ class UpcomingCalendarViewModel(
             val month = _state.value.visibleMonth
             val from = month.onDay(1)
             val to = month.lastDay
-            // The whole module runs kotlinx.datetime now (wasmJs
-            // purification) — the repository boundary no longer converts.
+            // The whole module runs kotlinx.datetime now —
+            // the repository boundary no longer converts.
             arrRepository.calendar(from, to).collect { items ->
                 if (_state.value.visibleMonth == month) {
                     _state.value = _state.value.copy(items = items, error = null)
@@ -166,13 +167,13 @@ class UpcomingCalendarViewModel(
             return
         }
         launch {
-            CalendarLoad.load(
+            loadInto(
                 start = { _state.value = _state.value.copy(isLoading = true, error = null) },
                 fetch = {
                     val month = _state.value.visibleMonth
                     arrRepository.refreshCalendar(month.onDay(1), month.lastDay)
                 },
-                // The success arm is deliberately empty (see CalendarLoad):
+                // The success arm is deliberately empty (see loadInto):
                 // items land through the month collector, not this payload.
                 onSuccess = { },
                 onFailure = { _state.value = _state.value.copy(error = it.message) },
@@ -241,7 +242,7 @@ class UpcomingCalendarViewModel(
 
 /**
  * Today's date in the device timezone, centralised so the screen and VM agree.
- * kotlin.time.Clock + the kotlinx todayIn extension (multiplatform since the
- *  wasmJs purification — the java.time ZoneId seam is gone).
+ * kotlin.time.Clock + the kotlinx todayIn extension (the java.time ZoneId
+ * seam is gone).
  */
 internal fun today(): LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())

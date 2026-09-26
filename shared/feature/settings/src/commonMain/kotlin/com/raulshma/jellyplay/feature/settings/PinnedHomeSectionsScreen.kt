@@ -88,6 +88,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinn
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remove_section_cd
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+/**
+ * The pass-through highlight id Appearance's pinned-home-sections row bakes
+ * into `Route.PinnedHomeSections` to land on this screen's add row — a
+ * screen-local row with no search entry, so it lives here, not in a
+ * search-ids holder.
+ */
+internal const val PINNED_ADD_HIGHLIGHT_ID = "pinned_add"
+
 @Composable
 fun PinnedHomeSectionsScreen(
     onBack: () -> Unit,
@@ -186,7 +194,7 @@ fun PinnedHomeSectionsScreen(
                     AddPinnedSectionRow(
                         index = pinnedSections.size,
                         count = pinnedSections.size + 1,
-                        highlighted = highlightSettingId == "pinned_add",
+                        highlighted = highlightSettingId == PINNED_ADD_HIGHLIGHT_ID,
                         onClick = { showAddSheet = true },
                     )
                 }

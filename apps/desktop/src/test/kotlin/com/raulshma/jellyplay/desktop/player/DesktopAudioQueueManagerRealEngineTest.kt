@@ -123,7 +123,7 @@ class DesktopAudioQueueManagerRealEngineTest {
             )
             pollUntil("track a playing", timeoutMs = 20_000) { manager.isPlaying.value }
 
-            val ctx = assertNotNull(engineRef.get()).underlyingPlayer as Pointer
+            val ctx = assertNotNull(engineRef.get()).liveMpvHandle() as Pointer
             fun prop(name: String): String? = MpvLib.getPropertyString(ctx, name)
 
             // The full chain reaches mpv's live `af` property. Substring (not

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Library feature user-facing strings (enhancements §2.2) -->
-    <string name="library_photo_saved_to_gallery">已保存到相册</string>
     <string name="library_failed_to_load_items">加载项目失败</string>
     <string name="library_failed_to_load_more_items">加载更多项目失败</string>
 
@@ -46,29 +45,40 @@
     <string name="library_failed_to_load_more">加载更多失败</string>
 
     <!-- PhotoAlbumScreen -->
-    <string name="library_photos">照片</string>
-    <string name="library_sort_options">排序选项</string>
-    <string name="library_failed_to_load_photos">加载照片失败</string>
-    <string name="library_no_photos_found">未找到照片</string>
 
     <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
-    <string name="library_photo_adjustments">调整</string>
-    <string name="library_photo_slideshow">幻灯片</string>
-    <string name="library_photo_start_slideshow">开始幻灯片</string>
-    <string name="library_photo_stop_slideshow">停止幻灯片</string>
     <!-- %1$d = brightness as integer percent -->
-    <string name="library_photo_brightness">亮度 %1$d%</string>
     <!-- %1$d = contrast as integer percent -->
-    <string name="library_photo_contrast">对比度 %1$d%</string>
     <!-- %1$d = saturation as integer percent -->
-    <string name="library_photo_saturation">饱和度 %1$d%</string>
-    <string name="library_photo_failed_to_load">无法加载照片</string>
     <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
-    <string name="library_cd_close">关闭</string>
-    <string name="library_cd_share">分享</string>
-    <string name="library_cd_save">保存</string>
-    <string name="library_cd_info">信息</string>
-    <string name="library_cd_adjust">调整</string>
-    <string name="library_cd_previous">上一张</string>
-    <string name="library_cd_next">下一张</string>
+    <string name="library_no_downloads_offline">还没有下载</string>
+    <string name="library_try_adjusting_filters">尝试调整筛选条件</string>
+    <string name="library_masonry_view">瀑布流视图</string>
+    <string name="library_jump_to_letter">跳转到字母</string>
+    <string name="library_see_all">查看全部</string>
+    <string name="library_back">返回</string>
+    <string name="library_all_filters">全部筛选</string>
+    <string name="library_sort">排序</string>
+    <string name="library_type">按类型筛选</string>
+    <string name="library_any">任意</string>
+    <string name="library_group_by">结果分组依据</string>
+    <string name="library_group_by_none">无</string>
+    <string name="library_group_by_name">名称</string>
+    <string name="library_group_by_type">类型</string>
+    <string name="library_group_by_genre">类型</string>
+    <string name="library_group_by_year">年份</string>
+    <string name="library_poster_size">海报大小</string>
+    <string name="library_action_view">视图</string>
+    <string name="library_action_size">大小</string>
+    <string name="library_action_group">分组</string>
+    <string name="library_reset_all">全部重置</string>
+    <string name="library_reset_confirm_title">重置媒体库？</string>
+    <string name="library_reset_confirm_message">这将清除所有筛选并返回默认媒体库。视图模式、海报大小、分组，以及当前文件夹保存的筛选和排序都将被重置。</string>
+    <string name="library_reset_dont_show_again">不再显示</string>
+    <string name="library_sort_in_progress">进行中</string>
+    <string name="library_filter_downloaded">已下载</string>
+    <string name="library_year_from">从 %1$d 起</string>
+    <string name="library_year_to">到 %1$d</string>
+    <string name="data_download_started">下载已开始</string>
+    <string name="data_download_start_failed">无法开始下载</string>
 </resources>

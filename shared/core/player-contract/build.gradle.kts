@@ -1,57 +1,26 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    id("jellyplay.kmp.library.base")
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.player.contract"
-        compileSdk = 37
-        minSdk = 28
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    // wasmJs target added MediaEngine's supertypes
-    // (PlayerLifecycleCallbacks, RemotePlayableEngine) previously lived in
-    // shared:core:data — which has no wasm build (Room) — and blocked this
-    // module from shipping wasm. They now live here verbatim (SAME packages,
-    // zero consumer import churn) so HtmlVideoEngine gets a wasm-visible
-    // contract. Dependency edge flipped: core:data now depends
-    // on this module instead of the reverse.
-    wasmJs {
-        browser {
-            testTask {
-                // commonTest suites run via jvmTest; the wasmJs browser test
-                // run needs a local Chrome/Chromium (karma) and stays opt-in
-                // until wires a headless wasm test lane — without this
-                // guard, `gradlew build`/`check` would fail on Chrome-less
-                // machines that previously ran no wasm tests at all. Same
-                // pattern as :shared:core:network.
-                enabled = false
-            }
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // PlayerLifecycleCallbacks and RemotePlayableEngine previously lived in
+        // shared:core:data; they now live here verbatim (SAME packages, zero
+        // consumer import churn). Dependency edge flipped: core:data now depends
+        // on this module instead of the reverse.
+
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
             // Flow/StateFlow surface of the engine contract.
             implementation(libs.kotlinx.coroutines.core)
+            // TaskBundle — the EngineEventCoordinator's per-engine policy slot
+            // choreography (the same bundle the core:data session collaborators
+            // use). core:concurrency is a dependency leaf, so no cycle.
+            implementation(project(":shared:core:concurrency"))
             // core:model's @Serializable enums surface their generated
             // serializer companions in this module's when-expressions
             // (PlayerType, DecoderMode, MediaSegmentType, …); compiling against
@@ -65,7 +34,6 @@ kotlin {
             implementation(libs.compose.runtime)
         }
         getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
             implementation(libs.coroutines.test)
         }
         // EngineCapabilityMatrixTest moved here from :feature:player:video's
@@ -73,8 +41,5 @@ kotlin {
         // seventeen): the matrix itself moved to this module's commonMain
         // (same package) so shared feature modules can consume it; the test
         // follows its subject. kotlin.test replaces the org.junit imports.
-        getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
-        }
     }
 }

@@ -202,27 +202,63 @@ class DesktopAppUpdateTest {
             info(
                 htmlUrl = "",
                 assetName = "jellyplay-desktop-macos-v0.11.0.dmg",
-                assetUrl = "https://example.com/jellyplay-desktop-macos-v0.11.0.dmg",
+                assetUrl = "https://github.com/raulshma/jellyplay/releases/download/v0.11.0/jellyplay-desktop-macos-v0.11.0.dmg",
             ),
         )
-        assertEquals("https://example.com/jellyplay-desktop-macos-v0.11.0.dmg", link)
+        assertEquals(
+            "https://github.com/raulshma/jellyplay/releases/download/v0.11.0/jellyplay-desktop-macos-v0.11.0.dmg",
+            link,
+        )
     }
 
     @Test
     fun androidApkAsset_neverBecomesADesktopLink() {
         // The ADR's false-attach guard: GitHubReleasesApiImpl.selectAsset's
         // last-resort branch can attach an Android -universal.apk to a desktop
-        // result. An APK must never be handed to a desktop user.
+        // result. An APK must never be handed to a desktop user. (The URLs are
+        // allow-listed shapes — the extension guard, not the allow-list, is
+        // what must reject these.)
         for (ext in listOf(".apk", ".apk.part")) {
             val link = DesktopUpdateLinks.pick(
                 info(
                     htmlUrl = "",
                     assetName = "jellyplay-v0.11.0-phone-universal$ext",
-                    assetUrl = "https://example.com/jellyplay-v0.11.0-phone-universal$ext",
+                    assetUrl = "https://github.com/raulshma/jellyplay/releases/download/v0.11.0/jellyplay-v0.11.0-phone-universal$ext",
                 ),
             )
             assertNull(link, "APK asset ($ext) must not become a desktop download link")
         }
+    }
+
+    @Test
+    fun hostilePageUrl_failsClosedToNull_notToTheAssetBranch() {
+        // A release html_url off the compiled-in allow-list (here: a
+        // moved repo's attacker org) must not reach the browser — and must not
+        // silently fall through to the asset branch either: both URLs come
+        // from the same untrusted info. The caller degrades to the
+        // compiled-in RELEASES_PAGE_URL snackbar.
+        val link = DesktopUpdateLinks.pick(
+            info(
+                htmlUrl = "https://github.com/attacker/jellyplay/releases/tag/v0.11.0",
+                assetName = "jellyplay-desktop-windows-v0.11.0.msi",
+                assetUrl = "https://github.com/raulshma/jellyplay/releases/download/v0.11.0/jellyplay-desktop-windows-v0.11.0.msi",
+            ),
+        )
+        assertNull(link, "a hostile release page must never become a desktop link")
+    }
+
+    @Test
+    fun hostileAssetUrl_failsClosedToNull() {
+        // Same pin for the installer-asset branch: an off-allow-list URL is
+        // rejected even though the name ends in an installer extension.
+        val link = DesktopUpdateLinks.pick(
+            info(
+                htmlUrl = "",
+                assetName = "jellyplay-desktop-windows-v0.11.0.msi",
+                assetUrl = "https://evil.example.com/jellyplay-desktop-windows-v0.11.0.msi",
+            ),
+        )
+        assertNull(link, "a hostile installer URL must never become a desktop link")
     }
 
     @Test

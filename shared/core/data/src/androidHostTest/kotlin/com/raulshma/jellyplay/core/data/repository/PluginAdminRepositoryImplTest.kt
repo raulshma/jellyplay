@@ -3,12 +3,12 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
-import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.PluginApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -18,13 +18,18 @@ import org.junit.Test
  * the admin facade split — the LiveTvRepositoryImpl pattern; the family
  * single composes the same impl the JellyfinApiClient union delegates to,
  * so wire behavior is unchanged). The two compositions live in the jvmTest
- * twin.
+ * twin — the ctor's session seams there are plain lambdas, stubbed per
+ * test.
  */
 class PluginAdminRepositoryImplTest {
 
     private val pluginApiClient: PluginApiClient = mockk(relaxed = true)
-    private val engine: JellyfinApiEngine = mockk(relaxed = true)
-    private val repository = PluginAdminRepositoryImpl(pluginApiClient, engine)
+    private val repository = PluginAdminRepositoryImpl(
+        pluginApiClient = pluginApiClient,
+        activeServerAddress = { null },
+        session = { null },
+        okHttpClient = OkHttpClient(),
+    )
 
     @Test
     fun `plugin operations delegate to the family client`() = runTest {

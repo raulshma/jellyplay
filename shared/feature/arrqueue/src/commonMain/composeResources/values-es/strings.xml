@@ -38,17 +38,17 @@
 
     <!-- Grab -->
     <string name="arrqueue_grab_title">Forzar captura del release</string>
-    <string name="arrqueue_grab_message">¿Enviar \"%1$s\" a su cliente de descarga ahora?</string>
-    <string name="arrqueue_grab_sent">Captura enviada para \"%1$s\"</string>
+    <string name="arrqueue_grab_message">¿Enviar "%1$s" a su cliente de descarga ahora?</string>
+    <string name="arrqueue_grab_sent">Captura enviada para "%1$s"</string>
 
     <!-- Import -->
     <string name="arrqueue_import_title">Forzar importación</string>
-    <string name="arrqueue_import_message">¿Importar \"%1$s\" en %2$s ahora?</string>
-    <string name="arrqueue_import_sent">Importación enviada para \"%1$s\"</string>
+    <string name="arrqueue_import_message">¿Importar "%1$s" en %2$s ahora?</string>
+    <string name="arrqueue_import_sent">Importación enviada para "%1$s"</string>
 
     <!-- Remove / delete dialog -->
     <string name="arrqueue_remove_selected_title">¿Eliminar seleccionados?</string>
-    <string name="arrqueue_remove_item_title">¿Eliminar \"%1$s\"?</string>
+    <string name="arrqueue_remove_item_title">¿Eliminar "%1$s"?</string>
     <string name="arrqueue_remove_body_bulk">Elige cómo eliminar estos elementos de la cola.</string>
     <string name="arrqueue_remove_body_single">Elige cómo eliminar este elemento de la cola.</string>
     <string name="arrqueue_remove_only">Solo eliminar</string>

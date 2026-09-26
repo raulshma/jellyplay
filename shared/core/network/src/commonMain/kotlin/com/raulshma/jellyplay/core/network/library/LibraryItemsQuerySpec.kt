@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.library
 
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
@@ -10,26 +11,22 @@ import com.raulshma.jellyplay.core.model.PlayedStatus
  * un-extracted counterpart of [LibraryRequestPolicy]'s projections and
  * [HomeSectionsFetcher]'s choreography. Each builder below decides, ONCE, what
  * one read endpoint's `/Items` query contains (filters, sort field+order, kind
- * include/exclude, paging, field projection); the two hand-mirrored clients
- * ([com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl] on the JVM,
- * [com.raulshma.jellyplay.core.network.api.KtorWasmLibraryApiClient] on wasm)
- * become thin adapters that only translate a [LibraryItemsQuerySpec] into
- * their transport vocabulary — SDK typed setters vs raw query strings.
+ * include/exclude, paging, field projection); the hand-mirrored client
+ * ([com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl] on the JVM)
+ * becomes a thin adapter that only translates a [LibraryItemsQuerySpec] into
+ * its transport vocabulary — SDK typed setters.
  *
- * Everything here is wire-level (string serial names) and pure: no Ktor, no
+ * Everything here is wire-level (string serial names) and pure: no
  * Jellyfin SDK, only shared/core/model inputs. The JVM adapter resolves the
  * wire names against the SDK enums it sends (the same serialName-lookup
- * regime [LibraryRequestPolicy] established); the wasm adapter sends them
- * as-is.
+ * regime [LibraryRequestPolicy] established).
  *
  * Collection encoding stays adapter-side BY DESIGN: the SDK's UrlBuilder
- * repeats a collection param per element (`fields=A&fields=B`) while the wasm
- * client comma-joins (`fields=A,B`) — server-side model binding treats both
- * identically, and [WasmMirrorContractTest] pins the param-NAME parity rather
- * than the encoding. The same reasoning lets builders normalize empty
+ * repeats a collection param per element (`fields=A&fields=B`). The same
+ * reasoning lets builders normalize empty
  * collections to null: the SDK's UrlBuilder skips null values AND adds zero
  * params for an empty collection, so "null" and "empty" are wire-identical on
- * the JVM side, and the wasm adapter's null-filtering `q()` drops both.
+ * the JVM side.
  *
  * Endpoints whose assembly is a single fixed path (no per-call decisions —
  * e.g. getLatestMedia, getAlbumTracks, getCollections, the detail projection)
@@ -72,6 +69,15 @@ internal data class LibraryItemsQuerySpec(
     val minCommunityRating: Double? = null,
     /** ItemFields serial names; null = server default projection. */
     val fields: List<String>? = null,
+    /** Discover rows only: personIds as raw server ids (cast/crew filter); null = unconstrained. */
+    val personIds: List<String>? = null,
+    /**
+     * Discover rows only: window lower bounds as epoch millis, resolved to the
+     * SDK's LocalDateTime date params by the JVM adapter (minDateLastSaved /
+     * minPremiereDate). null = no window.
+     */
+    val minDateLastSavedMs: Long? = null,
+    val minPremiereDateMs: Long? = null,
 )
 
 /**
@@ -125,8 +131,7 @@ internal fun buildMediaItemsQuerySpec(
         tags = filters.tags.takeIf { it.isNotEmpty() },
         sortBy = parseItemSortList(filters.sortBy.apiValue).takeIf { it.isNotEmpty() },
         // SortOption carries "Ascending"/"Descending"; normalize case-
-        // insensitively with an Ascending default — the fallback both twins
-        // applied (JVM: SortOrder enum lookup, wasm: string re-derivation).
+        // insensitively with an Ascending default (JVM: SortOrder enum lookup).
         sortOrderDescending = filters.sortBy.sortOrder.equals("Descending", ignoreCase = true),
         startIndex = startIndex,
         limit = limit,
@@ -136,6 +141,41 @@ internal fun buildMediaItemsQuerySpec(
         fields = LIST_PROJECTION_FIELDS + "Genres",
     )
 }
+
+/**
+ * The discover-row query: [buildMediaItemsQuerySpec] over the row's shared
+ * [LibraryFilters] dimensions, plus the discover-only dimensions (studios,
+ * people, relative date windows) and the row's own limit. Pure — [nowEpochMs]
+ * param keeps the relative-window arithmetic testable; the JVM adapter
+ * resolves the millis to the SDK's date params.
+ */
+internal fun buildDiscoverRowQuerySpec(
+    row: DiscoverRowConfig,
+    parentId: String?,
+    startIndex: Int,
+    limit: Int,
+    nowEpochMs: Long,
+): LibraryItemsQuerySpec {
+    val base = buildMediaItemsQuerySpec(
+        parentId = parentId,
+        filters = row.filters,
+        studioIds = row.studios.map { it.id }.takeIf { it.isNotEmpty() },
+        startIndex = startIndex,
+        limit = limit,
+        searchTerm = null,
+        kindFilter = ItemKindFilter.TOP_LEVEL,
+    )
+    return base.copy(
+        personIds = row.people.map { it.id }.takeIf { it.isNotEmpty() },
+        minDateLastSavedMs = row.addedWithinDays?.let { nowEpochMs - it * DAY_MS },
+        // Year windows measured in 365-day units — a leap-day skew is
+        // immaterial for a discovery filter.
+        minPremiereDateMs = row.premieredWithinYears?.let { nowEpochMs - it * YEAR_MS },
+    )
+}
+
+private const val DAY_MS = 24L * 60 * 60 * 1000
+private const val YEAR_MS = 365L * DAY_MS
 
 /** The search-hints query (getSearchHints): term + optional kind narrowing + paging. */
 internal fun buildSearchHintsQuerySpec(
@@ -202,12 +242,10 @@ internal fun buildItemsByStudioQuerySpec(
  * Books narrow server-side via `includeItemTypes` ("Book" — the SDK
  * getResumeItems named arg); the video row sends no kind constraint.
  *
- * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (a declared per-client
- * divergence — `java.time` on the JVM, the JS clock + local offset via
- * `WasmClock` on wasm) and the SDK's non-null enable* defaults
+ * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (`java.time`, JVM-side)
+ * and the SDK's non-null enable* defaults
  * (enableTotalRecordCount / enableImages / excludeActiveSessions), which are
- * transport-level — the wasm client pins them explicitly, the JVM SDK sends
- * them as non-null defaults.
+ * transport-level — the JVM SDK sends them as non-null defaults.
  */
 internal fun buildResumeQuerySpec(
     limit: Int,

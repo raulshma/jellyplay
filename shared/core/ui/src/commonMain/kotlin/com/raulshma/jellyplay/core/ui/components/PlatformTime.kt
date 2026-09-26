@@ -4,17 +4,27 @@ package com.raulshma.jellyplay.core.ui.components
  * Platform seam for the handful of wall-clock/format primitives that used to
  * be JVM-API calls inside commonMain UI code (`String.format`, `Calendar`,
  * `java.time`). Android/desktop behavior is pinned by the jvmShared actuals
- * (which carry the original bodies verbatim); wasmJs gets pure replacements.
- * Keep call sites semantics-neutral so neither platform's shape drifts.
+ * (which carry the original bodies verbatim). [formatIntPattern] is the one
+ * public member: the settings and editor features (whose PlatformFormats
+ * expect/actual twins it replaces) consume it directly.
  */
+
+/**
+ * Renders a localized resource pattern with one integer slot (`%1$d`) — the
+ * single renderer for every feature's "N days / N minutes / N downloads"
+ * translation patterns. Formerly duplicated as module-internal expect/actual
+ * pairs in the settings and editor features (byte-identical actuals); the
+ * jvmShared actual is the verbatim `String.format` body both shipped, host
+ * locale included.
+ */
+expect fun formatIntPattern(pattern: String, value: Int): String
 
 /**
  * One-decimal fixed notation ("%.1f" formatting contract: HALF_UP rounding at
  * the first decimal, sign rendered symmetrically for stray negatives). The
- * decimal separator follows each platform's %.1f behavior — the JVM default
- * locale (decimal comma under e.g. de-DE hosts) on android/desktop, always a
- * dot on wasm. Every former `"%.1f".format(x)` site in this module routes
- * through here.
+ * decimal separator follows the JVM's %.1f behavior — the JVM default
+ * locale (decimal comma under e.g. de-DE hosts) on android/desktop. Every
+ * former `"%.1f".format(x)` site in this module routes through here.
  */
 internal expect fun formatOneDecimal(value: Double): String
 

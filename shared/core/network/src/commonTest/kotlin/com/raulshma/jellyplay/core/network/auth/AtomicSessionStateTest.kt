@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the wasm client's atomic session publishing — the same invariants the
+ * Pins the atomic session publishing — the same invariants the
  * jvmTest JellyfinApiEngineSessionTest pins for the engine's flows:
  * a session exists only when BOTH sides exist, and a transition is observed
  * as one step (no synthetic (newServer, oldUser) intermediate).

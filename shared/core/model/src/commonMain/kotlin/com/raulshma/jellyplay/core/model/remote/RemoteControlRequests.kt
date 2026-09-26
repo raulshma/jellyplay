@@ -91,6 +91,37 @@ sealed class GeneralCommand {
     @Serializable @Immutable data class SetPlaybackOrder(val order: String) : GeneralCommand()
     @Serializable @Immutable data class SetMaxStreamingBitrate(val bitrate: Int) : GeneralCommand()
     @Serializable @Immutable data object ToggleFullscreen : GeneralCommand()
+
+    // ── Navigation ladder: the d-pad / destination family the
+    // official remote-control UIs render once the capabilities list carries
+    // them. All are UI-level commands — the receiver routes them to the
+    // navigation bridge, never to a playback dispatcher.
+    @Serializable @Immutable data object Back : GeneralCommand()
+    @Serializable @Immutable data object Select : GeneralCommand()
+    @Serializable @Immutable data object MoveUp : GeneralCommand()
+    @Serializable @Immutable data object MoveDown : GeneralCommand()
+    @Serializable @Immutable data object MoveLeft : GeneralCommand()
+    @Serializable @Immutable data object MoveRight : GeneralCommand()
+    @Serializable @Immutable data object GoHome : GeneralCommand()
+    @Serializable @Immutable data object GoToSettings : GeneralCommand()
+    @Serializable @Immutable data object GoToSearch : GeneralCommand()
+    @Serializable @Immutable data object ToggleContextMenu : GeneralCommand()
+
+    /**
+     * Remote "show this item" command (the remote browsing a library while
+     * this device is idle). Arguments carry `ItemId` / `ItemName` /
+     * `ItemType`; only [itemId] is load-bearing — the receiver's idle gate
+     * consumes it, name/type are logged for diagnostics.
+     */
+    @Serializable @Immutable data class DisplayContent(
+        val itemId: String,
+        val itemName: String? = null,
+        val itemType: String? = null,
+    ) : GeneralCommand()
+
+    /** Remote frame-capture request (the "screenshot" button on the remote). */
+    @Serializable @Immutable data object TakeScreenshot : GeneralCommand()
+
     @Serializable @Immutable data class DisplayMessage(val header: String, val text: String, val timeoutMs: Int?) : GeneralCommand()
     @Serializable @Immutable data class Unknown(val name: String) : GeneralCommand()
 }

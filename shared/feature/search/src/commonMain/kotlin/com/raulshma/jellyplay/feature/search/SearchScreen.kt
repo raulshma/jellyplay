@@ -105,8 +105,6 @@ import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.staticCompositionLocalOf
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -127,6 +125,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
+import kotlinx.coroutines.flow.StateFlow
 import com.raulshma.jellyplay.feature.search.generated.resources.Res
 import com.raulshma.jellyplay.feature.search.generated.resources.search_action_cancel
 import com.raulshma.jellyplay.feature.search.generated.resources.search_action_clear
@@ -157,22 +156,25 @@ import com.raulshma.jellyplay.feature.search.generated.resources.search_try_adju
 import com.raulshma.jellyplay.feature.search.generated.resources.search_voice_prompt
 import com.raulshma.jellyplay.feature.search.generated.resources.search_voice_search
 
-val LocalPendingSearchQuery = compositionLocalOf<String?> { null }
-val LocalConsumeSearchQuery = staticCompositionLocalOf<() -> Unit> { {} }
-
+/**
+ * @param pendingSearchQuery the shell's prefill channel: a non-null value
+ *   fires one search, then [onConsumeSearchQuery] must clear it — the armed
+ *   value survives until consumed, so it never re-triggers on its own.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SearchScreen(
+    pendingSearchQuery: StateFlow<String?>,
+    onConsumeSearchQuery: () -> Unit,
     onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
     onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = koinViewModel(),
 ) {
-    val pendingQuery = LocalPendingSearchQuery.current
-    val consumeQuery = LocalConsumeSearchQuery.current
+    val pendingQuery by pendingSearchQuery.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(pendingQuery) {
         pendingQuery?.let { query ->
             viewModel.onEvent(SearchUiEvent.Search(query))
-            consumeQuery()
+            onConsumeSearchQuery()
         }
     }
 

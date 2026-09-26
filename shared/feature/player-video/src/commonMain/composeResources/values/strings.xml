@@ -25,7 +25,7 @@
     <!-- Playback error overlay -->
     <string name="player_video_playback_error">Playback Error</string>
     <string name="player_video_playback_error_retryable">Playback was interrupted. Retry on this engine, or try a different one.</string>
-    <string name="player_video_playback_error_fatal">This video couldn\'t be played on this engine. Try a different player engine, or dismiss to return.</string>
+    <string name="player_video_playback_error_fatal">This video couldn't be played on this engine. Try a different player engine, or dismiss to return.</string>
     <string name="player_video_retry_on">Retry on %1$s</string>
     <string name="player_video_retry_with">Retry with %1$s</string>
     <string name="player_video_try_another_engine">Try another engine</string>
@@ -90,7 +90,7 @@
     <!-- SyncPlay sheet -->
     <string name="player_video_leave_group">Leave Group</string>
     <string name="player_video_ignore_wait">Ignore Wait</string>
-    <string name="player_video_ignore_wait_hint">Don\'t pause for buffering users</string>
+    <string name="player_video_ignore_wait_hint">Don't pause for buffering users</string>
     <string name="player_video_repeat_one">Repeat One</string>
     <string name="player_video_repeat_all">Repeat All</string>
     <string name="player_video_repeat_none">Repeat None</string>
@@ -116,7 +116,7 @@
     <string name="player_video_failed_tap_to_retry">Failed — tap to retry</string>
     <string name="player_video_search_failed">Search failed</string>
     <!-- Shown inline on the Get tab when the server-default remote-subtitle list fails to load (replaces the former global toast). -->
-    <string name="player_video_load_subtitles_failed">Couldn\'t load subtitles</string>
+    <string name="player_video_load_subtitles_failed">Couldn't load subtitles</string>
     <string name="player_video_no_results_found">No results found</string>
     <string name="player_video_pick_language_hint">Pick a language and search to find subtitles.</string>
     <string name="player_video_subtitle_provider_all">All</string>
@@ -164,6 +164,8 @@
     <string name="player_video_playback_mode">Playback Mode</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 On</string>
     <string name="player_video_decoder">Decoder</string>
+    <string name="player_video_rendering">Rendering</string>
+    <string name="player_video_deinterlace">Deinterlace · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
     <string name="player_video_stats_for_nerds">Stats for Nerds</string>
     <string name="player_video_stats_for_nerds_on">Stats for Nerds \u00B7 On</string>
@@ -276,9 +278,11 @@
     <string name="player_video_stats_position">Position</string>
     <string name="player_video_stats_progress">Progress</string>
     <string name="player_video_stats_buffer_health">Buffer Health</string>
+    <string name="player_video_stats_buffered_ranges">Buffered ranges</string>
     <string name="player_video_stats_buffered">Buffered</string>
     <string name="player_video_stats_clock">Clock</string>
     <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_hdr_output_active">HDR output active</string>
     <string name="player_video_stats_color_range">Color Range</string>
     <string name="player_video_stats_color_depth">Color Depth</string>
     <string name="player_video_stats_sample_rate">Sample Rate</string>
@@ -307,6 +311,10 @@
     <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>
     <string name="player_video_adaptive_bitrate_off">Off - full quality (direct play)</string>
     <string name="player_video_skip_intro">Skip Intro</string>
+    <string name="player_video_skipped_segment">Skipped %1$s</string>
+    <string name="player_video_mark_watched_and_skip">Mark watched &amp; skip</string>
+    <string name="player_video_mark_watched_and_exit">Mark watched &amp; exit</string>
+    <string name="player_video_mark_unwatched_and_exit">Mark unwatched &amp; exit</string>
     <string name="player_video_overview_tab">Overview</string>
     <string name="player_video_lyrics_subtitles_tab">Lyrics / Subtitles</string>
     <string name="player_video_synopsis">Synopsis</string>
@@ -320,7 +328,7 @@
     <string name="player_video_companion">JellyPlay Companion</string>
 
     <!-- Localized error messages -->
-    <string name="player_video_font_invalid_format">Selected file isn\'t a .ttf or .otf font.</string>
+    <string name="player_video_font_invalid_format">Selected file isn't a .ttf or .otf font.</string>
 
     <!-- Accessibility: screen-reader semantics for the brightness/volume gesture overlay (P5 §3.1) -->
     <string name="a11y_gesture_controls">Brightness and volume controls</string>

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
@@ -201,7 +202,7 @@ internal class SubtitleManager(
                         it.copy(
                             remoteSubtitles = emptyList(),
                             isLoadingRemoteSubtitles = false,
-                            remoteSubtitlesError = e.message ?: "unknown error",
+                            remoteSubtitlesError = UserErrorMessages.resolve(e, "unknown error"),
                         )
                     }
                 },
@@ -246,7 +247,7 @@ internal class SubtitleManager(
                     waitForSubtitleToAppear(itemId, subtitleInfo, effectiveSnapshot)
                 },
                 onFailure = { e ->
-                    val msg = e.message ?: "Download failed"
+                    val msg = UserErrorMessages.resolve(e, "Download failed")
                     userMessageBus.error("Subtitle download failed: $msg")
                     markDownloadStatus(subtitleId, SubtitleDownloadState.FAILED, msg)
                 },
@@ -665,7 +666,7 @@ internal class SubtitleManager(
                         it.copy(
                             isSearchingSubtitles = false,
                             hasSearchedSubtitles = false,
-                            subtitleSearchError = e.message ?: "Search failed",
+                            subtitleSearchError = UserErrorMessages.resolve(e, "Search failed"),
                         )
                     }
                 },
@@ -892,7 +893,7 @@ internal class SubtitleManager(
                                     // Server unreachable / upload failed — the subtitle
                                     // is still usable on-device. Surface a softer
                                     // device-only status rather than a hard failure.
-                                    val msg = e.message ?: "Server unavailable"
+                                    val msg = UserErrorMessages.resolve(e, "Server unavailable")
                                     verifyThenMark(
                                         statusKey = statusKey,
                                         hint = hint,
@@ -905,7 +906,7 @@ internal class SubtitleManager(
                             )
                         },
                         onFailure = { e ->
-                            val msg = e.message ?: "Download failed"
+                            val msg = UserErrorMessages.resolve(e, "Download failed")
                             userMessageBus.error("Subtitle download failed: $msg")
                             markDownloadStatus(statusKey, SubtitleDownloadState.FAILED, msg)
                         },
@@ -987,7 +988,7 @@ internal class SubtitleManager(
                 }
                 userMessageBus.info("Subtitle uploaded")
             }.onFailure { e ->
-                userMessageBus.error(e.message ?: "Failed to upload subtitle")
+                userMessageBus.error(UserErrorMessages.resolve(e, "Failed to upload subtitle"))
             }
         }
     }

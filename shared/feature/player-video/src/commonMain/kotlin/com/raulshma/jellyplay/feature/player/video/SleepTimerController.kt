@@ -86,8 +86,10 @@ internal class SleepTimerController(
         }
         sleepTimerManager.setOnTimerExpired { getEngine()?.pause() }
         sleepTimerManager.setOnFadeProgress { progress ->
-            // Skip volume writes while user-muted; let mute state win.
-            if (!isMuted()) getEngine()?.setVolume(progress)
+            // Skip volume writes while user-muted; let mute state win. The
+            // fade is PROGRAMMATIC: engines with per-content-type
+            // volume memory must not capture it as a user level.
+            if (!isMuted()) getEngine()?.setVolume(progress, isUserChange = false)
         }
         sleepTimerManager.start(durationMs)
         _state.update {
@@ -134,7 +136,9 @@ internal class SleepTimerController(
         sleepTimerManager.cancel()
         val engine = getEngine()
         if (engine != null && !isMuted()) {
-            preSleepVolume?.let { engine.setVolume(it) }
+            // Restore is programmatic too — cancel must not look like the user
+            // re-chose the pre-fade level.
+            preSleepVolume?.let { engine.setVolume(it, isUserChange = false) }
         }
         preSleepVolume = null
         _state.update {

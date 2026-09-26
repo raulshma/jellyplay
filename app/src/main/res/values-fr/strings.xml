@@ -178,9 +178,13 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">Lecture en cours : %1$s</string>
+    <string name="snackbar_context_menu_unavailable">Menu contextuel indisponible ici</string>
 
     <!-- Player speed-picker custom-value labels (§2.3). -->
     <string name="player_speed_custom">Vitesse personnalisée</string>
     <string name="player_speed_value">%1$sx</string>
     <string name="player_speed_slider_label">Ajuster la vitesse de lecture</string>
+    <string name="whatsnew_sheet_title">Nouveautés</string>
+    <string name="whatsnew_release_title">Nouveau dans la v%1$s</string>
+    <string name="whatsnew_got_it">Compris</string>
 </resources>

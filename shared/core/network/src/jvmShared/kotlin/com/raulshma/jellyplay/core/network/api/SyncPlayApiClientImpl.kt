@@ -27,16 +27,13 @@ import org.jellyfin.sdk.model.api.SetRepeatModeRequestDto
 import org.jellyfin.sdk.model.api.SetShuffleModeRequestDto
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.*
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class SyncPlayApiClientImpl @Inject constructor(
+class SyncPlayApiClientImpl(
     private val engine: JellyfinApiEngine,
 ) : SyncPlayApiClient {
 
-    override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> = engine.apiResultWithRetry {
-        val response = engine.requireApi().syncPlayApi.syncPlayGetGroups().content
+    override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> = engine.withApi { api ->
+        val response = api.syncPlayApi.syncPlayGetGroups().content
         response.map { groupInfo ->
             SyncPlayGroup(
                 groupId = groupInfo.groupId.toString(),
@@ -48,20 +45,20 @@ class SyncPlayApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayJoinGroup(
+    override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayJoinGroup(
             JoinGroupRequestDto(
                 groupId = groupId.toUUID(),
             )
         )
     }
 
-    override suspend fun leaveSyncPlayGroup(): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayLeaveGroup()
+    override suspend fun leaveSyncPlayGroup(): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayLeaveGroup()
     }
 
-    override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayCreateGroup(
+    override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayCreateGroup(
             NewGroupRequestDto(
                 groupName = groupName,
             )
@@ -73,12 +70,12 @@ class SyncPlayApiClientImpl @Inject constructor(
         isPlaying: Boolean,
         playlistItemId: String?,
         whenMs: Long?,
-    ): Result<Unit> = engine.apiResultWithRetry {
+    ): Result<Unit> = engine.withApi { api ->
         val whenDate = whenMs?.let {
             java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneOffset.UTC)
         } ?: java.time.LocalDateTime.now(java.time.Clock.systemUTC())
 
-        engine.requireApi().syncPlayApi.syncPlayReady(
+        api.syncPlayApi.syncPlayReady(
             ReadyRequestDto(
                 `when` = whenDate,
                 positionTicks = positionTicks,
@@ -93,12 +90,12 @@ class SyncPlayApiClientImpl @Inject constructor(
         isPlaying: Boolean,
         playlistItemId: String?,
         whenMs: Long?,
-    ): Result<Unit> = engine.apiResultWithRetry {
+    ): Result<Unit> = engine.withApi { api ->
         val whenDate = whenMs?.let {
             java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneOffset.UTC)
         } ?: java.time.LocalDateTime.now(java.time.Clock.systemUTC())
 
-        engine.requireApi().syncPlayApi.syncPlayBuffering(
+        api.syncPlayApi.syncPlayBuffering(
             BufferRequestDto(
                 `when` = whenDate,
                 positionTicks = positionTicks,
@@ -108,25 +105,25 @@ class SyncPlayApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun syncPlayPause(): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayPause()
+    override suspend fun syncPlayPause(): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayPause()
     }
 
-    override suspend fun syncPlayUnpause(): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayUnpause()
+    override suspend fun syncPlayUnpause(): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayUnpause()
     }
 
-    override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlaySeek(
+    override suspend fun syncPlaySeek(positionTicks: Long): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlaySeek(
             SeekRequestDto(
                 positionTicks = positionTicks,
             )
         )
     }
 
-    override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> = engine.apiResultWithRetry {
+    override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> = engine.withApi { api ->
         val activeId = groupId ?: throw IllegalArgumentException("groupId is required for getSyncPlayInfo")
-        val groups = engine.requireApi().syncPlayApi.syncPlayGetGroups().content
+        val groups = api.syncPlayApi.syncPlayGetGroups().content
         val groupInfo = groups.find { it.groupId.toString() == activeId }
             ?: throw IllegalStateException("SyncPlay group $activeId not found")
         SyncPlayGroupInfo(
@@ -143,43 +140,43 @@ class SyncPlayApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun syncPlayStop(): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayStop()
+    override suspend fun syncPlayStop(): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayStop()
     }
 
-    override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayNextItem(
+    override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayNextItem(
             NextItemRequestDto(
                 playlistItemId = playlistItemId.toUUID(),
             )
         )
     }
 
-    override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayPreviousItem(
+    override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayPreviousItem(
             PreviousItemRequestDto(
                 playlistItemId = playlistItemId.toUUID(),
             )
         )
     }
 
-    override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> = engine.apiResultWithRetry {
+    override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> = engine.withApi { api ->
         val sdkMode = when (mode) {
             SyncPlayRepeatMode.REPEAT_NONE -> GroupRepeatMode.REPEAT_NONE
             SyncPlayRepeatMode.REPEAT_ALL -> GroupRepeatMode.REPEAT_ALL
             SyncPlayRepeatMode.REPEAT_ONE -> GroupRepeatMode.REPEAT_ONE
         }
-        engine.requireApi().syncPlayApi.syncPlaySetRepeatMode(
+        api.syncPlayApi.syncPlaySetRepeatMode(
             SetRepeatModeRequestDto(mode = sdkMode)
         )
     }
 
-    override suspend fun syncPlaySetShuffleMode(mode: SyncPlayShuffleMode): Result<Unit> = engine.apiResultWithRetry {
+    override suspend fun syncPlaySetShuffleMode(mode: SyncPlayShuffleMode): Result<Unit> = engine.withApi { api ->
         val sdkMode = when (mode) {
             SyncPlayShuffleMode.SORTED -> GroupShuffleMode.SORTED
             SyncPlayShuffleMode.SHUFFLE -> GroupShuffleMode.SHUFFLE
         }
-        engine.requireApi().syncPlayApi.syncPlaySetShuffleMode(
+        api.syncPlayApi.syncPlaySetShuffleMode(
             SetShuffleModeRequestDto(mode = sdkMode)
         )
     }
@@ -189,8 +186,8 @@ class SyncPlayApiClientImpl @Inject constructor(
         playingItemId: String,
         mediaSourceId: String?,
         startPositionTicks: Long,
-    ): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlaySetNewQueue(
+    ): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlaySetNewQueue(
             PlayRequestDto(
                 playingQueue = itemIds.map { it.toUUID() },
                 playingItemPosition = itemIds.indexOf(playingItemId).takeIf { it >= 0 } ?: 0,
@@ -202,10 +199,10 @@ class SyncPlayApiClientImpl @Inject constructor(
     override suspend fun syncPlayQueue(
         itemIds: List<String>,
         mode: String,
-    ): Result<Unit> = engine.apiResultWithRetry {
+    ): Result<Unit> = engine.withApi { api ->
         val sdkMode = GroupQueueMode.fromNameOrNull(mode)
             ?: GroupQueueMode.QUEUE
-        engine.requireApi().syncPlayApi.syncPlayQueue(
+        api.syncPlayApi.syncPlayQueue(
             QueueRequestDto(
                 itemIds = itemIds.map { it.toUUID() },
                 mode = sdkMode,
@@ -213,22 +210,22 @@ class SyncPlayApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun syncPlaySetPlaylistItem(playlistItemId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlaySetPlaylistItem(
+    override suspend fun syncPlaySetPlaylistItem(playlistItemId: String): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlaySetPlaylistItem(
             SetPlaylistItemRequestDto(
                 playlistItemId = playlistItemId.toUUID(),
             )
         )
     }
 
-    override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlaySetIgnoreWait(
+    override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlaySetIgnoreWait(
             IgnoreWaitRequestDto(ignoreWait = ignore)
         )
     }
 
-    override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayRemoveFromPlaylist(
+    override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayRemoveFromPlaylist(
             RemoveFromPlaylistRequestDto(
                 playlistItemIds = listOf(playlistItemId.toUUID()),
                 clearPlayingItem = true,
@@ -237,8 +234,8 @@ class SyncPlayApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayMovePlaylistItem(
+    override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayMovePlaylistItem(
             MovePlaylistItemRequestDto(
                 playlistItemId = playlistItemId.toUUID(),
                 newIndex = newIndex,
@@ -246,8 +243,8 @@ class SyncPlayApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun syncPlayPing(pingMs: Long): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().syncPlayApi.syncPlayPing(
+    override suspend fun syncPlayPing(pingMs: Long): Result<Unit> = engine.withApi { api ->
+        api.syncPlayApi.syncPlayPing(
             PingRequestDto(ping = pingMs)
         )
     }

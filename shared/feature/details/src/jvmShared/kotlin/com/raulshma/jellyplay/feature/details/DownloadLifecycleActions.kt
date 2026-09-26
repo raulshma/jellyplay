@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
@@ -228,7 +229,9 @@ internal class DownloadLifecycleActions(
                     messages.tryEmit(DetailMessage.Text(message))
                 }
             } catch (e: Exception) {
-                messages.tryEmit(DetailMessage.Text(e.message ?: strings.get(Res.string.detail_error_download_failed)))
+                messages.tryEmit(
+                    DetailMessage.Text(UserErrorMessages.resolve(e, strings.get(Res.string.detail_error_download_failed))),
+                )
             }
             _state.update { it.copy(isDownloading = false) }
         }
@@ -252,7 +255,12 @@ internal class DownloadLifecycleActions(
                     messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = downloadIds.size, error = null))
                 }
                 .onFailure { error ->
-                    messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = 0, error = error.message ?: strings.get(Res.string.detail_error_queue_failed)))
+                    messages.tryEmit(
+                        DetailMessage.SeriesDownload(
+                            queuedCount = 0,
+                            error = UserErrorMessages.resolve(error, strings.get(Res.string.detail_error_queue_failed)),
+                        ),
+                    )
                 }
             _state.update { it.copy(isDownloadingSeries = false) }
         }

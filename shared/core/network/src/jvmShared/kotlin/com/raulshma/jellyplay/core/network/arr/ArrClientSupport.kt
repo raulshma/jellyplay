@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.core.network.arr
 
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.network.api.HttpExecutor
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -85,6 +87,38 @@ internal class ArrClientSupport(
     /** Stream-decoding request execution; see [HttpExecutor.parseJson]. */
     internal suspend inline fun <reified T> parseRequest(request: Request): Result<T> =
         http.parseJson(request)
+
+    /**
+     * Stream-decoding request execution with an explicit serializer — the
+     * [parseRequest] arm for the [ArrV3Client] engine, whose envelope row
+     * type is a per-service parameter rather than a reified call-site type.
+     * Mirrors [HttpExecutor.parseJson] member-for-member: absent body → the
+     * HTTP-status failure shape, decode failures surface raw via runCatching
+     * (never wrapped in an ApiException, never retried), execution rides the
+     * same retrying [HttpExecutor.apiResult] chassis.
+     */
+    internal suspend fun <T> parseRequest(request: Request, serializer: KSerializer<T>): Result<T> =
+        http.apiResult {
+            http.execute(request) { response ->
+                val stream = response.body?.byteStream()
+                if (stream == null) {
+                    Result.failure<T>(http.httpEmptyBodyFailure(response.code))
+                } else {
+                    decodeStream(serializer, stream)
+                }
+            }
+        }
+
+    /**
+     * The raw stream decode, in a NON-suspend fun so the bare [runCatching]
+     * is cancellation-safe by construction (nothing suspend runs inside it —
+     * the BareRunCatchingRatchet's documented escape for parse guards; same
+     * shape as [HttpExecutor.parseJson]'s inline arm, which this mirrors
+     * member-for-member: decode failures surface RAW, never wrapped in an
+     * ApiException, never retried).
+     */
+    private fun <T> decodeStream(serializer: KSerializer<T>, stream: java.io.InputStream): Result<T> =
+        runCatching { json.decodeFromStream(serializer, stream) }
 
     /** Status-only request execution; see [HttpExecutor.parseUnit]. */
     suspend fun parseUnit(request: Request): Result<Unit> = http.parseUnit(request)

@@ -125,6 +125,23 @@ val MediaItem.hasWatchProgress: Boolean
     get() = hasPlaybackPosition && !isPlayed
 
 /**
+ * True when the item carries a runtime worth rendering as time: a non-zero
+ * [runTimeTicks] that is neither a SERIES container (carries no runtime of
+ * its own) nor a BOOK (RunTimeTicks is absent or meaningless there — the
+ * position ticks encode reading progress, not time, and the video runtime
+ * math on that data produced bogus "0m left" labels).
+ *
+ * The card footers and the newsletter meta rows previously re-derived this
+ * ladder per site and had drifted: the card footers excluded SERIES + BOOK,
+ * the newsletter rows only SERIES (or neither), so a book with stray runtime
+ * ticks rendered a duration in some sections and not others. Route every
+ * "show a duration" gate through this predicate; the sub-minute floor lives
+ * one step down in `formatRuntimeLabelFromTicks`.
+ */
+val MediaItem.hasMeaningfulRuntime: Boolean
+    get() = (runTimeTicks ?: 0L) > 0 && mediaType != MediaType.SERIES && mediaType != MediaType.BOOK
+
+/**
  * The series id this detail entry resolves to for series-scoped operations
  * (seasons/episodes load, smart-play, playlist expansion): a series resolves to
  * itself, an episode/season to its parent [seriesId], anything else to null.

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.book
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
@@ -61,6 +62,7 @@ class BookReaderViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var readerStore: ReaderStore
     private lateinit var readerPreferences: ReaderPreferences
     private lateinit var annotationsRepository: FakeReaderAnnotationsRepository
@@ -72,12 +74,13 @@ class BookReaderViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
         playbackRepository = mockk()
+        playbackIdentity = mockk()
         readerStore = mockk()
         every { readerStore.reader } returns readerSlice
         annotationsRepository = FakeReaderAnnotationsRepository()
         contentResolver = FakeBookContentResolver()
         every { playbackRepository.getBookDownloadUrl(any()) } returns "https://server/download"
-        every { playbackRepository.getAccessToken() } returns "token"
+        every { playbackIdentity.accessToken() } returns "token"
         every { readerStore.lastCfi(any()) } returns null
         coEvery { readerStore.setLastCfi(any(), any()) } returns Unit
         coEvery { playbackRepository.reportBookProgress(any(), any(), any()) } returns Result.success(Unit)
@@ -118,6 +121,7 @@ class BookReaderViewModelTest {
     ): BookReaderViewModel = BookReaderViewModel(
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         preferences = readerPreferences,
         annotationsRepository = annotationsRepository,
         contentResolver = contentResolver,

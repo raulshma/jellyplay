@@ -15,11 +15,8 @@ import org.jellyfin.sdk.api.client.extensions.*
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class LiveTvApiClientImpl @Inject constructor(
+class LiveTvApiClientImpl(
     private val engine: JellyfinApiEngine,
 ) : LiveTvApiClient {
 
@@ -32,8 +29,8 @@ class LiveTvApiClientImpl @Inject constructor(
         addCurrentProgram: Boolean,
         enableFavoriteSorting: Boolean,
         isFavorite: Boolean?,
-    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvChannel>> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.getLiveTvChannels(
+    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvChannel>> = engine.withApi { api ->
+        api.liveTvApi.getLiveTvChannels(
             userId = userIdUuid(),
             startIndex = startIndex,
             limit = limit,
@@ -47,9 +44,9 @@ class LiveTvApiClientImpl @Inject constructor(
     override suspend fun getRecommendedPrograms(
         filters: ProgramFilters,
         limit: Int,
-    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.apiResultWithRetry {
+    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.withApi { api ->
         val now = org.jellyfin.sdk.model.DateTime.now()
-        engine.requireApi().liveTvApi.getRecommendedPrograms(
+        api.liveTvApi.getRecommendedPrograms(
             userId = userIdUuid(),
             limit = limit,
             isAiring = filters.isAiring,
@@ -68,9 +65,9 @@ class LiveTvApiClientImpl @Inject constructor(
         channelId: String,
         startDateUtc: String?,
         endDateUtc: String?,
-    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.apiResultWithRetry {
+    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.withApi { api ->
         val now = org.jellyfin.sdk.model.DateTime.now()
-        engine.requireApi().liveTvApi.getLiveTvPrograms(
+        api.liveTvApi.getLiveTvPrograms(
             channelIds = listOf(channelId.toUUID()),
             userId = userIdUuid(),
             // minEndDate filters out programs that already ended before the
@@ -87,7 +84,7 @@ class LiveTvApiClientImpl @Inject constructor(
         channelIds: List<String>,
         startDateUtc: String,
         endDateUtc: String,
-    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.apiResultWithRetry {
+    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvProgram>> = engine.withApi { api ->
         val dto = GetProgramsDto(
             channelIds = channelIds.map { it.toUUID() },
             userId = userIdUuid(),
@@ -97,7 +94,7 @@ class LiveTvApiClientImpl @Inject constructor(
             fields = listOf(ItemFields.OVERVIEW),
         )
         val now = org.jellyfin.sdk.model.DateTime.now()
-        engine.requireApi().liveTvApi.getPrograms(dto).content.items.map { it.toLiveTvProgram(now) }
+        api.liveTvApi.getPrograms(dto).content.items.map { it.toLiveTvProgram(now) }
     }
 
     override suspend fun getLiveTvGuide(
@@ -105,9 +102,9 @@ class LiveTvApiClientImpl @Inject constructor(
         endDateUtc: String,
         startIndex: Int,
         limit: Int,
-    ): Result<EpgGuide> = engine.apiResultWithRetry {
+    ): Result<EpgGuide> = engine.withApi { api ->
         coroutineScope {
-            val client = engine.requireApi()
+            val client = api
             val uid = userIdUuid()
             val channelsDeferred = async {
                 client.liveTvApi.getLiveTvChannels(
@@ -135,8 +132,8 @@ class LiveTvApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getGuideInfo(): Result<GuideInfo> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.getGuideInfo().content.let {
+    override suspend fun getGuideInfo(): Result<GuideInfo> = engine.withApi { api ->
+        api.liveTvApi.getGuideInfo().content.let {
             GuideInfo(startDate = it.startDate.toString(), endDate = it.endDate.toString())
         }
     }
@@ -144,8 +141,8 @@ class LiveTvApiClientImpl @Inject constructor(
     override suspend fun getRecordings(
         limit: Int?,
         isInProgress: Boolean?,
-    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvRecording>> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.getRecordings(
+    ): Result<List<com.raulshma.jellyplay.core.model.LiveTvRecording>> = engine.withApi { api ->
+        api.liveTvApi.getRecordings(
             userId = userIdUuid(),
             limit = limit,
             isInProgress = isInProgress,
@@ -157,19 +154,19 @@ class LiveTvApiClientImpl @Inject constructor(
     override suspend fun getTimers(
         isActive: Boolean?,
         isScheduled: Boolean?,
-    ): Result<List<com.raulshma.jellyplay.core.model.DvrTimer>> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.getTimers(
+    ): Result<List<com.raulshma.jellyplay.core.model.DvrTimer>> = engine.withApi { api ->
+        api.liveTvApi.getTimers(
             isActive = isActive,
             isScheduled = isScheduled,
         ).content.items.map { it.toDvrTimer() }
     }
 
-    override suspend fun getSeriesTimers(sortBy: String?): Result<List<com.raulshma.jellyplay.core.model.DvrSeriesTimer>> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.getSeriesTimers(sortBy = sortBy).content.items.map { it.toDvrSeriesTimer() }
+    override suspend fun getSeriesTimers(sortBy: String?): Result<List<com.raulshma.jellyplay.core.model.DvrSeriesTimer>> = engine.withApi { api ->
+        api.liveTvApi.getSeriesTimers(sortBy = sortBy).content.items.map { it.toDvrSeriesTimer() }
     }
 
-    override suspend fun getDefaultTimer(programId: String): Result<com.raulshma.jellyplay.core.model.DvrSeriesTimer> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.getDefaultTimer(programId = programId).content.toDvrSeriesTimer()
+    override suspend fun getDefaultTimer(programId: String): Result<com.raulshma.jellyplay.core.model.DvrSeriesTimer> = engine.withApi { api ->
+        api.liveTvApi.getDefaultTimer(programId = programId).content.toDvrSeriesTimer()
     }
 
     /**
@@ -178,8 +175,8 @@ class LiveTvApiClientImpl @Inject constructor(
      * a [TimerInfoDto] seeded from those defaults (so padding/priority/etc.
      * come from server settings rather than being hand-rolled).
      */
-    override suspend fun createTimer(programId: String): Result<Unit> = engine.apiResultWithRetry {
-        val defaults = engine.requireApi().liveTvApi.getDefaultTimer(programId = programId).content
+    override suspend fun createTimer(programId: String): Result<Unit> = engine.withApi { api ->
+        val defaults = api.liveTvApi.getDefaultTimer(programId = programId).content
         val payload = TimerInfoDto(
             programId = defaults.programId,
             channelId = defaults.channelId,
@@ -193,7 +190,7 @@ class LiveTvApiClientImpl @Inject constructor(
             isPostPaddingRequired = defaults.isPostPaddingRequired,
             priority = defaults.priority,
         )
-        engine.requireApi().liveTvApi.createTimer(payload)
+        api.liveTvApi.createTimer(payload)
     }
 
     /**
@@ -201,17 +198,17 @@ class LiveTvApiClientImpl @Inject constructor(
      * program and `POST /LiveTv/SeriesTimers` with that payload, matching the
      * web client's `createLiveTvSeriesTimer` flow.
      */
-    override suspend fun createSeriesTimer(programId: String): Result<Unit> = engine.apiResultWithRetry {
-        val defaults = engine.requireApi().liveTvApi.getDefaultTimer(programId = programId).content
-        engine.requireApi().liveTvApi.createSeriesTimer(defaults)
+    override suspend fun createSeriesTimer(programId: String): Result<Unit> = engine.withApi { api ->
+        val defaults = api.liveTvApi.getDefaultTimer(programId = programId).content
+        api.liveTvApi.createSeriesTimer(defaults)
     }
 
-    override suspend fun cancelTimer(timerId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.cancelTimer(timerId = timerId)
+    override suspend fun cancelTimer(timerId: String): Result<Unit> = engine.withApi { api ->
+        api.liveTvApi.cancelTimer(timerId = timerId)
     }
 
-    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().liveTvApi.cancelSeriesTimer(timerId = seriesTimerId)
+    override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> = engine.withApi { api ->
+        api.liveTvApi.cancelSeriesTimer(timerId = seriesTimerId)
     }
 
     private fun String.toDateTime(): LocalDateTime =

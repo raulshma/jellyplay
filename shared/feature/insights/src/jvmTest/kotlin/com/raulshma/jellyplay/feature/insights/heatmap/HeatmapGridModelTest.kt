@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -12,9 +13,21 @@ import kotlin.test.assertTrue
  * Pins the Compose-free [HeatmapGridModel] folds extracted from
  * [WatchProgressHeatmapScreen]: leap-year grid coverage, the mid-year
  * min-activity-date start, month-label week placement, the quartile level
- * thresholds, the TV focus clamp, and the viewport scroll-target coercion.
+ * thresholds, the TV focus clamp, the viewport scroll-target coercion, and
+ * the pointer hit resolution (`dayAt`/`isInsideGrid`).
  */
 class HeatmapGridModelTest {
+
+    /** Production stride at density 1.0: cellSize 11dp + cellGap 2dp = 12px. */
+    private val stride = 12f
+
+    private fun fullYear2024Grid(): Array<HeatmapCell?> = HeatmapGridModel.calculateGrid(
+        year = 2024,
+        dailyActivities = listOf(DailyWatchActivity(date = "2024-02-29", value = 5)),
+        minActivityDate = null,
+        today = LocalDate.of(2024, 12, 31),
+    ).first
+
 
     // ── calculateGrid: leap-year February ────────────────────────────────
 
@@ -235,5 +248,136 @@ class HeatmapGridModelTest {
                 scrollValuePx = 0, viewportWidthPx = 50f,
             ),
         )
+    }
+
+    // ── dayAt / isInsideGrid: pointer hit resolution ─────────────────────
+
+    @Test
+    fun dayAt_originAndCellCenters_resolveToTheirDates() {
+        val grid = fullYear2024Grid()
+
+        // Origin corner: Jan 1 2024 is a Monday, so week 0's Sunday cell (0,0)
+        // receives Jan 7 — the Monday-start grid's pinned indexing. Cell
+        // centers sit at index*stride + 5.5.
+        assertEquals(
+            LocalDate.of(2024, 1, 7),
+            HeatmapGridModel.dayAt(5.5f, 5.5f, stride, 52, grid),
+        )
+        assertEquals(
+            LocalDate.of(2024, 1, 1),
+            HeatmapGridModel.dayAt(5.5f, 17.5f, stride, 52, grid),
+        )
+        // Leap-year February arm: 2024-02-29 is a Thursday; its ISO Mon–Sun
+        // week (Feb 26 – Mar 3) anchors to the Sunday Mar 3 → cell (8,4).
+        assertEquals(
+            LocalDate.of(2024, 2, 29),
+            HeatmapGridModel.dayAt(8 * stride + 5.5f, 4 * stride + 5.5f, stride, 52, grid),
+        )
+    }
+
+    @Test
+    fun dayAt_exactHalfStrideBoundaries_roundUpToTheNextCell() {
+        val grid = fullYear2024Grid()
+
+        // x = 6.0 is exactly half a stride → roundToInt rounds up to week 1.
+        assertEquals(
+            LocalDate.of(2024, 1, 14),
+            HeatmapGridModel.dayAt(6f, 5.5f, stride, 52, grid),
+        )
+        // Same on the y axis → day 1.
+        assertEquals(
+            LocalDate.of(2024, 1, 1),
+            HeatmapGridModel.dayAt(5.5f, 6f, stride, 52, grid),
+        )
+    }
+
+    @Test
+    fun dayAt_gapPositions_resolveToTheNearerCell_neverAMiss() {
+        val grid = fullYear2024Grid()
+
+        // The 2px gap between the week-0 and week-1 cells spans x ∈ [11, 13),
+        // but the round-to-nearest-stride conversion assigns the whole of it
+        // to week 1 — gaps are not misses under the pinned math.
+        assertEquals(
+            LocalDate.of(2024, 1, 14),
+            HeatmapGridModel.dayAt(11.5f, 5.5f, stride, 52, grid),
+        )
+    }
+
+    @Test
+    fun dayAt_beyondEdge_isOutsideTheGrid() {
+        val grid = fullYear2024Grid()
+
+        // x = 618.0 = 51.5 strides → rounds to week 52, beyond the 52 columns;
+        // the canvas is 52*12 = 624px wide, so the last 6px band is dead.
+        assertFalse(HeatmapGridModel.isInsideGrid(618f, 5.5f, stride, 52))
+        assertNull(HeatmapGridModel.dayAt(618f, 5.5f, stride, 52, grid))
+        // y = 78.0 = 6.5 strides → rounds to day 7; the canvas's +4px bottom
+        // padding band (canvas height 88px) is dead too.
+        assertFalse(HeatmapGridModel.isInsideGrid(5.5f, 78f, stride, 52))
+        assertNull(HeatmapGridModel.dayAt(5.5f, 80f, stride, 52, grid))
+    }
+
+    @Test
+    fun dayAt_inGridUnpopulatedCell_isInsideButNull() {
+        // 2023 starts on Sunday Jan 1: it fills only the (0,0) slot, while
+        // Jan 2 onward anchor to the NEXT column (ISO Mon–Sun weeks) — so
+        // (0,1..6) stay null inside the grid.
+        val (grid, numWeeks) = HeatmapGridModel.calculateGrid(
+            year = 2023,
+            dailyActivities = emptyList(),
+            minActivityDate = null,
+            today = LocalDate.of(2023, 12, 31),
+        )
+        assertEquals(LocalDate.of(2023, 1, 1), grid[0]?.date)
+        assertNull(grid[1])
+
+        // The screen keeps dispatching in-grid taps on these cells as a null
+        // day — unlike the dead bands beyond the edge.
+        val x = 0 * stride + 5.5f
+        val y = 1 * stride + 5.5f
+        assertTrue(HeatmapGridModel.isInsideGrid(x, y, stride, numWeeks))
+        assertNull(HeatmapGridModel.dayAt(x, y, stride, numWeeks, grid))
+    }
+
+    @Test
+    fun dayAt_midYearStart_firstWeekResolvesFromItsSunday() {
+        val (grid, numWeeks) = HeatmapGridModel.calculateGrid(
+            year = 2024,
+            dailyActivities = emptyList(),
+            minActivityDate = LocalDate.of(2024, 7, 10),
+            today = LocalDate.of(2024, 12, 31),
+        )
+
+        // The mid-year grid starts on its backed-up Sunday 2024-07-07 → the
+        // origin corner resolves to it.
+        assertEquals(
+            LocalDate.of(2024, 7, 7),
+            HeatmapGridModel.dayAt(5.5f, 5.5f, stride, numWeeks, grid),
+        )
+    }
+
+    @Test
+    fun dayAt_afterToday_isInsideButNull() {
+        val (grid, numWeeks) = HeatmapGridModel.calculateGrid(
+            year = 2024,
+            dailyActivities = emptyList(),
+            minActivityDate = null,
+            today = LocalDate.of(2024, 8, 15),
+        )
+
+        // Everything after `today` (Aug 15, a Thursday) is null. Tap the
+        // first unpopulated cell's center — positions taken from the grid
+        // itself, no hand-derived week math.
+        val lastPopulated = grid.indexOfLast { it != null }
+        val firstNull = grid.indexOfFirst { it == null }
+        assertTrue(firstNull in 1 until lastPopulated)
+        assertEquals(LocalDate.of(2024, 8, 15), grid[lastPopulated]?.date)
+        assertNull(grid[firstNull])
+
+        val x = (firstNull / 7) * stride + 5.5f
+        val y = (firstNull % 7) * stride + 5.5f
+        assertTrue(HeatmapGridModel.isInsideGrid(x, y, stride, numWeeks))
+        assertNull(HeatmapGridModel.dayAt(x, y, stride, numWeeks, grid))
     }
 }

@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
  * the Android actual gives its SAF URIs. A bad URI or an unopenable file
  * throws from the stream constructor, which the ViewModel's existing
  * runCatching surfaces as "Export/Import failed: …" exactly like a failing
- * contentResolver stream on Android. The web seam narrowing (raw streams
+ * contentResolver stream on Android. The seam narrowing (raw streams
  * → text-level payload) moved the former caller-side
  * `stream.writer().use { it.write(json) }` / `stream.reader().readText()`
  * bodies here — same streams, same bytes, same failure mapping.

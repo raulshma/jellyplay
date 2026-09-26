@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,7 +9,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,6 +42,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,8 +55,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.graphicsLayer
-import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.text.font.FontWeight
@@ -134,6 +132,8 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whatsnew_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whatsnew_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about_subtitle
@@ -148,6 +148,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_badge
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_sections_visible
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore_subtitle
@@ -217,6 +219,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screensaver
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_minutes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_signed_in_as_name
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_confirm_message
@@ -250,7 +261,7 @@ private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 // one-off sign-out actions. Kept as a hand list on purpose: what makes these two
 // ids actions is semantics (a destructive confirm), not a derivable structural
 // property of their catalog declarations.
-private val ACTION_ONLY_IDS = setOf("logout", "sign_out_from_server")
+private val ACTION_ONLY_IDS = setOf(SettingsScreenIds.LOGOUT, SettingsScreenIds.SIGN_OUT_FROM_SERVER)
 
 // Dream-screen pickers (slideshow interval, transition style) flow through the shared
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
@@ -318,11 +329,11 @@ internal fun settingsResultClickAction(
     showAdvancedSettings: Boolean,
 ): SettingsSearchResultClick {
     val click = when {
-        id == "logout" -> SettingsSearchResultClick(
+        id == SettingsScreenIds.LOGOUT -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = false),
         )
         route == Route.Settings -> {
-            if (id == "sign_out_from_server") {
+            if (id == SettingsScreenIds.SIGN_OUT_FROM_SERVER) {
                 SettingsSearchResultClick(
                     action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = true),
                 )
@@ -335,7 +346,7 @@ internal fun settingsResultClickAction(
         }
         route == Route.Onboarding -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.OpenSetupWizard,
-            pendingHighlightId = "setup_wizard",
+            pendingHighlightId = SettingsScreenIds.SETUP_WIZARD,
         )
         else -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.NavigateToScreen(route.withHighlightSettingId(id)),
@@ -720,7 +731,11 @@ fun SettingsScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
-    var activeDialog by remember { mutableStateOf<PickerState<*>?>(null) }
+    // The screen-level dialog state: the screensaver/idle sections write
+    // through this holder (activeDialog.value = ...) so one
+    // SettingsPickerDialog at the screen root still owns dismissal.
+    val activeDialogState = remember { mutableStateOf<PickerState<*>?>(null) }
+    var activeDialog by activeDialogState
 
     // The search panel's five loose state pieces (query / active / category
     // filter / display list / recents) and their interactions — open → type →
@@ -749,22 +764,6 @@ fun SettingsScreen(
         onNavigate(buildRoute(id).withHighlightSettingId(id))
     }
 
-    // Section scaffold: one lazy item wrapped in the staggered entrance. The
-    // (phone, tv) steps derive from the ordered SETTINGS_ENTRANCE_SECTIONS
-    // list — pinned by SettingsEntranceStepsTest to equal the hand-typed
-    // literals this replaced — so inserting a section renumbers the followers
-    // automatically.
-    fun LazyListScope.settingsSection(
-        key: String,
-        content: @Composable () -> Unit,
-    ) {
-        val steps = requireNotNull(settingsEntranceStep(key)) {
-            "undeclared settings entrance section '$key' — add it to SETTINGS_ENTRANCE_SECTIONS"
-        }
-        item(key = key) {
-            AnimatedSettingsEntrance(if (isTv) steps.tv else steps.phone) { content() }
-        }
-    }
 
     // Shared core/ui settings-search pipeline over this module's catalog
     // (the same `settingsSearchResults` feature/home consumes through the
@@ -1328,7 +1327,7 @@ fun SettingsScreen(
                             bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
                         ),
                     ) {
-                        settingsSection("profile") {
+                        settingsSection("profile", isTv) {
                             if (userName.isNotBlank()) {
                                 SettingsProfileBanner(
                                     userName = userName,
@@ -1342,14 +1341,14 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("power_user_mode") {
+                        settingsSection("power_user_mode", isTv) {
                             PowerUserModeCard(
                                 checked = preferences.showAdvancedSettings,
                                 onCheckedChange = { viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(it) } },
                             )
                         }
 
-                        settingsSection("active_devices") {
+                        settingsSection("active_devices", isTv) {
                             if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
                                 ActiveDevicesRow(
                                     sessions = viewModel.activeSessions,
@@ -1359,181 +1358,52 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("account") {
-                            SettingsGroup(
-                                icon = Tabler.Outline.User,
-                                title = stringResource(Res.string.settings_account),
-                                summary = { stringResource(Res.string.settings_signed_in_as_name, userName) },
-                                badge = {
-                                    RoleBadge(isAdmin = viewModel.currentUser?.isAdmin == true)
+                        settingsSection("account", isTv) {
+                            SettingsAccountSection(
+                                userName = userName,
+                                isAdmin = viewModel.currentUser?.isAdmin == true,
+                                openSetting = openSetting,
+                                onSignOut = { fromServer ->
+                                    signOutFromServer = fromServer
+                                    showSignOutConfirm = true
                                 },
-                                initiallyExpanded = false,
-                            ) {
-                                // Row count derived from the account group
-                                // declaration — the four declared ids are
-                                // exactly the rows rendered here.
-                                val accountCount = SettingsScreenGroups.account.itemIds.size
-                                SettingListItem(
-                                    icon = Tabler.Outline.Server,
-                                    title = stringResource(Res.string.settings_server_management),
-                                    subtitle = stringResource(Res.string.settings_server_management_subtitle),
-                                    index = 0, count = accountCount,
-                                    onClick = { openSetting("server_management") { Route.ServerManagement(it) } },
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.Users,
-                                    title = stringResource(Res.string.settings_switch_user),
-                                    subtitle = stringResource(Res.string.settings_switch_user_subtitle),
-                                    index = 1, count = accountCount,
-                                    onClick = { openSetting("user_management") { Route.UserManagement(it) } },
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.Logout,
-                                    title = stringResource(Res.string.settings_sign_out),
-                                    subtitle = stringResource(Res.string.settings_sign_out_subtitle),
-                                    index = 2, count = accountCount,
-                                    isDestructive = true,
-                                    onClick = {
-                                        signOutFromServer = false
-                                        showSignOutConfirm = true
-                                    },
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.Logout,
-                                    title = stringResource(Res.string.settings_sign_out_from_server),
-                                    subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
-                                    index = 3, count = accountCount,
-                                    isDestructive = true,
-                                    onClick = {
-                                        signOutFromServer = true
-                                        showSignOutConfirm = true
-                                    },
-                                )
-                            }
+                            )
                         }
 
-                        settingsSection("activity") {
-                            val pendingCount = viewModel.pendingRequestCount.collectAsStateWithLifecycle().value
-                            SettingsGroup(
-                                icon = Tabler.Outline.Activity,
-                                title = stringResource(Res.string.settings_activity_insights),
-                                summary = { stringResource(Res.string.settings_activity_insights_subtitle) },
-                                badge = if (pendingCount > 0) {
-                                    {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "$pendingCount pending",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            )
-                                        }
-                                    }
-                                } else null,
-                                initiallyExpanded = false,
-                            ) {
-                                // Row count derived from the activity-insights
-                                // group declaration.
-                                val insightsCount = SettingsScreenGroups.activityInsights.itemIds.size
-                                SettingListItem(
-                                    icon = Tabler.Outline.Heart,
-                                    title = stringResource(Res.string.settings_browse_favorites),
-                                    subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
-                                    index = 0, count = insightsCount,
-                                    onClick = { openSetting("favorites") { Route.Favorites } },
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.ChartBar,
-                                    title = stringResource(Res.string.settings_watch_history_heatmap),
-                                    subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
-                                    index = 1, count = insightsCount,
-                                    onClick = { openSetting("watch_progress_heatmap") { Route.WatchProgressHeatmap } },
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.Database,
-                                    title = stringResource(Res.string.settings_activity_queue),
-                                    subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
-                                    index = 2, count = insightsCount,
-                                    onClick = { openSetting("activity_queue") { Route.ArrQueue } },
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.CalendarEvent,
-                                    title = stringResource(Res.string.settings_upcoming),
-                                    subtitle = stringResource(Res.string.settings_upcoming_subtitle),
-                                    index = 3, count = insightsCount,
-                                    onClick = { openSetting("upcoming") { Route.UpcomingCalendar } },
-                                )
-                                SettingListItem(
-                                    icon = Tabler.Outline.Inbox,
-                                    title = stringResource(Res.string.settings_requests),
-                                    subtitle = stringResource(Res.string.settings_requests_subtitle),
-                                    index = 4, count = insightsCount,
-                                    trailingText = pendingCount.takeIf { it > 0 }?.toString(),
-                                    onClick = { openSetting("requests") { Route.Requests } },
-                                )
-                            }
+                        settingsSection("activity", isTv) {
+                            SettingsActivitySection(
+                                viewModel = viewModel,
+                                openSetting = openSetting,
+                            )
                         }
 
-                        settingsSection("system") {
-                            val activeSessionCount = viewModel.activeSessions.size
-                            SettingsGroup(
-                                icon = Tabler.Outline.Adjustments,
-                                title = stringResource(Res.string.settings_system),
-                                summary = { stringResource(Res.string.settings_system_subtitle) },
-                                badge = if (viewModel.currentUser?.isAdmin == true && activeSessionCount > 0) {
-                                    {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.secondaryContainer)
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "$activeSessionCount active",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            )
-                                        }
-                                    }
-                                } else null,
-                                initiallyExpanded = false,
-                            ) {
-                                // Row count derived from the system-core group
-                                // declaration: the admin-dashboard row drops for
-                                // non-admins, every other declared row renders.
-                                val systemCount = SettingsScreenGroups.systemCore.items.count { item ->
-                                    item.id != "admin_dashboard" || viewModel.currentUser?.isAdmin == true
-                                }
-                                var systemIndex = 0
-                                if (viewModel.currentUser?.isAdmin == true) {
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Shield,
-                                        title = stringResource(Res.string.settings_admin_dashboard),
-                                        subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
-                                        index = systemIndex++, count = systemCount,
-                                        onClick = { openSetting("admin_dashboard") { Route.AdminDashboard } },
-                                    )
-                                }
-                                SettingListItem(
-                                    icon = Tabler.Outline.Wand,
-                                    title = stringResource(Res.string.settings_setup_wizard),
-                                    subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
-                                    index = systemIndex++, count = systemCount,
-                                    onClick = {
-                                        lastClickedSettingId = "setup_wizard"
-                                        onSetupWizard()
-                                    },
-                                )
-                            }
+                        settingsSection("system", isTv) {
+                            SettingsSystemSection(
+                                viewModel = viewModel,
+                                openSetting = openSetting,
+                                onSetupWizardClick = {
+                                    lastClickedSettingId = SettingsScreenIds.SETUP_WIZARD
+                                    onSetupWizard()
+                                },
+                            )
                         }
 
-                        settingsSection("item_appearance") {
+                        settingsSection("item_home", isTv) {
+                            val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
+                            SettingListItem(
+                                icon = Tabler.Outline.Home,
+                                title = stringResource(Res.string.settings_home_title),
+                                subtitle = stringResource(
+                                    Res.string.settings_home_sections_visible,
+                                    homePrefs.enabledHomeSectionTypes.size,
+                                    HomeSectionType.CONFIGURABLE.size,
+                                ),
+                                index = 0, count = 1,
+                                onClick = { openSetting("home") { Route.HomeSettings(it) } },
+                            )
+                        }
+
+                        settingsSection("item_appearance", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.Palette,
                                 title = stringResource(Res.string.settings_appearance),
@@ -1543,7 +1413,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_playback") {
+                        settingsSection("item_playback", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.PlayerPlay,
                                 title = stringResource(Res.string.settings_playback),
@@ -1553,7 +1423,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_audio") {
+                        settingsSection("item_audio", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.Music,
                                 title = stringResource(Res.string.settings_audio_player),
@@ -1563,7 +1433,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_language") {
+                        settingsSection("item_language", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.Language,
                                 title = stringResource(Res.string.settings_language_subtitles),
@@ -1577,7 +1447,7 @@ fun SettingsScreen(
                         // NotificationSync seam no-ops there) — entry + screen
                         // stay Android-only.
                         if (settingsCapabilities.supportsNotifications) {
-                            settingsSection("item_notifications") {
+                            settingsSection("item_notifications", isTv) {
                                 val notifPrefs = preferences.notificationPreferences
                                 SettingListItem(
                                     icon = Tabler.Outline.Bell,
@@ -1589,7 +1459,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("item_storage") {
+                        settingsSection("item_storage", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.Database,
                                 title = stringResource(Res.string.settings_downloads_storage),
@@ -1599,7 +1469,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_security") {
+                        settingsSection("item_security", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.Lock,
                                 title = stringResource(Res.string.settings_security),
@@ -1614,7 +1484,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_privacy_data") {
+                        settingsSection("item_privacy_data", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.ShieldLock,
                                 title = stringResource(Res.string.settings_privacy_data),
@@ -1624,7 +1494,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_backup") {
+                        settingsSection("item_backup", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.DatabaseExport,
                                 title = stringResource(Res.string.settings_backup_restore),
@@ -1635,146 +1505,69 @@ fun SettingsScreen(
                         }
 
                         if (isTv) {
-                            settingsSection("group_screensaver") {
-                                SettingsGroup(
-                                    icon = Tabler.Outline.Moon,
-                                    title = stringResource(Res.string.settings_screensaver),
-                                    summary = {
-                                        val cats = preferences.dreamImageCategories
-                                        remember(cats) {
-                                            cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
-                                        }
-                                    },
-                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
-                                ) {
-                                    // Row count derived from the screensaver group
-                                    // declaration — the five declared dream rows are
-                                    // exactly the rows rendered here.
-                                    val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
-                                    val slideshowIntervalTitle = stringResource(Res.string.settings_slideshow_interval)
-                                    val transitionStyleTitle = stringResource(Res.string.settings_transition_style)
-                                    val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)
-                                    val transitionSlideLabel = stringResource(Res.string.settings_transition_slide)
-                                    val transitionNoneLabel = stringResource(Res.string.settings_transition_none)
-                                    SettingToggleItem(
-                                        icon = Tabler.Outline.Typography,
-                                        title = stringResource(Res.string.settings_show_title),
-                                        subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
-                                        checked = preferences.dreamShowTitle,
-                                        index = 0, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_show_title",
-                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamShowTitle(it) } },
-                                    )
-                                    val categoryMovies = stringResource(Res.string.settings_category_movies)
-                                    val categoryTv = stringResource(Res.string.settings_category_tv)
-                                    val categoryMusic = stringResource(Res.string.settings_category_music)
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Movie,
-                                        title = stringResource(Res.string.settings_categories),
-                                        subtitle = stringResource(Res.string.settings_categories_subtitle),
-                                        trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
-                                            preferences.dreamImageCategories.joinToString(", ") {
-                                                when (it) {
-                                                    DreamImageCategory.MOVIES -> categoryMovies
-                                                    DreamImageCategory.SERIES -> categoryTv
-                                                    DreamImageCategory.MUSIC -> categoryMusic
-                                                }
-                                            }
-                                        },
-                                        index = 1, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_categories",
-                                        onClick = {
-                                            val allCats = DreamImageCategory.entries.toSet()
-                                            val current = preferences.dreamImageCategories
-                                            val next = if (current.size == allCats.size) {
-                                                setOf(DreamImageCategory.MOVIES)
-                                            } else {
-                                                val cycle = allCats.toList()
-                                                val nextIndex = current.size
-                                                cycle.take(nextIndex + 1).toSet()
-                                            }
-                                            viewModel.edit { scope -> scope.screensaver.setDreamImageCategories(next) }
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Stopwatch,
-                                        title = stringResource(Res.string.settings_slideshow_interval),
-                                        subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
-                                        trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
-                                        index = 2, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_slideshow_interval",
-                                        onClick = {
-                                            activeDialog = PickerState.List(
-                                                title = slideshowIntervalTitle,
-                                                items = listOf(5_000L, 10_000L, 15_000L, 30_000L, 60_000L),
-                                                label = { "${it / 1000}s" },
-                                                isSelected = { it == preferences.dreamSlideshowIntervalMs },
-                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamSlideshowIntervalMs(it) } },
-                                            )
-                                        },
-                                    )
-                                    SettingToggleItem(
-                                        icon = Tabler.Outline.Wand,
-                                        title = stringResource(Res.string.settings_ken_burns),
-                                        subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
-                                        checked = preferences.dreamKenBurnsEnabled,
-                                        index = 3, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_ken_burns",
-                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamKenBurnsEnabled(it) } },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.ArrowRight,
-                                        title = stringResource(Res.string.settings_transition_style),
-                                        subtitle = preferences.dreamTransitionStyle.name,
-                                        trailingText = preferences.dreamTransitionStyle.name,
-                                        index = 4, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == "screensaver_transition_style",
-                                        onClick = {
-                                            val labels = mapOf(
-                                                DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
-                                                DreamTransitionStyle.SLIDE to transitionSlideLabel,
-                                                DreamTransitionStyle.NONE to transitionNoneLabel,
-                                            )
-                                            activeDialog = PickerState.List(
-                                                title = transitionStyleTitle,
-                                                items = DreamTransitionStyle.entries,
-                                                label = { labels[it] ?: it.name },
-                                                isSelected = { it == preferences.dreamTransitionStyle },
-                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamTransitionStyle(it) } },
-                                            )
-                                        },
-                                    )
-                                }
+                            settingsSection("group_screensaver", isTv) {
+                                SettingsScreensaverSection(
+                                    preferences = preferences,
+                                    viewModel = viewModel,
+                                    lastClickedSettingId = lastClickedSettingId,
+                                    activeDialog = activeDialogState,
+                                )
                             }
                         }
 
-                        settingsSection("item_experimental") {
+                        // the desktop idle "Ready to play" ambient
+                        // screen rows — capability-gated (structurally absent
+                        // on Android, whose lock-screen/screensaver story owns
+                        // idle display), rendered as their own group beside
+                        // the TV dream group so neither row total entangles.
+                        if (settingsCapabilities.supportsIdleAmbientScreen) {
+                            settingsSection("group_idle_ambient", isTv) {
+                                SettingsIdleAmbientSection(
+                                    preferences = preferences,
+                                    viewModel = viewModel,
+                                    lastClickedSettingId = lastClickedSettingId,
+                                    activeDialog = activeDialogState,
+                                )
+                            }
+                        }
+
+                        settingsSection("item_experimental", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.Flask,
                                 title = stringResource(Res.string.settings_experimental),
                                 subtitle = experimentalSummarySubtitle(preferences),
                                 index = 0, count = 1,
-                                onClick = { openSetting("experimental") { Route.ExperimentalSettings(it) } },
+                                onClick = { openSetting(ExperimentalSettingsIds.EXPERIMENTAL) { Route.ExperimentalSettings(it) } },
                             )
                         }
 
-                        settingsSection("item_integrations") {
+                        settingsSection("item_integrations", isTv) {
                             SettingListItem(
-                                icon = Tabler.Outline.PlugConnected,
-                                title = stringResource(Res.string.settings_integrations),
+                                icon = rowIcon(IntegrationsScreenIds.INTEGRATIONS),
+                                title = rowTitle(IntegrationsScreenIds.INTEGRATIONS),
                                 subtitle = stringResource(Res.string.settings_integrations_subtitle),
                                 index = 0, count = 1,
-                                onClick = { openSetting("integrations") { Route.Integrations(it) } },
+                                onClick = { openSetting(IntegrationsScreenIds.INTEGRATIONS) { Route.Integrations(it) } },
                             )
                         }
 
-                        settingsSection("item_about") {
+                        settingsSection("item_about", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.InfoCircle,
                                 title = stringResource(Res.string.settings_about),
                                 subtitle = stringResource(Res.string.settings_about_subtitle),
                                 index = 0, count = 1,
                                 onClick = { openSetting("about") { Route.About } },
+                            )
+                        }
+
+                        settingsSection("item_whatsnew", isTv) {
+                            SettingListItem(
+                                icon = Tabler.Outline.Sparkles,
+                                title = stringResource(Res.string.settings_whatsnew_title),
+                                subtitle = stringResource(Res.string.settings_whatsnew_subtitle),
+                                index = 0, count = 1,
+                                onClick = { openSetting("whatsnew") { Route.WhatsNew } },
                             )
                         }
                     }
@@ -2046,12 +1839,6 @@ private fun PowerUserModeCard(
     val isLight = LocalIsLightTheme.current
     val tvFocusState = rememberTvFocusState(focusedScale = 1.02f)
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = pressScaleValue(isPressed, 0.98f),
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "powerUserPressScale",
-    )
     val confirmHaptic = rememberConfirmHaptic()
 
     val iconTint by animateColorAsState(
@@ -2071,10 +1858,11 @@ private fun PowerUserModeCard(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.98f,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            )
             .clip(ShapeCache.smooth24)
             .background(settingsGroupContainerColor())
             .lightModeHairlineBorder(ShapeCache.smooth24)
@@ -2176,6 +1964,28 @@ private fun RoleBadge(
             fontWeight = FontWeight.Medium,
             color = onContainer,
         )
+    }
+}
+
+/**
+ * Section scaffold: one lazy item wrapped in the staggered entrance. The
+ * (phone, tv) steps derive from the ordered SETTINGS_ENTRANCE_SECTIONS
+ * list — pinned by SettingsEntranceStepsTest to equal the hand-typed
+ * literals this replaced — so inserting a section renumbers the followers
+ * automatically. Hoisted out of [SettingsScreen] (it used to be a local fun
+ * closing over the screen's isTv) so it reads the same value as an explicit
+ * parameter; the entrance-step key check still throws on undeclared keys.
+ */
+private fun LazyListScope.settingsSection(
+    key: String,
+    isTv: Boolean,
+    content: @Composable () -> Unit,
+) {
+    val steps = requireNotNull(settingsEntranceStep(key)) {
+        "undeclared settings entrance section '$key' — add it to SETTINGS_ENTRANCE_SECTIONS"
+    }
+    item(key = key) {
+        AnimatedSettingsEntrance(if (isTv) steps.tv else steps.phone) { content() }
     }
 }
 
@@ -2293,4 +2103,370 @@ private fun SettingsTvCollapsedSearchRow(
             )
         }
     }
+}
+
+/** The `account` section: the Account / Users / Servers SettingsGroup (records: AccountRowRecords). */
+@Composable
+private fun SettingsAccountSection(
+    userName: String,
+    isAdmin: Boolean,
+    openSetting: (String, (String) -> Route) -> Unit,
+    onSignOut: (fromServer: Boolean) -> Unit
+) {
+                            SettingsGroup(
+                                icon = Tabler.Outline.User,
+                                title = stringResource(Res.string.settings_account),
+                                summary = { stringResource(Res.string.settings_signed_in_as_name, userName) },
+                                badge = {
+                                    RoleBadge(isAdmin = isAdmin)
+                                },
+                                initiallyExpanded = false,
+                            ) {
+                                // Row count derived from the account group
+                                // declaration — the four declared ids are
+                                // exactly the rows rendered here.
+                                val accountCount = SettingsScreenGroups.account.itemIds.size
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.SERVER_MANAGEMENT),
+                                    title = rowTitle(SettingsScreenIds.SERVER_MANAGEMENT),
+                                    subtitle = stringResource(Res.string.settings_server_management_subtitle),
+                                    index = 0, count = accountCount,
+                                    onClick = { openSetting(SettingsScreenIds.SERVER_MANAGEMENT) { Route.ServerManagement(it) } },
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.USER_MANAGEMENT),
+                                    title = rowTitle(SettingsScreenIds.USER_MANAGEMENT),
+                                    subtitle = stringResource(Res.string.settings_switch_user_subtitle),
+                                    index = 1, count = accountCount,
+                                    onClick = { openSetting(SettingsScreenIds.USER_MANAGEMENT) { Route.UserManagement(it) } },
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.LOGOUT),
+                                    title = rowTitle(SettingsScreenIds.LOGOUT),
+                                    subtitle = stringResource(Res.string.settings_sign_out_subtitle),
+                                    index = 2, count = accountCount,
+                                    isDestructive = true,
+                                    onClick = { onSignOut(false) },
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.SIGN_OUT_FROM_SERVER),
+                                    title = rowTitle(SettingsScreenIds.SIGN_OUT_FROM_SERVER),
+                                    subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
+                                    index = 3, count = accountCount,
+                                    isDestructive = true,
+                                    onClick = { onSignOut(true) },
+                                )
+                            }
+}
+
+/** The `activity` section: the Activity & Insights SettingsGroup (records: ActivityInsightsRowRecords). */
+@Composable
+private fun SettingsActivitySection(
+    viewModel: SettingsViewModel,
+    openSetting: (String, (String) -> Route) -> Unit
+) {
+                            val pendingCount = viewModel.pendingRequestCount.collectAsStateWithLifecycle().value
+                            SettingsGroup(
+                                icon = Tabler.Outline.Activity,
+                                title = stringResource(Res.string.settings_activity_insights),
+                                summary = { stringResource(Res.string.settings_activity_insights_subtitle) },
+                                badge = if (pendingCount > 0) {
+                                    {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "$pendingCount pending",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                        }
+                                    }
+                                } else null,
+                                initiallyExpanded = false,
+                            ) {
+                                // Row count derived from the activity-insights
+                                // group declaration.
+                                val insightsCount = SettingsScreenGroups.activityInsights.itemIds.size
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.FAVORITES),
+                                    title = rowTitle(SettingsScreenIds.FAVORITES),
+                                    subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
+                                    index = 0, count = insightsCount,
+                                    onClick = { openSetting(SettingsScreenIds.FAVORITES) { Route.Favorites } },
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.WATCH_PROGRESS_HEATMAP),
+                                    title = rowTitle(SettingsScreenIds.WATCH_PROGRESS_HEATMAP),
+                                    subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
+                                    index = 1, count = insightsCount,
+                                    onClick = { openSetting(SettingsScreenIds.WATCH_PROGRESS_HEATMAP) { Route.WatchProgressHeatmap } },
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.ACTIVITY_QUEUE),
+                                    title = rowTitle(SettingsScreenIds.ACTIVITY_QUEUE),
+                                    subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
+                                    index = 2, count = insightsCount,
+                                    onClick = { openSetting(SettingsScreenIds.ACTIVITY_QUEUE) { Route.ArrQueue } },
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.UPCOMING),
+                                    title = rowTitle(SettingsScreenIds.UPCOMING),
+                                    subtitle = stringResource(Res.string.settings_upcoming_subtitle),
+                                    index = 3, count = insightsCount,
+                                    onClick = { openSetting(SettingsScreenIds.UPCOMING) { Route.UpcomingCalendar } },
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.REQUESTS),
+                                    title = rowTitle(SettingsScreenIds.REQUESTS),
+                                    subtitle = stringResource(Res.string.settings_requests_subtitle),
+                                    index = 4, count = insightsCount,
+                                    trailingText = pendingCount.takeIf { it > 0 }?.toString(),
+                                    onClick = { openSetting(SettingsScreenIds.REQUESTS) { Route.Requests } },
+                                )
+                            }
+}
+
+/** The `system` section: the System SettingsGroup (records: SystemRowRecords). */
+@Composable
+private fun SettingsSystemSection(
+    viewModel: SettingsViewModel,
+    openSetting: (String, (String) -> Route) -> Unit,
+    onSetupWizardClick: () -> Unit
+) {
+                            val activeSessionCount = viewModel.activeSessions.size
+                            SettingsGroup(
+                                icon = Tabler.Outline.Adjustments,
+                                title = stringResource(Res.string.settings_system),
+                                summary = { stringResource(Res.string.settings_system_subtitle) },
+                                badge = if (viewModel.currentUser?.isAdmin == true && activeSessionCount > 0) {
+                                    {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "$activeSessionCount active",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            )
+                                        }
+                                    }
+                                } else null,
+                                initiallyExpanded = false,
+                            ) {
+                                // Row count derived from the system-core group
+                                // declaration: the admin-dashboard row drops for
+                                // non-admins, every other declared row renders.
+                                val systemCount = SettingsScreenGroups.systemCore.items.count { item ->
+                                    item.id != SettingsScreenIds.ADMIN_DASHBOARD || viewModel.currentUser?.isAdmin == true
+                                }
+                                var systemIndex = 0
+                                if (viewModel.currentUser?.isAdmin == true) {
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.ADMIN_DASHBOARD),
+                                        title = rowTitle(SettingsScreenIds.ADMIN_DASHBOARD),
+                                        subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
+                                        index = systemIndex++, count = systemCount,
+                                        onClick = { openSetting(SettingsScreenIds.ADMIN_DASHBOARD) { Route.AdminDashboard } },
+                                    )
+                                }
+                                SettingListItem(
+                                    icon = rowIcon(SettingsScreenIds.SETUP_WIZARD),
+                                    title = rowTitle(SettingsScreenIds.SETUP_WIZARD),
+                                    subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
+                                    index = systemIndex++, count = systemCount,
+                                    onClick = { onSetupWizardClick() },
+                                )
+                            }
+}
+
+/** The `group_screensaver` section: the TV dream SettingsGroup (records: SystemRowRecords screensaver rows). */
+@Composable
+private fun SettingsScreensaverSection(
+    preferences: SettingsScreenPreferences,
+    viewModel: SettingsViewModel,
+    lastClickedSettingId: String?,
+    activeDialog: MutableState<PickerState<*>?>
+) {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.Moon,
+                                    title = stringResource(Res.string.settings_screensaver),
+                                    summary = {
+                                        val cats = preferences.dreamImageCategories
+                                        remember(cats) {
+                                            cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
+                                        }
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
+                                ) {
+                                    // Row count derived from the screensaver group
+                                    // declaration — the five declared dream rows are
+                                    // exactly the rows rendered here.
+                                    val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
+                                    val slideshowIntervalTitle = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL)
+                                    val transitionStyleTitle = rowTitle(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE)
+                                    val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)
+                                    val transitionSlideLabel = stringResource(Res.string.settings_transition_slide)
+                                    val transitionNoneLabel = stringResource(Res.string.settings_transition_none)
+                                    SettingToggleItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_SHOW_TITLE),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_SHOW_TITLE),
+                                        subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
+                                        checked = preferences.dreamShowTitle,
+                                        index = 0, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_SHOW_TITLE,
+                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamShowTitle(it) } },
+                                    )
+                                    val categoryMovies = stringResource(Res.string.settings_category_movies)
+                                    val categoryTv = stringResource(Res.string.settings_category_tv)
+                                    val categoryMusic = stringResource(Res.string.settings_category_music)
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_CATEGORIES),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_CATEGORIES),
+                                        subtitle = stringResource(Res.string.settings_categories_subtitle),
+                                        trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
+                                            preferences.dreamImageCategories.joinToString(", ") {
+                                                when (it) {
+                                                    DreamImageCategory.MOVIES -> categoryMovies
+                                                    DreamImageCategory.SERIES -> categoryTv
+                                                    DreamImageCategory.MUSIC -> categoryMusic
+                                                }
+                                            }
+                                        },
+                                        index = 1, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_CATEGORIES,
+                                        onClick = {
+                                            val allCats = DreamImageCategory.entries.toSet()
+                                            val current = preferences.dreamImageCategories
+                                            val next = if (current.size == allCats.size) {
+                                                setOf(DreamImageCategory.MOVIES)
+                                            } else {
+                                                val cycle = allCats.toList()
+                                                val nextIndex = current.size
+                                                cycle.take(nextIndex + 1).toSet()
+                                            }
+                                            viewModel.edit { scope -> scope.screensaver.setDreamImageCategories(next) }
+                                        },
+                                    )
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL),
+                                        subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
+                                        trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
+                                        index = 2, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL,
+                                        onClick = {
+                                            activeDialog.value = PickerState.List(
+                                                title = slideshowIntervalTitle,
+                                                items = listOf(5_000L, 10_000L, 15_000L, 30_000L, 60_000L),
+                                                label = { "${it / 1000}s" },
+                                                isSelected = { it == preferences.dreamSlideshowIntervalMs },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamSlideshowIntervalMs(it) } },
+                                            )
+                                        },
+                                    )
+                                    SettingToggleItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_KEN_BURNS),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_KEN_BURNS),
+                                        subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
+                                        checked = preferences.dreamKenBurnsEnabled,
+                                        index = 3, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_KEN_BURNS,
+                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamKenBurnsEnabled(it) } },
+                                    )
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE),
+                                        subtitle = preferences.dreamTransitionStyle.name,
+                                        trailingText = preferences.dreamTransitionStyle.name,
+                                        index = 4, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE,
+                                        onClick = {
+                                            val labels = mapOf(
+                                                DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
+                                                DreamTransitionStyle.SLIDE to transitionSlideLabel,
+                                                DreamTransitionStyle.NONE to transitionNoneLabel,
+                                            )
+                                            activeDialog.value = PickerState.List(
+                                                title = transitionStyleTitle,
+                                                items = DreamTransitionStyle.entries,
+                                                label = { labels[it] ?: it.name },
+                                                isSelected = { it == preferences.dreamTransitionStyle },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamTransitionStyle(it) } },
+                                            )
+                                        },
+                                    )
+                                }
+}
+
+/** The `group_idle_ambient` section: the desktop idle-ambient SettingsGroup (records: SystemRowRecords idle rows). */
+@Composable
+private fun SettingsIdleAmbientSection(
+    preferences: SettingsScreenPreferences,
+    viewModel: SettingsViewModel,
+    lastClickedSettingId: String?,
+    activeDialog: MutableState<PickerState<*>?>
+) {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.Moon,
+                                    title = stringResource(Res.string.settings_idle_ambient),
+                                    summary = {
+                                        if (preferences.idleAmbientEnabled) stringResource(Res.string.settings_idle_ambient_on)
+                                        else stringResource(Res.string.settings_idle_ambient_off)
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
+                                ) {
+                                    val idleTotal = SettingsScreenGroups.systemIdleAmbient.itemIds.size
+                                    val idleTimeoutTitle = rowTitle(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT)
+                                    val idleTimeoutOffLabel = stringResource(Res.string.settings_idle_ambient_timeout_off)
+                                    val idleTimeoutOptions = listOf(0L, 1L, 5L, 10L, 15L, 30L)
+                                    // stringResource resolves in composition — pre-build the
+                                    // whole label column so the picker's plain label lambda only
+                                    // indexes (the auto-lock timer row's pattern).
+                                    val idleTimeoutLabels = idleTimeoutOptions.map { minutes ->
+                                        if (minutes == 0L) idleTimeoutOffLabel
+                                        else stringResource(Res.string.settings_idle_ambient_timeout_minutes, minutes)
+                                    }
+                                    SettingToggleItem(
+                                        icon = rowIcon(SettingsScreenIds.IDLE_AMBIENT_ENABLED),
+                                        title = rowTitle(SettingsScreenIds.IDLE_AMBIENT_ENABLED),
+                                        subtitle = stringResource(Res.string.settings_idle_ambient_enabled_subtitle),
+                                        checked = preferences.idleAmbientEnabled,
+                                        index = 0, count = idleTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.IDLE_AMBIENT_ENABLED,
+                                        onCheckedChange = { enabled ->
+                                            viewModel.edit { scope -> scope.screensaver.setIdleAmbientEnabled(enabled) }
+                                        },
+                                    )
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT),
+                                        title = rowTitle(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT),
+                                        subtitle = stringResource(Res.string.settings_idle_ambient_timeout_subtitle),
+                                        trailingText = idleTimeoutLabels[
+                                            idleTimeoutOptions.indexOf(preferences.idleAmbientTimeoutMin)
+                                                .coerceAtMost(idleTimeoutLabels.lastIndex),
+                                        ],
+                                        index = 1, count = idleTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.IDLE_AMBIENT_TIMEOUT,
+                                        onClick = {
+                                            activeDialog.value = PickerState.List(
+                                                title = idleTimeoutTitle,
+                                                items = idleTimeoutOptions,
+                                                label = { idleTimeoutLabels[idleTimeoutOptions.indexOf(it).coerceAtMost(idleTimeoutLabels.lastIndex)] },
+                                                isSelected = { it == preferences.idleAmbientTimeoutMin },
+                                                onSelect = { minutes ->
+                                                    viewModel.edit { scope -> scope.screensaver.setIdleAmbientTimeoutMin(minutes) }
+                                                },
+                                            )
+                                        },
+                                    )
+                                }
 }

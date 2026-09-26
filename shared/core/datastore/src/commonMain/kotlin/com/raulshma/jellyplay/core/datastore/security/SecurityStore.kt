@@ -57,6 +57,7 @@ class SecurityStore constructor(
         val USE_PIN_FOR_PLAYER_LOCK = booleanPreferencesKey("use_pin_for_player_lock")
         val AUTO_LOCK_TIMER_MS = longPreferencesKey("auto_lock_timer_ms")
         val REMOTE_CONTROL_ENABLED = booleanPreferencesKey("remote_control_enabled")
+        val REMOTE_DISPLAY_CONTENT_ENABLED = booleanPreferencesKey("remote_display_content_enabled")
     }
 
     private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
@@ -87,6 +88,9 @@ class SecurityStore constructor(
         usePinForPlayerLock = PreferenceCodec.readBool(prefs, Keys.USE_PIN_FOR_PLAYER_LOCK, "use_pin_for_player_lock", false),
         autoLockTimerMs = PreferenceCodec.readLong(prefs, Keys.AUTO_LOCK_TIMER_MS, "auto_lock_timer_ms", 30_000L),
         remoteControlEnabled = PreferenceCodec.readBool(prefs, Keys.REMOTE_CONTROL_ENABLED, "remote_control_enabled", true),
+        remoteDisplayContentEnabled = PreferenceCodec.readBool(
+            prefs, Keys.REMOTE_DISPLAY_CONTENT_ENABLED, "remote_display_content_enabled", false,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -207,6 +211,16 @@ class SecurityStore constructor(
     }
 
     /**
+     * The remote "DisplayContent" opt-in (idle detail navigation from
+     * another client's remote browse). Default false — unlike the master
+     * remote-control switch this one changes on-screen content, so it ships
+     * off until the user consents.
+     */
+    suspend fun setRemoteDisplayContentEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.REMOTE_DISPLAY_CONTENT_ENABLED] = enabled }
+    }
+
+    /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
      * those lists are what the facade actually resets, so deriving from them
@@ -227,38 +241,20 @@ class SecurityStore constructor(
         PreferenceResetCategory.SECURITY -> listOf(
             Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
             Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
-            Keys.REMOTE_CONTROL_ENABLED,
+            Keys.REMOTE_CONTROL_ENABLED, Keys.REMOTE_DISPLAY_CONTENT_ENABLED,
         )
         else -> emptyList()
     }
 
     /**
-     * Restores the security-sensitive lock config (PIN lock/hash, biometric,
-     * use-PIN-for-player-lock, auto-lock timer) from a decoded [UserPreferences].
-     * Called separately by the facade so an imported backup can never silently
-     * replace the device's lock config — only when the caller explicitly opts in.
-     */
-    internal suspend fun restoreSecuritySensitive(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.PIN_LOCK_ENABLED] = userPreferences.pinLockEnabled
-            userPreferences.pinHash?.let { prefs[Keys.PIN_HASH] = it }
-            prefs[Keys.BIOMETRIC_LOCK_ENABLED] = userPreferences.biometricLockEnabled
-            prefs[Keys.USE_PIN_FOR_PLAYER_LOCK] = userPreferences.usePinForPlayerLock
-            prefs[Keys.AUTO_LOCK_TIMER_MS] = userPreferences.autoLockTimerMs
-        }
-    }
-
-    /**
-     * Slice inverse of [read] for the non-security-sensitive key: writes
-     * [Keys.REMOTE_CONTROL_ENABLED] from [slice], mirroring [restorePreferences]
-     * (the remote-control switch is independent of the lock config and restored
-     * unconditionally).
+     * Slice inverse of [read] for the non-security-sensitive keys: writes the
+     * two remote-control switches from [slice], mirroring [restorePreferences]
+     * (both are independent of the lock config and restored unconditionally).
      */
     suspend fun restore(slice: SecuritySlice) {
         dataStore.edit { prefs ->
             prefs[Keys.REMOTE_CONTROL_ENABLED] = slice.remoteControlEnabled
+            prefs[Keys.REMOTE_DISPLAY_CONTENT_ENABLED] = slice.remoteDisplayContentEnabled
         }
     }
 
@@ -293,4 +289,6 @@ data class SecuritySlice(
     val usePinForPlayerLock: Boolean = false,
     val autoLockTimerMs: Long = 30_000L,
     val remoteControlEnabled: Boolean = true,
+    /** Opt-in for remote "DisplayContent" idle detail navigation. */
+    val remoteDisplayContentEnabled: Boolean = false,
 )

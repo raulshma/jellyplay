@@ -4,14 +4,12 @@ import com.raulshma.jellyplay.core.model.CacheIdentity
 import kotlinx.coroutines.flow.SharedFlow
 
 /**
- *  seam (wasmJs target of `core:data`): the identity surface
- * `SeerrRepositoryImpl` and [SessionCacheRegistry] need from the session —
+ * The identity surface `SeerrRepositoryImpl` and [SessionCacheRegistry]
+ * need from the session —
  * cache identity reads plus the transition stream the registry reacts to —
  * WITHOUT the JVM-bound machinery [HomeSession] is built on (the OkHttp
  * `JellyfinApiClient` + `AtomicReference` mirror). On android/desktop the
- * jvmShared DI graph binds [HomeSession] here (existing behavior unchanged);
- * wasmJs binds an `AtomicSessionState`-backed provider (`dataWasmModule`)
- * over the same classifier shape.
+ * jvmShared DI graph binds [HomeSession] here (existing behavior unchanged).
  */
 interface SessionIdentityProvider {
 

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Photo-suite strings moved verbatim from feature/library at the photo-suite extraction (same resource names;
+         the two strings library still shares were re-keyed photos_reset / photos_failed_to_load_more). -->
+    <string name="photos_photo_saved_to_gallery">Saved to gallery</string>
+    <string name="photos_photos">Photos</string>
+    <string name="photos_sort_options">Sort options</string>
+    <string name="photos_failed_to_load_photos">Failed to load photos</string>
+    <string name="photos_no_photos_found">No photos found</string>
+    <string name="photos_photo_adjustments">Adjustments</string>
+    <string name="photos_photo_slideshow">Slideshow</string>
+    <string name="photos_photo_start_slideshow">Start slideshow</string>
+    <string name="photos_photo_stop_slideshow">Stop slideshow</string>
+    <string name="photos_photo_brightness">Brightness %1$d%</string>
+    <string name="photos_photo_contrast">Contrast %1$d%</string>
+    <string name="photos_photo_saturation">Saturation %1$d%</string>
+    <string name="photos_photo_failed_to_load">Failed to load photo</string>
+    <string name="photos_cd_close">Close</string>
+    <string name="photos_cd_share">Share</string>
+    <string name="photos_cd_save">Save</string>
+    <string name="photos_cd_info">Info</string>
+    <string name="photos_cd_adjust">Adjust</string>
+    <string name="photos_cd_previous">Previous</string>
+    <string name="photos_cd_next">Next</string>
+    <string name="photos_reset">Reset</string>
+    <string name="photos_failed_to_load_more">Failed to load more</string>
+</resources>

@@ -39,12 +39,12 @@
     <string name="music_now_playing">In riproduzione</string>
     <string name="music_download_album">Scarica album</string>
     <string name="music_download_track">Scarica brano</string>
-    <string name="music_delete_album_downloads_confirm_title">Eliminare i download dell\'album?</string>
+    <string name="music_delete_album_downloads_confirm_title">Eliminare i download dell'album?</string>
     <string name="music_delete_album_downloads_confirm_message">Questo rimuove tutte le tracce scaricate da questo album.</string>
 
     <!-- Track / row menus -->
-    <string name="music_go_to_album">Vai all\'album</string>
-    <string name="music_go_to_artist">Vai all\'artista</string>
+    <string name="music_go_to_album">Vai all'album</string>
+    <string name="music_go_to_artist">Vai all'artista</string>
     <string name="music_more_options">Altre opzioni</string>
     <string name="music_favorite">Preferito</string>
     <string name="music_unfavorite">Rimuovi dai preferiti</string>
@@ -95,7 +95,7 @@
     <string name="music_new_playlist">Nuova playlist</string>
     <string name="music_edit_playlist">Modifica playlist</string>
     <string name="music_delete_playlist">Elimina playlist</string>
-    <string name="music_delete_playlist_confirm">Eliminare \"%1$s\"? Questa azione non può essere annullata.</string>
+    <string name="music_delete_playlist_confirm">Eliminare "%1$s"? Questa azione non può essere annullata.</string>
     <string name="music_create">Crea</string>
     <string name="music_save">Salva</string>
     <string name="music_edit">Modifica</string>

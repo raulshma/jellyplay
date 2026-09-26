@@ -107,8 +107,7 @@ private fun ActivityDigestItem(
 }
 
 // The digest's relative-date read moved behind the NewsletterDateLabels seam
-// ( wasmJs target: java.time formatting has no multiplatform twin) — the
-// private wrapper stays so the reflection-based jvmTest keeps reaching the
-// pinned branch shape through this file's facade.
+// — the private wrapper stays so the reflection-based jvmTest keeps reaching
+// the pinned branch shape through this file's facade.
 private fun formatRelativeDate(dateStr: String): String =
     newsletterRelativeDateLabel(dateStr)

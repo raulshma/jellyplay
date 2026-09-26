@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.core.network.library
 
 /**
- * Pure UTC-millis → local ISO-8601 offset-date-time formatting for the wasm
+ * Pure UTC-millis → local ISO-8601 offset-date-time formatting for the
  * NextUp `nextUpDateCutoff` parameter. The JVM path computes
  * `LocalDateTime.now().minusDays(n)` and lets the SDK serialize it as an
- * `ISO_OFFSET_DATE_TIME` string in the system zone; wasm has no java.time, so
- * the civil-date math (Howard Hinnant's `civil_from_days`) lives here pure
+ * `ISO_OFFSET_DATE_TIME` string in the system zone; the civil-date math
+ * (Howard Hinnant's `civil_from_days`) lives here pure
  * and the platform file supplies only "now" and the zone offset.
  */
 fun isoLocalFromUtcMillis(utcMillis: Long, offsetBehindMinutes: Int): String {

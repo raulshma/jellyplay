@@ -105,7 +105,7 @@
     <string name="core_ui_accent_color_title">Colore di accento</string>
     <string name="core_ui_accent_color_subtitle">Seleziona una tonalità di colore di accento personalizzata o dinamica</string>
     <string name="core_ui_color_style_title">Stile colore</string>
-    <string name="core_ui_color_style_subtitle">Definisci l\'atmosfera visiva delle tavolozze generate</string>
+    <string name="core_ui_color_style_subtitle">Definisci l'atmosfera visiva delle tavolozze generate</string>
     <string name="core_ui_dynamic_colors">Colori dinamici dello sfondo</string>
     <string name="core_ui_synthwave_accent_title">Accento Synthwave</string>
     <string name="core_ui_synthwave_accent_subtitle">Seleziona una tonalità di colore di accento neon personalizzata</string>
@@ -139,6 +139,7 @@
     <string name="ss_cat_audio_player">Lettore audio</string>
     <string name="ss_cat_backup_restore">Backup e ripristino</string>
     <string name="ss_cat_experimental">Sperimentale</string>
+    <string name="ss_cat_home">Schermata Home</string>
     <string name="ss_cat_integrations">Integrazioni</string>
     <string name="ss_cat_language_subtitles">Lingua e sottotitoli</string>
     <string name="ss_cat_notifications">Notifiche</string>
@@ -196,7 +197,7 @@
     <string name="detail_season_default">Stagione %1$d</string>
     <string name="detail_cd_collapse">Comprimi</string>
     <string name="detail_cd_expand">Espandi</string>
-    <string name="detail_delete_entire_series">Elimina l\'intera serie</string>
+    <string name="detail_delete_entire_series">Elimina l'intera serie</string>
     <string name="detail_cancel">Annulla</string>
     <string name="detail_delete_count">Elimina %1$d</string>
     <string name="detail_delete_count_with_freed">Elimina %1$d · %2$s</string>
@@ -223,8 +224,8 @@
     <string name="transcode_reason_audio_bitrate">Il bitrate audio supera il limite di qualità dello streaming.</string>
     <string name="transcode_reason_container_bitrate">Il bitrate complessivo supera il limite di qualità dello streaming.</string>
     <string name="transcode_reason_video_bit_depth">La profondità bit del video (es. 10 bit) non è supportata per la riproduzione diretta.</string>
-    <string name="transcode_reason_audio_bit_depth">La profondità bit dell\'audio non è supportata per la riproduzione diretta.</string>
-    <string name="transcode_reason_audio_channels">L\'audio ha più canali di quanti ne consenta il profilo del dispositivo.</string>
+    <string name="transcode_reason_audio_bit_depth">La profondità bit dell'audio non è supportata per la riproduzione diretta.</string>
+    <string name="transcode_reason_audio_channels">L'audio ha più canali di quanti ne consenta il profilo del dispositivo.</string>
     <string name="transcode_reason_audio_profile">Il profilo audio (es. DTS-HD, Atmos) non è supportato per la riproduzione diretta.</string>
     <string name="transcode_reason_audio_sample_rate">La frequenza di campionamento audio non è supportata per la riproduzione diretta.</string>
     <string name="transcode_reason_audio_is_external">La traccia audio è esterna al contenitore e non può essere trasmessa direttamente.</string>
@@ -236,7 +237,7 @@
     <string name="transcode_reason_video_framerate">La frequenza fotogrammi del video non è supportata per la riproduzione diretta.</string>
     <string name="transcode_reason_video_level">Il livello del codec video è troppo alto per il decoder del dispositivo.</string>
     <string name="transcode_reason_video_profile">Il profilo del codec video non è supportato per la riproduzione diretta.</string>
-    <string name="transcode_reason_video_range">L\'intervallo video (es. HDR, Dolby Vision) non è supportato per la riproduzione diretta.</string>
+    <string name="transcode_reason_video_range">L'intervallo video (es. HDR, Dolby Vision) non è supportato per la riproduzione diretta.</string>
     <string name="transcode_reason_video_resolution">La risoluzione video supera il limite di riproduzione diretta.</string>
     <string name="transcode_reason_subtitle_codec">Il formato dei sottotitoli deve essere incorporato dal server.</string>
     <string name="transcode_reason_stream_count">Il file ha più flussi di quanti ne consenta il profilo del dispositivo.</string>
@@ -246,10 +247,26 @@
     <string name="transcode_reason_hint_engine">Prova un altro motore di riproduzione (mpv o VLC): potrebbe riprodurlo direttamente.</string>
     <string name="transcode_reason_hint_decoder">Impostare il decoder su Software/FFmpeg potrebbe risolvere.</string>
     <string name="transcode_reason_hint_quality">Aumenta il limite di qualità streaming nel selettore qualità.</string>
-    <string name="transcode_reason_hint_subtitle">Scegli un sottotitolo SRT/esterno per evitare l\'incorporamento.</string>
+    <string name="transcode_reason_hint_subtitle">Scegli un sottotitolo SRT/esterno per evitare l'incorporamento.</string>
     <string name="core_remove_download_title">Eliminare il download?</string>
     <string name="core_remove_download_message">Questa azione elimina la copia scaricata di “%1$s” da questo dispositivo. La copia sul server non viene modificata.</string>
     <string name="core_remove_download_confirm">Elimina</string>
     <string name="core_ui_read_more">Leggi altro</string>
     <string name="core_ui_show_less">Mostra meno</string>
+    <string name="core_media_folder">Cartella</string>
+    <string name="core_media_folder_plural">Cartelle</string>
+    <string name="core_ui_auth_use_screen_lock">Usa blocco schermo</string>
+    <string name="core_ui_auth_unlock_screen_lock">Sblocca con blocco schermo</string>
+    <string name="core_ui_auth_device_credential_prompt">Usa il blocco schermo del dispositivo per sbloccare</string>
+    <string name="core_show_password">Mostra password</string>
+    <string name="core_hide_password">Nascondi password</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">Novità</string>
+    <string name="core_ui_whatsnew_release_title">Novità nella v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">Nuovo</string>
+    <string name="core_ui_whatsnew_category_improvement">Migliorato</string>
+    <string name="core_ui_whatsnew_category_fix">Corretto</string>
+    <string name="core_ui_whatsnew_take_me_there">Portami lì</string>
+    <string name="core_ui_whatsnew_got_it">Capito</string>
+    <string name="core_ui_whatsnew_archive_empty">Ancora nessuna novità di versione.</string>
 </resources>

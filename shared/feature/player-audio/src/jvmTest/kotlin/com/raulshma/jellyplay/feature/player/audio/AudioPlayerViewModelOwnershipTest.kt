@@ -9,17 +9,31 @@ import kotlin.test.assertTrue
  * module's BookReaderViewModelOwnershipTest pattern): the count of
  * AudioPlayerViewModel's public + internal members (properties and functions,
  * primary-constructor parameters and private members excluded) must never
- * increase past the current ceiling. New behaviour belongs in an extracted
- * module built from constructor lambdas — the AudioEffectsController / AudioSleepTimerController / AudioCastController / PlaylistPickerStateHolder seam shape (and the deferred now-playing/queue/effects snapshot fold) — with the VM left a thin
+ * increase past the current ceiling. The VM is a flows + `onEvent` facade
+ * (the HomeViewModel precedent): commands arrive as [AudioPlayerUiEvent]s
+ * through the single funnel, the former command funs are private handlers,
+ * and the only public members beyond the funnel are the state flows/getters,
+ * the controller slices, and the sync image-URL/id getters. New behaviour
+ * belongs in an extracted module built from constructor lambdas — the
+ * AudioEffectsController / AudioSleepTimerController / AudioCastController /
+ * PlaylistPickerStateHolder seam shape (and the deferred
+ * now-playing/queue/effects snapshot fold) — with the VM left a thin
  * caller that owns the uiState writes.
  *
- * Baseline: 81 members. Lower the ceiling when a slice moves out and
- * deletes members; never raise it to admit new ones.
+ * Baseline: 27 members (81 before the AudioPlayerUiEvent intent fold: the
+ * same flows/getters/slices plus 45 per-action command funs the funnel
+ * replaced and 10 dead ones deleted outright — the `onCastDisconnected`
+ * no-op, the cast play/pause/seek/volume forwards (the screen drives
+ * `castController` directly), the crossfade/gapless/pre-amp writes (the
+ * settings screen owns those stores; `seedForPlayback` re-applies them),
+ * `stopPlayback`, and the end-of-episode trigger (the platform queue
+ * managers fire it themselves)). Lower the ceiling when a slice moves out
+ * and deletes members; never raise it to admit new ones.
  */
 class AudioPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 81
+    private val maxPublicInternalMembers = 27
 
     /**
      * A class-body declaration line at the ViewModel's single level of

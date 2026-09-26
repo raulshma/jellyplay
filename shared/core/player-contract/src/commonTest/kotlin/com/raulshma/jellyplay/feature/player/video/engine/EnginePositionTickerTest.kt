@@ -42,7 +42,7 @@ class EnginePositionTickerTest {
         var ready: Boolean = true
 
         fun ticker(scope: TestScope): EnginePositionTicker = EnginePositionTicker(
-            scope = scope,
+            scopeProvider = { scope },
             pollingIntervalMs = interval,
             isPlayingFlow = playingFlow,
             isCurrentlyPlaying = { playing },

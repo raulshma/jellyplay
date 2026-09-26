@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.NextEpisode
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
@@ -18,6 +19,7 @@ import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
+import com.raulshma.jellyplay.feature.home.generated.resources.home_discover_reroll_failed
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_started
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_start_failed
 import com.raulshma.jellyplay.feature.home.generated.resources.home_series_download_queued
@@ -220,11 +222,12 @@ internal class HomeViewModel(
         offlineRepository = offlineRepository,
         fetchFailed = refresher.state.map { it.fetchFailed },
         // The offline home's layout mirror (#147): the cached online sections
-        // the offline home reproduces filtered to downloads. runCatching so a
-        // corrupt blob degrades to the generic offline rows instead of
-        // crashing the gate collector.
+        // the offline home reproduces filtered to downloads.
+        // runCatchingRethrowingCancellation so a corrupt blob degrades to the
+        // generic offline rows instead of crashing the gate collector, while a
+        // cancelled read still propagates.
         homeLayoutProvider = {
-            runCatching { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
+            runCatchingRethrowingCancellation { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
                 .getOrDefault(emptyList())
         },
         bookTocCacheRepository = bookTocCacheRepository,
@@ -458,6 +461,7 @@ internal class HomeViewModel(
                         enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
                         homeSectionOrder = prefs.home.homeSectionOrder,
                         libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
+                        discoverRows = prefs.home.discoverRows,
                     ),
                     offlineSectionPrefs = OfflineHomeSectionPrefs(
                         continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
@@ -587,6 +591,7 @@ internal class HomeViewModel(
                         partialLoadError = refresh.partialLoadError,
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
+                        rollingDiscoverRowIds = refresh.rollingDiscoverRowIds,
                         offlineMode = refresh.offlineMode,
                     )
                 }
@@ -655,6 +660,7 @@ internal class HomeViewModel(
             is HomeUiEvent.SetSectionVisible -> setSectionVisible(event.type, event.visible)
             is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
+            is HomeUiEvent.RollDiscoverRow -> rollDiscoverRow(event.rowId)
             is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
@@ -924,6 +930,28 @@ internal class HomeViewModel(
      */
     private fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
         launch { prefs.homeDiscovery.setLibrarySectionVisible(libraryId, type, visible) }
+    }
+
+    /**
+     * The dice affordance: re-rolls one RANDOM-sorted discover row via the
+     * refresher's in-place patch (the repository's rerollDiscoverRow owns the
+     * cache choreography; the refresher swaps the row's items in place — no
+     * full refresh). The row config is read from the prefs mirror, so a roll
+     * for a since-deleted row is a no-op. A failed roll (fetch error or empty
+     * result) surfaces on the message bus — the row keeps its current items,
+     * but the tap is never silently dead.
+     */
+    private fun rollDiscoverRow(rowId: String) {
+        val row = sectionPrefs.query.discoverRows.find { it.id == rowId }
+        if (row == null) {
+            userMessageBus.error(UiText.Resource(Res.string.home_discover_reroll_failed))
+            return
+        }
+        refresher.rollDiscoverRow(row) { rolled ->
+            if (!rolled) {
+                userMessageBus.error(UiText.Resource(Res.string.home_discover_reroll_failed))
+            }
+        }
     }
 
     override fun onCleared() {

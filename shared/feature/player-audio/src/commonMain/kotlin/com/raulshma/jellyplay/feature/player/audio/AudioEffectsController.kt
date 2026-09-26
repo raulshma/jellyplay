@@ -178,11 +178,6 @@ internal class AudioEffectsController(
         persist = { audioStore.setAudioNormalizationMode(mode) },
     )
 
-    fun setReplayGainPreAmpDb(db: Float) = core.applyAndPersist(
-        apply = { effectsManager.setReplayGainPreAmpDb(db) },
-        persist = { audioStore.setReplayGainPreAmpDb(db) },
-    )
-
     fun toggleEqualizer() = core.applyAndPersist(
         apply = effectsManager::toggleEqualizer,
         persist = { audioEffectsStore.setEqualizerEnabled(effectsManager.equalizerEnabled.value) },
@@ -250,24 +245,18 @@ internal class AudioEffectsController(
         persist = { audioEffectsStore.setAutoEqByGenre(enabled) },
     )
 
-    fun updateCrossfadeDuration(ms: Long) = core.applyAndPersist(
-        apply = { engine.setCrossfadeDurationMs(ms) },
-        persist = { audioStore.setAudioCrossfadeDurationMs(ms) },
-    )
-
-    fun updateGaplessPlayback(enabled: Boolean) = core.applyAndPersist(
-        apply = { engine.setGaplessEnabled(enabled) },
-        persist = { audioStore.setAudioGaplessEnabled(enabled) },
-    )
-
     /**
      * The ONE ordered seeding entry for [AudioPlayerViewModel.play] — the same
-     * field list the setters above own, fed from the persisted slices at track
-     * start. Deliberately apply-ONLY: the values came FROM the stores, so the
-     * persist leg is skipped (writing them back would round-trip every play and
-     * fight in-flight preference edits — this matches the former inline block).
-     * The strength fields mirror back through the manager's read accessors, so
-     * the prefs slice only feeds the manager. Field coverage is pinned by
+     * field list the setters above own, plus the three axes that have NO
+     * apply-and-persist command (crossfade, gapless, replay-gain pre-amp:
+     * the audio settings screen writes those stores directly, and the new
+     * value lands on the next track start through this seed — they never had
+     * a mid-track writer). Deliberately apply-ONLY: the values came FROM the
+     * stores, so the persist leg is skipped (writing them back would
+     * round-trip every play and fight in-flight preference edits — this
+     * matches the former inline block). The strength fields mirror back
+     * through the manager's read accessors, so the prefs slice only feeds
+     * the manager. Field coverage is pinned by
      * `AudioEffectsControllerTest`'s seeding-contract guard.
      */
     fun seedForPlayback(audio: AudioSlice, effects: AudioEffectsSlice) {

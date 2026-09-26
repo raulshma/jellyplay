@@ -3,11 +3,9 @@ package com.raulshma.jellyplay.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetRequestCodes
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetUi
 import com.raulshma.jellyplay.widget.skeleton.updateRecommendationGridWidget
-import org.koin.mp.KoinPlatform
 
 /**
  * Home-screen widget that surfaces personalized recommendations from
@@ -32,16 +30,6 @@ import org.koin.mp.KoinPlatform
  * skeleton (`updateRecommendationGridWidget`, parameterized by this widget's
  * 7_400_0xx request-code namespace).
  */
-/**
- * Koin accessors (Hilt removal): resolved straight from the
- * application container, same try/catch shape the EntryPoint call used.
- */
-private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
-    KoinPlatform.getKoin()!!.get()
-
-private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
-    KoinPlatform.getKoin()!!.get()
-
 class LibraryRecommendationsWidget : GridWidgetProvider() {
 
     override val gridViewId: Int = R.id.lr_widget_grid
@@ -57,7 +45,7 @@ class LibraryRecommendationsWidget : GridWidgetProvider() {
     }
 
     override suspend fun refreshNow(context: Context) {
-        koinWidgetWorkScheduler().refreshLibraryNow()
+        WidgetKoin.widgetWorkScheduler.refreshLibraryNow()
     }
 
     companion object {
@@ -76,7 +64,7 @@ class LibraryRecommendationsWidget : GridWidgetProvider() {
                 context = context,
                 appWidgetManager = appWidgetManager,
                 appWidgetId = appWidgetId,
-                subtitleText = readSourceLabel(context, appWidgetId),
+                subtitleText = readLibrarySourceLabel(appWidgetId),
                 ui = GridWidgetUi(
                     layoutRes = R.layout.library_recommendations_widget,
                     headerViewId = R.id.lr_widget_header,
@@ -96,10 +84,5 @@ class LibraryRecommendationsWidget : GridWidgetProvider() {
                 ),
             )
         }
-
-        private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {
-            koinWidgetDataStore().getWidgetConfigForIdSync(appWidgetId)
-                .librarySource.displayName
-        }.getOrDefault(LibraryRecommendationsSource.SIMILAR_TO_RECENT.displayName)
     }
 }

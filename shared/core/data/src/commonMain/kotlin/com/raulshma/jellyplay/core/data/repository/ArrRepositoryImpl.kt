@@ -371,24 +371,20 @@ class ArrRepositoryImpl(
     // ── Sonarr series management ("Manage Series" screen) ────────────────
 
     override suspend fun resolveSonarrSeries(tvdbId: Int): Result<ArrSeriesResolution> =
-        withContext(cacheScope.coroutineContext) {
-            resolveSonarrSeriesForSeries(tvdbId)?.let {
-                Result.success(
-                    ArrSeriesResolution(
-                        serverId = it.serverId,
-                        seriesId = it.seriesId,
-                        title = it.title,
-                        monitored = it.monitored,
-                        path = it.path,
-                    ),
-                )
-            } ?: Result.failure(noServerException())
+        withResolvedSonarrSeries(tvdbId) { target ->
+            Result.success(
+                ArrSeriesResolution(
+                    serverId = target.serverId,
+                    seriesId = target.seriesId,
+                    title = target.title,
+                    monitored = target.monitored,
+                    path = target.path,
+                ),
+            )
         }
 
     override suspend fun getSonarrEpisodes(tvdbId: Int): Result<List<ArrSeriesEpisode>> =
-        withContext(cacheScope.coroutineContext) {
-            val target = resolveSonarrSeriesForSeries(tvdbId)
-                ?: return@withContext Result.failure(noServerException())
+        withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.getEpisodesForSeries(target.baseUrl, target.apiKey, target.seriesId)
         }
 
@@ -396,35 +392,30 @@ class ArrRepositoryImpl(
         tvdbId: Int,
         episodeIds: List<Int>,
         monitored: Boolean,
-    ): Result<Unit> = withContext(cacheScope.coroutineContext) {
-        val target = resolveSonarrSeriesForSeries(tvdbId)
-            ?: return@withContext noServer()
-        if (episodeIds.isEmpty()) return@withContext Result.success(Unit)
-        sonarrApiClient.monitorEpisodes(target.baseUrl, target.apiKey, episodeIds, monitored)
+    ): Result<Unit> = withResolvedSonarrSeries(tvdbId) { target ->
+        if (episodeIds.isEmpty()) Result.success(Unit)
+        else sonarrApiClient.monitorEpisodes(target.baseUrl, target.apiKey, episodeIds, monitored)
     }
 
     override suspend fun deleteSonarrEpisodeFile(tvdbId: Int, episodeFileId: Int): Result<Unit> =
-        withContext(cacheScope.coroutineContext) {
-            val target = resolveSonarrSeriesForSeries(tvdbId)
-                ?: return@withContext noServer()
+        withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.deleteEpisodeFile(target.baseUrl, target.apiKey, episodeFileId)
         }
 
     override suspend fun searchSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>): Result<Unit> =
-        withContext(cacheScope.coroutineContext) {
-            val target = resolveSonarrSeriesForSeries(tvdbId)
-                ?: return@withContext noServer()
-            if (episodeIds.isEmpty()) return@withContext Result.success(Unit)
-            sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
-                ArrCommandName.SEARCH_EPISODES, episodeIds = episodeIds,
-            ).map { }
+        withResolvedSonarrSeries(tvdbId) { target ->
+            if (episodeIds.isEmpty()) {
+                Result.success(Unit)
+            } else {
+                sonarrApiClient.postCommand(
+                    target.baseUrl, target.apiKey,
+                    ArrCommandName.SEARCH_EPISODES, episodeIds = episodeIds,
+                ).map { }
+            }
         }
 
     override suspend fun searchMonitoredSonarrSeason(tvdbId: Int, seasonNumber: Int): Result<Unit> =
-        withContext(cacheScope.coroutineContext) {
-            val target = resolveSonarrSeriesForSeries(tvdbId)
-                ?: return@withContext noServer()
+        withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
                 target.baseUrl, target.apiKey,
                 ArrCommandName.SEASON_SEARCH,
@@ -434,9 +425,7 @@ class ArrRepositoryImpl(
         }
 
     override suspend fun refreshSonarrSeries(tvdbId: Int): Result<Unit> =
-        withContext(cacheScope.coroutineContext) {
-            val target = resolveSonarrSeriesForSeries(tvdbId)
-                ?: return@withContext noServer()
+        withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
                 target.baseUrl, target.apiKey,
                 ArrCommandName.REFRESH_SERIES, seriesId = target.seriesId,
@@ -444,9 +433,7 @@ class ArrRepositoryImpl(
         }
 
     override suspend fun rescanSonarrSeries(tvdbId: Int): Result<Unit> =
-        withContext(cacheScope.coroutineContext) {
-            val target = resolveSonarrSeriesForSeries(tvdbId)
-                ?: return@withContext noServer()
+        withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
                 target.baseUrl, target.apiKey,
                 ArrCommandName.RESCAN_SERIES, seriesId = target.seriesId,
@@ -454,14 +441,30 @@ class ArrRepositoryImpl(
         }
 
     override suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit> =
-        withContext(cacheScope.coroutineContext) {
-            val target = resolveSonarrSeriesForSeries(tvdbId)
-                ?: return@withContext noServer()
+        withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
                 target.baseUrl, target.apiKey,
                 ArrCommandName.SEARCH_SERIES, seriesId = target.seriesId,
             ).map { }
         }
+
+    /**
+     * The Sonarr members' guard seam (the `withSeerrSession` precedent):
+     * resolves the owning Sonarr server + internal series id for [tvdbId]
+     * once and hands it to [action] inside the cache scope; an unresolved
+     * series (no configured server tracks it / resolution failed) fails with
+     * the shared no-server 404 — the exact outcome the nine hand-copied
+     * `resolveSonarrSeriesForSeries(tvdbId) ?: return@withContext …` ladders
+     * produced. Members stay one-line command declarations over it.
+     */
+    private suspend fun <T> withResolvedSonarrSeries(
+        tvdbId: Int,
+        action: suspend (ResolvedSonarrSeries) -> Result<T>,
+    ): Result<T> = withContext(cacheScope.coroutineContext) {
+        val target = resolveSonarrSeriesForSeries(tvdbId)
+            ?: return@withContext Result.failure(noServerException())
+        action(target)
+    }
 
     /**
      * Resolves the owning Sonarr server + internal series id for [tvdbId] by

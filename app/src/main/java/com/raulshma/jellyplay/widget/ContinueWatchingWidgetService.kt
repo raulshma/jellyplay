@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.widget.skeleton.continueWatchingProgressPercent
 import com.raulshma.jellyplay.widget.skeleton.continueWatchingRowSubtitle
 import com.raulshma.jellyplay.widget.skeleton.continueWatchingRowVisibility
 import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
-import org.koin.mp.KoinPlatform
 
 /**
  * Backs the Continue Watching widget's `ListView` with a
@@ -49,11 +48,8 @@ import org.koin.mp.KoinPlatform
 class ContinueWatchingWidgetService : RemoteViewsService() {
 
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        // Koin accessors (Hilt removal): resolved straight from the
-        // application container, same shape the EntryPoint call used.
-        val koin = KoinPlatform.getKoin()!!
-        val store: WidgetDataStore = koin.get()
-        val playbackRepo: PlaybackRepository = koin.get()
+        val store: WidgetDataStore = WidgetKoin.get()
+        val playbackRepo: PlaybackRepository = WidgetKoin.get()
         val appWidgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID

@@ -138,6 +138,7 @@
     <string name="ss_cat_audio_player">オーディオプレーヤー</string>
     <string name="ss_cat_backup_restore">バックアップと復元</string>
     <string name="ss_cat_experimental">実験的機能</string>
+    <string name="ss_cat_home">ホーム画面</string>
     <string name="ss_cat_integrations">連携</string>
     <string name="ss_cat_language_subtitles">言語と字幕</string>
     <string name="ss_cat_notifications">通知</string>
@@ -250,4 +251,21 @@
     <string name="core_remove_download_confirm">削除</string>
     <string name="core_ui_read_more">続きを読む</string>
     <string name="core_ui_show_less">折りたたむ</string>
+    <string name="core_media_folder">フォルダー</string>
+    <string name="core_media_folder_plural">フォルダー</string>
+    <string name="core_ui_auth_use_screen_lock">画面ロックを使用</string>
+    <string name="core_ui_auth_unlock_screen_lock">画面ロックでロック解除</string>
+    <string name="core_ui_auth_device_credential_prompt">端末の画面ロックでロック解除</string>
+    <string name="core_ui_read">読む</string>
+    <string name="core_show_password">パスワードを表示</string>
+    <string name="core_hide_password">パスワードを非表示</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">新機能</string>
+    <string name="core_ui_whatsnew_release_title">v%1$s の新機能</string>
+    <string name="core_ui_whatsnew_category_new">新規</string>
+    <string name="core_ui_whatsnew_category_improvement">改善</string>
+    <string name="core_ui_whatsnew_category_fix">修正</string>
+    <string name="core_ui_whatsnew_take_me_there">そこへ移動</string>
+    <string name="core_ui_whatsnew_got_it">了解</string>
+    <string name="core_ui_whatsnew_archive_empty">リリースのハイライトはまだありません。</string>
 </resources>

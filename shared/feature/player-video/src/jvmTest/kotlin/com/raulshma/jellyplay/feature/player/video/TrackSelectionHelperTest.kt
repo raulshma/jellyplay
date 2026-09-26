@@ -101,6 +101,9 @@ class TrackSelectionHelperTest {
         getPlayMethod: () -> com.raulshma.jellyplay.core.model.PlayMethod =
             { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
         onReloadForStreamChange: (MediaStreamSelection) -> Unit = { },
+        getRuleContentType: () -> com.raulshma.jellyplay.core.model.RuleContentType =
+            { com.raulshma.jellyplay.core.model.RuleContentType.EPISODE },
+        getRuleTitles: () -> List<String> = { listOf("Test Series", "Episode 1") },
     ) = TrackSelectionHelper(
         engineStore = engineStore,
         subtitleStore = subtitleStore,
@@ -111,6 +114,8 @@ class TrackSelectionHelperTest {
         getPlayMethod = getPlayMethod,
         onReloadForStreamChange = onReloadForStreamChange,
         playbackPreferenceResolver = resolver,
+        getRuleContentType = getRuleContentType,
+        getRuleTitles = getRuleTitles,
         scope = scope,
     )
 
@@ -449,12 +454,16 @@ class TrackSelectionHelperTest {
         helper.selectSubtitleTrack(TrackOption(0, "English", "eng", false))
 
         // The persisted per-item selection should carry index 0 (engine index),
-        // not null.
+        // not null — plus the descriptor snapshot of the side-loaded sub.
         coVerify {
             engineStore.setMediaStreamSelection(
                 itemId = "item1",
-                audioStreamIndex = null,
-                subtitleStreamIndex = 0,
+                selection = MediaStreamSelection(
+                    audioStreamIndex = null,
+                    subtitleStreamIndex = 0,
+                    subtitleLabel = "English",
+                    subtitleLanguage = "eng",
+                ),
             )
         }
     }
@@ -774,14 +783,18 @@ class TrackSelectionHelperTest {
         helper.selectSubtitleTrack(TrackOption(100_003, "English - Ass", "eng", false), isUserOverride = true)
 
         // User picks act: session re-POST with the chosen stream index, and the
-        // pick persists so the post-reload ladder restores it on the
-        // re-side-loaded track.
+        // pick persists (with its descriptor snapshot) so the post-reload
+        // ladder can revalidate and restore it on the re-side-loaded track.
         assertEquals(3, reloadedSub)
         coVerify {
             engineStore.setMediaStreamSelection(
                 itemId = "item1",
-                audioStreamIndex = null,
-                subtitleStreamIndex = 3,
+                selection = MediaStreamSelection(
+                    audioStreamIndex = null,
+                    subtitleStreamIndex = 3,
+                    subtitleLabel = "English - Ass",
+                    subtitleLanguage = "eng",
+                ),
             )
         }
         // The picker row shows the optimistic selection.
@@ -809,8 +822,12 @@ class TrackSelectionHelperTest {
         coVerify {
             engineStore.setMediaStreamSelection(
                 itemId = "item1",
-                audioStreamIndex = 1,
-                subtitleStreamIndex = null,
+                selection = MediaStreamSelection(
+                    audioStreamIndex = 1,
+                    subtitleStreamIndex = null,
+                    audioLabel = "Spanish",
+                    audioLanguage = "spa",
+                ),
             )
         }
     }
@@ -998,4 +1015,356 @@ class TrackSelectionHelperTest {
         isSelected = isSelected,
         type = type,
     )
+
+    // ─── The rule-engine rung in the restore ladder ────────────────────
+    //
+    // Rung order under test: per-item/series manual preference > rule engine >
+    // global preferred language; the explicit-off intent outranks everything.
+
+    /** Installs [rules] as the persisted rule set on the subtitle store. */
+    private fun withRules(rules: com.raulshma.jellyplay.core.model.LanguageRuleSet) {
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(languageRules = rules),
+        )
+    }
+
+    @Test
+    fun updateTracksFromEngine_dubbedAllPreset_subsOffAndDubbedAudioForEpisodes() {
+        // Global preference says English subs; the DUBBED_ALL preset outranks it.
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(
+                preferredSubtitleLanguage = "eng",
+                languageRules = com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                    preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.DUBBED_ALL,
+                    audioLanguages = listOf("ger"),
+                ),
+            ),
+        )
+        helper = makeHelper()
+        mediaStreams = listOf(
+            MediaStream(index = 1, type = StreamType.AUDIO, language = "jpn", displayTitle = "Japanese"),
+            MediaStream(index = 2, type = StreamType.AUDIO, language = "ger", displayTitle = "German"),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "Japanese", "jpn", TrackType.AUDIO, isSelected = false, id = "a0").copy(streamIndex = 1),
+            mediaTrack(1, "German", "ger", TrackType.AUDIO, isSelected = false, id = "a1").copy(streamIndex = 2),
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "s0"),
+        )
+        helper.updateTracksFromEngine()
+
+        // Dubbed audio selected; English subs forced Off despite the global preference.
+        verify { engine.selectTrack(TrackType.AUDIO, 1) }
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_ruleLanguage_outranksGlobalPreferredLanguage() {
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(
+                preferredSubtitleLanguage = "eng",
+                languageRules = com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                    preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.CUSTOM,
+                    subtitleLanguages = listOf("jpn"),
+                ),
+            ),
+        )
+        helper = makeHelper()
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+            mediaTrack(1, "Japanese", "jpn", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_seriesManualPreference_outranksRule() {
+        // Series pinned to Spanish audio; the rule set wants Japanese.
+        withRules(
+            com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.CUSTOM,
+                audioLanguages = listOf("jpn"),
+            ),
+        )
+        helper = makeHelper(
+            resolver = resolverFor(
+                com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
+                    scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
+                    key = "series1",
+                    audioLanguage = "spa",
+                )
+            ),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "Japanese", "jpn", TrackType.AUDIO, isSelected = false),
+            mediaTrack(1, "Spanish", "spa", TrackType.AUDIO, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.AUDIO, 1) }
+        verify(exactly = 0) { engine.selectTrack(TrackType.AUDIO, 0) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_seriesDisabled_outranksRuleAndGlobalPreferred() {
+        // The explicit series-level "subtitles off" intent is
+        // not outranked by the global preferred-language rung NOR by the
+        // rules wanting subtitles.
+        withRules(
+            com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.SUBBED_ALL,
+                subtitleLanguages = listOf("eng"),
+            ),
+        )
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(
+                preferredSubtitleLanguage = "eng",
+                languageRules = com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                    preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.SUBBED_ALL,
+                    subtitleLanguages = listOf("eng"),
+                ),
+            ),
+        )
+        helper = makeHelper(
+            getCurrentSeriesId = { "series1" },
+            resolver = resolverFor(
+                com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
+                    scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
+                    key = "series1",
+                    subtitleDisabled = true,
+                )
+            ),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 0) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_ruleForcedOnly_selectsForcedStream() {
+        withRules(
+            com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.CUSTOM,
+                subtitleLanguages = listOf("eng"),
+                rules = listOf(
+                    com.raulshma.jellyplay.core.model.LanguageRule(
+                        id = "r1",
+                        subtitleLanguages = listOf("eng"),
+                        subtitleMode = com.raulshma.jellyplay.core.model.SubtitleTrackMode.FORCED_ONLY,
+                    ),
+                ),
+            ),
+        )
+        helper = makeHelper()
+        mediaStreams = listOf(
+            MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English", isForced = true),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_subtitleAllowList_neverAutoSelectsOutsideLanguages() {
+        // Exclusion: the global preference wants English, but the allow-list
+        // only admits Japanese — the English track is never auto-selected and
+        // nothing else matches, so Off is the outcome (mpv lang_filter parity).
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(
+                preferredSubtitleLanguage = "eng",
+                languageRules = com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                    preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.CUSTOM,
+                    subtitleAllowList = setOf("jpn"),
+                ),
+            ),
+        )
+        helper = makeHelper()
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 0) }
+
+        // Inclusion: with the rule set wanting Japanese (an allowed language),
+        // the Japanese track is selected while the out-of-list English track
+        // that would otherwise match nothing is correctly skipped.
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(
+                preferredSubtitleLanguage = "eng",
+                languageRules = com.raulshma.jellyplay.core.model.LanguageRuleSet(
+                    preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.CUSTOM,
+                    subtitleLanguages = listOf("jpn"),
+                    subtitleAllowList = setOf("jpn"),
+                ),
+            ),
+        )
+        helper = makeHelper()
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+            mediaTrack(1, "Japanese", "jpn", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_inactiveRuleSet_isByteIdenticalPassthrough() {
+        // MANUAL/empty rule set: the global preference ladder applies unchanged.
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(
+                preferredAudioLanguage = "spa",
+                languageRules = com.raulshma.jellyplay.core.model.LanguageRuleSet(),
+            ),
+        )
+        helper = makeHelper()
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
+            mediaTrack(1, "Spanish", "spa", TrackType.AUDIO, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.AUDIO, 1) }
+    }
+
+    // ─── Stale stored-index revalidation ───────────────────────────────
+
+    private fun storedSubtitleSelection(selection: MediaStreamSelection) {
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            PlayerEngineSlice(mediaStreamSelections = mapOf("item1" to selection)),
+        )
+    }
+
+    @Test
+    fun updateTracksFromEngine_staleStoredIndex_languageMismatch_demotesToLanguageMatch() {
+        // The stored entry recorded index 1 → German. The server re-ordered the
+        // streams so index 1 is now English: the descriptor no longer matches,
+        // so the index is demoted and the global language rung (eng) applies
+        // instead of blindly selecting the now-wrong track.
+        storedSubtitleSelection(
+            MediaStreamSelection(
+                subtitleStreamIndex = 1,
+                subtitleLabel = "German",
+                subtitleLanguage = "ger",
+            ),
+        )
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(preferredSubtitleLanguage = "eng"),
+        )
+        mediaStreams = listOf(
+            MediaStream(index = 1, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English"),
+            MediaStream(index = 2, type = StreamType.SUBTITLE, language = "ger", displayTitle = "German"),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false).copy(streamIndex = 1),
+            mediaTrack(1, "German", "ger", TrackType.SUBTITLE, isSelected = false).copy(streamIndex = 2),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 1) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_storedIndex_matchingDescriptor_stillSelectsByIndex() {
+        // Same entry, same layout: the descriptor validates, index selection applies.
+        storedSubtitleSelection(
+            MediaStreamSelection(
+                subtitleStreamIndex = 2,
+                subtitleLabel = "German",
+                subtitleLanguage = "ger",
+            ),
+        )
+        mediaStreams = listOf(
+            MediaStream(index = 1, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English"),
+            MediaStream(index = 2, type = StreamType.SUBTITLE, language = "ger", displayTitle = "German"),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false).copy(streamIndex = 1),
+            mediaTrack(1, "German", "ger", TrackType.SUBTITLE, isSelected = false).copy(streamIndex = 2),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_legacyStoredIndex_withoutDescriptors_trustedByTypeOnly() {
+        // Back-fill contract: absent descriptor fields keep today's behaviour —
+        // the index is trusted as long as it still points at a same-type stream.
+        storedSubtitleSelection(MediaStreamSelection(subtitleStreamIndex = 1))
+        mediaStreams = listOf(
+            MediaStream(index = 1, type = StreamType.SUBTITLE, language = "ger", displayTitle = "German"),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "German", "ger", TrackType.SUBTITLE, isSelected = false).copy(streamIndex = 1),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_droppedStoredStream_fallsBackToLanguageMatch() {
+        // Transcode re-enumeration dropped stream 1 entirely: the stored index
+        // resolves to no stream, the descriptor check passes through (no target
+        // to validate), and the stream-index/label match misses → the global
+        // language rung picks the surviving track.
+        storedSubtitleSelection(
+            MediaStreamSelection(
+                subtitleStreamIndex = 1,
+                subtitleLabel = "German",
+                subtitleLanguage = "ger",
+            ),
+        )
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(preferredSubtitleLanguage = "eng"),
+        )
+        mediaStreams = listOf(
+            MediaStream(index = 4, type = StreamType.SUBTITLE, language = "eng", displayTitle = "English"),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false).copy(streamIndex = 4),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+    }
+
+    @Test
+    fun selectSubtitleTrack_userOverride_persistsDescriptorsAlongsideIndex() {
+        // The persisted per-item entry snapshots the label + language of
+        // the selected stream so a later restore can revalidate the index.
+        mediaStreams = listOf(
+            MediaStream(index = 3, type = StreamType.SUBTITLE, language = "ger", displayTitle = "German"),
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "German", "ger", TrackType.SUBTITLE, isSelected = false).copy(streamIndex = 3),
+        )
+        helper.updateTracksFromEngine()
+        helper.selectSubtitleTrack(
+            TrackOption(0, "German", "ger", false).copy(streamIndex = 3),
+            isUserOverride = true,
+        )
+
+        coVerify {
+            engineStore.setMediaStreamSelection(
+                itemId = "item1",
+                selection = MediaStreamSelection(
+                    audioStreamIndex = null,
+                    subtitleStreamIndex = 3,
+                    subtitleLabel = "German",
+                    subtitleLanguage = "ger",
+                ),
+            )
+        }
+    }
 }

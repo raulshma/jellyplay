@@ -79,9 +79,9 @@ fun AmbientScreen(
         currentPositionState = viewModel.currentPositionState,
         duration = uiState.duration,
         onTap = onTap,
-        onPlayPause = { viewModel.togglePlayPause() },
-        onSkipNext = { viewModel.skipToNext() },
-        onSkipPrevious = { viewModel.skipToPrevious() },
+        onPlayPause = { viewModel.onEvent(AudioPlayerUiEvent.TogglePlayPause) },
+        onSkipNext = { viewModel.onEvent(AudioPlayerUiEvent.SkipToNext) },
+        onSkipPrevious = { viewModel.onEvent(AudioPlayerUiEvent.SkipToPrevious) },
     )
 }
 

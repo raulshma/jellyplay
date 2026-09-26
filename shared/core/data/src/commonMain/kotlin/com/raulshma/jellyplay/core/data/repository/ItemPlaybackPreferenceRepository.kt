@@ -80,6 +80,20 @@ interface ItemPlaybackPreferenceRepository {
         track: RememberedTrack?,
     )
 
+    /**
+     * Persists the per-item/series rendering override for [scope]/[key]:
+     * the shader-pack / tone-mapping pair the player's "Rendering" sheet pins.
+     * Other fields on the row are preserved; [overrides] = null clears the
+     * override ("Inherit" — the global settings stand again), dropping the row
+     * entirely when nothing else is remembered. A corrupt stored blob parses
+     * to null on read (never throws out of [get]).
+     */
+    suspend fun setRenderProfile(
+        scope: PlaybackPrefScope,
+        key: String,
+        overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?,
+    )
+
     /** Removes the preference row for [scope]/[key], if any. */
     suspend fun delete(scope: PlaybackPrefScope, key: String)
 }

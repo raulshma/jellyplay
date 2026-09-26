@@ -6,8 +6,6 @@ import org.jellyfin.sdk.model.api.EncodingContext
 import org.jellyfin.sdk.model.api.MediaStreamProtocol
 import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
 import org.jellyfin.sdk.model.deviceprofile.buildDeviceProfile
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Builds the Jellyfin [org.jellyfin.sdk.model.api.DeviceProfile] sent with
@@ -30,8 +28,7 @@ import javax.inject.Singleton
  * The candidate codec lists per container mirror the official Jellyfin
  * Android client's `AVAILABLE_VIDEO_CODECS` / `AVAILABLE_AUDIO_CODECS`.
  */
-@Singleton
-class DeviceProfileProvider @Inject constructor(
+class DeviceProfileProvider(
     private val deviceCodecCapabilities: DeviceCodecCapabilities,
 ) {
 

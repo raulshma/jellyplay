@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
@@ -41,16 +42,20 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.message.UiText
@@ -81,6 +86,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
@@ -309,6 +315,96 @@ class HomeViewModelEventsTest {
                 }
             }
         }
+
+    // ── RollDiscoverRow (dice affordance, end-to-end through uiState) ────────
+
+    @Test
+    fun rollDiscoverRow_swapsTheRowsItemsThroughUiState() = vmTest {
+        // A template-style preset row (RANDOM sort, Jellyfin source) persisted
+        // in the home prefs — the exact shape the manage screen's templates
+        // create and the dice wiring gates on.
+        val row = DiscoverRowConfig(
+            id = "dr_x",
+            title = "Random Surprise",
+            filters = LibraryFilters(mediaTypes = listOf(MediaType.MOVIE), sortBy = SortOption.RANDOM),
+        )
+        homeDiscoveryFlow.value = HomeDiscoverySlice(discoverRows = listOf(row))
+        coEvery { mediaRepository.getHomeSections(any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(
+                    HomeSection(
+                        id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),
+                        title = row.title,
+                        type = HomeSectionType.DISCOVER,
+                        items = listOf(item("m1"), item("m2")),
+                    ),
+                ),
+            ),
+        )
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+        assertEquals(
+            listOf("m1", "m2"),
+            viewModel.uiState.value.sections.first { it.type == HomeSectionType.DISCOVER }.items.map { it.id },
+        )
+
+        val rolled = listOf(item("r9"), item("r4"))
+        coEvery { mediaRepository.rerollDiscoverRow(row) } returns Result.success(rolled)
+
+        viewModel.onEvent(HomeUiEvent.RollDiscoverRow(row.id))
+        runCurrent()
+
+        assertEquals(
+            listOf("r9", "r4"),
+            viewModel.uiState.value.sections.first { it.type == HomeSectionType.DISCOVER }.items.map { it.id },
+            "the dice roll swaps the row's items through the full VM fold",
+        )
+        advanceTimeBy(701)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty(), "the rolling flag settles")
+        // The cache choreography is the repository's now (rerollDiscoverRow
+        // owns invalidate → fetch → seed); the end-to-end pin here is that the
+        // roll reached it exactly once.
+        coVerify(exactly = 1) { mediaRepository.rerollDiscoverRow(row) }
+    }
+
+    @Test
+    fun rollDiscoverRow_failedFetch_keepsItems_andToasts() = vmTest {
+        val row = DiscoverRowConfig(id = "dr_x", title = "Random Surprise")
+        homeDiscoveryFlow.value = HomeDiscoverySlice(discoverRows = listOf(row))
+        coEvery { mediaRepository.getHomeSections(any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(
+                    HomeSection(
+                        id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),
+                        title = row.title,
+                        type = HomeSectionType.DISCOVER,
+                        items = listOf(item("m1")),
+                    ),
+                ),
+            ),
+        )
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+
+        coEvery { mediaRepository.rerollDiscoverRow(row) } returns
+            Result.failure(RuntimeException("server hiccup"))
+
+        viewModel.onEvent(HomeUiEvent.RollDiscoverRow(row.id))
+        runCurrent()
+
+        assertEquals(
+            listOf("m1"),
+            viewModel.uiState.value.sections.first { it.type == HomeSectionType.DISCOVER }.items.map { it.id },
+            "a failed roll keeps the row's current items",
+        )
+        verify(exactly = 1) { userMessageBus.error(any<UiText>()) }
+        advanceTimeBy(701)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty())
+    }
 
     // ── MarkItemUnplayed ─────────────────────────────────────────────────────
 
@@ -594,13 +690,6 @@ class HomeViewModelEventsTest {
         sortedEpisodes = episodes,
         epoch = 1L,
     )
-
-    // HomeClock seam fake: the epoch-millis read drives the
-        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
-        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
-    }
 
     /**
      * Behavior fake for [UserDataMutator]: records mark-played/unplayed calls

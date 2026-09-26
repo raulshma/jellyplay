@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
  * wire: the raw access token plus the ALREADY-MAPPED model user. The
  * platform lambda owns the round-trip AND its DTO → [UserInfo] mapping
  * (each platform speaks its own DTO dialect — the Jellyfin SDK on
- * jvmShared, the wire DTOs in this package on wasm); the core owns the
+ * jvmShared, the wire DTOs in this package); the core owns the
  * validation on top, checking the token BEFORE the user (the order both
  * pre-fold impls used). Nulls pass straight through to those validation
  * throws.
@@ -39,7 +39,7 @@ data class CapturedLoginState<S>(
  * The session mutation surface a platform injects into [AuthSessionCore] —
  * implemented by the two atomic state holders the auth clients already
  * publish through (`JellyfinApiEngine` on jvmShared,
- * [AtomicSessionState] on wasm), so the folded spine drives the SAME state
+ * [AtomicSessionState] in this package), so the folded spine drives the SAME state
  * (and, via the injected [Mutex], excludes against the SAME critical
  * sections) as every unfolded platform path: setUser, address failover's
  * session republish, the quick-connect endpoints. A write with one side
@@ -58,7 +58,7 @@ interface AuthSessionStateStore {
  * state. Every hook runs inside the caller's critical section (under the
  * injected [Mutex]), in the exact slot the pre-fold JVM spine placed its
  * `engine.updateApi` calls; [S] is the captured side state a failure may
- * need restored (the jvmShared `ApiClient?`; Unit on wasm).
+ * need restored (the jvmShared `ApiClient?`; Unit otherwise).
  */
 interface AuthSessionSideEffects<S> {
     /** Snapshot of the side state, captured beside the session in one lock. */
@@ -80,9 +80,7 @@ interface AuthSessionSideEffects<S> {
 
 /**
  * The no-op port for platforms with no side state to keep atomic with the
- * session: wasm derives base URL + token from the shared session state per
- * request, so there is no client object to swap (the declared divergence
- * in `KtorWasmAuthApiClient`'s class KDoc). [S] is Unit and every hook is
+ * session — no client object to swap. [S] is Unit and every hook is
  * inert.
  */
 val NoOpAuthSessionSideEffects: AuthSessionSideEffects<Unit> = object : AuthSessionSideEffects<Unit> {
@@ -95,10 +93,10 @@ val NoOpAuthSessionSideEffects: AuthSessionSideEffects<Unit> = object : AuthSess
 /**
  * The auth session-establishment spine every `AuthApiClient` implementation
  * shares — the capture/adopt/try/publish/restore discipline the jvmShared
- * `AuthApiClientImpl` (Jellyfin SDK + OkHttp) and the wasm
- * `KtorWasmAuthApiClient` (Ktor) mirrored as two private copies until this
+ * `AuthApiClientImpl` (Jellyfin SDK + OkHttp)
+ * carried as a private copy until this
  * fold; ONE commonMain home so the session semantics cannot drift between
- * platforms. The platform files keep their declared divergences (the DTO →
+ * implementations. The platform files keep their declared divergences (the DTO →
  * user mapping, side-channel presence, retry/probe plumbing) and delegate
  * the spine here.
  *

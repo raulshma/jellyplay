@@ -2,9 +2,8 @@ package com.raulshma.jellyplay.core.network.auth
 
 /**
  * Builds the Jellyfin authorization header value, byte-compatible with the
- * Jellyfin SDK's `AuthorizationHeaderBuilder` (org.jellyfin.sdk 1.8.12) so a
- * wasm client presents the same identity format the android/desktop SDK
- * clients do.
+ * Jellyfin SDK's `AuthorizationHeaderBuilder` (org.jellyfin.sdk 1.8.12),
+ * presenting the same identity format the android/desktop SDK clients do.
  *
  * The SDK sends it as an `Authorization` header with the `MediaBrowser`
  * scheme — `X-Emby-Authorization` is the legacy header alias servers still

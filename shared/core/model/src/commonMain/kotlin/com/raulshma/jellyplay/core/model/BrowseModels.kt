@@ -25,7 +25,7 @@ data class HomeSection(
      * home UI uses this to apply per-library visibility overrides via the
      * inline section-config sheet — matching the Settings → Configure Libraries
      * screen semantics. See [HomeSectionType.isConfigurable] and
-     * `libraryHomeSectionOverrides` in `UserPreferences`.
+     * `libraryHomeSectionOverrides` in `AppearanceScreenPreferences`.
      */
     val libraryId: String? = null,
     /**
@@ -38,6 +38,14 @@ data class HomeSection(
      * type.
      */
     val collectionType: String? = null,
+    /**
+     * Items for a SEERR-sourced Discover row (`discover_<rowId>`), rendered
+     * with the request-capable TMDB card instead of the poster row. Mutually
+     * exclusive with [items] by construction (a row is one source or the
+     * other); empty for every non-Seerr section. Additive with a default, so
+     * persisted Room snapshots decode unchanged.
+     */
+    val seerrItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem> = emptyList(),
 )
 
 /**
@@ -74,6 +82,13 @@ enum class HomeSectionType {
     DOWNLOADED,
     RECOMMENDATIONS,
     PINNED,
+    /**
+     * User-configured discover rows (Jellyfin catalog queries and Seerr/TMDB
+     * discovery, one [DiscoverRowConfig] per rendered row). Dynamic identity:
+     * each row is its own section under `discover_<rowId>` (see
+     * [descriptor]); renders nothing while zero rows are enabled.
+     */
+    DISCOVER,
     ;
 
     /**
@@ -109,6 +124,10 @@ enum class HomeSectionType {
             LATEST_MEDIA,
             RECENTLY_ADDED,
             RECOMMENDATIONS,
+            // Appended last: a persisted order missing DISCOVER re-inserts it
+            // at this default position (the order union), so existing layouts
+            // keep their relative order and gain the new section at the end.
+            DISCOVER,
         )
     }
 }

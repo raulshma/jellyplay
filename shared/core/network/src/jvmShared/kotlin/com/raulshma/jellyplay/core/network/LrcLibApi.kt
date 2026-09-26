@@ -9,11 +9,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class LrcLibApi @Inject constructor(
+class LrcLibApi(
     client: OkHttpClient,
 ) {
     private val json = JellyfinApiEngine.sharedJson

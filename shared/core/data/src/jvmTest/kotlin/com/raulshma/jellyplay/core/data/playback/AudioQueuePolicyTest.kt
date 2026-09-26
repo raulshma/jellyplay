@@ -25,7 +25,9 @@ import kotlin.test.assertTrue
  *    guard, the set-B strictly-later guard;
  *  - the position-tick plan: A–B enforcement target + the PRE-seek publish
  *    order, publish dedup (null = leave the flow alone) and the duration
- *    coercion.
+ *    coercion;
+ *  - the end-of-stream stop position: last published position wins,
+ *    otherwise the item's full duration stands in, in 100-ns ticks.
  */
 class AudioQueuePolicyTest {
 
@@ -312,5 +314,25 @@ class AudioQueuePolicyTest {
         ).let {
             assertNull(it.publishDurationMs, "coerced-equal duration publishes nothing")
         }
+    }
+
+    // ── finalStopPositionTicks (end-of-stream stop position) ─────────────
+
+    @Test
+    fun `finalStopPositionTicks reports the last published position when one exists`() {
+        // The position>0 branch: the tick conversion is x10_000 (100-ns
+        // units), and the duration is ignored entirely.
+        assertEquals(42_000L * 10_000L, AudioQueuePolicy.finalStopPositionTicks(positionMs = 42_000L, durationMs = 180_000L))
+        assertEquals(1L * 10_000L, AudioQueuePolicy.finalStopPositionTicks(positionMs = 1L, durationMs = 0L))
+    }
+
+    @Test
+    fun `finalStopPositionTicks falls back to the full duration on a zero position`() {
+        // A track handoff with nothing published means the row played to its
+        // end — the duration stands in for the stop position.
+        assertEquals(180_000L * 10_000L, AudioQueuePolicy.finalStopPositionTicks(positionMs = 0L, durationMs = 180_000L))
+        // Zero is strictly the boundary: position 0 does NOT win even over a
+        // 0 duration — the total function's 0/0 → 0 corner.
+        assertEquals(0L, AudioQueuePolicy.finalStopPositionTicks(positionMs = 0L, durationMs = 0L))
     }
 }

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.model
 
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.serialization.Serializable
 
 /**
@@ -11,8 +10,8 @@ import kotlinx.serialization.Serializable
  *  2. Provide presentation metadata (title/subtitle/icon) in the settings
  *     feature's `ExperimentalFeatures` registry so the Experimental screen
  *     can render a toggle for it.
- *  3. Read it from `UserPreferences.enabledExperimentalFeatures` at the
- *     call site.
+ *  3. Read it from `ExperimentalPreferences.enabledExperimentalFeatures` at
+ *     the call site.
  *
  * The identifier is persisted by [name] so existing entries survive
  * reordering. Do not rename existing constants once released.
@@ -51,15 +50,8 @@ enum class ExperimentalFeature {
 
 /**
  * Convenience helper keeping the "is this experimental feature on?" check
- * readable at call sites.
- */
-fun UserPreferences.isExperimentalEnabled(feature: ExperimentalFeature): Boolean =
-    feature in enabledExperimentalFeatures
-
-/**
- * Slice overload so the Experimental settings screen (which collects only
- * [ExperimentalPreferences]) can perform the same check without the whole
- * [UserPreferences] object.
+ * readable at call sites (the Experimental settings screen collects only
+ * [ExperimentalPreferences]).
  */
 fun ExperimentalPreferences.isExperimentalEnabled(feature: ExperimentalFeature): Boolean =
     feature in enabledExperimentalFeatures

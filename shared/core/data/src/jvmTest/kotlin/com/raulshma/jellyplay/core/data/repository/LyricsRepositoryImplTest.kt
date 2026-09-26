@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
@@ -18,8 +18,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
-import java.time.LocalDate
-import java.time.ZoneId
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -335,16 +333,5 @@ class LyricsRepositoryImplTest {
         assertTrue(result.isSuccess)
         assertEquals(0, result.getOrNull()!!.lines.size)
         coVerify(exactly = 1) { apiClient.getLyrics("item-1") }
-    }
-
-    /**
-     * Controllable [TimeSource] for the eviction throttle — same shape as the
-     * fake in MediaRepositoryHomeSectionsCacheTest (core:data deliberately
-     * hosts no shared test fakes; see TimeSource's KDoc).
-     */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

@@ -79,6 +79,23 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_ep
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_replay_episode
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_resume_episode
 
+/**
+ * ViewModel for the media-detail screen — the thin async caller that owns the
+ * [DetailUiState] content writes over the provider's resolved snapshots.
+ *
+ * Every user intent arrives as a [DetailUiEvent] through the single [onEvent]
+ * funnel (the home feature's `HomeViewModel` precedent;
+ * [ManageSeriesViewModel] is the in-module template) — the per-action command
+ * handlers are private, so there is no per-screen command method to keep in
+ * sync. Two surfaces deliberately stay public beside the funnel: the read
+ * side (the [uiState]/[preferences]/[messages]/[canManageSeries]/
+ * [quickActionDownloadedIds] flows, the image-URL getters, the click-time
+ * `selected*Index` reads, the storage probe — queries, not commands) and the
+ * eight deep helper seams ([downloads], [playlists], [watchLater],
+ * [collections], [resync], [offline], [watchParty], [seerrRequests]) —
+ * extracted modules the screen drives directly, which would only gain
+ * shallow pass-through events.
+ */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class DetailViewModel internal constructor(
     // Storage probe seam (StatFs/usable-space behind [getAvailableStorageBytes]);
@@ -111,7 +128,6 @@ class DetailViewModel internal constructor(
     private val stores: DetailStores,
     /** Seerr/TMDB/Arr remote-discovery clients + their offline gate (pure DI aggregation). */
     private val remoteDiscovery: RemoteDiscoveryClients,
-    private val audioPlaybackManager: DetailAudioPlayback,
     private val audioQueueFacade: AudioQueueFacade,
     private val themeMusicPlayer: DetailThemeMusic,
     /** Hilt factories for the extracted action helpers (see [DetailActionFactories]). */
@@ -238,6 +254,36 @@ class DetailViewModel internal constructor(
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
     }
 
+    /** The single command funnel — routes each intent to its private handler. */
+    fun onEvent(event: DetailUiEvent) {
+        when (event) {
+            is DetailUiEvent.LoadItem -> loadItem(event.itemId)
+            is DetailUiEvent.ForceRefresh -> forceRefresh()
+            is DetailUiEvent.LoadEpisodesForSeason -> loadEpisodesForSeason(event.seriesId, event.seasonId)
+            is DetailUiEvent.SelectSubtitle -> selectSubtitle(event.index)
+            is DetailUiEvent.SelectAudio -> selectAudio(event.index)
+            is DetailUiEvent.SelectLocalSubtitle -> selectLocalSubtitle(event.index)
+            is DetailUiEvent.SetEpisodesDescending -> setEpisodesDescending(event.descending)
+            is DetailUiEvent.SetCompactEpisodeList -> setCompactEpisodeList(event.enabled)
+            is DetailUiEvent.PlayAlbum -> playAlbum(startIndex = event.startIndex)
+            is DetailUiEvent.StartInstantMix -> startInstantMix()
+            is DetailUiEvent.ToggleFavorite -> toggleFavorite()
+            is DetailUiEvent.MarkPlayed -> markPlayed()
+            is DetailUiEvent.MarkUnplayed -> markUnplayed()
+            is DetailUiEvent.MarkRowItemPlayed -> markRowItemPlayed(event.item, event.played)
+            is DetailUiEvent.MarkSeasonPlayed -> markSeasonPlayed(event.seasonId)
+            is DetailUiEvent.MarkSeasonUnplayed -> markSeasonUnplayed(event.seasonId)
+            is DetailUiEvent.DownloadRowItem -> downloadRowItem(event.item, event.onOpenDetail)
+            is DetailUiEvent.RemoveRowItemDownload -> removeRowItemDownload(event.item)
+            is DetailUiEvent.HideFromNextUp -> hideFromNextUp()
+            is DetailUiEvent.ShowFromNextUp -> showFromNextUp()
+            is DetailUiEvent.HideFromContinueWatching -> hideFromContinueWatching()
+            is DetailUiEvent.ShowFromContinueWatching -> showFromContinueWatching()
+            is DetailUiEvent.SetLastViewedSeason -> setLastViewedSeason(event.seriesId, event.seasonId)
+            is DetailUiEvent.SetShowDetailUpNext -> setShowDetailUpNext(event.enabled)
+        }
+    }
+
     // ── Extracted action helpers ────────────────────────────────────────
     // Each follows the SeerrRequestStateHolder template: a plain, VM-scoped
     // class (constructed here, dies with viewModelScope) that owns its own
@@ -354,12 +400,12 @@ class DetailViewModel internal constructor(
      */
     private var lastAppliedGeneration = -1L
 
-    fun selectSubtitle(index: Int?) {
+    private fun selectSubtitle(index: Int?) {
         _uiState.update { it.copy(selectedSubtitleIndex = index) }
         persistStreamSelection(subtitleIndex = index, audioIndex = _uiState.value.selectedAudioIndex)
     }
 
-    fun selectAudio(index: Int?) {
+    private fun selectAudio(index: Int?) {
         _uiState.update { it.copy(selectedAudioIndex = index) }
         persistStreamSelection(subtitleIndex = _uiState.value.selectedSubtitleIndex, audioIndex = index)
     }
@@ -378,7 +424,7 @@ class DetailViewModel internal constructor(
      * index for a server source; this writes the local-manifest index for a
      * downloaded file (the two are independent selection spaces).
      */
-    fun selectLocalSubtitle(index: Int?) {
+    private fun selectLocalSubtitle(index: Int?) {
         _uiState.update { it.copy(selectedLocalSubtitleIndex = index) }
         persistStreamSelection(subtitleIndex = index, audioIndex = _uiState.value.selectedAudioIndex)
     }
@@ -406,7 +452,7 @@ class DetailViewModel internal constructor(
      * read back reactively via [preferences], so [SeasonsSection] picks it up
      * without any per-screen plumbing.
      */
-    fun setEpisodesDescending(descending: Boolean) {
+    private fun setEpisodesDescending(descending: Boolean) {
         launch { stores.libraryStore.setEpisodesDescending(descending) }
     }
 
@@ -415,7 +461,7 @@ class DetailViewModel internal constructor(
      * [setEpisodesDescending], persisted app-wide so the choice carries across
      * every series detail screen.
      */
-    fun setCompactEpisodeList(enabled: Boolean) {
+    private fun setCompactEpisodeList(enabled: Boolean) {
         launch { stores.libraryStore.setCompactEpisodeList(enabled) }
     }
 
@@ -445,7 +491,7 @@ class DetailViewModel internal constructor(
         }
     }
 
-    fun loadItem(itemId: String) {
+    private fun loadItem(itemId: String) {
         loadItemInternal(itemId, refresh = false)
     }
 
@@ -457,7 +503,7 @@ class DetailViewModel internal constructor(
      * indicator is driven by [DetailUiLoadState.Refreshing] (via
      * [DetailUiState.loadState]) instead.
      */
-    fun forceRefresh() {
+    private fun forceRefresh() {
         val itemId = _uiState.value.detail?.item?.id ?: return
         loadItemInternal(itemId, refresh = true)
     }
@@ -870,7 +916,7 @@ class DetailViewModel internal constructor(
      * [MediaDetailSnapshot] via [observe]. [reduceLoaded] adopts the merged
      * episodes and recomputes smart-play — no local uiState merge needed.
      */
-    fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
+    private fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
         if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
         val itemId = currentItemId ?: return
         launch {
@@ -893,7 +939,7 @@ class DetailViewModel internal constructor(
         }
     }
 
-    fun playAlbum(startIndex: Int = 0) {
+    private fun playAlbum(startIndex: Int = 0) {
         val tracks = _uiState.value.albumTracks
         if (tracks.isEmpty()) return
         val albumName = _uiState.value.detail?.item?.name
@@ -951,29 +997,11 @@ class DetailViewModel internal constructor(
      * resolved after the user navigated away, so playback cannot start on the
      * wrong screen.
      */
-    fun startInstantMix() {
+    private fun startInstantMix() {
         val detail = _uiState.value.detail ?: return
         val item = detail.item
         if (!item.mediaType.isAudioType) return
         instantMixHolder.start(item.id, item.album ?: item.name)
-    }
-
-    /**
-     * Plays a single LOCAL-origin album track.
-     *
-     * The remote [playAlbum] builds a queue via [AudioPlaybackManager.playQueue],
-     * which depends on a server [MediaRepository.getMediaDetail] fetch. For a
-     * local track we instead use the per-item [AudioPlaybackManager.play], which
-     * has its own local-source fallback (`resolveLocalSource`) when the server
-     * fetch fails — so a downloaded track plays without a server round-trip.
-     *
-     * Decision: `AudioPlaybackManager.play(itemId)` exists and carries
-     * the local-source fallback, so it is used directly rather than routing
-     * through `onAudioClick` → `Route.AudioPlayer`. `play()` asserts the main
-     * thread (ExoPlayer contract); the click handler runs on the main thread.
-     */
-    fun playLocalTrack(itemId: String) {
-        audioPlaybackManager.play(itemId)
     }
 
     private fun maybeComputeSmartPlayTarget() {
@@ -1069,7 +1097,7 @@ class DetailViewModel internal constructor(
         if (shouldRecomputeSmartPlay) maybeComputeSmartPlayTarget()
     }
 
-    fun toggleFavorite() {
+    private fun toggleFavorite() {
         launch {
             val itemId = _uiState.value.detail?.item?.id ?: return@launch
             userDataMutator.setFavorite(
@@ -1084,9 +1112,9 @@ class DetailViewModel internal constructor(
         }
     }
 
-    fun markPlayed() = setPlayed(played = true)
+    private fun markPlayed() = setPlayed(played = true)
 
-    fun markUnplayed() = setPlayed(played = false)
+    private fun markUnplayed() = setPlayed(played = false)
 
     /**
      * Shared optimistic watched-toggle for the detail item. Jellyfin clears a
@@ -1143,7 +1171,7 @@ class DetailViewModel internal constructor(
      * provider session and drops the parent catalogue so re-entry cannot
      * replay the old state.
      */
-    fun markRowItemPlayed(item: MediaItem, played: Boolean) {
+    private fun markRowItemPlayed(item: MediaItem, played: Boolean) {
         launch {
             userDataMutator.setPlayed(
                 itemId = item.id,
@@ -1163,7 +1191,7 @@ class DetailViewModel internal constructor(
      * #147): same routing as the library grid — inline start for single-stream
      * items, detail screen for series (selection sheet) and other richer flows.
      */
-    fun downloadRowItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
+    private fun downloadRowItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
         launch {
             when (val result = mediaDownloadActions.download(item)) {
                 DownloadRequestResult.Started ->
@@ -1177,7 +1205,7 @@ class DetailViewModel internal constructor(
     }
 
     /** Long-press Remove download from a detail row card — deletes the local copy only. */
-    fun removeRowItemDownload(item: MediaItem) {
+    private fun removeRowItemDownload(item: MediaItem) {
         mediaDownloadActions.removeDownload(item)
     }
 
@@ -1187,11 +1215,11 @@ class DetailViewModel internal constructor(
      * recomputes smart-play. Delegates to [MarkSeasonReactor] — see there for
      * the no-refetch / re-entry invalidation contract.
      */
-    fun markSeasonPlayed(seasonId: String) = markSeasonReactor.markSeasonPlayed(seasonId)
+    private fun markSeasonPlayed(seasonId: String) = markSeasonReactor.markSeasonPlayed(seasonId)
 
-    fun markSeasonUnplayed(seasonId: String) = markSeasonReactor.markSeasonUnplayed(seasonId)
+    private fun markSeasonUnplayed(seasonId: String) = markSeasonReactor.markSeasonUnplayed(seasonId)
 
-    fun hideFromNextUp() {
+    private fun hideFromNextUp() {
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
@@ -1200,7 +1228,7 @@ class DetailViewModel internal constructor(
         }
     }
 
-    fun showFromNextUp() {
+    private fun showFromNextUp() {
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
@@ -1209,7 +1237,7 @@ class DetailViewModel internal constructor(
         }
     }
 
-    fun hideFromContinueWatching() {
+    private fun hideFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
             stores.homeDiscoveryStore.hideCwItem(item.id)
@@ -1217,7 +1245,7 @@ class DetailViewModel internal constructor(
         }
     }
 
-    fun showFromContinueWatching() {
+    private fun showFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
             stores.homeDiscoveryStore.unhideCwItem(item.id)
@@ -1231,13 +1259,13 @@ class DetailViewModel internal constructor(
      * but emits NO user-facing message (a background preference write). The
      * value flows back reactively via [preferences].
      */
-    fun setLastViewedSeason(seriesId: String, seasonId: String) {
+    private fun setLastViewedSeason(seriesId: String, seasonId: String) {
         launch {
             stores.homeDiscoveryStore.setLastViewedSeason(seriesId, seasonId)
         }
     }
 
-    fun setShowDetailUpNext(enabled: Boolean) {
+    private fun setShowDetailUpNext(enabled: Boolean) {
         launch {
             stores.libraryStore.setShowDetailUpNext(enabled)
         }
@@ -1400,39 +1428,6 @@ class DetailViewModel internal constructor(
         val itemId = currentItemId ?: return
         if (_uiState.value.origin?.isLocal == true) {
             launch { mediaDetailProvider.refresh(itemId) }
-        }
-    }
-
-    /**
-     * Marks a single episode played/unplayed (offline-aware + outboxed via the
-     * mutator). Does NOT refetch the server — the mutator rewrites the provider
-     * session optimistically and drops the parent catalogue for re-entry, and
-     * the container adapter flips every visible projection of the episode.
-     */
-    fun markEpisodePlayed(episodeId: String, played: Boolean) {
-        launch {
-            userDataMutator.setPlayed(
-                itemId = episodeId,
-                played = played,
-                mode = UserDataMutator.FlipMode.Optimistic,
-                containers = listOf(detailItemContainer),
-                seriesId = seriesIdForItem(episodeId),
-            )
-        }
-    }
-
-    /**
-     * Per-item favorite toggle (offline-aware + outboxed). Distinct from the
-     * no-arg [toggleFavorite], which flips the current detail item optimistically.
-     */
-    fun toggleFavorite(itemId: String) {
-        launch {
-            userDataMutator.setFavorite(
-                itemId = itemId,
-                mode = UserDataMutator.FlipMode.Optimistic,
-                containers = listOf(detailItemContainer),
-                seriesId = seriesIdForItem(itemId),
-            )
         }
     }
 

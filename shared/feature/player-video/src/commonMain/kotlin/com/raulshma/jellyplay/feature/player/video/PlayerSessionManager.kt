@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.download.ContainerSniffer
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -18,6 +20,7 @@ import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
+import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -27,6 +30,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
+import com.raulshma.jellyplay.core.ui.components.episodePlayerSubtitle
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_loading_media
@@ -86,11 +90,12 @@ class PlayerSessionManager(
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
-    /** commonMain PiP seam: androidMain adapter wraps the legacy singleton. */
+    /** The shared core:data PiP port (process singleton impl on Android). */
     private val pipController: PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
@@ -172,25 +177,21 @@ class PlayerSessionManager(
     /**
      * Builds the secondary line shown beneath the episode title in the player
      * chrome. For a series episode this renders the show name followed by the
-     * season/episode marker in `SXXEXX` form (e.g. "The Show · S01E05"). When
+     * season/episode marker in `SxxExx` form (e.g. "The Show · S1E5"). When
      * neither a series name nor season/episode data is available, falls back
      * to a trimmed overview — preserving the historical behaviour for movies
-     * and other non-episodic items.
+     * and other non-episodic items. The subtitle shape is core/ui's
+     * [episodePlayerSubtitle] — the ONE derivation the chrome and the
+     * next-episode overlay render (the two previously carried near-identical
+     * buildStrings and had split on the blank-series-name edge).
      */
     private fun buildEpisodeSubtitle(
         seriesName: String?,
         overview: String?,
         seasonNumber: Int?,
         episodeNumber: Int?,
-    ): String = buildString {
-        val hasSeries = !seriesName.isNullOrBlank()
-        if (hasSeries) append(seriesName)
-        if (seasonNumber != null && episodeNumber != null) {
-            if (isNotEmpty()) append(" \u00B7 ")
-            append("S${seasonNumber}E${episodeNumber}")
-        }
-        if (isEmpty()) append(overview?.take(60) ?: "")
-    }
+    ): String = episodePlayerSubtitle(seriesName, seasonNumber, episodeNumber)
+        ?: (overview?.take(60) ?: "")
 
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
         // Same stale-fetch hazard as loadMedia: a reclaimed engine for the
@@ -603,13 +604,32 @@ class PlayerSessionManager(
         val externalSubtitles = buildExternalSubtitles(detail, source, playMethod)
 
         val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
-        
+
         val headers = mutableMapOf<String, String>()
-        val serverUrl = playbackRepository.getServerUrl()
-        val token = playbackRepository.getAccessToken()
+        val serverUrl = playbackIdentity.serverUrl()
+        val token = playbackIdentity.accessToken()
         if (!token.isNullOrBlank()) {
             headers += JellyfinAuthorizationHeader.tokenOnlyHeader(token)
         }
+
+        // When the language rule engine resolves languages for this
+        // item, seed the request's preferred languages so the engine's native
+        // track selection (ExoPlayer track-selection parameters) starts out in
+        // agreement with the helper's restore ladder. A null resolution axis
+        // falls back to the global preferred language — the exact precedence
+        // the ladder applies (per-item/series manual preferences are the
+        // helper's rung and outrank both).
+        val ruleResolution = TrackResolutionEngine.resolve(
+            agg.subtitle.languageRules,
+            TrackRuleContext(
+                contentType = mediaRuleContentType(detail.item.mediaType),
+                titles = listOfNotNull(
+                    detail.item.seriesName?.takeIf { it.isNotBlank() },
+                    detail.item.name?.takeIf { it.isNotBlank() },
+                ),
+                streams = _sessionState.value.mediaStreams,
+            ),
+        )
 
         val request = PlaybackRequest(
             uri = url,
@@ -618,8 +638,15 @@ class PlayerSessionManager(
             artworkUri = artworkUri,
             externalSubtitles = externalSubtitles,
             headers = headers,
-            preferredAudioLanguage = agg.subtitle.preferredAudioLanguage,
-            preferredSubtitleLanguage = agg.subtitle.preferredSubtitleLanguage,
+            preferredAudioLanguage = ruleResolution?.audioLanguage
+                ?: agg.subtitle.preferredAudioLanguage,
+            // A rule-driven OFF keeps the engine's native subtitle preference
+            // unset — the helper's ladder enforces the Off itself.
+            preferredSubtitleLanguage = if (ruleResolution?.subtitleDisabled == true) {
+                null
+            } else {
+                ruleResolution?.subtitleLanguage ?: agg.subtitle.preferredSubtitleLanguage
+            },
             maxVideoBitrate = if (agg.playback.playbackMode == PlaybackMode.AUTO)
                 adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
                 else null,
@@ -631,11 +658,38 @@ class PlayerSessionManager(
             normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
             serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
+            // Hand the engines that do their own TLS (mpv) the
+            // app-level client-certificate paths. Null when no certificate
+            // is enabled — OkHttp-backed engines (ExoPlayer) inherit it via
+            // the shared TLS layer instead.
+            tls = playbackIdentity.clientTls(),
         )
 
+        maybeNotifyVlcClientCertificateUnsupported(playerType)
         lastPlaybackRequest = request
         eng.load(request)
     }
+
+    /**
+     * LibVLC's Android TLS-client-cert support is unreliable, so a
+     * client certificate is DOCUMENTED-unsupported on the VLC engine. When
+     * one is active and VLC was selected, surface a one-time (per session
+     * manager) informational notice recommending ExoPlayer/mpv — playback is
+     * NOT blocked (the server decides whether the certificate-less
+     * connection lives).
+     */
+    private fun maybeNotifyVlcClientCertificateUnsupported(playerType: PlayerType) {
+        if (playerType != PlayerType.LIBVLC || vlcClientCertNoticeShown) return
+        if (playbackIdentity.clientTls() == null) return
+        vlcClientCertNoticeShown = true
+        userMessageBus.info(
+            "Client certificate not supported by the VLC engine — " +
+                "switch to ExoPlayer or mpv for mTLS servers",
+        )
+    }
+
+    /** See [maybeNotifyVlcClientCertificateUnsupported]. */
+    private var vlcClientCertNoticeShown = false
 
     private fun resolveEngineConfig(
         playerType: PlayerType,
@@ -1111,7 +1165,7 @@ class PlayerSessionManager(
      * shared:core:data commonMain). Behavior is byte-identical to the
      * ContainerSniffer that used to live in this module's engine package:
      * missing/unreadable/short/unrecognized files return null. The glue stays
-     * here because core:data's commonMain builds for wasmJs (no java.io) and
+     * here because core:data's commonMain is java.io-free and
      * this module's commonMain is JVM-only by design.
      */
     private fun sniffDownloadedContainer(file: java.io.File): String? {

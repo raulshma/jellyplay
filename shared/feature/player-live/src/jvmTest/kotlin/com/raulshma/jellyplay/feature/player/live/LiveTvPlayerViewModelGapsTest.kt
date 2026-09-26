@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.feature.player.live
 
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -43,8 +46,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -86,6 +89,7 @@ class LiveTvPlayerViewModelGapsTest {
 
     private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
+    private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
     private lateinit var aggregateStore: VideoPlayerAggregateStore
@@ -103,6 +107,14 @@ class LiveTvPlayerViewModelGapsTest {
     private val engineErrorDetailFlow = MutableStateFlow<String?>(null)
     private val engineErrorMessageFlow = MutableStateFlow<String?>(null)
 
+    /**
+     * The VM's pinned wall clock (the injected [EpochMillisSource] seam —
+     * LiveNowWindow's inject-don't-create rule): the program-window fixtures
+     * below derive from the SAME now the VM reads, so "airing" stays airing.
+     */
+    private val fixedNow: Instant = Instant.parse("2026-06-22T15:00:00Z")
+    private val fixedNowMs: Long = fixedNow.toEpochMilliseconds()
+
     /** The engine-failure callback the VM hands the factory; invoked by tests. */
     private var onTranscodeFallback: (() -> Unit)? = null
 
@@ -111,6 +123,7 @@ class LiveTvPlayerViewModelGapsTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(scheduler))
         liveTvRepo = mockk(relaxed = true)
         playbackRepo = mockk(relaxed = true)
+        playbackIdentity = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
         aggregateStore = mockk(relaxed = true)
@@ -122,7 +135,7 @@ class LiveTvPlayerViewModelGapsTest {
         every { lastChannelStore.observeLastChannelId() } returns flowOf(null)
         every { appRuntimeStateStore.state } returns appRuntimeFlow
         every { playbackStore.playback } returns playbackFlow
-        every { playbackRepo.getAccessToken() } returns "tok"
+        every { playbackIdentity.accessToken() } returns "tok"
         every { fakeEngine.state } returns engineStateFlow
         every { fakeEngine.isPlaying } returns engineIsPlayingFlow
         every { fakeEngine.isAtLiveEdge } returns MutableStateFlow(true)
@@ -167,10 +180,12 @@ class LiveTvPlayerViewModelGapsTest {
     ): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
         liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
+        playbackIdentity = playbackIdentity,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,
         aggregateStore = aggregateStore,
         lastChannelStore = lastChannelStore,
+        epochMillisSource = EpochMillisSource { fixedNowMs },
         engineFactory = LiveEngineFactory { config, onFallback ->
             assertEquals("tok", config.authToken, "auth token flows via the engine config")
             onTranscodeFallback = onFallback
@@ -192,7 +207,7 @@ class LiveTvPlayerViewModelGapsTest {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(channelCount))
         stubResolve()
-        vm.initialize(routeChannelId, null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize(routeChannelId, null, null))
         scheduler.runCurrent()
         return vm
     }
@@ -292,11 +307,11 @@ class LiveTvPlayerViewModelGapsTest {
         val audio = FakeAudio()
         val vm = tune(audio = audio)
 
-        vm.toggleMute()
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
         assertTrue(vm.state.value.isMuted)
         assertEquals(listOf(0.0f), audio.volumeWrites, "mute writes volume 0")
 
-        vm.toggleMute()
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
         assertFalse(vm.state.value.isMuted)
         assertEquals(listOf(0.0f, 0.7f), audio.volumeWrites, "unmute restores the captured 0.7f, not a default")
     }
@@ -306,7 +321,7 @@ class LiveTvPlayerViewModelGapsTest {
         val audio = FakeAudio().apply { currentVolume = null }
         val vm = tune(audio = audio)
 
-        vm.toggleMute()
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
 
         assertFalse(vm.state.value.isMuted)
         assertTrue(audio.volumeWrites.isEmpty())
@@ -315,7 +330,7 @@ class LiveTvPlayerViewModelGapsTest {
     @Test
     fun `toggleMute without an audio seam never crashes`() = runTest {
         val vm = tune() // audio = null (the jvmTest default)
-        vm.toggleMute()
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
         assertFalse(vm.state.value.isMuted)
     }
 
@@ -323,7 +338,7 @@ class LiveTvPlayerViewModelGapsTest {
     fun `stop clears the pre-mute volume so a stale level never lands on a fresh engine`() = runTest {
         val audio = FakeAudio()
         val vm = tune(audio = audio)
-        vm.toggleMute() // captures 0.7f, writes 0f
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute) // captures 0.7f, writes 0f
         assertEquals(listOf(0.0f), audio.volumeWrites)
 
         vm.stop()
@@ -333,9 +348,9 @@ class LiveTvPlayerViewModelGapsTest {
         // capture 0.5f — the 0.7f captured before stop() must be gone.
         audio.currentVolume = 0.5f
         audio.volumeWrites.clear()
-        vm.toggleMute()
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
         assertTrue(vm.state.value.isMuted)
-        vm.toggleMute()
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
         assertEquals(
             listOf(0.0f, 0.5f),
             audio.volumeWrites,
@@ -352,12 +367,12 @@ class LiveTvPlayerViewModelGapsTest {
 
     // ── 3. In-player recording actions ───────────────────────────────────────
 
-    /** ISO instant ~1 h before now, for a program window that is airing. */
+    /** ISO instant ~1 h before the VM's pinned now — a program that is airing. */
     private fun hourBeforeNow(): String =
-        (Clock.System.now() - 1.hours).toString()
+        (fixedNow - 1.hours).toString()
 
     private fun hourAfterNow(): String =
-        (Clock.System.now() + 1.hours).toString()
+        (fixedNow + 1.hours).toString()
 
     private fun airingProgram(
         id: String = "prog-1",
@@ -387,7 +402,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
-        vm.recordCurrentProgramOnce()
+        vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce)
         scheduler.runCurrent()
 
         assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_success)), messages)
@@ -404,7 +419,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
-        vm.recordCurrentProgramOnce()
+        vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce)
         scheduler.runCurrent()
 
         assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Raw("tuner busy")), messages)
@@ -417,7 +432,7 @@ class LiveTvPlayerViewModelGapsTest {
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
 
-        vm.recordCurrentProgramOnce()
+        vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce)
         scheduler.runCurrent()
 
         coVerify(exactly = 0) { liveTvRepo.createTimer(any()) }
@@ -431,7 +446,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
-        vm.recordCurrentProgramSeries()
+        vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramSeries)
         scheduler.runCurrent()
 
         assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_success)), messages)
@@ -444,7 +459,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
-        vm.cancelCurrentProgramTimer()
+        vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramTimer)
         scheduler.runCurrent()
 
         assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_canceled)), messages)
@@ -454,7 +469,7 @@ class LiveTvPlayerViewModelGapsTest {
     fun `cancelCurrentProgramTimer without a timer id is a silent no-op`() = runTest {
         val vm = tuneWithProgram(airingProgram(timerId = null))
 
-        vm.cancelCurrentProgramTimer()
+        vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramTimer)
         scheduler.runCurrent()
 
         coVerify(exactly = 0) { liveTvRepo.cancelTimer(any()) }
@@ -464,7 +479,7 @@ class LiveTvPlayerViewModelGapsTest {
     fun `cancelCurrentProgramSeries without a series timer id is a silent no-op`() = runTest {
         val vm = tuneWithProgram(airingProgram(seriesTimerId = null))
 
-        vm.cancelCurrentProgramSeries()
+        vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramSeries)
         scheduler.runCurrent()
 
         coVerify(exactly = 0) { liveTvRepo.cancelSeriesTimer(any()) }
@@ -482,7 +497,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
-        vm.recordCurrentProgramOnce()
+        vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce)
         scheduler.runCurrent()
 
         // Throwable.message == null must hit the adapter's fallback literal
@@ -498,7 +513,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
-        vm.cancelCurrentProgramTimer()
+        vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramTimer)
         scheduler.runCurrent()
 
         assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Raw("Failed to cancel recording")), messages)
@@ -510,7 +525,7 @@ class LiveTvPlayerViewModelGapsTest {
         coEvery { liveTvRepo.createTimer("prog-1") } returns
             Result.failure(RuntimeException("tuner busy"))
 
-        vm.recordCurrentProgramOnce()
+        vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce)
         scheduler.runCurrent()
 
         // Only the tune's own load — the program window is re-read after a
@@ -525,7 +540,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         val messages = mutableListOf<LivePlayerMessage>()
         backgroundCollectMessages(vm, messages)
-        vm.cancelCurrentProgramSeries()
+        vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramSeries)
         scheduler.runCurrent()
 
         assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_canceled)), messages)
@@ -534,7 +549,9 @@ class LiveTvPlayerViewModelGapsTest {
 
     private fun TestScope.backgroundCollectMessages(vm: LiveTvPlayerViewModel, into: MutableList<LivePlayerMessage>) {
         backgroundScope.launch(UnconfinedTestDispatcher(scheduler)) {
-            vm.messages.collect { into.add(it) }
+            vm.events.collect { event ->
+                if (event is LivePlayerEvent.Message) into.add(event.message)
+            }
         }
         scheduler.runCurrent()
     }
@@ -599,7 +616,7 @@ class LiveTvPlayerViewModelGapsTest {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(1))
         stubResolve(method = PlayMethod.TRANSCODE)
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         scheduler.runCurrent()
         assertEquals(LivePlayMethod.TRANSCODE, vm.state.value.playMethod)
 
@@ -643,7 +660,7 @@ class LiveTvPlayerViewModelGapsTest {
         val vm = tune()
         coEvery { playbackStore.setLiveStreamOption(any()) } returns Unit
 
-        vm.setLiveStreamOption(LiveStreamOption.TRANSCODE)
+        vm.onEvent(LiveTvPlayerUiEvent.SetLiveStreamOption(LiveStreamOption.TRANSCODE))
         scheduler.runCurrent()
 
         coVerify(exactly = 1) { playbackStore.setLiveStreamOption(LiveStreamOption.TRANSCODE) }
@@ -657,7 +674,7 @@ class LiveTvPlayerViewModelGapsTest {
     @Test
     fun `setLiveStreamOption without an active channel is a no-op`() = runTest {
         val vm = createVm()
-        vm.setLiveStreamOption(LiveStreamOption.DIRECT_STREAM)
+        vm.onEvent(LiveTvPlayerUiEvent.SetLiveStreamOption(LiveStreamOption.DIRECT_STREAM))
         scheduler.runCurrent()
         coVerify(exactly = 0) { playbackStore.setLiveStreamOption(any()) }
         assertEquals(0, capturedRequests.size)
@@ -670,7 +687,7 @@ class LiveTvPlayerViewModelGapsTest {
         val vm = tune()
         engineDurationFlow.value = 3_600_000L
 
-        vm.playFromStart()
+        vm.onEvent(LiveTvPlayerUiEvent.PlayFromStart)
 
         io.mockk.verify { fakeEngine.seekTo(0L) }
     }
@@ -680,7 +697,7 @@ class LiveTvPlayerViewModelGapsTest {
         val vm = tune()
         engineDurationFlow.value = -1L
 
-        vm.playFromStart()
+        vm.onEvent(LiveTvPlayerUiEvent.PlayFromStart)
 
         io.mockk.verify(exactly = 0) { fakeEngine.seekTo(any()) }
     }
@@ -711,7 +728,7 @@ class LiveTvPlayerViewModelGapsTest {
     @Test
     fun `a successful zap persists the channel as last-watched`() = runTest {
         val vm = tune(channelCount = 2)
-        vm.channelUp()
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp())
         scheduler.runCurrent()
         coVerify { lastChannelStore.setLastChannelId("ch-1") }
     }
@@ -734,7 +751,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         // The activity-scoped VM is reused across screen entries: a re-init
         // after stop() must run the full load again.
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         scheduler.runCurrent()
         assertEquals(2, capturedRequests.size)
         assertEquals("ch-0", vm.state.value.currentChannel?.id)
@@ -751,14 +768,14 @@ class LiveTvPlayerViewModelGapsTest {
         }
         stubResolve()
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
-        vm.channelUp() // queued while the load is parked
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp()) // queued while the load is parked
 
         vm.stop() // the zap belongs to the torn-down session
         loadGate.complete(Unit)
 
         // Re-entry loads the route channel directly — no surprise zap to ch-1.
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         scheduler.runCurrent()
         assertEquals(0, vm.state.value.currentIndex)
     }

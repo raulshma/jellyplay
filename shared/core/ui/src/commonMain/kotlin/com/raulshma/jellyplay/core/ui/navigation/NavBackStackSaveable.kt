@@ -32,9 +32,10 @@ import androidx.savedstate.serialization.SavedStateConfiguration
  *
  * This expect lets [rememberNavigationState] keep one common body while each
  * target picks the correct overload: Android takes the reflection path and
- * IGNORES [savedStateConfiguration] (no Android caller passes one); JVM/wasm
- * keep the explicit-configuration path, where a forgotten configuration still
- * fails loudly with the library's own message instead of silently degrading.
+ * IGNORES [savedStateConfiguration] (no Android caller passes one); JVM
+ * keeps the explicit-configuration path, where a forgotten configuration
+ * still fails loudly with the library's own message instead of silently
+ * degrading.
  */
 @Composable
 internal expect fun rememberNavBackStackSaveable(

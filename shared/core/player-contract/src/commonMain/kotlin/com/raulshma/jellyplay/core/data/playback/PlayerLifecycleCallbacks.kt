@@ -6,9 +6,7 @@ package com.raulshma.jellyplay.core.data.playback
  *
  * Home note: born in shared/core:data's `PlayerLifecycleManager.kt`
  * and moved here verbatim (SAME package, so no consumer import changes) because
- * `MediaEngine` extends it and this module needs a wasmJs target for
- * `HtmlVideoEngine` — shared/core:data has no wasm build (Room) and never will
- * (web v1 keeps the server as source of truth). `PlayerLifecycleManager` (the
+ * `MediaEngine` extends it. `PlayerLifecycleManager` (the
  * delegating bridge) stays in shared/core:data.
  */
 interface PlayerLifecycleCallbacks {

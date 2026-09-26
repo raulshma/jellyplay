@@ -7,7 +7,8 @@ import com.raulshma.jellyplay.core.model.ConnectionCredentials
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +30,14 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 class SyncPlayManager(
-    private val apiClient: JellyfinApiClient,
+    /**
+     * Group lifecycle + info + ping (the PlaybackRepositoryImpl ctor
+     * precedent: family seams, not the JellyfinApiClient union — the family
+     * singles compose the same impls the union delegates to).
+     */
+    private val syncPlayApiClient: SyncPlayApiClient,
+    /** The pre-join capability broadcast (postCapabilities). */
+    private val authApiClient: AuthApiClient,
     private val webSocketClient: JellyfinWebSocketClient,
     private val authRepository: AuthRepository,
     private val timeSyncManager: TimeSyncManager,
@@ -175,8 +183,8 @@ class SyncPlayManager(
     suspend fun joinGroup(groupId: String): Result<Unit> {
         return try {
             Log.d(TAG, "Joining SyncPlay group: $groupId")
-            apiClient.postCapabilities()
-            apiClient.joinSyncPlayGroup(groupId)
+            authApiClient.postCapabilities()
+            syncPlayApiClient.joinSyncPlayGroup(groupId)
             activeGroupIdRef.set(groupId)
             isGroupActive.set(true)
             syncPlayReady.set(false)
@@ -256,8 +264,8 @@ class SyncPlayManager(
                 lastReconnectAtMs.set(System.currentTimeMillis())
                 Log.d(TAG, "WebSocket reconnected mid-session, re-asserting group membership: $groupId")
                 try {
-                    apiClient.postCapabilities()
-                    apiClient.joinSyncPlayGroup(groupId)
+                    authApiClient.postCapabilities()
+                    syncPlayApiClient.joinSyncPlayGroup(groupId)
                     refreshGroupInfo()
                 } catch (ce: CancellationException) {
                     throw ce
@@ -271,7 +279,7 @@ class SyncPlayManager(
     suspend fun leaveGroup(): Result<Unit> {
         Log.d(TAG, "Leaving SyncPlay group")
         val apiResult = try {
-            apiClient.leaveSyncPlayGroup()
+            syncPlayApiClient.leaveSyncPlayGroup()
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: Exception) {
@@ -284,8 +292,8 @@ class SyncPlayManager(
 
     suspend fun createGroup(groupName: String): Result<Unit> {
         return try {
-            apiClient.postCapabilities()
-            apiClient.createSyncPlayGroup(groupName)
+            authApiClient.postCapabilities()
+            syncPlayApiClient.createSyncPlayGroup(groupName)
             Result.success(Unit)
         } catch (ce: CancellationException) {
             throw ce
@@ -303,7 +311,7 @@ class SyncPlayManager(
                     if (isInSyncPlaySession) {
                         try {
                             val ping = timeSyncManager.getPingMs()
-                            apiClient.syncPlayPing(ping)
+                            syncPlayApiClient.syncPlayPing(ping)
                         } catch (ce: CancellationException) {
                             throw ce
                         } catch (e: Exception) {
@@ -317,7 +325,7 @@ class SyncPlayManager(
     private suspend fun refreshGroupInfo() {
         try {
             val groupId = activeGroupIdRef.get() ?: return
-            val info = apiClient.getSyncPlayInfo(groupId).getOrNull() ?: return
+            val info = syncPlayApiClient.getSyncPlayInfo(groupId).getOrNull() ?: return
             val current = cachedGroup.get()
             // playingItem* / positionTicks are carried over from the cached
             // group ONLY: this manager's producer (SyncPlayApiClientImpl's

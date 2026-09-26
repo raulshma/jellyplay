@@ -9,21 +9,14 @@ import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
-import com.raulshma.jellyplay.core.database.dao.DownloadProgressRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
-import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
-import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
-import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -33,8 +26,6 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
-import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import kotlinx.coroutines.CancellationException
@@ -47,10 +38,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
 import java.io.File
-import java.util.UUID
 
 // V3 downloads conveyor: moved verbatim from the legacy :core:data shim (same
 // package/name) minus its Android-only surfaces. Ctor-level transforms only —
@@ -59,17 +47,24 @@ import java.util.UUID
 //  - `@ApplicationContext context` dropped; its three uses became constructor
 //    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator], the
 //    notification group summary → [DownloadProgressNotifier], Coil preloading
-//    → [OfflineImagePreloader].
+//    → [OfflineImagePreloader] (the preloader rode with the offline-metadata
+//    cluster to [OfflineDownloadWriterCore] at the D6 extraction).
 //  - concrete `DownloadStorageLayout` → the [DownloadStorageLayoutContract]
-//    interface (Android impl keeps its Context/StatFs logic verbatim).
+//    interface (Android impl keeps its Context/StatFs logic verbatim) — the
+//    contract is now a dependency of the writer core only.
 //  - `mediaRepository: MediaRepository` → a deferred [MediaRepositoryAccess]
 //    provider: every use sits on the series paths (downloadSeries + episode
-//    series-seeding in saveOfflineMediaItem); startDownload never touches it,
-//    so desktop single-item downloads work with a throwing provider.
-//  - `dagger.Lazy<DownloadDelegate>` → kotlin `Lazy<DownloadDelegate>`
-//    (memoizing single-evaluation semantics preserved; the construction cycle
-//    `DownloadRepositoryImpl → DownloadDelegate → OfflineDownloadWriter →
-//    DownloadRepositoryImpl` stays broken by deferral).
+//    series-seeding in the writer core); startDownload never touches it, so
+//    desktop single-item downloads work with a throwing provider.
+//  - `dagger.Lazy<DownloadDelegate>` → kotlin `Lazy<DownloadDelegate>` and
+//    now (D6) a plain [DownloadDelegate]: the artifact-write half moved to
+//    [OfflineDownloadWriterCore] — a standalone single over the same DAOs and
+//    seams with NO back-reference to this repository — so the former
+//    construction cycle `DownloadRepositoryImpl → DownloadDelegate →
+//    OfflineDownloadWriter → DownloadRepositoryImpl` is gone and the `Lazy`
+//    deferral with it. This class keeps the [DownloadRepository] surface
+//    (which extends [OfflineDownloadWriter]) and forwards those members
+//    one-to-one to the same writer-core single the delegate writes through.
 //  - `android.util.Log` → the module's Log facade.
 // Koin (dataJvmModule) owns construction; the legacy DataModule bridges the
 // remaining Hilt injectors via koin().get().
@@ -89,34 +84,26 @@ class DownloadRepositoryImpl(
      */
     private val episodeCatalogue: EpisodeCatalogue,
     private val playbackRepository: PlaybackRepository,
-    private val httpClient: OkHttpClient,
     private val downloadsStore: DownloadsStore,
-    private val json: Json,
-    /**
-     * Lazy to break the construction cycle: [downloadSeries] (below)
-     * delegates the per-episode artifact bundle to [DownloadDelegate], and
-     * [DownloadDelegate] now depends on [OfflineDownloadWriter] — which this
-     * class implements. That's still a cycle at graph-construction time
-     * (`DownloadRepositoryImpl → DownloadDelegate → OfflineDownloadWriter →
-     * DownloadRepositoryImpl`), so the `Lazy` defers resolution until first
-     * use.
-     *
-     * What changed vs the old NOTE: the delegate no longer depends on the full
-     * 25-method [DownloadRepository] interface — it was narrowed to the
-     * 8-method [OfflineDownloadWriter] write surface. The *coupling* disease
-     * the old comment named is fixed; `Lazy` here is purely the structural
-     * construction-cycle breaker it should always have been, not a paper-over
-     * for a god-interface dependency.
-     */
-    private val downloadDelegate: Lazy<DownloadDelegate>,
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueueCoordinator,
-    private val storageLayout: DownloadStorageLayoutContract,
-    private val syncComparator: OfflineSyncComparator,
     private val progressNotifier: DownloadProgressNotifier,
-    private val imagePreloader: OfflineImagePreloader,
-    /** Clock seam for the baseline-seeding `lastSyncedAt` stamp. */
-    private val timeSource: TimeSource,
+    /**
+     * The extracted artifact-write cluster ([OfflineDownloadWriterCore]): row
+     * creation, offline metadata + baseline seeding, parent hierarchy seeding,
+     * worker enqueue, and the sidecar/artifact surface — over its own DAO and
+     * seam dependencies, with no reference back to this repository (D6). The
+     * inherited [OfflineDownloadWriter] members (and the local manifest /
+     * segments / inventory reads) forward to it one-to-one; [downloadSeries]
+     * reuses its metadata + series-artwork helpers.
+     */
+    private val writer: OfflineDownloadWriterCore,
+    /**
+     * The per-item download recipe (prepare + execute + artifact bundle).
+     * Resolved eagerly: the cycle it used to participate in is dissolved by
+     * the writer-core extraction, so the former `Lazy` deferral is gone.
+     */
+    private val downloadDelegate: DownloadDelegate,
 ) : DownloadRepository,
     // The promoted feature-facing read seams (DownloadQueue,
     // TrackDownloadStatusWindow, ActiveDownloadCount, SeriesEpisodeDownloads)
@@ -145,20 +132,6 @@ class DownloadRepositoryImpl(
         offlineMediaDao = offlineMediaDao,
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
-    )
-
-    // The sidecar/artifact half of a download — trickplay/subtitle/segment/
-    // image writes and the local manifest/segments/inventory reads (see
-    // [DownloadSidecarCore]'s KDoc for the ownership split). Constructed from
-    // this class's own constructor deps (the OfflineDeletionCore precedent),
-    // so the public constructor is unchanged.
-    private val sidecarCore = DownloadSidecarCore(
-        playbackRepository = playbackRepository,
-        downloadDao = downloadDao,
-        offlineMediaDao = offlineMediaDao,
-        syncBaselineDao = syncBaselineDao,
-        httpClient = httpClient,
-        json = json,
     )
 
     // Room re-runs download queries on every 2 s progress tick, and a full
@@ -260,76 +233,12 @@ class DownloadRepositoryImpl(
         downloadDao.getDownloadById(id)?.name
 
     /**
-     * Creates (or dedupes to) the PENDING downloads row for [request]. The
-     * former 15-positional-parameter override + internal forwarding twin
-     * collapsed into the [DownloadStartRequest] value object — the entity
-     * construction below is unchanged semantically.
+     * Creates (or dedupes to) the PENDING downloads row for [request] — the
+     * write body lives in [OfflineDownloadWriterCore.startDownload]; the
+     * repository only carries the inherited [OfflineDownloadWriter] surface.
      */
     override suspend fun startDownload(request: DownloadStartRequest): Result<DownloadItem> =
-        runCatchingRethrowingCancellation {
-        val mediaItemId = request.mediaItemId
-        val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
-        if (existing != null) {
-            val isCompleted = existing.status == DownloadStatus.COMPLETED.name
-            val fileExists = existing.downloadPath.isNotBlank() && java.io.File(existing.downloadPath).exists()
-            if (isCompleted && fileExists) {
-                return@runCatchingRethrowingCancellation existing.toDownloadItem()
-            }
-            if (existing.status != DownloadStatus.FAILED.name && existing.status != DownloadStatus.CANCELLED.name && !isCompleted) {
-                return@runCatchingRethrowingCancellation existing.toDownloadItem()
-            }
-            if (existing.downloadPath.isNotBlank()) {
-                withContext(Dispatchers.IO) {
-                    File(existing.downloadPath).let { f -> if (f.exists()) f.delete() }
-                    DownloadArtifacts.cleanup(File(existing.downloadPath).parentFile, existing.mediaItemId)
-                }
-            }
-            downloadDao.deleteDownloadById(existing.id)
-        }
-
-        val prefs = downloadsStore.downloads.first()
-        // Storage cap (MB + GB): single owner is StoragePolicy. Previously
-        // duplicated here and in downloadSeries; the two could drift.
-        storagePolicy.enforce(precomputedCurrentBytes = request.precomputedCurrentBytes)
-
-        // Path-layout policy (internal vs external dir, filename sanitize,
-        // container extension, free-space floor) lives in DownloadStorageLayout
-        // — previously inlined ~40 LOC in this method, unreachable from any
-        // other call site and untestable without a full repo construction.
-        val id = UUID.randomUUID().toString()
-        val resolved = storageLayout.resolve(
-            mediaType = request.mediaType,
-            storageLocationPref = prefs.downloadStorageLocation,
-            name = request.name,
-            idHint = id.take(8),
-            container = request.container,
-        )
-        val filePath = resolved.filePath
-
-        val entity = DownloadEntity(
-            id = id,
-            mediaItemId = mediaItemId,
-            name = request.name,
-            mediaType = request.mediaType,
-            downloadPath = filePath,
-            downloadUrl = request.downloadUrl,
-            totalSizeBytes = 0L,
-            downloadedBytes = 0L,
-            status = DownloadStatus.PENDING.name,
-            mediaSourceId = request.mediaSourceId,
-            imageUrl = request.imageUrl,
-            imageBlurHash = request.imageBlurHash,
-            seriesId = request.seriesId,
-            seasonId = request.seasonId,
-            seriesName = request.seriesName,
-            seasonName = request.seasonName,
-            episodeNumber = request.episodeNumber,
-            seasonNumber = request.seasonNumber,
-            container = request.container,
-        )
-        downloadDao.insertDownload(entity)
-        entity.toDownloadItem()
-    }
+        writer.startDownload(request)
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
@@ -471,102 +380,20 @@ class DownloadRepositoryImpl(
      * cast, or other [MediaDetail]-only fields). Item-only downloads therefore
      * remain chapter-less by design — callers that have a full [MediaDetail]
      * (download worker, resync) must use [saveOfflineMediaDetail] so
-     * `chaptersJson` and other rich blobs are encoded.
+     * `chaptersJson` and other rich blobs are encoded. The write body lives in
+     * [OfflineDownloadWriterCore.saveOfflineMediaItem].
      */
-    override suspend fun saveOfflineMediaItem(item: MediaItem, imageUrl: String?, backdropUrl: String?, downloadPath: String?) {
-        saveOfflineMetadataForItem(item, imageUrl, backdropUrl)
-        seedEpisodeParents(item, artworkDir = downloadPath?.let { File(it).parentFile })
-    }
+    override suspend fun saveOfflineMediaItem(item: MediaItem, imageUrl: String?, backdropUrl: String?, downloadPath: String?) =
+        writer.saveOfflineMediaItem(item, imageUrl, backdropUrl, downloadPath)
 
     /**
-     * Fetches a series' poster (Primary @300) and backdrop (Backdrop @1280)
-     * into [artworkDir] as [DownloadArtifacts]-named sibling files, preferring
-     * the local copy; a `null` path (no dir, no such image, or a failed fetch)
-     * makes the caller fall back to the remote URL. The one home for the
-     * series-artwork grammar the two series paths previously hand-copied —
-     * the seedEpisodeParents copy even built the filenames from raw
-     * `"${seriesId}_poster.jpg"` literals, leaking the grammar out of
-     * [DownloadArtifacts] (identical strings, so this is a pure fold).
+     * Persist full metadata (overview, genres, ratings, cast, studios, …) for
+     * a downloaded item from a [MediaDetail], seeding the parent series/season
+     * rows for episodes — the write body lives in
+     * [OfflineDownloadWriterCore.saveOfflineMediaDetail].
      */
-    private suspend fun downloadSeriesArtwork(seriesId: String, artworkDir: File?): SeriesArtwork {
-        val posterPath = artworkDir?.let {
-            sidecarCore.downloadImageToDisk(seriesId, "Primary", 300, it, DownloadArtifacts.posterFile(seriesId))
-        }
-        val backdropPath = artworkDir?.let {
-            sidecarCore.downloadImageToDisk(seriesId, "Backdrop", 1280, it, DownloadArtifacts.backdropFile(seriesId))
-        }
-        return SeriesArtwork(posterPath, backdropPath)
-    }
-
-    private data class SeriesArtwork(val posterPath: String?, val backdropPath: String?)
-
-    /**
-     * Seeds the parent series/season rows for an episode download so a lone
-     * episode still has its hierarchy. Deliberately does NOT touch the episode
-     * row itself: callers that already persisted the rich [MediaDetail] entity
-     * must not have it REPLACE-wiped by a bare-item re-upsert (which nulls
-     * peopleJson/providerIdsJson/externalUrlsJson/chaptersJson).
-     *
-     * [artworkDir] is the directory series artwork is pre-downloaded into;
-     * pass null when no media directory exists yet (artwork then falls back
-     * to remote URLs).
-     */
-    private suspend fun seedEpisodeParents(item: MediaItem, artworkDir: File?) {
-        if (item.mediaType != MediaType.EPISODE) return
-        val seriesId = item.seriesId
-        val seasonId = item.seasonId
-
-        if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
-            // The lazy accessor itself may throw (desktop: no MediaRepository
-            // definition until ). Degrade to the minimal-row fallback
-            // below — the same shape as a failed detail fetch on Android —
-            // so episode downloads still seed their parent series/season
-            // rows instead of aborting the whole metadata block.
-            val seriesDetail = runCatchingRethrowingCancellation { mediaRepository().getMediaDetail(seriesId) }
-                .getOrNull()
-                ?.getOrNull()
-            if (seriesDetail != null) {
-                val seriesArtwork = downloadSeriesArtwork(seriesId, artworkDir)
-                val seriesImageUrl = seriesArtwork.posterPath
-                    ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
-                val seriesBackdropUrl = seriesArtwork.backdropPath
-                    ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
-                saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
-            } else {
-                offlineMediaDao.upsert(
-                    OfflineMediaEntity(
-                        id = seriesId,
-                        name = item.seriesName ?: "Unknown Series",
-                        mediaType = MediaType.SERIES.name,
-                    )
-                )
-            }
-        }
-
-        if (seasonId != null && offlineMediaDao.getById(seasonId) == null) {
-            offlineMediaDao.upsert(
-                OfflineMediaEntity(
-                    id = seasonId,
-                    name = item.seasonName ?: "Season ${item.seasonNumber}",
-                    mediaType = MediaType.SEASON.name,
-                    seriesId = seriesId,
-                    seasonNumber = item.seasonNumber,
-                )
-            )
-        }
-    }
-
-    override suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
-        saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
-
-        // For episodes, seed the series/season rows so a lone episode download
-        // still has its parent rows. Routes through seedEpisodeParents — NOT
-        // saveOfflineMediaItem — so the just-persisted rich entity (cast,
-        // providers, urls, chapters) is not wiped by a bare-item re-upsert.
-        // No artworkDir: this call historically had none, so series artwork
-        // keeps falling back to remote URLs here.
-        seedEpisodeParents(detail.item, artworkDir = null)
-    }
+    override suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) =
+        writer.saveOfflineMediaDetail(detail, imageUrl, backdropUrl)
 
     override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> =
         // Room suspend functions already switch to the Room query executor, so
@@ -627,7 +454,7 @@ class DownloadRepositoryImpl(
 
             // Persist full series metadata (cast, studios, ratings, …) from the
             // fetched detail so the offline series screen is as rich as online.
-            saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
+            writer.saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
 
             // One consolidated seasons + episodes load (single round-trip via
             // the catalogue) replaces the former getSeasons + per-season
@@ -650,13 +477,13 @@ class DownloadRepositoryImpl(
             // silently dropping an artifact (see DownloadIntake kdoc). Only the
             // series/season metadata + budget guard + concurrency permit live
             // here; everything else is DownloadDelegate.executeDownload.
-            val delegate = downloadDelegate.value
+            val delegate = downloadDelegate
             val qualityMaxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
             val budgetHint = if (batchCurrentBytes >= 0) batchCurrentBytes else null
             val downloadIds = mutableListOf<String>()
 
             for (season in targetSeasons) {
-                saveOfflineMetadataForItem(season, null, null)
+                writer.saveOfflineMetadataForItem(season, null, null)
 
                 val allEpisodes = snapshot.seasonEpisodes(season.id)
                 val selectedEpisodeIds = episodeIds?.get(season.id)?.toSet()
@@ -714,7 +541,7 @@ class DownloadRepositoryImpl(
                     .mapNotNull { File(it).parentFile }
                     .firstOrNull()
                 if (firstEpisodeDir != null) {
-                    val seriesArtwork = downloadSeriesArtwork(seriesId, firstEpisodeDir)
+                    val seriesArtwork = writer.downloadSeriesArtwork(seriesId, firstEpisodeDir)
                     if (seriesArtwork.posterPath != null || seriesArtwork.backdropPath != null) {
                         // Re-persist without re-preloading cast images: the
                         // preloads already ran for the seed above. This only
@@ -733,30 +560,33 @@ class DownloadRepositoryImpl(
         }
     }
 
-    // ── Sidecar/artifact surface (delegates one-to-one to the core) ────────
-    // Bodies moved verbatim to [DownloadSidecarCore]; the behavioral contracts
-    // are pinned by DownloadRepositoryImplSubtitlesTest (androidHostTest) and
-    // DownloadSidecarCoreTest (jvmTest).
+    // ── Sidecar/artifact + write surface (forwards one-to-one) ─────────────
+    // The inherited OfflineDownloadWriter members and the local reads forward
+    // to [writer] — the extracted OfflineDownloadWriterCore single the
+    // DownloadDelegate also writes through (bodies moved verbatim there;
+    // the behavioral contracts are pinned by
+    // DownloadRepositoryImplSubtitlesTest (androidHostTest),
+    // OfflineDownloadWriterCoreTest and DownloadSidecarCoreTest (jvmTest)).
 
     override suspend fun downloadTrickplayData(
         itemId: String,
         trickplayInfo: TrickplayInfo,
         downloadPath: String,
-    ): Boolean = sidecarCore.downloadTrickplayData(itemId, trickplayInfo, downloadPath)
+    ): Boolean = writer.downloadTrickplayData(itemId, trickplayInfo, downloadPath)
 
     override suspend fun downloadExternalSubtitles(
         itemId: String,
         mediaSourceId: String,
         mediaStreams: List<MediaStream>,
         downloadPath: String,
-    ): Boolean = sidecarCore.downloadExternalSubtitles(itemId, mediaSourceId, mediaStreams, downloadPath)
+    ): Boolean = writer.downloadExternalSubtitles(itemId, mediaSourceId, mediaStreams, downloadPath)
 
     override suspend fun markSubtitlesPending(itemId: String) {
-        sidecarCore.markSubtitlesPending(itemId)
+        writer.markSubtitlesPending(itemId)
     }
 
     override suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean =
-        sidecarCore.downloadMediaSegments(itemId, downloadPath)
+        writer.downloadMediaSegments(itemId, downloadPath)
 
     override suspend fun downloadOfflineImage(
         itemId: String,
@@ -764,183 +594,30 @@ class DownloadRepositoryImpl(
         maxWidth: Int,
         parentDir: File,
         fileName: String,
-    ): String? = sidecarCore.downloadImageToDisk(itemId, imageType, maxWidth, parentDir, fileName)
+    ): String? = writer.downloadOfflineImage(itemId, imageType, maxWidth, parentDir, fileName)
 
     override suspend fun loadLocalSubtitleManifest(
         downloadPath: String,
         itemId: String?,
-    ): OfflineSubtitleManifest? = sidecarCore.loadLocalSubtitleManifest(downloadPath, itemId)
+    ): OfflineSubtitleManifest? = writer.loadLocalSubtitleManifest(downloadPath, itemId)
 
     override suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? =
-        sidecarCore.loadLocalSegments(itemId)
+        writer.loadLocalSegments(itemId)
 
     override suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory =
-        sidecarCore.getDownloadFileInventory(itemId)
+        writer.getDownloadFileInventory(itemId)
 
-    private suspend fun saveOfflineMetadataForItem(item: MediaItem, imageUrl: String?, backdropUrl: String?) {
-        // Metadata + playback are split across two tables; seed both from the
-        // fresh item in one transaction so a reader never sees a metadata row
-        // without its playback snapshot. The freshness baseline is seeded only
-        // on the detail path ([saveOfflineMetadataForDetail]) where a full
-        // MediaDetail is available.
-        database.withTransaction {
-            offlineMediaDao.upsert(item.toOfflineMediaEntity(imageUrl, backdropUrl))
-            playbackStateDao.upsert(item.toPlaybackState())
-        }
-        preloadImageToCache(imageUrl)
-        preloadImageToCache(backdropUrl)
-    }
-
-    /**
-     * Persist full metadata for a downloaded item from a [MediaDetail], including
-     * cast, studios, critic rating, tagline, and original title. Cast images
-     * are preloaded into the platform image cache so the offline detail screen
-     * can render the cast row without network access.
-     */
-    private suspend fun saveOfflineMetadataForDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
-        // Metadata, playback, and freshness baseline each live in their own
-        // table now. A metadata re-persist (the resync PERSIST_METADATA step
-        // re-uses this) can no longer clobber the baseline — it's in
-        // `sync_baseline` — so the old "copy the sync columns forward" block is
-        // gone.
-        val existingMeta = offlineMediaDao.getById(detail.item.id)
-        database.withTransaction {
-            offlineMediaDao.upsert(detail.toOfflineMediaEntity(imageUrl, backdropUrl))
-            playbackStateDao.upsert(detail.item.toPlaybackState())
-        }
-        // Seed the freshness baseline from the detail we just persisted so the
-        // first auto-check has a reference to diff against. Without this, a fresh
-        // download enters with no baseline row and the first check treats itself
-        // as "first contact" — swallowing a real change that happened before that
-        // first check (and always reporting CURRENT for new downloads). Only seed
-        // when no baseline existed yet, so a re-download doesn't clobber a recent
-        // check's flags; a genuine re-download is itself a fresh server snapshot.
-        val existingBaseline = syncBaselineDao.getBaseline(detail.item.id)
-        if (existingMeta == null || existingBaseline?.syncedMetadataSignature == null) {
-            val baseline = syncComparator.baseline(detail)
-            syncBaselineDao.upsert(
-                SyncBaselineEntity(
-                    id = detail.item.id,
-                    syncedPosterTag = baseline.posterTag,
-                    syncedBackdropTag = baseline.backdropTag,
-                    syncedMetadataSignature = baseline.metadataSignature,
-                    syncedSubtitleSignature = baseline.subtitleSignature,
-                    syncedTrickplaySignature = baseline.trickplaySignature,
-                    // Segments aren't part of MediaDetail; their signature is
-                    // seeded on the first segments resync rather than at
-                    // download time.
-                    syncedSegmentsSignature = null,
-                    syncedMediaSourceId = baseline.mediaSourceId,
-                    syncedMediaSizeBytes = baseline.mediaSizeBytes,
-                    lastSyncedAt = timeSource.nowEpochMillis(),
-                ),
-            )
-        }
-        preloadImageToCache(imageUrl)
-        preloadImageToCache(backdropUrl)
-        // Preload up to 10 cast images so the offline cast row renders without
-        // a network connection. Mirrors the poster/backdrop caching above.
-        detail.people
-            .filter { it.hasCastImage() }
-            .take(10)
-            .forEach { person ->
-                preloadImageToCache(playbackRepository.getImageUrl(person.id, maxWidth = 200))
-            }
-    }
-
-    override fun enqueueDownload(downloadId: String) {
-        // Runtime enqueue honours the user's wifi-only + schedule-window
-        // preferences (cold-start recovery in DownloadRecoveryInitializer calls
-        // DownloadEnqueuer directly with honorScheduleAndNetwork = false).
-        downloadEnqueuer.enqueue(downloadId)
-    }
+    override fun enqueueDownload(downloadId: String) = writer.enqueueDownload(downloadId)
 
     override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatchingRethrowingCancellation {
         downloadDao.updatePriority(id, priority)
     }
 
-    private fun preloadImageToCache(url: String?) {
-        if (url.isNullOrBlank()) return
-        imagePreloader.preload(url)
-    }
-
-    private fun MediaItem.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?) = OfflineMediaEntity(
-        id = id,
-        name = name,
-        mediaType = mediaType.name,
-        overview = overview,
-        year = year,
-        communityRating = communityRating,
-        officialRating = officialRating,
-        runTimeTicks = runTimeTicks,
-        parentId = parentId,
-        seriesId = seriesId,
-        seasonId = seasonId,
-        // Clear the series subtitle for top-level entities where it would just
-        // duplicate the title; only episodes carry a meaningful
-        // series name distinct from their own.
-        seriesName = if (mediaType == MediaType.EPISODE || mediaType == MediaType.SEASON) seriesName else null,
-        seasonName = if (mediaType == MediaType.EPISODE) seasonName else null,
-        episodeNumber = episodeNumber,
-        seasonNumber = seasonNumber,
-        indexNumber = indexNumber,
-        childCount = childCount,
-        posterPath = imageUrl,
-        backdropPath = backdropUrl,
-        blurHashPrimary = blurHashes.primary,
-        blurHashBackdrop = blurHashes.backdrop,
-        premiereDate = premiereDate,
-        genres = genres.joinToString(","),
-    )
-
-    /**
-     * Server `UserData` snapshot seeded at download time (and re-seeded on a
-     * metadata re-persist) into `playback_state`. Mirrors the playback fields
-     * the metadata row used to carry, so a freshly downloaded item shows its
-     * watched / resume state immediately.
-     */
-    private fun MediaItem.toPlaybackState(): PlaybackStateEntity = PlaybackStateEntity(
-        id = id,
-        playbackPositionTicks = playbackPositionTicks,
-        playedPercentage = PlayedStateSync.computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
-        isPlayed = isPlayed,
-        isFavorite = isFavorite,
-        lastPlayedDate = null,
-    )
-
-    /**
-     * Maps a [MediaDetail] (the rich server response) to an [OfflineMediaEntity],
-     * additionally persisting original title, critic rating, studios, tagline,
-     * the cast as a JSON blob, and the chapter list as a JSON blob (so chapter
-     * markers and the chapter sheet work offline). Falls back to the item-level
-     * values for the base fields so this stays consistent with
-     * [MediaItem.toOfflineMediaEntity].
-     */
-    private fun MediaDetail.toOfflineMediaEntity(imageUrl: String?, backdropUrl: String?): OfflineMediaEntity {
-        val base = item.toOfflineMediaEntity(imageUrl, backdropUrl)
-        val cast = people
-            .filter { it.type == "Actor" }
-            .map { person ->
-                OfflinePersonInfo(
-                    id = person.id,
-                    name = person.name,
-                    role = person.role,
-                    type = person.type,
-                    imageTag = person.primaryImageTag,
-                    blurHash = person.primaryBlurHash,
-                )
-            }
-        return base.copy(
-            originalTitle = item.originalTitle,
-            criticRating = criticRating,
-            studios = item.studios.joinToString(","),
-            tagline = taglines.firstOrNull(),
-            peopleJson = if (cast.isEmpty()) null else encodeCast(cast),
-            providerIdsJson = if (providerIds.isEmpty()) null else encodeProviderIds(providerIds),
-            externalUrlsJson = if (externalUrls.isEmpty()) null else encodeExternalUrls(externalUrls),
-            chaptersJson = if (chapters.isEmpty()) null else encodeChapters(chapters),
-        )
-    }
+    // The entity ⟷ domain mappers this class used to carry as private members
+    // (MediaItem/MediaDetail → OfflineMediaEntity, MediaItem → PlaybackStateEntity,
+    // DownloadEntity → DownloadItem, DownloadProgressRow → DownloadProgress) live
+    // in OfflineMediaMappers.kt — the single owner of the offline/download column
+    // semantics, shared with OfflineRepositoryImpl's read side.
 
     /**
      * Declared delta vs the former inline body, adopted from the majority
@@ -962,38 +639,6 @@ class DownloadRepositoryImpl(
             },
         )
     }
-
-    private fun DownloadEntity.toDownloadItem() = DownloadItem(
-        id = id,
-        mediaItemId = mediaItemId,
-        name = name,
-        mediaType = mediaType.toEnumOrNull() ?: MediaType.UNKNOWN,
-        downloadPath = downloadPath,
-        downloadUrl = downloadUrl,
-        totalSizeBytes = totalSizeBytes,
-        downloadedBytes = downloadedBytes,
-        status = status.toEnumOrNull() ?: DownloadStatus.FAILED,
-        speedBytesPerSec = speedBytesPerSec,
-        mediaSourceId = mediaSourceId,
-        imageUrl = imageUrl,
-        imageBlurHash = imageBlurHash,
-        seriesId = seriesId,
-        seasonId = seasonId,
-        seriesName = seriesName,
-        seasonName = seasonName,
-        episodeNumber = episodeNumber,
-        seasonNumber = seasonNumber,
-        errorMessage = errorMessage,
-        priority = priority,
-        container = container,
-    )
-
-    /** DAO progress projection → feature-facing [DownloadProgress] (repository boundary keeps DAO types in). */
-    private fun DownloadProgressRow.toDownloadProgress() = DownloadProgress(
-        id = id,
-        downloadedBytes = downloadedBytes,
-        speedBytesPerSec = speedBytesPerSec,
-    )
 
     /**
      * Maps a [DownloadQuality] preference to the max bitrate (bits/s) passed

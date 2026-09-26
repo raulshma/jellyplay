@@ -44,10 +44,12 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.parseWhatsNewEntries
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.MarkdownText
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.whatsnew.WhatsNewEntryCard
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -113,6 +115,8 @@ fun AppUpdateSheet(
                     autoDownloadEnabled = autoDownloadEnabled,
                     onAutoDownloadToggle = onAutoDownloadToggle,
                     onDownload = { onDownload(state.info) },
+                    showNotes = showNotes,
+                    onToggleNotes = { showNotes = !showNotes },
                     onDismiss = onDismiss,
                 )
                 is UpdateState.Downloading -> DownloadingContent(
@@ -199,11 +203,13 @@ private fun ColumnScope.NoUpdateContent(
 }
 
 @Composable
-private fun UpdateAvailableContent(
+private fun ColumnScope.UpdateAvailableContent(
     info: AppUpdateInfo,
     autoDownloadEnabled: Boolean,
     onAutoDownloadToggle: (Boolean) -> Unit,
     onDownload: () -> Unit,
+    showNotes: Boolean,
+    onToggleNotes: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Text(
@@ -221,15 +227,43 @@ private fun UpdateAvailableContent(
         )
     }
     Spacer(Modifier.height(12.dp))
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 200.dp),
-    ) {
-        MarkdownText(
-            text = info.releaseNotes.ifBlank { stringResource(R.string.update_no_notes) },
-            modifier = Modifier.verticalScroll(rememberScrollState()),
-        )
+    // Same single content artifact as the post-update sheet: the pending
+    // release's body, with its What's New table derived into the guided
+    // entry cards. No table → the markdown body renders directly.
+    val entries = remember(info.releaseNotes) { parseWhatsNewEntries(info.releaseNotes) }
+    if (entries.isNotEmpty() && !showNotes) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 260.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            entries.forEach { entry ->
+                WhatsNewEntryCard(entry = entry, onNavigate = null)
+            }
+        }
+        TextButton(
+            onClick = onToggleNotes,
+            modifier = Modifier.focusIndicator(),
+        ) { Text(stringResource(R.string.update_view_notes)) }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (entries.isNotEmpty()) Modifier.weight(1f) else Modifier.heightIn(max = 200.dp)),
+        ) {
+            MarkdownText(
+                text = info.releaseNotes.ifBlank { stringResource(R.string.update_no_notes) },
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            )
+        }
+        if (entries.isNotEmpty()) {
+            TextButton(
+                onClick = onToggleNotes,
+                modifier = Modifier.focusIndicator(),
+            ) { Text(stringResource(R.string.update_hide_notes)) }
+        }
     }
     Spacer(Modifier.height(12.dp))
     val noApk = info.downloadAssetUrl == null

@@ -18,8 +18,7 @@ import org.koin.dsl.module
  *  - SyncPlaySession resolves from
  *    [platformSyncPlayModule]: the jvmShared fragment delegates to the
  *    SyncPlayManager single (dataJvmModule — the SyncPlay stack moved into
- * shared:core:data's jvmShared source set during the engine phase); the
- *    wasmJs fragment binds the honest unsupported session.
+ * shared:core:data's jvmShared source set during the engine phase).
  */
 val syncPlayModule: Module = module {
     includes(platformSyncPlayModule())

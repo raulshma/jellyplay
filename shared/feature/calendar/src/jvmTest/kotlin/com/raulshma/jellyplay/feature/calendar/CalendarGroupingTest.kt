@@ -20,11 +20,11 @@ import kotlin.test.assertTrue
  * filtering, the ISO-prefix release-date parse, the relative-label boundary
  * window, and the month-membership check.
  *
- * the helpers run kotlinx.datetime.LocalDate/YearMonth now (wasmJs
- * purification); `plus`/`minus` take a DateTimeUnit since kotlinx 0.8 dropped
+ * the helpers run kotlinx.datetime.LocalDate/YearMonth;
+ * `plus`/`minus` take a DateTimeUnit since kotlinx 0.8 dropped
  * the plusDays/minusDays sugar. The header-label test pins the JVM default
  * locale for the CalendarDateLabels jvmShared actual (Locale.getDefault()
- * resolution, unchanged from the pre-wasm java.time bodies).
+ * resolution).
  */
 class CalendarGroupingTest {
 
@@ -134,10 +134,9 @@ class CalendarGroupingTest {
 
     @Test
     fun headerLabelsFormatWithPinnedLocale() {
-        // The jvmShared actual formats through the DEFAULT locale (the
-        // verbatim pre-wasm behavior) — pin it to English around the
-        // assertions for determinism, as the old `Locale.ENGLISH` parameter
-        // argument did.
+        // The jvmShared actual formats through the DEFAULT locale — pin it
+        // to English around the assertions for determinism, as the old
+        // `Locale.ENGLISH` parameter argument did.
         val previous = Locale.getDefault()
         Locale.setDefault(Locale.ENGLISH)
         try {

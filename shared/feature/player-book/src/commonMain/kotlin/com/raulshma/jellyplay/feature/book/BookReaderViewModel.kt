@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.book
 
 import androidx.compose.ui.graphics.ImageBitmap
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
@@ -8,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
 import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
@@ -82,6 +84,7 @@ import kotlin.math.roundToInt
 class BookReaderViewModel(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     /**
      * The reader preference choreography ([ReaderPreferences] — snapshot +
      * commands + write-through). Every pref write routes through it; the VM
@@ -99,7 +102,7 @@ class BookReaderViewModel(
      */
     private val formatProbe: BookFormatProbe = NoopBookFormatProbe,
     /**
-     * Paragraph read-aloud engine (Android TTS; desktop/web degrade to the
+     * Paragraph read-aloud engine (Android TTS; desktop degrades to the
      * neutral [NoopBookSpeechEngine] and the reader hides its speech UI).
      * Defaulted so tests and non-DI constructions compile unchanged.
      */
@@ -346,6 +349,7 @@ class BookReaderViewModel(
         scope = scope,
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
         contentResolver = contentResolver,
         documentOpener = documentOpener,
         formatProbe = formatProbe,
@@ -672,7 +676,7 @@ class BookReaderViewModel(
      * the persisted rate/pitch, marks the session live and asks the host
      * (through the attached session's seam) for the current chapter's
      * paragraphs at the exact resume anchor — the answer lands in
-     * [onSpeechContext]. Unavailable engines (desktop/web) and paged books
+     * [onSpeechContext]. Unavailable engines (desktop) and paged books
      * are a silent no-op — their UI never offers the button.
      */
     fun startReadAloud() {
@@ -798,7 +802,7 @@ class BookReaderViewModel(
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
         val existing = bookmarkAtCurrentPosition()
         scope.launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 if (existing != null) {
                     annotationsRepository.removeBookmark(existing.id)
                 } else {
@@ -815,7 +819,7 @@ class BookReaderViewModel(
     }
 
     fun deleteBookmark(id: Long) {
-        scope.launch { runCatching { annotationsRepository.removeBookmark(id) } }
+        scope.launch { runCatchingRethrowingCancellation { annotationsRepository.removeBookmark(id) } }
     }
 
     /**
@@ -849,7 +853,7 @@ class BookReaderViewModel(
         val chapterLabel = _currentEpubLocation.value?.chapterLabel.orEmpty()
         _selection.value = null
         scope.launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 annotationsRepository.addAnnotation(
                     itemId = itemId,
                     cfi = selection.cfi,
@@ -875,12 +879,12 @@ class BookReaderViewModel(
         style: ReaderAnnotationStyle? = null,
     ) {
         scope.launch {
-            runCatching { annotationsRepository.updateAnnotation(id, note, color, style) }
+            runCatchingRethrowingCancellation { annotationsRepository.updateAnnotation(id, note, color, style) }
         }
     }
 
     fun deleteAnnotation(id: Long) {
-        scope.launch { runCatching { annotationsRepository.deleteAnnotation(id) } }
+        scope.launch { runCatchingRethrowingCancellation { annotationsRepository.deleteAnnotation(id) } }
     }
 
     /** The persisted annotation sitting on the live selection's CFI, if any (edit vs create row). */

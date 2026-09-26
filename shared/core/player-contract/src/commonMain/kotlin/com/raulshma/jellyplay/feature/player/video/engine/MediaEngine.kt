@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.DeinterlaceMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -62,7 +63,63 @@ data class PlaybackRequest(
      * when no server runtime is available (e.g. unknown-length items).
      */
     val serverDurationMs: Long = 0L,
+    /**
+     * TLS client-certificate material for [uri]'s server, when the app-level
+     * mTLS certificate is active. Engines with their own networking
+     * (the mpv engines via ffmpeg) consume the literal file paths — hence the
+     * PEM normalization the import performs; OkHttp-backed engines inherit
+     * the certificate through the shared TLS layer instead and ignore this.
+     * `null` when no certificate is enabled.
+     */
+    val tls: PlaybackTls? = null,
 )
+
+/**
+ * File-path view of the app-level client certificate for engines that do
+ * their own TLS (mpv/ffmpeg). Paths are the normalized PEM pair written at
+ * import; [caPath] is the optional trust-anchor override.
+ */
+data class PlaybackTls(
+    val clientCertificatePath: String,
+    val clientKeyPath: String,
+    val caPath: String? = null,
+)
+
+/**
+ * Pure mapping from [PlaybackTls] onto mpv's TLS options: the three
+ * `tls-*` file-path options, or the reset (empty-value) writes when no
+ * certificate is active — the same diff-then-write discipline
+ * `http-header-fields` has (options PERSIST on the mpv context, so the
+ * previous item's credentials must be cleared, never inherited). Shared by
+ * the Android and desktop mpv engines so the emitted option set cannot drift
+ * between platforms.
+ *
+ * Option names are the CURRENT mpv surface (`tls-cert-file` / `tls-key-file`
+ * / `tls-ca-file`, verified against the bundled libmpv v0.40): older mpv
+ * spelled the client pair `tls-cert`/`tls-key` and the plan's draft named
+ * them `tls-client-cert`/`tls-client-key` — neither exists today, and
+ * unknown option writes fail silently on libmpv.
+ */
+object MpvTlsOptions {
+
+    private const val OPTION_CLIENT_CERT = "tls-cert-file"
+    private const val OPTION_CLIENT_KEY = "tls-key-file"
+    private const val OPTION_CA_FILE = "tls-ca-file"
+
+    /** The option writes [PlaybackRequest.tls] translates to. */
+    fun from(tls: PlaybackTls?): List<Pair<String, String>> = when (tls) {
+        null -> listOf(
+            OPTION_CLIENT_CERT to "",
+            OPTION_CLIENT_KEY to "",
+            OPTION_CA_FILE to "",
+        )
+        else -> buildList {
+            add(OPTION_CLIENT_CERT to tls.clientCertificatePath)
+            add(OPTION_CLIENT_KEY to tls.clientKeyPath)
+            if (tls.caPath != null) add(OPTION_CA_FILE to tls.caPath)
+        }
+    }
+}
 
 data class SubtitleSource(
     val url: String,
@@ -85,6 +142,21 @@ data class EngineConfig(
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val engineSpecific: EngineSpecificConfig? = null,
     val pauseOnAudioFocusLoss: Boolean = true,
+    /**
+     * Deinterlacing: mpv `deinterlace` on the mpv engines; other
+     * engines no-op it. SESSION-SCOPED on the player surface (gear-menu cycle,
+     * folded into every config build while the session lives, reverted on
+     * exit) — never persisted.
+     */
+    val deinterlace: DeinterlaceMode = DeinterlaceMode.AUTO,
+    /**
+     * Whether the CURRENT item's video stream is HDR — resolved by the
+     * config builder via `isHdrFromStreams`. Transient session input, never
+     * persisted. The mpv engines combine it with `MpvEngineConfig.hdrPassthrough`
+     * (and the display's reported target) to decide whether HDR passthrough is
+     * ACTIVE — and whether `tone-mapping` writes are suppressed (HDR→HDR).
+     */
+    val hdrSource: Boolean = false,
     /**
      * Optional DRM hook. When non-null, engines that support DRM (currently
      * ExoPlayerEngine on Android) attach the supplied session manager —
@@ -193,6 +265,13 @@ data class EngineCapabilities(
      * engines with `false` silently skip them.
      */
     val supportsImageSubtitles: Boolean = false,
+    /**
+     * Honors [EngineConfig.deinterlace] — the gear-menu "Deinterlace"
+     * cycle is gated on this. Both mpv engines map the mode onto mpv's
+     * `deinterlace` property; ExoPlayer/libVLC/no-op engines leave it `false`
+     * so the menu item is hidden rather than a dead control.
+     */
+    val supportsDeinterlace: Boolean = false,
 )
 
 enum class EnginePlaybackState {
@@ -289,6 +368,21 @@ data class EngineVideoStats(
      * [droppedFrames] (decoder-side). mpv's `frame-drop-count`.
      */
     val voFrameDropCount: Long? = null,
+    /**
+     * HDR passthrough is ACTIVE for the running session: the setting
+     * is on, the item is HDR, and mpv's `video-target-params` reports an HDR
+     * display target. Drives the "HDR output active" badge in the stats
+     * overlay. `false` on engines that don't expose the target surface
+     * (Android, software-render path).
+     */
+    val hdrOutputActive: Boolean = false,
+    /**
+     * One-line HDR passthrough diagnostic for the stats overlay: set
+     * when passthrough is requested but NOT active — e.g. the display target
+     * stayed SDR, so the tone mapping took over. `null` = nothing to
+     * report.
+     */
+    val hdrOutputNotice: String? = null,
 )
 
 /**
@@ -343,15 +437,6 @@ interface MediaEngine :
     override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
 
-    /**
-     * Opaque native player handle (re-declaration of the type-erased
-     * `RemotePlayableEngine.underlyingPlayer` with the contract-level null
-     * default). Android engines narrow it via val covariance — ExoPlayerEngine
-     * returns `androidx.media3.common.Player?`; consumers on Android cast.
-     * Desktop engines may expose the mpv handle; default is `null`.
-     */
-    override val underlyingPlayer: Any? get() = null
-
     // ── Identity ──
     /**
      * Stable, human-readable engine name for user-facing strings (the
@@ -396,6 +481,19 @@ interface MediaEngine :
 
     val bufferedPositionMs: StateFlow<Long>
     val videoStats: StateFlow<EngineVideoStats>
+
+    /**
+     * Buffered playback ranges in ms on the item's absolute timeline
+     * — the multi-band generalization of [bufferedPositionMs]. Ranges are
+     * clamped to `[0, durationMs]`, non-degenerate, sorted and merged (see
+     * [BufferedRanges.normalize]); discontinuities survive so the seek bar can
+     * shade each cached window separately (a forward seek drops the old
+     * window; the back-buffer stays behind the playhead). Engines that expose
+     * no buffer surface inherit the always-empty [BufferedRanges.EMPTY]
+     * default instead of faking a full-track band.
+     */
+    val bufferedRanges: StateFlow<List<LongRange>>
+        get() = BufferedRanges.EMPTY
 
     /**
      * Accumulated subtitle cues for the active track, for the subtitle-sync

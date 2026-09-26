@@ -46,9 +46,14 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_channel_mix_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_channel_mixing
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_clear_ab_repeat
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deinterlace
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_decoder
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_rendering
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_dialogue_boost
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_dialogue_boost_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mark_unwatched_and_exit
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mark_watched_and_exit
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mark_watched_and_skip
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_night_mode
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_night_mode_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_normalization_on
@@ -184,6 +189,24 @@ internal fun BoxScope.PlayerOverflowMenu(
     onAbRepeatClear: () -> Unit = {},
     audioOnly: Boolean = false,
     onToggleAudioOnly: () -> Unit = {},
+    // The mark-and-exit pair. The watched item's label flips between
+    // "…& skip" (a next episode exists) and "…& exit" (it doesn't) — one
+    // action, the VM's markWatchedAndSkip owns the advance-vs-close branch.
+    hasNextEpisode: Boolean = false,
+    // Incognito leaves no watch state — the unwatched variant hides.
+    incognitoModeEnabled: Boolean = false,
+    onMarkWatchedAndSkip: () -> Unit = {},
+    onMarkUnwatchedAndQuit: () -> Unit = {},
+    // the Rendering sheet (shader pack / tone mapping / quality) —
+    // mpv engines only, gated by the caller.
+    supportsRenderPanel: Boolean = false,
+    onRenderClick: () -> Unit = {},
+    // the session-scoped deinterlace cycle (gated by
+    // EngineCapabilities.supportsDeinterlace — mpv engines only). [mode] is
+    // the CURRENT session mode, surfaced in the item's label.
+    supportsDeinterlace: Boolean = false,
+    deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
+    onDeinterlaceCycle: () -> Unit = {},
 ) {
     if (!expanded) return
     val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
@@ -488,6 +511,25 @@ internal fun BoxScope.PlayerOverflowMenu(
                 label = stringResource(Res.string.player_video_decoder),
                 onClick = onDecoderClick,
             )
+            if (supportsRenderPanel) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.Wand,
+                    label = stringResource(Res.string.player_video_rendering),
+                    onClick = onRenderClick,
+                )
+            }
+            if (supportsDeinterlace && deinterlaceMode != null) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.Scan,
+                    label = stringResource(Res.string.player_video_deinterlace, deinterlaceMode.displayName),
+                    onClick = onDeinterlaceCycle,
+                    tint = if (deinterlaceMode != com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
             if (supportsAudioPassthrough) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Volume,
@@ -556,6 +598,22 @@ internal fun BoxScope.PlayerOverflowMenu(
                 onClick = onToggleAudioOnly,
                 tint = if (audioOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
+            // Mark-and-exit actions. TV reaches them through the same
+            // overflow focus path as every other item (the panel is one
+            // scrollable focus column).
+            OverflowMenuItem(
+                icon = Tabler.Outline.Checks,
+                label = if (hasNextEpisode) stringResource(Res.string.player_video_mark_watched_and_skip)
+                    else stringResource(Res.string.player_video_mark_watched_and_exit),
+                onClick = onMarkWatchedAndSkip,
+            )
+            if (!incognitoModeEnabled) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.EyeOff,
+                    label = stringResource(Res.string.player_video_mark_unwatched_and_exit),
+                    onClick = onMarkUnwatchedAndQuit,
+                )
+            }
         }
     }
 }

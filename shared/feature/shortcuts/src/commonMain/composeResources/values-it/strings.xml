@@ -6,7 +6,7 @@
     <string name="shortcuts_category_services">Servizi</string>
     <string name="shortcuts_category_system">Sistema</string>
     <string name="shortcuts_empty_title">Nessuna scorciatoia disponibile</string>
-    <string name="shortcuts_empty_description">Sfoglia l\'app per scoprire funzioni e contenuti</string>
+    <string name="shortcuts_empty_description">Sfoglia l'app per scoprire funzioni e contenuti</string>
     <string name="shortcuts_empty_action">Sfoglia libreria</string>
     <string name="shortcuts_item_downloads_title">Download</string>
     <string name="shortcuts_item_downloads_description">Contenuti offline e gestione dei download.</string>
@@ -23,14 +23,14 @@
     <string name="shortcuts_item_requests_description">Richiedi film e serie TV.</string>
     <string name="shortcuts_item_newsletters_title">Newsletter</string>
     <string name="shortcuts_item_newsletters_description">Ultime newsletter e aggiornamenti.</string>
-    <string name="shortcuts_item_seerr_description">Configura l\'integrazione Seerr.</string>
+    <string name="shortcuts_item_seerr_description">Configura l'integrazione Seerr.</string>
     <string name="shortcuts_item_activity_queue_title">Coda attività</string>
     <string name="shortcuts_item_activity_queue_description">Coda di download combinata Radarr/Sonarr e gestione.</string>
     <string name="shortcuts_item_upcoming_title">In arrivo</string>
     <string name="shortcuts_item_upcoming_description">Calendario delle uscite combinato Sonarr/Radarr.</string>
     <string name="shortcuts_item_arr_description">Connessioni dirette ai server *arr e override.</string>
     <string name="shortcuts_item_settings_title">Impostazioni</string>
-    <string name="shortcuts_item_settings_description">Aspetto, riproduzione, audio e opzioni dell\'app.</string>
+    <string name="shortcuts_item_settings_description">Aspetto, riproduzione, audio e opzioni dell'app.</string>
     <string name="shortcuts_item_server_mgmt_title">Gestione server</string>
     <string name="shortcuts_item_server_mgmt_description">Connessione e configurazione del server.</string>
     <string name="shortcuts_item_switch_user_title">Cambia utente</string>
@@ -40,5 +40,9 @@
     <string name="shortcuts_item_setup_wizard_title">Configurazione guidata</string>
     <string name="shortcuts_item_setup_wizard_description">Esegui il flusso di configurazione iniziale.</string>
     <string name="shortcuts_item_about_title">Informazioni</string>
-    <string name="shortcuts_item_about_description">Versione, licenze e informazioni sull\'app.</string>
+    <string name="shortcuts_item_about_description">Versione, licenze e informazioni sull'app.</string>
+    <string name="shortcuts_search_placeholder">Cerca scorciatoie…</string>
+    <string name="shortcuts_search_no_results">Nessuna scorciatoia corrisponde a «%1$s»</string>
+    <string name="shortcuts_search_clear">Cancella ricerca</string>
+    <string name="shortcuts_admin_badge">Admin</string>
 </resources>

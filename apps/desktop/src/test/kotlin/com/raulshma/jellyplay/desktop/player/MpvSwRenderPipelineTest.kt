@@ -168,7 +168,7 @@ class MpvSwRenderPipelineTest {
     }
 
     private fun intProperty(engine: MpvSoftwareRenderEngine, name: String): Int =
-        (engine.underlyingPlayer as? Pointer)
+        (engine.liveMpvHandle() as? Pointer)
             ?.let { ctx -> MpvLib.getPropertyString(ctx, name)?.toIntOrNull() }
             ?: -1
 

@@ -1,13 +1,12 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
-import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
-import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
@@ -37,8 +36,10 @@ import org.robolectric.annotation.Config
 import java.io.File
 
 /**
- * Pins the non-destructive contract of
- * [DownloadRepositoryImpl.downloadExternalSubtitles]:
+ * Pins the non-destructive contract of the offline subtitle bundle —
+ * [DownloadRepositoryImpl.downloadExternalSubtitles] and now its host
+ * [OfflineDownloadWriterCore] (D6 extracted the write cluster; the repository
+ * forwards the writer surface to it one-to-one):
  *
  * - a genuine server-side removal (no deliverable subtitle streams) mirrors to
  *   disk by clearing the sidecar dir and reports success;
@@ -52,11 +53,11 @@ import java.io.File
  * - [DownloadRepositoryImpl.markSubtitlesPending] delegates to the DAO's
  *   atomic mark (the flag-raising SQL itself lives in SyncBaselineDaoTest).
  *
- * Constructed like [DownloadRepositoryImplResumeTest]; the subtitle path touches
- * only `playbackRepository` (URL resolution) and on-disk files, so the rest are
- * relaxed mocks. V3 downloads conveyor: the impl moved to :shared:core:data
- * jvmShared — this suite constructs it through the seam ctor (same fakes as the
- * resume suite).
+ * Constructed with a REAL [OfflineDownloadWriterCore] (the subtitle path
+ * touches only `playbackRepository`, `playbackIdentity` and on-disk files, so
+ * its remaining seams are relaxed mocks); the repository forwards to it.
+ * Robolectric stays because the shared Log facade's Android actual delegates
+ * to android.util.Log.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -69,46 +70,51 @@ class DownloadRepositoryImplSubtitlesTest {
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
-    private val httpClient: OkHttpClient = mockk()
+    private val playbackIdentity: PlaybackIdentity = mockk(relaxed = true)
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
     private val json: Json = Json
-    private val downloadDelegate: kotlin.Lazy<DownloadDelegate> = lazy { mockk<DownloadDelegate>(relaxed = true) }
-    private val storagePolicy: StoragePolicy = mockk(relaxed = true)
-    private val downloadEnqueuer: DownloadEnqueueCoordinator = mockk(relaxed = true)
-    private val storageLayout: DownloadStorageLayoutContract = mockk(relaxed = true)
-    private val syncComparator: OfflineSyncComparator = mockk(relaxed = true)
-    private val episodeCatalogue: EpisodeCatalogue = mockk(relaxed = true)
-    private val progressNotifier: DownloadProgressNotifier = mockk(relaxed = true)
-    private val imagePreloader: OfflineImagePreloader = mockk(relaxed = true)
+    private val downloadDelegate: DownloadDelegate = mockk(relaxed = true)
 
     private lateinit var tempDir: File
     private lateinit var downloadPath: File
     private val itemId = "item-1"
 
-    private fun repository(testClient: OkHttpClient = httpClient) = DownloadRepositoryImpl(
+    /** The real write cluster under test (the repository only forwards). */
+    private fun writerCore(testClient: OkHttpClient = OkHttpClient()) = OfflineDownloadWriterCore(
+        downloadDao = downloadDao,
+        offlineMediaDao = offlineMediaDao,
+        playbackStateDao = playbackStateDao,
+        syncBaselineDao = syncBaselineDao,
+        database = database,
+        downloadsStore = preferencesStore,
+        storagePolicy = mockk(relaxed = true),
+        storageLayout = mockk(relaxed = true),
+        syncComparator = mockk(relaxed = true),
+        downloadEnqueuer = mockk(relaxed = true),
+        imagePreloader = mockk(relaxed = true),
+        playbackRepository = playbackRepository,
+        playbackIdentity = playbackIdentity,
+        httpClient = testClient,
+        json = json,
+        timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
+        mediaRepository = MediaRepositoryAccess { mediaRepository },
+    )
+
+    private fun repository(testClient: OkHttpClient = OkHttpClient()) = DownloadRepositoryImpl(
         downloadDao = downloadDao,
         offlineMediaDao = offlineMediaDao,
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
         database = database,
         mediaRepository = MediaRepositoryAccess { mediaRepository },
-        episodeCatalogue = episodeCatalogue,
+        episodeCatalogue = mockk(relaxed = true),
         playbackRepository = playbackRepository,
-        httpClient = testClient,
         downloadsStore = preferencesStore,
-        json = json,
+        storagePolicy = mockk(relaxed = true),
+        downloadEnqueuer = mockk(relaxed = true),
+        progressNotifier = mockk(relaxed = true),
+        writer = writerCore(testClient),
         downloadDelegate = downloadDelegate,
-        storagePolicy = storagePolicy,
-        downloadEnqueuer = downloadEnqueuer,
-        storageLayout = storageLayout,
-        syncComparator = syncComparator,
-        progressNotifier = progressNotifier,
-        imagePreloader = imagePreloader,
-        timeSource = object : com.raulshma.jellyplay.core.data.util.TimeSource {
-            override fun nowEpochMillis(): Long = System.currentTimeMillis()
-            override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
-            override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
-        },
     )
 
     private fun subtitlesDir(): File =
@@ -263,7 +269,7 @@ class DownloadRepositoryImplSubtitlesTest {
                 MockResponse().setResponseCode(200).setHeader("Content-Type", contentType).setBody(body),
             )
             server.start()
-            every { playbackRepository.getAccessToken() } returns accessToken
+            every { playbackIdentity.accessToken() } returns accessToken
             every { playbackRepository.buildSubtitleDeliveryUrl(itemId, "src-1", 0, "srt") } returns
                 server.url("/Videos/item/src-1/Subtitles/0/Stream.srt").toString()
 

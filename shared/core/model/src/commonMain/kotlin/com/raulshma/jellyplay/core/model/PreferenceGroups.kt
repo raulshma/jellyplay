@@ -107,6 +107,8 @@ data class SecurityPreferences(
     val autoLockTimerMs: Long = 30_000L,
     val incognitoModeEnabled: Boolean = false,
     val remoteControlEnabled: Boolean = true,
+    /** Opt-in for remote "DisplayContent" (idle detail navigation). */
+    val remoteDisplayContentEnabled: Boolean = false,
 )
 
 @Immutable
@@ -162,9 +164,9 @@ data class AppearancePreferences(
 // + DVR + syncplay + video settings; the Appearance screen shows theme + home
 // layout + newsletter settings). Each slice below is the *exact* set of fields
 // one settings sub-screen reads, so collecting it recomposes only when one of
-// that screen's fields changes. Field names are identical to [UserPreferences]
-// on purpose: that keeps the screen bodies (`preferences.X`) untouched when a
-// screen swaps from the whole [UserPreferences] to its slice.
+// that screen's fields changes. Field names deliberately match the legacy
+// `UserPreferences` aggregate these slices were carved from: that keeps the
+// screen bodies (`preferences.X`) untouched by the carve-up.
 //
 // A field that two screens both display (e.g. `dialogueBoostEnabled` appears on
 // both Playback and Audio) is projected into both slices. A write to such a
@@ -206,6 +208,8 @@ data class PlaybackPreferences(
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    /** Skip-on-forward-seek. Default off — see `VideoPlayerSlice`. */
+    val skipSegmentsOnSeek: Boolean = false,
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
@@ -237,6 +241,14 @@ data class PlaybackPreferences(
     val dvrPostPaddingMinutes: Int = 0,
     val dvrRecordingQuality: String = "AUTO",
     val androidTvWatchNextEnabled: Boolean = true,
+    /**
+     * Per-content-type volume memory is on — one remembered level
+     * per bucket (video / music / audiobook), applied at item start and
+     * written on user-initiated changes. Desktop-video-backed (the app owns
+     * mpv's volume scalar there); the row is capability-hidden on Android,
+     * whose video volume is the system stream's.
+     */
+    val rememberVolumePerContentType: Boolean = true,
 )
 
 /** Fields read by `AudioSettingsScreen`. */
@@ -340,6 +352,8 @@ data class LanguagePreferences(
         edgeType = SubtitleEdgeType.OUTLINE,
     ),
     val appLanguage: String? = null,
+    /** The track-language rule set edited by the screen's track-selection group. */
+    val languageRules: LanguageRuleSet = LanguageRuleSet(),
 )
 
 /** Fields read by `ExperimentalSettingsScreen`. */
@@ -391,6 +405,8 @@ data class AppearanceScreenPreferences(
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
+    /** The user's custom Discover rows (config order). */
+    val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val hiddenCwItemIds: Set<String> = emptySet(),
@@ -430,4 +446,34 @@ data class AppearanceScreenPreferences(
         NewsletterSectionType.ACTIVITY_DIGEST,
     ),
     val newsletterSectionOrder: List<NewsletterSectionType> = NewsletterSectionType.DEFAULT_ORDER,
+)
+
+/**
+ * Fields read by `HomeSettingsScreen` — the home-screen config hub (display
+ * rows, Continue Watching / Next Up behavior, and the home layout editor).
+ * Everything here projects from the single [HomeDiscoveryStore] slice; the
+ * card-display toggles (unwatched badge, watched checkmark, hide watched,
+ * external ratings) are deliberately excluded because they are app-wide card
+ * settings that stay on the Appearance screen.
+ */
+@Immutable
+@Serializable
+data class HomeScreenPreferences(
+    val homeMode: HomeMode = HomeMode.VIDEO,
+    val homeHeroEnabled: Boolean = true,
+    val homeBackdropEnabled: Boolean = true,
+    val showClockOnHome: Boolean = false,
+    val showSettingsInHomeSearch: Boolean = true,
+    val hideTopHeaderOnScroll: Boolean = false,
+    val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
+    val hiddenCwItemIds: Set<String> = emptySet(),
+    val mergeContinueWatchingAndNextUp: Boolean = false,
+    val nextUpMaxDays: Int = 0,
+    val nextUpRewatching: Boolean = false,
+    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+    val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
+    /** The user's custom Discover rows (config order). */
+    val discoverRows: List<DiscoverRowConfig> = emptyList(),
+    val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
 )

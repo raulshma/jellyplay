@@ -3,9 +3,15 @@ package com.raulshma.jellyplay.feature.player.live
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
+import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
@@ -13,10 +19,14 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateSto
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
-import com.raulshma.jellyplay.core.model.PlaybackInfoResult
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.feature.player.video.engine.EngineDecision
+import com.raulshma.jellyplay.feature.player.video.engine.EngineEventCoordinator
+import com.raulshma.jellyplay.feature.player.video.engine.EngineEventSource
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
+import com.raulshma.jellyplay.feature.player.video.engine.EngineSessionShell
+import com.raulshma.jellyplay.feature.player.video.engine.FallbackPolicy
+import com.raulshma.jellyplay.feature.player.video.engine.WatchdogScope
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error_buffering_timeout
@@ -29,17 +39,18 @@ import com.raulshma.jellyplay.feature.player.live.generated.resources.live_recor
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineConfig
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
+import com.raulshma.jellyplay.feature.player.live.engine.LiveMuteMemory
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlaybackRequest
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerAudio
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerEngine
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 import com.raulshma.jellyplay.feature.player.live.engine.TranscodeReasonsRenderer
+import com.raulshma.jellyplay.feature.livetv.LiveTvProgramWindow
 import com.raulshma.jellyplay.feature.livetv.components.RecordAction
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.nowInstant
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,28 +61,28 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Instant
 
 private const val TAG = "LiveTvPlayerViewModel"
 
 private const val PROGRAM_LOOKAHEAD_HOURS = 12L
 private const val CHANNEL_LIST_LIMIT = 200
 /**
- * Watchdog mirroring the VOD player's BUFFERING_TIMEOUT_MS: if a live stream
- * stays in BUFFERING this long without reaching READY (common with flaky
- * tuners that stall without raising a PlaybackException), surface an
+ * This host's buffering-watchdog window, fed to the shared
+ * [EngineEventCoordinator] at construction (candidate C4: the policy core is
+ * the VOD coordinator's, moved to player-contract; the timeout is a policy
+ * KNOB here). If a live stream stays in BUFFERING this long without reaching
+ * READY (common with flaky tuners that stall without raising a
+ * PlaybackException), the coordinator's timeout decision surfaces an
  * actionable error instead of spinning the rebuffer spinner forever.
  */
 private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
 
 /**
  * Owns Live TV playback end to end: loads the channel list from
- * [LiveTvRepository], resolves the
- * live stream URL via [PlaybackRepository.resolvePlayback], drives a
+ * [LiveTvRepository], resolves the live stream URL via [LiveSessionManager]
+ * (the PlaybackRepository choreography), drives a
  * [LivePlayerEngine], and surfaces UI state for the zap list + now/next
  * overlay + rebuffer spinner.
  *
@@ -87,22 +98,35 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
  * legacy `PlayerAudioLifecycle` wrapper and its `@ApplicationContext Context`
  * died with it) and [TranscodeReasonsRenderer] (legacy core:ui formatter).
  * The `UserMessageBus`/`UiText` ctor dep died too: record/cancel feedback
- * now flows through [messages] (livetv's LiveTvUserMessage screen-forward
- * seam) and localized error state stays unresolved until render time
- * ([LivePlayerMessage]).
+ * now flows through [events] as [LivePlayerEvent.Message] values (livetv's
+ * LiveTvUserMessage screen-forward seam) and localized error state stays
+ * unresolved until render time ([LivePlayerMessage]).
  *
- * Live PiP: the nullable [pip] seam (androidMain adapter over the
- * legacy core:data singleton the host Activity reads) arms auto-enter on each
+ * Live PiP: the nullable [pip] seam — the shared core:data
+ * [PipController] port (its AndroidPipController singleton is the same
+ * instance the host Activity reads) — arms auto-enter on each
  * successful tune, mirrors play state, installs the remote-action transport
- * (SKIP = channel zap) and tears it all down in [stop] — see [PipController].
+ * (SKIP = channel zap), discharges the PiP-dismiss latch into teardown +
+ * [LivePlayerEvent.ClosePlayer] (the VOD VM's choreography) and tears it all
+ * down in [stop].
+ *
+ * LiveNowWindow: the now/next program scan converged on livetv's
+ * vocabulary — the wall-clock read goes through the injected
+ * [EpochMillisSource] seam ([nowInstant], never a direct `Clock.System.now()`,
+ * fake-able in jvmTest) and the current/next pick is
+ * [LiveTvProgramWindow.currentAndNext] (the lenient-parse widening of the
+ * C10 timestamp-vocabulary unification; the former strict `Instant.parse`
+ * ladder died with it).
  */
 class LiveTvPlayerViewModel(
     private val liveTvRepository: LiveTvRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackIdentity: PlaybackIdentity,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     private val playbackStore: PlaybackStore,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val lastChannelStore: LastChannelStore,
+    private val epochMillisSource: EpochMillisSource,
     private val engineFactory: LiveEngineFactory,
     private val imageUrlProvider: ImageUrlProvider,
     private val audio: LivePlayerAudio? = null,
@@ -115,14 +139,14 @@ class LiveTvPlayerViewModel(
     val state: StateFlow<LiveTvPlayerUiState> = _state.asStateFlow()
 
     /**
-     * One-shot record/cancel feedback (livetv conveyor's LiveTvUserMessage
-     * pattern): the Android screen collects this flow and forwards through
-     * the app-wide user-message bus, resolving [LivePlayerMessage.Resource]
-     * values with the current locale. Buffered channel + trySend preserves
-     * the legacy UserMessageBus emit ordering.
+     * One-shot screen events (record/cancel feedback, PiP-dismiss screen
+     * close) on the [LivePlayerEvent] vocabulary — ONE intake replacing the
+     * former messages/closePlayer member pair (the VOD `SessionEvent`
+     * pattern; the VM's public-member ratchet stays at its ceiling).
+     * Emitted via the engine-session shell's tryEmit-only pipe (a
+     * mid-teardown emission never suspends).
      */
-    private val messageChannel = Channel<LivePlayerMessage>(Channel.BUFFERED)
-    val messages: Flow<LivePlayerMessage> = messageChannel.receiveAsFlow()
+    val events: Flow<LivePlayerEvent> get() = engineEventShell.events
 
     // High-frequency DVR-window streams kept OUT of [LiveTvPlayerUiState] so
     // the 500 ms position tick invalidates only the leaf that renders it (the
@@ -134,9 +158,25 @@ class LiveTvPlayerViewModel(
     private val _durationMs = MutableStateFlow(-1L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
+    /**
+     * The live source-resolution choreography — `resolvePlayback` → the
+     * DIRECT_STREAM probe-override → the fetchPlaybackInfo/getStreamUrl
+     * fallback ladder (the "Mirrors the VOD PlayerSessionManager.loadOnline
+     * fallback" duplicate that used to live inline in [playChannel] and
+     * [onTranscodeFallback]). Owned here over this VM's [playbackRepository]
+     * the way the VOD VM owns its `playerSessionManager`; this VM keeps the
+     * uiState writes, the event emission and the engine load.
+     */
+    private val sessionManager = LiveSessionManager(playbackRepository)
+
     private var engine: LivePlayerEngine? = null
     private var initialized = false
-    private var preMuteVolume: Float? = null
+
+    /**
+     * The mute toggle's pre-mute memory (the [LiveMuteMemory] policy chip —
+     * remember/restore/stale-clear semantics live there, this VM applies).
+     */
+    private var muteMemory = LiveMuteMemory()
 
     /**
      * A zap that arrived while the channel list was still loading, deferred
@@ -177,10 +217,59 @@ class LiveTvPlayerViewModel(
      */
     private val playerAudioLifecycle: LivePlayerAudio? = audio
 
-    // Buffering watchdog (see LIVE_BUFFERING_TIMEOUT_MS). A live tuner can stall
-    // in BUFFERING without ever raising a PlaybackException; this surfaces an
-    // error after the timeout so the rebuffer spinner doesn't spin forever.
-    private var bufferingWatchdogJob: Job? = null
+    // ── Engine-event policy core (shared with the VOD player) ────────────────
+    // The player-contract EngineEventCoordinator owns the engine-event
+    // POLICIES (the buffering watchdog; the coordinator's decision vocabulary)
+    // — raw engine flows in, EngineDecisions out. This VM keeps the
+    // EXECUTION: the shell's fan-out routes each decision to
+    // [executeEngineDecision], which writes uiState / re-resolves. The
+    // player-contract EngineSessionShell owns the session-structural plumbing
+    // both players used to hand-roll (coordinator build/re-arm/dispose, the
+    // intake wiring, the decision fan-out, the one-shot event pipe); this VM
+    // pins its behavior via the shell's Config knobs — previously a
+    // hand-rolled copy of the VOD coordinator's policies:
+
+    /**
+     * Raw-event slice of the current engine ([EngineEventSource]) — null
+     * while no engine exists. Drives the coordinator's policies; never
+     * commanded through. Published in [ensureEngine], nulled in [stop].
+     */
+    private val engineEventSource = MutableStateFlow<EngineEventSource?>(null)
+
+    /**
+     * The mapped-state collector behind the current [engineEventSource]'s
+     * `playbackState`; cancelled when the slice is re-created or the session
+     * is torn down so a RELEASED engine is never retained by an orphaned
+     * `stateIn` job across screen re-entries.
+     */
+    private var enginePlaybackMapJob: Job? = null
+
+    /**
+     * The engine-session shell: the live coordinator inside, disposed in
+     * [stop] and re-armed in [ensureEngine] (only after a dispose does
+     * [EngineSessionShell.reArm] actually build a fresh one). This host's
+     * Config pins:
+     *  - EVERY_BUFFERING_EPISODE watchdog at LIVE_BUFFERING_TIMEOUT_MS — a
+     *    stalled tuner can sit in BUFFERING mid-playback without ever
+     *    raising a PlaybackException, so every episode (re-)arms a fresh
+     *    window (the VOD player pins initial-buffer-only instead).
+     *  - EXTERNAL_REQUEST_ONLY fallback — the engine's own per-load phase
+     *    machine decides WHEN a direct/direct-stream failure falls back;
+     *    the coordinator converts its callback into a decision (unlatched;
+     *    the engine owns the one-shot counting).
+     */
+    private val engineEventShell = EngineSessionShell<LivePlayerEvent>(
+        scope = viewModelScope,
+        engineSources = engineEventSource,
+        onDecision = ::executeEngineDecision,
+        config = EngineSessionShell.Config(
+            coordinator = EngineEventCoordinator.Config(
+                bufferingTimeoutMs = LIVE_BUFFERING_TIMEOUT_MS,
+                watchdogScope = WatchdogScope.EVERY_BUFFERING_EPISODE,
+                fallbackPolicy = FallbackPolicy.EXTERNAL_REQUEST_ONLY,
+            ),
+        ),
+    )
 
     init {
         // Bind the audio seam before anything can create an engine (the
@@ -210,6 +299,59 @@ class LiveTvPlayerViewModel(
             .distinctUntilChanged()
             .onEach { ms -> _state.value = _state.value.copy(controlsTimeoutMs = ms) }
             .launchIn(viewModelScope)
+
+        // PiP auto-exit discharge (the VOD VM's pipDismissed collector): the
+        // host Activity's autoExitPip collector translates requestAutoExitPip
+        // (fired below on engine END/ERROR in PiP) into notifyPipDismissed;
+        // landing here means the window is showing a dead stream and the
+        // screen must close. The ordering (pause → teardown → close → the
+        // defensive latch clear, issue #145) lives on the shared helper —
+        // this host supplies only its teardown list and its close pipe.
+        viewModelScope.dischargePipDismissal(
+            pip = pip,
+            teardown = {
+                engine?.pause()
+                stop()
+            },
+            close = { engineEventShell.emitEvent(LivePlayerEvent.ClosePlayer) },
+        )
+
+        // (The coordinator's decision fan-out lives in [engineEventShell]: it
+        // routes every EngineDecision to [executeEngineDecision] — the
+        // executor the shell was constructed with — and follows the current
+        // coordinator instance across stop()/re-entry re-arms.)
+    }
+
+    /**
+     * The single command funnel (the VideoPlayerUiEvent / AudioPlayerUiEvent
+     * precedent): every user intent the screen expresses arrives as a
+     * [LiveTvPlayerUiEvent] and routes once here to a private handler — the
+     * former per-action public funs. The public surface beyond the funnel is
+     * the state flows, the queries ([engineForRendering], [logoUrlFor]), the
+     * media3 relay [onVideoSizeChanged] and the lifecycle [stop] — pinned by
+     * LiveTvPlayerViewModelOwnershipTest.
+     */
+    fun onEvent(event: LiveTvPlayerUiEvent) {
+        when (event) {
+            is LiveTvPlayerUiEvent.Initialize ->
+                initialize(event.channelId, event.audioStreamIndex, event.subtitleStreamIndex)
+            is LiveTvPlayerUiEvent.ChannelUp -> channelUp(event.audioStreamIndex, event.subtitleStreamIndex)
+            is LiveTvPlayerUiEvent.ChannelDown -> channelDown(event.audioStreamIndex, event.subtitleStreamIndex)
+            is LiveTvPlayerUiEvent.SelectChannelById -> selectChannelById(event.channelId)
+            is LiveTvPlayerUiEvent.ToggleFavorite -> toggleFavorite(event.channelId)
+            is LiveTvPlayerUiEvent.RecordCurrentProgramOnce -> recordCurrentProgramOnce()
+            is LiveTvPlayerUiEvent.RecordCurrentProgramSeries -> recordCurrentProgramSeries()
+            is LiveTvPlayerUiEvent.CancelCurrentProgramTimer -> cancelCurrentProgramTimer()
+            is LiveTvPlayerUiEvent.CancelCurrentProgramSeries -> cancelCurrentProgramSeries()
+            is LiveTvPlayerUiEvent.TogglePlayPause -> togglePlayPause()
+            is LiveTvPlayerUiEvent.SeekToLiveEdge -> seekToLiveEdge()
+            is LiveTvPlayerUiEvent.SeekWithinDvr -> seekWithinDvr(event.positionMs)
+            is LiveTvPlayerUiEvent.PlayFromStart -> playFromStart()
+            is LiveTvPlayerUiEvent.RefreshPosition -> refreshPosition()
+            is LiveTvPlayerUiEvent.ToggleMute -> toggleMute()
+            is LiveTvPlayerUiEvent.Retry -> retry(event.audioStreamIndex, event.subtitleStreamIndex)
+            is LiveTvPlayerUiEvent.SetLiveStreamOption -> setLiveStreamOption(event.option)
+        }
     }
 
     /**
@@ -220,11 +362,19 @@ class LiveTvPlayerViewModel(
      * Idempotent — subsequent calls with the same id are no-ops so
      * recomposition doesn't restart playback.
      */
-    fun initialize(
+    private fun initialize(
         channelId: String,
         audioStreamIndex: Int?,
         subtitleStreamIndex: Int?,
     ) {
+        // Defensive (the VOD VM's initialize posture): the PiP seam is a
+        // process singleton whose one-shot event flags outlive this Activity.
+        // A flag left set by an abnormally torn-down previous session must
+        // never greet the next tune — the fresh screen would react to it
+        // instantly and close (issue #145). Legitimate in-flight dismiss
+        // flows end in stop + close, never a new initialize.
+        pip?.clearPipDismissed()
+        pip?.consumeAutoExitPip()
         // Captured even on a no-op re-init (initialized already true) so the
         // PiP transport's zap mapping always carries the latest route's
         // overrides — a PlayerActivity onNewIntent args swap re-fires this.
@@ -287,7 +437,7 @@ class LiveTvPlayerViewModel(
         }
     }
 
-    fun channelUp(audioStreamIndex: Int? = null, subtitleStreamIndex: Int? = null) {
+    private fun channelUp(audioStreamIndex: Int? = null, subtitleStreamIndex: Int? = null) {
         val channels = _state.value.channels
         if (channels.isEmpty()) {
             // List still loading → defer the zap; it applies once the list
@@ -302,7 +452,7 @@ class LiveTvPlayerViewModel(
         switchTo(next, audioStreamIndex, subtitleStreamIndex)
     }
 
-    fun channelDown(audioStreamIndex: Int? = null, subtitleStreamIndex: Int? = null) {
+    private fun channelDown(audioStreamIndex: Int? = null, subtitleStreamIndex: Int? = null) {
         val channels = _state.value.channels
         if (channels.isEmpty()) {
             // See channelUp: defer while loading, no-op otherwise.
@@ -319,7 +469,7 @@ class LiveTvPlayerViewModel(
      * Tunes the channel whose id matches [channelId]. No-op if the id is not
      * in the current channel list. Used by the in-player channel list sheet.
      */
-    fun selectChannelById(channelId: String) {
+    private fun selectChannelById(channelId: String) {
         val channels = _state.value.channels
         val index = channels.indexOfFirst { it.id == channelId }
         if (index !in channels.indices) return
@@ -331,7 +481,7 @@ class LiveTvPlayerViewModel(
      * via [UserPreferencesStore.setFavoriteChannels]; the `init` observer
      * propagates the change into [_state].
      */
-    fun toggleFavorite(channelId: String) {
+    private fun toggleFavorite(channelId: String) {
         viewModelScope.launch {
             val current = appRuntimeStateStore.state.first().favoriteChannels
             val updated = if (channelId in current) current - channelId else current + channelId
@@ -340,9 +490,9 @@ class LiveTvPlayerViewModel(
     }
 
     // ── In-player recording ──
-    // The shared [RecordActions] choreography (livetv conveyor's ONE record
+    // The shared [RecordActions] choreography (livetv's ONE record
     // flow), adapted to this screen's feedback surface exactly as
-    // ChannelDetailViewModel does it: one-shot messages on [messageChannel]
+    // ChannelDetailViewModel does it: one-shot messages on [events]
     // (Resource success/canceled, Raw failure with the legacy fallback
     // literals) and a re-fetch of the current channel's program window after
     // every successful action so the Record ↔ Cancel sheet state follows the
@@ -352,34 +502,36 @@ class LiveTvPlayerViewModel(
     private val recordActions = RecordActions(liveTvRepository, viewModelScope) { outcome ->
         when (outcome) {
             is RecordOutcome.Success -> {
-                messageChannel.trySend(outcome.request.action.successMessage())
+                engineEventShell.emitEvent(LivePlayerEvent.Message(outcome.request.action.successMessage()))
                 viewModelScope.launch { refreshProgramsForCurrentChannel() }
             }
             is RecordOutcome.Error ->
-                messageChannel.trySend(
-                    LivePlayerMessage.Raw(outcome.message ?: outcome.request.action.failureFallback())
+                engineEventShell.emitEvent(
+                    LivePlayerEvent.Message(
+                        LivePlayerMessage.Raw(outcome.message ?: outcome.request.action.failureFallback())
+                    )
                 )
             is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
         }
     }
 
     /** Schedules a single-episode timer for the current program. */
-    fun recordCurrentProgramOnce() {
+    private fun recordCurrentProgramOnce() {
         _state.value.currentProgram?.let(recordActions::recordOnce)
     }
 
     /** Schedules a series timer rooted at the current program. */
-    fun recordCurrentProgramSeries() {
+    private fun recordCurrentProgramSeries() {
         _state.value.currentProgram?.let(recordActions::recordSeries)
     }
 
     /** Cancels the single timer on the current program (if one is set). */
-    fun cancelCurrentProgramTimer() {
+    private fun cancelCurrentProgramTimer() {
         _state.value.currentProgram?.let { recordActions.cancelTimer(it) }
     }
 
     /** Cancels the series timer on the current program (if one is set). */
-    fun cancelCurrentProgramSeries() {
+    private fun cancelCurrentProgramSeries() {
         _state.value.currentProgram?.let { recordActions.cancelSeries(it) }
     }
 
@@ -417,27 +569,13 @@ class LiveTvPlayerViewModel(
     /**
      * Resolves a playable live URL for [channel] and starts playback.
      *
-     * end-to-end flow:
-     * 1. Always resolve under [PlaybackMode.AUTO] regardless of the user's
-     * playback pref — live tuners do not support static direct play
-     * (FORCE_DIRECT_PLAY disables direct stream + transcode, leaving
-     * the server no playable method for a live source) and forcing
-     * transcode up-front breaks tuners that only offer direct stream.
-     * 2. Call `fetchPlaybackInfo` with `autoOpenLiveStream = true` and a
-     * **blank** `mediaSourceId` (live sources have a server-generated
-     * source id distinct from the channel id; passing the channel id as
-     * the source id causes the server to return an empty source list).
-     * 3. Pick the first source from the response.
-     * 4. Try `resolvePlayback` first — it walks the full Direct Play /
-     * Direct Stream / Transcode decision tree and returns null only if
-     * the server offers no playable method.
-     * 5. If `resolvePlayback` returns null, fall back to building a direct
-     * stream URL directly via `getStreamUrl(itemId, sourceId,
-     * liveStreamId)` (the VOD path's `PlayerSessionManager.loadOnline`
-     * does the same fallback). The server has already opened the tuner
-     * session via `autoOpenLiveStream=true`, so the URL works even when
-     * the source flags are all false.
-     * 6. If we still have no URL, surface the error with the actual cause.
+     * The resolution choreography (the full decision tree, the DIRECT_STREAM
+     * probe-override and the fetchPlaybackInfo/getStreamUrl fallback ladder —
+     * end-to-end semantics including the mandatory AUTO mode and the blank
+     * mediaSourceId live on [LiveSessionManager.resolve]). This body keeps
+     * the tune choreography: surface the resolution failure, log the resolved
+     * pick, mirror the play method into the chrome, load the engine, arm PiP
+     * and refresh the program window.
      */
     private suspend fun playChannel(
         channel: LiveTvChannel,
@@ -445,7 +583,7 @@ class LiveTvPlayerViewModel(
         subtitleStreamIndex: Int?,
     ) {
         val playback = playbackStore.playback.first()
-        val resolved = resolveLiveStream(
+        val resolved = sessionManager.resolve(
             channel = channel,
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
@@ -494,143 +632,32 @@ class LiveTvPlayerViewModel(
         loadPrograms(channel.id)
     }
 
-    /**
-     * Resolves a live stream for [channel] under [option]. Tries the full
-     * decision tree (`resolvePlayback`), then falls back to a direct stream
-     * URL built from the first server-returned source. Returns null only
-     * when both paths fail.
-     */
-    private suspend fun resolveLiveStream(
-        channel: LiveTvChannel,
-        audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?,
-        option: LiveStreamOption,
-        playerType: com.raulshma.jellyplay.core.model.PlayerType,
-    ): ResolvedPlayback? {
-        // Pass mediaSourceId = "" so the server does not filter on a
-        // channel-id-as-source-id. mode = AUTO is inert here because the
-        // live flag table is driven by `liveStreamOption`.
-        val resolved = playbackRepository.resolvePlayback(
-            itemId = channel.id,
-            mediaSourceId = "",
-            startTimeTicks = 0L,
-            audioStreamIndex = audioStreamIndex,
-            subtitleStreamIndex = subtitleStreamIndex,
-            maxStreamingBitrateBits = null,
-            mode = PlaybackMode.AUTO,
-            playerType = playerType,
-            liveStreamOption = option,
-        )
-        if (resolved != null) {
-            // DIRECT_STREAM probe-override policy (LiveStreamResolution,
-            // pinned by LiveStreamResolutionTest): when the user asked for
-            // Direct Stream but the server resolved a transcode, the
-            // live-source probe failed even though the tuner session is
-            // live — ignore the verdict and fall to the liveStreamId ladder
-            // below; AUTO/TRANSCODE options accept the server's pick.
-            if (shouldIgnoreServerTranscodeVerdict(option, resolved.playMethod)) {
-                Log.w(
-                    TAG,
-                    "Server resolved transcode for ${channel.name} despite " +
-                        "DIRECT_STREAM request (probe failed); forcing direct stream"
-                )
-            } else {
-                return resolved
-            }
-        } else {
-            Log.w(TAG, "resolvePlayback returned null for ${channel.name} (option=$option); falling back to fetchPlaybackInfo")
-        }
-
-        // Fallback: fetch PlaybackInfo directly and build a direct stream URL
-        // from the first source's liveStreamId. Mirrors the VOD
-        // PlayerSessionManager.loadOnline fallback.
-        val info: PlaybackInfoResult = playbackRepository
-            .fetchPlaybackInfo(
-                itemId = channel.id,
-                mediaSourceId = "",
-                startTimeTicks = 0L,
-                audioStreamIndex = audioStreamIndex,
-                subtitleStreamIndex = subtitleStreamIndex,
-                maxStreamingBitrateBits = null,
-                mode = PlaybackMode.AUTO,
-                playerType = playerType,
-                liveStreamOption = option,
-            )
-            .getOrNull() ?: run {
-            Log.e(TAG, "fetchPlaybackInfo failed for ${channel.name}")
-            return null
-        }
-
-        val source = info.mediaSources.firstOrNull() ?: run {
-            Log.e(TAG, "fetchPlaybackInfo returned no media sources for ${channel.name}")
-            return null
-        }
-        Log.i(
-            TAG,
-            "Source for ${channel.name}: id=${source.id}, " +
-                "directPlay=${source.supportsDirectPlay}, " +
-                "directStream=${source.supportsDirectStream}, " +
-                "transcode=${source.supportsTranscoding}, " +
-                "transcodeUrl=${source.transcodeUrl != null}, " +
-                "liveStreamId=${source.liveStreamId != null}, " +
-                "requiresOpening=${source.requiresOpening}"
-        )
-
-        // Pure capability ladder + play-method fold (LiveStreamResolution,
-        // pinned by LiveStreamResolutionTest); this VM keeps only the repo
-        // URL call (injected as the builder) and the logging.
-        val resolution = resolveLiveStreamResolution(
-            source = source,
-            buildStreamUrl = { mediaSourceId, liveStreamId ->
-                playbackRepository.getStreamUrl(
-                    itemId = channel.id,
-                    mediaSourceId = mediaSourceId,
-                    startTimeTicks = 0L,
-                    liveStreamId = liveStreamId,
-                )
-            },
-        )
-        val stream = when (resolution) {
-            is LiveStreamResolution.Resolved -> resolution
-            LiveStreamResolution.NoPlayableMethod -> {
-                Log.e(TAG, "No playable method offered for ${channel.name}")
-                return null
-            }
-        }
-        if (stream.via == LiveStreamResolution.Via.LIVE_STREAM_ID) {
-            Log.w(TAG, "All playability flags false for ${channel.name}; attempting direct stream via liveStreamId")
-        }
-        if (stream.url.isBlank()) {
-            Log.e(TAG, "Resolved URL is blank for ${channel.name}")
-            return null
-        }
-        return ResolvedPlayback(
-            mediaSourceId = source.id,
-            streamUrl = stream.url,
-            playMethod = stream.playMethod,
-            playSessionId = info.playSessionId,
-            maxStreamingBitrate = null,
-            container = source.container,
-        )
-    }
-
     private fun ensureEngine(): LivePlayerEngine {
         val existing = engine
         if (existing != null) return existing
         val config = LiveEngineConfig(
-            authToken = playbackRepository.getAccessToken(),
+            authToken = playbackIdentity.accessToken(),
         )
-        val newEngine = engineFactory.create(config, ::onTranscodeFallback)
+        val newEngine = engineFactory.create(config, ::onEngineFallbackRequested)
         observeEngine(newEngine)
         engine = newEngine
+        // Arm the engine-event policy core (shared with the VOD player's
+        // PlaybackSession) BEFORE publishing the engine's raw-event slice, so
+        // no policy window is missed between engine creation and collection.
+        // The shell builds its coordinator eagerly over [engineEventSource];
+        // this re-arm is a no-op until [stop] disposed it — the same
+        // re-arm-on-entry shape the VOD session applies per initialize.
+        // This host's pins (EVERY_BUFFERING_EPISODE + EXTERNAL_REQUEST_ONLY)
+        // live on the shell's Config at the declaration site.
+        engineEventShell.reArm()
+        engineEventSource.value = newEngine.toEngineEventSource()
         // Install becoming-noisy + audio-focus only once for the (reused)
         // engine instance, mirroring the VOD player. They persist across
         // channel switches and are torn down in [stop].
         playerAudioLifecycle?.onEngineCreated()
-        // Re-arm the PiP transport alongside every engine creation: [stop]
-        // runs PipController.reset() which nulls it, and this (reused,
-        // activity-scoped) VM's init never re-runs on a screen re-entry — so
-        // the bridge must ride the engine lifecycle or PiP controls go dead.
+        // Re-arm the PiP transport with every engine creation: [stop] nulls
+        // it via PipController.reset() — the re-arm lifecycle rationale lives
+        // on [reArmPipTransport].
         registerPipTransport()
         return newEngine
     }
@@ -678,31 +705,10 @@ class LiveTvPlayerViewModel(
             ) {
                 pip?.requestAutoExitPip()
             }
-            // Buffering watchdog: arm a timeout on entering BUFFERING, cancel it
-            // on any other state. If the tuner stalls without a PlaybackException,
-            // the timeout surfaces a retryable error so the user isn't stuck on
-            // a spinning rebuffer. Mirrors the VOD player's initial-buffer guard.
-            when (s) {
-                LiveEngineState.BUFFERING -> {
-                    if (bufferingWatchdogJob == null) {
-                        bufferingWatchdogJob = viewModelScope.launch {
-                            delay(LIVE_BUFFERING_TIMEOUT_MS)
-                            if (eng.state.value == LiveEngineState.BUFFERING) {
-                                _state.value = _state.value.copy(
-                                    isBuffering = false,
-                                    errorMessage = LivePlayerMessage.Resource(
-                                        Res.string.live_error_buffering_timeout
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                }
-                else -> {
-                    bufferingWatchdogJob?.cancel()
-                    bufferingWatchdogJob = null
-                }
-            }
+            // (The buffering watchdog arm/cancel that used to live here moved
+            // to the shared EngineEventCoordinator — its every-episode scope
+            // re-arms on BUFFERING and its timeout decision lands in
+            // [executeEngineDecision].)
         }.launchIn(viewModelScope)
         eng.isPlaying.onEach {
             _state.value = _state.value.copy(isPlaying = it)
@@ -742,15 +748,100 @@ class LiveTvPlayerViewModel(
     }
 
     /**
-     * Invoked by the engine on a direct/direct stream failure. Re-resolves
-     * via `resolveLiveStream` with [LiveStreamOption.TRANSCODE] so the server
-     * hands back a transcoding URL (`onPlayerError` path).
+     * Executes one [EngineDecision] from the shared coordinator — what a
+     * decision *does* (uiState writes, the transcode re-resolve/reload). The
+     * live engine carries no `EngineError` flow and no subtitle events, so
+     * the watchdog timeout is the only decision this host receives today.
+     */
+    private fun executeEngineDecision(decision: EngineDecision) {
+        when (decision) {
+            is EngineDecision.ShowError -> {
+                // The ONLY ShowError the coordinator can emit here is the
+                // buffering-watchdog timeout (clearBuffering = true — the VOD
+                // error-dialog path rides the engine error flow live doesn't
+                // have): lift the stuck rebuffer spinner and surface the
+                // retryable timeout error.
+                if (decision.clearBuffering) {
+                    _state.value = _state.value.copy(
+                        isBuffering = false,
+                        errorMessage = LivePlayerMessage.Resource(
+                            Res.string.live_error_buffering_timeout
+                        ),
+                    )
+                }
+            }
+            is EngineDecision.FallbackToTranscode ->
+                // The engine's phase machine latched the direct/direct-stream
+                // failure and requested the re-resolve; execution unchanged.
+                onTranscodeFallback()
+            // ENDED handling (the engineState/isBuffering writes and the PiP
+            // auto-exit shared with ERROR) stays in observeEngine's state
+            // collector — the coordinator's ENDED decision is redundant here.
+            EngineDecision.PlaybackEnded -> Unit
+            // Pass-out protection is a VOD preference; live arms no hours
+            // budget, so the poller is disabled and this never fires.
+            EngineDecision.PassOutPause -> Unit
+            // The live engine produces no subtitle events.
+            is EngineDecision.InformUser -> Unit
+        }
+    }
+
+    /**
+     * The engine's raw-event slice feeding the coordinator (candidate C4): a
+     * per-tune fresh [EngineEventSource] over this engine's flows. The tuner
+     * engine has no `EngineError` channel (errors surface as an ERROR state +
+     * message/detail flows, handled in [observeEngine]) and no subtitle
+     * events — the watchdog is the only policy those defaults leave armed.
+     */
+    private fun LivePlayerEngine.toEngineEventSource(): EngineEventSource {
+        // Cancel the previous engine's mapped-state collector first: the
+        // released engine must not be retained by an orphaned collector
+        // across screen re-entries (the activity-scoped VM outlives engines).
+        enginePlaybackMapJob?.cancel()
+        val mapped = MutableStateFlow(EnginePlaybackState.IDLE)
+        enginePlaybackMapJob = viewModelScope.launch {
+            state.map { it.toEnginePlaybackState() }.collect { mapped.value = it }
+        }
+        return EngineEventSource(isPlaying = isPlaying, playbackState = mapped)
+    }
+
+    /**
+     * Positional one-to-one map onto the shared engine-state vocabulary — an
+     * exhaustive `when` so a state added to either enum breaks this site at
+     * compile time instead of silently mis-mapping.
+     */
+    private fun LiveEngineState.toEnginePlaybackState(): EnginePlaybackState = when (this) {
+        LiveEngineState.IDLE -> EnginePlaybackState.IDLE
+        LiveEngineState.BUFFERING -> EnginePlaybackState.BUFFERING
+        LiveEngineState.READY -> EnginePlaybackState.READY
+        LiveEngineState.ENDED -> EnginePlaybackState.ENDED
+        LiveEngineState.ERROR -> EnginePlaybackState.ERROR
+    }
+
+    /**
+     * Engine-side fallback trigger (installed via [LiveEngineFactory]): the
+     * engine's per-load phase machine latched a direct/direct-stream failure
+     * and requests the transcode re-resolve. Routed through the shared
+     * coordinator's intake so the request becomes a normal
+     * [EngineDecision.FallbackToTranscode] — one decision intake, the same
+     * shape the VOD player's errors take — executed by
+     * [executeEngineDecision] → [onTranscodeFallback].
+     */
+    private fun onEngineFallbackRequested() {
+        engineEventShell.onTranscodeFallbackRequested()
+    }
+
+    /**
+     * Executes the transcode fallback: re-resolves via
+     * [LiveSessionManager.resolve] with [LiveStreamOption.TRANSCODE] so the
+     * server hands back a transcoding URL, and reloads the engine
+     * (`onPlayerError` path).
      */
     private fun onTranscodeFallback() {
         val channel = _state.value.currentChannel ?: return
         viewModelScope.launch {
             val playback = playbackStore.playback.first()
-            val resolved = resolveLiveStream(
+            val resolved = sessionManager.resolve(
                 channel = channel,
                 audioStreamIndex = null,
                 subtitleStreamIndex = null,
@@ -787,7 +878,7 @@ class LiveTvPlayerViewModel(
     }
 
     private suspend fun loadPrograms(channelId: String) {
-        val now = Clock.System.now()
+        val now = epochMillisSource.nowInstant()
         val end = now + PROGRAM_LOOKAHEAD_HOURS.hours
         val programs = liveTvRepository.getLiveTvPrograms(
             channelId = channelId,
@@ -797,39 +888,22 @@ class LiveTvPlayerViewModel(
             startDateUtc = now.toString(),
             endDateUtc = end.toString(),
         ).getOrNull().orEmpty()
-        val parsed = programs.map { p ->
-            Triple(
-                p,
-                parseInstantOrNull(p.startDate),
-                parseInstantOrNull(p.endDate),
-            )
-        }
-        val current = parsed.firstOrNull { (_, start, finish) ->
-            start != null && finish != null && start <= now && now < finish
-        }?.first
-        val next = parsed.firstOrNull { (p, start, _) ->
-            start != null && start > now && p.id != current?.id
-        }?.first
+        // LiveNowWindow: the one canonical now/next fold (lenient parse +
+        // half-open airing window) — the former strict-parse Triple scan died
+        // with the C10 timestamp-vocabulary unification.
+        val (current, next) = LiveTvProgramWindow.currentAndNext(programs, now)
         _state.value = _state.value.copy(currentProgram = current, nextProgram = next)
     }
 
-    /**
-     * Pure ISO-8601 parse guard — non-suspend on purpose (the ratchet keeps
-     * bare runCatching out of suspend bodies): an unparseable program instant
-     * degrades to null and that program can't be picked as current/next.
-     */
-    private fun parseInstantOrNull(raw: String?): Instant? =
-        raw?.let { runCatching { Instant.parse(it) }.getOrNull() }
-
-    fun togglePlayPause() {
+    private fun togglePlayPause() {
         engine?.let { if (it.isPlaying.value) it.pause() else it.play() }
     }
 
-    fun seekToLiveEdge() {
+    private fun seekToLiveEdge() {
         engine?.seekToLiveEdge()
     }
 
-    fun seekWithinDvr(positionMs: Long) {
+    private fun seekWithinDvr(positionMs: Long) {
         engine?.seekTo(positionMs)
     }
 
@@ -840,7 +914,7 @@ class LiveTvPlayerViewModel(
      * streams with no DVR window there is no "start" to return to, so this is
      * a no-op — the UI gates the action on `canSeek`.
      */
-    fun playFromStart() {
+    private fun playFromStart() {
         // Guard: only restart when a DVR window exists. Mirrors the seek-bar
         // gate (LiveSeekBar returns early when durationMs <= 0).
         if (_durationMs.value <= 0L) return
@@ -848,7 +922,7 @@ class LiveTvPlayerViewModel(
     }
 
     /** Polled by the screen every 500ms while playing to refresh seek-bar state. */
-    fun refreshPosition() {
+    private fun refreshPosition() {
         engine?.refreshLiveWindow()
     }
 
@@ -858,25 +932,25 @@ class LiveTvPlayerViewModel(
      * is no audio seam / attached platform player (e.g. a future non-Exo
      * engine, or a platform without one).
      */
-    fun toggleMute() {
+    private fun toggleMute() {
         val audio = playerAudioLifecycle ?: return
         val currentVolume = audio.playerVolume() ?: return
         if (_state.value.isMuted) {
             // Restore the pre-mute level captured when muting; never slam to a
             // fixed default. Null (e.g. mute set externally, or player swapped)
             // means leave the current volume untouched.
-            preMuteVolume?.let { audio.setPlayerVolume(it) }
-            preMuteVolume = null
+            muteMemory.restorationVolume()?.let(audio::setPlayerVolume)
+            muteMemory = muteMemory.onUnmute()
             _state.value = _state.value.copy(isMuted = false)
         } else {
             // Capture the raw player volume so unmute restores it exactly.
-            preMuteVolume = currentVolume
+            muteMemory = muteMemory.onMute(currentVolume)
             audio.setPlayerVolume(0f)
             _state.value = _state.value.copy(isMuted = true)
         }
     }
 
-    fun retry(
+    private fun retry(
         audioStreamIndex: Int? = null,
         subtitleStreamIndex: Int? = null,
     ) {
@@ -891,7 +965,7 @@ class LiveTvPlayerViewModel(
      * the old session is stop-reported, the new option is persisted, and the
      * engine reloads the re-resolved URL. No-op if no channel is active.
      */
-    fun setLiveStreamOption(option: LiveStreamOption) {
+    private fun setLiveStreamOption(option: LiveStreamOption) {
         val channel = _state.value.currentChannel ?: return
         // Reflect the choice in UI state immediately (ahead of the async
         // DataStore -> preferences collector) so the option sheet keeps the
@@ -914,17 +988,19 @@ class LiveTvPlayerViewModel(
 
     /**
      * Arms the PiP transport bridge so the host Activity can dispatch PiP
-     * remote-action intents to the live engine. Live mapping: PLAY/PAUSE hit
-     * the engine directly; the window's rewind/forward SKIP actions zap
-     * channel-down/up (the live-TV PiP convention — a DVR micro-seek is
-     * meaningless on pure-live streams, and [seekWithinDvr] is already a
-     * no-op there), re-resolving with the route's preferred stream overrides;
-     * NEXT stays unmapped (live has no "next episode", so pipHasNext is never
-     * set and the Activity never renders that action).
+     * remote-action intents to the live engine. The null-controller guard and
+     * assignment mechanics (plus the Activity-scoped-VM re-arm rationale)
+     * live in [reArmPipTransport]; this body owns only the live mapping:
+     * PLAY/PAUSE hit the engine directly (no SyncPlay/cast routing exists on
+     * live); the window's rewind/forward SKIP actions zap channel-down/up
+     * (the live-TV PiP convention — a DVR micro-seek is meaningless on
+     * pure-live streams, and [seekWithinDvr] is already a no-op there),
+     * re-resolving with the route's preferred stream overrides; NEXT stays
+     * unmapped (live has no "next episode", so pipHasNext is never set and
+     * the Activity never renders that action).
      */
     private fun registerPipTransport() {
-        val pip = pip ?: return
-        pip.pipTransport = PipTransport { action ->
+        reArmPipTransport(pip) { action ->
             when (action) {
                 PipAction.PLAY -> engine?.play()
                 PipAction.PAUSE -> engine?.pause()
@@ -973,8 +1049,13 @@ class LiveTvPlayerViewModel(
         // Tear down audio-focus + becoming-noisy before releasing the engine so
         // the listeners never dereference a torn-down player (idempotent).
         playerAudioLifecycle?.onReleased()
-        bufferingWatchdogJob?.cancel()
-        bufferingWatchdogJob = null
+        // Tear down the engine-event shell BEFORE releasing the engine so no
+        // policy collector (the buffering watchdog included) observes a
+        // released engine — the same order the VOD session's release applies.
+        engineEventShell.dispose()
+        enginePlaybackMapJob?.cancel()
+        enginePlaybackMapJob = null
+        engineEventSource.value = null
         engine?.release()
         engine = null
         initialized = false
@@ -984,7 +1065,7 @@ class LiveTvPlayerViewModel(
         // Clear the captured pre-mute volume so a stale value from the previous
         // player is never restored on a later unmute (e.g. mute → leave screen →
         // return to a fresh engine). isMuted is reset via the fresh uiState below.
-        preMuteVolume = null
+        muteMemory = muteMemory.onStopped()
         // Full PiP teardown: nulls the transport, disarms auto-enter and drops
         // the aspect/playing mirrors so a stale armed flag can't float the next
         // screen's window into PiP. The transport re-arms in [ensureEngine] on

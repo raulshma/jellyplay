@@ -8,8 +8,8 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.livetv.LIVE_TV_STALENESS_INTERVAL_MS
-import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
@@ -39,7 +39,7 @@ data class ProgramsUiState(
  * Drives the Programs tab — six category rows fetched in parallel from
  * `GET /LiveTv/Programs/Recommended`, exactly matching jellyfin-web's
  * `livetvsuggested.js` reload(): On Now (isAiring), then Shows/Movies/Sports/
- * Kids/News (hasAired=false + the category flag). Implements the web app's
+ * Kids/News (hasAired=false + the category flag). Implements jellyfin-web's
  * 5-minute full-render throttle: a re-entry within
  * [LIVE_TV_STALENESS_INTERVAL_MS] only refreshes the "On Now" row.
  */
@@ -79,7 +79,7 @@ class ProgramsViewModel(
         launch {
             val now = timeSource.nowEpochMillis()
             val fullRender = now - lastFullRender > LIVE_TV_STALENESS_INTERVAL_MS
-            LiveTvLoad.load(
+            loadInto(
                 start = {
                     // The load flavour picks the flag: a full render raises
                     // isLoading, a throttled re-entry raises refreshing — both

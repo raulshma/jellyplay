@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 
 /**
- * Receiver scope for [PreferencesEditor.edit], exposing the 18 domain stores +
+ * Receiver scope for [PreferencesEditor.edit], exposing the 19 domain stores +
  * [AppRuntimeStateStore] so write-side call sites reach the owning store
  * directly instead of going through `UserPreferencesStore` forwarding setters.
  *
@@ -53,5 +53,7 @@ class PreferencesEditScope constructor(
     val subtitle: SubtitleLanguageStore,
     val syncPlayCast: SyncPlayCastStore,
     val experimental: ExperimentalStore,
+    /** Per-content-type volume memory (settings toggle + levels). */
+    val volumeProfile: com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore,
     val appRuntimeState: AppRuntimeStateStore,
 )

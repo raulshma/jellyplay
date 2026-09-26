@@ -48,7 +48,7 @@
     <string name="admin_stop">Ferma</string>
     <string name="admin_stop_session_cd">Ferma riproduzione</string>
     <string name="admin_stop_session_title">Fermare la riproduzione?</string>
-    <string name="admin_stop_session_body">Fermare il media attualmente in riproduzione su \"%1$s\"?</string>
+    <string name="admin_stop_session_body">Fermare il media attualmente in riproduzione su "%1$s"?</string>
     <string name="admin_run">Esegui</string>
 
     <!-- Relative time -->
@@ -67,8 +67,8 @@
 
     <!-- AccessDeniedScreen -->
     <string name="admin_access_denied_title">Accesso negato</string>
-    <string name="admin_access_denied_body">Non hai l\'autorizzazione per accedere a quest\'area.</string>
-    <string name="admin_access_denied_contact">Contatta l\'amministratore del server se ritieni sia un errore.</string>
+    <string name="admin_access_denied_body">Non hai l'autorizzazione per accedere a quest'area.</string>
+    <string name="admin_access_denied_contact">Contatta l'amministratore del server se ritieni sia un errore.</string>
 
     <!-- AuditHistoryTab -->
     <string name="admin_no_audit_history">Nessuno storico di audit</string>
@@ -106,7 +106,7 @@
     <string name="admin_search_plugins">Cerca plugin…</string>
     <string name="admin_installed">Installato</string>
     <string name="admin_install_third_party_title">Installare plugin di terzi?</string>
-    <string name="admin_install_third_party_body">I plugin hanno lo stesso accesso al sistema del tuo server Jellyfin. Installa plugin solo da fonti attendibili. Continuare l\'installazione di %1$s?</string>
+    <string name="admin_install_third_party_body">I plugin hanno lo stesso accesso al sistema del tuo server Jellyfin. Installa plugin solo da fonti attendibili. Continuare l'installazione di %1$s?</string>
     <string name="admin_latest_version">Ultima: v%1$s</string>
     <string name="admin_installing">Installazione di %1$s</string>
     <string name="admin_add_repository_title">Aggiungi repository</string>
@@ -163,7 +163,7 @@
     <string name="admin_new_password">Nuova password</string>
     <string name="admin_discard">Scarta</string>
     <string name="admin_save_changes">Salva modifiche</string>
-    <string name="admin_could_not_reload">Impossibile ricaricare l\'utente aggiornato</string>
+    <string name="admin_could_not_reload">Impossibile ricaricare l'utente aggiornato</string>
 
     <!-- User detail: tabs / sections -->
     <string name="admin_sign_in">Accesso</string>
@@ -191,7 +191,7 @@
     <string name="admin_hidden">Nascosto</string>
     <string name="admin_hidden_desc">Nascondi questo utente dalla schermata di accesso</string>
     <string name="admin_allow_preference_access">Consenti accesso alle preferenze</string>
-    <string name="admin_allow_preference_access_desc">Lascia che l\'utente modifichi le proprie preferenze</string>
+    <string name="admin_allow_preference_access_desc">Lascia che l'utente modifichi le proprie preferenze</string>
     <string name="admin_max_parental_rating">Classificazione genitori max.</string>
     <string name="admin_max_parental_rating_desc">Nascondi i contenuti sopra la classificazione scelta.</string>
     <string name="admin_block_unrated">Blocca contenuti non classificati</string>
@@ -349,7 +349,7 @@
     <string name="admin_no_schedules">Nessun orario impostato</string>
     <string name="admin_no_libraries_found">Nessuna libreria trovata</string>
     <string name="admin_cannot_change_own_admin">Impossibile modificare il proprio stato di amministratore</string>
-    <string name="admin_cannot_remove_last_admin">Impossibile rimuovere l\'ultimo amministratore</string>
+    <string name="admin_cannot_remove_last_admin">Impossibile rimuovere l'ultimo amministratore</string>
     <string name="admin_cannot_disable_self">Non puoi disattivare te stesso</string>
     <string name="admin_disabled_cannot_sign_in">Gli utenti disattivati non possono accedere</string>
     <string name="admin_no_limit">Nessun limite</string>
@@ -357,7 +357,7 @@
     <!-- Scheduled task trigger chips -->
     <string name="admin_trigger_daily">Giornaliero</string>
     <string name="admin_trigger_weekly">Settimanale</string>
-    <string name="admin_trigger_on_startup">All\'avvio</string>
+    <string name="admin_trigger_on_startup">All'avvio</string>
     <string name="admin_trigger_every_hours">Ogni %1$dh</string>
     <string name="admin_trigger_every_days">Ogni %1$dd</string>
 
@@ -403,5 +403,5 @@
 
     <string name="admin_plugin_config_unavailable">La configurazione del plugin non è disponibile su questa piattaforma.</string>
 
-    <string name="admin_no_delete_permission">Il tuo account non ha l\'autorizzazione per eliminare contenuti. Contatta l\'amministratore del server.</string>
+    <string name="admin_no_delete_permission">Il tuo account non ha l'autorizzazione per eliminare contenuti. Contatta l'amministratore del server.</string>
 </resources>

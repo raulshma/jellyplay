@@ -7,9 +7,9 @@ import kotlin.test.assertTrue
 
 /**
  * Pins for [desktopBackKeyDecision] — the exact truth table the two former
- * hand-copies (DesktopAppRoot's scaffold Row, DesktopSignedOutAuthHost)
- * implemented: Esc / Alt+Left pop at depth > 1, plain Left is never back,
- * and ANY key at the root (depth <= 1) is refused.
+ * hand-copies (DesktopAppRoot's scaffold Row, the signed-out shell's shared
+ * SignedOutAuthHost frame) implemented: Esc / Alt+Left pop at depth > 1,
+ * plain Left is never back, and ANY key at the root (depth <= 1) is refused.
  */
 class DesktopBackKeyDecisionTest {
 

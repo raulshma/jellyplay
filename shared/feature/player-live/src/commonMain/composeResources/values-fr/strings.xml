@@ -24,7 +24,7 @@
     <string name="live_record_title">Enregistrer</string>
     <string name="live_record_once">Enregistrer une fois</string>
     <string name="live_record_series">Enregistrer la série</string>
-    <string name="live_cancel_recording">Annuler l\'enregistrement</string>
+    <string name="live_cancel_recording">Annuler l'enregistrement</string>
     <string name="live_cancel_series">Annuler la série</string>
     <string name="live_record_success">Enregistrement planifié</string>
     <string name="live_record_canceled">Enregistrement annulé</string>

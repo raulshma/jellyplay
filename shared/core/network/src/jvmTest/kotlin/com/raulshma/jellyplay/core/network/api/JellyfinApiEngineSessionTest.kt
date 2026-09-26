@@ -140,8 +140,7 @@ class JellyfinApiEngineSessionTest {
 
     @Test
     fun `requireUserId throws Not authenticated and currentUserId is null without a session`() {
-        // The engine-side twin of the wasm support's requireCurrentUser():
-        // same exception type, same message.
+        // requireUserId(): IllegalStateException, message "Not authenticated".
         val engine = newEngine()
 
         assertNull(engine.currentUserId())

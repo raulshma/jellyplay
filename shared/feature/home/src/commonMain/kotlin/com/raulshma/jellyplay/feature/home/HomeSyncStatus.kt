@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Web seam over core:data's jvmShared `SyncStatusStateHolder`
+ * Common seam over core:data's jvmShared `SyncStatusStateHolder`
  * (+ its Factory) — the home screen's pending-sync surface: outbox badge
  * count, sync-details sheet rows, per-row resolved metadata, the manual
  * drain trigger and the offline→online drain gate. The holder's constructor
@@ -17,14 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
  * exactly the holder's consumer-facing surface, the jvmShared factory
  * adapter builds the REAL holder via the real `SyncStatusStateHolderFactory`
  * (android/desktop behavior unchanged — the sheet, badge and drain flows
- * are the holder's own), and the wasmJs factory builds an honestly idle
- * holder.
- *
- * Web behavior: the browser has no offline playback outbox (no download
- * pipeline exists to queue watch-progress events), so the wasm holder keeps
- * the count at 0, the entries/details empty, [syncNow] inert and
- * [awaitOutboxDrained] trivially true (there is genuinely nothing pending —
- * never a fabricated pending set).
+ * are the holder's own).
  */
 interface HomeSyncStatus {
 
@@ -66,14 +59,12 @@ fun interface HomeSyncStatusFactory {
 }
 
 /**
- * Web seam over core:data's jvmShared `NewsletterTriggerManager`
+ * Common seam over core:data's jvmShared `NewsletterTriggerManager`
  * — the one read the home banner makes (is this week's newsletter issue due?).
  * The manager computes weekday windows through java.time, so commonMain
  * cannot name the class. NewsletterBanner gates on the single flow;
  * the jvmShared actual delegates to the real manager (android/desktop
- * unchanged), and the wasmJs actual never shows the banner (the web shell
- * has no newsletter notification pipeline — genuinely false, not a
- * fabricated due-state).
+ * unchanged).
  */
 fun interface HomeNewsletterGate {
 

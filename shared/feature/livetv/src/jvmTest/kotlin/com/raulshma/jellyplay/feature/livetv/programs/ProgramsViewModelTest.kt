@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.feature.livetv.programs
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.clearMocks
@@ -19,8 +19,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import java.time.LocalDate
-import java.time.ZoneId
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -40,7 +38,7 @@ class ProgramsViewModelTest {
     private lateinit var viewModel: ProgramsViewModel
 
     /** The fake clock behind the full-render throttle; tests move [FakeTimeSource.nowMs] across its boundary. */
-    private val fakeTimeSource = FakeTimeSource()
+    private val fakeTimeSource = FakeTimeSource(BOOT_MS)
 
     @BeforeTest
     fun setUp() {
@@ -304,18 +302,6 @@ class ProgramsViewModelTest {
         assertEquals("http://img/p1", viewModel.getImageUrl("p1", "tag"))
 
         verify(exactly = 1) { imageUrlProvider.getImageUrlOrNull("p1", "tag") }
-    }
-
-    /**
-     * Controllable [TimeSource] on a fixed epoch well past the zero start of
-     * the throttle's lastFullRender stamp (the HomeRefresher fake idiom) —
-     * the init load is a full render, and tests move [nowMs] across the
-     * 5-minute boundary relative to [BOOT_MS].
-     */
-    private class FakeTimeSource(var nowMs: Long = BOOT_MS) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 
     private companion object {

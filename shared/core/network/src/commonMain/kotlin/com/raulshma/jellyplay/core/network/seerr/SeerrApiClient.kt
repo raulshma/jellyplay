@@ -162,6 +162,7 @@ interface SeerrApiClient {
         credentials: SeerrCredentials,
         page: Int = 1,
         primaryReleaseDateGte: String? = null,
+        params: SeerrDiscoverParams? = null,
     ): Result<SeerrSearchResponse>
 
     suspend fun getDiscoverTv(
@@ -169,6 +170,7 @@ interface SeerrApiClient {
         credentials: SeerrCredentials,
         page: Int = 1,
         firstAirDateGte: String? = null,
+        params: SeerrDiscoverParams? = null,
     ): Result<SeerrSearchResponse>
 
     suspend fun getRequests(

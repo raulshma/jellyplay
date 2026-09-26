@@ -1,12 +1,13 @@
 package com.raulshma.jellyplay.core.data.remote
 
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 
 /**
  * Pins [RemoteNavigationBridge]'s fan-out contract:

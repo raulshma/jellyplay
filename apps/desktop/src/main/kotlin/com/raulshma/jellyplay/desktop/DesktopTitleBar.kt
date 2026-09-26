@@ -57,8 +57,9 @@ import com.composables.icons.tabler.outline.X
  * Replaces the AWT [androidx.compose.ui.window.MenuBar] too: an undecorated
  * frame has no native menu strip on Windows, so the same File/View/Help
  * entries live here as dropdown menus (their keyboard accelerators —
- * Ctrl+R, Ctrl+Q, F11 — are wired in Main.kt's window-level
- * onPreviewKeyEvent, which fires with or without a focused Compose node).
+ * Ctrl+R, Ctrl+Q, F11 — render here from the [DesktopAccelerators] table and
+ * are wired in Main.kt's window-level onPreviewKeyEvent, which fires with or
+ * without a focused Compose node).
  *
  * Window controls follow the Windows convention: minimize + maximize/restore
  * hover with a subtle on-surface wash, close hovers with the theme's error
@@ -136,7 +137,7 @@ internal fun WindowScope.DesktopTitleBar(
                     TitleBarMenuButton(label = "File") { closeMenu ->
                         DropdownMenuItem(
                             text = { Text("Refresh") },
-                            trailingIcon = { MenuShortcutText("Ctrl+R") },
+                            trailingIcon = { MenuShortcutText(DesktopAccelerators.Refresh.displayLabel) },
                             onClick = {
                                 closeMenu()
                                 onRefresh()
@@ -144,7 +145,7 @@ internal fun WindowScope.DesktopTitleBar(
                         )
                         DropdownMenuItem(
                             text = { Text("Exit") },
-                            trailingIcon = { MenuShortcutText("Ctrl+Q") },
+                            trailingIcon = { MenuShortcutText(DesktopAccelerators.Exit.displayLabel) },
                             onClick = {
                                 closeMenu()
                                 onExit()
@@ -156,7 +157,7 @@ internal fun WindowScope.DesktopTitleBar(
                             text = {
                                 Text(if (isFullscreenActive) "Exit Fullscreen" else "Fullscreen")
                             },
-                            trailingIcon = { MenuShortcutText("F11") },
+                            trailingIcon = { MenuShortcutText(DesktopAccelerators.ToggleFullscreen.displayLabel) },
                             onClick = {
                                 closeMenu()
                                 onToggleFullscreen()

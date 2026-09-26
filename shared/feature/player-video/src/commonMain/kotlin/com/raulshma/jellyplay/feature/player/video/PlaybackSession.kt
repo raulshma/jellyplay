@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -15,23 +16,22 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.feature.player.video.engine.EngineDecision
+import com.raulshma.jellyplay.feature.player.video.engine.EngineEventCoordinator
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
+import com.raulshma.jellyplay.feature.player.video.engine.EngineSessionShell
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.toEngineEventSource
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 // SavedStateHandle keys for surviving process death. The in-stream
 // playback position, the item it belongs to, the server session id, and the
@@ -132,12 +132,15 @@ internal fun resolveResumeTicks(
  * constructor lambda; the session never touches the ui state.
  *
  * Construction contract:
- * - the ViewModel's [CoroutineScope] is INJECTED, never constructed here.
- *   Session-launched coroutines (e.g. the coalesced seek-mirror write tracked
- *   by the seek-progress task slot) keep launching on that scope — never on
- *   [releaseScope] and never on a session-internal scope cancelled in
- *   release(), because the onDispose teardown path joins the pending seek
- *   job and depends on those launch semantics;
+ * - both the ViewModel's [CoroutineScope]s are INJECTED, never constructed
+ *   here: [scope] (session-launched coroutines, e.g. the coalesced seek-mirror
+ *   write tracked by the seek-progress task slot — never on [releaseScope]
+ *   and never on a session-internal scope cancelled in release(), because the
+ *   onDispose teardown path joins the pending seek job and depends on those
+ *   launch semantics) and [releaseScope] (the teardown work that must outlive
+ *   the viewModelScope on clear(); the owner cancels it from `onCleared`
+ *   AFTER release(), the same cancel-after-release ordering it has always
+ *   applied);
  * - [PlayerSessionManager] and [PlaybackProgressReporter] are injected as
  *   already-constructed instances. The reporter keeps being built inside the
  *   ViewModel (its ui-state handle wiring stays VM-side by design) and is
@@ -158,10 +161,27 @@ internal fun resolveResumeTicks(
  */
 private const val LOAD = "PlaybackSession.load"
 private const val SEEK_PROGRESS = "PlaybackSession.seekProgress"
-private const val ENGINE_DECISIONS = "PlaybackSession.engineDecisions"
 
 internal class PlaybackSession(
     val scope: CoroutineScope,
+    /**
+     * Scope for teardown work that must outlive the viewModelScope on clear()
+     * (the final stop-report and the pending-seek join): IO dispatcher +
+     * supervisor so one failing write cannot cancel the other. INJECTED by the
+     * owner like [scope] — never constructed here — and cancelled by the
+     * owner's `onCleared` AFTER release(), preserving the cancel-after-release
+     * ordering.
+     */
+    internal val releaseScope: CoroutineScope,
+    /**
+     * Wall-clock millis behind the seek-latch freshness window
+     * ([getReportPositionMs]), the position-persist throttle
+     * ([persistPlaybackPosition]) and the process-death staleness check — a
+     * WALL clock (not monotonic), because the persisted-at stamps it is
+     * compared against were written by a previous process. Injectable for
+     * tests.
+     */
+    private val clock: () -> Long = { System.currentTimeMillis() },
     val playerSessionManager: PlayerSessionManager,
     val progressReporter: PlaybackProgressReporter,
     private val sessionLoadPipeline: SessionLoadPipeline,
@@ -222,10 +242,43 @@ internal class PlaybackSession(
     /** Direct alias of the session manager's engine flow — same instance, no re-publish. */
     val engineFlow: StateFlow<MediaEngine?> = playerSessionManager.engineFlow
 
-    private val _events = MutableSharedFlow<SessionEvent>(
-        extraBufferCapacity = 16,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    // ── Engine-event orchestration ──────────────────────────────────────────
+    // The player-contract EngineSessionShell owns the session-structural
+    // plumbing both players used to hand-roll: the EngineEventCoordinator's
+    // construction/re-arm/dispose, the engine-event intake wiring, the
+    // decision fan-out to the executor below and the one-shot SessionEvent
+    // pipe. The session keeps the DECISION EXECUTION (reload choreography,
+    // reporting, engine commands) and the `released` latch — the shell never
+    // sees them. VOD pins: the coordinator Config defaults
+    // (FallbackPolicy.FORCE_DIRECT_PLAY_ONE_SHOT +
+    // WatchdogScope.INITIAL_BUFFER_ONLY).
+    private val engineEventShell = EngineSessionShell<SessionEvent>(
+        scope = scope,
+        // The coordinator consumes the engine-agnostic EngineEventSource slice;
+        // each MediaEngine swap maps to a fresh source (same emission points as
+        // when the coordinator collected the engine flow directly).
+        engineSources = playerSessionManager.engineFlow.map { it?.toEngineEventSource() },
+        onDecision = ::executeEngineDecision,
+        config = EngineSessionShell.Config(
+            getPlaybackMode = getPlaybackMode,
+            directPlayFallbackNotice = directPlayFallbackNotice,
+            passOutHours = passOutHours,
+            onRearmed = onEngineEventCoordinatorRearmed,
+        ),
     )
+
+    /**
+     * The live coordinator (the shell's current instance). Exposed so the VM
+     * can drive the pieces that stay VM-owned: the mirror collectors
+     * ([isPlaying]/[isBuffering] ui-state writes), the latch resets
+     * ([EngineEventCoordinator.onNewItem] /
+     * [EngineEventCoordinator.onPlaybackModeChanged]), the interaction clock
+     * ([EngineEventCoordinator.onUserInteraction]) and the teardown-time
+     * [EngineEventCoordinator.dispose] — the shell re-arms a disposed
+     * instance on the next [initialize].
+     */
+    internal val engineEventCoordinator: EngineEventCoordinator
+        get() = engineEventShell.coordinator
 
     /**
      * Session-level outcomes (errors to surface, user notices, end of
@@ -235,76 +288,12 @@ internal class PlaybackSession(
      * mid-teardown emission never suspends (same contract as the
      * coordinator's decision stream).
      */
-    val events: SharedFlow<SessionEvent> = _events.asSharedFlow()
-
-    // ── Engine-event orchestration ──────────────────────────────────────────
-    // The coordinator owns the engine-event *policies* (guarded play/buffering
-    // mirrors, the FORCE_DIRECT_PLAY → transcode one-shot fallback latch, the
-    // initial-buffering watchdog, subtitle toasts, pass-out protection) and
-    // emits [EngineDecision]s; the session owns the coordinator's lifecycle
-    // (construction, re-arm on re-initialization) and executes the decisions.
-    // A `var` because the VM's performRelease() disposes it and the
-    // Activity-scoped VM is reused across media: every load re-arms it via
-    // [ensureEngineEventCoordinatorActive].
-
-    private fun createEngineEventCoordinator() = EngineEventCoordinator(
-        scope = scope,
-        engineFlow = playerSessionManager.engineFlow,
-        getPlaybackMode = getPlaybackMode,
-        directPlayFallbackNotice = directPlayFallbackNotice,
-        passOutHours = passOutHours,
-    )
-
-    /**
-     * The live coordinator. Exposed so the VM can drive the pieces that stay
-     * VM-owned: the mirror collectors ([isPlaying]/[isBuffering] ui-state
-     * writes), the latch resets ([EngineEventCoordinator.onNewItem] /
-     * [EngineEventCoordinator.onPlaybackModeChanged]), the interaction clock
-     * ([EngineEventCoordinator.onUserInteraction]) and the teardown-time
-     * [EngineEventCoordinator.dispose]. Only this class reassigns it.
-     */
-    internal var engineEventCoordinator: EngineEventCoordinator = createEngineEventCoordinator()
-        private set
+    val events: SharedFlow<SessionEvent> = engineEventShell.events
 
     // Task slots for the session's cancel-and-replace choreographies. The
     // bundle owns only the slot bookkeeping; scope lifecycle (the injected VM
     // scope + releaseScope) stays exactly where it was.
     private val sessionTasks = TaskBundle(scope)
-
-    init {
-        startEngineDecisionFanOut()
-    }
-
-    /**
-     * Starts (or restarts, after a dispose/re-arm cycle) the decision
-     * executor. The mirror collectors stay VM-side — they write the ui state,
-     * which this class never touches.
-     */
-    private fun startEngineDecisionFanOut() {
-        sessionTasks.replace(ENGINE_DECISIONS) {
-            val coordinator = engineEventCoordinator
-            scope.launch {
-                coordinator.decisions.collect { decision ->
-                    executeEngineDecision(decision)
-                }
-            }
-        }
-    }
-
-    /**
-     * Re-creates the engine-event coordinator if a previous VM
-     * [com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel.release]
-     * disposed it (the Activity-scoped VM is reused across media, so every
-     * load must re-arm it exactly like the PiP transport). Also re-subscribes
-     * the decision fan-out and pokes [onEngineEventCoordinatorRearmed] so the
-     * VM re-arms its mirror collectors against the new instance.
-     */
-    private fun ensureEngineEventCoordinatorActive() {
-        if (!engineEventCoordinator.disposed) return
-        engineEventCoordinator = createEngineEventCoordinator()
-        startEngineDecisionFanOut()
-        onEngineEventCoordinatorRearmed()
-    }
 
     /**
      * Executes one [EngineDecision]: what a decision *does* (reload
@@ -322,7 +311,11 @@ internal class PlaybackSession(
                 // verdict, so the dialog can offer same-engine retry
                 // (Network/Render) vs. switch-engine (Decoder/Drm).
                 if (released) return
-                _events.tryEmit(
+                // Any engine-error surface latches the reporter's
+                // watched-threshold suppression for the remainder of this
+                // item (and flags the teardown stop `failed`).
+                progressReporter.onEngineError()
+                engineEventShell.emitEvent(
                     SessionEvent.ShowError(
                         error = decision.error.message,
                         retryable = decision.error.retryable,
@@ -338,13 +331,18 @@ internal class PlaybackSession(
                 )
             }
             EngineDecision.PlaybackEnded -> {
-                if (!released) _events.tryEmit(SessionEvent.PlaybackEnded)
+                if (!released) {
+                    // A genuine EOF (engine ENDED, not an error)
+                    // counts as watched even below the 95 % threshold.
+                    progressReporter.onGenuineEof()
+                    engineEventShell.emitEvent(SessionEvent.PlaybackEnded)
+                }
             }
             EngineDecision.PassOutPause -> {
                 playerSessionManager.engine?.pause()
-                _events.tryEmit(SessionEvent.PassOutPause)
+                engineEventShell.emitEvent(SessionEvent.PassOutPause)
             }
-            is EngineDecision.InformUser -> _events.tryEmit(
+            is EngineDecision.InformUser -> engineEventShell.emitEvent(
                 SessionEvent.InformUser(decision.message)
             )
         }
@@ -410,14 +408,6 @@ internal class PlaybackSession(
      */
 
     /**
-     * Scope for teardown work that must outlive the viewModelScope on clear()
-     * (the final stop-report and the pending-seek join): IO dispatcher +
-     * supervisor so one failing write cannot cancel the other. The VM cancels
-     * it from onCleared.
-     */
-    internal val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    /**
      * Job returned from [initialize] when a hook early-returns before any
      * load was launched (remote "Play On" routing, same-item short-circuit):
      * callers get a uniformly typed, already-finished handle instead of a
@@ -432,7 +422,8 @@ internal class PlaybackSession(
      * 1. `released = false`;
      * 2. [SessionLifecycleHooks.rearmTransports] (PiP transport re-arm)
      *    followed by the session-owned engine-event coordinator re-arm
-     *    ([ensureEngineEventCoordinatorActive]);
+     *    ([EngineSessionShell.reArm] — a no-op unless a previous release
+     *    disposed the coordinator);
      * 3. [SessionLifecycleHooks.resetForNewItem] (autoplay reset,
      *    autoplay-cancelled clear, coordinator new-item latch, pending stream
      *    indices);
@@ -473,7 +464,7 @@ internal class PlaybackSession(
     fun initialize(request: LoadRequest): Job {
         released = false
         hooks.rearmTransports()
-        ensureEngineEventCoordinatorActive()
+        engineEventShell.reArm()
         hooks.resetForNewItem(
             MediaStreamSelection(
                 audioStreamIndex = request.audioStreamIndex,
@@ -611,12 +602,12 @@ internal class PlaybackSession(
         rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
 
         if (resolved.playMethod == PlayMethod.TRANSCODE) {
-            _events.tryEmit(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
+            engineEventShell.emitEvent(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
         }
         if (mode == PlaybackMode.FORCE_DIRECT_PLAY &&
             resolved.playMethod != PlayMethod.DIRECT_PLAY
         ) {
-            _events.tryEmit(
+            engineEventShell.emitEvent(
                 SessionEvent.InformUser("Direct Play unavailable for this item — falling back to transcode")
             )
             launchFallbackToTranscode(
@@ -904,7 +895,7 @@ internal class PlaybackSession(
         val seekPos = lastSeekPositionMs
         val seekTime = lastSeekTimestamp
         if (seekPos != null && seekTime > 0L) {
-            val timeSinceSeek = System.currentTimeMillis() - seekTime
+            val timeSinceSeek = clock() - seekTime
             if (timeSinceSeek < 3000L) {
                 return seekPos
             }
@@ -916,14 +907,27 @@ internal class PlaybackSession(
      * Stop-reports the *current* server playback session (skip on incognito,
      * dedup through [stopReportedForSession] so the two paths that can fire
      * for one session — this one and the final teardown in [release] — never
-     * double-report). Both write sites (here and in [release]) moved together
-     * from the VM at B3.
+     * double-report; the reporter's stalled-finish stop for the same session
+     * dedups through [PlaybackProgressReporter.hasReportedStopFor] the same
+     * way). The report carries `failed = true` when the reporter's error
+     * latch is held: an error-aborted session must not trip the
+     * server's own "≥X % = played" rule — the actual spoiler-protection fix.
+     * Both write sites (here and in [release]) moved together from the VM
+     * at B3.
      */
     fun reportCurrentPlaybackStopped() {
         if (getIncognitoModeEnabled()) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = currentPlaySessionId
         if (sessionId == stopReportedForSession) return
+        if (progressReporter.hasReportedStopFor(sessionId)) {
+            // The reporter already stop-reported this session at the FULL
+            // duration (stalled-finish): latch the dedup and skip the
+            // duplicate, which would only downgrade the position.
+            stopReportedForSession = sessionId
+            return
+        }
+        val failed = progressReporter.isErrorLatched()
         val positionMs = getReportPositionMs().takeIf { it > 0L }
             // Some engines report 0 right after STATE_ENDED; falling back to the
             // last persisted position keeps the stop telemetry (and with it the
@@ -938,7 +942,7 @@ internal class PlaybackSession(
         if (positionTicks > 0) {
             stopReportedForSession = sessionId
             scope.launch {
-                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks)
+                playbackRepository.reportPlaybackStopped(itemId, sessionId, positionTicks, failed = failed)
                 // No manual cache invalidation (plan 08): the end-of-item
                 // auto-advance path marks the episode played, which evicts
                 // inside the repository; a same-item reload re-reads through
@@ -957,7 +961,7 @@ internal class PlaybackSession(
      */
     fun seekPersisted(positionMs: Long) {
         lastSeekPositionMs = positionMs
-        val now = System.currentTimeMillis()
+        val now = clock()
         lastSeekTimestamp = now
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
@@ -985,7 +989,7 @@ internal class PlaybackSession(
      * start-report.
      */
     fun persistPlaybackPosition(positionMs: Long, force: Boolean) {
-        val now = System.currentTimeMillis()
+        val now = clock()
         if (!force && now - lastPersistedAtMs < POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
@@ -1078,7 +1082,7 @@ internal class PlaybackSession(
         return resolveResumeTicks(
             savedPosMs = savedPosMs,
             persistedAtMs = persistedAt,
-            nowMs = System.currentTimeMillis(),
+            nowMs = clock(),
             entryPointTicks = startPositionTicks,
             staleThresholdMs = STALE_POSITION_THRESHOLD_MS,
         )
@@ -1163,6 +1167,10 @@ internal class PlaybackSession(
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
+        // A latched error at teardown flags the final stop `failed`
+        // so the server does not apply its own "≥X % = played" rule to the
+        // aborted session. Snapshotted BEFORE the teardown statements below.
+        val failed = progressReporter.isErrorLatched()
 
         releaseInternalsSessionPart()
         hooks.releaseInternalsVmPart()
@@ -1180,36 +1188,37 @@ internal class PlaybackSession(
         }
         // Skip the second Stop if reportCurrentPlaybackStopped already
         // sent one for this session — duplicate Stop reports confuse the
-        // server's resume/progress bookkeeping.
+        // server's resume/progress bookkeeping. The reporter's
+        // stalled-finish stop (sent at the FULL duration) dedups the same
+        // way: a teardown stop at the stalled position would only downgrade
+        // the position the server already resolved.
         if (itemId != null && positionTicks > 0 && sessionId != stopReportedForSession) {
             stopReportedForSession = sessionId
-            releaseScope.launch(NonCancellable) {
-                runCatching {
-                    withTimeout(5_000) {
-                        playbackRepository.reportPlaybackStopped(
-                            itemId = itemId,
-                            sessionId = sessionId,
-                            positionTicks = positionTicks,
-                        )
+            if (!progressReporter.hasReportedStopFor(sessionId)) {
+                releaseScope.launch(NonCancellable) {
+                    // withTimeoutOrNull, not withTimeout: the timeout is an
+                    // expected give-up (best-effort final report), not a
+                    // failure — a rethrown TimeoutCancellationException would
+                    // escape this handler-less scope. Real cancellation still
+                    // propagates through the rethrowing variant.
+                    runCatchingRethrowingCancellation {
+                        withTimeoutOrNull(5_000) {
+                            playbackRepository.reportPlaybackStopped(
+                                itemId = itemId,
+                                sessionId = sessionId,
+                                positionTicks = positionTicks,
+                                failed = failed,
+                            )
+                        }
                     }
+                    // No manual cache invalidation here (plan 08): the detail
+                    // screen's re-entry freshness comes from the provider's forced
+                    // re-resolve (requestRevalidate) and the auto-advance path
+                    // already evicts via markPlayed inside the repository — the
+                    // old invalidateUserDataCaches call duplicated both.
                 }
-                // No manual cache invalidation here (plan 08): the detail
-                // screen's re-entry freshness comes from the provider's forced
-                // re-resolve (requestRevalidate) and the auto-advance path
-                // already evicts via markPlayed inside the repository — the
-                // old invalidateUserDataCaches call duplicated both.
             }
         }
-    }
-
-    /**
-     * Cancels [releaseScope] — the teardown work that must outlive the
-     * viewModelScope (final stop-report, pending-seek join). Called by the
-     * VM's `onCleared` AFTER its `release()`, preserving the same
-     * cancel-after-release ordering the VM used when it owned the scope.
-     */
-    fun onOwnerCleared() {
-        releaseScope.cancel()
     }
 }
 

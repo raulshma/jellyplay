@@ -751,13 +751,26 @@ private fun HeatmapGrid(
                     .pointerInput(numWeeks) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
-                            val tapX = down.position.x
-                            val tapY = down.position.y
-                            val weekIdx = (tapX / (cellSizePx + cellGapPx)).roundToInt()
-                            val dayIdx = (tapY / (cellSizePx + cellGapPx)).roundToInt()
-                            if (weekIdx in 0 until numWeeks && dayIdx in 0 until 7) {
-                                val cell = grid.getOrNull(weekIdx * 7 + dayIdx)
-                                onDayClick(cell?.date)
+                            // Pointer→day resolution is HeatmapGridModel's
+                            // (the verbatim former inline math): out-of-grid
+                            // taps are dropped without dispatching; in-grid
+                            // taps on unpopulated cells dispatch a null day.
+                            if (HeatmapGridModel.isInsideGrid(
+                                    x = down.position.x,
+                                    y = down.position.y,
+                                    cellStridePx = cellSizePx + cellGapPx,
+                                    numWeeks = numWeeks,
+                                )
+                            ) {
+                                onDayClick(
+                                    HeatmapGridModel.dayAt(
+                                        x = down.position.x,
+                                        y = down.position.y,
+                                        cellStridePx = cellSizePx + cellGapPx,
+                                        numWeeks = numWeeks,
+                                        grid = grid,
+                                    ),
+                                )
                             }
                         }
                     }

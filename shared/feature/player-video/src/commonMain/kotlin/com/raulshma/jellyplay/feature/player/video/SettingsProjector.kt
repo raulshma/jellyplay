@@ -81,45 +81,45 @@ internal class SettingsProjector(
             subtitleStyleChanged = true
         }
 
-        // Slice-aware distinct-until-changed guards. The former generic
-        // `diff` property-select helper cannot reach stored slice leaves
-        // (KProperty1<VideoPlayerUiState,*> does not traverse the slice),
-        // so each leaf uses a slice-scoped helper that preserves the
-        // single-copy guard without duplicating the if/update shape.
-        syncUiPref(
-            selector = { it.showPlaybackMetadata },
+        // Distinct-until-changed guards, all through the one generic
+        // [syncPref]: the selector/updater lambdas compose the slice
+        // traversal (KProperty1<VideoPlayerUiState,*> does not traverse the
+        // slice, so a property-ref helper cannot reach stored slice leaves),
+        // preserving the single-copy guard for a leaf in any slice.
+        syncPref(
+            selector = { it.uiPrefs.showPlaybackMetadata },
             newValue = agg.videoPlayer.videoShowPlaybackMetadata,
-            updater = { prefs, v -> prefs.copy(showPlaybackMetadata = v) },
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(showPlaybackMetadata = v)) },
         )
-        syncUiPref(
-            selector = { it.showClock },
+        syncPref(
+            selector = { it.uiPrefs.showClock },
             newValue = agg.videoPlayer.showClockInPlayer,
-            updater = { prefs, v -> prefs.copy(showClock = v) },
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(showClock = v)) },
         )
-        syncUiPref(
-            selector = { it.showTimeRemaining },
+        syncPref(
+            selector = { it.uiPrefs.showTimeRemaining },
             newValue = agg.videoPlayer.showTimeRemaining,
-            updater = { prefs, v -> prefs.copy(showTimeRemaining = v) },
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(showTimeRemaining = v)) },
         )
-        syncVideoFxPref(
-            selector = { it.tvZoomModePercent },
+        syncPref(
+            selector = { it.videoFx.tvZoomModePercent },
             newValue = agg.videoPlayer.tvZoomModePercent,
-            updater = { fx, v -> fx.copy(tvZoomModePercent = v) },
+            updater = { v -> copy(videoFx = videoFx.copy(tvZoomModePercent = v)) },
         )
-        syncUiPref(
-            selector = { it.keepScreenOnDuringVideo },
+        syncPref(
+            selector = { it.uiPrefs.keepScreenOnDuringVideo },
             newValue = agg.playback.keepScreenOnDuringVideo,
-            updater = { prefs, v -> prefs.copy(keepScreenOnDuringVideo = v) },
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(keepScreenOnDuringVideo = v)) },
         )
-        syncUiPref(
-            selector = { it.passOutProtectionHours },
+        syncPref(
+            selector = { it.uiPrefs.passOutProtectionHours },
             newValue = agg.videoPlayer.videoPassOutProtectionHours,
-            updater = { prefs, v -> prefs.copy(passOutProtectionHours = v) },
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(passOutProtectionHours = v)) },
         )
-        syncAutoplayPref(
-            selector = { it.autoPlayCountdownSec },
+        syncPref(
+            selector = { it.autoplay.autoPlayCountdownSec },
             newValue = agg.playback.autoPlayCountdownSec,
-            updater = { ap, v -> ap.copy(autoPlayCountdownSec = v) },
+            updater = { v -> copy(autoplay = autoplay.copy(autoPlayCountdownSec = v)) },
         )
 
         // PIN lock: two uiPrefs leaves driven by one pref + one derived flag.
@@ -131,36 +131,22 @@ internal class SettingsProjector(
         return subtitleStyleChanged
     }
 
-    private inline fun <T> syncUiPref(
-        selector: (com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState) -> T,
-        newValue: T,
-        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState, T) -> com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState,
+    /**
+     * The one distinct-until-changed guard shared by every leaf above, any
+     * slice: [selector] reads the current leaf and [updater] writes it back,
+     * each composing the slice traversal a property reference cannot express
+     * (`KProperty1<VideoPlayerUiState, *>` does not reach stored slice
+     * leaves, and slice `val`s are read-only). An unchanged value performs
+     * no copy at all; a changed one rewrites the leaf inside a single
+     * uiState copy built from the state `updateUiState` hands over.
+     */
+    private inline fun <V> syncPref(
+        selector: (VideoPlayerUiState) -> V,
+        newValue: V,
+        crossinline updater: VideoPlayerUiState.(V) -> VideoPlayerUiState,
     ) {
-        val current = selector(getUiState().uiPrefs)
-        if (current != newValue) {
-            updateUiState { it.copy(uiPrefs = updater(it.uiPrefs, newValue)) }
-        }
-    }
-
-    private inline fun <T> syncVideoFxPref(
-        selector: (com.raulshma.jellyplay.feature.player.video.state.VideoFxState) -> T,
-        newValue: T,
-        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.VideoFxState, T) -> com.raulshma.jellyplay.feature.player.video.state.VideoFxState,
-    ) {
-        val current = selector(getUiState().videoFx)
-        if (current != newValue) {
-            updateUiState { it.copy(videoFx = updater(it.videoFx, newValue)) }
-        }
-    }
-
-    private inline fun <T> syncAutoplayPref(
-        selector: (com.raulshma.jellyplay.feature.player.video.state.AutoplayState) -> T,
-        newValue: T,
-        crossinline updater: (com.raulshma.jellyplay.feature.player.video.state.AutoplayState, T) -> com.raulshma.jellyplay.feature.player.video.state.AutoplayState,
-    ) {
-        val current = selector(getUiState().autoplay)
-        if (current != newValue) {
-            updateUiState { it.copy(autoplay = updater(it.autoplay, newValue)) }
+        if (selector(getUiState()) != newValue) {
+            updateUiState { it.updater(newValue) }
         }
     }
 }

@@ -14,9 +14,9 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
-import com.raulshma.jellyplay.feature.player.video.engine.FakeMediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -32,6 +32,7 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -67,14 +68,16 @@ import kotlinx.coroutines.test.runTest
  * Conventions match [PlaybackSessionReportingTest]: the session's injected
  * scope is unconfined on the test scheduler (synchronous launches + a virtual
  * clock for the 500 ms seek coalescing), repositories are relaxed mocks,
- * VM-facing seams are recording fakes. The session-owned
- * [PlaybackSession.releaseScope] (a real IO scope) is cancelled in the
- * per-test teardown via [PlaybackSession.onOwnerCleared].
+ * VM-facing seams are recording fakes. The session's injected
+ * [PlaybackSession.releaseScope] (a real IO scope, built by the test like the
+ * production VM does) is cancelled in the per-test teardown via that injected
+ * instance.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackSessionLifecycleTest {
 
     private lateinit var session: PlaybackSession
+    private lateinit var releaseScope: CoroutineScope
     private lateinit var playerSessionManager: PlayerSessionManager
     private lateinit var sessionStateFlow: MutableStateFlow<PlayerSessionState>
     private lateinit var engineFlow: MutableStateFlow<MediaEngine?>
@@ -103,6 +106,7 @@ class PlaybackSessionLifecycleTest {
 
     private fun TestScope.buildSession(currentItemId: String? = null, playSessionId: String? = null) {
         sessionScope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+        releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         engine = FakeMediaEngine().apply {
             durationValue = 100_000L
             advanceTo(30_000L)
@@ -143,6 +147,7 @@ class PlaybackSessionLifecycleTest {
 
         session = PlaybackSession(
             scope = sessionScope,
+            releaseScope = releaseScope,
             playerSessionManager = playerSessionManager,
             progressReporter = progressReporter,
             sessionLoadPipeline = pipeline,
@@ -174,7 +179,9 @@ class PlaybackSessionLifecycleTest {
 
     @AfterTest
     fun tearDown() {
-        if (this::session.isInitialized) session.onOwnerCleared()
+        // Cancel the injected release scope AFTER the session's work was
+        // verified — the owner's teardown path, as in the VM's onCleared.
+        if (this::releaseScope.isInitialized) releaseScope.cancel()
         if (this::sessionScope.isInitialized) sessionScope.cancel()
     }
 

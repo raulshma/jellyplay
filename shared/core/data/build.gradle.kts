@@ -1,22 +1,16 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    id("jellyplay.kmp.library.base")
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.data"
-        compileSdk = 37
-        minSdk = 28
         // The moved notification drawables/strings (media-session icons,
         // playback-sync + download notifications) are real android res —
-        // same packaging note as :shared:core:ui.
-        androidResources {
-            enable = true
-        }
+        // same packaging note as :shared:core:ui. (androidResources.enable
+        // itself comes from the convention plugin; see its KDoc for the
+        // MissingResourceException story.)
         // cutover: the legacy :core:data module's Robolectric suites
         // moved here (androidHostTest). Flags carried over from the legacy
         // module's testOptions verbatim.
@@ -24,35 +18,7 @@ kotlin {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    // The requests slice's data layer compiles for the web shell.
-    // Room stayed behind: :shared:core:database has no wasm build, so the
-    // Room-backed repositories (QueuePersistenceHelper, SeenMedia*,
-    // ItemPlaybackPreference*, PlaylistRepositories, OfflineSyncProjection,
-    // ScanWorkerHelper) plus the other JVM-touching files moved to jvmShared,
-    // and the database edge demoted from commonMain api() to jvmShared
-    // implementation() (core:network precedent: common seams + jvmShared
-    // impls). The browser lane is compile-only like core:network's — no wasm
-    // test task (jvmTest pins the semantics).
-    wasmJs {
-        browser {
-            testTask {
-                enabled = false
-            }
-        }
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop — this is
@@ -64,13 +30,10 @@ kotlin {
         // OkHttp transfer machinery and the repositories whose signatures leak
         // File/URI/stream edges). commonMain holds the common-safe seams + the
         // promoted Seerr/Arr repositories (kotlinx-datetime instead of
-        // java.time) + the promoted DAO-backed impls.
-        val jvmShared = create("jvmShared")
-        jvmShared.dependsOn(getByName("commonMain"))
-        getByName("androidMain") { dependsOn(jvmShared) }
-        getByName("jvmMain") { dependsOn(jvmShared) }
+        // java.time) + the promoted DAO-backed impls. The jvmShared middle
+        // source set itself comes from the convention plugin.
 
-        getByName("commonMain").dependencies {
+        commonMain.dependencies {
             api(project(":shared:core:model"))
             api(project(":shared:core:network"))
             // Cancellation-safe suspend wrappers + TaskBundle — the module's
@@ -79,16 +42,14 @@ kotlin {
             // promotion: the Room-backed repository impls
             // (SearchHistory/ItemPlaybackPreference/SeenMedia/PlaybackOutbox/
             // Smart+MoodPlaylist, QueuePersistenceHelper, RoomTransactions)
-            // moved from jvmShared to commonMain — the database module has a
-            // wasmJs target since (Room 3 + WebWorkerSQLiteDriver), so the
-            // Room edge is no longer JVM-only. Promoted from the old jvmShared
-            // api() edge (kept there too — dataJvmModule still wires the DAO
-            // consumers that remain JVM).
+            // moved from jvmShared to commonMain — the Room edge is no
+            // longer JVM-only. Promoted from the old jvmShared api() edge
+            // (kept there too — dataJvmModule still wires the DAO consumers
+            // that remain JVM).
             api(project(":shared:core:database"))
             // promotion: the promoted impls' Koin definitions live in
-            // dataJvmModule (jvmShared) / dataWasmModule (wasmJs) — both need
-            // the Koin DSL, and koin-core 4.2.2 is multiplatform (wasmJs
-            // stable since 4.0.0).
+            // dataJvmModule (jvmShared) — they need the Koin DSL, and
+            // koin-core 4.2.2 is multiplatform.
             api(libs.koin.core)
             // Room is consumed from BOTH source sets now: the promoted
             // commonMain impls use the commonMain API edge above, while the
@@ -123,10 +84,10 @@ kotlin {
         }
         getByName("jvmShared").dependencies {
             // Module/qualifier types appear in the public di signatures
-            // (Koin construction owner). Never visible to wasmJs.
+            // (Koin construction owner).
             api(libs.koin.core)
             // Room DAOs/entities: confined to jvmShared (the
-            // moved Room-backed repositories above) — never visible to wasmJs.
+            // moved Room-backed repositories above).
             api(project(":shared:core:database"))
             // (No javax.inject dependency: the @Inject/@Singleton decorations
             // were stripped from these impls when Koin took construction
@@ -202,13 +163,12 @@ kotlin {
             // AAR's consumer metadata.
             implementation(libs.org.json)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
+        // kotlin("test") + coroutines-test on commonTest cover both test lanes
+        // through the commonTest → jvmTest hierarchy edge.
+        commonTest.dependencies {
             implementation(libs.coroutines.test)
         }
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.coroutines.test)
             // Koin module smoke tests (C4): load dataJvmModule +
             // desktopDataModule against the datastore/network/database modules.
             implementation(libs.koin.test)
@@ -219,6 +179,10 @@ kotlin {
             // (PlaybackOutboxRepositoryImplTest, AuthRepositoryImplTest) —
             // same pattern as :shared:core:database's jvmTest.
             implementation(libs.androidx.sqlite.bundled)
+            // Shared MediaEngine double (AUTO_PLAY mpv personality) for the
+            // audio queue-semantics suite — the former same-package private
+            // copy was its twin, migrated in the fixtures merge.
+            implementation(project(":shared:core:test-fixtures"))
         }
     }
 }

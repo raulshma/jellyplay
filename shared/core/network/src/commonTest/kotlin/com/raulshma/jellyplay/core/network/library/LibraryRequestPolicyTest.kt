@@ -5,11 +5,11 @@ import kotlin.test.assertEquals
 
 /**
  * Pins the shared list-projection policy ([LIST_PROJECTION_FIELDS]): the
- * exact wire field set both library clients attach to every list-shaped
+ * exact wire field set the library clients attach to every list-shaped
  * query, plus the compositions that extend it (the genre-rendering queries'
  * `+ "Genres"`, the playlists listing's `+ CanDelete/DateCreated` — the
- * exact expressions the two clients evaluate). Element-for-element pins,
- * not sets: the list IS the wire order (the wasm client comma-joins it, the
+ * exact expressions the clients evaluate). Element-for-element pins,
+ * not sets: the list IS the wire order (the
  * JVM client resolves it in order against the SDK ItemFields enum).
  * Documented one-offs that project something else (CHILD_COUNT, TAGS, the
  * photo grid's aspect-ratio-only projection) stay at their call sites and

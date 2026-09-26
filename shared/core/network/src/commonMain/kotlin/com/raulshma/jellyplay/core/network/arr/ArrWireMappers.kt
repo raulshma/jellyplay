@@ -12,12 +12,11 @@ import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
 /**
- * Wire→model mappers for the wasm Radarr/Sonarr clients — verbatim
- * transcriptions of the private mapper functions inside the jvmShared
- * `RadarrApiClientImpl` / `SonarrApiClientImpl` (same names, same fallbacks,
- * same computation order), extracted to commonMain so commonTest can pin
- * them and the wasm clients consume them unchanged. Read each mapper against
- * its JVM original when touching either side.
+ * Wire→model mappers for the Radarr/Sonarr clients over the consolidated
+ * [ArrWireDto] shapes — the single source of truth both the [ArrV3Client]
+ * engine and commonTest use. Same names, same fallbacks, same computation
+ * order the former per-impl private mappers carried (they were verbatim
+ * twins of these); preserve that when touching.
  */
 
 // ── Radarr ──────────────────────────────────────────────────────────────────
@@ -100,17 +99,8 @@ internal fun RadarrMovieResource.toArrWantedItem(): ArrWantedItem = ArrWantedIte
     mediaType = ArrMediaType.MOVIE,
 )
 
-/**
- * `RadarrApiClientImpl.RadarrMediaCover.posterPreference`: picks the best
- * available poster URL. `remoteUrl` is absolute and preferred; behind a
- * reverse proxy Radarr often leaves `remoteUrl` null and populates only
- * `url` (a path relative to the Radarr root), so fall back to it rather than
- * rendering no poster.
- */
-internal fun RadarrMediaCover.posterPreference(): String? = remoteUrl ?: url
-
-/** `RadarrApiClientImpl.RadarrCommandResource.toModel`. */
-internal fun RadarrCommandResource.toArrCommand(): ArrCommand = ArrCommand(
+/** `RadarrApiClientImpl.RadarrCommandResource.toModel` — shared `ArrCommandResource` shape. */
+internal fun ArrCommandResource.toArrCommand(): ArrCommand = ArrCommand(
     id = id,
     name = name,
     status = status,
@@ -182,8 +172,7 @@ internal fun SonarrEpisodeResource.toCalendarItem(): ArrCalendarItem {
         overview = overview,
         // Prefer remoteUrl (absolute); fall back to url (relative path),
         // which behind a reverse proxy is often the only field populated.
-        posterPath = series?.images?.firstOrNull { it.coverType == "poster" }
-            ?.let { it.remoteUrl ?: it.url },
+        posterPath = series?.images?.firstOrNull { it.coverType == "poster" }?.posterPreference(),
     )
 }
 
@@ -208,8 +197,12 @@ internal fun SonarrBlocklistRecord.toArrBlocklistItem(): ArrBlocklistItem = ArrB
     message = message,
 )
 
-/** `SonarrApiClientImpl.SonarrWantedRecord.toWantedItem`. */
-internal fun SonarrWantedRecord.toArrWantedItem(): ArrWantedItem = ArrWantedItem(
+/**
+ * `SonarrApiClientImpl.SonarrWantedRecord.toWantedItem` — the wanted row IS a
+ * [SonarrEpisodeResource] (field-identical wire), so the mapper lives on the
+ * shared episode row.
+ */
+internal fun SonarrEpisodeResource.toArrWantedItem(): ArrWantedItem = ArrWantedItem(
     id = id,
     tvdbId = series?.tvdbId,
     title = series?.title ?: title.ifBlank { "Unknown" },
@@ -218,15 +211,6 @@ internal fun SonarrWantedRecord.toArrWantedItem(): ArrWantedItem = ArrWantedItem
     monitored = true,
     overview = overview,
     mediaType = ArrMediaType.SERIES,
-)
-
-/** `SonarrApiClientImpl.SonarrCommandResource.toModel`. */
-internal fun SonarrCommandResource.toArrCommand(): ArrCommand = ArrCommand(
-    id = id,
-    name = name,
-    status = status,
-    message = message,
-    dateUtc = queued ?: started ?: ended,
 )
 
 /**

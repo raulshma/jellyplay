@@ -5,14 +5,14 @@ import android.widget.Toast
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.core.data.remote.NavigationTarget
 import com.raulshma.jellyplay.core.data.remote.PlayEventPayload
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
-import com.raulshma.jellyplay.feature.shell.UserMessageHost
-import com.raulshma.jellyplay.feature.shell.resolveUiText
+import com.raulshma.jellyplay.feature.shell.navigation.popPlayerRoutes
+import com.raulshma.jellyplay.feature.shell.navigation.routeForNavigationTarget
 import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import kotlinx.coroutines.flow.Flow
 
@@ -20,13 +20,16 @@ import kotlinx.coroutines.flow.Flow
  * One home for the Android shell's nav-request collectors — the five
  * collect-then-dispatch loops JellyPlayApp's `MainContent` used to hand-copy
  * composable-inline: the pending-route (deep link / shortcut) dispatch, the
- * remote-navigation collector, the remote-control now-playing snackbar, the
- * SyncPlay auto-open guard, and (via [shellUserMessageHost] below) the
- * message-bus adaptation seams. Every loop is the same shape — collect an
+ * remote-navigation collector, the remote-control now-playing snackbar, and
+ * the SyncPlay auto-open guard. Beside them live the message-bus adaptation
+ * seams ([shellUserMessagePresent] / [legacySeverityOf] below) — the former
+ * sixth loop, the hand-copied message collectors, now reduced to feeding the
+ * shared `rememberShellUserMessages` seam. Every loop is the same shape — collect an
  * external request, apply one small policy fork, drive the navigator or the
  * snackbar host — and the forks are pure companion folds
  * ([pendingRouteDispatch], [syncPlayAutoOpenRoute],
- * [nowPlayingSnackbarMessage]) in the [RemoteNavigationRouting] style, so
+ * [nowPlayingSnackbarMessage]) in the shared pure-fold style (the
+ * `feature.shell.navigation.RemoteNavigationRouting` precedent), so
  * both halves are JVM-pinned through fake lambdas
  * (`NavRequestCollectorTest`; the PinGateController shape).
  *
@@ -40,9 +43,12 @@ import kotlinx.coroutines.flow.Flow
  * flow-keyed collectors hold their launch-time instance.
  *
  * NOT here: message-presentation POLICY (serial merge→resolve→present,
- * severity → duration) — that is [UserMessageHost]'s (shared/feature/shell);
- * the adapters at the bottom of this file only construct the host and
- * project the legacy bus's payload. The external-player launch protocol
+ * severity → duration) — that is
+ * [com.raulshma.jellyplay.feature.shell.UserMessageHost]'s
+ * (shared/feature/shell), whose composition wiring is the shared
+ * `rememberShellUserMessages` seam; the adapters at the bottom of this file
+ * only fork the surface ([shellUserMessagePresent]) and project the legacy
+ * bus's payload ([legacySeverityOf]). The external-player launch protocol
  * lives in `ExternalPlayerHost` (navigation/playbackhost, beside
  * `PlaybackHostRouter`) — it is STATEFUL (the pending-launch stash), so it
  * is remembered rather than constructed inline like this collector.
@@ -72,6 +78,8 @@ internal class NavRequestCollector(
     private val backStacks: () -> Collection<MutableList<NavKey>>,
     private val consumePendingRoute: () -> Unit,
     private val presentSnackbar: suspend (message: String) -> Unit,
+    private val goBack: () -> Unit,
+    private val dispatchKey: ((Int) -> Boolean)?,
 ) {
 
     /**
@@ -113,15 +121,44 @@ internal class NavRequestCollector(
      * requests emitted by the WebSocket receiver
      * (`RemoteNavigationBridge.targets`). The target→route mapping and the
      * Jellyfin-web "Stop" pop (`ClosePlayer` → player entries off the top of
-     * EVERY back stack) are [RemoteNavigationRouting]'s pure folds; pushed
+     * EVERY back stack) are shared/feature/shell's pure folds
+     * (`feature.shell.navigation.RemoteNavigationRouting`); pushed
      * routes go through the filter-carrying [navigate] seam.
+     *
+     * Navigation ladder: [NavigationTarget.GoBack] pops via [goBack];
+     * [NavigationTarget.MoveFocus] / [NavigationTarget.InvokeSelect] /
+     * [NavigationTarget.OpenContextMenu] synthesize D-pad/center/menu key
+     * events through [dispatchKey] (Compose's own key handling interprets
+     * them); a context-menu key nothing consumed falls back to the standard
+     * user message; [NavigationTarget.GoToTopLevel] reuses the pure
+     * [pendingRouteDispatch] tab-vs-push fork.
      */
-    suspend fun collectRemoteNavigation(targets: Flow<NavigationTarget>) {
+    suspend fun collectRemoteNavigation(
+        targets: Flow<NavigationTarget>,
+        contextMenuUnavailableMessage: String,
+    ) {
         targets.collect { target ->
-            if (target is NavigationTarget.ClosePlayer) {
-                popPlayerRoutes(backStacks())
-            } else {
-                routeForNavigationTarget(target)?.let(navigate)
+            when (target) {
+                NavigationTarget.ClosePlayer -> popPlayerRoutes(backStacks())
+                NavigationTarget.GoBack -> goBack()
+                is NavigationTarget.MoveFocus -> dispatchKey?.invoke(keyCodeForFocusDirection(target.direction))
+                NavigationTarget.InvokeSelect -> dispatchKey?.invoke(REMOTE_SELECT_KEYCODE)
+                NavigationTarget.OpenContextMenu -> {
+                    val handled = dispatchKey?.invoke(REMOTE_CONTEXT_MENU_KEYCODE) == true
+                    if (!handled) presentSnackbar(contextMenuUnavailableMessage)
+                }
+                is NavigationTarget.GoToTopLevel,
+                is NavigationTarget.OpenVideoPlayer,
+                is NavigationTarget.OpenAudioPlayer,
+                is NavigationTarget.OpenMediaDetail -> {
+                    routeForNavigationTarget(target)?.let { route ->
+                        when (pendingRouteDispatch(route, topLevelKeys)) {
+                            is PendingRouteDispatch.SwitchTab -> selectTopLevelTab(route)
+                            is PendingRouteDispatch.Push -> navigate(route)
+                            PendingRouteDispatch.None -> Unit
+                        }
+                    }
+                }
             }
         }
     }
@@ -196,39 +233,36 @@ internal class NavRequestCollector(
 }
 
 /**
- * Constructs the Android shell's [UserMessageHost] — the present adapter the
- * shared host needs: TV renders a system Toast (the TV layout has no root
- * SnackbarHost), phone renders the shell's [SnackbarHostState] snackbar
- * (accessible, dismissible). Owns ONLY the surface fork and the duration
- * mappings; the serial merge→resolve→present choreography and the
- * severity → duration policy stay in the shared host (`UserMessageHost`).
- * `MainContent` remembers the result keyed on `isTv`, exactly as it did when
- * this adapter was inline.
+ * The Android shell's present adapter for the shared
+ * `rememberShellUserMessages` seam — the surface fork the host needs: TV
+ * renders a system Toast (the TV layout has no root SnackbarHost), phone
+ * renders the shell's [SnackbarHostState] snackbar (accessible,
+ * dismissible). Owns ONLY the surface fork and the duration mappings; host
+ * construction, the serial merge→resolve→present choreography and the
+ * severity → duration policy stay in the shared seam.
  */
-internal fun shellUserMessageHost(
+internal fun shellUserMessagePresent(
     context: Context,
     isTv: Boolean,
     snackbarHostState: SnackbarHostState,
-): UserMessageHost = UserMessageHost(
-    resolveText = ::resolveUiText,
-    present = { text, duration ->
-        if (isTv) {
-            Toast.makeText(context, text, toastDurationFor(duration)).show()
-        } else {
-            snackbarHostState.showSnackbar(
-                message = text,
-                withDismissAction = true,
-                duration = snackbarDurationFor(duration),
-            )
-        }
-    },
-)
+): suspend (String, UserMessageDuration) -> Unit = { text, duration ->
+    if (isTv) {
+        Toast.makeText(context, text, toastDurationFor(duration)).show()
+    } else {
+        snackbarHostState.showSnackbar(
+            message = text,
+            withDismissAction = true,
+            duration = snackbarDurationFor(duration),
+        )
+    }
+}
 
 /**
  * The legacy (`core:ui` feedback) bus's severity projected onto the shared
- * bus's vocabulary — the adaptation `UserMessageHost.hostAdapted` needs for
- * a shell-owned payload type the shared module cannot name. Exhaustive: a
- * new legacy arm is a compile-time decision.
+ * bus's vocabulary — the adaptation
+ * `com.raulshma.jellyplay.feature.shell.UserMessageHost.hostAdapted` needs
+ * for a shell-owned payload type the shared module cannot name. Exhaustive:
+ * a new legacy arm is a compile-time decision.
  */
 internal fun legacySeverityOf(message: UserMessage): SharedUserMessage.Severity = when (message) {
     is UserMessage.Error -> SharedUserMessage.Severity.Error

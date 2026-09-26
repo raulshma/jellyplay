@@ -11,12 +11,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the wasm user-management wire DTOs' PascalCase contract and the
+ * Pins the user-management wire DTOs' PascalCase contract and the
  * DTO→core.model mapping semantics (mirrors the jvmShared JellyfinDtoMappers
  * / UserApiClientImpl behavior these tests substitute for): managed-user
  * mapping field-for-field, the policy overlay's merge rules, the
  * parental-rating grouping, and the password null→reset semantics. Decoding
- * runs through the same lenient Json configuration the wasm client uses.
+ * runs through the same lenient Json configuration the wire client uses.
  */
 class UserWireMapperTest {
 
@@ -228,8 +228,8 @@ class UserWireMapperTest {
         val serverPolicy = json.decodeFromString<ManagedUserPolicyDtoWire>(fullPolicyJson())
         // An admin edits ONE permission off — false, which equals the wire
         // DTO's default. The SDK's UserPolicy has no Kotlin defaults, so the
-        // JVM POSTs every field; the wasm client must therefore encode this
-        // body with encodeDefaults = true (userPostWireJson). Pin that the
+        // JVM POSTs every field; this body must therefore be encoded
+        // with encodeDefaults = true (userPostWireJson). Pin that the
         // false permission lands on the wire, and that the shared lenient
         // instance would have silently omitted it — the server would then
         // restore its permissive CLR default and the edit would no-op.

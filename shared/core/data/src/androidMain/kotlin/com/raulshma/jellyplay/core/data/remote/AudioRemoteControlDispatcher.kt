@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
+import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
 import com.raulshma.jellyplay.core.model.remote.PlaybackDomain
 import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
@@ -22,12 +23,17 @@ import kotlinx.coroutines.withContext
  * the underlying ExoPlayer instance must only be touched from the
  * application looper and the receiver delivers these events on
  * [Dispatchers.Default].
+ *
+ * Renamed `AndroidAudioRemoteControlDispatcher` with the jvmShared
+ * extraction: `AudioRemoteControlDispatcher` is now the commonMain INTERFACE
+ * this class implements (desktop's jvmMain twin drives the shared-contract
+ * DesktopAudioQueueManager).
  */
-class AudioRemoteControlDispatcher(
+class AndroidAudioRemoteControlDispatcher(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val mediaRepository: MediaRepository,
     private val remoteNavigationBridge: RemoteNavigationBridge,
-) : RemoteControlDispatcher {
+) : AudioRemoteControlDispatcher {
 
     override val domain: PlaybackDomain = PlaybackDomain.AUDIO
 
@@ -111,6 +117,21 @@ class AudioRemoteControlDispatcher(
                 GeneralCommand.ToggleFullscreen,
                 is GeneralCommand.DisplayMessage,
                 is GeneralCommand.Unknown -> Unit
+                // Nav-ladder + DisplayContent + TakeScreenshot never reach a
+                // dispatcher (the receiver routes them UI-side before
+                // dispatch) — exhaustiveness backstop only.
+                GeneralCommand.Back,
+                GeneralCommand.Select,
+                GeneralCommand.MoveUp,
+                GeneralCommand.MoveDown,
+                GeneralCommand.MoveLeft,
+                GeneralCommand.MoveRight,
+                GeneralCommand.GoHome,
+                GeneralCommand.GoToSettings,
+                GeneralCommand.GoToSearch,
+                GeneralCommand.ToggleContextMenu,
+                is GeneralCommand.DisplayContent,
+                GeneralCommand.TakeScreenshot -> Unit
             }
         }
     }

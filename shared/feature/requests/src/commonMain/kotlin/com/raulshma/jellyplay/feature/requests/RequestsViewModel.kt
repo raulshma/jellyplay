@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
@@ -157,7 +158,7 @@ class RequestsViewModel(
             val requestedBy = if (s.showMyRequestsOnly) currentUser.value?.id else null
             val skip = if (refresh) 0 else PageAppender.skipForPage(s.currentPage, s.pageSize)
 
-            RequestsLoad.load(
+            loadInto(
                 start = { _state.value = s.copy(isLoading = true, error = null) },
                 fetch = {
                     seerrRepository.getRequests(

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
+import com.raulshma.jellyplay.core.model.LanguageRuleSet
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -55,6 +56,7 @@ class SubtitleLanguageStore constructor(
         val APP_LANGUAGE = stringPreferencesKey("app_language")
         val HDR_SUBTITLE_STYLE_ENABLED = booleanPreferencesKey("hdr_subtitle_style_enabled")
         val HDR_SUBTITLE_STYLE = stringPreferencesKey("hdr_subtitle_style")
+        val TRACK_SELECTION_RULES = stringPreferencesKey("track_selection_rules")
     }
 
     /** Memoised decode of the SDR subtitle style blob. */
@@ -63,6 +65,9 @@ class SubtitleLanguageStore constructor(
     private var cachedHdrSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
     /** Memoised decode of the per-item subtitle delay map blob. */
     private var cachedSubtitleDelayByItem: ParsedCache<Map<String, Long>> = ParsedCache(null, emptyMap())
+    /** Memoised decode of the track-language rule-set blob. */
+    private var cachedTrackSelectionRules: ParsedCache<LanguageRuleSet> =
+        ParsedCache(null, LanguageRuleSet())
 
     /**
      * The subtitle &amp; language preference slice, derived directly from the raw
@@ -108,11 +113,21 @@ class SubtitleLanguageStore constructor(
             nullPolicy = CachedJsonNullPolicy.MemoizeNull,
         )
 
+        val trackSelectionRules = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.TRACK_SELECTION_RULES],
+            cache = cachedTrackSelectionRules,
+            default = LanguageRuleSet(),
+            parse = { PreferenceCodec.json.decodeFromString<LanguageRuleSet>(it) },
+            cacheRef = { cachedTrackSelectionRules = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
+
         return SubtitleSlice(
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             subtitlesForcedOnly = PreferenceCodec.readBool(prefs, Keys.SUBTITLES_FORCED_ONLY, "subtitles_forced_only", false),
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             subtitleDelayByItem = subtitleDelayByItem,
+            languageRules = trackSelectionRules,
             subtitleStyle = subtitleStyle ?: SubtitleStyle(),
             subtitlePreviewInSettings = PreferenceCodec.readBool(prefs, Keys.SUBTITLE_PREVIEW_IN_SETTINGS, "subtitle_preview_in_settings", true),
             preferAudioDescription = PreferenceCodec.readBool(prefs, Keys.PREFER_AUDIO_DESCRIPTION, "prefer_audio_description", false),
@@ -199,6 +214,20 @@ class SubtitleLanguageStore constructor(
     }
 
     /**
+     * Persists the track-language rule set. The identity rule set
+     * (MANUAL preset, nothing configured) removes the key so storage carries
+     * no no-op blob — matching the identity-by-absence read default.
+     */
+    suspend fun setTrackSelectionRules(rules: LanguageRuleSet) {
+        dataStore.edit { prefs ->
+            if (rules == LanguageRuleSet()) prefs.remove(Keys.TRACK_SELECTION_RULES)
+            else prefs[Keys.TRACK_SELECTION_RULES] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<LanguageRuleSet>(), rules,
+            )
+        }
+    }
+
+    /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
      * those lists are what the facade actually resets, so deriving from them
@@ -228,6 +257,7 @@ class SubtitleLanguageStore constructor(
             Keys.HDR_SUBTITLE_STYLE_ENABLED,
             Keys.HDR_SUBTITLE_STYLE,
             Keys.SUBTITLE_DELAY_BY_ITEM,
+            Keys.TRACK_SELECTION_RULES,
         )
         PreferenceResetCategory.MISC_APP -> listOf(
             Keys.APP_LANGUAGE,
@@ -263,6 +293,10 @@ class SubtitleLanguageStore constructor(
                 kotlinx.serialization.serializer<SubtitleStyle>(),
                 slice.hdrSubtitleStyle,
             )
+            prefs[Keys.TRACK_SELECTION_RULES] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<LanguageRuleSet>(),
+                slice.languageRules,
+            )
         }
     }
 }
@@ -279,6 +313,8 @@ data class SubtitleSlice(
     val subtitlesForcedOnly: Boolean = false,
     val preferredAudioLanguage: String? = null,
     val subtitleDelayByItem: Map<String, Long> = emptyMap(),
+    /** The track-language rule set; the default instance is the inert identity. */
+    val languageRules: LanguageRuleSet = LanguageRuleSet(),
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val subtitlePreviewInSettings: Boolean = true,
     val preferAudioDescription: Boolean = false,

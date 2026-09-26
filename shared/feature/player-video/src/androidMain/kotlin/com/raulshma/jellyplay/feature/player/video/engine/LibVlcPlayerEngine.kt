@@ -63,7 +63,6 @@ class LibVlcPlayerEngine(
     private var currentPlaybackRequest: PlaybackRequest? = null
 
     private var pendingPlay = false
-    private var wasPlayingBeforeActivityPause = false
     private var hasRenderer = false
     private var pendingRendererItem: RendererItem? = null
     private var cachedDurationMs: Long = 0L
@@ -111,23 +110,20 @@ class LibVlcPlayerEngine(
     @Volatile
     private var mediaGeneration = 0
 
-    override fun onActivityPause() {
-        wasPlayingBeforeActivityPause = _isPlaying.value
-        pause()
+    // Activity pause/resume: the remember-+pause / restore template is final in
+    // BasePlayerEngine; libVLC contributes only the view churn around it —
+    // detach after the pause, re-attach before the play restore.
+    override fun onPausedNative() {
         try { mediaPlayer?.detachViews() } catch (_: Exception) {}
     }
 
-    override fun onActivityResume() {
+    override fun onResumingNative() {
         videoLayout?.let { layout ->
             try {
                 mediaPlayer?.attachPreviewViews(layout)
             } catch (e: Exception) {
                 Log.e(TAG, "attachViews failed on resume", e)
             }
-        }
-        if (wasPlayingBeforeActivityPause) {
-            wasPlayingBeforeActivityPause = false
-            play()
         }
     }
 
@@ -161,6 +157,15 @@ class LibVlcPlayerEngine(
                 if (dur > 0) {
                     _bufferedPositionMs.value = ((bufPercent / 100f) * dur).toLong()
                 }
+                // libVLC exposes only a 0..100 buffering percentage —
+                // the fraction-ahead approximation bands [position, position +
+                // fraction * duration]. Full (100%) buffering shades through
+                // the end of the item.
+                _bufferedRanges.value = BufferedRanges.aheadOfPosition(
+                    positionMs = currentPositionMs,
+                    fraction = bufPercent / 100f,
+                    durationMs = dur,
+                )
             }
             MediaPlayer.Event.ESAdded,
             MediaPlayer.Event.ESDeleted,
@@ -175,7 +180,6 @@ class LibVlcPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
-        recreateEngineScopeIfInactive()
         releaseInternal(releaseVlc = true)
 
         currentPlaybackRequest = request

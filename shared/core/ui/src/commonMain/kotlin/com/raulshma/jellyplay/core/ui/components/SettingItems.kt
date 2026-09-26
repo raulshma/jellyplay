@@ -3,14 +3,12 @@ package com.raulshma.jellyplay.core.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,7 +47,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
 import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
-import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -186,17 +183,6 @@ private fun SettingListItemImpl(
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = pressScaleValue(isPressed, 0.97f),
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "settingItemScale",
-    )
-    val pressAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "settingItemAlpha",
-    )
 
     val headlineColor = if (isDestructive) MaterialTheme.colorScheme.error
     else MaterialTheme.colorScheme.onSurface
@@ -284,11 +270,12 @@ private fun SettingListItemImpl(
         modifier = Modifier
             .fillMaxWidth()
             .then(modifier)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = pressAlpha
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.97f,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                pressedAlpha = 0.7f,
+            )
             .highlightGlow(glowAlpha, shape, primaryColor)
             .lightModeHairlineBorder(shape)
             .focusRequester(focusRequester)
@@ -355,17 +342,6 @@ private fun SettingToggleItemImpl(
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val interactionSource = remember { MutableInteractionSource() }
     val confirmHaptic = rememberConfirmHaptic()
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "toggleItemScale",
-    )
-    val pressAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "toggleItemAlpha",
-    )
     val iconColor by animateColorAsState(
         targetValue = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         else if (checked) MaterialTheme.colorScheme.primary
@@ -440,11 +416,12 @@ private fun SettingToggleItemImpl(
         modifier = Modifier
             .fillMaxWidth()
             .then(modifier)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = pressAlpha
-            }
+            .pressScale(
+                interactionSource = interactionSource,
+                defaultScale = 0.97f,
+                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                pressedAlpha = 0.7f,
+            )
             .highlightGlow(glowAlpha, shape, primaryColor)
             .lightModeHairlineBorder(shape)
             .focusRequester(focusRequester)

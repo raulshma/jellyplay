@@ -30,7 +30,7 @@ app could not even start; both P0s are fixed and committed:
    `SavedStateConfiguration.DEFAULT` because only the desktop shell passes a
    real module (`desktopNavSavedStateConfiguration()`), which is exactly why
    desktop was immune. Fix: the expect/actual `rememberNavBackStackSaveable`
-   seam — Android takes the library's reflection overload, JVM/wasm keep the
+   seam — Android takes the library's reflection overload, JVM keeps the
    explicit-configuration path.
 2. **compose-resources assets missing from the APK** (commit `c6da8ff8a`).
    AGP-9 KMP library plugins leave android resources OFF, so no `.cvr` assets

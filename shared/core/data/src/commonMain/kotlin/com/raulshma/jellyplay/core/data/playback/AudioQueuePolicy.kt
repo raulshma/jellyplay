@@ -42,6 +42,9 @@ package com.raulshma.jellyplay.core.data.playback
  *    (the pre-seek value — the adapters' original order; the next tick
  *    publishes A). Unchanged position/duration publish as null (writing
  *    them back would be a StateFlow-conflated no-op anyway).
+ *  - END-OF-STREAM STOP POSITION ([finalStopPositionTicks]): last published
+ *    position wins; otherwise the item's full duration stands in (the row
+ *    ended); ticks are 100-ns units; total, 0/0 → 0.
  */
 object AudioQueuePolicy {
 
@@ -237,4 +240,20 @@ object AudioQueuePolicy {
             updateLyricIndex = hasLyrics,
         )
     }
+
+    /**
+     * The end-of-stream stop position every track handoff reports for the
+     * PREVIOUS item: the last published position when one exists, else the
+     * item's full duration (the engine ended the row, so "no position
+     * published" means it played to the end), converted to 100-ns ticks —
+     * Jellyfin's `playbackPositionTicks` unit. Total: any input pair yields a
+     * non-negative result; the 0/0 pair (nothing ever published) reports 0.
+     *
+     * Was a verbatim `if (position > 0) position * 10_000 else duration *
+     * 10_000` three-peat: Android's natural-transition site, Android's
+     * crossfade site (both `AudioPlaybackManager`), and commonMain's
+     * `AudioQueueStateCore.transitionTo` (which pins the shared shape).
+     */
+    fun finalStopPositionTicks(positionMs: Long, durationMs: Long): Long =
+        if (positionMs > 0) positionMs * 10_000 else durationMs * 10_000
 }

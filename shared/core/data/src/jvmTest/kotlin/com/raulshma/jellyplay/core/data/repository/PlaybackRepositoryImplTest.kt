@@ -123,6 +123,30 @@ class PlaybackRepositoryImplTest {
     }
 
     @Test
+    fun `reportPlaybackStopped threads the failed flag to the apiClient`() = runTest {
+        // An error-aborted session's stop must reach the wire with
+        // failed=true (the server then skips its own ">= X% = played" rule).
+        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, true) } returns
+            Result.success(Unit)
+
+        val result = repository.reportPlaybackStopped("item-1", "session-1", 5000000L, failed = true)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, true) }
+        coVerify(exactly = 0) { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, false) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped defaults to a non-failed stop`() = runTest {
+        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, false) } returns
+            Result.success(Unit)
+
+        repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
+
+        coVerify(exactly = 1) { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, false) }
+    }
+
+    @Test
     fun `reportPlaybackStopped purges user-data caches for the item`() = runTest {
         coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
             Result.success(Unit)
@@ -401,19 +425,8 @@ class PlaybackRepositoryImplTest {
         accessToken = null,
     )
 
-    @Test
-    fun `getServerUrl delegates to apiClient`() {
-        every { apiClient.getServerUrl() } returns "https://test.example.com"
-
-        assertEquals("https://test.example.com", repository.getServerUrl())
-    }
-
-    @Test
-    fun `getAccessToken delegates to apiClient`() {
-        every { apiClient.getAccessToken() } returns "token-123"
-
-        assertEquals("token-123", repository.getAccessToken())
-    }
+    // getServerUrl/getAccessToken delegate tests retired with the members: the
+    // identity reads moved to PlaybackIdentity (DefaultPlaybackIdentityTest).
 
     // ── resolvePlayback ───────────────────────────────────────────────
 

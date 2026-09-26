@@ -216,6 +216,7 @@ class LibraryLayoutViewModel(
             homeDiscovery.setNextUpMaxDays(config.nextUpMaxDays)
             homeDiscovery.setNextUpRewatching(config.nextUpRewatching)
             homeDiscovery.setPinnedHomeSections(config.pinnedHomeSections)
+            homeDiscovery.setDiscoverRows(config.discoverRows)
             homeDiscovery.setHomeHeroEnabled(config.homeHeroEnabled)
             homeDiscovery.setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
         }
@@ -280,6 +281,7 @@ class LibraryLayoutViewModel(
             nextUpMaxDays = prefs.nextUpMaxDays,
             nextUpRewatching = prefs.nextUpRewatching,
             pinnedHomeSections = prefs.pinnedHomeSections,
+            discoverRows = prefs.discoverRows,
             homeHeroEnabled = prefs.homeHeroEnabled,
             continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
         )

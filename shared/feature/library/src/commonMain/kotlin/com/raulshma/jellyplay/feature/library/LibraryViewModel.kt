@@ -6,6 +6,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -42,7 +43,7 @@ import kotlinx.coroutines.flow.map
 import com.raulshma.jellyplay.core.data.util.FilterCodec
 import com.raulshma.jellyplay.core.data.util.loadListWithRetry
 
-/** Projected slice of [UserPreferences] used to derive the active library view mode. */
+/** Projected slice used to derive the active library view mode. */
 private data class ViewModePrefs(
     val libraryViewMode: LibraryViewMode,
     val libraryViewModes: Map<String, String>,
@@ -107,7 +108,7 @@ internal class LibraryViewModel(
      * Eagerly-started flow — one collector serves every host surface.
      */
     // Whether this platform has a download pipeline — screens gate the
-    // download CTA on it (hidden rather than Failed-toasting on web).
+    // download CTA on it (hidden rather than Failed-toasting).
     val downloadSupported = quickDownloadActions.isSupported
 
     val downloadedIds = quickDownloadActions.downloadedIds
@@ -438,7 +439,7 @@ internal class LibraryViewModel(
                     // fetch — e.g. a transient 403 — from making the app unusable
 
                     if (_folders.value.isNullOrEmpty()) {
-                        _error.set(error.message ?: "${error::class.simpleName}")
+                        _error.set(UserErrorMessages.resolve(error, "${error::class.simpleName}"))
                     }
                 }
             _isLoading.set(false)

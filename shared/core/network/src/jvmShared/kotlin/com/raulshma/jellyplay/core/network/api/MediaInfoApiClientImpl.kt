@@ -10,9 +10,11 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.model.PlaybackReportingActivity
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.StaleMediaItem
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import kotlinx.coroutines.async
@@ -31,12 +33,19 @@ import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.extensions.*
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class MediaInfoApiClientImpl @Inject constructor(
+/** The default-zone wall clock through the seam — the ONE "now" derivation every seam read in this file shares (LocalDateTime.now() IS ofEpochMilli(System.currentTimeMillis()) in the default zone, and SystemTimeSource.nowEpochMillis() IS System.currentTimeMillis() on both platforms). */
+private fun TimeSource.nowLocalDateTime(): java.time.LocalDateTime =
+    java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(nowEpochMillis()), java.time.ZoneId.systemDefault())
+
+class MediaInfoApiClientImpl(
     private val engine: JellyfinApiEngine,
+    /**
+     * Clock seam (D3) for the stale/watched scans' `now` reference — the
+     * daysSincePlayed filtering is behaviour-bearing (what the cleanup
+     * suggestion shows), so it reads the injected clock, not the machine's.
+     */
+    private val timeSource: TimeSource,
 ) : MediaInfoApiClient {
 
     private val rawRequester = JellyfinRawRequester(engine)
@@ -45,7 +54,11 @@ class MediaInfoApiClientImpl @Inject constructor(
     // repository layer (which already caches library folders), so every
     // newsletter render previously bypassed the in-memory cache. Short TTL
     // keeps it fresh across server renames without per-render network calls.
-    private val serverNameCache = TtlCache<String>(maxSize = 4, ttlMs = 30 * 60 * 1000L)
+    // Like AdminApiClientImpl's dashboard caches, a declared exception to the
+    // identity-keyed house idiom: bare server-scoped key, no CacheIdentity
+    // composite (core:network has no identity source) — see CONTEXT.md
+    // "Core data repositories".
+    private val serverNameCache = TtlCache<String>(maxSize = 4, ttlMs = FreshnessCeilings.MEDIA_INFO_SERVER_NAME_TTL_MS)
 
     private suspend fun getCachedServerName(): String =
         runCatchingRethrowingCancellation {
@@ -155,14 +168,13 @@ class MediaInfoApiClientImpl @Inject constructor(
         rawRequester.postStatusOnly("/newsletter/test", "Failed to send test newsletter")
     }
 
-    override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.withApi { api ->
         val response = api.userApi.getUsers().content ?: emptyList()
         response.map(::toJellyfinUser)
     }
 
-    override suspend fun getUserById(userId: String): Result<JellyfinUser> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.getUserById(java.util.UUID.fromString(userId)).content.let(::toJellyfinUser)
+    override suspend fun getUserById(userId: String): Result<JellyfinUser> = engine.withApi { api ->
+        api.userApi.getUserById(java.util.UUID.fromString(userId)).content.let(::toJellyfinUser)
     }
 
     private fun toJellyfinUser(dto: org.jellyfin.sdk.model.api.UserDto): JellyfinUser = JellyfinUser(
@@ -177,8 +189,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         hasPassword = dto.hasPassword,
     )
 
-    override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.withApi { api ->
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val response = api.itemsApi.getItems(
             userId = java.util.UUID.fromString(userId),
@@ -191,8 +202,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         response?.totalRecordCount ?: 0
     }
 
-    override suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>?): Result<Int> = engine.withApi { api ->
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val response = api.itemsApi.getItems(
             userId = java.util.UUID.fromString(userId),
@@ -213,8 +223,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         sortOrder: String,
         startIndex: Int,
         limit: Int,
-    ): Result<Pair<Int, List<MediaItem>>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Pair<Int, List<MediaItem>>> = engine.withApi { api ->
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
         val sortList = parseItemSortList(sortBy)
         val order = if (sortOrder == "Descending") SortOrder.DESCENDING else SortOrder.ASCENDING
@@ -243,8 +252,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
         useDateAdded: Boolean,
-    ): Result<Pair<Int, List<StaleMediaItem>>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Pair<Int, List<StaleMediaItem>>> = engine.withApi { api ->
         val types = includeItemTypes.mapNotNull { parseItemKind(it) }
         val allItems = mutableListOf<StaleMediaItem>()
         var totalEstimate = 0
@@ -279,7 +287,9 @@ class MediaInfoApiClientImpl @Inject constructor(
         val playedItems = playedResponse?.items ?: emptyList()
         totalEstimate = playedResponse?.totalRecordCount ?: 0
 
-        val now = java.time.LocalDateTime.now()
+        // Same value LocalDateTime.now() produced, through the epoch seam —
+        // [nowLocalDateTime].
+        val now = timeSource.nowLocalDateTime()
         for (dto in playedItems) {
             val userData = dto.userData
             val lastPlayedStr = userData?.lastPlayedDate?.toString()
@@ -337,8 +347,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         parentId: String?,
         startIndex: Int,
         limit: Int,
-    ): Result<Pair<Int, List<WatchedMediaItem>>> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Pair<Int, List<WatchedMediaItem>>> = engine.withApi { api ->
         val types = includeItemTypes.mapNotNull { parseItemKind(it) }
         val response = api.itemsApi.getItems(
             userId = java.util.UUID.fromString(userId),
@@ -358,7 +367,8 @@ class MediaInfoApiClientImpl @Inject constructor(
         ).content
 
         val items = (response?.items ?: emptyList())
-        val now = java.time.LocalDateTime.now()
+        // Seam-derived `now` — see [nowLocalDateTime] / the stale-scan site.
+        val now = timeSource.nowLocalDateTime()
         val filtered = items.filter { dto ->
             if (keepFavorites && dto.userData?.isFavorite == true) return@filter false
             val lastPlayed = dto.userData?.lastPlayedDate
@@ -400,12 +410,12 @@ class MediaInfoApiClientImpl @Inject constructor(
         Pair(total, watchedItems)
     }
 
-    override suspend fun deleteItem(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().libraryApi.deleteItem(itemId = java.util.UUID.fromString(itemId))
+    override suspend fun deleteItem(itemId: String): Result<Unit> = engine.withApi { api ->
+        api.libraryApi.deleteItem(itemId = java.util.UUID.fromString(itemId))
     }
 
-    override suspend fun deleteItems(itemIds: List<String>): Result<Int> = engine.apiResultWithRetry {
-        engine.requireApi().libraryApi.deleteItems(
+    override suspend fun deleteItems(itemIds: List<String>): Result<Int> = engine.withApi { api ->
+        api.libraryApi.deleteItems(
             ids = itemIds.map { java.util.UUID.fromString(it) },
         )
         itemIds.size

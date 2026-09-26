@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
  * divergences (unconditional hook fire, the CUSTOM-preset `levelsRewritten`
  * flag, the null-context ReplayGain shims) are pinned in the core's KDoc.
  */
-class AudioEffectsProcessor() : AudioEffectsStateCore(rejectOutOfRangeEqualizerBands = false) {
+class AudioEffectsProcessor() : AudioEffectsStateCore() {
     private lateinit var scope: CoroutineScope
 
     var playerProvider: (() -> ExoPlayer?)? = null

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -13,10 +14,10 @@ import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
@@ -75,7 +76,10 @@ import kotlinx.datetime.plus
  *    reconnect handshake: full-screen loader, outbox drain, capped fetch.
  *    The going-online busy flag itself is NOT here —
  *    [OfflineModeManager.goingOnline] owns it beside the transition that
- *    raises it).
+ *    raises it). The dice-roll MACHINERY is delegated to
+ *    [DiscoverRowsCoordinator] (constructed inside — same state store, same
+ *    scope, the generation invariant owned beside the roll jobs it orders);
+ *    the refresher keeps only the drain CALL SITE inside its fetch.
  *  * [HomeViewModel] is a flows + `onEvent` facade: it folds [state] into
  *    its single UiState object, resets the scroll anchor on identity
  *    changes and manual refresh (pure VM state the refresher cannot see),
@@ -136,7 +140,7 @@ internal class HomeRefresher(
     // All cadence/TTL constants live in core:model's HomeFreshness — the one
     // seam for the home freshness policy shared with the cache layers below.
 
-    private companion object {
+    internal companion object {
         /**
          * Hard deadline on the offline→online fetch. There is no withTimeout
          * anywhere down the getHomeSections / fetchDiscoverSections /
@@ -157,6 +161,15 @@ internal class HomeRefresher(
 
     private val _state = MutableStateFlow(HomeRefreshState())
     val state: StateFlow<HomeRefreshState> = _state.asStateFlow()
+
+    /**
+     * The dice-roll machinery (registry, roll jobs, in-place patches, the
+     * min-spin floor) — extracted so the generation invariant lives beside
+     * the jobs it orders. Constructed here (not injected) with the refresher's
+     * own scope/repository/state so every construction surface that already
+     * builds a refresher keeps building a working one.
+     */
+    private val discoverRows = DiscoverRowsCoordinator(scope, mediaRepository, _state)
 
     private val refreshMutex = Mutex()
     private var refreshJob: Job? = null
@@ -190,6 +203,10 @@ internal class HomeRefresher(
      */
     private var userDataRefreshJob: Job? = null
     // Discover-sections TTL gate (see HomeFreshness.DISCOVER_TTL_MS / fetchDiscoverSections).
+    // The CUSTOM Seerr discover rows need no gate here anymore: they ride
+    // the home-sections fetch itself (network-layer TTL + last-known-good —
+    // see HomeSectionsFetcher.fetchSeerrDiscoverRows); the refresher's
+    // WHAT/WHEN voice for them is the query it hands to getHomeSections.
     private val discoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
     private var lastContinueWatchingIds: Set<String> = emptySet()
     /**
@@ -293,7 +310,10 @@ internal class HomeRefresher(
                     // force = the home screen's manual refresh /
                     // pull-to-refresh: bypass this query's home-sections
                     // cache rather than dropping every cache in the
-                    // repository (plan 08).
+                    // repository (plan 08). The main fetch carries the
+                    // custom discover rows of BOTH sources (Jellyfin +
+                    // Seerr) — the network layer owns their fan-out, TTL and
+                    // ordering; nothing is spliced here anymore.
                     mediaRepository.getHomeSections(sectionPrefs.query, force = force)
                 }
                 val discoverDeferred = if (discoverEnabledProvider()) {
@@ -340,11 +360,26 @@ internal class HomeRefresher(
                         // and BEFORE the sections write so sections and
                         // fractions land as ONE emission — a two-step write
                         // painted paged-book cards on the percent fallback
-                        // until the second update arrived.
+                        // until the second update arrived. The decode is also
+                        // the fetch's LAST suspension and must stay ahead of
+                        // the roll-registry drain below (generation invariant
+                        // on [DiscoverRowsCoordinator.rolledRowGenerations]);
+                        // it reads only the CONTINUE_READING section, which
+                        // discover rolls never touch, so the pre-drain
+                        // sections are the right input either way.
                         val bookFractions = decodeBookProgressFractionsFor(finalSections)
-                        _state.update { it.copy(sections = finalSections, bookProgressFractions = bookFractions) }
 
-                        val continueWatching = finalSections
+                        // The fetch's drain point — its own last word on
+                        // sections: re-apply every roll registered before now
+                        // over the pre-roll payloads this fetch captured
+                        // (generation invariant on the coordinator's
+                        // registry). drainRolls is SYNCHRONOUS: no suspension
+                        // between this drain and the write below, by
+                        // construction.
+                        val rolledSections = discoverRows.drainRolls(finalSections)
+                        _state.update { it.copy(sections = rolledSections, bookProgressFractions = bookFractions) }
+
+                        val continueWatching = rolledSections
                             .find { it.type == HomeSectionType.CONTINUE_WATCHING }
                             ?.items ?: emptyList()
                         val currentIds = continueWatching.map { it.id }.toSet()
@@ -388,7 +423,7 @@ internal class HomeRefresher(
                         // still swaps Continue Watching / Next Up to the
                         // locally derived rows instead of freezing the
                         // pre-offline server snapshot.
-                        _state.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
+                        _state.update { s -> s.copy(error = UserErrorMessages.resolve(throwable, "${throwable::class.simpleName}")) }
                         _state.update { it.copy(partialLoadError = false) }
                     }
 
@@ -478,6 +513,7 @@ internal class HomeRefresher(
                 refreshJob?.cancel()
                 userDataRefreshJob?.cancel()
                 discoverJob?.cancel()
+                discoverRows.cancelForIdentityChange()
                 // The raced-sync bypass described sections this reset just
                 // dropped — it must not outlive the identity that raced.
                 lastFetchRacedPendingSync = false
@@ -552,6 +588,7 @@ internal class HomeRefresher(
         // identity; letting it land would repopulate the just-cleared
         // discoverSections with the previous user's rows.
         discoverJob?.cancel()
+        discoverRows.cancelForIdentityChange()
         val sectionPrefs = sectionPrefsProvider()
         val cachedSections = orderedCachedSections(sectionPrefs)
         // Same single-emission pairing as the fetch write: the SWR paint and
@@ -680,7 +717,10 @@ internal class HomeRefresher(
 
     /**
      * Resets the discover-sections TTL so the next [fetchDiscoverSections]
-     * actually hits the network. Called on user-initiated refresh.
+     * actually hits the network. Called on user-initiated refresh — the
+     * custom Seerr rows ride the forced home-sections fetch instead (the
+     * network layer's force acts as their invalidation), and the legacy
+     * fixed grid is what this gate still covers.
      */
     private fun invalidateDiscoverCache() {
         discoverCache.invalidate()
@@ -697,6 +737,17 @@ internal class HomeRefresher(
     private fun fetchDiscover() {
         discoverJob?.cancel()
         discoverJob = scope.launch { fetchDiscoverSections(seerrPreferencesProvider()) }
+    }
+
+    /**
+     * The dice affordance for one RANDOM-sorted Jellyfin discover row —
+     * forwarded to [DiscoverRowsCoordinator.roll], which owns the whole roll
+     * choreography (the repository's reroll owns the cache half; see the roll
+     * protocol on `MediaRepository.rerollDiscoverRow`). Kept as a refresher
+     * member so the VM's (and tests') surface is unchanged.
+     */
+    fun rollDiscoverRow(row: DiscoverRowConfig, onResult: (Boolean) -> Unit = {}) {
+        discoverRows.roll(row, onResult)
     }
 
     /**
@@ -1122,6 +1173,12 @@ internal data class HomeRefreshState(
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     /** Direct *arr "Recently Grabbed / Coming Soon" calendar row. */
     val recentlyGrabbed: List<SeerrSearchItem> = emptyList(),
+    /**
+     * Custom discover rows with a dice roll in flight (row ids) — drives the
+     * dice icon's tumbling animation and the one-roll-per-row tap guard.
+     * Cleared on completion AND failure (the finally in [rollDiscoverRow]).
+     */
+    val rollingDiscoverRowIds: Set<String> = emptySet(),
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
 ) {

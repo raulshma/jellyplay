@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.newsletter
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -75,8 +76,8 @@ class NewsletterViewModel(
             // is not cached by this repository, so the old global
             // invalidateCaches() call was a no-op for this screen.
 
-            // wasmJs rewrite of java.time's ISO_LOCAL_DATE_TIME chain:
-            // kotlinx LocalDate prints ISO "yyyy-MM-dd" zero-padded, so the
+            // kotlinx LocalDate replaces java.time's ISO_LOCAL_DATE_TIME chain:
+            // it prints ISO "yyyy-MM-dd" zero-padded, so the
             // hand-built "T00:00:00" suffix is byte-identical to the string
             // the server has always received ("2026-09-05T00:00:00").
             val sinceDate =
@@ -110,7 +111,7 @@ class NewsletterViewModel(
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            error = e.message ?: "Failed to load newsletter",
+                            error = UserErrorMessages.resolve(e, "Failed to load newsletter"),
                         )
                     }
                 }
@@ -119,8 +120,8 @@ class NewsletterViewModel(
 
     private fun markViewed() {
         launch {
-            // wasmJs rewrite of System.currentTimeMillis() — the same
-            // epoch millis off the monotonic-wall Clock.System.
+            // Clock.System epoch-millis read — the same value
+            // System.currentTimeMillis() produced.
             notificationStore.setNewsletterLastViewed(Clock.System.now().toEpochMilliseconds())
         }
     }

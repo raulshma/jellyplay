@@ -1,35 +1,11 @@
-@file:OptIn(ExperimentalWasmDsl::class)
-
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    id("jellyplay.kmp.library.base")
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.core.concurrency"
-        compileSdk = 37
-        minSdk = 28
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
-
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    wasmJs {
-        browser()
-        nodejs()
-    }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
         commonMain.dependencies {
@@ -39,12 +15,10 @@ kotlin {
             // see it without a cycle.
             implementation(libs.kotlinx.coroutines.core)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.coroutines.test)
-        }
-        getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
+        // kotlin("test") on commonTest/jvmTest comes from the convention
+        // plugin; coroutines-test declared once here covers both test lanes
+        // through the commonTest → jvmTest hierarchy edge.
+        commonTest.dependencies {
             implementation(libs.coroutines.test)
         }
     }

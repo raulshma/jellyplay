@@ -48,17 +48,31 @@ object PlaybackVolumePolicy {
         val normalized: Float,
         /** System music-stream sync value (0..1, no amplification). */
         val systemStream: Float,
+        /**
+         * whether this application was USER-initiated (slider / key /
+         * remote "SetVolume") rather than programmatic (sleep-timer fade,
+         * audio-focus duck). Engines that remember the volume per content
+         * type capture the level ONLY on user changes — a fade must never
+         * overwrite the remembered level.
+         */
+        val isUserChange: Boolean = true,
     )
 
     /**
      * Clamps [raw] to the engine's declared boost ceiling and derives the
      * system-stream sync value. The caller routes [LevelPlan.normalized]
      * through the base `rememberUnmuteVolumeIfAudible` so the remembered
-     * unmute level updates exactly when the applied level is audible.
+     * unmute level updates exactly when the applied level is audible, and
+     * consults [LevelPlan.isUserChange] before writing any per-content-type
+     * volume memory.
      */
-    fun planLevel(raw: Float, maxBoost: Float): LevelPlan {
+    fun planLevel(raw: Float, maxBoost: Float, isUserChange: Boolean = true): LevelPlan {
         val clamped = raw.coerceIn(0f, maxBoost)
-        return LevelPlan(normalized = clamped, systemStream = clamped.coerceIn(0f, 1f))
+        return LevelPlan(
+            normalized = clamped,
+            systemStream = clamped.coerceIn(0f, 1f),
+            isUserChange = isUserChange,
+        )
     }
 
     /** Decision for muting. */

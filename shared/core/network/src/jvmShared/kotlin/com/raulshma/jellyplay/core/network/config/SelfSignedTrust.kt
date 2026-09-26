@@ -1,23 +1,28 @@
 package com.raulshma.jellyplay.core.network.config
 
 import java.net.Socket
+import java.security.Principal
+import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.KeyManager
+import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLEngine
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509ExtendedKeyManager
 import javax.net.ssl.X509ExtendedTrustManager
+import javax.net.ssl.X509KeyManager
 import javax.net.ssl.X509TrustManager
 import okhttp3.OkHttpClient
 
 /**
  * Opt-in trust for Jellyfin servers that present a self-signed (or otherwise
- * unverifiable) TLS certificate — desktop + Android. Wasm is deliberately out
- * of scope: the browser owns certificate decisions there.
+ * unverifiable) TLS certificate — desktop + Android.
  *
  * ## Shape
  *
@@ -97,35 +102,47 @@ object SelfSignedTrustHosts {
  * delegates untouched, so default platform trust behavior (including the
  * Android network security config, which the default factory incorporates)
  * is preserved byte-for-byte.
+ *
+ * ## Custom CA override
+ *
+ * When [customCa] is supplied and yields a certificate, the DELEGATE for
+ * non-granted peers becomes a trust manager anchored on that single CA
+ * instead of the platform default — merged with (not replacing) the
+ * self-signed grant short-circuit above. The CA-anchored manager is cached
+ * per certificate instance (the provider itself caches parses against file
+ * stamps, so handshakes are not punished with re-reads). A corrupt installed
+ * override makes [customCa] throw, which fails the handshake — never a
+ * silent fall back to platform trust.
  */
 class SelfSignedTrustManager(
     private val delegate: X509TrustManager,
     private val grantedHosts: () -> Set<String>,
+    private val customCa: (() -> X509Certificate?)? = null,
 ) : X509ExtendedTrustManager() {
 
-    override fun getAcceptedIssuers(): Array<X509Certificate> = delegate.acceptedIssuers
+    override fun getAcceptedIssuers(): Array<X509Certificate> = effectiveDelegate().acceptedIssuers
 
     override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {
-        delegate.checkClientTrusted(chain, authType)
+        effectiveDelegate().checkClientTrusted(chain, authType)
     }
 
     override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String, socket: Socket?) {
-        when (delegate) {
-            is X509ExtendedTrustManager -> delegate.checkClientTrusted(chain, authType, socket)
-            else -> delegate.checkClientTrusted(chain, authType)
+        when (val effective = effectiveDelegate()) {
+            is X509ExtendedTrustManager -> effective.checkClientTrusted(chain, authType, socket)
+            else -> effective.checkClientTrusted(chain, authType)
         }
     }
 
     override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String, engine: SSLEngine?) {
-        when (delegate) {
-            is X509ExtendedTrustManager -> delegate.checkClientTrusted(chain, authType, engine)
-            else -> delegate.checkClientTrusted(chain, authType)
+        when (val effective = effectiveDelegate()) {
+            is X509ExtendedTrustManager -> effective.checkClientTrusted(chain, authType, engine)
+            else -> effective.checkClientTrusted(chain, authType)
         }
     }
 
     override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
         // No peer visible on this overload — cannot (and must not) short-circuit.
-        delegate.checkServerTrusted(chain, authType)
+        effectiveDelegate().checkServerTrusted(chain, authType)
     }
 
     override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String, socket: Socket?) {
@@ -139,9 +156,9 @@ class SelfSignedTrustManager(
         ) {
             return
         }
-        when (delegate) {
-            is X509ExtendedTrustManager -> delegate.checkServerTrusted(chain, authType, socket)
-            else -> delegate.checkServerTrusted(chain, authType)
+        when (val effective = effectiveDelegate()) {
+            is X509ExtendedTrustManager -> effective.checkServerTrusted(chain, authType, socket)
+            else -> effective.checkServerTrusted(chain, authType)
         }
     }
 
@@ -149,14 +166,40 @@ class SelfSignedTrustManager(
         val peerHost = engine?.peerHost
         val peerPort = engine?.peerPort ?: -1
         if (SelfSignedTrustHosts.isGranted(grantedHosts(), peerHost, peerPort)) return
-        when (delegate) {
-            is X509ExtendedTrustManager -> delegate.checkServerTrusted(chain, authType, engine)
-            else -> delegate.checkServerTrusted(chain, authType)
+        when (val effective = effectiveDelegate()) {
+            is X509ExtendedTrustManager -> effective.checkServerTrusted(chain, authType, engine)
+            else -> effective.checkServerTrusted(chain, authType)
         }
     }
 
-    private fun isPeerGranted(peerHost: String?, peerPort: Int): Boolean =
-        SelfSignedTrustHosts.isGranted(grantedHosts(), peerHost, peerPort)
+    /**
+     * The trust manager non-granted peers are validated against: the custom
+     * CA-anchored one when an override is installed, the platform default
+     * otherwise.
+     */
+    private fun effectiveDelegate(): X509TrustManager {
+        val ca = customCa?.invoke() ?: return delegate
+        return caAnchoredManager(ca)
+    }
+
+    /** Cache of the last CA-anchored manager, keyed on the certificate instance. */
+    private var caAnchoredCache: Pair<X509Certificate, X509TrustManager>? = null
+    private val caCacheLock = Any()
+
+    private fun caAnchoredManager(ca: X509Certificate): X509TrustManager {
+        synchronized(caCacheLock) {
+            val cached = caAnchoredCache
+            if (cached != null && cached.first === ca) return cached.second
+        }
+        val anchors = java.security.KeyStore.getInstance(java.security.KeyStore.getDefaultType())
+        anchors.load(null, null)
+        anchors.setCertificateEntry("jellyplay-server-ca", ca)
+        val factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+        factory.init(anchors)
+        val manager = factory.trustManagers.filterIsInstance<X509TrustManager>().first()
+        synchronized(caCacheLock) { caAnchoredCache = ca to manager }
+        return manager
+    }
 }
 
 /**
@@ -194,6 +237,53 @@ internal fun platformTrustManager(): X509TrustManager {
 }
 
 /**
+ * Everything [applyTls] installs on a client builder, in one value: the
+ * handshake-time granted-set read (self-signed "proceed anyway" grants) and
+ * the app-level client-certificate provider (mTLS). Both are read
+ * LIVE at handshake time — see [ClientCertificateProvider] for the
+ * fail-closed contract of the certificate half.
+ */
+class ServerTrustConfig(
+    val grantedHosts: () -> Set<String>,
+    val clientCertificate: ClientCertificateProvider = ClientCertificateProvider.NONE,
+)
+
+/**
+ * The generalized TLS layer install: everything
+ * [applySelfSignedTrust] does, PLUS the client-certificate key managers
+ * funneled through a [LiveClientKeyManager] and the optional custom-CA trust
+ * anchor — both sourced from [ServerTrustConfig.clientCertificate] at
+ * handshake time, so importing/toggling/removing a certificate takes effect
+ * on the next handshake without rebuilding any client (the live-config
+ * contract the granted set already has). Used by `baseOkHttpClient` and the
+ * `ServerAddressRouter` probe client — the two TLS construction sites every
+ * derived client (API, WS, images, streaming, downloads, ExoPlayer) inherits
+ * from on BOTH JVM platforms.
+ */
+fun OkHttpClient.Builder.applyTls(
+    trust: ServerTrustConfig,
+): OkHttpClient.Builder {
+    // Deliberate TLS exception behind an explicit feature flag (see
+    // applySelfSignedTrust): the layer is installed unconditionally when the
+    // feature is on because grants, the client certificate, and the CA
+    // override are all read LIVE at handshake time — the client must carry
+    // the layer even before any of them exist. The always-true flag is also
+    // the escape hatch CodeQL's java/insecure-trustmanager query recognizes.
+    val selfSignedTrustEnabled = true
+    if (selfSignedTrustEnabled) {
+        val caReader: (() -> X509Certificate?)? =
+            if (trust.clientCertificate === ClientCertificateProvider.NONE) null
+            else trust.clientCertificate::customCa
+        val trustManager = SelfSignedTrustManager(platformTrustManager(), trust.grantedHosts, caReader)
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(arrayOf(LiveClientKeyManager(trust.clientCertificate)), arrayOf(trustManager), SecureRandom())
+        sslSocketFactory(sslContext.socketFactory, trustManager)
+        hostnameVerifier(SelfSignedHostnameVerifier(okhttpDefaultHostnameVerifier, trust.grantedHosts))
+    }
+    return this
+}
+
+/**
  * Installs the self-signed trust layer on a client builder: an SSLContext
  * built over a [SelfSignedTrustManager] wrapping the platform default, plus a
  * [SelfSignedHostnameVerifier] wrapping OkHttp's stock verifier. Both read the
@@ -201,27 +291,89 @@ internal fun platformTrustManager(): X509TrustManager {
  * configured ONCE per client and stays live. Used by `baseOkHttpClient` and
  * the `ServerAddressRouter` probe client (a probe against a self-signed
  * server must not be classified "unreachable" once the user granted it).
+ * Equivalent to [applyTls] with no client-certificate provider.
  */
 fun OkHttpClient.Builder.applySelfSignedTrust(
     grantedHosts: () -> Set<String>,
-): OkHttpClient.Builder {
-    // Deliberate TLS exception behind an explicit feature flag. The layer is
-    // installed unconditionally when the feature is on: grants are read LIVE
-    // at handshake time (file KDoc above), so the client must carry the layer
-    // even before the first grant exists — per-host decisions happen per
-    // handshake, never here. The always-true flag both documents that and is
-    // the escape hatch CodeQL's java/insecure-trustmanager query recognizes
-    // for intentional trust-manager installs (a sink guarded by a
-    // trust-named boolean is treated as flagged use, not a finding).
-    val selfSignedTrustEnabled = true
-    if (selfSignedTrustEnabled) {
-        val trustManager = SelfSignedTrustManager(platformTrustManager(), grantedHosts)
-        val sslContext = SSLContext.getInstance("TLS")
-        sslContext.init(null, arrayOf(trustManager), SecureRandom())
-        sslSocketFactory(sslContext.socketFactory, trustManager)
-        hostnameVerifier(SelfSignedHostnameVerifier(okhttpDefaultHostnameVerifier, grantedHosts))
+): OkHttpClient.Builder = applyTls(ServerTrustConfig(grantedHosts))
+
+/**
+ * Delegating [X509KeyManager] that funnels the app's client-certificate
+ * state into a handshake-time read: every alias/key lookup consults the
+ * provider's CURRENT key managers, so enabling, disabling, or swapping the
+ * certificate affects the very next TLS handshake without rebuilding the
+ * OkHttpClient that carries this manager.
+ *
+ * When no certificate is configured (`null` from the provider) the manager
+ * falls back to the JVM default key managers — reproducing the key-selection
+ * semantics of `SSLContext.init(null, ...)`, which is what the pre-existing
+ * layer did — so certificate-less apps see zero behavior drift. When a
+ * certificate IS enabled, the provider's managers are used exclusively; its
+ * fail-closed exceptions (missing/corrupt material) propagate into the
+ * handshake as a TLS failure rather than a silent certificate-less one.
+ *
+ * Server-side alias selection always routes to the JVM default: the app only
+ * ever acts as a TLS client.
+ */
+internal class LiveClientKeyManager(
+    private val provider: ClientCertificateProvider,
+) : X509ExtendedKeyManager() {
+
+    /** The default key managers, as `SSLContext.init(null, ...)` would use. */
+    private val defaultManager: X509KeyManager by lazy {
+        val factory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
+        factory.init(null, null)
+        factory.keyManagers.filterIsInstance<X509KeyManager>().first()
     }
-    return this
+
+    /** The CURRENT client key manager — the provider's, or the default. Fail-closed. */
+    private fun current(): X509KeyManager {
+        val managers = provider.keyManagers() ?: return defaultManager
+        return managers.filterIsInstance<X509KeyManager>().firstOrNull()
+            ?: throw ClientCertificateMaterialException(
+                "Client certificate provider returned no X509KeyManager",
+            )
+    }
+
+    override fun getClientAliases(keyType: String?, issuers: Array<Principal>?): Array<String>? =
+        current().getClientAliases(keyType, issuers)
+
+    override fun chooseClientAlias(
+        keyType: Array<String>?,
+        issuers: Array<Principal>?,
+        socket: Socket?,
+    ): String? = current().chooseClientAlias(keyType, issuers, socket)
+
+    override fun chooseEngineClientAlias(
+        keyType: Array<String>?,
+        issuers: Array<Principal>?,
+        engine: SSLEngine?,
+    ): String? {
+        val manager = current()
+        return if (manager is X509ExtendedKeyManager) {
+            manager.chooseEngineClientAlias(keyType, issuers, engine)
+        } else {
+            manager.chooseClientAlias(keyType, issuers, null)
+        }
+    }
+
+    override fun getServerAliases(keyType: String?, issuers: Array<Principal>?): Array<String>? =
+        defaultManager.getServerAliases(keyType, issuers)
+
+    override fun chooseServerAlias(keyType: String?, issuers: Array<Principal>?, socket: Socket?): String? =
+        defaultManager.chooseServerAlias(keyType, issuers, socket)
+
+    override fun chooseEngineServerAlias(
+        keyType: String?,
+        issuers: Array<Principal>?,
+        engine: SSLEngine?,
+    ): String? = (defaultManager as? X509ExtendedKeyManager)
+        ?.chooseEngineServerAlias(keyType, issuers, engine)
+
+    override fun getPrivateKey(alias: String?): PrivateKey? = current().getPrivateKey(alias)
+
+    override fun getCertificateChain(alias: String?): Array<X509Certificate>? =
+        current().getCertificateChain(alias)
 }
 
 /** Adapts a config provider into the handshake-time granted-set read. */

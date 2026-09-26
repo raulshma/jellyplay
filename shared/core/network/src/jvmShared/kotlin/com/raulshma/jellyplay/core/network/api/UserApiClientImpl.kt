@@ -8,39 +8,35 @@ import org.jellyfin.sdk.model.api.CreateUserByName
 import org.jellyfin.sdk.model.api.UpdateUserPassword
 import org.jellyfin.sdk.api.client.extensions.*
 import org.jellyfin.sdk.model.serializer.toUUID
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class UserApiClientImpl @Inject constructor(
+class UserApiClientImpl(
     private val engine: JellyfinApiEngine,
 ) : UserApiClient {
 
-    override suspend fun getManagedUsers(): Result<List<ManagedUser>> = engine.apiResultWithRetry {
-        val users = engine.requireApi().userApi.getUsers().content ?: emptyList()
+    override suspend fun getManagedUsers(): Result<List<ManagedUser>> = engine.withApi { api ->
+        val users = api.userApi.getUsers().content ?: emptyList()
         users.map { it.toManagedUser() }
     }
 
-    override suspend fun getManagedUser(userId: String): Result<ManagedUser> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.getUserById(userId.toUUID()).content.toManagedUser()
+    override suspend fun getManagedUser(userId: String): Result<ManagedUser> = engine.withApi { api ->
+        api.userApi.getUserById(userId.toUUID()).content.toManagedUser()
     }
 
-    override suspend fun getCurrentUserId(): Result<String> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.getCurrentUser().content.id.toString()
+    override suspend fun getCurrentUserId(): Result<String> = engine.withApi { api ->
+        api.userApi.getCurrentUser().content.id.toString()
     }
 
-    override suspend fun getCurrentUser(): Result<ManagedUser> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.getCurrentUser().content.toManagedUser()
+    override suspend fun getCurrentUser(): Result<ManagedUser> = engine.withApi { api ->
+        api.userApi.getCurrentUser().content.toManagedUser()
     }
 
-    override suspend fun createUser(name: String, password: String?): Result<ManagedUser> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.createUserByName(
+    override suspend fun createUser(name: String, password: String?): Result<ManagedUser> = engine.withApi { api ->
+        api.userApi.createUserByName(
             CreateUserByName(name = name, password = password),
         ).content.toManagedUser()
     }
 
-    override suspend fun renameUser(userId: String, newName: String): Result<ManagedUser> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    override suspend fun renameUser(userId: String, newName: String): Result<ManagedUser> = engine.withApi { api ->
         // Fetch the full DTO, copy the name, POST it back. Never construct a
         // partial UserDto — id is non-null with no default and dropping
         // policy/configuration would clear them server-side.
@@ -53,8 +49,7 @@ class UserApiClientImpl @Inject constructor(
     override suspend fun updateUserPolicy(
         userId: String,
         policy: ManagedUserPolicy,
-    ): Result<Unit> = engine.apiResultWithRetry {
-        val api = engine.requireApi()
+    ): Result<Unit> = engine.withApi { api ->
         // Rehydrate the full server policy, overlay the edited fields,
         // POST the merged object. Preserves all bookkeeping fields.
         val current = api.userApi.getUserById(userId.toUUID()).content
@@ -93,8 +88,8 @@ class UserApiClientImpl @Inject constructor(
         api.userApi.updateUserPolicy(userId.toUUID(), merged)
     }
 
-    override suspend fun updateUserPassword(userId: String, newPassword: String?): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.updateUserPassword(
+    override suspend fun updateUserPassword(userId: String, newPassword: String?): Result<Unit> = engine.withApi { api ->
+        api.userApi.updateUserPassword(
             userId = userId.toUUID(),
             data = UpdateUserPassword(
                 currentPw = null,
@@ -104,12 +99,12 @@ class UserApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun deleteUser(userId: String): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().userApi.deleteUser(userId.toUUID())
+    override suspend fun deleteUser(userId: String): Result<Unit> = engine.withApi { api ->
+        api.userApi.deleteUser(userId.toUUID())
     }
 
-    override suspend fun getLibraryFoldersForEditor(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {
-        val response = engine.requireApi().libraryApi.getMediaFolders().content
+    override suspend fun getLibraryFoldersForEditor(): Result<List<LibraryFolder>> = engine.withApi { api ->
+        val response = api.libraryApi.getMediaFolders().content
             ?: throw IllegalStateException("Server returned empty response")
         (response.items ?: emptyList()).map { item ->
             LibraryFolder(
@@ -123,8 +118,8 @@ class UserApiClientImpl @Inject constructor(
         // the editor needs the full server folder list.
     }
 
-    override suspend fun getParentalRatings(): Result<List<ParentalRatingOption>> = engine.apiResultWithRetry {
-        val ratings = engine.requireApi().localizationApi.getParentalRatings().content
+    override suspend fun getParentalRatings(): Result<List<ParentalRatingOption>> = engine.withApi { api ->
+        val ratings = api.localizationApi.getParentalRatings().content
         // Group by (score, subScore), concatenating names on collision so ratings
         // sharing a score/subScore collapse into one label (web parity, e.g. "PG-13/TV-14").
         ratings

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.syncplay
 
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,7 +16,9 @@ import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicLong
 
 class TimeSyncManager constructor(
-    private val apiClient: JellyfinApiClient
+    // getServerTime lives on the playback family client (the PlaybackRepositoryImpl
+    // ctor precedent: family seam, not the JellyfinApiClient union).
+    private val playbackApiClient: PlaybackApiClient
 ) {
     private val offsetMs = AtomicLong(0)
     private val lastPingMs = AtomicLong(0)
@@ -76,7 +78,7 @@ class TimeSyncManager constructor(
     suspend fun sync() {
         try {
             val requestSent = System.currentTimeMillis()
-            val result = apiClient.getServerTime()
+            val result = playbackApiClient.getServerTime()
             val responseReceived = System.currentTimeMillis()
 
             result.onSuccess { response ->

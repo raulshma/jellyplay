@@ -32,9 +32,6 @@ import org.koin.dsl.module
  *    `subtitle_provider_secure_prefs`); desktop namespaces under
  *    `"JellyPlay/<name>"` so the three credential sets stay isolated in the
  *    OS keyring, matching the per-file isolation on Android.
- *
- * The web module is untouched — `webDatastoreModule` is a genuinely
- * different shape (localStorage-backed storage connections).
  */
 fun datastorePlatformModule(
     prefsDir: () -> Path,

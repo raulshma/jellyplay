@@ -364,13 +364,17 @@ fun PosterCard(
         modifier = modifier,
         aspectRatio = aspectRatio,
         clipToShape = clipToShape,
-        onPlayClick = onPlayClick,
-        playButtonDominantColor = dominantColor,
-        playButtonSize = playButtonSize,
-        playIcon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
-        playIconContentDescription = stringResource(if (isBook) Res.string.core_ui_read else Res.string.core_ui_play),
+        play = onPlayClick?.let { onPlay ->
+            PlayAffordance(
+                onClick = onPlay,
+                dominantColor = dominantColor,
+                buttonSize = playButtonSize,
+                icon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
+                contentDescription = stringResource(if (isBook) Res.string.core_ui_read else Res.string.core_ui_play),
+            )
+        },
         sharedElementKey = sharedElementKey,
-        scrimBrush = gradientBrush,
+        scrim = gradientBrush?.let { CardScrim(brush = it) },
         previewFactory = previewFactory,
         onLongPress = onQuickActionsLongPress,
         showProgress = showProgress,
@@ -443,13 +447,7 @@ fun PosterCard(
                 // instead of an empty gap (matches WideMediaCard's subtitle).
                 if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
                     val episodeSubtitle = remember(item.seasonNumber, item.episodeNumber) {
-                        when {
-                            item.seasonNumber != null && item.episodeNumber != null ->
-                                "S${item.seasonNumber} E${item.episodeNumber.toString().padStart(2, '0')}"
-                            item.episodeNumber != null -> "E${item.episodeNumber.toString().padStart(2, '0')}"
-                            item.seasonNumber != null -> "S${item.seasonNumber}"
-                            else -> null
-                        }
+                        episodeCardCode(item.seasonNumber, item.episodeNumber, separator = " ")
                     }
                     if (episodeSubtitle != null) {
                         Text(
@@ -468,56 +466,35 @@ fun PosterCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                val isSeries = item.mediaType == MediaType.SERIES
-                // Books never render runtime/time-left meta: RunTimeTicks is
-                // absent or meaningless for them, and their position ticks
-                // encode reading progress (page index or percent), not time —
-                // the video runtime math on that data produced bogus "0m left"
-                // labels. A book in progress shows "% complete" from the
-                // BookProgressPolicy decode instead; an unstarted book shows
-                // nothing at all.
-                val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries && !isBook
-                val hasWatchProgress =
-                    item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
-                val remainingTime =
-                    remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
-                        if (hasWatchProgress && hasValidDuration) {
-                            formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
-                        } else null
-                    }
-                val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
-                    if (hasValidDuration && !hasWatchProgress) {
-                        formatRuntimeLabelFromTicks(item.runTimeTicks)
-                    } else null
+                // The whole book-vs-time meta decision is [mediaCardFooterMeta]'s
+                // (see MediaCardFooters.kt); this shell only renders it — always
+                // with the "•" divider and the poster footer's text style.
+                val footerMeta = remember(item, bookProgressFractionOverride) {
+                    mediaCardFooterMeta(item, bookProgressFractionOverride)
                 }
-                val bookPercent =
-                    remember(isBook, item.isPlayed, bookProgressFractionOverride, item.playbackPositionTicks) {
-                        bookFooterPercent(item, bookProgressFractionOverride)
+                if (footerMeta != null) {
+                    Text(
+                        text = "•",
+                        style = footerStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    when (footerMeta) {
+                        is MediaCardFooterMeta.BookProgress -> Text(
+                            text = "${footerMeta.percent}% complete",
+                            style = footerStyle,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        is MediaCardFooterMeta.TimeLeft -> Text(
+                            text = "${footerMeta.label} left",
+                            style = footerStyle,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        is MediaCardFooterMeta.Runtime -> Text(
+                            text = footerMeta.label,
+                            style = footerStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-
-                val timeText = remainingTime ?: totalTime
-                if (bookPercent != null) {
-                    Text(
-                        text = "•",
-                        style = footerStyle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = "$bookPercent% complete",
-                        style = footerStyle,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else if (timeText != null) {
-                    Text(
-                        text = "•",
-                        style = footerStyle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = if (remainingTime != null) "$timeText left" else timeText,
-                        style = footerStyle,
-                        color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         },

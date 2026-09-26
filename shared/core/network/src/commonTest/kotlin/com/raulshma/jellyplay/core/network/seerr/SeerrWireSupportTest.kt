@@ -1,12 +1,13 @@
 package com.raulshma.jellyplay.core.network.seerr
 
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the wasm Seerr client's wire string-shaping helpers against the
+ * Pins the Seerr client's wire string-shaping helpers against the
  * jvmShared `SeerrApiClientImpl` behavior they substitute for: the verbatim
  * `parseErrorMessage` texts, the login Set-Cookie join, the URLEncoder
  * stand-in, the credential→header selection (the OkHttp `withAuth` `when`),
@@ -196,5 +197,40 @@ class SeerrWireSupportTest {
             "/discover/tv?page=3&firstAirDateGte=2023-06-01",
             seerrDiscoverTvPath(3, "2023-06-01"),
         )
+    }
+
+    @Test
+    fun `discover movies path carries custom row params`() {
+        val path = seerrDiscoverMoviesPath(
+            page = 2,
+            primaryReleaseDateGte = null,
+            params = SeerrDiscoverParams(
+                genreIds = listOf(28, 12),
+                minVoteAverage = 7f,
+                sortBy = "popularity.desc",
+            ),
+        )
+        assertEquals("/discover/movies?page=2&genre=28%2C12&voteAverageGte=7.0&sortBy=popularity.desc", path)
+    }
+
+    @Test
+    fun `discover year window folds into the date bounds`() {
+        val path = seerrDiscoverMoviesPath(
+            page = 1,
+            primaryReleaseDateGte = null,
+            params = SeerrDiscoverParams(yearFrom = 1990, yearTo = 1999),
+        )
+        assertEquals("/discover/movies?page=1&primaryReleaseDateGte=1990-01-01&primaryReleaseDateLte=1999-12-31", path)
+    }
+
+    @Test
+    fun `explicit date gte wins over the earlier year bound`() {
+        val path = seerrDiscoverTvPath(
+            page = 1,
+            firstAirDateGte = "2026-01-01",
+            params = SeerrDiscoverParams(yearFrom = 2000),
+        )
+        // 2026-01-01 is later than 2000-01-01, so the explicit bound stands.
+        assertEquals("/discover/tv?page=1&firstAirDateGte=2026-01-01", path)
     }
 }

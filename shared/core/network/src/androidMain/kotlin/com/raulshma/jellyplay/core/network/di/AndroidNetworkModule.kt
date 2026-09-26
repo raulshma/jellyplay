@@ -6,6 +6,9 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.network.DiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.api.AndroidDeviceCodecCapabilities
 import com.raulshma.jellyplay.core.network.api.DeviceCodecCapabilities
+import com.raulshma.jellyplay.core.network.config.ClientCertificateFacade
+import com.raulshma.jellyplay.core.network.config.ClientCertificateManager
+import com.raulshma.jellyplay.core.network.config.ClientCertificateProvider
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -32,12 +35,29 @@ import org.koin.dsl.module
  * that module migrates).
  */
 fun androidNetworkModule(context: Context): Module = module {
+    // mTLS: the app-level client certificate store. Files live
+    // under the app-private filesDir ("certs/"); the passphrase + enabled
+    // flag live in their own EncryptedSharedPreferences file (the credential
+    // stores' per-file isolation convention). One instance serves BOTH the
+    // facade (settings UI) and the handshake-time provider (applyTls).
+    single {
+        ClientCertificateManager(
+            certsDir = File(context.filesDir, "certs"),
+            secureStorage = com.raulshma.jellyplay.core.datastore.AndroidSecureKeyValueStorage(
+                context,
+                "client_certificate_secure_prefs",
+            ),
+        )
+    }
+    single<ClientCertificateFacade> { get<ClientCertificateManager>() }
+    single<ClientCertificateProvider> { get<ClientCertificateManager>() }
     single {
         baseOkHttpClient(
             cacheDir = File(context.cacheDir, "http_cache"),
             okHttpConfigProvider = get(),
             bandwidthInterceptor = get(),
             serverAddressRouter = get(),
+            clientCertificateProvider = get(),
         )
     }
     single(qualifier = NetworkQualifiers.streamingHttpClient) {

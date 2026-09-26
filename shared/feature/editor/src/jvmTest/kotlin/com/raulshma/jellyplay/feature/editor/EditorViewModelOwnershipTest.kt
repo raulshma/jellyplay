@@ -12,22 +12,22 @@ import kotlin.test.assertTrue
  * increase past the current ceiling. The VM is a flows + `onEvent` facade
  * (the HomeViewModel precedent): commands arrive as [EditorUiEvent]s through
  * the single funnel, private handlers own the choreography, and the only
- * public command members left are the thin tab delegates ImagesTab.kt /
- * SubtitlesTab.kt still call (they are owned by another builder; they die
- * when those files adopt onEvent). New behaviour belongs in an extracted
+ * public members beyond the funnel are the two sync image-URL getters.
+ * New behaviour belongs in an extracted
  * module built from constructor lambdas — the EditableItemMetadataForm /
  * MetadataEditSession shape the editor already folds its ~30 metadata fields
  * through — with the VM left a thin caller that owns the uiState writes.
  *
- * Baseline: 16 members (22 before the sealed-intent fold: uiState, onEvent,
- * the 11 kept tab delegates, the two sync image-URL getters, and
- * EditorUiState.isDirty, which shares the file). Lower the ceiling when a
- * slice moves out and deletes members; never raise it to admit new ones.
+ * Baseline: 5 members (16 before the ImagesTab/SubtitlesTab delegate
+ * retirement: uiState, onEvent, the 11 kept tab delegates, the two sync
+ * image-URL getters, and EditorUiState.isDirty, which shares the file).
+ * Lower the ceiling when a slice moves out and deletes members; never raise
+ * it to admit new ones.
  */
 class EditorViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 16
+    private val maxPublicInternalMembers = 5
 
     /**
      * A class-body declaration line at the ViewModel's single level of

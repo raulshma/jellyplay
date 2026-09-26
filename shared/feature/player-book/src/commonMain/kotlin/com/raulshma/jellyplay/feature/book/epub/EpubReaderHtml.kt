@@ -19,7 +19,7 @@ internal object EpubReaderHtml {
 
     private fun marker(of: String) = "<!--JELLYPLAY-INJECT:$of-->"
 
-    // Dispatchers.Default, not IO ( wasmJs: IO has no wasm dispatcher) —
+    // Dispatchers.Default, not IO —
     // this is CPU-bound in-memory string work over already-read bytes, which
     // is what the Default pool is for.
     suspend fun build(): String = withContext(Dispatchers.Default) {

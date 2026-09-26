@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
@@ -60,6 +61,7 @@ import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
+import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -931,56 +933,5 @@ class HomeViewModelTest {
 
         assertEquals("a-ep-1", (firstResolved as SeriesPlayResolution.Episode).item.id)
         assertNull(secondResolved)
-    }
-
-    /**
-     * Controllable [TimeSource] whose clock defaults to a fixed epoch so the
-     * periodic-refresh and TTL gates stay on one side of their thresholds;
-     * tests move [nowMs] to deliberately cross one.
-     */
-    // HomeClock seam fake: the epoch-millis read drives the
-        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
-        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
-    }
-
-    /**
-     * Behavior fake for [UserDataMutator]: records calls and mimics the real
-     * module's success path (container rewrite via the resolved
-     * [AppliedMutation] patch) so the home container adapter's flip is driven
-     * exactly as in production. The protocol itself is pinned by
-     * UserDataMutatorTest in :core:data.
-     */
-    private class FakeUserDataMutator : UserDataMutator {
-        val playedCalls = mutableListOf<Triple<String, Boolean, String?>>()
-
-        override suspend fun setPlayed(
-            itemId: String,
-            played: Boolean,
-            mode: UserDataMutator.FlipMode,
-            containers: List<UserDataContainer>,
-            seriesId: String?,
-        ): Result<AppliedMutation> {
-            playedCalls += Triple(itemId, played, seriesId)
-            val applied = AppliedMutation(itemId = itemId, played = played)
-            if (mode == UserDataMutator.FlipMode.Optimistic) {
-                containers.forEach { it.rewrite(itemId, applied::patch) }
-            }
-            return Result.success(applied)
-        }
-
-        override suspend fun setFavorite(
-            itemId: String,
-            mode: UserDataMutator.FlipMode,
-            containers: List<UserDataContainer>,
-            seriesId: String?,
-        ): Result<AppliedMutation> = Result.success(AppliedMutation(itemId = itemId, favorite = true))
-
-        override suspend fun setSeasonPlayed(
-            seriesId: String,
-            seasonId: String,
-            played: Boolean,
-        ): Result<AppliedMutation> = Result.success(AppliedMutation(itemId = seasonId, played = played))
     }
 }

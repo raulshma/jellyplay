@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -24,18 +23,15 @@ fun interface NotificationSync {
 }
 
 class NotificationSettingsViewModel(
-    private val store: UserPreferencesStore,
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val advancedSettings: AdvancedSettingsGate,
-    private val editor: PreferencesEditor,
+    advancedSettings: AdvancedSettingsGate,
+    editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
     private val notificationSync: NotificationSync,
-) : JellyPlayViewModel() {
+) : SettingsSectionViewModel(advancedSettings, editor) {
 
     /** Notification-screen slice — recomposes this screen only on notification-field writes. */
     val preferences: StateFlow<NotificationPreferences> = projections.notificationPreferences
-
-    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
 
     private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
@@ -46,8 +42,6 @@ class NotificationSettingsViewModel(
     init {
         loadLibraryFolders()
     }
-
-    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
     /**
      * Applies a transform to the notification preferences and reschedules the

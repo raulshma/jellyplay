@@ -27,7 +27,7 @@ import kotlin.math.max
  * happening in the first place (defense in depth — Wyzie/OpenSubtitles docs
  * both recommend throttling proactively rather than reacting to 429s).
  *
- * One instance per provider impl (`@Inject constructor` + `@Singleton` gives a
+ * One instance per provider impl (the Koin `single` binding gives a
  * single shared limiter across the app for that provider).
  */
 class SubtitleRateLimiter(private val minIntervalMs: Long) {

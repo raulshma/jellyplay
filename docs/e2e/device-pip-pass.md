@@ -42,7 +42,7 @@ surfaced two P0 crashes, both now fixed and committed (full accounts in
    was immune because only the desktop shell passes
    `desktopNavSavedStateConfiguration()`. Fix: expect/actual
    `rememberNavBackStackSaveable` — Android uses the library's
-   reflection-based overload, JVM/wasm keep the explicit configuration.
+   reflection-based overload, JVM keeps the explicit configuration.
 2. **compose-resources `.cvr` assets missing from the APK** (commit
    `c6da8ff8a`) — AGP-9 KMP library plugins leave android resources OFF, so
    the APK shipped `Res` accessors with no backing assets;

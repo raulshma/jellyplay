@@ -1,62 +1,54 @@
 package com.raulshma.jellyplay.core.data.di
 
-import com.raulshma.jellyplay.core.data.download.DesktopDownloadIntake
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
-import com.raulshma.jellyplay.core.data.network.DesktopNetworkMonitor
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.offline.DesktopOfflineModeManager
-import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.AdminStatisticsLabelProvider
-import com.raulshma.jellyplay.core.data.repository.DesktopAdminStatisticsLabels
-import com.raulshma.jellyplay.core.data.repository.DesktopDownloadStorageLayout
-import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
-import com.raulshma.jellyplay.core.data.repository.DownloadProgressNotifier
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
-import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
-import com.raulshma.jellyplay.core.data.repository.DesktopLocalStreamProbe
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
-import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStoreImpl
-import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
-import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
-import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
-import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
-import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
-import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
-import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
-import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
-import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
-import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainer
-import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainerImpl
-import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
-import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
-import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
-import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
-import java.io.File
 import java.nio.file.Path
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop platform pick of the Koin-owned data layer (part 2).
- * Holds the always-connected connectivity seams, the LinkedHashMap-based
- * image-URL memoiser, the (unsupported, badge-less) desktop stream
- * probe, and the file-backed StreamingSubtitleStore; everything
- * else resolves from [dataJvmModule].
+ * Desktop platform pick of the Koin-owned data layer (part 2) — the
+ * construction-owner aggregate. The former single 337-line module is now
+ * sibling family modules in this package (the file's old comment-section
+ * boundaries — one Koin module per family), and this aggregate keeps the
+ * `desktopDataModule` name alive via `includes` so consumers
+ * (apps/desktop's `desktopKoinModules` list, DataKoinModulesTest's desktop
+ * smoke graph) and the load-order relationships are unchanged. Every
+ * binding body moved verbatim into its family — no renames, no retyping.
  *
- * V3 downloads conveyor: also holds the desktop actuals of the portable
- * download engine's seams — the appdata storage layout, the in-process
- * DesktopDownloadManager (the DownloadEnqueueCoordinator actual: enqueue =
- * transfer-loop kick, cancelWork = cooperative stop), no-op notification /
- * image-preload surfaces, the desktop DownloadIntake, and the 6 h
- * auto-download loop. Since the MediaRepository cluster flip the
- * MediaRepositoryAccess actual is REAL (Koin owns MediaRepositoryImpl on
- * desktop too) — series downloads and auto-download work end-to-end.
+ * Families (mirroring the DataKoinModule aggregate pattern; the includes
+ * order follows the pre-split file's section order — OfflineModeManager
+ * rides at the front with NetworkMonitor because it is the connectivity
+ * pair, and registration order is inert in Koin anyway, definitions are
+ * keyed):
+ *  - [desktopConnectivityModule] — the always-connected NetworkMonitor
+ *    pick and the OfflineModeManager built over it.
+ *  - [desktopRemoteControlModule] — the remote-control receiver trio.
+ *  - [desktopMediaSupportModule] — the LinkedHashMap-based image-URL
+ *    memoiser, the (unsupported, badge-less) desktop stream probe, and
+ *    the file-backed StreamingSubtitleStore.
+ *  - [desktopAdminModule] — the admin-statistics label seam's desktop
+ *    actual (base-locale English literals).
+ *  - [desktopDownloadsSeamsModule] — the V3 downloads conveyor's desktop
+ *    seam actuals: the appdata storage layout, the in-process
+ *    DesktopDownloadManager (the DownloadEnqueueCoordinator actual:
+ *    enqueue = transfer-loop kick, cancelWork = cooperative stop), no-op
+ *    notification / image-preload surfaces, the desktop DownloadIntake,
+ *    and the 6 h auto-download loop. Since the MediaRepository cluster
+ *    flip the MediaRepositoryAccess actual is REAL (Koin owns
+ *    MediaRepositoryImpl on desktop too) — series downloads and
+ *    auto-download work end-to-end.
+ *  - [desktopHomeConveyorModule] — the Home conveyor's desktop actuals:
+ *    the work-scheduler twins plus the honest no-ops.
+ *  - [desktopUpdateModule] — the desktop update-check sentinel.
+ *
+ * Everything not defined by these families resolves from [dataJvmModule].
+ *
+ * OVERRIDE COUPLING (the ONE deliberate desktop override): apps/desktop's
+ * desktopAppUpdateModule — LAST in desktopKoinModules' startKoin list,
+ * which runs with allowOverride(true) — REPLACES [desktopUpdateModule]'s
+ * sentinel-bound AppUpdateRepository single with the real-version desktop
+ * auto-update actual (docs/adr/desktop-auto-update.md). Pointer comments
+ * live on both sides (DesktopUpdateKoinModule.kt / DesktopKoinModules.kt).
  */
 fun desktopDataModule(dataDir: Path): Module {
     // Side effect, deliberately before the module definition: common code
@@ -68,231 +60,19 @@ fun desktopDataModule(dataDir: Path): Module {
     DataBuildFlags.debugBuild = System.getProperty("jellyplay.debug")?.toBoolean() ?: true
 
     return module {
-        single<NetworkMonitor> { DesktopNetworkMonitor() }
-
-        single<OfflineModeManager> {
-            DesktopOfflineModeManager(
-                networkMonitor = get(),
-                networkOfflineStore = get(),
-            )
-        }
-
-        single<ImageUrlProvider> {
-            // The shared jvmShared impl — the desktop twin (DesktopImageUrlProvider)
-            // was deleted once the policy lived in one class next to the interface.
-            ImageUrlProviderImpl(
-                playbackRepository = get(),
-                appearanceStore = get(),
-            )
-        }
-
-        single<LocalStreamProbe> { DesktopLocalStreamProbe() }
-
-        //  admin flip: desktop actual of the admin-statistics label
-        // seam — base-locale English literals (see the object's kdoc for the
-        // accepted locale delta). The Android actual lives in the app
-        // composition root (androidAdminSeamsModule) over legacy core:data
-        // R.string.
-        single<AdminStatisticsLabelProvider> { DesktopAdminStatisticsLabels }
-
-        // ── V3 downloads conveyor: desktop actuals of the engine seams ──────
-
-        single<DownloadStorageLayoutContract> { DesktopDownloadStorageLayout(dataDir) }
-
-        single<DownloadProgressNotifier> { DownloadProgressNotifier { /* no summary surface on desktop */ } }
-
-        single<OfflineImagePreloader> { OfflineImagePreloader { /* no shared preload cache on desktop */ } }
-
-        //  MediaRepository cluster flip: MediaRepository is now
-        // Koin-owned on desktop too (dataJvmModule's MediaRepositoryImpl
-        // single), so this accessor is real — desktop SERIES downloads and
-        // the auto-download scheduler went live with the flip. Previously the
-        // documented throwing-lazy (no desktop definition): downloadSeries
-        // failed loudly and episode series-seeding degraded to the minimal
-        // parent-row fallback.
-        single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
-
-        // The in-process download manager: construction is side-effect free;
-        // the composition root resolves + start()s it after startKoin.
-        single {
-            DesktopDownloadManager(
-                downloadDao = get(),
-                userDao = get(),
-                downloadsStore = get(),
-                serverIdentityStore = get(),
-                tokenCipher = get(),
-                concurrencyLimiter = get(),
-                transferClient = get(),
-                // Lazy: the manager is the repository's coordinator actual, so
-                // an eager resolution here would re-enter the repository
-                // single's construction (see the manager ctor kdoc).
-                downloadRepository = lazy { get<DownloadRepository>() },
-                networkMonitor = get(),
-                offlineModeManager = get(),
-                scope = get(DatastoreQualifiers.applicationScope),
-            )
-        }
-        single<DownloadEnqueueCoordinator> { get<DesktopDownloadManager>() }
-
-        single {
-            DesktopDownloadIntake(
-                delegate = get(),
-                downloadRepository = get(),
-                mediaRepository = get(),
-                downloadsStore = get(),
-            )
-        }
-        single<DownloadIntake> { get<DesktopDownloadIntake>() }
-
-        // Desktop actual of the quick-action download-outcome seam
-        // (MediaDownloadActions.downloadAndReport posts Started/Failed
-        // through it): Android bridges this to core/ui's UserMessageBus
-        // snackbar via androidAppInteropAdaptersModule, but desktop has no
-        // global toast host in core/data's reach — and core/data must not
-        // depend on core/ui. Console-logging keeps the outcome visible in the
-        // desktop log without inventing UI plumbing here; the transfer itself
-        // is observable through the downloads screen either way.
-        single<DownloadOutcomeMessenger> {
-            object : DownloadOutcomeMessenger {
-                override fun downloadStarted() {
-                    println("[downloads] download started")
-                }
-
-                override fun downloadStartFailed() {
-                    println("[downloads] download failed to start")
-                }
-            }
-        }
-
-        single {
-            DesktopAutoDownloadScheduler(
-                downloadsStore = get(),
-                downloadRepository = get(),
-                downloadIntake = get(),
-                episodeCatalogue = get(),
-                scope = get(DatastoreQualifiers.applicationScope),
-            )
-        }
-
-        // ── Home conveyor desktop actuals: the four WorkManager/ ──
-        // widget-backed HomeViewModel ctor deps have their desktop actuals
-        // here (Android: PlaybackSyncScheduler lives in
-        // androidCoreDataModule, TvWatchNextScheduler too,
-        // ContinueWatchingBroadcaster/LibrarySyncHook in the app's
-        // androidAppModule).
-        //  - PlaybackSyncScheduler: REAL since the playback-outbox drainer
-        //    moved into shared jvmShared — DesktopPlaybackSyncScheduler runs
-        //    drainer.drainOnce(0) at startup, on every going-online edge
-        //    (network Offline→Online OR the app-level Offline Mode toggling
-        //    back online — the shared ReconnectTrigger), and on
-        //    SyncStatusStateHolder's manual "sync now"
-        //    (see its class KDoc for the declared behaviour delta: desktop
-        //    staged outbox rows now actually drain; no periodic backstop).
-        //    Android overrides the interface with the WorkManager-backed
-        //    PlaybackSyncSchedulerImpl in androidCoreDataModule — the two
-        //    platform modules never load together, and Android constructs its
-        //    worker-scoped drainer per worker (no Koin single here would fit;
-        //    setForeground lives on the running CoroutineWorker).
-        //  - TvWatchNextScheduler: the Android TV "Watch Next" OS row has no
-        //    desktop equivalent.
-        //  - ContinueWatchingBroadcaster: refreshes the Android app widget's
-        //    RemoteViews service; no widgets on desktop.
-        //  - LibrarySyncHook: fans a library scan out to Android's
-        //    auto-download drain + widget refresh; both are no-ops here.
-        single<PlaybackOutboxDrainer.UserDataSyncTrigger> {
-            // No WorkManager user-data worker on desktop: the drain tail's
-            // synchronous cache-invalidate + notifyUserDataChanged fan-out
-            // already refreshes the open UI; the 12h async warm-refetch stays
-            // Android-only.
-            PlaybackOutboxDrainer.UserDataSyncTrigger { }
-        }
-        single<PlaybackOutboxDrainer> {
-            PlaybackOutboxDrainerImpl(
-                outbox = get(),
-                playbackRepository = get(),
-                offlineModeManager = get(),
-                playedStateSync = get(),
-                offlineRepository = get(),
-                mediaRepository = get(),
-                cacheInvalidator = get(),
-                userDataSyncTrigger = get(),
-                // Desktop has no notification surface for a headless drain.
-                notifier = PlaybackOutboxDrainer.Notifier.NONE,
-            )
-        }
-        single {
-            DesktopPlaybackSyncScheduler(
-                drainer = get(),
-                networkMonitor = get(),
-                offlineModeManager = get(),
-                scope = get(DatastoreQualifiers.applicationScope),
-            )
-        }
-        single<PlaybackSyncScheduler> { get<DesktopPlaybackSyncScheduler>() }
-        single<TvWatchNextScheduler> {
-            object : TvWatchNextScheduler {
-                override fun scheduleRefresh() {}
-            }
-        }
-        single<ContinueWatchingBroadcaster> {
-            object : ContinueWatchingBroadcaster {
-                override fun refreshContinueWatching() {}
-            }
-        }
-        single<LibrarySyncHook> {
-            object : LibrarySyncHook {
-                override suspend fun onLibraryScanComplete() {}
-            }
-        }
-
-        // ── Streaming-subtitle store (promotion) ────────────────────
-        // The impl moved out of the legacy Android-Hilt-owned :core:data shim
-        // into jvmShared, so desktop gets the real file-backed store, not a
-        // stub. baseDir is the appdata dir — the desktop twin of Android's
-        // `filesDir`; the impl appends its own "streaming-subtitles" root
-        // (same subtree name on both platforms). Backs the metadata editor's
-        // external-provider subtitle downloads AND the player's
-        // SubtitleManager provider-download path on desktop.
-        single<StreamingSubtitleStore> {
-            StreamingSubtitleStoreImpl(
-                baseDir = dataDir.toFile(),
-                json = get(),
-            )
-        }
-
-        // ── AppUpdate split: the desktop update-check actual ──────
-        // The repository resolves (the About screen's "Check for updates" row
-        // calls it through DesktopAppRoot), but desktop has NO self-update: the
-        // version sentinel below beats every real release tag, so
-        // GitHubReleasesApiImpl.fetchLatestUpdate's
-        // compareVersions(tag, currentVersionName) can never report an update.
-        // ("dev" would FALSE-positive here: compareVersions reads non-numeric
-        // segments as 0, and selectAsset's last-resort branch — any asset
-        // ending in "-universal.apk" — would then attach an Android universal
-        // APK to the result.) downloadUpdate is unreachable (the UI gates on
-        // isUpdateAvailable), so the appdata updates dir stays empty and
-        // getPendingUpdate / cleanupDownloadedUpdate are no-ops.
-        single<AppUpdateRepository> {
-            AppUpdateRepositoryImpl(
-                gitHubReleasesApi = get(),
-                downloadClient = get(NetworkQualifiers.downloadHttpClient),
-                // Same "updates" subtree name as the Android filesDir layout.
-                updatesDir = File(dataDir.toFile(), UPDATES_DIR),
-                currentVersionName = { DESKTOP_SELF_UPDATE_VERSION },
-                flavor = "desktop",
-                supportedAbis = arrayOf("desktop"),
-            )
-        }
+        includes(
+            desktopConnectivityModule,
+            desktopRemoteControlModule,
+            desktopMediaSupportModule(dataDir),
+            desktopAdminModule,
+            desktopDownloadsSeamsModule(dataDir),
+            desktopHomeConveyorModule,
+            // OVERRIDE COUPLING: apps/desktop's desktopAppUpdateModule
+            // (last in desktopKoinModules' startKoin list,
+            // allowOverride(true)) replaces this family's sentinel-bound
+            // AppUpdateRepository single — see DesktopUpdateKoinModule.kt's
+            // pointer comment.
+            desktopUpdateModule(dataDir),
+        )
     }
 }
-
-/** Same directory name as the Android filesDir layout ("updates"). */
-private const val UPDATES_DIR = "updates"
-
-/**
- * Sentinel current version, deliberately not the About screen's "dev": a
- * "dev" that compareVersions folds to 0 would make every GitHub release look
- * like an available desktop update (see the definition comment above). No
- * realistic release tag beats 999999.
- */
-private const val DESKTOP_SELF_UPDATE_VERSION = "999999.0.0"

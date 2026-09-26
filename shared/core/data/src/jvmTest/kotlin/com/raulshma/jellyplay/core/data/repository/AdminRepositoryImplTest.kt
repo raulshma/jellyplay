@@ -7,8 +7,11 @@ import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import io.mockk.coEvery
@@ -26,8 +29,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins [AdminRepositoryImpl]'s composition logic over the API client + realtime
- * channels (pure pass-throughs are not retested):
+ * Pins [AdminRepositoryImpl]'s composition logic over the family API clients +
+ * realtime channels (pure pass-throughs are not retested):
  *  1. `startLibraryScan` resolves the scan task by the `RefreshLibrary` key
  *     first, then by display name (case-insensitive), and only then falls back
  *     to the bare library-refresh endpoint (which has no progress to poll);
@@ -38,10 +41,16 @@ import kotlin.test.assertTrue
  *  4. the realtime task streams + user image URL delegate to the
  *     engine/channel state. (The plugin family's compositions moved to
  *     PluginAdminRepositoryImplTest at the facade split.)
+ *
+ * D5: the ctor injects the family singles directly (admin + user clients in
+ * these tests; the live-tv/library clients carry the two remaining
+ * pass-throughs and are omitted here) — the JellyfinApiClient union it used
+ * to inject was a pure delegation over these same singles.
  */
 class AdminRepositoryImplTest {
 
-    private lateinit var apiClient: JellyfinApiClient
+    private lateinit var adminApiClient: AdminApiClient
+    private lateinit var userApiClient: UserApiClient
     private lateinit var engine: JellyfinApiEngine
     private lateinit var realtimeTasks: ScheduledTasksRealtimeChannel
     private lateinit var activityLogChannel: ActivityLogRealtimeChannel
@@ -54,29 +63,30 @@ class AdminRepositoryImplTest {
             address = "https://server.example.com",
         ),
     )
-    private val currentUser = MutableStateFlow<com.raulshma.jellyplay.core.model.UserInfo?>(
-        com.raulshma.jellyplay.core.model.UserInfo(
-            id = "11111111-1111-4111-8111-111111111111",
-            name = "admin",
-            serverAddress = "https://server.example.com",
-            accessToken = "token-1",
-            serverId = "server-1",
-        ),
-    )
 
     @BeforeTest
     fun setup() {
-        apiClient = mockk()
+        adminApiClient = mockk()
+        userApiClient = mockk()
         engine = mockk()
         realtimeTasks = mockk()
         activityLogChannel = mockk()
-        every { engine.currentServer } returns currentServer
-        every { engine.currentUser } returns currentUser
+        // The router-address read the URL builder consumes; the default mirrors
+        // "no failover configured" (active == the server's primary).
+        every { engine.activeServerAddress } answers { currentServer.value?.address }
         every { realtimeTasks.tasks } returns flowOf(emptyList())
         every { realtimeTasks.scanLibraryTask } returns flowOf(null)
         every { realtimeTasks.lastPushAtMs } returns 0L
         every { activityLogChannel.entries(any()) } returns flowOf()
-        repository = AdminRepositoryImpl(apiClient, engine, realtimeTasks, activityLogChannel)
+        repository = AdminRepositoryImpl(
+            adminApiClient = adminApiClient,
+            userApiClient = userApiClient,
+            liveTvApiClient = mockk<LiveTvApiClient>(relaxed = true),
+            libraryApiClient = mockk<LibraryApiClient>(relaxed = true),
+            engine = engine,
+            realtimeTasks = realtimeTasks,
+            activityLogRealtimeChannel = activityLogChannel,
+        )
     }
 
     private fun task(id: String, key: String, name: String) = ScheduledTaskInfo(
@@ -88,10 +98,10 @@ class AdminRepositoryImplTest {
 
     @Test
     fun `startLibraryScan prefers the RefreshLibrary task key`() = runTest {
-        coEvery { apiClient.getScheduledTasks() } returns Result.success(
+        coEvery { adminApiClient.getScheduledTasks() } returns Result.success(
             listOf(task("t-key", key = "RefreshLibrary", name = "Other name")),
         )
-        coEvery { apiClient.startTask("t-key") } returns Result.success(Unit)
+        coEvery { adminApiClient.startTask("t-key") } returns Result.success(Unit)
 
         repository.startLibraryScan()
 
@@ -100,10 +110,10 @@ class AdminRepositoryImplTest {
 
     @Test
     fun `startLibraryScan falls back to a case-insensitive name match`() = runTest {
-        coEvery { apiClient.getScheduledTasks() } returns Result.success(
+        coEvery { adminApiClient.getScheduledTasks() } returns Result.success(
             listOf(task("t-name", key = "different", name = "scan MEDIA library")),
         )
-        coEvery { apiClient.startTask("t-name") } returns Result.success(Unit)
+        coEvery { adminApiClient.startTask("t-name") } returns Result.success(Unit)
 
         repository.startLibraryScan()
 
@@ -112,23 +122,23 @@ class AdminRepositoryImplTest {
 
     @Test
     fun `startLibraryScan falls back to the bare refresh endpoint without a task`() = runTest {
-        coEvery { apiClient.getScheduledTasks() } returns Result.success(emptyList())
-        coEvery { apiClient.scanLibrary() } returns Result.success(Unit)
+        coEvery { adminApiClient.getScheduledTasks() } returns Result.success(emptyList())
+        coEvery { adminApiClient.scanLibrary() } returns Result.success(Unit)
 
         repository.startLibraryScan()
 
-        coVerify(exactly = 0) { apiClient.startTask(any()) }
-        coVerify(exactly = 1) { apiClient.scanLibrary() }
+        coVerify(exactly = 0) { adminApiClient.startTask(any()) }
+        coVerify(exactly = 1) { adminApiClient.scanLibrary() }
     }
 
     @Test
     fun `the dashboard summary degrades each failing endpoint independently`() = runTest {
-        coEvery { apiClient.getSystemInfo() } returns Result.success(SystemInfo(serverName = "Jelly"))
-        coEvery { apiClient.getItemCounts() } returns Result.failure(IllegalStateException("x"))
-        coEvery { apiClient.getSessions() } returns Result.failure(IllegalStateException("x"))
-        coEvery { apiClient.getActivityLogEntries(startIndex = null, limit = 10) } returns
+        coEvery { adminApiClient.getSystemInfo() } returns Result.success(SystemInfo(serverName = "Jelly"))
+        coEvery { adminApiClient.getItemCounts() } returns Result.failure(IllegalStateException("x"))
+        coEvery { adminApiClient.getSessions() } returns Result.failure(IllegalStateException("x"))
+        coEvery { adminApiClient.getActivityLogEntries(startIndex = null, limit = 10) } returns
             Result.failure(IllegalStateException("x"))
-        coEvery { apiClient.getScheduledTasks() } returns Result.success(emptyList())
+        coEvery { adminApiClient.getScheduledTasks() } returns Result.success(emptyList())
 
         val summary = repository.getDashboardSummary().getOrThrow()
 
@@ -140,11 +150,11 @@ class AdminRepositoryImplTest {
 
     @Test
     fun `the dashboard summary still succeeds when everything fails`() = runTest {
-        coEvery { apiClient.getSystemInfo() } returns Result.failure(IllegalStateException("down"))
-        coEvery { apiClient.getItemCounts() } returns Result.failure(IllegalStateException("down"))
-        coEvery { apiClient.getSessions() } returns Result.failure(IllegalStateException("down"))
-        coEvery { apiClient.getActivityLogEntries(any(), any()) } returns Result.failure(IllegalStateException("down"))
-        coEvery { apiClient.getScheduledTasks(any()) } returns Result.failure(IllegalStateException("down"))
+        coEvery { adminApiClient.getSystemInfo() } returns Result.failure(IllegalStateException("down"))
+        coEvery { adminApiClient.getItemCounts() } returns Result.failure(IllegalStateException("down"))
+        coEvery { adminApiClient.getSessions() } returns Result.failure(IllegalStateException("down"))
+        coEvery { adminApiClient.getActivityLogEntries(any(), any()) } returns Result.failure(IllegalStateException("down"))
+        coEvery { adminApiClient.getScheduledTasks(any()) } returns Result.failure(IllegalStateException("down"))
 
         val summary = repository.getDashboardSummary().getOrThrow()
 
@@ -155,25 +165,25 @@ class AdminRepositoryImplTest {
     @Test
     fun `the sessions dashboard passes populated lists through`() = runTest {
         val sessions = listOf(SessionInfo(id = "s1"))
-        coEvery { apiClient.getSystemInfo() } returns Result.success(SystemInfo())
-        coEvery { apiClient.getItemCounts() } returns Result.failure(IllegalStateException("x"))
-        coEvery { apiClient.getSessions() } returns Result.success(sessions)
-        coEvery { apiClient.getActivityLogEntries(any(), any()) } returns Result.failure(IllegalStateException("x"))
-        coEvery { apiClient.getScheduledTasks(any()) } returns Result.failure(IllegalStateException("x"))
+        coEvery { adminApiClient.getSystemInfo() } returns Result.success(SystemInfo())
+        coEvery { adminApiClient.getItemCounts() } returns Result.failure(IllegalStateException("x"))
+        coEvery { adminApiClient.getSessions() } returns Result.success(sessions)
+        coEvery { adminApiClient.getActivityLogEntries(any(), any()) } returns Result.failure(IllegalStateException("x"))
+        coEvery { adminApiClient.getScheduledTasks(any()) } returns Result.failure(IllegalStateException("x"))
 
         assertEquals(sessions, repository.getDashboardSummary().getOrThrow().sessions)
     }
 
     @Test
     fun `getUsersOverview counts only active administrators`() = runTest {
-        coEvery { apiClient.getManagedUsers() } returns Result.success(
+        coEvery { userApiClient.getManagedUsers() } returns Result.success(
             listOf(
                 user("u1", isAdministrator = true, isDisabled = false),   // counts
                 user("u2", isAdministrator = true, isDisabled = true),    // disabled: no
                 user("u3", isAdministrator = false, isDisabled = false),  // non-admin: no
             ),
         )
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("u1")
+        coEvery { userApiClient.getCurrentUserId() } returns Result.success("u1")
 
         val overview = repository.getUsersOverview().getOrThrow()
 
@@ -184,11 +194,11 @@ class AdminRepositoryImplTest {
 
     @Test
     fun `getUserEditorContext degrades failed auxiliary fetches to empty`() = runTest {
-        coEvery { apiClient.getManagedUser("u1") } returns Result.success(user("u1", isAdministrator = true))
-        coEvery { apiClient.getLibraryFoldersForEditor() } returns
+        coEvery { userApiClient.getManagedUser("u1") } returns Result.success(user("u1", isAdministrator = true))
+        coEvery { userApiClient.getLibraryFoldersForEditor() } returns
             Result.failure(IllegalStateException("no folders"))
-        coEvery { apiClient.getCurrentUserId() } returns Result.success("u1")
-        coEvery { apiClient.getManagedUsers() } returns
+        coEvery { userApiClient.getCurrentUserId() } returns Result.success("u1")
+        coEvery { userApiClient.getManagedUsers() } returns
             Result.success(listOf(user("u1", isAdministrator = true)))
 
         val context = repository.getUserEditorContext("u1").getOrThrow()
@@ -201,10 +211,10 @@ class AdminRepositoryImplTest {
     @Test
     fun `getUserEditorContext passes the folder list through when available`() = runTest {
         val folders = listOf(LibraryFolder(id = "f1", name = "Movies", collectionType = "movies"))
-        coEvery { apiClient.getManagedUser("u1") } returns Result.success(user("u1", isAdministrator = false))
-        coEvery { apiClient.getLibraryFoldersForEditor() } returns Result.success(folders)
-        coEvery { apiClient.getCurrentUserId() } returns Result.failure(IllegalStateException("no session"))
-        coEvery { apiClient.getManagedUsers() } returns Result.success(emptyList())
+        coEvery { userApiClient.getManagedUser("u1") } returns Result.success(user("u1", isAdministrator = false))
+        coEvery { userApiClient.getLibraryFoldersForEditor() } returns Result.success(folders)
+        coEvery { userApiClient.getCurrentUserId() } returns Result.failure(IllegalStateException("no session"))
+        coEvery { userApiClient.getManagedUsers() } returns Result.success(emptyList())
 
         val context = repository.getUserEditorContext("u1").getOrThrow()
 
@@ -236,6 +246,18 @@ class AdminRepositoryImplTest {
     }
 
     @Test
+    fun `getUserImageUrl follows the router's failover address, not the server's primary`() {
+        // Failover pin: the router moved to an alternate while currentServer
+        // still carries the (dead) primary — the URL must target the active
+        // endpoint, never the straggler primary address.
+        every { engine.activeServerAddress } returns "https://failover.example.com"
+
+        val url = repository.getUserImageUrl("11111111-1111-4111-8111-111111111111", tag = "abc", maxWidth = 200)
+
+        assertTrue(url.startsWith("https://failover.example.com/Users/"), url)
+    }
+
+    @Test
     fun `getUserImageUrl is empty without a server`() {
         currentServer.value = null
 
@@ -249,7 +271,7 @@ class AdminRepositoryImplTest {
     )
 
     private fun coVerifyScanStarted(taskId: String) {
-        coVerify(exactly = 1) { apiClient.startTask(taskId) }
-        coVerify(exactly = 0) { apiClient.scanLibrary() }
+        coVerify(exactly = 1) { adminApiClient.startTask(taskId) }
+        coVerify(exactly = 0) { adminApiClient.scanLibrary() }
     }
 }

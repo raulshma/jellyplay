@@ -16,8 +16,7 @@ package com.raulshma.jellyplay.core.network.api
  * "you don't have access" UX instead of showing a generic network-error string.
  *
  * Split (see docs/kmp-migration-plan.md): only the pure, commonMain-safe
- * classification lives in this file so wasm consumers can build `ApiException`s
- * from HTTP statuses. The java.net/Jellyfin-SDK throwable classifiers
+ * classification lives in this file. The java.net/Jellyfin-SDK throwable classifiers
  * (`fromJellyfin`, `fromNetwork`) are companion EXTENSION functions in
  * `ApiExceptionJvm.kt` (jvmShared) — every existing `ApiException.fromJellyfin(x)`
  * call site keeps compiling unchanged.
@@ -48,10 +47,9 @@ class ApiException(
      * certificate or failed hostname verification). Set by the JVM-side
      * classifiers (`ApiExceptionJvm.kt`) by walking the cause chain for
      * `javax.net.ssl.SSLException` — commonMain cannot see that type, so the
-     * flag travels as plain Boolean. Lets callers offer the self-signed trust
-     * dialog instead of a generic network error. Always false on wasm (the
-     * browser owns certificate decisions there).
-     */
+ * flag travels as plain Boolean. Lets callers offer the self-signed trust
+ * dialog instead of a generic network error.
+ */
     val isTlsTrustError: Boolean = false,
     message: String,
     cause: Throwable? = null,

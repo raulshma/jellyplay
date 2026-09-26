@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
 import com.raulshma.jellyplay.feature.music.di.musicModule
 import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
+import com.raulshma.jellyplay.feature.photos.di.photosModule
 import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
 import com.raulshma.jellyplay.feature.book.di.playerBookModule
 import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
@@ -30,8 +31,8 @@ import org.koin.core.module.Module
  * (`*sharedFeatureModules`) and KoinModuleRegistrationGuardTest derives its
  * expected set from (set-equality in BOTH directions against the feature
  * modules discovered under `shared/feature/<module>/src/{commonMain,jvmShared}`; the
- * test reads this list out of this file's source text — the webFeatureModules
- * precedent). When a new feature lands a commonMain/jvmShared Module, add it
+ * test reads this list out of this file's source text). When a new feature
+ * lands a commonMain/jvmShared Module, add it
  * here; the guard test follows automatically. Forgetting this line is the
  * arrqueue/shortcuts lesson — compile gates are BLIND to Koin registration.
  *
@@ -63,6 +64,15 @@ val sharedFeatureModules: List<Module> = listOf(
     // resolved with the cluster flip, and desktopPhotoExport (desktop's
     // inline list) supplies the photo-export actual (unsupported=no-op).
     libraryModule,
+    // …photos, extracted from library at the photo-suite move: the
+    // PhotoAlbum/PhotoViewer ViewModels (the former trailing libraryModule
+    // definitions). Both VM ctor deps (MediaRepository, ImageUrlProvider)
+    // are Koin-native in the shared graph; the PhotoExport seam's actuals
+    // are the per-shell platform modules (androidPhotoExportModule /
+    // desktopPhotoExportModule, the shells' inline lists) that moved with
+    // the suite. Route.PhotoAlbum/Route.PhotoViewer stay core:ui keys,
+    // registered by photosSection (AppSections) beside librarySection.
+    photosModule,
     // …music, third conveyor item — LIVE since (browse) and fully playable
     // since: desktopPlayerModule provides the real desktop audio core
     // (DesktopAudioQueueManager over an audio-only MpvDesktopEngine +
@@ -202,8 +212,8 @@ val sharedFeatureModules: List<Module> = listOf(
     // (desktopAuthPlatformModule) — the auth seam's fun-interface probe in
     // feature/auth (blames a connect failure on the Android 17+
     // local-network permission), NOT core/ui's same-named composition local.
-    // Unified sign-in on the desktop screens: the signed-out gate
-    // (DesktopSignedOutAuthHost) and the signed-in settings drill-ins
+    // Unified sign-in on the desktop screens: the signed-out gate (the
+    // shared SignedOutAuthHost) and the signed-in settings drill-ins
     // (DesktopAppRoot's authSection entries) both instantiate these
     // ViewModels; the legacy DesktopSignInPane pane is retired.
     authModule,

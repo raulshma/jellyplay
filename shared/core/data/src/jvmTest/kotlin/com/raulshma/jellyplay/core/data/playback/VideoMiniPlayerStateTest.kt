@@ -45,7 +45,6 @@ class VideoMiniPlayerStateTest {
         val playingFlow = MutableStateFlow(playing)
         override val currentPositionMs: Long get() = 0L
         override val isPlaying get() = playingFlow
-        override val underlyingPlayer: Any? get() = null
         override val volume: Float get() = 1f
         override fun play() { playing = true; playingFlow.value = true }
         override fun pause() { pauseCount++; playing = false; playingFlow.value = false }
@@ -53,7 +52,7 @@ class VideoMiniPlayerStateTest {
         override fun seekTo(positionMs: Long) = Unit
         override fun selectTrack(type: com.raulshma.jellyplay.core.model.TrackType, index: Int) = Unit
         override fun setMaxVideoBitrate(bps: Int?) = Unit
-        override fun setVolume(value: Float) = Unit
+        override fun setVolume(value: Float, isUserChange: Boolean) = Unit
         override fun increaseVolume(delta: Float) = Unit
         override fun decreaseVolume(delta: Float) = Unit
         override fun setMuted(muted: Boolean) = Unit

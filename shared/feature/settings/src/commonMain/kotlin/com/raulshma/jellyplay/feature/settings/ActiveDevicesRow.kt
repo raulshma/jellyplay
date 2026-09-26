@@ -3,15 +3,12 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontWeight
@@ -162,14 +158,6 @@ private fun ActiveDeviceCard(
     serverAddress: String,
     onSendMessage: () -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "deviceCardScale",
-    )
-
     val nowPlayingItem = session.nowPlayingItem
     val backgroundImageUrl = if (nowPlayingItem != null && serverAddress.isNotBlank()) {
         val tag = nowPlayingItem.backdropImageTag ?: nowPlayingItem.primaryImageTag
@@ -180,13 +168,11 @@ private fun ActiveDeviceCard(
     } else null
 
     Card(
+        // The Card has no clickable, so there is no press feedback to scale —
+        // no pressScale here until a click interaction exists to drive it.
         modifier = Modifier
             .width(260.dp)
-            .height(160.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            },
+            .height(160.dp),
         shape = ShapeCache.smooth20,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,

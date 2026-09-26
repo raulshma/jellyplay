@@ -168,7 +168,8 @@ class SessionCoordinatorTest {
         // The launch "add server" flash, as measured on device: the
         // repository's isAuthenticated flip resumed the restore coroutine a
         // few ms BEFORE the coordinator's mirror collector ran, so the splash
-        // gate released while the shell still composed AuthContent — one
+        // gate released while the shell still composed the signed-out auth
+        // host (SignedOutAuthHost) — one
         // (isRestoring=false, isAuthenticated=false) frame flashes the
         // server list over Home. This reproduces the shape: the flip lands
         // while restoreSession() is still running, before the mirror
@@ -211,6 +212,27 @@ class SessionCoordinatorTest {
             "splash gate released before the authenticated mirror flipped: $order",
             mirrorIndex < releaseIndex,
         )
+    }
+
+    @Test
+    fun `restart raises the splash gate synchronously before the restore coroutine runs`() = runTest(dispatcher) {
+        // The activity-state-loss rebuild path: start() again after the first
+        // pass settled the gate. StandardTestDispatcher is NOT the VM's
+        // Main.immediate — the launched restore coroutine does not run until
+        // advanceUntilIdle — so the gate-up must happen synchronously inside
+        // start(): a splash reading between the two would otherwise see the
+        // previous pass's false (restore()'s internal re-raise comes too late).
+        coordinator.start(lifecycleScope) { }
+        advanceUntilIdle()
+        assertFalse(coordinator.isRestoring.value)
+
+        coordinator.start(lifecycleScope) { }
+        assertTrue(
+            "the gate must be up when start() returns, before the launched restore can re-raise it",
+            coordinator.isRestoring.value,
+        )
+        advanceUntilIdle()
+        assertFalse(coordinator.isRestoring.value)
     }
 
     @Test

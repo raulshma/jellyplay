@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * DTO→core.model mapping semantics (mirrors the jvmShared
  * AuthApiClientImpl.toUserInfo / probeServerInfo behavior these tests
  * substitute for). Decoding runs through the same lenient Json configuration
- * the wasm client uses.
+ * the wire client uses.
  */
 class AuthWireDtoMapperTest {
 
@@ -142,10 +142,10 @@ class AuthWireDtoMapperTest {
         val caps = defaultClientCapabilities()
         assertEquals(listOf("Video", "Audio"), caps.playableMediaTypes)
         assertEquals(SUPPORTED_REMOTE_COMMANDS, caps.supportedCommands)
-        assertEquals(15, caps.supportedCommands.size)
+        assertEquals(27, caps.supportedCommands.size)
         assertEquals(true, caps.supportsMediaControl)
         assertEquals(true, caps.supportsPersistentIdentifier)
-        assertNull(caps.deviceProfile, "wasm v1 sends no DeviceProfile (documented cut)")
+        assertNull(caps.deviceProfile, "sends no DeviceProfile (documented cut)")
         // Spot-pin order against JellyfinApiEngine.SUPPORTED_REMOTE_COMMANDS.
         assertEquals(
             listOf("SetVolume", "VolumeUp", "VolumeDown", "Mute", "Unmute", "ToggleMute"),

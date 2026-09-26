@@ -8,11 +8,9 @@ import android.graphics.Bitmap
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.WidgetConfig
 import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 import java.util.concurrent.ConcurrentHashMap
-import org.koin.mp.KoinPlatform
 
 /**
  * The Now Playing widget's single render pipeline. Every FULL push — the
@@ -71,7 +69,7 @@ internal object NowPlayingWidgetRenderer {
 
     /** Koin accessor with the process-start race the provider paths carry. */
     private fun resolveWidgetConfig(appWidgetId: Int): WidgetConfig = try {
-        KoinPlatform.getKoin()!!.get<WidgetDataStore>().getWidgetConfigForIdSync(appWidgetId)
+        WidgetKoin.widgetDataStore.getWidgetConfigForIdSync(appWidgetId)
     } catch (_: Exception) {
         WidgetConfig()
     }

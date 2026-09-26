@@ -41,4 +41,8 @@
     <string name="shortcuts_item_setup_wizard_description">Ejecutar el flujo de configuración inicial.</string>
     <string name="shortcuts_item_about_title">Acerca de</string>
     <string name="shortcuts_item_about_description">Versión, licencias e información de la app.</string>
+    <string name="shortcuts_search_placeholder">Buscar atajos…</string>
+    <string name="shortcuts_search_no_results">Ningún atajo coincide con «%1$s»</string>
+    <string name="shortcuts_search_clear">Borrar búsqueda</string>
+    <string name="shortcuts_admin_badge">Admin</string>
 </resources>

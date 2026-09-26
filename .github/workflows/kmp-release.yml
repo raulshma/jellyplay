@@ -1,7 +1,7 @@
 name: KMP Alpha Release
 
 # KMP alpha channel (release-alpha/* branches): publishes the DESKTOP
-# installers and the WEB wasm bundle as a GitHub PRE-RELEASE tagged
+# installers as a GitHub PRE-RELEASE tagged
 # v<x.y.z>-alpha.N. The Android stable lane stays in release.yml — these two
 # never mix:
 #  * release-alpha/* is its own namespace: release.yml's v* and release/**
@@ -15,7 +15,7 @@ name: KMP Alpha Release
 # the version script reads the channel from the namespace (the -alpha in
 # release-alpha), so the branch name alone pins the tag to v<x.y.z>-alpha.N.
 # Top-level dashed branches (v0.11.0-alpha) no longer trigger this lane —
-# release-alpha/* is the only push path to a MID-CYCLE desktop/web release;
+# release-alpha/* is the only push path to a MID-CYCLE desktop release;
 # stable cuts in release.yml publish v<x.y.z>-alpha.N of their own base via
 # its KMP jobs. The desktop packageVersion stays numeric
 # (jpackage/msi constraint, apps/desktop/build.gradle.kts); the alpha marker
@@ -148,52 +148,8 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  web-bundle:
-    needs: determine-version
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v7
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
-
-      - name: Build web wasm bundle (production)
-        run: ./gradlew :apps:web:wasmJsBrowserDistribution --stacktrace
-
-      # Write <name>.gz sidecars for every *.wasm/*.js/*.css
-      # inside the distribution BEFORE the zip step below (it takes the whole
-      # directory verbatim), so self-hosters can serve them with nginx
-      # `gzip_static on;` / Caddy `file_server precompressed` instead of
-      # on-the-fly compression. The task dependsOn the distribution, so this
-      # is a cheap re-entry: the bundle itself is already up to date here.
-      - name: Precompress web bundle (gzip sidecars)
-        run: ./gradlew :apps:web:precompressWasmDist --stacktrace
-
-      - name: Zip web bundle with alpha version
-        run: |
-          VERSION="${{ needs.determine-version.outputs.display }}"
-          cd apps/web/build/dist/wasmJs/productionExecutable
-          zip -r "$RUNNER_TEMP/jellyplay-web-v${VERSION}.zip" .
-
-      - name: Upload web bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-bundle
-          path: ${{ runner.temp }}/jellyplay-web-*.zip
-          retention-days: 7
-          if-no-files-found: error
-
   release:
-    needs: [determine-version, desktop-package, web-bundle]
+    needs: [determine-version, desktop-package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -211,7 +167,6 @@ jobs:
           name: "JellyPlay KMP Alpha ${{ needs.determine-version.outputs.tag }}"
           files: |
             release-assets/jellyplay-desktop-*
-            release-assets/jellyplay-web-*
           generate_release_notes: true
           # The alpha contract: marked pre-release and never "latest" — the
           # Android updater's /releases/latest probe stays on the stable line.

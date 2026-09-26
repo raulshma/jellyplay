@@ -13,8 +13,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -31,8 +29,9 @@ import org.robolectric.annotation.Config
  *
  * V3 downloads conveyor: the impl moved to :shared:core:data jvmShared; this
  * legacy-side suite now constructs it through the seam ctor (mock coordinator /
- * layout contract / notifier / preloader, a simple MediaRepositoryAccess fake,
- * and a kotlin.Lazy delegate). Robolectric stays because the shared Log
+ * notifier, a simple MediaRepositoryAccess fake, and a relaxed delegate —
+ * the D6 writer-core extraction removed both the Lazy and the repo's own
+ * write cluster). Robolectric stays because the shared Log
  * facade's Android actual delegates to android.util.Log.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -46,30 +45,27 @@ class DownloadRepositoryImplResumeTest {
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
-    private val httpClient: OkHttpClient = mockk()
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
-    private val json: Json = Json
     // downloadSeries delegates the per-episode bundle here; the resume tests
-    // never exercise it, so a relaxed mock behind a kotlin Lazy is sufficient.
-    private val downloadDelegate: kotlin.Lazy<DownloadDelegate> = lazy { mockk<DownloadDelegate>(relaxed = true) }
+    // never exercise it, so a relaxed mock is sufficient. (D6: no longer a
+    // kotlin Lazy — the writer-core extraction dissolved the construction
+    // cycle the Lazy used to break.)
+    private val downloadDelegate: DownloadDelegate = mockk(relaxed = true)
     // Storage cap + WorkManager enqueue were extracted out of the repo into
     // their own modules. The resume path exercises neither, so relaxed mocks
     // (the enqueue seam's interface) suffice.
     private val storagePolicy: StoragePolicy = mockk(relaxed = true)
     private val downloadEnqueuer: DownloadEnqueueCoordinator = mockk(relaxed = true)
-    // Path-layout policy was extracted out of the repo; the resume path never
-    // starts a new download, so a relaxed mock of the shared contract suffices.
-    private val storageLayout: DownloadStorageLayoutContract = mockk(relaxed = true)
-    // The resume path never consults the offline-sync comparator; a relaxed mock
-    // satisfies the constructor param added alongside the sync wiring.
-    private val syncComparator: com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator = mockk(relaxed = true)
     // The resume path never loads series episodes; a relaxed mock satisfies the
     // catalogue constructor param added alongside the seasons/episodes migration.
     private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue = mockk(relaxed = true)
-    // Notification summary + image preload seams: relaxed mocks — the resume
-    // path refreshes the summary but never renders notifications here.
+    // Notification summary seam: relaxed mock — the resume path refreshes the
+    // summary but never renders notifications here.
     private val progressNotifier: DownloadProgressNotifier = mockk(relaxed = true)
-    private val imagePreloader: OfflineImagePreloader = mockk(relaxed = true)
+    // D6: the artifact-write cluster (start/metadata seeding/sidecars) lives in
+    // the writer core; the resume path touches only DAO reads + batch updates,
+    // so a relaxed mock suffices.
+    private val writer: OfflineDownloadWriterCore = mockk(relaxed = true)
 
     private fun repository() = DownloadRepositoryImpl(
         downloadDao = downloadDao,
@@ -80,21 +76,12 @@ class DownloadRepositoryImplResumeTest {
         mediaRepository = MediaRepositoryAccess { mediaRepository },
         episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
-        httpClient = httpClient,
         downloadsStore = preferencesStore,
-        json = json,
-        downloadDelegate = downloadDelegate,
         storagePolicy = storagePolicy,
         downloadEnqueuer = downloadEnqueuer,
-        storageLayout = storageLayout,
-        syncComparator = syncComparator,
         progressNotifier = progressNotifier,
-        imagePreloader = imagePreloader,
-        timeSource = object : com.raulshma.jellyplay.core.data.util.TimeSource {
-            override fun nowEpochMillis(): Long = System.currentTimeMillis()
-            override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
-            override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
-        },
+        writer = writer,
+        downloadDelegate = downloadDelegate,
     )
 
     @Test

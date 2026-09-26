@@ -10,8 +10,6 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.discovery.RecommendedServerInfo
 import org.jellyfin.sdk.discovery.RecommendedServerInfoScore
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Guards the platform's multicast reception requirement around SSDP scans.
@@ -43,8 +41,7 @@ class NoopDiscoveryMulticastGuard : DiscoveryMulticastGuard {
  * - Always provide a manual entry fallback alongside automatic discovery
  * - Discovery can fail on Docker bridge networks, mesh Wi-Fi with IGMP snooping, or VPNs
  */
-@Singleton
-class ServerDiscoveryService @Inject constructor(
+class ServerDiscoveryService(
     private val jellyfin: Jellyfin,
     private val multicastGuard: DiscoveryMulticastGuard,
 ) {

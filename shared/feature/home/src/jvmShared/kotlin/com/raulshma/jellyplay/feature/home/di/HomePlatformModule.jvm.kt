@@ -16,7 +16,7 @@ internal actual fun platformHomeModule(): Module = module {
     // HomeDownloadActions / SeriesEpisodeDownloads bindings moved out with
     // the download-actions seam consolidation: core:data declares, implements
     // and binds QuickDownloadActions / SeriesEpisodeDownloads itself on both
-    // platforms (dataJvmModule here, dataWasmModule on web).
+    // platforms (dataJvmModule here).
     single<HomeClock> { JvmHomeClock(get()) }
     single<HomeNewsletterGate> { JvmHomeNewsletterGate(get()) }
     // The holder factory's collaborator single, moved here from the common

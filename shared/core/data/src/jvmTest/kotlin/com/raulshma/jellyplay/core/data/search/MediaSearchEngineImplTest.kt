@@ -23,6 +23,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +46,9 @@ import kotlin.test.assertTrue
  *    engine itself must never throw;
  *  - the Seerr gate (connected + search-enabled + not on Local);
  *  - the history policy (result-gated, ≥2 chars, hidden-history and
- *    signed-out guards) and the offline round.
+ *    signed-out guards) and the offline round;
+ *  - the side-search round (gated Seerr + offline scan, the seerrError mark,
+ *    and cancel-and-replace across queries).
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class MediaSearchEngineImplTest {
@@ -237,6 +240,110 @@ class MediaSearchEngineImplTest {
         verify { mediaRepository wasNot Called }
         verify { seerrRepository wasNot Called }
         coVerify(exactly = 1) { searchHistoryRepository.saveQuery("batman", "user-1") }
+    }
+
+    // ── Side search ─────────────────────────────────────────────────────
+
+    @Test
+    fun `sideSearch blank query short-circuits without touching any source`() = runTest {
+        val state = engine.sideSearch(flowOf("   ")).first()
+
+        assertEquals("   ", state.query)
+        assertTrue(state.seerr.isEmpty())
+        assertFalse(state.seerrError)
+        assertTrue(state.offline.isEmpty())
+        verify { seerrRepository wasNot Called }
+        verify { offlineRepository wasNot Called }
+    }
+
+    @Test
+    fun `sideSearch skips seerr silently when the gate is closed`() = runTest {
+        networkStatus.value = NetworkStatus.Local
+        coEvery { offlineRepository.searchOffline("batman", 10) } returns listOf(offlineItem("o1"))
+
+        val state = engine.sideSearch(flowOf("batman")).first { it.offline.isNotEmpty() }
+
+        // Gate off → empty seerr slot and NO error row (Seerr is merely
+        // unavailable, not failed); the offline scan still runs.
+        assertTrue(state.seerr.isEmpty())
+        assertFalse(state.seerrError)
+        assertEquals(listOf("o1"), state.offline.map { it.id })
+        verify { seerrRepository wasNot Called }
+    }
+
+    @Test
+    fun `sideSearch lands gated seerr results and offline rows`() = runTest {
+        coEvery { seerrRepository.search("batman") } returns Result.success(
+            SeerrSearchResponse(results = (1..12).map { seerrItem(it) })
+        )
+        coEvery { offlineRepository.searchOffline("batman", 10) } returns listOf(offlineItem("o1"))
+
+        val state = engine.sideSearch(flowOf("batman")).first { it.seerr.isNotEmpty() }
+
+        // seerrLimit (default 10) caps the seerr slot of the 12 results.
+        assertEquals((1..10).toList(), state.seerr.map { it.id })
+        assertFalse(state.seerrError)
+        assertEquals(listOf("o1"), state.offline.map { it.id })
+    }
+
+    @Test
+    fun `sideSearch marks seerrError on repository failure without losing offline rows`() = runTest {
+        coEvery { seerrRepository.search("batman") } returns Result.failure(IllegalStateException("seerr down"))
+        coEvery { offlineRepository.searchOffline("batman", 10) } returns listOf(offlineItem("o1"))
+
+        val state = engine.sideSearch(flowOf("batman")).first { it.seerrError }
+
+        assertTrue(state.seerr.isEmpty())
+        assertTrue(state.seerrError)
+        assertEquals(listOf("o1"), state.offline.map { it.id })
+    }
+
+    @Test
+    fun `sideSearch also marks seerrError when the repository throws`() = runTest {
+        coEvery { seerrRepository.search("batman") } throws RuntimeException("transport boom")
+        coEvery { offlineRepository.searchOffline("batman", 10) } returns emptyList()
+
+        val state = engine.sideSearch(flowOf("batman")).first { it.seerrError }
+
+        assertTrue(state.seerr.isEmpty())
+        assertTrue(state.seerrError)
+    }
+
+    @Test
+    fun `sideSearch swallows a failing offline scan into an empty row`() = runTest {
+        coEvery { seerrRepository.search("batman") } returns Result.success(SeerrSearchResponse(results = emptyList()))
+        coEvery { offlineRepository.searchOffline("batman", 10) } throws RuntimeException("db locked")
+
+        val completed = engine.sideSearch(flowOf("batman")).toList().last()
+
+        // Offline is best-effort: the failure renders as an empty row, the
+        // round itself never throws and the seerr slot is untouched.
+        assertTrue(completed.offline.isEmpty())
+        assertFalse(completed.seerrError)
+    }
+
+    @Test
+    fun `sideSearch cancels the previous query's in-flight round`() = runTest {
+        val staleItem = offlineItem("stale")
+        val freshItem = offlineItem("fresh")
+        // The stale scan parks on a gate: it would publish ONLY if its round
+        // were still alive when the gate opens.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { seerrRepository.search(any()) } returns Result.success(SeerrSearchResponse(results = emptyList()))
+        coEvery { offlineRepository.searchOffline("stale", any()) } coAnswers {
+            gate.await()
+            listOf(staleItem)
+        }
+        coEvery { offlineRepository.searchOffline("fresh", any()) } returns listOf(freshItem)
+
+        val states = engine.sideSearch(flowOf("stale", "fresh")).toList()
+
+        // Only the fresh round's completed state lands — the stale round is
+        // cancelled mid-flight and its rows can never publish.
+        assertTrue(states.none { staleItem in it.offline })
+        val completed = states.last()
+        assertEquals("fresh", completed.query)
+        assertEquals(listOf(freshItem), completed.offline)
     }
 
     // ── recordHistory policy (public seam) ──────────────────────────────

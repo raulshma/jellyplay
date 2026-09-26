@@ -1,20 +1,46 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
-import com.raulshma.jellyplay.core.network.config.SelfSignedTrustMatcher
+import com.raulshma.jellyplay.core.network.config.ClientCertificateFacade
+import com.raulshma.jellyplay.core.network.config.ClientCertificateImport
+import com.raulshma.jellyplay.core.network.config.ClientCertificateStatus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
+/**
+ * One-shot certificate-operation outcome emitted by
+ * [ServerManagementViewModel] and rendered by [ServerManagementScreen],
+ * which resolves the resource text (compose-resources) and posts it to the
+ * shared UserMessageBus — the [PrivacyUserMessage] pattern, so no
+ * hardcoded English leaks into shared code.
+ */
+@Immutable
+sealed interface CertificateUserMessage {
+    /** Import succeeded — `settings_client_certificate_imported[_expires]`. */
+    data class Imported(val notValidAfterMs: Long?) : CertificateUserMessage
+
+    /** The certificate was removed — `settings_client_certificate_removed`. */
+    data object Removed : CertificateUserMessage
+
+    /** Import failed — the facade's user-presentable text, or the generic
+     * `settings_client_certificate_import_failed` fallback when null. */
+    data class ImportFailed(val text: String?) : CertificateUserMessage
+}
+
 class ServerManagementViewModel(
     private val authRepository: AuthRepository,
     private val serverIdentityStore: ServerIdentityStore,
     private val networkOfflineStore: NetworkOfflineStore,
+    private val selfSignedTrustRepository: SelfSignedTrustRepository,
+    private val clientCertificate: ClientCertificateFacade,
 ) : JellyPlayViewModel() {
 
     private val _servers = composeState<List<ServerInfo>>(emptyList())
@@ -36,6 +62,17 @@ class ServerManagementViewModel(
     private val _selfSignedTrustHosts = composeState<Set<String>>(emptySet())
     val selfSignedTrustHosts: Set<String> get() = _selfSignedTrustHosts.value
 
+    /** Live status of the app-level client certificate (mTLS). */
+    private val _clientCertificateStatus = composeState(ClientCertificateStatus())
+    val clientCertificateStatus: ClientCertificateStatus get() = _clientCertificateStatus.value
+
+    /** Ephemeral outcome of a certificate operation (surfaced via the message bus). */
+    private val _certificateMessage = composeState<CertificateUserMessage?>(null)
+    val certificateMessage: CertificateUserMessage? get() = _certificateMessage.value
+
+    private val _isCertificateOperationInProgress = composeState(false)
+    val isCertificateOperationInProgress: Boolean get() = _isCertificateOperationInProgress.value
+
     init {
         launch {
             authRepository.servers.collect { serverList ->
@@ -54,6 +91,11 @@ class ServerManagementViewModel(
                 .collect { hosts ->
                     _selfSignedTrustHosts.value = hosts
                 }
+        }
+        launch {
+            clientCertificate.status.collect { status ->
+                _clientCertificateStatus.value = status
+            }
         }
     }
 
@@ -117,45 +159,40 @@ class ServerManagementViewModel(
     /**
      * Whether this server's granted self-signed trust entry is currently on.
      * Keyed on the PRIMARY address (the canonical grant the Add Server dialog
-     * writes), normalized the same way `connectToServer` normalizes before
-     * probing so the stored entry and this read agree byte-for-byte.
+     * writes), normalized inside the repository seam the same way
+     * `connectToServer` normalizes before probing so the stored entry and
+     * this read agree byte-for-byte.
      *
-     * Delegates to the SAME pure matcher the handshake-time trust layer uses
-     * ([SelfSignedTrustMatcher], reached through the jvmShared facade): the
-     * layer honors a portless grant on ANY port of the host, so exact string
-     * membership here would show the toggle OFF for a grant every handshake
-     * honors (review finding — display drift).
+     * Delegates through [SelfSignedTrustRepository] — core:data's view of the
+     * SAME pure matcher the handshake-time trust layer uses: the layer honors
+     * a portless grant on ANY port of the host, so exact string membership
+     * here would show the toggle OFF for a grant every handshake honors
+     * (review finding — display drift).
      */
     fun isSelfSignedTrustGranted(server: ServerInfo): Boolean =
-        SelfSignedTrustMatcher.isAddressGranted(selfSignedTrustHosts, normalizeServerAddress(server.address))
+        selfSignedTrustRepository.isSelfSignedTrustGranted(selfSignedTrustHosts, server.address)
 
     /**
      * Grants or revokes this server's self-signed-certificate trust. Grant
      * writes the primary address; revoke removes EVERY granted entry that
      * covers any of this server's addresses (primary + alternates, matched
-     * with [SelfSignedTrustMatcher] — so a portless grant covering a ported
-     * address is revoked too, mirroring what the toggle displays; revoking
-     * one address of a server while leaving its siblings trusted would be
-     * surprising). Note (documented limitation, mirrored in the network
-     * layer's KDoc): already pooled TLS connections stay trusted until they
-     * idle out of OkHttp's connection pool or the process restarts; only NEW
-     * handshakes are gated.
+     * through [SelfSignedTrustRepository] — so a portless grant covering a
+     * ported address is revoked too, mirroring what the toggle displays;
+     * revoking one address of a server while leaving its siblings trusted
+     * would be surprising). Note (documented limitation, mirrored in the
+     * network layer's KDoc): already pooled TLS connections stay trusted
+     * until they idle out of OkHttp's connection pool or the process
+     * restarts; only NEW handshakes are gated.
      */
     fun setSelfSignedTrust(server: ServerInfo, granted: Boolean) {
         launch {
             if (granted) {
                 networkOfflineStore.addSelfSignedTrustHost(normalizeServerAddress(server.address))
             } else {
-                val serverAddresses = (listOf(server.address) + server.alternateAddresses)
-                    .map { normalizeServerAddress(it) }
-                selfSignedTrustHosts.forEach { grant ->
-                    val coversThisServer = serverAddresses.any { address ->
-                        SelfSignedTrustMatcher.isAddressGranted(setOf(grant), address)
-                    }
-                    if (coversThisServer) {
-                        networkOfflineStore.removeSelfSignedTrustHost(grant)
-                    }
-                }
+                val serverAddresses = listOf(server.address) + server.alternateAddresses
+                selfSignedTrustRepository
+                    .selfSignedTrustGrantsCovering(selfSignedTrustHosts, serverAddresses)
+                    .forEach { grant -> networkOfflineStore.removeSelfSignedTrustHost(grant) }
             }
         }
     }
@@ -163,12 +200,13 @@ class ServerManagementViewModel(
     /**
      * Orphan-grant cleanup, run after an address or whole server is removed:
      * drops every granted trust entry that no longer covers ANY known server
-     * address (the primary or an alternate of ANY server, normalized, matched
-     * with the same [SelfSignedTrustMatcher] the toggle and the handshake
-     * layer use — so a portless grant survives while any port of its host is
-     * still known, and vice versa). A grant still covering another address
-     * survives; a grant whose last covering address is gone would otherwise
-     * linger forever as an invisible trust hole with no UI left to revoke it.
+     * address (the primary or an alternate of ANY server, normalized inside
+     * [SelfSignedTrustRepository] — the same matcher the toggle and the
+     * handshake layer use, so a portless grant survives while any port of its
+     * host is still known, and vice versa). A grant still covering another
+     * address survives; a grant whose last covering address is gone would
+     * otherwise linger forever as an invisible trust hole with no UI left to
+     * revoke it.
      *
      * Best-effort by design: the server list is re-read from the repository
      * AFTER the removal, and any race (a removal not yet visible to the
@@ -178,15 +216,42 @@ class ServerManagementViewModel(
     private suspend fun pruneOrphanedTrustGrants() {
         val knownAddresses = authRepository.servers.first()
             .flatMap { listOf(it.address) + it.alternateAddresses }
-            .map { normalizeServerAddress(it) }
         val granted = networkOfflineStore.networkOffline.value.selfSignedTrustHosts
-        granted.forEach { grant ->
-            val stillCoversSomeAddress = knownAddresses.any { address ->
-                SelfSignedTrustMatcher.isAddressGranted(setOf(grant), address)
-            }
-            if (!stillCoversSomeAddress) {
-                networkOfflineStore.removeSelfSignedTrustHost(grant)
-            }
+        val stillCovering = selfSignedTrustRepository.selfSignedTrustGrantsCovering(granted, knownAddresses)
+        (granted - stillCovering).forEach { grant ->
+            networkOfflineStore.removeSelfSignedTrustHost(grant)
         }
+    }
+
+    // ------------------------------------------------- client certificate (mTLS)
+
+    /**
+     * Imports + enables a client certificate. The screen assembles
+     * the [ClientCertificateImport] from its picks; the parse/normalize
+     * failures come back as user-presentable messages through
+     * [certificateMessage], successes confirm with subject + expiry.
+     */
+    fun importClientCertificate(input: ClientCertificateImport) {
+        launch {
+            _isCertificateOperationInProgress.value = true
+            _certificateMessage.value = null
+            clientCertificate.import(input)
+                .onSuccess { status -> _certificateMessage.value = CertificateUserMessage.Imported(status.notValidAfterMs) }
+                .onFailure { _certificateMessage.value = CertificateUserMessage.ImportFailed(it.message) }
+            _isCertificateOperationInProgress.value = false
+        }
+    }
+
+    fun setClientCertificateEnabled(enabled: Boolean) {
+        clientCertificate.setEnabled(enabled)
+    }
+
+    fun removeClientCertificate() {
+        clientCertificate.remove()
+        _certificateMessage.value = CertificateUserMessage.Removed
+    }
+
+    fun clearCertificateMessage() {
+        _certificateMessage.value = null
     }
 }

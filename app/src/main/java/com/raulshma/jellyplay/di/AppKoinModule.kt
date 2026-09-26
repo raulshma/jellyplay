@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStoreOwner
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.shared.core.data.R
@@ -12,21 +11,35 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectListener
+import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.core.ui.feedback.UiText
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
-import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
+import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.floating.FloatingPlayerState
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
+import com.raulshma.jellyplay.startup.AppStartupPrewarms
 import com.raulshma.jellyplay.startup.CacheMaintenanceInitializer
 import com.raulshma.jellyplay.startup.DownloadRecoveryInitializer
 import com.raulshma.jellyplay.widget.ContinueWatchingBroadcasterImpl
@@ -103,6 +116,14 @@ fun androidAppModule(context: Context): Module = module {
             experimentalStore = get(),
         )
     }
+    single {
+        WhatsNewCoordinator(
+            whatsNewRepository = get(),
+            experimentalStore = get(),
+            appRuntimeStateStore = get(),
+            currentVersionName = { installedVersionName(context) },
+        )
+    }
     single { SyncPlayOpenCoordinator(syncPlayManager = get()) }
 
     // Startup initializers (formerly field-injected into the Application and
@@ -118,6 +139,36 @@ fun androidAppModule(context: Context): Module = module {
             lyricsRepository = get(),
             offlineRepository = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    // Cold-start prewarm choreography (formerly ~15 inline `by lazyFromKoin`
+    // Application fields + the launch blocks in onCreate). Every collaborator
+    // arrives as a memoizing kotlin.Lazy over this container — `lazy { get() }`
+    // — so construction still defers to the IO launch block that first touches
+    // it, exactly like the former Application fields; only the DataStore
+    // application scope single resolves eagerly, and it was constructed at
+    // container start anyway.
+    single {
+        AppStartupPrewarms(
+            applicationScope = get(DatastoreQualifiers.applicationScope),
+            networkOfflineStore = lazy { get<NetworkOfflineStore>() },
+            serverIdentityStore = lazy { get<ServerIdentityStore>() },
+            securityStore = lazy { get<SecurityStore>() },
+            fontProvider = lazy { get<FontProvider>() },
+            videoStreamCache = lazy { get<VideoStreamCache>() },
+            audioPlaybackManager = lazy { get<AudioPlaybackManager>() },
+            nowPlayingWidgetUpdater = lazy { get<NowPlayingWidgetUpdater>() },
+            widgetWorkScheduler = lazy { get<WidgetWorkScheduler>() },
+            userDataSyncScheduler = lazy { get<UserDataSyncScheduler>() },
+            playbackSyncScheduler = lazy { get<PlaybackSyncScheduler>() },
+            playbackSyncReconnectListener = lazy { get<PlaybackSyncReconnectListener>() },
+            downloadReconnectListener = lazy { get<DownloadReconnectListener>() },
+            notificationReconnectListener = lazy { get<NotificationReconnectListener>() },
+            autoDownloadScheduler = lazy { get<AutoDownloadScheduler>() },
+            notificationScheduler = lazy { get<NotificationScheduler>() },
+            downloadRecoveryInitializer = lazy { get<DownloadRecoveryInitializer>() },
+            appUpdateRepository = lazy { get<AppUpdateRepository>() },
         )
     }
 
@@ -173,6 +224,7 @@ val androidAppViewModelsModule: Module = module {
             sessionCoordinator = get(),
             updateCoordinator = get(),
             syncPlayOpenCoordinator = get(),
+            whatsNewCoordinator = get(),
         )
     }
     viewModel {
@@ -188,12 +240,15 @@ val androidAppViewModelsModule: Module = module {
 
 /**
  * Shared-feature seam adapters over the core data singletons (formerly the
- * HiltMusicMessageBus/HiltDetailAudioPlayback/HiltDetailThemeMusic/
+ * HiltMusicMessageBus/HiltDetailThemeMusic/
  * HiltAudioPlayerEngine/HiltAudioPlayerCast classes in the deleted
  * HiltInteropModule). Same adapter bodies, direct Koin resolution: the
- * AudioPlaybackManager/CastManager/UserMessageBus/ThemeMusicPlayer targets
+ * CastManager/UserMessageBus/ThemeMusicPlayer targets
  * are Koin-owned by the core graphs now, so no EntryPoint bridge
  * remains. Desktop halves are the no-op defs in each shared module's jvmMain.
+ * (DetailAudioPlayback is gone entirely — its only caller, the detail
+ * local-track play command, was production-unreachable and died with the
+ * DetailUiEvent fold.)
  *
  * AudioPlayerEngine is NOT bridged here anymore: the contract moved into
  * core/data (beside AudioQueueManager/AudioEffectsManager) and the media3
@@ -201,7 +256,6 @@ val androidAppViewModelsModule: Module = module {
  */
 fun androidAppInteropAdaptersModule(application: Application): Module = module {
     single<MusicMessageBus> { AppMusicMessageBus(bus = get()) }
-    single<DetailAudioPlayback> { AppDetailAudioPlayback(manager = get()) }
     single<DetailThemeMusic> { AppDetailThemeMusic(player = get()) }
     single<AudioPlayerCast> { AppAudioPlayerCast(castManager = get(), application = application) }
     // Dev v0.10.7 quick-action flow: core/data's download-outcome seam
@@ -229,13 +283,6 @@ private class AppDownloadOutcomeMessenger(
     override fun downloadStartFailed() {
         userMessageBus.error(UiText.Resource(R.string.data_download_start_failed))
     }
-}
-
-/** Details feature seam: per-item audio playback over the shared manager. */
-private class AppDetailAudioPlayback(
-    private val manager: AudioPlaybackManager,
-) : DetailAudioPlayback {
-    override fun play(itemId: String) = manager.play(itemId)
 }
 
 /** Details feature seam: ambient theme music over the shared player. */
@@ -289,6 +336,28 @@ private class AppAudioPlayerCast(
 }
 
 /**
+ * The installed version name for the What's New coordinator's show-once
+ * comparison — a twin of core:data AndroidDataModule's update-check probe
+ * (same PackageManager read, same versionName-first preference). Kept here
+ * because that seam is module-private and update-flow-local; when a third
+ * consumer appears, hoist both into one shared Koin single.
+ */
+private fun installedVersionName(context: Context): String {
+    val pm = context.packageManager
+    val info = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        pm.getPackageInfo(
+            context.packageName,
+            android.content.pm.PackageManager.PackageInfoFlags.of(0),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        pm.getPackageInfo(context.packageName, 0)
+    }
+    @Suppress("DEPRECATION")
+    return info.versionName ?: androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info).toString()
+}
+
+/**
  * [ViewModelProvider.Factory] that constructs ViewModels from the Koin
  * container while leaving ownership — instance caching, config-change
  * survival, onCleared — to the AndroidX ViewModelStore it is handed to.
@@ -308,12 +377,3 @@ object KoinViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         KoinPlatform.getKoin().get(modelClass.kotlin, null)
 }
-
-/**
- * Resolves the activity-scoped [MainViewModel] from a composable context.
- * Uses the plain ViewModelProvider default key, so the instance is the SAME
- * one MainActivity's `by viewModels` delegate holds (same store, same key) —
- * do not swap this for koinViewModel() without re-checking that identity.
- */
-fun mainViewModelFromKoin(owner: ViewModelStoreOwner): MainViewModel =
-    ViewModelProvider(owner, KoinViewModelFactory)[MainViewModel::class.java]

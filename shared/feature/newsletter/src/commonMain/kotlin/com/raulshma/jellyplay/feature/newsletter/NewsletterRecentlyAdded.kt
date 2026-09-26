@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.hasMeaningfulRuntime
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -170,11 +171,7 @@ fun NewsletterMediaCard(
 
             if (item.mediaType == MediaType.EPISODE && item.seriesName != null) {
                 Text(
-                    text = buildString {
-                        append(item.seriesName)
-                        item.seasonNumber?.let { s -> append(" S${s}") }
-                        item.episodeNumber?.let { e -> append("E${e}") }
-                    },
+                    text = episodeSeriesSubtitle(item),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -194,8 +191,7 @@ fun NewsletterMediaCard(
                     )
                 }
 
-                val runTimeTicks = item.runTimeTicks
-                if (runTimeTicks != null && runTimeTicks > 0 && item.mediaType != MediaType.SERIES) {
+                if (item.hasMeaningfulRuntime) {
                     item.year?.let {
                         Text(
                             text = "\u00B7",
@@ -204,8 +200,8 @@ fun NewsletterMediaCard(
                         )
                     }
                     Text(
-                        text = remember(runTimeTicks) {
-                            formatDurationFromTicks(runTimeTicks)
+                        text = remember(item.runTimeTicks) {
+                            formatDurationFromTicks(item.runTimeTicks!!)
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

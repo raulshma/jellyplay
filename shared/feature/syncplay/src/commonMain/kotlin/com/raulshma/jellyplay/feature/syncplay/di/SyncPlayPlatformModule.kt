@@ -9,9 +9,8 @@ import org.koin.core.module.Module
  * composition roots keep registering the single `syncPlayModule`):
  *  - jvmShared actual: binds [com.raulshma.jellyplay.feature.syncplay.JvmSyncPlaySession]
  *    over the existing `SyncPlayManager` single from dataJvmModule —
- *    android/desktop behavior unchanged;
- *  - wasmJs actual: binds the honest unsupported session (see the seam
- *    KDoc). The rest of the VM's graph (SyncPlayRepository, SyncPlayCastStore)
+ *    android/desktop behavior unchanged. The rest of the VM's graph
+ *    (SyncPlayRepository, SyncPlayCastStore)
  *    resolves from the shared-module graph on all targets.
  */
 internal expect fun platformSyncPlayModule(): Module

@@ -11,7 +11,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,7 +46,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.designsystem.theme.settingsGroupContainerColor
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
-import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -95,12 +94,6 @@ internal fun SettingsGroup(
 
     val headerTvFocusState = rememberTvFocusState(focusedScale = 1.02f)
     val headerInteractionSource = remember { MutableInteractionSource() }
-    val headerPressed by headerInteractionSource.collectIsPressedAsState()
-    val headerScale by animateFloatAsState(
-        targetValue = pressScaleValue(headerPressed, 0.98f),
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "headerPressScale",
-    )
 
     val isLight = LocalIsLightTheme.current
 
@@ -116,10 +109,11 @@ internal fun SettingsGroup(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer {
-                    scaleX = headerScale
-                    scaleY = headerScale
-                }
+                .pressScale(
+                    interactionSource = headerInteractionSource,
+                    defaultScale = 0.98f,
+                    spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                )
                 .clip(ShapeCache.smooth16)
                 .then(headerTvFocusState.focusModifier)
                 .tvFocusIndicator(headerTvFocusState, ShapeCache.smooth16)

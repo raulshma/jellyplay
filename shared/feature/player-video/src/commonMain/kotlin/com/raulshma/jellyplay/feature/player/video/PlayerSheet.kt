@@ -28,6 +28,13 @@ sealed class PlayerSheet {
     data object PlaybackMode : PlayerSheet() { override val key = "PlaybackMode" }
     data object SleepTimer : PlayerSheet() { override val key = "SleepTimer" }
     data object VideoFilter : PlayerSheet() { override val key = "VideoFilter" }
+
+    /**
+     * shader pack / tone mapping / quality profile (mpv engines). The
+     * pickers write the session render state (immediate) and optionally the
+     * per-series override row ("Save for this series").
+     */
+    data object Render : PlayerSheet() { override val key = "Render" }
 }
 
 /**
@@ -59,4 +66,5 @@ private val ALL_SHEETS: List<PlayerSheet> = listOf(
     PlayerSheet.PlaybackMode,
     PlayerSheet.SleepTimer,
     PlayerSheet.VideoFilter,
+    PlayerSheet.Render,
 )

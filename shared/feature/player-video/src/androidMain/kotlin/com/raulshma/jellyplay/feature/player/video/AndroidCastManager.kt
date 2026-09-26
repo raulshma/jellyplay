@@ -5,9 +5,10 @@ package com.raulshma.jellyplay.feature.player.video
  * singleton (seam): exposes the member set the commonMain
  * [VideoPlayerViewModel] calls. The discovery/connect surface stays on the
  * legacy class — the screen reaches it through the `androidCastManager`
- * ViewModel extension. `castPlayerForSession` is widened to the opaque
- * [Any] (media3 `Player?`) so the platform type does not leak into common
- * code.
+ * ViewModel extension. The legacy class's media3-typed
+ * `castPlayerForSession` is consumed by the androidMain
+ * `VideoMediaSessionFactory` wiring (the background-cast detach path), not
+ * by this seam.
  */
 internal class AndroidCastManager(
     val delegate: com.raulshma.jellyplay.core.data.cast.CastManager,
@@ -22,6 +23,4 @@ internal class AndroidCastManager(
     override val isBackgroundCasting: Boolean get() = delegate.isBackgroundCasting
 
     override fun softRelease() = delegate.softRelease()
-
-    override val castPlayerForSession: Any? get() = delegate.castPlayerForSession
 }

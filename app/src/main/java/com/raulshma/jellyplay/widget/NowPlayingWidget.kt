@@ -13,19 +13,6 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
 import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import kotlinx.coroutines.cancel
-import org.koin.mp.KoinPlatform
-
-/**
- * Koin accessors (Hilt removal): each call site resolves its
- * dependency straight from the application container, wrapped in the same
- * try/catch the former EntryPointAccessors call used (process-start race →
- * the caller's empty/fallback state, never a crash from the broadcast).
- */
-private fun koinAudioPlaybackManager(): AudioPlaybackManager =
-    KoinPlatform.getKoin()!!.get()
-
-private fun koinNowPlayingWidgetUpdater(): NowPlayingWidgetUpdater =
-    KoinPlatform.getKoin()!!.get()
 
 class NowPlayingWidget : WidgetProviderSkeleton() {
 
@@ -64,7 +51,7 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
     private fun notifyUpdaterPresenceChanged(context: Context?) {
         if (context == null) return
         try {
-            koinNowPlayingWidgetUpdater().onWidgetPresenceChanged()
+            WidgetKoin.nowPlayingWidgetUpdater.onWidgetPresenceChanged()
         } catch (_: Exception) {
             // Updater not constructed yet (process start race) — Application's
             // start() call will pick the widget list up anyway.
@@ -84,7 +71,7 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
         // The manager state is read once up front (same thread the former
         // inline reads used); the render itself goes through the shared
         // renderer, inside the main-handler post below.
-        val manager = koinAudioPlaybackManager()
+        val manager = WidgetKoin.audioPlaybackManager
         val snapshot = NowPlayingWidgetRenderer.readPushSnapshot(manager)
 
         // Owns its goAsync() window inline: the finish rides the posted
@@ -159,7 +146,7 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
     }
 
     private fun resolveAudioManager(context: Context): AudioPlaybackManager? = try {
-        koinAudioPlaybackManager()
+        WidgetKoin.audioPlaybackManager
     } catch (e: Exception) {
         Log.w(TAG, "Failed to resolve AudioPlaybackManager", e)
         null
@@ -191,7 +178,7 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
             appWidgetId: Int,
         ) {
             val snapshot = try {
-                NowPlayingWidgetRenderer.readPushSnapshot(koinAudioPlaybackManager())
+                NowPlayingWidgetRenderer.readPushSnapshot(WidgetKoin.audioPlaybackManager)
             } catch (_: Exception) {
                 EMPTY_STATE_SNAPSHOT
             }

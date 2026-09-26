@@ -48,6 +48,12 @@ class ItemPlaybackPreferenceWriterTest {
             val type: TrackType,
             val track: RememberedTrack?,
         ) : RepoCall
+
+        data class SetRenderProfile(
+            val scope: PlaybackPrefScope,
+            val key: String,
+            val overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?,
+        ) : RepoCall
     }
 
     private class FakeRepository : ItemPlaybackPreferenceRepository {
@@ -90,6 +96,14 @@ class ItemPlaybackPreferenceWriterTest {
             track: RememberedTrack?,
         ) {
             calls += RepoCall.SaveRememberedTrack(scope, key, type, track)
+        }
+
+        override suspend fun setRenderProfile(
+            scope: PlaybackPrefScope,
+            key: String,
+            overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?,
+        ) {
+            calls += RepoCall.SetRenderProfile(scope, key, overrides)
         }
 
         override suspend fun delete(scope: PlaybackPrefScope, key: String) = Unit
@@ -281,6 +295,66 @@ class ItemPlaybackPreferenceWriterTest {
             repository.calls,
         )
         assertEquals(1, refreshCount)
+    }
+
+    // ─── Render profile: SERIES-then-ITEM persistence ────────────────
+
+    @Test
+    fun setRenderProfile_value_savesSeriesScopeWhenSeriesExists() = testScope.runTest {
+        seriesId = "series1"
+        itemId = "item1"
+        val overrides = com.raulshma.jellyplay.core.model.MpvRenderOverrides(
+            shaderPack = com.raulshma.jellyplay.core.model.MpvShaderPack.ANIME4K_A,
+            toneMapping = com.raulshma.jellyplay.core.model.MpvToneMapping.BT2390,
+        )
+
+        writer.setRenderProfile(overrides)
+
+        assertEquals(
+            listOf<RepoCall>(RepoCall.SetRenderProfile(PlaybackPrefScope.SERIES, "series1", overrides)),
+            repository.calls,
+        )
+        assertEquals(1, refreshCount)
+    }
+
+    @Test
+    fun setRenderProfile_fallsBackToItemScopeWhenNoSeries() = testScope.runTest {
+        itemId = "item1"
+
+        writer.setRenderProfile(com.raulshma.jellyplay.core.model.MpvRenderOverrides())
+
+        assertEquals(
+            listOf<RepoCall>(
+                RepoCall.SetRenderProfile(PlaybackPrefScope.ITEM, "item1", com.raulshma.jellyplay.core.model.MpvRenderOverrides()),
+            ),
+            repository.calls,
+        )
+    }
+
+    @Test
+    fun clearRenderProfile_clearsBothScopes() = testScope.runTest {
+        seriesId = "series1"
+        itemId = "item1"
+
+        writer.clearRenderProfile()
+
+        assertEquals(
+            listOf<RepoCall>(
+                RepoCall.SetRenderProfile(PlaybackPrefScope.SERIES, "series1", null),
+                RepoCall.SetRenderProfile(PlaybackPrefScope.ITEM, "item1", null),
+            ),
+            repository.calls,
+        )
+        assertEquals(1, refreshCount)
+    }
+
+    @Test
+    fun setRenderProfile_noKeysAtAll_noops() = testScope.runTest {
+        writer.setRenderProfile(com.raulshma.jellyplay.core.model.MpvRenderOverrides())
+        writer.clearRenderProfile()
+
+        assertTrue(repository.calls.isEmpty())
+        assertEquals(0, refreshCount)
     }
 
     // ─── The resolver refresh fires after EVERY completed write ───────────────

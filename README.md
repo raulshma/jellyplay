@@ -30,7 +30,7 @@
 
 One app for every screen: **phones, tablets, foldables, Android TV, and Amazon Fire TV**. Stream movies and shows, play music with synced lyrics, read comics and ebooks, request content via **Jellyseerr/Overseerr**, manage your **Radarr/Sonarr** queues, download for offline, and run your server from a built-in **admin dashboard** — with three switchable video engines (**ExoPlayer, libmpv, LibVLC**), in-app **self-update** via GitHub Releases, no accounts, and no tracking.
 
-**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback (full effect stack: equalizer, bass boost, night mode, ReplayGain, …), in-player video with working keyboard media keys, the video effect stack (brightness/contrast/saturation/hue/sharpen/blur/rotate), frame capture to `~/Pictures/JellyPlay`, live subtitle cues, the full metadata editor, and the in-app book reader (CBZ/CBR/PDF/EPUB — read-aloud excepted); sign-in uses the shared auth flow (Quick Connect, remembered users, server-address alternates). An experimental **web (wasm)** shell signs in against a live server (sessions persist across page reloads), renders artwork, plays video in-browser, and renders the routed feature screens (requests, calendar, Seerr media details, ARR queue + its settings, onboarding); it carries a real OPFS-backed SQLite database (Room 3 over WebWorkerSQLiteDriver, single-tab). The KMP migration itself is complete (docs/kmp-migration-plan.md): 23 of 25 feature modules compile for wasm, and the two playback-hub modules stay Android/desktop by recorded scope. Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release; the auto-update client and release checklist have landed, signing and per-OS passes remain.
+**Also growing beyond Android:** the codebase is now Kotlin Multiplatform — an early **Windows desktop** build (Compose Multiplatform + libmpv) runs browsing, search, details, home, settings, music with real audio playback (full effect stack: equalizer, bass boost, night mode, ReplayGain, …), in-player video with working keyboard media keys, the video effect stack (brightness/contrast/saturation/hue/sharpen/blur/rotate), **render profiles with Anime4K upscaling**, frame capture to `~/Pictures/JellyPlay`, live subtitle cues, the full metadata editor, and the in-app book reader (CBZ/CBR/PDF/EPUB — read-aloud excepted); sign-in uses the shared auth flow (Quick Connect, remembered users, server-address alternates). The KMP migration itself is complete (docs/kmp-migration-plan.md). Player polish, and macOS/Linux (build-from-source, untested), are still landing — treat the desktop build as a preview, not a release; the auto-update client and release checklist have landed, signing and per-OS passes remain.
 
 If you self-host Jellyfin and want a truly native, beautiful, capable client — or a **Plex/Kodi alternative** — give JellyPlay a try.
 
@@ -42,7 +42,7 @@ If you self-host Jellyfin and want a truly native, beautiful, capable client —
 
 | | |
 | :--- | :--- |
-| 🎬 **Multi-engine video player** | Switch between **ExoPlayer (Media3)**, **libmpv**, and **LibVLC** per device — HDR, refresh rate/resolution matching, trickplay seeking, A/B repeat with seek-bar region visualization, gestures, Chromecast, floating Picture-in-Picture, and live transcode-reason surfacing. |
+| 🎬 **Multi-engine video player** | Switch between **ExoPlayer (Media3)**, **libmpv**, and **LibVLC** per device — HDR, refresh rate/resolution matching, **render profiles** (Anime4K shader packs, tone mapping, quality), trickplay seeking, A/B repeat with seek-bar region visualization, multi-range buffered seek bar, gestures, Chromecast, floating Picture-in-Picture, and live transcode-reason surfacing. |
 | 💬 **Full subtitle system** | **ASS/SSA** & **VTT** parsing, external subtitle loading & download, full styling, delay offset, **live sync preview** with cue stack & ±30 s offset slider, **multi-provider search** (Jellyfin, Wyzie, OpenSubtitles), **per-series role memory**, and consistent track labels & badges across engines. |
 | 📱 **Native on every screen** | Phone, tablet, foldable, **Android TV**, and **Fire TV** with D-pad navigation, a Leanback launcher, and adaptive Material 3 layouts — plus an early **Windows desktop** build from the same Kotlin Multiplatform codebase. |
 | 🎵 **Rich audio player** | Synced lyrics via LRCLIB, 10-band equalizer, Night Mode & Dialogue Boost, ambient visualizer, mood playlists, and gapless playback. |
@@ -166,7 +166,9 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - Mini player overlay
 - Trickplay thumbnail seeking (Jellyfin trickplay sprite sheets) with offline caching support
 - **Refresh rate & resolution matching** — 3 modes (Off / Frame Rate Only / Frame Rate + Resolution) with judder-free cadence matching (24→60/120, etc.) and ±0.5 Hz tolerance
-- Cross-episode audio/subtitle **track memory** with role-aware scoring (remembers your preferred track per series)
+- Cross-episode audio/subtitle **track memory** with role-aware scoring and remembered container codec (re-matches when track labels churn), plus **track-selection presets & language rules** — ordered rules with language preferences and title patterns under *Settings → Language → Track Selection*
+- **Rendering sheet (render profiles)** — pick a shader pack (**Anime4K** modes A/B/C on desktop, user shaders supported), HDR→SDR tone mapping, and render quality in-player; apply for this session only or save as a per-item / per-series override
+- **Multi-range buffered seek bar** — the seek bar visualizes every buffered range (not just the contiguous band), and a stalled-at-end detector completes the item cleanly when the stream freezes near the finish
 - **A/B repeat** — loop any segment of the video, visualized as a highlighted seek-bar region with repeat badges
 - **Video byte cache** — direct-play/direct-stream segments are cached to disk so backward seeks don't re-fetch
 - **Screenshot capture** — save the current frame via PixelCopy
@@ -228,6 +230,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - Ambient Mode with animated color blobs derived from album art
 - Sleep timer with configurable duration
 - **Playback focus** — music and book read-aloud never talk over each other; the interrupted side stays paused for manual resume
+- **Volume memory** — remember one volume level each for video, music, and audiobooks (master toggle; desktop mpv and the audio players)
 
 **Music discovery**
 
@@ -261,6 +264,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
 - **Advanced series delete sheet** with multi-select episode management
 - Collection/box set browsing
 - Global Jellyfin search across movies, shows, music, albums, and more
+- **Seerr & offline side rows** — search results also surface Seerr discover hits and downloaded items alongside the library grid, with independent error/retry handling
 - Search filters for genre, year, and media type; voice search support
 - Search history persisted per-user with per-item deletion, bulk clear, and hide option
 - **Add-to-Playlist picker, Watch Later, and playlist creation** from the detail screen — add movies, episodes, and series to existing playlists or create new ones, with a pinned Watch Later row
@@ -410,6 +414,7 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 
 - WebSocket-based remote control from Jellyfin server
 - Receive Play, Pause, Seek, and general commands remotely
+- **General-command ladder** — navigate the app remotely (GoBack, move focus, select, open context menu) and request display content, which is idle-gated and requires explicit user consent
 - Media browser service integration for third-party controller apps
 - Active player management and remote playback reporting
 
@@ -420,6 +425,7 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 
 - Multi-server Jellyfin support with auto-discovery
 - Token-based and Quick Connect authentication
+- **Client certificates (mTLS)** — import a PKCS#12 bundle or PEM cert/key pair (plus an optional server CA) under *Settings → Server Management* for servers that require mutual TLS; presented automatically, fail-closed when enabled but missing
 - **Server address failover** — register primary and alternate addresses (Settings → Server Management); connectivity probes pick a reachable one, failover triggers only on connection failures, and the primary is preferred again once healthy
 - Multi-user support with per-server user switching and a home-screen **user switcher** chip for multi-user servers
 - **Realtime user-data sync** — home rows and open detail screens refresh live from server WebSocket pushes
@@ -458,7 +464,8 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 - **Newsletter digest** — weekly server library-activity digest (Recently Added, Continue Watching, Next Up, Fresh Picks, Activity Digest, Library Stats) with Home banner, pull-to-refresh, and configurable schedule
 - **Settings search** — find any setting instantly by name
 - **New media notifications** — real-time per-library notifications when new content is added, with quiet hours, seen-media tracking, grouped notifications, and notification actions (configurable check interval, per-library channels, 30-day seen pruning, Open-detail / Mark-as-seen actions)
-- **In-app self-update** — check, download, and install new releases directly from GitHub Releases (auto-check toggle + manual check in Settings → About; dismissed versions are suppressed for 24h; APK downloads survive restarts with cancel/re-download support and an opt-in auto-download of new releases)
+- **In-app self-update** — check, download, and install new releases directly from GitHub Releases (auto-check toggle + manual check in Settings → About; dismissed versions are suppressed for 24h; APK downloads survive restarts with cancel/re-download support and an opt-in auto-download of new releases). Every update URL is **fail-closed against a compiled-in GitHub owner/repo allow-list** before a download or browse starts
+- **Desktop idle screen** *(desktop)* — a configurable "Ready to play" ambient overlay after inactivity, respecting the screensaver-consent setting
 - **Navigation customization** — global overflow menu on the navigation bar with active-download count badges, plus a tablet navigation-rail toggle
 - **Settings deep-linking** — search from the home bar jumps straight into the matching settings screen with entry highlighting
 - **Privacy & Data hub** — confirm-gated clearing of caches, image cache, and search history, plus sign-out and factory reset in one place
@@ -469,22 +476,26 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 </details>
 
 <details>
-<summary><strong>Settings — 390+ options across 16 top-level sections</strong></summary>
+<summary><strong>Settings — 390+ options across 19 top-level sections</strong></summary>
 
 - **Player**: engine selection, decoder mode, audio passthrough, orientation, seek duration, gesture toggles, autoplay, controls timeout, preload buffer, force direct play, refresh rate/resolution matching, A/B repeat, AV-sync
-- **Audio**: default speed, gapless playback, crossfade, night mode, dialogue boost, equalizer, audio normalization, channel mix, dynamics compression, dialogue de-noise, virtualizer, reverb
+- **Audio**: default speed, gapless playback, crossfade, night mode, dialogue boost, equalizer, audio normalization, channel mix, dynamics compression, dialogue de-noise, virtualizer, reverb, volume memory, output device *(desktop)*
+- **Language**: app language, preferred audio & subtitle languages, **track-selection presets & language rules**, subtitle tester
 - **Subtitles**: language, style, trickplay, intro/outro skip (manual and auto), tap-to-translate, per-series role preferences
 - **SyncPlay**: progress reporting, auto-join, sync correction parameters
 - **Downloads**: connections preference, max cache size (with unlimited/0 option support)
 - **Storage**: offline media management, cache size, download location
 - **Visual**: dynamic theming, theme variant (Standard/Synthwave/Soothing/Monochrome/Vivid/Aurora/Sakura/Vector Pop), accent color, contrast level, OLED mode, streaming quality, performance mode, home backdrop
 - **Navigation**: overflow menu visibility, tablet navigation-rail toggle, hide header on scroll
+- **Account**: switch user, sign out / sign out from server, **server management** (primary & alternate addresses, failover, client certificates)
+- **Activity & insights**: favorites, watch-progress heatmap, Radarr/Sonarr activity queue, upcoming releases, Seerr requests
 - **Security**: PIN lock, biometric lock, auto-lock timer
 - **Privacy & Data**: clear cache/image cache/search history, sign out, factory reset
 - **Kids**: mode toggle, max content rating
 - **Screensaver**: interval, Ken Burns effect, transition style, image categories, title overlay
 - **Newsletter**: enable/disable, delivery day, notification badge
 - **Notifications**: new media notifications, quiet hours, per-library channels
+- **System**: admin dashboard entry, setup wizard, and the **desktop idle screen** (ambient "Ready to play" overlay)
 - **Live TV/DVR**: channel sources, EPG refresh, recording defaults
 - **Widget**: per-widget source configuration, refresh interval
 - **Accessibility**: color blind modes, blue light filter, reduce motion, haptic intensity, font scaling
@@ -507,11 +518,11 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 | ---------------- | ----------------------------------------------------------------- |
 | Language         | Kotlin 2.3.21, Java 17                                            |
 | UI               | Jetpack Compose (BOM 2026.06.01), Material 3, Material 3 Expressive  |
-| Build            | AGP 9.4.0, Gradle, KSP2                                           |
+| Build            | AGP 9.4.1, Gradle, KSP2                                           |
 | TV               | Android TV Material, Leanback                                     |
 | Navigation       | Navigation 3                                                      |
 | DI               | Koin 4.2.2 (Kotlin Multiplatform)                                 |
-| Multiplatform    | Compose Multiplatform 1.11.1 (shared core/features), libmpv via JNA (desktop), wasmJs web shell |
+| Multiplatform    | Compose Multiplatform 1.11.1 (shared core/features), libmpv via JNA (desktop) |
 | Storage          | Room 3.0.3 (androidx.room3), DataStore Preferences, AndroidX Security-Crypto |
 | Background       | WorkManager, Coroutines, StateFlow                                |
 | Video Players    | Media3/ExoPlayer 1.10.1, libmpv, LibVLC                           |
@@ -564,9 +575,6 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 
 # Desktop (JVM; Windows tested, macOS/Linux build-from-source and untested)
 ./gradlew :apps:desktop:run
-
-# Web shell (wasmJs compile check)
-./gradlew :apps:web:compileKotlinWasmJs
 ```
 
 The project uses product flavors — `phone` (standard mobile) and `tv` (Android TV with Leanback launcher). Release builds ship `arm64-v8a` and universal APKs; debug builds additionally produce `x86_64` and `x86` APKs for emulators and legacy Android TV system images.
@@ -604,7 +612,7 @@ dialog instead of a silent black screen.
 2. Clone the repo and open it in Android Studio — Gradle sync pulls the wrapper, KMP toolchains, and the bundled libmpv fetch (see below).
 3. Point the app at a local server (e.g. `http://<LAN-IP>:8096`) during onboarding, or use the seeded Docker server from `tools/e2e/bootstrap-jellyfin.sh`.
 
-> The repo is Kotlin Multiplatform: day-to-day feature work happens in `shared/` (commonMain + platform `androidMain`/`jvmMain`/`wasmJsMain` actuals). `app/` is the only Android-only module.
+> The repo is Kotlin Multiplatform: day-to-day feature work happens in `shared/` (commonMain + platform `androidMain`/`jvmMain` actuals). `app/` is the only Android-only module.
 
 ### Run each target
 
@@ -613,8 +621,6 @@ dialog instead of a silent black screen.
 | Android phone | `./gradlew :app:installPhoneDebug` | Needs a device/emulator connected via adb, or run the `app` config from Android Studio |
 | Android TV | `./gradlew :app:installTvDebug` | Same, on a TV device/emulator |
 | Windows desktop | `./gradlew :apps:desktop:run` | First run fetches a pinned `libmpv-2.dll` — needs 7-Zip on PATH (see [Building](#building)) |
-| Web (wasm, dev server) | `./gradlew :apps:web:wasmJsBrowserDevelopmentRun` | Incremental Kotlin/wasm dev loop in the browser |
-| Web (production bundle) | `./gradlew :apps:web:wasmJsBrowserDistribution` | Output in `apps/web/build/dist/wasmJs/productionExecutable`; serve with `node tools/e2e/serve.mjs --root apps/web/build/dist/wasmJs/productionExecutable --port 8080` (correct `.wasm` MIME is load-bearing) |
 
 ### Tests & verification
 
@@ -628,9 +634,6 @@ dialog instead of a silent black screen.
 # Desktop unit tests (includes the Koin-registration guard)
 ./gradlew :apps:desktop:test
 
-# Fast wasm compile gate — what the KMP CI lane runs per PR
-./gradlew :apps:web:compileKotlinWasmJs
-
 # Coverage report (opt-in flag required)
 ./gradlew koverHtmlReport -PenableCoverage
 ```
@@ -640,7 +643,7 @@ dialog instead of a silent black screen.
 `tools/e2e/` ships the driver scripts used by the project's verification passes:
 
 - `bootstrap-jellyfin.sh` — spins up a local Jellyfin in Docker at `http://localhost:8096` (user `harness` / `harness-e2e-pass`) seeded with generated test media; requires Docker and ffmpeg.
-- Headless-browser lanes (CDP via headless Edge): `web-verify.sh`, `web-cache-eviction.mjs`, `web-soak.mjs`, `foreign-origin.mjs`, `input-probe.mjs`, `desktop-session-pass.sh`, `msi-boot-pass.sh`.
+- Desktop lanes: `desktop-session-pass.sh`, `msi-boot-pass.sh`, `desktop-native-dialog-pass.sh`, `desktop-native-dialog-flows-pass.sh`.
 - Physical-device lanes (adb + UiAutomator): `device-locale-pass.sh`, `device-pip-pass.sh`.
 
 ### Tips
@@ -667,7 +670,7 @@ Two more workflows run alongside it:
 
 A fourth workflow keeps the Kotlin Multiplatform tree honest:
 
-- `.github/workflows/kmp-build.yml` — on pushes to `main`/`master`/`kmp-alpha` and every PR, compiles all configured targets of the `shared/` tree (JVM + wasmJs + Android) on Ubuntu, Windows, and macOS, runs the full `jvmTest` suite per shared module, and runs `:apps:desktop:test` (home of the Koin-registration guard) plus the `:apps:web:compileKotlinWasmJs` lane
+- `.github/workflows/kmp-build.yml` — on pushes to `main`/`master`/`kmp-alpha` and every PR, compiles all configured targets of the `shared/` tree (JVM + Android) on Ubuntu, Windows, and macOS, runs the full `jvmTest` suite per shared module, and runs `:apps:desktop:test` (home of the Koin-registration guard)
 
 ---
 
@@ -696,20 +699,19 @@ A fourth workflow keeps the Kotlin Multiplatform tree honest:
 
 ## Project Structure
 
-The codebase is Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals). The legacy Android-only core modules were folded in at the 2026-09-12 cutover — their Android halves are now `androidMain` source sets of the shared core modules — leaving `app/` the only Android-only Gradle module, beside the desktop and web shells.
+The codebase is Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals). The legacy Android-only core modules were folded in at the 2026-09-12 cutover — their Android halves are now `androidMain` source sets of the shared core modules — leaving `app/` the only Android-only Gradle module, beside the desktop shell.
 
 ```
 apps/
   desktop/                Windows desktop shell (Compose Multiplatform; libmpv engine via JNA) — preview
-  web/                    Experimental wasmJs browser shell (Coil artwork + HtmlVideoEngine + requests/calendar/SeerrDetail feature screens + Seerr credentials pane verified in-browser against a live server)
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/
     concurrency/          Coroutine utilities (map-concurrent, task bundling, cancellation-safe runCatching)
-    model/                Pure Kotlin data models (105 model files)
+    model/                Pure Kotlin data models (111 model files)
     designsystem/         Theming (8 variants), colors, shapes, typography, motion
-    datastore/            DataStore preferences (~391 settings), encrypted credentials, OS keyring seam
-    database/             Room KMP database (20 DAOs), v56 migration chain
+    datastore/            DataStore preferences (390+ settings), encrypted credentials, OS keyring seam
+    database/             Room KMP database (20 DAOs), v57 migration chain
     network/              Jellyfin API clients, Radarr/Sonarr (Arr) clients, Seerr client, TMDB, LRCLIB, Wyzie/OpenSubtitles, GitHub Releases, server discovery, address failover
     data/                 Repositories, playback managers, audio effects, SyncPlay, downloads; Android-only machinery (workers, receivers, media session, Cast, notifications) lives in its androidMain
     ui/                   Shared UI components, adaptive layouts, TV focus, animations, navigation; Android shims (biometric, WebView trailer, TV bits) in its androidMain
@@ -719,6 +721,7 @@ shared/
     onboarding/           First-run setup wizard (10-step preferences)
     home/                 Home screen, Kids home, newsletter banner, discover sections, and the offline home (downloaded content shelf + gate)
     library/              Library browsing and media collections (auto-filters to downloads while offline)
+    photos/               Photo albums and full-screen photo viewer with brightness/contrast/saturation adjustments and export
     search/               Search experience with history
     details/              Media detail, person detail, collection detail, Seerr detail
     player-video/         Video playback UI, multi-engine support, SyncPlay integration, Play On
@@ -741,7 +744,7 @@ shared/
     subtitle-tester/      Subtitle parser & styling test harness (dev/diagnostic tool, Android-only)
     shell/                Shell-graph aggregator (appSections nav graph + ShellHostHooks shared by the Android and desktop shells)
 baselineprofile/         Baseline profile generator for phone startup optimization
-tools/                   Dev/CI drivers: e2e/ (web-verify, web-cache-eviction, web-soak, foreign-origin, serve.mjs, bootstrap-jellyfin, desktop-session/msi-boot passes, input-probe — headless-Edge CDP lane scripts; device-locale/device-pip passes — physical-phone adb+uiautomator lanes), perf/ (desktop-baseline.sh), and the gitignored mpv/ drop-in dir for libmpv-2.dll (wired into :apps:desktop:test, see Building)
+tools/                   Dev/CI drivers: e2e/ (bootstrap-jellyfin; desktop-session / msi-boot / native-dialog passes — desktop lane scripts; device-locale / device-pip passes — physical-phone adb+uiautomator lanes), perf/ (desktop-baseline.sh), and the gitignored mpv/ drop-in dir for libmpv-2.dll (wired into :apps:desktop:test, see Building)
 website/                 Landing page (GitHub Pages)
 docs/                    Documentation guides
 ```
@@ -782,10 +785,10 @@ Other open-source projects in the Jellyfin ecosystem:
 
 | Metric | Value |
 | --- | --- |
-| Gradle modules | 38 (app + 9 shared core + 25 shared feature + desktop & web shells + baseline profile) |
+| Gradle modules | 37 (app + 9 shared core + 25 shared feature + desktop shell + baseline profile) |
 | Feature modules | 25 (KMP, under `shared/feature/`) |
-| Configurable settings | ~391 |
-| Data models | 105 |
+| Configurable settings | 390+ |
+| Data models | 111 |
 | API clients | 20+ |
 | Room DAOs | 20 |
 | Supported languages | 9 (English, Deutsch, Español, Français, Italiano, Português, 日本語, 한국어, 中文) |

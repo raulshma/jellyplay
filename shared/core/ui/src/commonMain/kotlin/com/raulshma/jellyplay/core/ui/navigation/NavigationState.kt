@@ -41,7 +41,7 @@ fun rememberNavigationState(
 
     // Platform seam (device pass fix): Android takes the reflection
     // overload (the explicit-configuration overload + DEFAULT module is the
-    // launch-crash the device pass caught); JVM/wasm keep the configuration
+    // launch-crash the device pass caught); JVM keeps the configuration
     // path. See NavBackStackSaveable.kt for the full account.
     val backStacks = topLevelRoutes.associateWith { key ->
         rememberNavBackStackSaveable(savedStateConfiguration, key)

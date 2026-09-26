@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings.di
 import com.raulshma.jellyplay.feature.settings.AboutViewModel
 import com.raulshma.jellyplay.feature.settings.AdvancedSettingsGate
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsViewModel
+import com.raulshma.jellyplay.feature.settings.HomeSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ArrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.AudioSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsViewModel
@@ -10,6 +11,7 @@ import com.raulshma.jellyplay.feature.settings.FactoryResetViewModel
 import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.LicensesViewModel
+import com.raulshma.jellyplay.feature.settings.DiscoverRowsViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
@@ -23,6 +25,7 @@ import com.raulshma.jellyplay.feature.settings.SettingsSearchCatalogPrewarmer
 import com.raulshma.jellyplay.feature.settings.SettingsViewModel
 import com.raulshma.jellyplay.feature.settings.StorageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsViewModel
+import com.raulshma.jellyplay.feature.settings.WhatsNewViewModel
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -99,7 +102,13 @@ val settingsModule: Module = module {
     }
     viewModel {
         AppearanceSettingsViewModel(
-            store = get(),
+            projections = get(),
+            advancedSettings = get(),
+            editor = get(),
+        )
+    }
+    viewModel {
+        HomeSettingsViewModel(
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -108,7 +117,6 @@ val settingsModule: Module = module {
     viewModel {
         LanguageSettingsViewModel(
             appLocaleSetter = get(),
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -116,16 +124,17 @@ val settingsModule: Module = module {
     }
     viewModel {
         PlaybackSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
             watchNextRefresher = get(),
+            // mpv audio-device enumeration: desktop-only — Android
+            // binds no enumerator and the row is capability-hidden there.
+            audioDeviceEnumerator = getOrNull(),
         )
     }
     viewModel {
         AudioSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -134,7 +143,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         ExperimentalSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -142,26 +150,7 @@ val settingsModule: Module = module {
     }
     viewModel {
         FactoryResetViewModel(
-            playbackStore = get(),
-            appearanceStore = get(),
-            videoPlayerStore = get(),
-            downloadsStore = get(),
-            engineStore = get(),
-            homeDiscoveryStore = get(),
-            audioStore = get(),
-            audioEffectsStore = get(),
-            audioCacheStore = get(),
-            libraryStore = get(),
-            navigationStore = get(),
-            networkOfflineStore = get(),
-            notificationStore = get(),
-            screensaverStore = get(),
-            securityStore = get(),
-            subtitleLanguageStore = get(),
-            syncPlayCastStore = get(),
-            experimentalStore = get(),
-            appRuntimeStateStore = get(),
-            pinRateLimiter = get(),
+            snapshotReader = get(),
             editor = get(),
         )
     }
@@ -217,6 +206,14 @@ val settingsModule: Module = module {
             // Per-server self-signed trust toggle state + grants (network
             // DataStore, same store the OkHttp config StateFlow flows from).
             networkOfflineStore = get(),
+            // The trust-toggle DECISION seam (core:data) — grants still
+            // observed/written through the store above; matching happens
+            // behind this repository so no core:network type reaches here.
+            selfSignedTrustRepository = get(),
+            // the app-level client certificate (mTLS) import /
+            // toggle / remove seam — one Koin single shared with the
+            // handshake layer (applyTls).
+            clientCertificate = get(),
         )
     }
     viewModel {
@@ -226,7 +223,6 @@ val settingsModule: Module = module {
     }
     viewModel {
         SecuritySettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),
@@ -267,6 +263,11 @@ val settingsModule: Module = module {
             jsonSource = get(),
         )
     }
+    viewModel {
+        WhatsNewViewModel(
+            whatsNewRepository = get(),
+        )
+    }
     // ──  final slice: home-layout cluster + notifications ──
     viewModel {
         LibraryLayoutViewModel(
@@ -277,8 +278,14 @@ val settingsModule: Module = module {
         )
     }
     viewModel {
+        DiscoverRowsViewModel(
+            homeDiscoveryStore = get(),
+            editor = get(),
+            mediaRepository = get(),
+        )
+    }
+    viewModel {
         NotificationSettingsViewModel(
-            store = get(),
             projections = get(),
             advancedSettings = get(),
             editor = get(),

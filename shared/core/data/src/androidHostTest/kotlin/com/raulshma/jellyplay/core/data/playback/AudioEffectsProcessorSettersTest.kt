@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.EqualizerSettings
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -75,5 +78,22 @@ class AudioEffectsProcessorSettersTest {
         assertTrue(processor.equalizerEnabled.value)
         assertTrue(processor.bassBoostEnabled.value)
         assertTrue(processor.nightModeEnabled.value)
+    }
+
+    @Test
+    fun `out-of-range equalizer band is dropped instead of throwing`() {
+        // The processor used to construct the core UNGUARDED, preserving the
+        // pre-extraction unguarded list write (IndexOutOfBoundsException); it
+        // now constructs guarded like desktop — a bad index is a full no-op
+        // (no state flip, no preset bump, no DSP hook).
+        processor.setEqualizerBand(-1, 600)
+        processor.setEqualizerBand(10, 600)
+        assertEquals(EqualizerSettings(), processor.equalizerSettings.value)
+        assertEquals(EqualizerPreset.FLAT, processor.equalizerPreset.value)
+
+        // An in-range write still lands and marks the preset CUSTOM.
+        processor.setEqualizerBand(0, 600)
+        assertEquals(600, processor.equalizerSettings.value.bandLevels[0])
+        assertEquals(EqualizerPreset.CUSTOM, processor.equalizerPreset.value)
     }
 }

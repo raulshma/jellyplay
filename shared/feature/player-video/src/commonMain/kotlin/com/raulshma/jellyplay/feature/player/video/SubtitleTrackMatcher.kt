@@ -30,6 +30,13 @@ internal object SubtitleTrackMatcher {
      * back to "Off". When a tier has several candidates, the DEFAULT-badged track
      * wins, then the lowest index (deterministic).
      *
+     * Full-vs-signs bias: when [preferFull] or [preferSigns] is set, the
+     * tier ladder first runs against the matching subset (non-signs / signs
+     * tracks respectively — [TrackResolutionEngine.isSignsTrack]); only when
+     * the preferred class has no same-language candidate does the other class
+     * apply, so a signs-only (or full-only) item still resolves. Both flags
+     * default false — the unbiased, pre-engine behaviour.
+     *
      * @param lang ISO-639 language code the preference resolved to.
      * @param forced whether the preference pins a forced-narrative track, or null.
      * @param hearingImpaired whether the preference pins an SDH track, or null.
@@ -39,17 +46,40 @@ internal object SubtitleTrackMatcher {
         lang: String,
         forced: Boolean?,
         hearingImpaired: Boolean?,
+        preferFull: Boolean = false,
+        preferSigns: Boolean = false,
     ): TrackOption? {
         val langMatches = tracks.filter { it.index >= 0 && isLanguageMatch(it.language, lang) }
         if (langMatches.isEmpty()) return null
-        // Tier 1 — exact descriptor (language + forced-role + sdh-role).
+        // Tier 1 — exact descriptor (language + forced-role + SDH-role).
         langMatches.filter { roleMatches(it, forced, hearingImpaired) }
-            .bestTiebreak()?.let { return it }
+            .biasedTiebreak(preferFull, preferSigns)?.let { return it }
         // Tier 2 — relax SDH, keep forced-role.
         langMatches.filter { roleMatches(it, forced, sdh = null) }
-            .bestTiebreak()?.let { return it }
+            .biasedTiebreak(preferFull, preferSigns)?.let { return it }
         // Tier 3 — language only.
-        return langMatches.bestTiebreak()
+        return langMatches.biasedTiebreak(preferFull, preferSigns)
+    }
+
+    /**
+     * Deterministic tie-break across several equally-good candidates: prefer the
+     * DEFAULT-badged track (often the canonical language track), then the lowest
+     * engine index (stable track order). Returns null for an empty list.
+     *
+     * With the full/signs bias, the full-dialogue vs signs/songs class
+     * ([TrackResolutionEngine.isSignsTrack]) ranks AHEAD of the DEFAULT/index
+     * order inside the tier — but the tier's own role pins (forced/SDH) still
+     * outrank the class split, so an explicit forced or SDH pin keeps winning
+     * over the bias (accessibility intent over preference).
+     */
+    private fun List<TrackOption>.biasedTiebreak(
+        preferFull: Boolean,
+        preferSigns: Boolean,
+    ): TrackOption? {
+        if (!preferFull && !preferSigns) return bestTiebreak()
+        val wantSigns = preferSigns
+        val preferredClass = filter { TrackResolutionEngine.isSignsTrack(it) == wantSigns }
+        return preferredClass.bestTiebreak() ?: bestTiebreak()
     }
 
     /**
@@ -64,9 +94,7 @@ internal object SubtitleTrackMatcher {
     }
 
     /**
-     * Deterministic tie-break across several equally-good candidates: prefer the
-     * DEFAULT-badged track (often the canonical language track), then the lowest
-     * engine index (stable track order). Returns null for an empty list.
+     * The unbiased tier tie-break: DEFAULT badge first, then lowest index.
      */
     private fun List<TrackOption>.bestTiebreak(): TrackOption? =
         minWithOrNull(compareBy({ !it.badges.contains(TrackBadge.DEFAULT) }, { it.index }))

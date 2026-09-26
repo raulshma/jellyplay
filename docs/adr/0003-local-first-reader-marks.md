@@ -63,5 +63,5 @@ survive.
    clears with reader preferences.
 - Schema changes for marks ride the existing migration chain and its
    contiguity guard.
-- `ReaderAnnotationsRepository` stays in `shared/core/data` commonMain, so a
-   future wasmJs reader gets marks for free once the reader itself ships there.
+- `ReaderAnnotationsRepository` stays in `shared/core/data` commonMain, so
+   future platforms get marks for free.

@@ -1,58 +1,23 @@
 package com.raulshma.jellyplay.core.data.util
 
-import com.raulshma.jellyplay.core.model.monotonicNowMillis
-import com.raulshma.jellyplay.core.model.wallNowMillis
-import java.time.LocalDate
-import java.time.ZoneId
-
 /**
- * Read-only seam over the system clocks, so time-aware logic (TTL gates,
- * refresh jitter, calendar windows) can be unit-tested by injecting a fake.
- *
- * The system implementation delegates to the platform seams in
- * `:shared:core:model` ([wallNowMillis] / [monotonicNowMillis]). There is no
- * test fake here — fakes live next to the tests that need them
- * (`feature/.../src/test`).
- *
- * split: the epoch-millis slice was promoted to the commonMain
- * [EpochMillisSource] seam (the promoted commonMain repository impls take
- * that type — java.time cannot cross into commonMain), so this interface
- * extends it. Every existing [TimeSource] fake across the repo therefore
- * satisfies [EpochMillisSource] unchanged, and the `today(zone)` java.time
- * surface stays available to the JVM-only consumers (feature/home's
- * commonMain, NewsletterTriggerManager, StatisticsMath, ...).
+ * D3: the JVM clock seam moved down to :shared:core:model
+ * (`com.raulshma.jellyplay.core.model.TimeSource` / `SystemTimeSource`) —
+ * core:network sits BELOW core:data in the module graph and could never
+ * adopt a seam living here, and the seam belongs beside the platform clock
+ * functions (wallNowMillis / monotonicNowMillis) it already delegated to.
+ * These aliases keep the ~30 not-yet-migrated imports across the repo
+ * compiling unchanged (every existing FakeTimeSource satisfies the new type
+ * identically — the seam's surface did not change); migrate per-touch.
  */
-interface TimeSource : EpochMillisSource {
-    /** Current wall-clock time in epoch milliseconds. */
-    override fun nowEpochMillis(): Long
+@Deprecated(
+    message = "Moved to :shared:core:model — use the core.model TimeSource",
+    replaceWith = ReplaceWith("TimeSource", "com.raulshma.jellyplay.core.model.TimeSource"),
+)
+typealias TimeSource = com.raulshma.jellyplay.core.model.TimeSource
 
-    /** Today's date in the given [zone]. */
-    fun today(zone: ZoneId): LocalDate
-
-    /**
-     * Monotonic elapsed time in milliseconds since boot. For in-memory TTL
-     * clocks only ([TtlCache]'s contract): unlike wall time it never jumps
-     * backwards or forwards (NTP correction, manual clock set), but it resets
-     * on reboot — which is fine because the in-memory caches it drives never
-     * outlive a process.
-     */
-    fun nowElapsedRealtimeMillis(): Long
-}
-
-/**
- * Moved from the legacy `:core:data` `util/TimeSource.kt` (C4 part 2,
- * seam 4). The two clock reads now delegate to the model platform seams:
- *  - `nowEpochMillis` → [wallNowMillis] (`System.currentTimeMillis` on
- *    Android and desktop — identical to the legacy read).
- *  - `nowElapsedRealtimeMillis` → [monotonicNowMillis]. On Android that is
- *    `SystemClock.elapsedRealtime`, i.e. the exact legacy source (monotonic
- *    across deep sleep). On desktop JVM it is a `System.nanoTime`-based
- *    monotonic counter — a different origin, but the [TimeSource] contract
- *    only requires within-process monotonicity (deltas), never a comparable
- *    absolute value, so TTL math is unaffected.
- */
-class SystemTimeSource : TimeSource {
-    override fun nowEpochMillis(): Long = wallNowMillis()
-    override fun today(zone: ZoneId): LocalDate = LocalDate.now(zone)
-    override fun nowElapsedRealtimeMillis(): Long = monotonicNowMillis()
-}
+@Deprecated(
+    message = "Moved to :shared:core:model — use the core.model SystemTimeSource",
+    replaceWith = ReplaceWith("SystemTimeSource", "com.raulshma.jellyplay.core.model.SystemTimeSource"),
+)
+typealias SystemTimeSource = com.raulshma.jellyplay.core.model.SystemTimeSource

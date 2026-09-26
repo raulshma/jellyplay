@@ -59,6 +59,8 @@ class MpvSoftwareRenderEngine(
      * tests avoid deliberately (they exercise the render path headlessly).
      */
     extraOptions: Map<String, String> = emptyMap(),
+    /** Forwarded to the shared engine ctor (the extracted shader dir). */
+    shaderDir: String? = null,
 ) : MpvDesktopEngine(
     extraOptions = buildMap {
         put("vo", "libmpv")
@@ -67,6 +69,7 @@ class MpvSoftwareRenderEngine(
     // No wid, ever: the whole point of this path is producing CPU frames
     // instead of embedding a child window.
     windowHandle = null,
+    shaderDir = shaderDir,
 ),
     SoftwareFrameVideoSurface {
 

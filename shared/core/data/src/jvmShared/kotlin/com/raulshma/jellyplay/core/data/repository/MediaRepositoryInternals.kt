@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
@@ -19,10 +20,11 @@ import java.util.concurrent.atomic.AtomicLong
 // instance, constructed by the [MediaRepositoryInternals] Koin single.
 
 // Shared by [MediaRepositoryImpl] (the collection-items cache) and
-// [DetailCacheGroup] below, so the detail-cluster TTL is one
-// value, not two hand-synced constants.
-/** 2 minutes — short enough that server changes are reflected quickly. */
-internal const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
+// [DetailCacheGroup] below. The value used to be a local `internal` const
+// here so the two sites hand-synced one number; both now cite the named
+// policy `FreshnessCeilings.DETAIL_TTL_MS` (core:model), which is the same
+// home the episode catalogue cites — one readable answer for "how stale may
+// detail-scoped data be".
 internal const val DETAIL_CACHE_MAX_ENTRIES = 30
 
 /**
@@ -113,18 +115,18 @@ internal class DetailCacheGroup(
 
     private val detailCache = TtlCache<MediaDetail>(
         maxSize = DETAIL_CACHE_MAX_ENTRIES,
-        ttlMs = DETAIL_CACHE_TTL_MS,
+        ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
     )
 
-    private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
-    private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val similarCache = TtlCache<List<MediaItem>>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
+    private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
 
     // Theme songs for a detail item: ThemeMusicPlayer releases its player on
     // screen exit, so every detail re-entry re-fetched the (almost always
     // empty) list — one HTTP round-trip per navigation for nothing. Cached
     // with the same 2-minute TTL and epoch-guarded write as its siblings; a
     // stale list ≤2 min after a server change is harmless for ambient audio.
-    private val themeSongsCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val themeSongsCache = TtlCache<List<MediaItem>>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
 
     // Single-flight dedup for `detail`: the detail screen is reachable from
     // many entry points (home row tap, deep link, "play next" notification,

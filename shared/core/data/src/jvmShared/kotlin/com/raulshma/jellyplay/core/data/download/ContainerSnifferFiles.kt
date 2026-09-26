@@ -8,7 +8,7 @@ import java.io.InputStream
  * first [ContainerSniffer.SNIFF_HEADER_BYTES] bytes of the download at
  * [downloadPath] and delegates detection to the sniffer.
  *
- * Lives in jvmShared (not commonMain, which also builds for wasmJs) and is
+ * Lives in jvmShared (not commonMain) and is
  * what the database layer's backfill probe resolves to — see
  * shared:core:data's `dataJvmModule`, which binds
  * `com.raulshma.jellyplay.core.database.migration.ContainerProbe` over this

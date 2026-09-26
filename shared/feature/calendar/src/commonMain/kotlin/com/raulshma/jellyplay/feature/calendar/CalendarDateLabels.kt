@@ -8,9 +8,9 @@ import kotlinx.datetime.YearMonth
 /**
  * Thin façade over the core/ui date-label seam — the module-internal names
  * the calendar's call sites use, kept so churn stays at the seams' edges.
- * The formatting bodies (java.time DateTimeFormatter on android/desktop,
- * fixed-English tables on wasm) and the month/day tables live ONLY in
- * core:ui's DateLabels; the documented locale degrade is stated once there.
+ * The formatting bodies (java.time DateTimeFormatter on android/desktop)
+ * and the month/day tables live ONLY in
+ * core:ui's DateLabels.
  */
 internal fun calendarDayHeaderLabel(date: LocalDate): String = weekdayShortMonthDay(date)
 

@@ -33,6 +33,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,6 +94,8 @@ fun ArtistDetailScreen(
     LaunchedEffect(artistId) {
         viewModel.loadArtist(artistId)
     }
+
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     // One collected mix snapshot drives both the isStartingMix progress gate
     // and the first-track navigation one-shot (InstantMixStateHolder fold).

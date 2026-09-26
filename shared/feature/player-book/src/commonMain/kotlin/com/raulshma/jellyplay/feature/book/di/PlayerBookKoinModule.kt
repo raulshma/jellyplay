@@ -27,14 +27,14 @@ import org.koin.dsl.module
  * the ReaderStore and the application scope resolve from the shared core
  * graph. The format probe and the speech engine bind where their platform
  * exists (jvmShared / android / desktop); elsewhere `getOrNull()` degrades to
- * the neutral [NoopBookFormatProbe] / [NoopBookSpeechEngine] (web compiles
- * and runs the reader with read-aloud reporting unavailable).
+ * the neutral [NoopBookFormatProbe] / [NoopBookSpeechEngine].
  */
 val playerBookModule: Module = module {
     viewModel {
         BookReaderViewModel(
             mediaRepository = get(),
             playbackRepository = get(),
+            playbackIdentity = get(),
             preferences = ReaderPreferences(store = get(), scope = get(DatastoreQualifiers.applicationScope)),
             annotationsRepository = get(),
             contentResolver = get(),

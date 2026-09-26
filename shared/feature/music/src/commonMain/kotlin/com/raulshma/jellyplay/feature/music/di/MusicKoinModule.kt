@@ -29,7 +29,7 @@ import org.koin.dsl.module
  *    interop module (dies at ); the queue-player seam
  *    MusicQueuePlayer resolves from
  *    [platformMusicModule] (jvmShared: adapter over the process-wide
- *    AudioQueueFacade single; wasmJs: honest unsupported no-op), while the
+ *    AudioQueueFacade single), while the
  *    download reads resolve from core:data's own seams
  *    (TrackDownloadStatusWindow for the album rows, ActiveDownloadCount for
  *    the home badge — both bound by core:data on both platforms);

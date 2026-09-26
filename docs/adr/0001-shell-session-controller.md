@@ -58,6 +58,21 @@ revisit triggers fire; the controller only maps a completed check to shell messa
 
 ## Revisit triggers
 
-- A third shell (web) gaining session state — reconsider placement.
 - If the controller accretes UI-shaped concerns (snackbar text, dialog gating), split
   the surface back out per shell and keep only the decision core shared.
+
+## Amendment (2026-09-24) — dependency set, not signature
+
+The RealtimeSessionController wiring was hand-duplicated per shell (same 12-param
+lambda bundles in `SessionCoordinator` and composable-inline in `DesktopAppRoot`).
+A `create(...)` factory beside the controller now owns the wiring, which required
+typing three collaborators concretely (`RealtimeConnection`, `RemoteControlReceiver`,
+`ServerIdentityStore`) — so `shared/feature/shell` gained `implementation` deps on
+`:shared:core:data` and `:shared:core:datastore`. The recorded *signature* rule
+still holds — no `*Repository` type crosses any surface; auth seams stay plain
+flows and suspend lambdas, construction stays direct, no Koin — but the module's
+dependency set is no longer repository-free in the Gradle sense. `RemoteControlReceiver`
+and `ServerIdentityStore` are final classes without narrow commonMain interfaces;
+the transport-surface dependency (`RealtimeConnection`'s KDoc: "split out of
+AuthRepository so the session shell depends on the transport surface alone") is the
+recorded intent this amendment makes explicit.

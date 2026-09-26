@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileSlice
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 
 /**
@@ -41,7 +42,7 @@ internal data class PlaybackCoreBundle(
     val audio: AudioSlice,
     val engine: PlayerEngineSlice,
 ) {
-    fun toPlaybackPreferences(sp: SyncPlayCastSlice) = PlaybackPreferences(
+    fun toPlaybackPreferences(sp: SyncPlayCastSlice, volume: VolumeProfileSlice) = PlaybackPreferences(
         preferredPlayer = playback.preferredPlayer,
         decoderMode = playback.decoderMode,
         audioPassthrough = playback.audioPassthrough,
@@ -67,6 +68,7 @@ internal data class PlaybackCoreBundle(
         trickplayEnabled = video.trickplayEnabled,
         trickplayOnSeekGesture = video.trickplayOnSeekGesture,
         segmentBehaviors = video.segmentBehaviors,
+        skipSegmentsOnSeek = video.skipSegmentsOnSeek,
         videoEpisodeBrowserEnabled = video.videoEpisodeBrowserEnabled,
         videoShowPlaybackMetadata = video.videoShowPlaybackMetadata,
         videoPreloadBufferSize = video.videoPreloadBufferSize,
@@ -98,6 +100,7 @@ internal data class PlaybackCoreBundle(
         dvrPostPaddingMinutes = sp.dvrPostPaddingMinutes,
         dvrRecordingQuality = sp.dvrRecordingQuality,
         androidTvWatchNextEnabled = playback.androidTvWatchNextEnabled,
+        rememberVolumePerContentType = volume.rememberVolumePerContentType,
     )
 }
 

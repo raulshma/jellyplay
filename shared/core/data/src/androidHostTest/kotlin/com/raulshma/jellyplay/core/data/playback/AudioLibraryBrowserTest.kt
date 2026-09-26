@@ -22,6 +22,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -34,7 +37,15 @@ import java.util.concurrent.atomic.AtomicInteger
  * order always matches the input order even when later items resolve first.
  * Null resolutions (no local file and no server detail) are dropped, never
  * padded.
+ *
+ * Robolectric runner: the artwork-uri pin reads `MediaMetadata.artworkUri`,
+ * which flows through `android.net.Uri.parse` — unavailable on the plain
+ * JUnit runner (this lane's android.jar returns default values). The sdk pin
+ * matches the lane's other Robolectric suites (module targetSdk exceeds the
+ * installed android-all max).
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class AudioLibraryBrowserTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
@@ -160,5 +171,20 @@ class AudioLibraryBrowserTest {
         val resolved = addItems(browser, "ALBUM_|album-1", "ALBUM_|album-2")
 
         assertEquals(listOf("a1-t1", "a1-t2", "a2-t1"), resolved.map { it.mediaId })
+    }
+
+    @Test
+    fun `resolved items carry the artwork uri from the playback repository`() {
+        // Pins the shared artUri lookup: the repository's URL string flows
+        // into MediaMetadata.artworkUri for every resolved playable.
+        val ids = listOf("t1", "t2")
+        coEvery { mediaRepository.getAlbumTracks("album-1") } returns Result.success(ids.map(::track))
+        stubLocalResolves(ids)
+        coEvery { playbackRepository.getImageUrl(any(), any(), any()) } returns "https://server/art/t1.jpg"
+        val browser = browser()
+
+        val resolved = addItems(browser, "ALBUM_|album-1")
+
+        assertEquals("https://server/art/t1.jpg", resolved.first().mediaMetadata.artworkUri.toString())
     }
 }

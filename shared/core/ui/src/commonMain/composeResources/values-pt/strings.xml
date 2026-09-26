@@ -138,6 +138,7 @@
     <string name="ss_cat_audio_player">Reprodutor de Áudio</string>
     <string name="ss_cat_backup_restore">Cópia de Segurança e Restauro</string>
     <string name="ss_cat_experimental">Experimental</string>
+    <string name="ss_cat_home">Ecrã inicial</string>
     <string name="ss_cat_integrations">Integrações</string>
     <string name="ss_cat_language_subtitles">Idioma e Legendas</string>
     <string name="ss_cat_notifications">Notificações</string>
@@ -251,4 +252,21 @@
     <string name="core_remove_download_confirm">Excluir</string>
     <string name="core_ui_read_more">Ler mais</string>
     <string name="core_ui_show_less">Mostrar menos</string>
+    <string name="core_media_folder">Pasta</string>
+    <string name="core_media_folder_plural">Pastas</string>
+    <string name="core_ui_auth_use_screen_lock">Usar bloqueio de ecrã</string>
+    <string name="core_ui_auth_unlock_screen_lock">Desbloquear com bloqueio de ecrã</string>
+    <string name="core_ui_auth_device_credential_prompt">Use o bloqueio de ecrã do dispositivo para desbloquear</string>
+    <string name="core_ui_read">Ler</string>
+    <string name="core_show_password">Mostrar palavra-passe</string>
+    <string name="core_hide_password">Ocultar palavra-passe</string>
+    <!-- What's New chrome -->
+    <string name="core_ui_whatsnew_sheet_title">Novidades</string>
+    <string name="core_ui_whatsnew_release_title">Novidades na v%1$s</string>
+    <string name="core_ui_whatsnew_category_new">Novo</string>
+    <string name="core_ui_whatsnew_category_improvement">Melhorado</string>
+    <string name="core_ui_whatsnew_category_fix">Corrigido</string>
+    <string name="core_ui_whatsnew_take_me_there">Levar-me lá</string>
+    <string name="core_ui_whatsnew_got_it">Entendido</string>
+    <string name="core_ui_whatsnew_archive_empty">Ainda sem destaques da versão.</string>
 </resources>

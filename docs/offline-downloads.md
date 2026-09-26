@@ -442,8 +442,12 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
   and an optional schedule-window delay.
 - **Concurrency limiter** — a shared `Semaphore`
   (`DownloadConcurrencyLimiter`) sized from **Max concurrent downloads**
-  (default 3, clamped 1–6). A worker enters `Queued` while waiting for a
-  permit, then promotes to `Downloading`.
+  (default 3, clamped 1–6). The `Queued` write happens before the gate; a
+  row then waits for a permit already `Queued`, and the permit covers the
+  whole transfer choreography — post-QUEUED re-check, `Downloading` write,
+  and the transfer body — so at most **Max concurrent downloads** transfers
+  run at once (both orchestrators share this gate through
+  `DownloadTransferGate`).
 - **Single-connection path** — OkHttp `GET` with the `Authorization:
   MediaBrowser` header and a custom `User-Agent`. If resuming (`existingBytes > 0`) it sends
   `Range: bytes=N-` and appends; handles HTTP 416 (stale range → restart
@@ -487,7 +491,8 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
 
 ### Persistence (Room)
 
-A single `JellyPlayDatabase` (v51) holds five relevant tables:
+A single `JellyPlayDatabase` (v57; the migration ladder lives in
+`Migrations46To56` and `Migration56To57`) holds five relevant tables:
 
 - **`downloads`** — live transfer state (path, url, sizes, status,
   speed, priority, error, container, series/season linkage). Indexed

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Library feature user-facing strings (enhancements §2.2) -->
-    <string name="library_photo_saved_to_gallery">Salvata in galleria</string>
     <string name="library_failed_to_load_items">Caricamento elementi non riuscito</string>
     <string name="library_failed_to_load_more_items">Caricamento di altri elementi non riuscito</string>
 
@@ -52,29 +51,35 @@
     <string name="library_failed_to_load_more">Caricamento di altri elementi non riuscito</string>
 
     <!-- PhotoAlbumScreen -->
-    <string name="library_photos">Foto</string>
-    <string name="library_sort_options">Opzioni di ordinamento</string>
-    <string name="library_failed_to_load_photos">Caricamento foto non riuscito</string>
-    <string name="library_no_photos_found">Nessuna foto trovata</string>
 
     <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
-    <string name="library_photo_adjustments">Regolazioni</string>
-    <string name="library_photo_slideshow">Presentazione</string>
-    <string name="library_photo_start_slideshow">Avvia presentazione</string>
-    <string name="library_photo_stop_slideshow">Ferma presentazione</string>
     <!-- %1$d = brightness as integer percent -->
-    <string name="library_photo_brightness">Luminosità %1$d%</string>
     <!-- %1$d = contrast as integer percent -->
-    <string name="library_photo_contrast">Contrasto %1$d%</string>
     <!-- %1$d = saturation as integer percent -->
-    <string name="library_photo_saturation">Saturazione %1$d%</string>
-    <string name="library_photo_failed_to_load">Impossibile caricare la foto</string>
     <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
-    <string name="library_cd_close">Chiudi</string>
-    <string name="library_cd_share">Condividi</string>
-    <string name="library_cd_save">Salva</string>
-    <string name="library_cd_info">Info</string>
-    <string name="library_cd_adjust">Regola</string>
-    <string name="library_cd_previous">Precedente</string>
-    <string name="library_cd_next">Successivo</string>
+    <string name="library_masonry_view">Vista masonry</string>
+    <string name="library_see_all">Vedi tutto</string>
+    <string name="library_back">Indietro</string>
+    <string name="library_all_filters">Tutti i filtri</string>
+    <string name="library_sort">Ordina</string>
+    <string name="library_type">Filtra per tipo</string>
+    <string name="library_any">Qualsiasi</string>
+    <string name="library_group_by">Raggruppa risultati per</string>
+    <string name="library_group_by_none">Nessuno</string>
+    <string name="library_group_by_name">Nome</string>
+    <string name="library_group_by_type">Tipo</string>
+    <string name="library_group_by_genre">Genere</string>
+    <string name="library_group_by_year">Anno</string>
+    <string name="library_poster_size">Dimensione poster</string>
+    <string name="library_action_view">Vista</string>
+    <string name="library_action_size">Dimensione</string>
+    <string name="library_action_group">Raggruppa</string>
+    <string name="library_reset_all">Reimposta tutto</string>
+    <string name="library_reset_confirm_title">Reimpostare la libreria?</string>
+    <string name="library_reset_confirm_message">Questo cancella tutti i filtri e torna alla libreria predefinita. Modalità di vista, dimensione poster e raggruppamento, oltre ai filtri salvati e all'ordinamento della cartella corrente, verranno ripristinati.</string>
+    <string name="library_reset_dont_show_again">Non mostrare più</string>
+    <string name="library_year_from">Da %1$d</string>
+    <string name="library_year_to">Fino a %1$d</string>
+    <string name="data_download_started">Scaricamento avviato</string>
+    <string name="data_download_start_failed">Impossibile avviare lo scaricamento</string>
 </resources>

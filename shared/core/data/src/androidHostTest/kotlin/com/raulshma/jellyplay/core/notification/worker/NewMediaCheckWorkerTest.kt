@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import io.mockk.coEvery
@@ -102,6 +103,7 @@ class NewMediaCheckWorkerTest {
                         notificationStore = notificationStore,
                         dispatcher = dispatcher,
                         scheduler = scheduler,
+                        timeSource = SystemTimeSource(),
                     )
                 },
             )

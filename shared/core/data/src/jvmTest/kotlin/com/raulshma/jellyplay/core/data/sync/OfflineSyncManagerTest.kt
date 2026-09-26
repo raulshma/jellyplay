@@ -37,9 +37,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.raulshma.jellyplay.core.data.util.TimeSource
-import java.time.LocalDate
-import java.time.ZoneId
+import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 
 /**
  * Pins the decision + persistence orchestration of [OfflineSyncManager] (the
@@ -72,7 +70,13 @@ class OfflineSyncManagerTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var manager: OfflineSyncManager
 
-    private val comparator = OfflineSyncComparator(FakeTimeSource())
+    // Wall-clock default (the deleted local copy's): the fixtures stamp
+    // baselines with `System.currentTimeMillis()` deltas, so the TTL gate's
+    // fresh/stale branches must compare against a now in the same
+    // epoch-millis regime.
+    private fun wallClockTimeSource() = FakeTimeSource(nowMs = System.currentTimeMillis())
+
+    private val comparator = OfflineSyncComparator(wallClockTimeSource())
 
     @BeforeTest
     fun setup() {
@@ -102,7 +106,7 @@ class OfflineSyncManagerTest {
             offlineModeManager = offlineModeManager,
             playbackRepository = playbackRepository,
             appScope = CoroutineScope(UnconfinedTestDispatcher()),
-            timeSource = FakeTimeSource(),
+            timeSource = wallClockTimeSource(),
         )
     }
 
@@ -449,7 +453,7 @@ class OfflineSyncManagerTest {
             offlineModeManager = offlineModeManager,
             playbackRepository = playbackRepository,
             appScope = batchScope,
-            timeSource = FakeTimeSource(),
+            timeSource = wallClockTimeSource(),
         )
         everyIsOffline(false)
 
@@ -475,17 +479,5 @@ class OfflineSyncManagerTest {
 
     private companion object {
         const val ITEM_ID = "item-1"
-    }
-
-    /**
-     * Controllable [TimeSource] whose default NOW tracks the real wall clock:
-     * the fixtures stamp baselines with `System.currentTimeMillis()` deltas,
-     * so the TTL gate's fresh/stale branches must compare against a now in
-     * the same epoch-millis regime.
-     */
-    private class FakeTimeSource(var nowMs: Long = System.currentTimeMillis()) : TimeSource {
-        override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

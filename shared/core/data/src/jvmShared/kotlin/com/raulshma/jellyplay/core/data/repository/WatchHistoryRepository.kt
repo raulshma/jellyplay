@@ -2,16 +2,16 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlight
+import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
+import com.raulshma.jellyplay.core.model.TimeSource
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.atomic.AtomicLong
 
@@ -44,10 +44,27 @@ interface WatchHistoryRepository {
 
 class WatchHistoryRepositoryImpl constructor(
     private val apiClient: JellyfinApiClient,
+    /**
+     * The ONE owner of the Playback Reporting plugin status (a StateFlow +
+     * refresh, registered with `SessionCacheRegistry` for identity
+     * invalidation) — shared with `AdminStatisticsRepositoryImpl`; see
+     * [com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore].
+     * Replaces this repository's own `_playbackReportingStatus`
+     * MutableStateFlow (one of the two independently stale owners the store
+     * folded). This repository's refresh keeps ITS OWN side effect — the
+     * played-items memo drop below — preserving the memo-clear-THEN-status
+     * order.
+     */
+    private val statusStore: PlaybackReportingStatusStore,
+    /**
+     * Clock seam for the heatmap's calendar reads (`LocalDate.now()` before
+     * D3): the current-year day count and the malformed-date year fallback
+     * below — same reads, through the seam, so jvmTest pins a fixed today.
+     */
+    private val timeSource: TimeSource,
 ) : WatchHistoryRepository {
 
-    private val _playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.UNKNOWN)
-    override val playbackReportingStatus: StateFlow<PlaybackReportingStatus> = _playbackReportingStatus.asStateFlow()
+    override val playbackReportingStatus: StateFlow<PlaybackReportingStatus> get() = statusStore.status
 
     /**
      * Memoizes the played-items scan per `(year, filter)`: the paged network
@@ -62,6 +79,21 @@ class WatchHistoryRepositoryImpl constructor(
      * `mayStore = false` so a failed scan can't pin an empty day. Entries
      * live until the next [refreshPlaybackReportingStatus], so a day tap is
      * exactly as stale as the grid load it belongs to.
+     *
+     * DECLARED DIVERGENCE from the identity-keyed [TtlCache] house idiom
+     * (deliberate, not an oversight — converting would change behavior):
+     *  - NO TTL. The memo's freshness policy is "as fresh as the grid load
+     *    it belongs to" — invalidated only by a plugin-status refresh. A
+     *    TtlCache conversion would need a duration, which this policy
+     *    deliberately does not have (see FreshnessCeilings' KDoc: the one
+     *    cache whose answer to "how stale?" is "no TTL").
+     *  - NO identity key and NO registry registration. The cache is a plain
+     *    `(year, filter)` map; a user/server switch would serve the previous
+     *    identity's memo until the next refresh. The TtlCache+registry
+     *    conversion would FIX that (a behavior change, out of scope for this
+     *    naming fold — the heatmap reads run after their own
+     *    `refreshPlaybackReportingStatus()`, which drops the memo, so the
+     *    practical window is a same-screen identity switch).
      */
     private data class PlayedItemsKey(val year: Int, val filter: HeatmapFilter)
 
@@ -96,17 +128,20 @@ class WatchHistoryRepositoryImpl constructor(
         // [SingleFlight.invalidateAll] section, so a flight that started
         // before this point still returns its result to its callers but
         // stores nothing — its write is either generation-vetoed or wiped by
-        // the clear.
+        // the clear. Order preserved verbatim from the pre-store owner:
+        // memo drop FIRST, then the shared store's status refresh.
         playedItemsFlight.invalidateAll { playedItemsCache.clear() }
-        _playbackReportingStatus.value = apiClient.checkPlaybackReportingPlugin()
-            .getOrDefault(PlaybackReportingStatus.UNAVAILABLE)
+        statusStore.refresh()
     }
 
     override suspend fun getDailyActivity(year: Int, filter: HeatmapFilter): List<DailyWatchActivity> {
-        val days = if (year == java.time.LocalDate.now().year) {
+        // Same read the bare LocalDate.now() made, through the seam (the
+        // system impl is LocalDate.now(zone), so identical at runtime).
+        val today = timeSource.today(java.time.ZoneId.systemDefault())
+        val days = if (year == today.year) {
             java.time.temporal.ChronoUnit.DAYS.between(
                 java.time.LocalDate.of(year, 1, 1),
-                java.time.LocalDate.now(),
+                today,
             ).toInt() + 1
         } else 365
 
@@ -162,8 +197,9 @@ class WatchHistoryRepositoryImpl constructor(
         } else emptyList()
 
         if (!isPluginAvailable || details.isEmpty()) {
-            // Fallback to basic watch history
-            val year = date.take(4).toIntOrNull() ?: java.time.LocalDate.now().year
+            // Fallback to basic watch history; a malformed date string falls
+            // back to the seam's current year (the old LocalDate.now().year).
+            val year = date.take(4).toIntOrNull() ?: timeSource.today(java.time.ZoneId.systemDefault()).year
             val items = getPlayedItems(year, filter)
             val filteredItems = items.filter { item ->
                 item.lastPlayedDate?.startsWith(date) == true

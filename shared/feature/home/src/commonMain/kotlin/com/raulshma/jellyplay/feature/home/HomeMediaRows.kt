@@ -1,5 +1,10 @@
 package com.raulshma.jellyplay.feature.home
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
@@ -27,6 +33,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +45,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -61,6 +69,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
 import com.raulshma.jellyplay.core.ui.components.mouseScroll
+import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -79,6 +88,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronRight
+import com.composables.icons.tabler.outline.Dice
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -486,6 +496,12 @@ fun HomeMediaRow(
     // no Primary image (common for freshly-added series whose library scan has
     // not yet generated a poster). See [EpisodePosterResolver].
     seriesBackdropResolver: (String) -> String = { "" },
+    // Dice affordance for RANDOM-sorted custom discover rows — renders in the
+    // row header next to the title. While the re-fetch is in flight the icon
+    // tumbles and further taps are ignored.
+    onRollClick: (() -> Unit)? = null,
+    rollInProgress: Boolean = false,
+    rollAccessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -521,6 +537,9 @@ fun HomeMediaRow(
             onLongClick = onSectionLongClick,
             onSeeAllClick = onSeeAllClick,
             seeAllFocusRequester = seeAllFocusRequester,
+            onRollClick = onRollClick,
+            rollInProgress = rollInProgress,
+            accessibilityLabel = rollAccessibilityLabel,
         )
         HomeItemRow(
             items = effectiveItems,
@@ -659,6 +678,11 @@ internal fun HomeRowTitle(
     onLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
     seeAllFocusRequester: FocusRequester? = null,
+    /** Dice affordance for RANDOM-sorted custom discover rows: re-rolls the row's items. */
+    onRollClick: (() -> Unit)? = null,
+    /** True while that re-roll's fetch is in flight — tumbles the dice icon and absorbs taps. */
+    rollInProgress: Boolean = false,
+    accessibilityLabel: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -696,6 +720,38 @@ internal fun HomeRowTitle(
                 .weight(1f)
                 .semantics { heading() },
         )
+        if (onRollClick != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            // The dice tumbles while the re-fetch runs — the only affordance
+            // feedback a roll gets (no spinner, content stays). Reduced-motion
+            // users keep the static icon; the tap guard below still applies.
+            val diceRotation = if (rollInProgress && !isReducedMotion()) {
+                val transition = rememberInfiniteTransition(label = "diceRoll")
+                transition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 900, easing = LinearEasing),
+                    ),
+                    label = "diceTumble",
+                ).value
+            } else {
+                0f
+            }
+            IconButton(
+                onClick = onRollClick,
+                enabled = !rollInProgress,
+            ) {
+                Icon(
+                    imageVector = Tabler.Outline.Dice,
+                    contentDescription = accessibilityLabel,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(diceRotation),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
         if (onSeeAllClick != null) {
             Spacer(modifier = Modifier.width(12.dp))
             SeeAllPill(

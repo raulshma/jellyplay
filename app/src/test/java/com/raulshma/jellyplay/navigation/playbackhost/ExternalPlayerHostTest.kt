@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.navigation.playbackhost
 
 import android.content.Intent
-import com.raulshma.jellyplay.ExternalPlayerLaunch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

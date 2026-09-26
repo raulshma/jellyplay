@@ -24,11 +24,8 @@ import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class AuthApiClientImpl @Inject constructor(
+class AuthApiClientImpl(
     private val engine: JellyfinApiEngine,
     private val addressRouter: ServerAddressRouter,
 ) : AuthApiClient {
@@ -312,19 +309,19 @@ class AuthApiClientImpl @Inject constructor(
         )
     }
 
-    override suspend fun postCapabilities(): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().sessionApi.postFullCapabilities(data = engine.cachedCapabilities)
+    override suspend fun postCapabilities(): Result<Unit> = engine.withApi { api ->
+        api.sessionApi.postFullCapabilities(data = engine.cachedCapabilities)
     }
 
-    override suspend fun revokeServerSession(): Result<Unit> = engine.apiResultWithRetry {
-        engine.requireApi().request(
+    override suspend fun revokeServerSession(): Result<Unit> = engine.withApi { api ->
+        api.request(
             method = HttpMethod.POST,
             pathTemplate = "Sessions/Logout",
         )
     }
 
-    override suspend fun authorizeQuickConnect(code: String): Result<Boolean> = engine.apiResultWithRetry {
-        engine.requireApi().quickConnectApi.authorizeQuickConnect(code = code).content
+    override suspend fun authorizeQuickConnect(code: String): Result<Boolean> = engine.withApi { api ->
+        api.quickConnectApi.authorizeQuickConnect(code = code).content
     }
 
     override fun getServerUrl(): String? = engine.activeServerAddress

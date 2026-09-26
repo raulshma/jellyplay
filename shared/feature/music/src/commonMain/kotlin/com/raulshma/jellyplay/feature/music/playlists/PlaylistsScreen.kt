@@ -82,6 +82,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -120,7 +121,7 @@ fun PlaylistsScreen(
     // LOAD failure (its retry re-runs the load), command failures are banners
     // over whatever the list currently shows.
     val loadErrorText = loadError?.let {
-        it.message ?: stringResource(MusicCollectionKind.PLAYLISTS.errorFallbackRes)
+        UserErrorMessages.resolve(it, stringResource(MusicCollectionKind.PLAYLISTS.errorFallbackRes))
     }
     val commandErrorText = commandError?.let { playlistCommandErrorText(it) }
 

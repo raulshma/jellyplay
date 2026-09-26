@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -56,7 +57,7 @@ class PersonDetailViewModel constructor(
     private fun DeferredFetchState<PersonDetailContent>.toUiState(): PersonDetailUiState =
         wholeScreenPhase(
             loading = { PersonDetailUiState.Loading },
-            error = { PersonDetailUiState.Error(it.message ?: "Failed to load") },
+            error = { PersonDetailUiState.Error(UserErrorMessages.resolve(it, "Failed to load")) },
             content = { content ->
                 PersonDetailUiState.Success(
                     name = content.name,

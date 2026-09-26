@@ -1,7 +1,12 @@
 package com.raulshma.jellyplay.feature.player.live
 
+import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipController
+import com.raulshma.jellyplay.core.data.playback.PipTransport
+import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -31,11 +36,14 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlin.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -49,6 +57,7 @@ class LiveTvPlayerViewModelTest {
 
     private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
+    private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
     private lateinit var aggregateStore: VideoPlayerAggregateStore
@@ -62,11 +71,19 @@ class LiveTvPlayerViewModelTest {
     private val engineIsPlayingFlow = MutableStateFlow(false)
     private val engineStateFlow = MutableStateFlow(LiveEngineState.IDLE)
 
+    /**
+     * The VM's pinned wall clock (the injected [EpochMillisSource] seam —
+     * LiveNowWindow's inject-don't-create rule): the program-window fixtures
+     * below derive from the same now the VM reads.
+     */
+    private val fixedNowMs: Long = Instant.parse("2026-06-22T15:00:00Z").toEpochMilliseconds()
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         liveTvRepo = mockk<LiveTvRepository>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
+        playbackIdentity = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
         aggregateStore = mockk(relaxed = true)
@@ -82,7 +99,7 @@ class LiveTvPlayerViewModelTest {
             val newFavs = firstArg<Set<String>>()
             appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = newFavs)
         }
-        every { playbackRepo.getAccessToken() } returns "tok"
+        every { playbackIdentity.accessToken() } returns "tok"
         every { fakeEngine.state } returns engineStateFlow
         every { fakeEngine.isPlaying } returns engineIsPlayingFlow
         every { fakeEngine.isAtLiveEdge } returns MutableStateFlow(true)
@@ -128,14 +145,14 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
 
         // wait for channel load to settle
         kotlinx.coroutines.delay(50)
-        vm.channelUp()
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp())
         assertEquals(1, vm.state.value.currentIndex)
-        vm.channelUp()
-        vm.channelUp()
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp())
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp())
         // wrap from 2 -> 0
         assertEquals(0, vm.state.value.currentIndex)
     }
@@ -148,8 +165,8 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
-        vm.channelDown()
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelDown())
         // wrap from 0 -> 2
         assertEquals(2, vm.state.value.currentIndex)
     }
@@ -162,7 +179,7 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-1", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-1", null, null))
         assertEquals(1, vm.state.value.currentIndex)
         assertTrue(vm.state.value.hasNext)
         assertTrue(vm.state.value.hasPrevious)
@@ -182,7 +199,7 @@ class LiveTvPlayerViewModelTest {
         } returns Result.failure(RuntimeException("server down"))
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         // allow coroutine to settle
         kotlinx.coroutines.delay(50)
         // The commonMain VM keeps the message unresolved until render time:
@@ -232,7 +249,7 @@ class LiveTvPlayerViewModelTest {
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList<LiveTvProgram>())
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
         assertEquals(1, capturedRequests.size)
@@ -277,7 +294,7 @@ class LiveTvPlayerViewModelTest {
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList<LiveTvProgram>())
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
         assertEquals(1, capturedRequests.size)
@@ -337,7 +354,7 @@ class LiveTvPlayerViewModelTest {
         playbackFlow.value = playbackFlow.value.copy(liveStreamOption = LiveStreamOption.DIRECT_STREAM)
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
         assertEquals(1, capturedRequests.size)
@@ -356,7 +373,7 @@ class LiveTvPlayerViewModelTest {
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList<LiveTvProgram>())
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
         assertEquals(1, capturedRequests.size)
@@ -372,7 +389,7 @@ class LiveTvPlayerViewModelTest {
         } returns Result.success(emptyList<LiveTvChannel>())
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
         // Unresolved-resource check (the legacy suite compared the localized
         // "No channels available" text via a Context mock; the commonMain VM
@@ -401,12 +418,12 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         assertTrue(vm.state.value.isLoadingChannels, "channel load should still be in flight")
 
         // The zap (screen D-pad or PiP SKIP_FORWARD) lands mid-load —
         // deferred, and nothing may resolve before the list commits.
-        vm.channelUp()
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp())
         assertEquals(0, capturedRequests.size, "no tune may start before the channel list commits")
 
         loadGate.complete(Unit)
@@ -432,9 +449,9 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
-        vm.channelUp() // superseded…
-        vm.channelDown() // …by the later intent: down wins.
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp()) // superseded…
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelDown()) // …by the later intent: down wins.
         loadGate.complete(Unit)
         kotlinx.coroutines.delay(50)
 
@@ -465,9 +482,9 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         assertTrue(vm.state.value.isLoadingChannels, "channel load should still be in flight")
-        vm.channelUp() // queued while loading…
+        vm.onEvent(LiveTvPlayerUiEvent.ChannelUp()) // queued while loading…
         failLoad = false // …but the in-flight load fails under it.
         loadGate.complete(Unit)
         kotlinx.coroutines.delay(50)
@@ -483,7 +500,7 @@ class LiveTvPlayerViewModelTest {
         // Re-entry proves the queued zap was DROPPED, not retained: the fresh
         // load plays the route channel directly — no surprise zap to ch-1.
         vm.stop()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
         assertEquals(0, vm.state.value.currentIndex)
         assertEquals("ch-0", vm.state.value.currentChannel?.id)
@@ -499,10 +516,10 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
-        vm.selectChannelById("ch-2")
+        vm.onEvent(LiveTvPlayerUiEvent.SelectChannelById("ch-2"))
         kotlinx.coroutines.delay(50)
         assertEquals(2, vm.state.value.currentIndex)
         assertEquals("ch-2", vm.state.value.currentChannel?.id)
@@ -516,11 +533,11 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
         val indexBefore = vm.state.value.currentIndex
 
-        vm.selectChannelById("does-not-exist")
+        vm.onEvent(LiveTvPlayerUiEvent.SelectChannelById("does-not-exist"))
         kotlinx.coroutines.delay(50)
         assertEquals(indexBefore, vm.state.value.currentIndex)
     }
@@ -528,7 +545,7 @@ class LiveTvPlayerViewModelTest {
     @Test
     fun `toggleFavorite adds id not already present`() = runTest {
         val vm = createVm()
-        vm.toggleFavorite("ch-7")
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleFavorite("ch-7"))
         kotlinx.coroutines.delay(50)
         assertTrue("ch-7" in appRuntimeFlow.value.favoriteChannels)
         assertTrue("ch-7" in vm.state.value.favorites)
@@ -538,7 +555,7 @@ class LiveTvPlayerViewModelTest {
     fun `toggleFavorite removes already-present id`() = runTest {
         appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = setOf("ch-7"))
         val vm = createVm()
-        vm.toggleFavorite("ch-7")
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleFavorite("ch-7"))
         kotlinx.coroutines.delay(50)
         assertTrue("ch-7" !in appRuntimeFlow.value.favoriteChannels)
         assertTrue("ch-7" !in vm.state.value.favorites)
@@ -552,11 +569,47 @@ class LiveTvPlayerViewModelTest {
         stubResolve()
 
         val vm = createVm()
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
-        vm.seekWithinDvr(12_000L)
+        vm.onEvent(LiveTvPlayerUiEvent.SeekWithinDvr(12_000L))
         io.mockk.verify { fakeEngine.seekTo(12_000L) }
+    }
+
+    @Test
+    fun `programs surface through the canonical now next window`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+        // LiveNowWindow: the VM reads the injected clock (fixedNowMs =
+        // 2026-06-22T15:00:00Z) and picks via LiveTvProgramWindow — the
+        // airing program's OFFSET-LESS timestamps ride the canonical lenient
+        // parse (UTC read) that the former strict `Instant.parse` scan
+        // rejected, so it is current rather than invisible.
+        val airing = LiveTvProgram(
+            id = "prog-1",
+            name = "News",
+            channelId = "ch-0",
+            startDate = "2026-06-22T14:30:00",
+            endDate = "2026-06-22T16:30:00",
+        )
+        val next = LiveTvProgram(
+            id = "prog-2",
+            name = "Late",
+            channelId = "ch-0",
+            startDate = "2026-06-22T16:30:00Z",
+            endDate = "2026-06-22T17:30:00Z",
+        )
+        coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns
+            Result.success(listOf(airing, next))
+
+        val vm = createVm()
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
+        kotlinx.coroutines.delay(50)
+
+        assertEquals("prog-1", vm.state.value.currentProgram?.id)
+        assertEquals("prog-2", vm.state.value.nextProgram?.id)
     }
 
     /**
@@ -565,16 +618,22 @@ class LiveTvPlayerViewModelTest {
      */
     private class FakePip : PipController {
         override val isInPipMode = MutableStateFlow(false)
+        override val pipDismissed = MutableStateFlow(false)
         override var pipTransport: PipTransport? = null
+        override var pipHasNext: Boolean = false
         val autoEnterRequests = mutableListOf<Boolean>()
         val playingMirrors = mutableListOf<Boolean>()
         val autoExits = mutableListOf<Unit>()
         val aspects = mutableListOf<Pair<Int, Int>?>()
+        val consumedAutoExits = mutableListOf<Unit>()
+        val clearedDismissals = mutableListOf<Unit>()
         var resetCount = 0
 
         override fun setPlaying(playing: Boolean) {
             playingMirrors.add(playing)
         }
+
+        override fun setControlsLocked(locked: Boolean) {}
 
         override fun requestAutoEnterPip(shouldEnter: Boolean) {
             autoEnterRequests.add(shouldEnter)
@@ -584,9 +643,19 @@ class LiveTvPlayerViewModelTest {
             autoExits.add(Unit)
         }
 
+        override fun consumeAutoExitPip() {
+            consumedAutoExits.add(Unit)
+        }
+
+        override fun clearPipDismissed() {
+            clearedDismissals.add(Unit)
+        }
+
         override fun setPipAspectRatio(aspect: Pair<Int, Int>?) {
             aspects.add(aspect)
         }
+
+        override fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {}
 
         override fun reset() {
             resetCount++
@@ -605,7 +674,7 @@ class LiveTvPlayerViewModelTest {
 
         val pip = FakePip()
         val vm = createVm(pip = pip)
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
         // A successful tune arms auto-enter exactly once.
@@ -632,7 +701,7 @@ class LiveTvPlayerViewModelTest {
 
         val pip = FakePip()
         val vm = createVm(pip = pip)
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
         val transport = pip.pipTransport
@@ -664,7 +733,7 @@ class LiveTvPlayerViewModelTest {
 
         val pip = FakePip()
         val vm = createVm(pip = pip)
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
 
         // An engine ERROR while the window is up must translate into the
@@ -684,7 +753,7 @@ class LiveTvPlayerViewModelTest {
 
         val pip = FakePip()
         val vm = createVm(pip = pip)
-        vm.initialize("ch-0", null, null)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
         kotlinx.coroutines.delay(50)
         assertNotNull(pip.pipTransport)
 
@@ -694,13 +763,79 @@ class LiveTvPlayerViewModelTest {
         assertNull(pip.pipTransport)
     }
 
+    @Test
+    fun `pip dismiss latch pauses, tears down and closes the screen`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
+        kotlinx.coroutines.delay(50)
+
+        val closeEvents = mutableListOf<LivePlayerEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.events.collect { closeEvents.add(it) }
+        }
+
+        // The host Activity's auto-exit path: the VM's requestAutoExitPip is
+        // translated by the Activity into notifyPipDismissed; the VM reacts
+        // by pausing, tearing the session down and closing the screen — the
+        // dead stream must not linger in the window.
+        pip.pipDismissed.value = true
+        kotlinx.coroutines.delay(50)
+
+        assertTrue(
+            closeEvents.any { it is LivePlayerEvent.ClosePlayer },
+            "the dismiss must surface a ClosePlayer screen event",
+        )
+        assertEquals(1, pip.resetCount)
+        assertNull(pip.pipTransport)
+        // TWO clears land: initialize's defensive clear (issue #145) plus the
+        // dismiss handler's re-clear after handling (defence against a reuse
+        // path that skipped the full reset).
+        assertEquals(2, pip.clearedDismissals.size)
+    }
+
+    @Test
+    fun `initialize defensively clears stale pip latches`() = runTest {
+        coEvery {
+            liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
+        } returns Result.success(channels(1))
+        stubResolve()
+
+        val pip = FakePip()
+        val vm = createVm(pip = pip)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
+        kotlinx.coroutines.delay(50)
+        vm.stop()
+
+        // A one-shot flag survived teardown (the abnormal path reset()
+        // normally covers); the re-fired initialize on the reused,
+        // activity-scoped VM must clear both latches before tuning.
+        pip.pipDismissed.value = true
+        kotlinx.coroutines.delay(50)
+        vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
+        kotlinx.coroutines.delay(50)
+
+        // The dismiss handler's re-clear + BOTH initializes' defensive clears.
+        assertEquals(3, pip.clearedDismissals.size)
+        // Every initialize consumes the auto-exit request defensively — the
+        // stale flag must never greet the next tune.
+        assertEquals(2, pip.consumedAutoExits.size)
+    }
+
     private fun createVm(pip: PipController? = null): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
         liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
+        playbackIdentity = playbackIdentity,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,
         aggregateStore = aggregateStore,
         lastChannelStore = lastChannelStore,
+        epochMillisSource = EpochMillisSource { fixedNowMs },
         engineFactory = LiveEngineFactory { _, _ -> fakeEngine },
         imageUrlProvider = imageUrlProvider,
         pip = pip,

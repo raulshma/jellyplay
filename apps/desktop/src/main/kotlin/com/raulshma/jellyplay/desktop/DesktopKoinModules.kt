@@ -16,10 +16,11 @@ import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModul
 import com.raulshma.jellyplay.feature.settings.di.desktopSettingsPlatformModule
 import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
 import com.raulshma.jellyplay.feature.book.di.desktopBookPlayerModule
-import com.raulshma.jellyplay.feature.library.di.desktopPhotoExportModule
+import com.raulshma.jellyplay.feature.photos.di.desktopPhotoExportModule
 import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
 import com.raulshma.jellyplay.feature.shell.sharedFeatureModules
 import org.koin.core.module.Module
+import org.koin.dsl.module
 
 /**
  * The desktop shell's startKoin module list (extracted from Main.kt): the
@@ -31,12 +32,19 @@ import org.koin.core.module.Module
  * Koin 4 dropped the per-definition override flag; Main.kt runs its startKoin
  * with `allowOverride(true)` for exactly ONE deliberate replacement — the
  * [desktopAppUpdateModule] at the END of this list REPLACES
- * [desktopDataModule]'s sentinel-bound AppUpdateRepository single with the
+ * [desktopDataModule]'s sentinel-bound AppUpdateRepository single (the
+ * desktopUpdateModule family definition — core:data's
+ * DesktopUpdateKoinModule.kt, which carries the mirrored pointer) with the
  * real-version desktop auto-update actual (docs/adr/desktop-auto-update.md).
  * Loaded last so it wins; the KoinModuleRegistrationGuardTest ratchets every
  * other registration.
  */
 internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
+    // The resolved bundle itself, for platform modules that resolve the full
+    // paths object via `get<DesktopPaths>()` (desktopPlayerModule's
+    // PlayerEngineFactory + Anime4KShaderInstaller); the modules below take
+    // their path slices as parameters instead.
+    module { single { paths } },
     datastoreCommonModule,
     desktopDatastoreModule(paths.dataDir),
     databaseDaosModule,
@@ -57,7 +65,7 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     desktopPlayerVideoModule,
     // The shared commonMain feature Koin modules (declared ONCE in
     // shared/feature/shell; the guard test derives its expected set from
-    // that declaration — webFeatureModules precedent). Desktop's platform
+    // that declaration). Desktop's platform
     // actuals follow inline.
     // The shared list spreads as its typed array — `listOf`'s vararg
     // takes arrays, not lists.
@@ -79,7 +87,9 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // ── Desktop auto-update (ADR desktop-auto-update) ────────────────
     // DELIBERATE OVERRIDE (the only one; see this file's KDoc on
     // allowOverride): replaces desktopDataModule's sentinel-bound
-    // AppUpdateRepository (`999999.0.0` — isUpdateAvailable could never
+    // AppUpdateRepository — the desktopUpdateModule family single, whose
+    // file (core:data's DesktopUpdateKoinModule.kt) carries the mirrored
+    // pointer — (`999999.0.0` — isUpdateAvailable could never
     // fire) with the real-version desktop actual. The installed version
     // comes from the generated desktop-build.properties (channel=release
     // only on CI release lanes); dev builds stay "up to date" by

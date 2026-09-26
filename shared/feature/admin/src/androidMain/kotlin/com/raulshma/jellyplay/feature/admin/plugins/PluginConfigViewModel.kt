@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.admin.AdminLoad
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_no_config_page
 import com.raulshma.jellyplay.feature.admin.users.detail.AdminUserMessage
@@ -43,7 +43,7 @@ class PluginConfigViewModel(
 
     private fun loadConfig(pluginId: String) {
         launch {
-            AdminLoad.load(
+            loadInto(
                 start = { _state.value = _state.value.copy(isLoading = true, error = null) },
                 fetch = {
                     // Bridge preparation precedes the page fetch (its legacy

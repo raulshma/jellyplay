@@ -1,47 +1,34 @@
 import org.gradle.api.plugins.ExtensionAware
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.multiplatform)
+    id("jellyplay.kmp.library.compose")
 }
 
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.player.video"
-        compileSdk = 37
-        minSdk = 28
-        // Compose-resources packaging (device-pass finding): with the
-        // AGP-9 KMP library plugin, android resources are OFF by default, so
-        // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
-        // app APK ships this module's Res accessors with NO backing .cvr
-        // assets — runtime MissingResourceException on the first string read.
-        androidResources {
-            enable = true
-        }
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    // No wasmJs target: the web shell is live but covers
-    // requests/calendar/details only, and this module's commonMain
-    // legitimately carries java.* (the track-scoring / trickplay helpers use
-    // java.io.File, the seek bar java.text.SimpleDateFormat) which a wasm
-    // target forbids — a web slice would need core:data's jvmShared-style
-    // split first.
-    jvm {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
+        // Rehomed :app androidTest suites (AVSyncSheet, AspectRatioSheet,
+        // DecoderPickerSheet, HdrBadge, NextEpisodeOverlay, PlaybackInfoOverlay,
+        // SkipOverlay, SubtitleDelayOverlay, SubtitleManagerSection,
+        // SubtitleStyleSheet, TrickplayOverlay) — withHostTest creates the
+        // androidUnitTest variant bound to the Kotlin test tree (AGP-9 KMP
+        // library plugin). Flags mirrored verbatim from shared/core/ui: real
+        // resource serving for compose-resources string lookups and
+        // unstubbed-Context tolerance.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
         }
     }
-
-    applyDefaultHierarchyTemplate()
 
     sourceSets {
-        getByName("commonMain").dependencies {
+        // This module's commonMain legitimately carries java.* (the
+        // track-scoring / trickplay helpers use java.io.File, the seek bar
+        // java.text.SimpleDateFormat), so it compiles for android+jvm only.
+        // Both targets and the default hierarchy come from the convention
+        // plugin.
+
+        commonMain.dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             // Repository interfaces + playback state holders the screens,
@@ -90,13 +77,14 @@ kotlin {
             // (KMP artifact — shared/core:data precedent).
             implementation(libs.androidx.collection)
         }
-        getByName("commonTest").dependencies {
-            implementation(kotlin("test"))
-        }
+        // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
-            implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
+            // Shared MediaEngine double (default MANUAL personality) for the
+            // session/policy suites — the former engine-package private fake
+            // was its twin, migrated in the fixtures merge.
+            implementation(project(":shared:core:test-fixtures"))
             // Desktop compose UI test for the keyboard-focus grab
             // (PlayerKeyboardFocusGrabUiTest) — runComposeUiTest is the
             // framework-agnostic ComposeUiTest entry (no JUnit4 runner; the
@@ -202,3 +190,25 @@ kotlin {
 // land in `...feature.player.video.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.player.video.generated.resources"
+
+// Robolectric lane for the 11 rehomed :app androidTest Compose suites.
+// AGP 9.4's withHostTest names the lane's source set androidHostTest
+// (src/androidHostTest/kotlin) and materializes it only in afterEvaluate, so
+// the dependency wiring rides a configureEach — an eager lookup would run
+// before the source set exists (same pattern as shared/core/ui).
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
+            implementation(libs.androidx.test.core)
+            // Compose UI tests under Robolectric (the rehomed sheet/overlay
+            // regression suites; media3's @UnstableApi opt-in rides the
+            // androidMain runtime classpath).
+            implementation(project.dependencies.platform(libs.compose.bom))
+            implementation(libs.compose.ui.test)
+            implementation(libs.compose.ui.test.manifest)
+        }
+    }
+}

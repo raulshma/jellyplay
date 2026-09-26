@@ -14,10 +14,10 @@ package com.raulshma.jellyplay.core.model.subtitle
  *   in `subtitles_counts` (e.g. `pt-BR`, `pt-PT`).
  *
  * The 2-letter↔3-letter resolution is platform data (the JDK/ICU locale set
- * on android/jvm; a table generated from the same JDK source on wasmJs), so
+ * on android/jvm), so
  * the resolvers are [expect][platformShortCodeToIso3] declarations and this
  * object lives in commonMain — the core:ui subtitle metadata row needs
- * [toIso1] on every target, including wasmJs.
+ * [toIso1] on every target.
  *
  * 639-1 ↔ 639-3 conversion on the JVM goes via lookup tables built from
  * `Locale.getAvailableLocales()` (which exposes both `.language` = 639-1 and
@@ -45,9 +45,8 @@ object SubtitleLanguageCodes {
     private val ISO2B_TO_3: Map<String, String> = ISO3_TO_2B.entries.associate { (a, b) -> b to a }
 
     /**
-     * Memo for the short-code branch of [toIso3] lives in the nonWeb actual
-     * (a ConcurrentHashMap — see SubtitleLanguageCodes.jvm.kt); the wasmJs
-     * actual resolves from a static map and needs no memo.
+     * The memo for the short-code branch of [toIso3] lives in the jvmShared
+     * actual (a ConcurrentHashMap — see SubtitleLanguageCodes.jvm.kt).
      */
 
     /** Converts an arbitrary language code (1/2/3-letter or BCP-47) to ISO 639-3. */
@@ -97,7 +96,7 @@ object SubtitleLanguageCodes {
 
 /**
  * Resolves a 2-letter (639-1) or BCP-47 prefix to ISO 639-3. Null when the
- * platform cannot map it. The nonWeb actual memoizes resolved values.
+ * platform cannot map it. The jvmShared actual memoizes resolved values.
  */
 internal expect fun platformShortCodeToIso3(cleaned: String): String?
 

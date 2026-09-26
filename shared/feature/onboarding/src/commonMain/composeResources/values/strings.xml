@@ -21,7 +21,7 @@
     <string name="onboarding_seerr_regions">Regions</string>
 
     <string name="onboarding_welcome_title">Welcome to\nJellyPlay</string>
-    <string name="onboarding_welcome_subtitle">Your personal Jellyfin client. Let\'s set up a few things to get you started.</string>
+    <string name="onboarding_welcome_subtitle">Your personal Jellyfin client. Let's set up a few things to get you started.</string>
     <string name="onboarding_feature_stream">Stream movies &amp; TV shows</string>
     <string name="onboarding_feature_music">Music player with advanced audio effects</string>
     <string name="onboarding_feature_download">Download for offline playback</string>

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.editor
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -16,6 +17,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -80,10 +82,11 @@ internal class EditorViewModel(
     /**
      * The single command funnel (the HomeViewModel `onEvent` precedent):
      * every user intent arrives as an [EditorUiEvent] and is routed once
-     * here. The `handle*` arms are the private handlers behind the kept tab
-     * delegates below; the remaining events route to the former command funs,
-     * now private (their names are unchanged for the internal reload
-     * callers).
+     * here — the tabs (Metadata/Images/Subtitles) dispatch the events
+     * directly. The `handle*` arms are the private handlers behind the
+     * file-picker / provider events; the remaining events route to the
+     * former command funs, now private (their names are unchanged for the
+     * internal reload callers).
      */
     fun onEvent(event: EditorUiEvent) {
         when (event) {
@@ -120,57 +123,20 @@ internal class EditorViewModel(
         }
     }
 
-    // region Kept tab delegates -------------------------------------------------
-    // ImagesTab.kt and SubtitlesTab.kt are owned by another builder and still
-    // call these names; each is a one-line forward into the funnel and dies
-    // when those files adopt onEvent.
-    // ----------------------------------------------------------------------------
-
-    fun uploadImageFromFile(file: EditorPickedFile, imageType: String) =
-        onEvent(EditorUiEvent.UploadImageFromFile(file, imageType))
-
-    fun uploadImageFromUrl(url: String, imageType: String) =
-        onEvent(EditorUiEvent.UploadImageFromUrl(url, imageType))
-
-    fun deleteImage(imageType: String, imageIndex: Int? = null) =
-        onEvent(EditorUiEvent.DeleteImage(imageType, imageIndex))
-
-    fun loadRemoteImages(imageType: String? = null, provider: String? = null, startIndex: Int? = null) =
-        onEvent(EditorUiEvent.LoadRemoteImages(imageType, provider, startIndex))
-
-    fun loadConfiguredSubtitleProviders() =
-        onEvent(EditorUiEvent.LoadConfiguredSubtitleProviders)
-
-    fun uploadSubtitleFromFile(
-        file: EditorPickedFile,
-        fileName: String,
-        language: String?,
-        isForced: Boolean,
-        isHearingImpaired: Boolean,
-    ) = onEvent(
-        EditorUiEvent.UploadSubtitleFromFile(file, fileName, language, isForced, isHearingImpaired),
-    )
-
-    fun deleteSubtitle(index: Int) =
-        onEvent(EditorUiEvent.DeleteSubtitle(index))
-
-    fun searchRemoteSubtitles(language: String) =
-        onEvent(EditorUiEvent.SearchRemoteSubtitles(language))
-
-    fun downloadRemoteSubtitle(subtitleId: String) =
-        onEvent(EditorUiEvent.DownloadRemoteSubtitle(subtitleId))
-
-    fun searchAllSubtitleProviders(language: String) =
-        onEvent(EditorUiEvent.SearchAllSubtitleProviders(language))
-
-    fun downloadProviderSubtitle(result: SubtitleSearchResult) =
-        onEvent(EditorUiEvent.DownloadProviderSubtitle(result))
-
-    // endregion
-
     private fun loadEditorData(itemId: String) {
         launch {
-            EditorLoad.load(
+            // The editor's ONE load ladder (core/ui loadInto, ex-EditorLoad).
+            // Only the editor-data load is a genuine single-fetch ladder: the
+            // other fetches are declared non-ladders — `saveMetadata` raises
+            // `isSaving` (a save, not a load, and its success arm re-baselines
+            // the form session), `searchAllSubtitleProviders` streams partial
+            // provider results instead of dispatching one Result, the
+            // provider-subtitle download is a multi-leg choreography
+            // (download → persist → upload → reload → attribute), and the
+            // image/subtitle mutations use the bare `.onSuccess`/`.onFailure`
+            // idiom with no loading-flag guard at all — folding any of them
+            // would change behaviour, not centralize it.
+            loadInto(
                 start = { _uiState.update { it.copy(isLoading = true, error = null) } },
                 fetch = { fetchEditorData(itemId) },
                 onSuccess = { loaded ->
@@ -292,7 +258,7 @@ internal class EditorViewModel(
     private fun handleUploadImageFromFile(file: EditorPickedFile, imageType: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            runCatching { file.readBytes() }
+            runCatchingRethrowingCancellation { file.readBytes() }
                 .onSuccess { bytes -> uploadImage(bytes, imageType) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
@@ -352,7 +318,7 @@ internal class EditorViewModel(
     ) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            runCatching { file.readBytes() }
+            runCatchingRethrowingCancellation { file.readBytes() }
                 .onSuccess { bytes -> uploadSubtitle(bytes, fileName, language, isForced, isHearingImpaired) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }

@@ -1,13 +1,13 @@
 package com.raulshma.jellyplay.core.network.failover
 
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.network.config.ClientCertificateProvider
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
-import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
+import com.raulshma.jellyplay.core.network.config.ServerTrustConfig
+import com.raulshma.jellyplay.core.network.config.applyTls
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -38,8 +38,7 @@ import okhttp3.Request
  * live in the commonMain [FailoverPolicy] core ([ProbeOutcome] is its
  * latency-free value twin — see `toProbeOutcome`); this JVM type stays
  * platform-side solely because of [latencyMs], the DECLARED JVM DIVERGENCE:
- * every probe records its wall-clock cost here for health checks/validation,
- * which the wasm transport has no equivalent for.
+ * every probe records its wall-clock cost here for health checks/validation.
  */
 data class AddressProbeResult(
     val reachable: Boolean,
@@ -94,8 +93,7 @@ private fun AddressProbeResult.toProbeOutcome() = ProbeOutcome(
  *
  * The pure decision tables (probe identity bar, legacy-prefix strip-retry,
  * resolved-address adoption, primary-then-alternates selection) live in the
- * commonMain [FailoverPolicy] core, shared with the wasmJs Ktor transport
- * (`KtorWasmAuthApiClient`). What stays JVM-side by declaration: the
+ * commonMain [FailoverPolicy] core. What stays JVM-side by declaration: the
  * per-probe latency capture on [AddressProbeResult] (the common [ProbeOutcome]
  * carries none), the primary-alone-first + concurrent-alternates probe
  * fan-out, and the all-down behavior of keeping the CURRENT active address
@@ -106,10 +104,15 @@ private fun AddressProbeResult.toProbeOutcome() = ProbeOutcome(
  *   the many unit-test constructions (`ServerAddressRouter()` with the
  *   `prober` seam stubbed) keep compiling; an empty-grants provider leaves
  *   platform trust behavior byte-identical.
+ * @param clientCertificateProvider source of the app-level client certificate:
+ *   the probe client presents it through the same `applyTls` layer
+ *   as the app client, so a server that REQUIRES mTLS classifies its probes
+ *   as reachable. Defaults to [ClientCertificateProvider.NONE] for the
+ *   unit-test constructions.
  */
-@Singleton
-class ServerAddressRouter @Inject constructor(
+class ServerAddressRouter(
     private val okHttpConfigProvider: OkHttpConfigProvider = ServerAddressRouter.emptyConfigProvider,
+    private val clientCertificateProvider: ClientCertificateProvider = ClientCertificateProvider.NONE,
 ) {
 
     data class Endpoint(
@@ -280,8 +283,7 @@ class ServerAddressRouter @Inject constructor(
      * cheap probe); only when it is down are the alternates probed
      * concurrently, so a black-holed network costs one probe window rather
      * than the sum of every endpoint's timeout. Both fan-out shapes are the
-     * router's transport (a DECLARED divergence — the wasm transport probes
-     * sequentially); the primary-then-alternates ORDER they serve is the
+     * router's transport; the primary-then-alternates ORDER they serve is the
      * common [selectPreferredAddress] decision.
      *
      * Returns true when the active address changed.
@@ -332,8 +334,7 @@ class ServerAddressRouter @Inject constructor(
      *
      * The ladder decisions (when to strip-retry, which answer is adopted and
      * what [AddressProbeResult.resolvedAddress] becomes) are the common
-     * FailoverPolicy tables — the wasm transport runs the identical ladder
-     * through [probeResolvedAddress]. The orchestration stays here so the
+     * FailoverPolicy tables. The orchestration stays here so the
      * latency-carrying [AddressProbeResult] values never flatten through the
      * latency-free [ProbeOutcome].
      */
@@ -435,15 +436,21 @@ class ServerAddressRouter @Inject constructor(
      * Probe client: deliberately NOT derived from the shared app client —
      * see the class KDoc. Fresh construction avoids the failover interceptor
      * (and its DI cycle), pins short timeouts (2s connect / 3s read / 5s
-     * call), and installs the same self-signed trust layer as the app client
-     * so granted servers probe as reachable.
+     * call), and installs the SAME TLS layer as the app client (self-signed
+     * grants + the client certificate, both read live at handshake time) so
+     * granted servers — and servers requiring mTLS — probe as reachable.
      */
     private val probeClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(2, TimeUnit.SECONDS)
             .readTimeout(3, TimeUnit.SECONDS)
             .callTimeout(5, TimeUnit.SECONDS)
-            .applySelfSignedTrust { okHttpConfigProvider.config.value.selfSignedTrustHosts }
+            .applyTls(
+                ServerTrustConfig(
+                    grantedHosts = { okHttpConfigProvider.config.value.selfSignedTrustHosts },
+                    clientCertificate = clientCertificateProvider,
+                ),
+            )
             .build()
     }
 }

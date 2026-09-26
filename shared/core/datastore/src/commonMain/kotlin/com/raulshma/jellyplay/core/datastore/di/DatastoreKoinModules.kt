@@ -31,10 +31,13 @@ import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,14 +53,14 @@ import org.koin.dsl.module
  * commonMain (was jvmShared): every def is common-legal — the
  * 41 store classes are commonMain and the applicationScope single constructs
  * CoroutineScope(SupervisorJob() + Dispatchers.Default), identical semantics
- * on android/jvm/wasmJs. At promotion NOTHING stayed behind in
+ * on android/jvm. At promotion NOTHING stayed behind in
  * jvmShared (its remaining files are the PinHasher/RandomUuidString/
  * BlockingFirstOrNull JVM actuals, which no def here references — their
  * expects are commonMain).
  *
  * Platform-bound definitions (the per-file DataStores and the
  * SecureKeyValueStorage-backed credential stores) live in
- * [androidDatastoreModule] / [desktopDatastoreModule] / webDatastoreModule.
+ * [androidDatastoreModule] / [desktopDatastoreModule].
  */
 val datastoreCommonModule = module {
 
@@ -238,6 +241,16 @@ val datastoreCommonModule = module {
         )
     }
 
+    // Per-content-type volume memory — shared by the desktop player
+    // wiring and both platforms' audio stacks; both platforms resolve it from
+    // this one common module.
+    single {
+        VolumeProfileStore(
+            get(DatastoreQualifiers.userPreferencesDataStore),
+            get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
     single {
         WidgetDataStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
@@ -277,27 +290,45 @@ val datastoreCommonModule = module {
     // Composites
     // ------------------------------------------------------------------
 
+    // The domain-store enumeration for the settings read lanes lives ONCE
+    // here: both PreferenceProjections (eager StateFlow projections) and
+    // PreferenceSnapshotReader (one-shot diff snapshot) consume the bundle.
+    single {
+        PreferenceStores(
+            playback = get<PlaybackStore>(),
+            videoPlayer = get<VideoPlayerStore>(),
+            engine = get<PlayerEngineStore>(),
+            subtitle = get<SubtitleLanguageStore>(),
+            audio = get<AudioStore>(),
+            audioEffects = get<AudioEffectsStore>(),
+            audioCache = get<AudioCacheStore>(),
+            appearance = get<AppearanceStore>(),
+            homeDiscovery = get<HomeDiscoveryStore>(),
+            library = get<LibraryStore>(),
+            navigation = get<NavigationStore>(),
+            downloads = get<DownloadsStore>(),
+            networkOffline = get<NetworkOfflineStore>(),
+            notification = get<NotificationStore>(),
+            syncPlayCast = get<SyncPlayCastStore>(),
+            security = get<SecurityStore>(),
+            experimental = get<ExperimentalStore>(),
+            screensaver = get<ScreensaverStore>(),
+            volumeProfile = get<VolumeProfileStore>(),
+        )
+    }
+
     single {
         PreferenceProjections(
             get(DatastoreQualifiers.applicationScope),
-            get<PlaybackStore>(),
-            get<VideoPlayerStore>(),
-            get<PlayerEngineStore>(),
-            get<SubtitleLanguageStore>(),
-            get<AudioStore>(),
-            get<AudioEffectsStore>(),
-            get<AudioCacheStore>(),
-            get<AppearanceStore>(),
-            get<HomeDiscoveryStore>(),
-            get<LibraryStore>(),
-            get<NavigationStore>(),
-            get<DownloadsStore>(),
-            get<NetworkOfflineStore>(),
-            get<NotificationStore>(),
-            get<SyncPlayCastStore>(),
-            get<SecurityStore>(),
-            get<ExperimentalStore>(),
-            get<ScreensaverStore>(),
+            stores = get<PreferenceStores>(),
+        )
+    }
+
+    single {
+        PreferenceSnapshotReader(
+            stores = get<PreferenceStores>(),
+            appRuntimeStateStore = get<AppRuntimeStateStore>(),
+            pinRateLimiter = get<PinRateLimiter>(),
         )
     }
 
@@ -305,7 +336,6 @@ val datastoreCommonModule = module {
         UserPreferencesStore(
             get(DatastoreQualifiers.applicationScope),
             get(DatastoreQualifiers.userPreferencesDataStore),
-            get<PreferenceProjections>(),
             get<PlaybackStore>(),
             get<AppearanceStore>(),
             get<VideoPlayerStore>(),
@@ -324,6 +354,7 @@ val datastoreCommonModule = module {
             get<SubtitleLanguageStore>(),
             get<SyncPlayCastStore>(),
             get<ExperimentalStore>(),
+            get<VolumeProfileStore>(),
             get<AppRuntimeStateStore>(),
         )
     }
@@ -348,6 +379,7 @@ val datastoreCommonModule = module {
             get<SubtitleLanguageStore>(),
             get<SyncPlayCastStore>(),
             get<ExperimentalStore>(),
+            get<VolumeProfileStore>(),
             get<AppRuntimeStateStore>(),
         )
     }

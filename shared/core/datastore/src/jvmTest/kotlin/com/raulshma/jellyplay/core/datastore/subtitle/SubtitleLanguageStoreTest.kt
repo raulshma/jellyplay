@@ -112,4 +112,45 @@ class SubtitleLanguageStoreTest {
         store.setSubtitlesForcedOnly(false)
         assertFalse(store.subtitle.first().subtitlesForcedOnly)
     }
+
+    @Test
+    fun `track selection rules default to the identity set`() = runTest {
+        assertEquals(com.raulshma.jellyplay.core.model.LanguageRuleSet(), store.subtitle.first().languageRules)
+        assertFalse(store.subtitle.first().languageRules.isActive)
+    }
+
+    @Test
+    fun `setTrackSelectionRules round-trips a configured rule set`() = runTest {
+        val rules = com.raulshma.jellyplay.core.model.LanguageRuleSet(
+            preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.DUBBED_ALL,
+            audioLanguages = listOf("ger", "jpn"),
+            subtitleLanguages = listOf("eng"),
+            audioAllowList = setOf("ger", "jpn"),
+            rules = listOf(
+                com.raulshma.jellyplay.core.model.LanguageRule(
+                    id = "rule-1",
+                    appliesTo = com.raulshma.jellyplay.core.model.RuleContentType.EPISODE,
+                    titlePattern = "One Piece",
+                    audioLanguages = listOf("jpn"),
+                    subtitleLanguages = listOf("eng"),
+                    subtitleMode = com.raulshma.jellyplay.core.model.SubtitleTrackMode.FULL,
+                ),
+            ),
+        )
+        store.setTrackSelectionRules(rules)
+        assertEquals(rules, store.subtitle.first().languageRules)
+    }
+
+    @Test
+    fun `setTrackSelectionRules with the identity set removes the key`() = runTest {
+        // A configured set first, so the test proves the identity write clears
+        // rather than being a no-op on an absent key.
+        store.setTrackSelectionRules(
+            com.raulshma.jellyplay.core.model.LanguageRuleSet(preset = com.raulshma.jellyplay.core.model.TrackSelectionPreset.SUBBED_ALL),
+        )
+        assertTrue(store.subtitle.first().languageRules.isActive)
+        store.setTrackSelectionRules(com.raulshma.jellyplay.core.model.LanguageRuleSet())
+        assertFalse(store.subtitle.first().languageRules.isActive)
+        assertEquals(com.raulshma.jellyplay.core.model.LanguageRuleSet(), store.subtitle.first().languageRules)
+    }
 }

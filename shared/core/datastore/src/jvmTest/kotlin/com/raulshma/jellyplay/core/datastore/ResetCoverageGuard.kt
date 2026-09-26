@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 
 /**
  * JVM test-source home of the reset-coverage guard machinery, moved out of
@@ -69,6 +70,7 @@ fun UserPreferencesStore.declaredKeys(): List<Preferences.Key<*>> = buildList {
     addAll(reflectKeys(SubtitleLanguageStore.Keys))
     addAll(reflectKeys(SyncPlayCastStore.Keys))
     addAll(reflectKeys(ExperimentalStore.Keys))
+    addAll(reflectKeys(VolumeProfileStore.Keys))
     addAll(reflectKeys(AppRuntimeStateStore.Keys))
     addAll(reflectKeys(PinRateLimiter.Keys))
 }

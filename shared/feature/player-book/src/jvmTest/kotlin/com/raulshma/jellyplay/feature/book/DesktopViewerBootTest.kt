@@ -78,7 +78,6 @@ class DesktopViewerBootTest {
         // The desktop browser is a heavyweight surface above all Compose
         // overlays, so its chrome lays out around the content region.
         assertTrue(epubChromeOverlaysContent(PlatformKind.ANDROID))
-        assertTrue(epubChromeOverlaysContent(PlatformKind.WEB))
         assertFalse(epubChromeOverlaysContent(PlatformKind.DESKTOP))
     }
 

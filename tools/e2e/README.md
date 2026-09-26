@@ -13,21 +13,17 @@ Toolset-wide (individual tools may need only a subset — see table):
 - Docker — the Jellyfin server fixture
 - ffmpeg — media fixtures
 - curl — ad-hoc HTTP probes against the fixture
-- Node 18+ — web-verify's checker (sibling tool)
 - JDK 17 toolchain via `./gradlew` (repo `gradlew` wrapper)
 
 ## Tools
 
 | Tool | What it verifies | Status |
 |---|---|---|
-| `bootstrap-jellyfin.sh` | Brings up the local Jellyfin fixture (Docker container, wizard-over-API incl. 10.11 CSRF quirks, ffmpeg testsrc media + posters, library scan) and prints user/item credentials — since wave 20B with 9 movies (8 carrying 2560x1440 posters sized to exceed Coil's measured wasm cache cap) | live (coordinator) |
+| `bootstrap-jellyfin.sh` | Brings up the local Jellyfin fixture (Docker container, wizard-over-API incl. 10.11 CSRF quirks, ffmpeg testsrc media + posters, library scan) and prints user/item credentials — 9 movies (8 carrying 2560x1440 posters) | live (coordinator) |
 | `msi-boot-pass.sh` | The installed-MSI artifact's payload boots: builds the MSI via `:apps:desktop:packageMsi`, administrative-extracts it (`msiexec /a`, no elevation, no install), checks the extracted layout (`JellyPlay.exe` + `runtime/` + `app/`), then boots the EXTRACTED exe under perf-harness properties and requires a clean self-exit with `windowShownMs >= 0` and zero crash logs | wave 13A — live |
 | `desktop-session-pass.sh` | Extended desktop session against a live Jellyfin fixture: in-APP video playback through the whole shared pipeline + Esc/popup-ordering evidence | wave 13B — live |
 | `desktop-native-dialog-pass.sh` | Desktop native-dialog flows inside the real windowed app: the AWT FileDialog settings-backup export/import round trip (SAVE with the production prefill, LOAD, ESC cancel) typed into by a Robot driver, asserting the exported file's existence + v2 JSON shape and the VM's status lines — server-free, the audit-F9 lane | wave 22F — live |
 | `desktop-native-dialog-flows-pass.sh` | The four remaining native-dialog flows (editor image picker, editor subtitle picker, insights heatmap share, player subtitle upload): real sign-in + route pushes + REAL Robot mouse clicks through the harness-gated `HarnessClickBridge` (`jellyplay.flowpass.*` props), the REAL AWT LOAD dialogs typed by the shared driver, server-side post-conditions (Primary image tag change / subtitle stream deltas / heatmap PNG under the redirected tmpdir) | wave 23 — live |
-| `web-verify` | Web (wasm) shell against a live Jellyfin fixture: sign-in, Coil artwork, HtmlVideoEngine playback, via headless-Edge CDP AX-tree driving | wave 13C — live |
-| `foreign-origin.mjs` | Second-origin static server (serve.mjs fork) with `Access-Control-Allow-Origin: *` on every response — the CORS half of the web-cache-eviction lane | wave 20B — live |
-| `web-cache-eviction` | Coil wasm memory-cache LRU eviction under large-library pressure + cross-origin artwork from a non-Jellyfin host, via the Diagnostics pane's wave-20B cache-probe cards | wave 20B — live |
 
 ## Running bootstrap-jellyfin.sh
 
@@ -38,9 +34,8 @@ tools/e2e/bootstrap-jellyfin.sh
 Starts (or restarts) the `jellyplay-e2e` Docker container on port 8096 with
 persisted state under `tools/e2e/.state/` (gitignored), runs the first-run
 wizard over the API, ensures user `harness` / `harness-e2e-pass`, generates
-the 12 s testsrc movie + poster PLUS the wave-20B cache-probe library (8
-movies with 2560x1440 posters — decoded 14,745,600 bytes each, 8× = 1.47×
-Coil's measured 80,530,636-byte wasm cache cap), adds the `E2E Media`
+the 12 s testsrc movie + poster PLUS the large-poster library (8 movies with
+2560x1440 posters), adds the `E2E Media`
 library and waits for the item scan. Idempotent: re-running skips completed
 stages (per-item name lookup + byte-compared poster replacement; the scan
 itself extracts small primaries from the video pixels which the size check
@@ -173,69 +168,6 @@ teardown of sampled PIDs, isolated `-Djellyplay.perf.dataDir` profile,
 space-free paths enforced (JAVA_TOOL_OPTIONS whitespace split). Report:
 `<profile>/data/logs/dialog-harness.json` (`"overallPass":true` gates the
 exit code) + dialog screenshots under the workspace `shots/` dir.
-
-## Running web-verify (wave 13C)
-
-Web-shell verification against a live Jellyfin: builds the wasm development
-bundle, stages it with the compose-resources merge, serves it statically,
-drives headless Edge over CDP through the accessibility tree (canvas app —
-no DOM locators), and asserts the full flow: sign-in → Diagnostics pane →
-Coil artwork decoded (`IMAGE_STATE: OK`) → HtmlVideoEngine muted autoplay
-reaching `playing=true pos>0` → `DIAG_OVERALL: OK` → zero console
-errors/exceptions → screenshot. Extended by waves 15C/16A/16B/16C/18A (the
-Requests / Calendar / Seerr-credentials / SeerrDetail screens and the Coil
-revisit gate) and wave 21C (the `DEVICE_ID stable across reload` gate:
-localStorage `jellyplay/device-id` read → page reload → re-read → same
-canonical UUID v4 — the persistent wasm device identity).
-
-```bash
-tools/e2e/web-verify.sh
-```
-
-Env overrides: `JP_SERVER_URL` (default `http://localhost:8096`),
-`JP_USERNAME` (`harness`), `JP_PASSWORD` (`harness-e2e-pass`). (`USERNAME`
-is deliberately not read — Windows sets it to the logged-in account and the
-sign-in would silently fail against the fixture.) Prerequisites: Node 18+
-with `ws` (`npm install` inside `tools/e2e/` — package.json committed),
-Edge, and the Node-download governance in `settings.gradle.kts` (webpack
-builds work with no repository-mode flips).
-
-One browser `Log.error` per run is expected and not gated: the automatic
-`/favicon.ico` 404 against the bare static server. Evidence (result.json +
-screenshot) lands in the OS temp dir, outside the repo.
-
-## Running web-cache-eviction (wave 20B)
-
-Closes the two honest cuts wave 18A left open (numbers + method in
-`docs/e2e/web-cache-eviction.md`): (1) LRU eviction under large-library
-pressure — the fixture's 8 × 14.7 MB decoded posters force the wasm
-memory cache through its 80,530,636-byte cap; the Diagnostics pane's
-"Probe all" loads every poster sequentially at full decode size and the
-lane asserts every item settles OK, COIL_CACHE never exceeds maxSize, the
-pass produced misses >= n and net >= n (equality in every measured run), and the cache genuinely filled
-(≥ 50% of cap); (2) a NON-Jellyfin origin — the lane itself spawns
-`foreign-origin.mjs` on 127.0.0.1:8599 (CORS `Access-Control-Allow-Origin:
-*`, different port = different origin), generates a distinct smptebars
-poster with ffmpeg, boots the app with `?foreignImage=…`, and asserts
-`FOREIGN_HOST: OK` plus actually-observed cross-origin network responses.
-The revisit step classifies its outcome honestly: a MISS re-fetches
-(entry gone from every layer), while a WEAK-HIT (measured on this
-platform: Coil's WeakMemoryCache resurrects an LRU-evicted bitmap even
-after pane disposal + forced GCs) is recorded as a named negative — the
-LRU eviction itself is proven by the byte-accounting plateau.
-
-```bash
-tools/e2e/bootstrap-jellyfin.sh                        # 9-item fixture, idempotent
-./gradlew :apps:web:wasmJsBrowserDevelopmentWebpack    # FRESH dist (stale-dist trap)
-node tools/e2e/web-cache-eviction.mjs                  # exit 0 = PASS
-```
-
-Prerequisites beyond web-verify's: ffmpeg on PATH (foreign poster). Same
-`ws` dependency; self-contained process hygiene (servers + Edge spawned
-and killed by PID). Uses a 1400×2000 window (the wave-20B cards render
-below the pane's Back button) with a wheel-scroll fallback for smaller
-windows. Evidence (result.json with the step ledger + `eviction.png`)
-lands in the OS temp dir, outside the repo.
 
 ## Running desktop-native-dialog-flows-pass.sh (wave 23)
 
