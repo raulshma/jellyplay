@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.whatsnew
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.WhatsNewFeed
 import com.raulshma.jellyplay.core.model.WhatsNewRelease
@@ -52,13 +53,16 @@ class WhatsNewRepositoryImpl(
     override val releases: StateFlow<List<WhatsNewRelease>> = _releases.asStateFlow()
 
     /**
-     * Folds the cache into the empty start off the hot path. runCatching so
-     * a DataStore read failure can never cancel the caller's scope — the
-     * flow then simply stays empty, and [releasesSnapshot] (which joins
-     * this job) still serves that degraded-but-valid state.
+     * Folds the cache into the empty start off the hot path. A DataStore
+     * read failure must never cancel the caller's scope — the flow then
+     * simply stays empty, and [releasesSnapshot] (which joins this job)
+     * still serves that degraded-but-valid state. Cancellation, though,
+     * must propagate ([runCatchingRethrowingCancellation], not bare
+     * `runCatching`): a cancelled init must not fold into [_releases] from
+     * a dead coroutine.
      */
     private val initJob: Job = externalScope.launch {
-        runCatching {
+        runCatchingRethrowingCancellation {
             val cached = experimentalStore.whatsNewFeedJson.first()
             // A never-fetched cache parses to the empty feed — a no-op merge.
             foldIn(parseWhatsNewFeed(cached) ?: WhatsNewFeed())
