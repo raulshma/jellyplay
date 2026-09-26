@@ -861,11 +861,7 @@ fun MediaDetailScreen(
         identifyState.query?.let {
             IdentifySheet(
                 state = identifyState,
-                onQueryChange = { name, year, providerId ->
-                    viewModel.metadataAdmin.updateIdentifyQuery { q ->
-                        q.copy(name = name, year = year, providerIds = q.providerIds.updatedProviderId(providerId))
-                    }
-                },
+                onQueryChange = viewModel.metadataAdmin::updateIdentifyQuery,
                 onSearch = { viewModel.metadataAdmin.searchIdentify() },
                 onApply = { result, replaceImages -> viewModel.metadataAdmin.applyIdentify(result, replaceImages) },
                 onDismiss = { viewModel.metadataAdmin.dismissIdentify() },

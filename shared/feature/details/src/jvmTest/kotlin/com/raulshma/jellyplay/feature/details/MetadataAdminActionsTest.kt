@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MetadataRefreshOption
+import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.UserInfo
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -37,7 +38,7 @@ class MetadataAdminActionsTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         messages.reset()
-        coEvery { editorRepository.refreshItemMetadata(any(), any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { editorRepository.refreshItemMetadata(any(), any()) } returns Result.success(Unit)
     }
 
     private fun actions(
@@ -68,7 +69,7 @@ class MetadataAdminActionsTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            editorRepository.refreshItemMetadata("m1", "FullRefresh", "FullRefresh", true, false)
+            editorRepository.refreshItemMetadata("m1", MetadataRefreshParams("FullRefresh", "FullRefresh", replaceAllMetadata = true, replaceAllImages = false))
         }
     }
 
@@ -91,7 +92,7 @@ class MetadataAdminActionsTest {
         val detail = MediaDetail(
             item = MediaItem(id = "m1", name = "My Series", mediaType = MediaType.SERIES),
         )
-        coEvery { editorRepository.refreshItemMetadata(any(), any(), any(), any(), any()) } returns
+        coEvery { editorRepository.refreshItemMetadata(any(), any()) } returns
             Result.failure(IllegalStateException("boom"))
 
         actions(this, MutableStateFlow(DetailSession(itemId = "m1", detail = detail)))
@@ -106,7 +107,7 @@ class MetadataAdminActionsTest {
         actions(this).refreshScreenItem(MetadataRefreshOption.DEFAULT)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { editorRepository.refreshItemMetadata(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { editorRepository.refreshItemMetadata(any(), any()) }
     }
 
     @Test

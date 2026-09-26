@@ -12,8 +12,10 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.mockk.verifyOrder
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -56,6 +58,7 @@ class AudioQueueFacadeTest {
             queueManager = queueManager,
             mediaRepository = mediaRepository,
             imageUrlProvider = imageUrlProvider,
+            radioScope = CoroutineScope(SupervisorJob() + testDispatcher),
         )
     }
 

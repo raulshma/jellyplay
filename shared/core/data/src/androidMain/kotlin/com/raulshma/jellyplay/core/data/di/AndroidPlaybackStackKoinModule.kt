@@ -103,6 +103,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             queueManager = get(),
             mediaRepository = get(),
             imageUrlProvider = get(),
+            radioScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 

@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.desktop.DesktopPaths
@@ -162,6 +163,7 @@ val desktopPlayerModule: Module = module {
             queueManager = get(),
             mediaRepository = get(),
             imageUrlProvider = get(),
+            radioScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 }

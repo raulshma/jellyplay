@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
@@ -183,20 +182,20 @@ class DefaultAudioQueueFacade(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     /** Application-lifetime scope backing the radio observer (singleton scope). */
-    radioScope: CoroutineScope? = null,
+    private val radioScope: CoroutineScope,
 ) : AudioQueueFacade {
 
     /**
      * The radio state machine, created lazily — in practice on the first
      * [radioState] collection (the queue sheet's radio chip is always
      * composed), which arms the queue observer; a facade whose radio state is
-     * never collected registers no observer. `radioScope` defaults to a
-     * private supervisor scope on Default — the observer only reads flows;
-     * the enqueue lambda owns the main-thread hop.
+     * never collected registers no observer. The scope is the injected
+     * application scope — the observer only reads flows; the enqueue lambda
+     * owns the main-thread hop.
      */
     private val radio: AudioRadioController by lazy {
         AudioRadioController(
-            scope = radioScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = radioScope,
             queueFlow = queueManager.queue,
             currentIndexFlow = queueManager.currentIndex,
             fetchMix = { seed -> withContext(Dispatchers.IO) { mediaRepository.getInstantMix(seed) } },

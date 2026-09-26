@@ -16,15 +16,15 @@ import kotlinx.serialization.Transient
  */
 
 /**
- * The item types the Identify flow supports. [IdentifyItemType.wireName] is
- * the SDK/endpoint discriminator — the single home for the "Series"/"Movie"
- * literals so no caller re-spells them.
+ * The item types the Identify flow supports. The client's endpoint dispatch
+ * (one SDK search endpoint per type) switches on this enum — no caller
+ * spells a "Series"/"Movie" string.
  */
 @Immutable
 @Serializable
-enum class IdentifyItemType(val wireName: String) {
-    SERIES("Series"),
-    MOVIE("Movie"),
+enum class IdentifyItemType {
+    SERIES,
+    MOVIE,
 }
 
 /**

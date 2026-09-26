@@ -168,7 +168,8 @@ the native view — use the system brightness).
 
 ## Limitations
 
-- **Read aloud is Android-only** — desktop has no bundled TTS engine; the
+- **Read aloud is Android + Windows only** — Android uses the system TTS,
+  Windows speaks through SAPI; macOS/Linux have no bundled engine, so the
   controls report the feature as unavailable there instead of failing
   mid-book.
 - **Marks stay on the device** — bookmarks, highlights, and notes are

@@ -93,14 +93,7 @@ internal class MetadataAdminActions(
     fun refreshScreenItem(option: MetadataRefreshOption) {
         val itemId = session.value?.detail?.item?.id ?: return
         scope.launch {
-            val params = option.toRefreshParams()
-            editorRepository.refreshItemMetadata(
-                itemId = itemId,
-                metadataRefreshMode = params.metadataRefreshMode,
-                imageRefreshMode = params.imageRefreshMode,
-                replaceAllMetadata = params.replaceAllMetadata,
-                replaceAllImages = params.replaceAllImages,
-            ).onSuccess {
+            editorRepository.refreshItemMetadata(itemId, option.toRefreshParams()).onSuccess {
                 messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_refresh_started)))
             }.onFailure {
                 messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_refresh_failed)))

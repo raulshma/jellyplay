@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.MetadataRefreshOption
+import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -160,7 +161,7 @@ class EditorViewModelMetadataTest {
         coEvery {
             editorRepository.getRemoteImages(any(), any(), any(), any(), any())
         } returns Result.success(RemoteImageResult())
-        coEvery { editorRepository.refreshItemMetadata(any(), any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { editorRepository.refreshItemMetadata(any(), any()) } returns Result.success(Unit)
 
         viewModel = EditorViewModel(
             editorRepository,
@@ -498,15 +499,15 @@ class EditorViewModelMetadataTest {
 
         viewModel.onEvent(EditorUiEvent.RefreshMetadata(MetadataRefreshOption.FULL_VALIDATION))
         advanceUntilIdle()
-        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, "FullRefresh", "Default", false, false) }
+        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, MetadataRefreshParams("FullRefresh", "Default", replaceAllMetadata = false, replaceAllImages = false)) }
 
         viewModel.onEvent(EditorUiEvent.RefreshMetadata(MetadataRefreshOption.REPLACE_ALL_METADATA))
         advanceUntilIdle()
-        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, "FullRefresh", "FullRefresh", true, false) }
+        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, MetadataRefreshParams("FullRefresh", "FullRefresh", replaceAllMetadata = true, replaceAllImages = false)) }
 
         viewModel.onEvent(EditorUiEvent.RefreshMetadata(MetadataRefreshOption.REPLACE_IMAGES))
         advanceUntilIdle()
-        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, "None", "FullRefresh", false, true) }
+        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, MetadataRefreshParams("None", "FullRefresh", replaceAllMetadata = false, replaceAllImages = true)) }
         assertNull(viewModel.uiState.value.error)
     }
 }

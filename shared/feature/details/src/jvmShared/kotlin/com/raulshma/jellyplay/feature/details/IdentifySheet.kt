@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.IdentifyQuery
 import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -61,7 +62,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 internal fun IdentifySheet(
     state: IdentifyUiState,
-    onQueryChange: (name: String, year: Int?, providerId: String?) -> Unit,
+    onQueryChange: ((IdentifyQuery) -> IdentifyQuery) -> Unit,
     onSearch: () -> Unit,
     onApply: (result: IdentifyResult, replaceAllImages: Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -85,7 +86,7 @@ internal fun IdentifySheet(
             // ── Prefill editors ──
             OutlinedTextField(
                 value = query.name,
-                onValueChange = { name -> onQueryChange(name, query.year, providerEntry?.value) },
+                onValueChange = { name -> onQueryChange { it.copy(name = name) } },
                 label = { Text(stringResource(Res.string.detail_identify_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -96,7 +97,7 @@ internal fun IdentifySheet(
                     value = query.year?.toString().orEmpty(),
                     onValueChange = { raw ->
                         val year = raw.filter { it.isDigit() }.take(4).toIntOrNull()
-                        onQueryChange(query.name, year, providerEntry?.value)
+                        onQueryChange { it.copy(year = year) }
                     },
                     label = { Text(stringResource(Res.string.detail_identify_year)) },
                     singleLine = true,
@@ -104,7 +105,9 @@ internal fun IdentifySheet(
                 )
                 OutlinedTextField(
                     value = providerEntry?.value.orEmpty(),
-                    onValueChange = { id -> onQueryChange(query.name, query.year, id.ifBlank { null }) },
+                    onValueChange = { id ->
+                        onQueryChange { it.copy(providerIds = it.providerIds.updatedProviderId(id.ifBlank { null })) }
+                    },
                     label = { Text(providerEntry?.key?.uppercase() ?: stringResource(Res.string.detail_identify_provider_id)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),

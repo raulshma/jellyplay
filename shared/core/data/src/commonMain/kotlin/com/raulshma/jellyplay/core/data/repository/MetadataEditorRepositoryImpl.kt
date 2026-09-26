@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
+import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -38,11 +39,14 @@ class MetadataEditorRepositoryImpl constructor(
 
     override suspend fun refreshItemMetadata(
         itemId: String,
-        metadataRefreshMode: String,
-        imageRefreshMode: String,
-        replaceAllMetadata: Boolean,
-        replaceAllImages: Boolean,
-    ): Result<Unit> = apiClient.refreshItemMetadata(itemId, metadataRefreshMode, imageRefreshMode, replaceAllMetadata, replaceAllImages)
+        params: MetadataRefreshParams,
+    ): Result<Unit> = apiClient.refreshItemMetadata(
+        itemId,
+        params.metadataRefreshMode,
+        params.imageRefreshMode,
+        params.replaceAllMetadata,
+        params.replaceAllImages,
+    )
 
     override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> =
         apiClient.getItemImageInfo(itemId)

@@ -486,14 +486,7 @@ internal class EditorViewModel(
     private fun refreshMetadata(option: MetadataRefreshOption) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            val params = option.toRefreshParams()
-            editorRepository.refreshItemMetadata(
-                itemId,
-                params.metadataRefreshMode,
-                params.imageRefreshMode,
-                params.replaceAllMetadata,
-                params.replaceAllImages,
-            ).onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+            editorRepository.refreshItemMetadata(itemId, option.toRefreshParams()).onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 

@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
+import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 
@@ -26,10 +27,7 @@ interface MetadataEditorRepository {
 
     suspend fun refreshItemMetadata(
         itemId: String,
-        metadataRefreshMode: String = "Default",
-        imageRefreshMode: String = "Default",
-        replaceAllMetadata: Boolean = false,
-        replaceAllImages: Boolean = false,
+        params: MetadataRefreshParams,
     ): Result<Unit>
 
     suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>>

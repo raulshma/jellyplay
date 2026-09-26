@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -111,7 +112,7 @@ class MetadataEditorRepositoryImplTest {
         coEvery { apiClient.refreshItemMetadata("m1", "FullRefresh", "FullRefresh", true, false) } returns
             Result.success(Unit)
 
-        val result = repository.refreshItemMetadata("m1", "FullRefresh", "FullRefresh", replaceAllMetadata = true, replaceAllImages = false)
+        val result = repository.refreshItemMetadata("m1", MetadataRefreshParams("FullRefresh", "FullRefresh", replaceAllMetadata = true, replaceAllImages = false))
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { apiClient.refreshItemMetadata("m1", "FullRefresh", "FullRefresh", true, false) }
