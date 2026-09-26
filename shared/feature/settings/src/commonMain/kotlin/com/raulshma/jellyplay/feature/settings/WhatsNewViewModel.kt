@@ -6,9 +6,9 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.launch
 
 /**
- * The What's New archive screen's model: the assembled feed (bundled ∪
- * cached ∪ fetched, newest first) plus a refresh fired on open so the
- * archive is fresh whenever the user browses it.
+ * The What's New archive screen's model: the assembled feed (cached ∪
+ * fetched, newest first) plus a refresh fired on open so the archive is
+ * fresh whenever the user browses it.
  */
 class WhatsNewViewModel(
     private val whatsNewRepository: WhatsNewRepository,

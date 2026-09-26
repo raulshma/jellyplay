@@ -181,22 +181,16 @@ internal class DiscoverRowsCoordinator(
                     // that write re-apply the rolled items instead of
                     // reverting the roll.
                     val generation = registerRolledRowGeneration(row.id, items)
+                    val rowSectionId = HomeSectionType.DISCOVER.descriptor.idFor(row.id)
                     Log.d(
                         TAG,
                         "roll ${row.id}: gen=$generation, patched ${items.size} items, first=${items.firstOrNull()?.id} " +
                             "(on-screen first=${state.value.sections
-                                .firstOrNull { it.id == HomeSectionType.DISCOVER.descriptor.idFor(row.id) }
+                                .firstOrNull { it.id == rowSectionId && it.type == HomeSectionType.DISCOVER }
                                 ?.items?.firstOrNull()?.id})",
                     )
-                    val rowSectionId = HomeSectionType.DISCOVER.descriptor.idFor(row.id)
                     state.update { s ->
-                        s.copy(
-                            sections = s.sections.map { section ->
-                                if (section.id == rowSectionId && section.type == HomeSectionType.DISCOVER) {
-                                    section.copy(items = items)
-                                } else section
-                            },
-                        )
+                        s.copy(sections = patchRolledRows(s.sections, mapOf(rowSectionId to items)))
                     }
                 }
                 onResult(rolled)
@@ -265,16 +259,28 @@ internal class DiscoverRowsCoordinator(
             "fetch re-applying rolled rows ${rolledRowGenerations.keys} " +
                 "(generations ${rolledRowGenerations.values.joinToString { it.generation.toString() }})",
         )
-        val rolledBySectionId = rolledRowGenerations.mapKeys { (rowId, _) ->
-            HomeSectionType.DISCOVER.descriptor.idFor(rowId)
-        }
+        val rolledBySectionId = rolledRowGenerations
+            .mapKeys { (rowId, _) -> HomeSectionType.DISCOVER.descriptor.idFor(rowId) }
+            .mapValues { (_, entry) -> entry.items }
         rolledRowGenerations.clear()
-        return sections.map { section ->
-            if (section.type != HomeSectionType.DISCOVER) {
-                section
-            } else {
-                rolledBySectionId[section.id]?.let { section.copy(items = it.items) } ?: section
-            }
+        return patchRolledRows(sections, rolledBySectionId)
+    }
+
+    /**
+     * The one in-place row-swap shape, shared by [roll]'s own write and
+     * [drainRolls]'s fetch-overlaid write so the two writers can't drift on
+     * what identifies a rolled row: a DISCOVER-typed section whose id is the
+     * DISCOVER descriptor's `idFor` of the rolled row's id. Sections without
+     * an entry pass through untouched.
+     */
+    private fun patchRolledRows(
+        sections: List<HomeSection>,
+        rolledItemsBySectionId: Map<String, List<MediaItem>>,
+    ): List<HomeSection> = sections.map { section ->
+        if (section.type != HomeSectionType.DISCOVER) {
+            section
+        } else {
+            rolledItemsBySectionId[section.id]?.let { section.copy(items = it) } ?: section
         }
     }
 }

@@ -47,7 +47,7 @@ object WhatsNewDecision {
 
     /**
      * The release to present for the installed version, if any — exact version
-     * match against the assembled feed (bundled ∪ cached ∪ fetched).
+     * match against the assembled feed (cached ∪ fetched).
      */
     fun releaseToShow(
         installedVersion: String,

@@ -29,8 +29,8 @@ interface WhatsNewRepository {
 
     /**
      * Fetches the GitHub releases list, caches it, and folds it into
-     * [releases]. Fails soft: on any failure the existing bundled+cached
-     * state is untouched and the failure is returned (the caller decides
+     * [releases]. Fails soft: on any failure the existing cached state is
+     * untouched and the failure is returned (the caller decides
      * whether to surface it — the launch path never does).
      */
     suspend fun refresh(): Result<Unit>

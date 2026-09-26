@@ -24,7 +24,10 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.awt.ComposeWindow
+import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.feature.shell.RealtimeSessionController
 import com.raulshma.jellyplay.feature.shell.SessionRestore
 import com.raulshma.jellyplay.feature.shell.navigation.SignedOutAuthHost
@@ -177,9 +180,9 @@ internal fun DesktopAppRoot(
     // name and this `create` call. The restore above may leave this
     // composition already authenticated, and the controller's auth collector
     // picks that up off the StateFlow's current value on its first pass.
-    val realtimeConnection: com.raulshma.jellyplay.core.data.repository.RealtimeConnection = koinInject()
-    val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore = koinInject()
-    val remoteControlReceiver: com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver = koinInject()
+    val realtimeConnection: RealtimeConnection = koinInject()
+    val serverIdentityStore: ServerIdentityStore = koinInject()
+    val remoteControlReceiver: RemoteControlReceiver = koinInject()
     val realtimeSession = remember(
         authRepository,
         realtimeConnection,
@@ -198,7 +201,7 @@ internal fun DesktopAppRoot(
             onReconnect = { authRepository.postCapabilities() },
         )
     }
-    androidx.compose.runtime.DisposableEffect(realtimeSession, sessionScope) {
+    DisposableEffect(realtimeSession, sessionScope) {
         onDispose { realtimeSession.stop() }
     }
 

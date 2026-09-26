@@ -721,6 +721,7 @@ shared/
     onboarding/           First-run setup wizard (10-step preferences)
     home/                 Home screen, Kids home, newsletter banner, discover sections, and the offline home (downloaded content shelf + gate)
     library/              Library browsing and media collections (auto-filters to downloads while offline)
+    photos/               Photo albums and full-screen photo viewer with brightness/contrast/saturation adjustments and export
     search/               Search experience with history
     details/              Media detail, person detail, collection detail, Seerr detail
     player-video/         Video playback UI, multi-engine support, SyncPlay integration, Play On

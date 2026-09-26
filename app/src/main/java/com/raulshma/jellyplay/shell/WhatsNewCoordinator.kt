@@ -28,8 +28,10 @@ import kotlinx.coroutines.launch
  *  3. A failed refresh never stamps: an offline first launch retries on the
  *     NEXT launch instead of silently losing the prompt. A successful fetch
  *     that still lacks the version stamps, so an unknown version never nags.
- *  4. Every other phase still fires a best-effort refresh so the Settings
- *     archive starts warm.
+ *  4. STAMP_SILENTLY still fires a best-effort refresh so a first browse of
+ *     the Settings archive starts warm; NONE does not — the archive
+ *     refreshes itself on open, so a steady-state launch makes no network
+ *     call.
  *
  * The sheet is rendered by the shell only while the update sheet is Idle —
  * an available self-update outranks the What's New presentation; this
@@ -61,7 +63,10 @@ class WhatsNewCoordinator(
             val onboardingCompleted = appRuntimeStateStore.isOnboardingCompleted()
 
             when (WhatsNewDecision.launchPhase(installed, seen, onboardingCompleted)) {
-                WhatsNewDecision.Phase.NONE -> whatsNewRepository.refresh()
+                WhatsNewDecision.Phase.NONE -> {
+                    // Steady-state launch: no prompt, and no network call —
+                    // the Settings archive refreshes itself when opened.
+                }
                 WhatsNewDecision.Phase.STAMP_SILENTLY -> {
                     experimentalStore.setWhatsNewSeenVersion(installed)
                     whatsNewRepository.refresh()

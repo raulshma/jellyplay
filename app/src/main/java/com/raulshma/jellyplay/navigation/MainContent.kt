@@ -33,7 +33,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
-import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
@@ -76,7 +75,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun MainContent(
     onLogout: (Boolean) -> Unit,
-    viewModel: MainViewModel,
+    model: MainShellModel,
     preferences: MainPreferences,
     infra: ShellInfra,
     audioPlaybackManager: AudioPlaybackManager,
@@ -92,7 +91,7 @@ internal fun MainContent(
     // rotation/locale keep the player. Captured in `remember` so it is stable
     // for this Activity's lifetime; rememberNavigationState runs the strip at
     // most once.
-    val stripPlayerRoutesOnRestore = remember { viewModel.consumeStateLossRestore() }
+    val stripPlayerRoutesOnRestore = remember { model.consumeStateLossRestore() }
 
     val navigationState = rememberNavigationState(
         startRoute = Route.Home,
@@ -119,9 +118,9 @@ internal fun MainContent(
     val currentMessageBus by rememberUpdatedState(userMessageBus)
     val externalPlayerHost = remember {
         ExternalPlayerHost(
-            buildLaunch = viewModel::buildExternalPlayerLaunch,
-            reportStart = viewModel::reportExternalPlaybackStart,
-            reportStopped = viewModel::reportExternalPlaybackStopped,
+            buildLaunch = model::buildExternalPlayerLaunch,
+            reportStart = model::reportExternalPlaybackStart,
+            reportStopped = model::reportExternalPlaybackStopped,
             notifyNoPlayerFound = {
                 currentMessageBus.error(
                     com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
@@ -195,9 +194,9 @@ internal fun MainContent(
     // Search has an offline-results path, Shortcuts are device-local,
     // MusicBrowse's home surfaces the downloaded music library, and Library
     // auto-filters to downloads (#147) — all stay visible.
-    val offlineMode by viewModel.offlineMode.collectAsStateWithLifecycle()
-    val isGoingOnline by viewModel.isGoingOnline.collectAsStateWithLifecycle()
-    val downloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
+    val offlineMode by model.offlineMode.collectAsStateWithLifecycle()
+    val isGoingOnline by model.isGoingOnline.collectAsStateWithLifecycle()
+    val downloadCount by model.activeDownloadCount.collectAsStateWithLifecycle()
     val isOffline = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
 
     // Memoize the route filter+reorder so it only re-runs when homeMode /
@@ -229,7 +228,7 @@ internal fun MainContent(
     }
 
     val onModeChange: (HomeMode) -> Unit = { mode ->
-        viewModel.setHomeMode(mode)
+        model.setHomeMode(mode)
     }
 
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
@@ -258,7 +257,7 @@ internal fun MainContent(
         navigate = navigator::navigate,
         selectTopLevelTab = { route -> navigationState.topLevelRoute.value = route },
         backStacks = { navigationState.backStacks.values },
-        consumePendingRoute = viewModel::consumePendingRoute,
+        consumePendingRoute = model::consumePendingRoute,
         presentSnackbar = { message ->
             snackbarHostState.showSnackbar(message = message, withDismissAction = true)
         },
@@ -270,7 +269,7 @@ internal fun MainContent(
     // (MainViewModel.pendingRoute). Value-keyed over the lifecycle-aware
     // state, so dispatch + the consume-once ack land in the frame the state
     // is seen — the tab-vs-nested fork lives in the collector's pure fold.
-    val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
+    val pendingRoute by model.pendingRoute.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRoute) {
         navRequests.dispatchPendingRoute(pendingRoute)
     }
@@ -491,15 +490,14 @@ internal fun MainContent(
             // Admin access-control state, collected once here (a @Composable
             // context) and threaded into the hooks as read lambdas so the
             // navigation entries — which are composed lazily — observe the
-            // latest value without re-building the entry graph. The same
-            // activity-scoped MainViewModel instance MainActivity's
-            // `by viewModels` delegate holds owns these flows; it stays in
-            // this file, and nothing below this point names the type.
-            val isAdminState = viewModel.isAdmin.collectAsStateWithLifecycle()
-            val isRefreshingAdminState = viewModel.isRefreshingAdmin.collectAsStateWithLifecycle()
+            // latest value without re-building the entry graph. The flows
+            // arrive through the [MainShellModel] seam; nothing below this
+            // point reaches past it.
+            val isAdminState = model.isAdmin.collectAsStateWithLifecycle()
+            val isRefreshingAdminState = model.isRefreshingAdmin.collectAsStateWithLifecycle()
 
             // The shell-host hooks (ShellHostHooks) behind the shared section
-            // graph, built ONCE here — the single site where the MainViewModel
+            // graph, built ONCE here — the single site where the model's
             // signals (admin gate, update check, surprise/search prefill) and
             // the Play On controller meet the shell seam. Remembered on the
             // same keys the former MainNavDisplay construction used, so the
@@ -523,7 +521,7 @@ internal fun MainContent(
                     // Lazy .value reads — admin refreshes don't rebuild the graph.
                     isAdmin = { isAdminState.value },
                     isRefreshingAdmin = { isRefreshingAdminState.value },
-                    onRefreshAdmin = { viewModel.refreshAdminStatus() },
+                    onRefreshAdmin = { model.refreshAdminStatus() },
                     // The shared home module narrows the Play-On surface to its
                     // HomePlayOnRedirect seam (the concrete strategy is Android-
                     // bound); the probe + fling choreography lives on the controller
@@ -534,9 +532,9 @@ internal fun MainContent(
                     // a remote session is already connected, which itself can only
                     // be initiated from the phone layout's Play On device sheet.
                     playOnRedirect = HomePlayOnRedirect(playOn::flingIfConnected),
-                    surpriseRequests = viewModel.surpriseRequests,
-                    pendingSearchQuery = viewModel.pendingSearchQuery,
-                    onConsumeSearchQuery = viewModel::consumePendingSearchQuery,
+                    surpriseRequests = model.surpriseRequests,
+                    pendingSearchQuery = model.pendingSearchQuery,
+                    onConsumeSearchQuery = model::consumePendingSearchQuery,
                 )
             }
 
@@ -647,9 +645,9 @@ internal fun MainContent(
                             // Switch to Home first so the hero controller is
                             // composed, then fire the surprise signal it collects.
                             navigationState.topLevelRoute.value = Route.Home
-                            viewModel.requestSurprise()
+                            model.requestSurprise()
                         },
-                        onToggleOffline = { viewModel.toggleOfflineMode() },
+                        onToggleOffline = { model.toggleOfflineMode() },
                     )
                 } else {
                     FullScreenContent(shellParams = shellParams)

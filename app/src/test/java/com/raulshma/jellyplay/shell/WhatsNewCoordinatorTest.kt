@@ -167,8 +167,9 @@ class WhatsNewCoordinatorTest {
 
         assertEquals(WhatsNewState.Idle, coordinator.state.value)
         assertTrue("no stamp expected: $capturedSeenStamps", capturedSeenStamps.isEmpty())
-        // The archive still gets warmed.
-        coVerify(exactly = 1) { repository.refresh() }
+        // Steady-state launch makes no network call — the Settings archive
+        // refreshes itself on open.
+        coVerify(exactly = 0) { repository.refresh() }
     }
 
     @Test

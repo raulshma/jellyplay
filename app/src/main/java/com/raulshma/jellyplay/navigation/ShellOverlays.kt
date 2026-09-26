@@ -8,8 +8,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
+import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.WhatsNewTargets
 import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import com.raulshma.jellyplay.update.AppUpdateSheet
+import com.raulshma.jellyplay.update.UpdateState
+import com.raulshma.jellyplay.whatsnew.WhatsNewSheet
+import com.raulshma.jellyplay.whatsnew.WhatsNewState
 
 /**
  * Collects [UpdateCoordinator.updateState] and shows the [AppUpdateSheet]
@@ -20,7 +26,7 @@ import com.raulshma.jellyplay.update.AppUpdateSheet
 internal fun UpdateSheetOverlay(update: UpdateCoordinator) {
     val state by update.updateState.collectAsStateWithLifecycle()
     val autoDownloadEnabled by update.selfUpdateDownloadEnabled.collectAsStateWithLifecycle()
-    if (state !is com.raulshma.jellyplay.update.UpdateState.Idle) {
+    if (state !is UpdateState.Idle) {
         val context = LocalContext.current
         AppUpdateSheet(
             state = state,
@@ -29,7 +35,7 @@ internal fun UpdateSheetOverlay(update: UpdateCoordinator) {
                 update.setSelfUpdateDownloadEnabled(enabled)
                 // Turning it ON while an update is already available should also
                 // start downloading the shown update immediately.
-                val available = state as? com.raulshma.jellyplay.update.UpdateState.UpdateAvailable
+                val available = state as? UpdateState.UpdateAvailable
                 if (enabled && available != null) {
                     update.startUpdateDownload(available.info)
                 }
@@ -55,21 +61,21 @@ internal fun UpdateSheetOverlay(update: UpdateCoordinator) {
  */
 @Composable
 internal fun WhatsNewSheetOverlay(
-    whatsNew: com.raulshma.jellyplay.shell.WhatsNewCoordinator,
+    whatsNew: WhatsNewCoordinator,
     update: UpdateCoordinator,
-    onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
+    onNavigate: (Route) -> Unit,
 ) {
     val state by whatsNew.state.collectAsStateWithLifecycle()
     val updateState by update.updateState.collectAsStateWithLifecycle()
-    val presentation = state as? com.raulshma.jellyplay.whatsnew.WhatsNewState.Show
-    if (presentation != null && updateState is com.raulshma.jellyplay.update.UpdateState.Idle) {
-        com.raulshma.jellyplay.whatsnew.WhatsNewSheet(
+    val presentation = state as? WhatsNewState.Show
+    if (presentation != null && updateState is UpdateState.Idle) {
+        WhatsNewSheet(
             release = presentation.release,
             onNavigateToEntry = { entry ->
                 // Dismiss FIRST so the deep link also consumes the prompt —
                 // the coordinator stamps the version seen on every exit path.
                 whatsNew.dismiss()
-                com.raulshma.jellyplay.core.ui.navigation.WhatsNewTargets
+                WhatsNewTargets
                     .resolve(entry.target, entry.highlightSettingId)
                     ?.let(onNavigate)
             },

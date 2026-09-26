@@ -108,7 +108,7 @@ fun JellyPlayApp(
                         // stop + sign-out) — the same fork desktop runs
                         // against AuthRepository.
                         onLogout = { revoke -> viewModel.logout(revoke) },
-                        viewModel = viewModel,
+                        model = viewModel,
                         preferences = preferences,
                         infra = infra,
                         // Resolved here — the authenticated branch only — so the
