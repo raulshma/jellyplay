@@ -560,6 +560,7 @@ fun MediaDetailScreen(
                         onAudioSelect = { idx: Int? -> viewModel.onEvent(DetailUiEvent.SelectAudio(idx)) },
                         onSelectLocalSubtitle = { index -> viewModel.onEvent(DetailUiEvent.SelectLocalSubtitle(index)) },
                         onStartInstantMix = { viewModel.onEvent(DetailUiEvent.StartInstantMix) },
+                        onStartRadio = { viewModel.onEvent(DetailUiEvent.StartRadio) },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
                     )
                 }

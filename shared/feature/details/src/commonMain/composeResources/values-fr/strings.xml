@@ -461,4 +461,7 @@
     <string name="detail_identify_apply">Appliquer</string>
     <string name="detail_msg_identify_applied">Métadonnées remplacées depuis le fournisseur. Rechargement…</string>
     <string name="detail_msg_identify_failed">Impossible d’identifier l’élément</string>
+    <string name="detail_option_start_radio">Lancer la radio</string>
+    <string name="detail_radio_empty">Aucune piste pour lancer une radio depuis cet élément</string>
+    <string name="detail_radio_failed">Impossible de lancer la radio</string>
 </resources>

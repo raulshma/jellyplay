@@ -65,6 +65,18 @@ internal class JvmMusicQueuePlayer(
         .startInstantMix(seedItemId, albumFallback, guard)
         .toMirror()
 
+    override suspend fun startRadio(
+        seedItemId: String,
+        albumFallback: String?,
+        guard: () -> Boolean,
+    ): MusicQueueOutcome = facade
+        .startRadio(seedItemId, albumFallback, guard)
+        .toMirror()
+
+    override fun stopRadio() {
+        facade.stopRadio()
+    }
+
     override suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int): MusicQueueOutcome =
         facade.playPlaylist(items, startIndex).toMirror()
 

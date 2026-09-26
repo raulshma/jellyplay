@@ -133,6 +133,7 @@ internal fun DetailContent(
         canAddToPlaylist = state.capabilities.remoteDiscovery,
         canAddToCollection = state.capabilities.remoteDiscovery,
         canInstantMix = isAudio && state.capabilities.remoteDiscovery,
+        canStartRadio = isAudio && state.capabilities.remoteDiscovery,
         canStartWatchParty = state.capabilities.remoteWorkAllowed,
         isOffline = state.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
@@ -155,6 +156,7 @@ internal fun DetailContent(
         onAddToPlaylist = callbacks.addTo.onAddToPlaylist,
         onAddToCollection = callbacks.addTo.onAddToCollection,
         onStartInstantMix = callbacks.playback.onStartInstantMix,
+        onStartRadio = callbacks.playback.onStartRadio,
         onStartWatchParty = callbacks.playback.onStartWatchParty,
     )
 

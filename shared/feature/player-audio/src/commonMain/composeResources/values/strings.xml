@@ -125,4 +125,6 @@
     <string name="audio_cast_to_device">Cast to device</string>
     <string name="audio_cast_no_devices">No cast devices found. Make sure your device is on the same network.</string>
     <string name="audio_cast_ok">OK</string>
+    <string name="audio_queue_radio">Radio</string>
+    <string name="audio_queue_radio_stop">Tap to stop radio</string>
 </resources>

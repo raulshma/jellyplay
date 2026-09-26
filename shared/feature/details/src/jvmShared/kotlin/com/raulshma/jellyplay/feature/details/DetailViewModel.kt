@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixError
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
@@ -65,6 +66,8 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_a
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_load_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_unavailable_offline
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_instant_mix_empty
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_radio_empty
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_radio_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_instant_mix_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_couldnt_mark_played
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_couldnt_mark_unplayed
@@ -268,6 +271,7 @@ class DetailViewModel internal constructor(
             is DetailUiEvent.SetCompactEpisodeList -> setCompactEpisodeList(event.enabled)
             is DetailUiEvent.PlayAlbum -> playAlbum(startIndex = event.startIndex)
             is DetailUiEvent.StartInstantMix -> startInstantMix()
+            is DetailUiEvent.StartRadio -> startRadio()
             is DetailUiEvent.ToggleFavorite -> toggleFavorite()
             is DetailUiEvent.MarkPlayed -> markPlayed()
             is DetailUiEvent.MarkUnplayed -> markUnplayed()
@@ -1024,6 +1028,32 @@ class DetailViewModel internal constructor(
         val item = detail.item
         if (!item.mediaType.isAudioType) return
         instantMixHolder.start(item.id, item.album ?: item.name)
+    }
+
+    /**
+     * Starts an endless radio for the current audio item: instant-mix seed via
+     * [AudioQueueFacade.startRadio] (the refill loop arms only when the seed
+     * actually starts playing). Fire-and-forget like [startInstantMix] — the
+     * only UI feedback is the empty / failure snackbar. Stopping happens in
+     * the player's queue sheet (the radio chip's stop action).
+     */
+    private fun startRadio() {
+        val detail = _uiState.value.detail ?: return
+        val item = detail.item
+        if (!item.mediaType.isAudioType) return
+        launch {
+            when (val outcome = audioQueueFacade.startRadio(
+                item.id,
+                albumFallback = item.album ?: item.name,
+                guard = { currentItemId == item.id },
+            )) {
+                AudioQueueOutcome.Empty ->
+                    _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_radio_empty)))
+                is AudioQueueOutcome.Failed ->
+                    _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_radio_failed)))
+                else -> Unit
+            }
+        }
     }
 
     private fun maybeComputeSmartPlayTarget() {

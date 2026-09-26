@@ -451,4 +451,7 @@
     <string name="detail_identify_apply">적용</string>
     <string name="detail_msg_identify_applied">공급자에서 메타데이터를 교체했습니다. 새로 고치는 중…</string>
     <string name="detail_msg_identify_failed">항목을 식별할 수 없습니다</string>
+    <string name="detail_option_start_radio">라디오 시작</string>
+    <string name="detail_radio_empty">이 항목으로 라디오를 시작할 트랙이 없습니다</string>
+    <string name="detail_radio_failed">라디오를 시작할 수 없습니다</string>
 </resources>

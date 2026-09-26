@@ -75,6 +75,22 @@ interface MusicQueuePlayer {
         guard: () -> Boolean = { true },
     ): MusicQueueOutcome
 
+    /**
+     * Starts an endless radio: instant-mix seed + automatic refills as the
+     * queue drains, until [stopRadio] (the jvmShared actual delegates to
+     * [com.raulshma.jellyplay.core.data.playback.AudioQueueFacade.startRadio]).
+     * Outcome semantics identical to [startInstantMix]; the radio arms only
+     * on [MusicQueueOutcome.Started].
+     */
+    suspend fun startRadio(
+        seedItemId: String,
+        albumFallback: String? = null,
+        guard: () -> Boolean = { true },
+    ): MusicQueueOutcome
+
+    /** Deactivates the radio (queue + playback keep playing as they are). */
+    fun stopRadio()
+
     /** Plays playlist items as a fresh queue (imageless mapper applies). */
     suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int = 0): MusicQueueOutcome
 

@@ -460,4 +460,7 @@
     <string name="detail_identify_apply">Übernehmen</string>
     <string name="detail_msg_identify_applied">Metadaten vom Anbieter übernommen. Wird neu geladen…</string>
     <string name="detail_msg_identify_failed">Element konnte nicht identifiziert werden</string>
+    <string name="detail_option_start_radio">Radio starten</string>
+    <string name="detail_radio_empty">Keine Titel, um von diesem Element ein Radio zu starten</string>
+    <string name="detail_radio_failed">Radio konnte nicht gestartet werden</string>
 </resources>

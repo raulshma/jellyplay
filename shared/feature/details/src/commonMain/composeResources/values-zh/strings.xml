@@ -451,4 +451,7 @@
     <string name="detail_identify_apply">应用</string>
     <string name="detail_msg_identify_applied">已从提供商替换元数据。正在重新加载…</string>
     <string name="detail_msg_identify_failed">无法识别该项目</string>
+    <string name="detail_option_start_radio">开始电台</string>
+    <string name="detail_radio_empty">没有可用于从此项目开始电台的曲目</string>
+    <string name="detail_radio_failed">无法开始电台</string>
 </resources>

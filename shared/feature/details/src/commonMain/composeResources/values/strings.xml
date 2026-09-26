@@ -487,4 +487,7 @@
     <string name="detail_identify_apply">Apply</string>
     <string name="detail_msg_identify_applied">Metadata replaced from provider. Reloading…</string>
     <string name="detail_msg_identify_failed">Couldn't identify the item</string>
+    <string name="detail_option_start_radio">Start radio</string>
+    <string name="detail_radio_empty">No tracks to seed a radio from this item</string>
+    <string name="detail_radio_failed">Couldn't start the radio</string>
 </resources>

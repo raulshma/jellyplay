@@ -136,6 +136,7 @@ class AudioPlayerViewModelGapsTest {
         trackDownloadActions = mockk(relaxed = true)
         sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
+        val audioQueueFacade = mockk<com.raulshma.jellyplay.core.data.playback.AudioQueueFacade>(relaxed = true)
 
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
@@ -199,6 +200,7 @@ class AudioPlayerViewModelGapsTest {
             trackDownloadActions = trackDownloadActions,
             sleepTimerManager = sleepTimerManager,
             cast = cast,
+            audioQueueFacade = audioQueueFacade,
         )
     }
 

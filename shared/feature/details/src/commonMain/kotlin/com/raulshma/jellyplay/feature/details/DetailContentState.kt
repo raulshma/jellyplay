@@ -155,6 +155,8 @@ internal data class PlaybackCallbacks(
     val onSelectLocalSubtitle: (index: Int?) -> Unit = {},
     /** Start an instant mix for the current audio item (fire-and-forget VM action). */
     val onStartInstantMix: () -> Unit = {},
+    /** Start an endless radio for the current audio item (fire-and-forget VM action). */
+    val onStartRadio: () -> Unit = {},
     /**
      * Bootstrap a SyncPlay watch party for the current item and open the player
      * (fire-and-forget VM action; success navigates via DetailMessage).

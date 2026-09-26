@@ -462,4 +462,7 @@
     <string name="detail_identify_apply">Aplicar</string>
     <string name="detail_msg_identify_applied">Metadatos reemplazados desde el proveedor. Recargando…</string>
     <string name="detail_msg_identify_failed">No se pudo identificar el elemento</string>
+    <string name="detail_option_start_radio">Iniciar radio</string>
+    <string name="detail_radio_empty">No hay pistas para iniciar una radio desde este elemento</string>
+    <string name="detail_radio_failed">No se pudo iniciar la radio</string>
 </resources>

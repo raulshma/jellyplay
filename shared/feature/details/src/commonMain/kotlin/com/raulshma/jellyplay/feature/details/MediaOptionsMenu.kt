@@ -17,6 +17,7 @@ import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.Stack2
 import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.Radio
 import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.model.DetailPreferences
@@ -45,6 +46,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_instant_mix
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_manage_series
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_refresh_metadata
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_start_radio
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_share
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_show_detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_show_in_continue_watching
@@ -93,6 +95,7 @@ internal fun rememberMediaOptions(
     canAddToPlaylist: Boolean,
     canAddToCollection: Boolean,
     canInstantMix: Boolean,
+    canStartRadio: Boolean,
     isOffline: Boolean,
     onClose: () -> Unit,
     onEditClick: () -> Unit,
@@ -114,6 +117,7 @@ internal fun rememberMediaOptions(
     onAddToPlaylist: () -> Unit,
     onAddToCollection: () -> Unit = {},
     onStartInstantMix: () -> Unit = {},
+    onStartRadio: () -> Unit = {},
     onStartWatchParty: () -> Unit = {},
     canStartWatchParty: Boolean = false,
 ): List<MediaOption> {
@@ -155,14 +159,15 @@ internal fun rememberMediaOptions(
     val labelAddToCollection = stringResource(Res.string.detail_option_add_to_collection)
     val labelDeleteDownloads = stringResource(Res.string.detail_option_delete_downloads)
     val labelInstantMix = stringResource(Res.string.detail_option_instant_mix)
+    val labelStartRadio = stringResource(Res.string.detail_option_start_radio)
     val labelWatchParty = stringResource(Res.string.detail_option_watch_party)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
-        canRefreshMetadata, canIdentify, canAddToPlaylist, canAddToCollection, canInstantMix, canStartWatchParty, isOffline, labelManageSeries,
-        labelRefreshMetadata, labelIdentify,
+        canRefreshMetadata, canIdentify, canAddToPlaylist, canAddToCollection, canInstantMix, canStartRadio, canStartWatchParty, isOffline, labelManageSeries,
+        labelRefreshMetadata, labelIdentify, labelStartRadio,
         labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
         labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty) {
         buildList {
@@ -271,6 +276,14 @@ internal fun rememberMediaOptions(
             if (canInstantMix) {
                 add(MediaOption(labelInstantMix, Tabler.Outline.WaveSine) {
                     onClose(); onStartInstantMix()
+                })
+            }
+            // Start Radio: audio-only, next to Instant Mix — an instant-mix
+            // seed that keeps refilling itself as the queue drains until the
+            // user stops it from the player's queue sheet.
+            if (canStartRadio) {
+                add(MediaOption(labelStartRadio, Tabler.Outline.Radio) {
+                    onClose(); onStartRadio()
                 })
             }
             // Watch Party: bootstraps a SyncPlay group for the current item and

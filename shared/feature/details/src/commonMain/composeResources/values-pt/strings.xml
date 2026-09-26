@@ -461,4 +461,7 @@
     <string name="detail_identify_apply">Aplicar</string>
     <string name="detail_msg_identify_applied">Metadados substituídos do fornecedor. A recarregar…</string>
     <string name="detail_msg_identify_failed">Não foi possível identificar o item</string>
+    <string name="detail_option_start_radio">Iniciar rádio</string>
+    <string name="detail_radio_empty">Sem faixas para iniciar uma rádio a partir deste item</string>
+    <string name="detail_radio_failed">Não foi possível iniciar a rádio</string>
 </resources>

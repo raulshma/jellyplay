@@ -68,6 +68,7 @@ val playerAudioModule: Module = module {
             effectsManager = get(),
             engine = get(),
             cast = get(),
+            audioQueueFacade = get(),
             projections = get(),
             audioStore = get(),
             audioEffectsStore = get(),

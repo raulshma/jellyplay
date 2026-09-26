@@ -49,6 +49,8 @@ class AudioPlayerViewModel(
     private val effectsManager: AudioEffectsManager,
     private val engine: AudioPlayerEngine,
     private val cast: AudioPlayerCast,
+    /** The build-a-queue facade — read-only here: the endless-radio state. */
+    private val audioQueueFacade: com.raulshma.jellyplay.core.data.playback.AudioQueueFacade,
     private val projections: PreferenceProjections,
     private val audioStore: AudioStore,
     private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
@@ -62,6 +64,10 @@ class AudioPlayerViewModel(
 
     /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
     val castController: AudioPlayerCast = cast
+
+    /** Endless-radio status — the queue sheet's active-radio chip reads this. */
+    val radioState: StateFlow<com.raulshma.jellyplay.core.data.playback.AudioRadioController.RadioState> =
+        audioQueueFacade.radioState
 
     init {
         // The cast controller is a ref-counted app-wide singleton shared with
@@ -348,6 +354,7 @@ class AudioPlayerViewModel(
         when (event) {
             is AudioPlayerUiEvent.Play -> play(event.itemId)
             is AudioPlayerUiEvent.RemoveFromQueue -> removeFromQueue(event.index)
+            is AudioPlayerUiEvent.StopRadio -> audioQueueFacade.stopRadio()
             is AudioPlayerUiEvent.UndoLastQueueOperation -> undoLastQueueOperation()
             is AudioPlayerUiEvent.CycleAbLoop -> cycleAbLoop()
             is AudioPlayerUiEvent.SkipToNext -> skipToNext()

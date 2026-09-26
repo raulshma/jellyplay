@@ -27,6 +27,9 @@ sealed interface AudioPlayerUiEvent {
     /** Removes the queue row at [index] (undoable — surfaces an undoEvents entry). */
     data class RemoveFromQueue(val index: Int) : AudioPlayerUiEvent
 
+    /** Deactivates the endless radio (queue + playback keep playing). */
+    data object StopRadio : AudioPlayerUiEvent
+
     /**
      * Restores the queue to before the most recent destructive op, if any. The
      * handler's success [Boolean] is discarded — the caller only offers undo

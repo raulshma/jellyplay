@@ -126,4 +126,6 @@
     <string name="audio_cast_to_device">デバイスにキャスト</string>
     <string name="audio_cast_no_devices">キャストデバイスが見つかりません。デバイスが同じネットワークにあることを確認してください。</string>
     <string name="audio_cast_ok">OK</string>
+    <string name="audio_queue_radio">ラジオ</string>
+    <string name="audio_queue_radio_stop">タップでラジオを停止</string>
 </resources>

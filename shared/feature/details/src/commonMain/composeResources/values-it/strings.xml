@@ -461,4 +461,7 @@
     <string name="detail_identify_apply">Applica</string>
     <string name="detail_msg_identify_applied">Metadati sostituiti dal provider. Ricaricamento…</string>
     <string name="detail_msg_identify_failed">Impossibile identificare l'elemento</string>
+    <string name="detail_option_start_radio">Avvia radio</string>
+    <string name="detail_radio_empty">Nessuna traccia per avviare una radio da questo elemento</string>
+    <string name="detail_radio_failed">Impossibile avviare la radio</string>
 </resources>

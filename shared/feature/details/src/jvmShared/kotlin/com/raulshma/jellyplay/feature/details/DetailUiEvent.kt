@@ -58,6 +58,12 @@ sealed interface DetailUiEvent {
     /** Starts a Jellyfin instant mix seeded off the current audio item (fire-and-forget). */
     data object StartInstantMix : DetailUiEvent
 
+    /**
+     * Starts an endless radio off the current audio item: instant-mix seed +
+     * automatic refills as the queue drains (fire-and-forget).
+     */
+    data object StartRadio : DetailUiEvent
+
     /** Toggles favorite on the CURRENT detail item (optimistic; failure emits a snackbar). */
     data object ToggleFavorite : DetailUiEvent
 

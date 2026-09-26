@@ -126,4 +126,6 @@
     <string name="audio_cast_to_device">投射到设备</string>
     <string name="audio_cast_no_devices">未找到投射设备。请确保您的设备在同一网络。</string>
     <string name="audio_cast_ok">确定</string>
+    <string name="audio_queue_radio">电台</string>
+    <string name="audio_queue_radio_stop">点按停止电台</string>
 </resources>

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.audio.sheets
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,13 +35,17 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.List
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Radio
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_queue_position
+import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_queue_radio
+import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_queue_radio_stop
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_queue_remove
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_queue_title
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_topbar_now_playing
@@ -48,6 +55,8 @@ import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_top
 internal fun QueueSheet(
     queue: List<AudioQueueItem>,
     currentIndex: Int,
+    isRadioActive: Boolean = false,
+    onStopRadio: () -> Unit = {},
     onSelect: (Int) -> Unit,
     onRemove: (Int) -> Unit,
     onDismiss: () -> Unit,
@@ -66,7 +75,9 @@ internal fun QueueSheet(
                 icon = Tabler.Outline.List,
                 // Queue position of the currently-playing track (1-based).
                 trailing = {
-                    if (currentIndex in queue.indices) {
+                    if (isRadioActive) {
+                        RadioChip(onStopRadio = onStopRadio)
+                    } else if (currentIndex in queue.indices) {
                         Text(
                             stringResource(
                                 Res.string.audio_queue_position,
@@ -98,6 +109,35 @@ internal fun QueueSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * The active-radio chip in the queue header: pulse icon + label, tappable to
+ * stop the refill loop (the queue itself keeps playing as it is).
+ */
+@Composable
+private fun RadioChip(onStopRadio: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(ShapeCache.smoothPill)
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .clickable(onClick = onStopRadio)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = Tabler.Outline.Radio,
+            contentDescription = stringResource(Res.string.audio_queue_radio_stop),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            stringResource(Res.string.audio_queue_radio),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
     }
 }
 
