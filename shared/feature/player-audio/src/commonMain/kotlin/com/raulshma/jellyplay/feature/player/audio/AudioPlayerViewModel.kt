@@ -5,11 +5,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.RadioState
 import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
@@ -50,13 +56,13 @@ class AudioPlayerViewModel(
     private val engine: AudioPlayerEngine,
     private val cast: AudioPlayerCast,
     /** The build-a-queue facade — read-only here: the endless-radio state. */
-    private val audioQueueFacade: com.raulshma.jellyplay.core.data.playback.AudioQueueFacade,
+    private val audioQueueFacade: AudioQueueFacade,
     private val projections: PreferenceProjections,
     private val audioStore: AudioStore,
-    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
-    private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
-    private val playlistRepository: com.raulshma.jellyplay.core.data.repository.PlaylistRepository,
-    private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
+    private val audioEffectsStore: AudioEffectsStore,
+    private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
+    private val userDataMutator: UserDataMutator,
     private val downloads: TrackDownloadStatusWindow,
     private val trackDownloadActions: TrackDownloadActions,
     private val sleepTimerManager: AudioSleepTimerManager,
@@ -65,9 +71,14 @@ class AudioPlayerViewModel(
     /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
     val castController: AudioPlayerCast = cast
 
-    /** Endless-radio status — the queue sheet's active-radio chip reads this. */
-    val radioState: StateFlow<com.raulshma.jellyplay.core.data.playback.AudioRadioController.RadioState> =
-        audioQueueFacade.radioState
+    /**
+     * Endless-radio status — the queue sheet's active-radio chip reads this.
+     * Lazy: resolving it at construction would force the facade's
+     * radio-controller (and its queue observer) into existence for every
+     * player-screen open, radio started or not — deferring to first read
+     * keeps radio-free sessions observer-free.
+     */
+    val radioState: StateFlow<RadioState> by lazy { audioQueueFacade.radioState }
 
     init {
         // The cast controller is a ref-counted app-wide singleton shared with

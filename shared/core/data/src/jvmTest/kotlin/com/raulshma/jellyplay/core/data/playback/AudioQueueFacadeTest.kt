@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -289,5 +290,32 @@ class AudioQueueFacadeTest {
         verify(exactly = 1) { queueManager.addToQueue(capture(captured)) }
         assertEquals("p1", captured.captured.id)
         assertNull(captured.captured.imageUrl)
+    }
+
+    // ── Endless-radio lifecycle ─────────────────────────────────────────
+
+    @Test
+    fun `a fresh queue disarms a live radio without an explicit stopRadio`() = runTest(testDispatcher) {
+        val queueFlow = MutableStateFlow<List<AudioQueueItem>>(emptyList())
+        val indexFlow = MutableStateFlow(0)
+        every { queueManager.queue } returns queueFlow
+        every { queueManager.currentIndex } returns indexFlow
+        coEvery { mediaRepository.getInstantMix(any()) } returns Result.success(listOf(track("m1")))
+
+        facade.startRadio("seed")
+        assertTrue(facade.radioState.value.active)
+        assertEquals("seed", facade.radioState.value.seedItemId)
+
+        // The user starts an unrelated queue: the old radio's seed must not
+        // keep refilling it.
+        facade.playTracks(listOf(track("t1")))
+        assertFalse(facade.radioState.value.active, "a fresh play must disarm the radio")
+
+        // A later radio re-seeds cleanly through the same path.
+        facade.startRadio("seed2")
+        assertTrue(facade.radioState.value.active)
+        assertEquals("seed2", facade.radioState.value.seedItemId)
+        facade.stopRadio()
+        assertFalse(facade.radioState.value.active)
     }
 }

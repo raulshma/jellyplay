@@ -53,6 +53,24 @@ Build your own playlists with rule-based criteria:
 Smart playlists update in real time when you import new music or
 JellyPlay detects a library scan.
 
+## Endless radio (auto-mix)
+
+Seed an endless mix from **any track, album, or artist** — the ⋮ menu's
+"Start radio" on a music detail screen. JellyPlay plays a Jellyfin
+instant mix for the seed, then keeps the music going: when you're within
+3 tracks of the queue's end it fetches a fresh batch (up to 20 tracks
+you haven't heard in this radio yet) and appends it, so playback never
+runs dry at the end of the queue.
+
+Details worth knowing:
+
+- The active radio shows a **chip in the queue sheet**; tap it to stop
+  the radio (the current queue keeps playing — it just stops growing).
+- Starting any new queue (another album, playlist, or mix) silently
+  ends the radio — a radio never refills a queue it didn't seed.
+- Offline servers deactivate the radio after 3 failed refills in a row
+  instead of hammering the connection.
+
 ## Synced lyrics
 
 JellyPlay fetches **time-synced lyrics** from the

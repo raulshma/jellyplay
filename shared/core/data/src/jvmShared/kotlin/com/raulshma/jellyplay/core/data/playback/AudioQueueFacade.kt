@@ -77,6 +77,9 @@ interface AudioQueueFacade {
     /**
      * Plays [tracks] as a fresh queue starting at [startIndex].
      *
+     * A fresh queue implicitly disarms any live endless radio (see
+     * [stopRadio]) — only [startRadio] leaves one armed.
+     *
      * @param shuffled pre-shuffles the list (`List.shuffled()`) before mapping
      *   — the "pre-shuffled list" MusicHome shuffle semantics, NOT the
      *   player-mode reshuffle of [AudioQueueManager.setShuffleMode].
@@ -157,15 +160,20 @@ interface AudioQueueFacade {
         guard: () -> Boolean = { true },
     ): AudioQueueOutcome
 
-    /** Deactivates the radio (queue + playback keep playing as they are). */
+    /**
+     * Deactivates the radio (queue + playback keep playing as they are).
+     * Every fresh-queue play method disarms the radio implicitly too — a
+     * radio never survives into a queue it didn't seed.
+     */
     fun stopRadio()
 
     /** UI-visible radio status (active/seed/refilling) for now-playing surfaces. */
-    val radioState: StateFlow<AudioRadioController.RadioState>
+    val radioState: StateFlow<RadioState>
 
     /**
-     * Plays playlist items as a fresh queue. `PlaylistItem` carries no image
-     * reference, so the existing imageless mapper (`imageUrl = null`) applies.
+     * Plays playlist items as a fresh queue (disarming any live radio, like
+     * [playTracks]). `PlaylistItem` carries no image reference, so the
+     * existing imageless mapper (`imageUrl = null`) applies.
      */
     suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int = 0): AudioQueueOutcome
 
@@ -203,7 +211,17 @@ class DefaultAudioQueueFacade(
         )
     }
 
-    override val radioState: StateFlow<AudioRadioController.RadioState>
+    /**
+     * True only while a radio [radio.start] armed is still live, so
+     * [stopRadio] and the fresh-queue play paths can deactivate it without
+     * forcing the lazy [radio] (and its queue observer) into existence for
+     * radio-free sessions. Set wherever the controller is armed; cleared
+     * under every disarm path.
+     */
+    @Volatile
+    private var radioArmed = false
+
+    override val radioState: StateFlow<RadioState>
         get() = radio.state
 
     override suspend fun startRadio(
@@ -212,12 +230,15 @@ class DefaultAudioQueueFacade(
         guard: () -> Boolean,
     ): AudioQueueOutcome {
         val outcome = startInstantMix(seedItemId, albumFallback, guard)
-        if (outcome is AudioQueueOutcome.Started) radio.start(seedItemId)
+        if (outcome is AudioQueueOutcome.Started) {
+            radioArmed = true
+            radio.start(seedItemId)
+        }
         return outcome
     }
 
     override fun stopRadio() {
-        radio.stop()
+        stopRadioIfArmed()
     }
 
     override suspend fun playTracks(
@@ -289,6 +310,7 @@ class DefaultAudioQueueFacade(
 
     override suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int): AudioQueueOutcome {
         if (items.isEmpty()) return AudioQueueOutcome.Empty
+        stopRadioIfArmed()
         val queueItems = withContext(Dispatchers.Default) { items.map { it.toAudioQueueItem() } }
         return withContext(Dispatchers.Main) {
             queueManager.playQueue(queueItems, startIndex)
@@ -298,6 +320,19 @@ class DefaultAudioQueueFacade(
 
     override suspend fun enqueuePlaylistItem(item: PlaylistItem) {
         withContext(Dispatchers.Main) { queueManager.addToQueue(item.toAudioQueueItem()) }
+    }
+
+    /**
+     * A fresh queue replaces whatever was playing, so a live radio's old seed
+     * must not keep refilling it ([startRadio] re-arms on its own Started).
+     * Runs before the queue mutation so an in-flight refill's pre-append
+     * claim check sees an inactive radio against the new queue.
+     */
+    private fun stopRadioIfArmed() {
+        if (radioArmed) {
+            radioArmed = false
+            radio.stop()
+        }
     }
 
     /**
@@ -311,6 +346,7 @@ class DefaultAudioQueueFacade(
         mapper: (T) -> AudioQueueItem,
     ): AudioQueueOutcome {
         if (source.isEmpty()) return AudioQueueOutcome.Empty
+        stopRadioIfArmed()
         val items = withContext(Dispatchers.Default) { source.map(mapper) }
         return withContext(Dispatchers.Main) {
             queueManager.playQueue(items, startIndex)

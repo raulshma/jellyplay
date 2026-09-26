@@ -112,9 +112,13 @@ data class EditorPerson(
  * episodes as well — that cascade is the bulk path for per-series refresh.
  */
 enum class MetadataRefreshOption {
-    /** Fetch missing metadata and images only (Default/Default). */
+    /** Fetch missing metadata and images only — jellyfin-web's "Scan for new and updated files". */
     DEFAULT,
-    /** Re-scan every field, keeping existing values as the baseline. */
+    /**
+     * Full refresh keeping existing values as the baseline — jellyfin-web's
+     * "Search for missing metadata" (despite that label, the web client
+     * sends FullRefresh here, without the replace flag).
+     */
     FULL_VALIDATION,
     /** Full refresh that overwrites current metadata with provider data. */
     REPLACE_ALL_METADATA,

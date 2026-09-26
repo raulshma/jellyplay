@@ -270,9 +270,9 @@
     <string name="core_ui_whatsnew_archive_empty">リリースのハイライトはまだありません。</string>
     <string name="core_refresh_metadata_title">メタデータを更新</string>
     <string name="core_refresh_metadata_message">「%s」のメタデータと画像をサーバーが更新する方法を選択してください。</string>
-    <string name="core_refresh_metadata_mode_default">不足データを検索</string>
+    <string name="core_refresh_metadata_mode_default">新規および更新されたファイルをスキャン</string>
     <string name="core_refresh_metadata_mode_default_desc">不足しているメタデータと画像のみ取得します。</string>
-    <string name="core_refresh_metadata_mode_full_validation">全メタデータを検証</string>
+    <string name="core_refresh_metadata_mode_full_validation">欠落したメタデータを検索</string>
     <string name="core_refresh_metadata_mode_full_validation_desc">各フィールドを再走査し、現在の値をベースラインとして保持します。</string>
     <string name="core_refresh_metadata_mode_replace_all">全メタデータを置き換え</string>
     <string name="core_refresh_metadata_mode_replace_all_desc">現在のメタデータをプロバイダーのデータで上書きします。シリーズの場合はエピソードも更新されます。</string>

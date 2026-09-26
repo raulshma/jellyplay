@@ -271,9 +271,9 @@
     <string name="core_ui_whatsnew_archive_empty">Ancora nessuna novità di versione.</string>
     <string name="core_refresh_metadata_title">Aggiorna metadati</string>
     <string name="core_refresh_metadata_message">Scegli come il server aggiorna metadati e immagini di “%s”.</string>
-    <string name="core_refresh_metadata_mode_default">Cerca dati mancanti</string>
+    <string name="core_refresh_metadata_mode_default">Cerca file nuovi e aggiornati</string>
     <string name="core_refresh_metadata_mode_default_desc">Scarica solo metadati e immagini mancanti.</string>
-    <string name="core_refresh_metadata_mode_full_validation">Valida tutti i metadati</string>
+    <string name="core_refresh_metadata_mode_full_validation">Cerca metadati mancanti</string>
     <string name="core_refresh_metadata_mode_full_validation_desc">Riverifica ogni campo mantenendo i valori attuali come base.</string>
     <string name="core_refresh_metadata_mode_replace_all">Sostituisci tutti i metadati</string>
     <string name="core_refresh_metadata_mode_replace_all_desc">Sovrascrive i metadati attuali con quelli del provider. Per una serie vengono aggiornati anche gli episodi.</string>

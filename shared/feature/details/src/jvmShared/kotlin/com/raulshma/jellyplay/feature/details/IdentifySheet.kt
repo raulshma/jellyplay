@@ -55,8 +55,8 @@ import org.jetbrains.compose.resources.stringResource
  * provider id), run the provider search, and pick the real match — applying
  * replaces the item's metadata (and optionally all images) server-side.
  *
- * State comes from [IdentifyUiState] (the VM's [IdentifyActions] helper); the
- * sheet is pure rendering + edit/apply callbacks.
+ * State comes from [IdentifyUiState] (the VM's [MetadataAdminActions]
+ * helper); the sheet is pure rendering + edit/apply callbacks.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

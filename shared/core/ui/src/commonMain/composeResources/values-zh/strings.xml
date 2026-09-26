@@ -270,9 +270,9 @@
     <string name="core_ui_whatsnew_archive_empty">暂无版本亮点。</string>
     <string name="core_refresh_metadata_title">刷新元数据</string>
     <string name="core_refresh_metadata_message">选择服务器如何刷新“%s”的元数据和图像。</string>
-    <string name="core_refresh_metadata_mode_default">扫描缺失数据</string>
+    <string name="core_refresh_metadata_mode_default">扫描新增和更新的文件</string>
     <string name="core_refresh_metadata_mode_default_desc">仅下载缺失的元数据和图像。</string>
-    <string name="core_refresh_metadata_mode_full_validation">校验全部元数据</string>
+    <string name="core_refresh_metadata_mode_full_validation">搜索缺失的元数据</string>
     <string name="core_refresh_metadata_mode_full_validation_desc">重新检查每个字段，以当前值作为基准。</string>
     <string name="core_refresh_metadata_mode_replace_all">替换全部元数据</string>
     <string name="core_refresh_metadata_mode_replace_all_desc">用提供商数据覆盖当前元数据。刷新剧集时其分集也会刷新。</string>

@@ -129,12 +129,16 @@ internal class MetadataAdminActions(
                 year = item.year,
                 providerIds = detail.providerIds,
             ),
+            // Monotonic across sheet opens: the screen's reload effect keys
+            // on this counter, so resetting it here would mask the next
+            // apply's bump whenever the previous value equaled it.
+            appliedCount = _identifyState.value.appliedCount,
         )
     }
 
     /** Closes the Identify sheet and drops the search/apply ephemera. */
     fun dismissIdentify() {
-        _identifyState.value = IdentifyUiState()
+        _identifyState.update { IdentifyUiState(appliedCount = it.appliedCount) }
     }
 
     /** Applies an edit to the Identify prefill (name / year / provider ids). */

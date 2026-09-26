@@ -37,15 +37,18 @@ import kotlin.coroutines.coroutineContext
  * `refillJob` / `consecutiveFailures` / the active-vs-launch decision goes
  * through [lock], so a stop can never lose a race against a launch that is
  * already past its active check (a post-stop refill would otherwise keep
- * enqueuing into a stopped radio). The [enqueue] lambda owns its own
- * main-thread hop (the facade's `enqueueTracks` pipeline), so this class
+ * enqueuing into a stopped radio). An in-flight refill re-asserts its
+ * claim right before appending ([mayAppend]): a stop, a re-start, or a
+ * queue replaced by a fresh play aborts the append rather than splicing
+ * the fetched batch into a queue it wasn't fetched for. The [enqueue]
+ * lambda owns its own main-thread hop (the facade's `enqueueTracks` pipeline), so this class
  * never touches the queue contract directly. Pure decisions — flows and
  * lambdas in, no platform types — so the whole state machine is
  * unit-testable with MutableStateFlow fakes.
  */
 class AudioRadioController(
     private val scope: CoroutineScope,
-    queueFlow: StateFlow<List<AudioQueueItem>>,
+    private val queueFlow: StateFlow<List<AudioQueueItem>>,
     currentIndexFlow: StateFlow<Int>,
     private val fetchMix: suspend (seedItemId: String) -> Result<List<MediaItem>>,
     private val enqueue: suspend (tracks: List<MediaItem>) -> Unit,
@@ -63,15 +66,6 @@ class AudioRadioController(
         /** Failed mixes in a row before the radio deactivates itself. */
         const val MAX_CONSECUTIVE_FAILURES = 3
     }
-
-    /** UI-visible radio status (now-playing surfaces show an active chip). */
-    data class RadioState(
-        val active: Boolean = false,
-        val seedItemId: String? = null,
-        val isRefilling: Boolean = false,
-        /** Batches appended this session — a cheap "how alive is this" signal. */
-        val refillCount: Int = 0,
-    )
 
     private val _state = MutableStateFlow(RadioState())
     val state: StateFlow<RadioState> = _state.asStateFlow()
@@ -132,7 +126,7 @@ class AudioRadioController(
                 onSuccess = { tracks ->
                     val queuedIds = queue.mapTo(HashSet(queue.size)) { it.id }
                     val fresh = tracks.filter { it.id !in queuedIds }.take(REFILL_BATCH)
-                    if (fresh.isNotEmpty()) {
+                    if (fresh.isNotEmpty() && mayAppend(self, queue)) {
                         enqueue(fresh)
                         _state.update { it.copy(refillCount = it.refillCount + 1) }
                     }
@@ -157,4 +151,30 @@ class AudioRadioController(
             }
         }
     }
+
+    /**
+     * Whether this refill job may still append. It must still own [refillJob]
+     * and the radio must still be active (a stop or a re-start cancels its
+     * claim), and the queue it snapshotted must still BE the queue — every
+     * queue mutation swaps in a new list instance, so an identity mismatch
+     * means the snapshot went stale against a replaced queue (a fresh play),
+     * and appending would splice old-seed tracks into an unrelated queue.
+     */
+    private fun mayAppend(self: Job, snapshot: List<AudioQueueItem>): Boolean = synchronized(lock) {
+        refillJob === self && _state.value.active && queueFlow.value === snapshot
+    }
 }
+
+/**
+ * UI-visible radio status (now-playing surfaces show an active chip).
+ * Top-level beside [AudioRadioController] because the facade's
+ * [AudioQueueFacade.radioState] exposes it as part of its own contract —
+ * callers should not reach into the controller's nesting for it.
+ */
+data class RadioState(
+    val active: Boolean = false,
+    val seedItemId: String? = null,
+    val isRefilling: Boolean = false,
+    /** Batches appended this session — a cheap "how alive is this" signal. */
+    val refillCount: Int = 0,
+)

@@ -144,6 +144,7 @@ Open **Settings → Storage** to tune downloads. Defaults are shown below.
 | **Smart downloads** | Off | Auto-deletes episodes you've watched ≥95% |
 | **Auto-download new episodes** | Off | Periodically fetches new episodes of downloaded series |
 | **Download schedule** | Off | Restrict downloads to a start–end time window (optionally Wi-Fi-only during the window) |
+| **Live Updates** (Android 16+) | Off | Promotes the download-progress notification to the lock screen and status area (ProgressStyle); requires the system Live Updates grant — tap the row to open the Android settings screen. Hidden below Android 16 and on desktop. |
 | **Max download storage** | Unlimited (0) | Cap the downloads directory at 5/10/20/50 GB |
 | **Storage location** | Internal | Internal storage vs External (SD card) |
 

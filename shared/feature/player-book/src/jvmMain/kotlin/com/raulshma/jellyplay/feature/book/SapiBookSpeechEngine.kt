@@ -88,6 +88,14 @@ private class SapiTtsBinding(
 
     private var voice: SpVoiceObject? = null
 
+    /**
+     * Set on the apartment thread by [shutdown] before the voice is released.
+     * A `WaitUntilDone` poll Callable queued behind the shutdown task would
+     * otherwise execute against freed COM memory — use-after-free, not a
+     * catchable [COMException] — so every queued poll checks this first.
+     */
+    private var released = false
+
     /** The waiter thread blocks on completion polls; events re-post to the apartment. */
     private var waiter: ExecutorService? = null
 
@@ -104,6 +112,7 @@ private class SapiTtsBinding(
             host?.onInit(connected = false)
             return
         }
+        released = false
         voice = created
         waiter = Executors.newSingleThreadExecutor { r -> Thread(r, "sapi-speech-wait").apply { isDaemon = true } }
         host?.onInit(connected = true)
@@ -128,10 +137,11 @@ private class SapiTtsBinding(
             // blocks on each 100ms poll's result, so a queued stop still
             // reaches the voice between polls — its purge drains the queue
             // and the next poll returns done. The machine's id guard makes
-            // any stale completion inert.
+            // any stale completion inert. The `released` check drops polls
+            // queued behind a shutdown instead of touching the freed voice.
             val drained = try {
                 var done = false
-                while (!done) done = submitToApartment { v.waitUntilDone(WAIT_POLL_MS) }.get()
+                while (!done) done = submitToApartment { released || v.waitUntilDone(WAIT_POLL_MS) }.get()
                 true
             } catch (_: Throwable) {
                 true
@@ -147,8 +157,14 @@ private class SapiTtsBinding(
     }
 
     override fun shutdown() {
+        // Order matters: stopping the waiter only stops FUTURE poll
+        // submissions — a poll Callable may already sit in the apartment
+        // queue behind this shutdown task, so `released` is set (and read by
+        // that poll on the apartment thread) before the voice's refcount
+        // goes away. All on the single apartment thread; no interleaving.
         waiter?.shutdownNow()
         waiter = null
+        released = true
         try {
             voice?.release()
         } catch (_: Throwable) {

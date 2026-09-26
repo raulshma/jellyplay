@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -160,5 +161,66 @@ class AudioRadioControllerTest {
 
         assertEquals(0, mixFetches, "no fetch once the cap is reached")
         c.stop()
+    }
+
+    // ── In-flight refill vs. replaced queue / stopped radio ──────────────
+
+    private fun controllerWithFetchGate(gate: CompletableDeferred<Unit>): AudioRadioController =
+        AudioRadioController(
+            scope = kotlinx.coroutines.CoroutineScope(dispatcher),
+            queueFlow = queue,
+            currentIndexFlow = currentIndex,
+            fetchMix = {
+                mixFetches++
+                gate.await()
+                mixResult
+            },
+            enqueue = { tracks -> enqueued = enqueued + listOf(tracks) },
+        )
+
+    @Test
+    fun `in-flight refill does not append when the queue was replaced during the fetch`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val c = controllerWithFetchGate(gate)
+        c.start("seed")
+        queue.value = listOf(queued("current"))
+        currentIndex.value = 0
+        advanceUntilIdle() // refill launched, parked inside fetchMix
+        assertEquals(1, mixFetches)
+
+        // A fresh play swaps in a new, long queue (above the refill
+        // threshold) while the mix resolves — the production facade also
+        // disarms the radio here, but even an armed radio must not let the
+        // STALE snapshot's batch land on the replaced queue.
+        queue.value = (1..10).map { queued("fresh$it") }
+        currentIndex.value = 0
+        mixResult = Result.success(listOf(track("stale")))
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(c.appendedIds().isEmpty(), "a stale-snapshot refill must not splice old-seed tracks into the replaced queue")
+        assertEquals(1, mixFetches, "the new queue sits above the threshold, so no refill may re-fire")
+        assertEquals(0, c.state.value.refillCount)
+        assertTrue(c.state.value.active)
+        c.stop()
+    }
+
+    @Test
+    fun `in-flight refill does not append after the radio stopped during the fetch`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val c = controllerWithFetchGate(gate)
+        c.start("seed")
+        queue.value = listOf(queued("current"))
+        currentIndex.value = 0
+        advanceUntilIdle()
+        assertEquals(1, mixFetches)
+
+        c.stop()
+        mixResult = Result.success(listOf(track("fresh")))
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(c.appendedIds().isEmpty(), "a stopped radio must not append a resolved batch")
+        assertFalse(c.state.value.active)
     }
 }

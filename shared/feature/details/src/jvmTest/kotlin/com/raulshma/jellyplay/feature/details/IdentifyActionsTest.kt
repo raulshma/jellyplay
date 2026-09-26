@@ -126,6 +126,24 @@ class IdentifyActionsTest {
     }
 
     @Test
+    fun `appliedCount is monotonic across dismiss and sheet re-opens`() = runTest {
+        coEvery { editorRepository.applyIdentifyResult(any(), any(), any()) } returns Result.success(Unit)
+
+        val actions = actions(this, seriesSession())
+        actions.openIdentifyScreenItem()
+        actions.applyIdentify(IdentifyResult(name = "A"), replaceAllImages = false)
+        advanceUntilIdle()
+        actions.openIdentifyScreenItem() // re-open must not zero the counter
+        assertEquals(1, actions.identifyState.value.appliedCount)
+        actions.applyIdentify(IdentifyResult(name = "B"), replaceAllImages = false)
+        advanceUntilIdle()
+
+        // The screen reloads on each counter bump; equal consecutive values
+        // would silently skip the second reload.
+        assertEquals(2, actions.identifyState.value.appliedCount, "each apply must bump past every prior value")
+    }
+
+    @Test
     fun `applyIdentify failure keeps the sheet open with no appliedCount bump`() = runTest {
         coEvery { editorRepository.applyIdentifyResult(any(), any(), any()) } returns
             Result.failure(IllegalStateException("boom"))
