@@ -140,6 +140,7 @@ class RoutePredicatesTest {
         Route.PhotoAlbum("parent-1"),
         Route.PhotoViewer("item-1"),
         Route.About,
+        Route.WhatsNew,
         Route.Licenses,
         Route.WatchProgressHeatmap,
         Route.Requests,
@@ -227,7 +228,8 @@ class RoutePredicatesTest {
                 "UserStatistics", "StaleMedia", "WatchedMediaCleanup",
                 "Plugins", "PluginDetail", "PluginConfig",
                 // misc
-                "Newsletter", "Favorites", "PhotoAlbum", "About", "Licenses",
+                "Newsletter", "Favorites", "PhotoAlbum", "About", "WhatsNew",
+                "Licenses",
                 "WatchProgressHeatmap", "SubtitleTester",
             ),
             descriptorNames() - classified,
