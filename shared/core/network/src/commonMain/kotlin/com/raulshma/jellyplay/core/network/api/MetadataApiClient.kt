@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.EditorPerson
+import com.raulshma.jellyplay.core.model.IdentifyQuery
+import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MetadataEditorInfo
@@ -34,4 +36,20 @@ interface MetadataApiClient {
     suspend fun uploadSubtitle(itemId: String, data: String, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean): Result<Unit>
     suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit>
     suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>>
+
+    /**
+     * The "Identify" provider search (jellyfin-web parity): posts the query to
+     * the type-specific `/Items/RemoteSearch/{Type}` endpoint and returns the
+     * provider candidates. [IdentifyQuery.itemType] dispatches the endpoint —
+     * "Series" and "Movie" are supported; other types fail the call.
+     */
+    suspend fun identifyRemoteSearch(query: IdentifyQuery): Result<List<IdentifyResult>>
+
+    /**
+     * Applies a chosen [IdentifyResult] onto the item (metadata replacement;
+     * images replaced when [replaceAllImages], the SDK/server default).
+     * `POST /Items/RemoteSearch/Apply/{itemId}` — the server also triggers a
+     * metadata refresh of the item on apply.
+     */
+    suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean = true): Result<Unit>
 }

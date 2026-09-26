@@ -6,12 +6,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Eye
+
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.Stack2
 import com.composables.icons.tabler.outline.Trash
@@ -37,6 +39,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_downloading_series
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_edit
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_detail_up_next
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_identify
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_next_up
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_instant_mix
@@ -86,6 +89,7 @@ internal fun rememberMediaOptions(
     canDeleteDownloadedSeries: Boolean,
     canEditMetadata: Boolean,
     canRefreshMetadata: Boolean,
+    canIdentify: Boolean,
     canAddToPlaylist: Boolean,
     canAddToCollection: Boolean,
     canInstantMix: Boolean,
@@ -105,6 +109,7 @@ internal fun rememberMediaOptions(
     onShowDetailUpNext: () -> Unit = {},
     onManageSeries: () -> Unit,
     onRefreshMetadata: () -> Unit = {},
+    onIdentify: () -> Unit = {},
     onTechnicalInfo: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onAddToCollection: () -> Unit = {},
@@ -145,6 +150,7 @@ internal fun rememberMediaOptions(
     val labelTechnicalInfo = stringResource(Res.string.detail_option_technical_info)
     val labelManageSeries = stringResource(Res.string.detail_option_manage_series)
     val labelRefreshMetadata = stringResource(Res.string.detail_option_refresh_metadata)
+    val labelIdentify = stringResource(Res.string.detail_option_identify)
     val labelAddToPlaylist = stringResource(Res.string.detail_option_add_to_playlist)
     val labelAddToCollection = stringResource(Res.string.detail_option_add_to_collection)
     val labelDeleteDownloads = stringResource(Res.string.detail_option_delete_downloads)
@@ -155,8 +161,8 @@ internal fun rememberMediaOptions(
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
-        canRefreshMetadata, canAddToPlaylist, canAddToCollection, canInstantMix, canStartWatchParty, isOffline, labelManageSeries,
-        labelRefreshMetadata,
+        canRefreshMetadata, canIdentify, canAddToPlaylist, canAddToCollection, canInstantMix, canStartWatchParty, isOffline, labelManageSeries,
+        labelRefreshMetadata, labelIdentify,
         labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
         labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty) {
         buildList {
@@ -175,6 +181,13 @@ internal fun rememberMediaOptions(
             if (canRefreshMetadata) {
                 add(MediaOption(labelRefreshMetadata, Tabler.Outline.Refresh) {
                     onClose(); onRefreshMetadata()
+                })
+            }
+            // Identify (jellyfin-web parity): search providers by name/year/id
+            // and apply the real match. Same admin + remote gates as refresh.
+            if (canIdentify) {
+                add(MediaOption(labelIdentify, Tabler.Outline.Search) {
+                    onClose(); onIdentify()
                 })
             }
             if (preferences.showShareMediaOption) {

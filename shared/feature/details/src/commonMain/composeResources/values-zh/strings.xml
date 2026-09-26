@@ -440,4 +440,15 @@
     <string name="detail_option_refresh_metadata">刷新元数据</string>
     <string name="detail_msg_refresh_started">已在服务器上排队刷新元数据</string>
     <string name="detail_msg_refresh_failed">无法刷新元数据</string>
+    <string name="detail_option_identify">识别</string>
+    <string name="detail_identify_title">识别</string>
+    <string name="detail_identify_name">名称</string>
+    <string name="detail_identify_year">年份</string>
+    <string name="detail_identify_provider_id">提供商 ID</string>
+    <string name="detail_identify_search">搜索</string>
+    <string name="detail_identify_results_empty">未找到匹配项。请调整名称、年份或提供商 ID 后重新搜索。</string>
+    <string name="detail_identify_replace_images">替换全部图像</string>
+    <string name="detail_identify_apply">应用</string>
+    <string name="detail_msg_identify_applied">已从提供商替换元数据。正在重新加载…</string>
+    <string name="detail_msg_identify_failed">无法识别该项目</string>
 </resources>

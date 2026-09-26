@@ -128,7 +128,6 @@ fun MediaDetailScreen(
     val resyncState by viewModel.resync.state.collectAsStateWithLifecycle()
     val detail = uiState.detail
     val canManageSeries by viewModel.canManageSeries.collectAsStateWithLifecycle()
-    val canManageMetadata by viewModel.canManageMetadata.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
 
@@ -466,7 +465,7 @@ fun MediaDetailScreen(
                     isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
                     preferences = preferences,
                     canManageSeries = canManageSeries,
-                    canManageMetadata = canManageMetadata,
+                    canManageMetadata = uiState.canManageMetadata,
                     origin = uiState.origin,
                     detailContext = uiState.detailContext,
                     capabilities = uiState.capabilities,
@@ -693,6 +692,7 @@ fun MediaDetailScreen(
                 val metadataCallbacks = remember(viewModel) {
                     MetadataCallbacks(
                         onRefreshMetadata = { showRefreshMetadataSheet = true },
+                        onIdentify = { viewModel.metadataAdmin.openIdentifyScreenItem() },
                     )
                 }
 
@@ -846,6 +846,29 @@ fun MediaDetailScreen(
                     },
                 )
             }
+        }
+
+        // ── Identify sheet (⋮ menu). State lives in the VM's metadataAdmin
+        // helper; a successful apply bumps appliedCount → reload the item so
+        // the screen reflects the server-replaced metadata. ──
+        val identifyState by viewModel.metadataAdmin.identifyState.collectAsStateWithLifecycle()
+        LaunchedEffect(identifyState.appliedCount) {
+            if (identifyState.appliedCount > 0) {
+                viewModel.onEvent(DetailUiEvent.ForceRefresh)
+            }
+        }
+        identifyState.query?.let {
+            IdentifySheet(
+                state = identifyState,
+                onQueryChange = { name, year, providerId ->
+                    viewModel.metadataAdmin.updateIdentifyQuery { q ->
+                        q.copy(name = name, year = year, providerIds = q.providerIds.updatedProviderId(providerId))
+                    }
+                },
+                onSearch = { viewModel.metadataAdmin.searchIdentify() },
+                onApply = { result, replaceImages -> viewModel.metadataAdmin.applyIdentify(result, replaceImages) },
+                onDismiss = { viewModel.metadataAdmin.dismissIdentify() },
+            )
         }
 
         // ── "Refresh metadata" mode sheet (⋮ menu). The sheet body is shared

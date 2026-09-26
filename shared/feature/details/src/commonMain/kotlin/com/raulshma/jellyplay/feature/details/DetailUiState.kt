@@ -44,6 +44,11 @@ data class DetailUiState(
     // Sealed load state for the core fetch. Default [DetailUiLoadState.Loaded]
     // matches the former all-false default (no loading, no refreshing, no error).
     val loadState: DetailUiLoadState = DetailUiLoadState.Loaded,
+    // Whether the signed-in user may run server-side metadata actions (admin).
+    // Gates the ⋮ menu's "Refresh metadata" / "Identify" entries (folded from
+    // MetadataAdminActions.isAdmin in the VM's init collector — a bag field,
+    // not a VM member, per the ownership ratchet).
+    val canManageMetadata: Boolean = false,
     // One-shot snackbar feedback for favorite / watched / download actions is
     // surfaced via [DetailViewModel.messages] (SharedFlow<DetailMessage>), not
     // here — see [DetailMessage].

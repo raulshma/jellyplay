@@ -18,8 +18,11 @@ import kotlin.test.assertTrue
  * and the read side (the state flows, the image-URL getters, the click-time
  * selected-*-index reads, the storage probe) stays public as queries.
  *
- * Baseline: 22 members after the DetailUiEvent intent fold. Before the fold
- * the VM exposed ~48 members: the same 22 read/helper/funnel surfaces minus
+ * Baseline: 23 members — the 22 of the DetailUiEvent intent fold plus ONE
+ * seam for the metadata-maintenance feature (MetadataAdminActions hosts both
+ * refresh and identify behind a single accessor; its admin gate rides the
+ * DetailUiState bag as `canManageMetadata`, not a member). Before the fold
+ * the VM exposed ~48 members: the same read/helper/funnel surfaces minus
  * onEvent, plus 27 public command funs (loadItem, forceRefresh,
  * loadEpisodesForSeason, selectSubtitle, selectAudio, selectLocalSubtitle,
  * setEpisodesDescending, setCompactEpisodeList, playAlbum, playLocalTrack,
@@ -38,7 +41,7 @@ import kotlin.test.assertTrue
 class DetailViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 22
+    private val maxPublicInternalMembers = 23
 
     /**
      * A class-body declaration line at the ViewModel's single level of

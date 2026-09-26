@@ -450,4 +450,15 @@
     <string name="detail_option_refresh_metadata">Aggiorna metadati</string>
     <string name="detail_msg_refresh_started">Aggiornamento dei metadati accodato sul server</string>
     <string name="detail_msg_refresh_failed">Impossibile aggiornare i metadati</string>
+    <string name="detail_option_identify">Identifica</string>
+    <string name="detail_identify_title">Identifica</string>
+    <string name="detail_identify_name">Nome</string>
+    <string name="detail_identify_year">Anno</string>
+    <string name="detail_identify_provider_id">ID provider</string>
+    <string name="detail_identify_search">Cerca</string>
+    <string name="detail_identify_results_empty">Nessuna corrispondenza. Modifica nome, anno o ID provider e riprova.</string>
+    <string name="detail_identify_replace_images">Sostituisci tutte le immagini</string>
+    <string name="detail_identify_apply">Applica</string>
+    <string name="detail_msg_identify_applied">Metadati sostituiti dal provider. Ricaricamento…</string>
+    <string name="detail_msg_identify_failed">Impossibile identificare l'elemento</string>
 </resources>

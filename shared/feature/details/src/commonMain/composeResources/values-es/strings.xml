@@ -451,4 +451,15 @@
     <string name="detail_option_refresh_metadata">Actualizar metadatos</string>
     <string name="detail_msg_refresh_started">Actualización de metadatos en cola en el servidor</string>
     <string name="detail_msg_refresh_failed">No se pudieron actualizar los metadatos</string>
+    <string name="detail_option_identify">Identificar</string>
+    <string name="detail_identify_title">Identificar</string>
+    <string name="detail_identify_name">Nombre</string>
+    <string name="detail_identify_year">Año</string>
+    <string name="detail_identify_provider_id">ID del proveedor</string>
+    <string name="detail_identify_search">Buscar</string>
+    <string name="detail_identify_results_empty">Sin coincidencias. Ajusta el nombre, el año o el ID del proveedor y busca de nuevo.</string>
+    <string name="detail_identify_replace_images">Reemplazar todas las imágenes</string>
+    <string name="detail_identify_apply">Aplicar</string>
+    <string name="detail_msg_identify_applied">Metadatos reemplazados desde el proveedor. Recargando…</string>
+    <string name="detail_msg_identify_failed">No se pudo identificar el elemento</string>
 </resources>

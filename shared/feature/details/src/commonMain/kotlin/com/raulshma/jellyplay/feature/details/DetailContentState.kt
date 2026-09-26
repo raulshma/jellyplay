@@ -69,7 +69,7 @@ internal data class DetailContentState(
     val canManageSeries: Boolean,
     /**
      * The signed-in user may run server-side metadata actions (admin). Gates
-     * the ⋮ menu's "Refresh metadata" entry together with
+     * the ⋮ menu's "Refresh metadata" / "Identify" entries together with
      * [DetailCapabilities.remoteDiscovery] (resolved in `DetailContent`).
      */
     val canManageMetadata: Boolean = false,
@@ -284,6 +284,8 @@ internal data class AddToCallbacks(
 internal data class MetadataCallbacks(
     /** Open the "Refresh metadata" mode sheet for the current item. */
     val onRefreshMetadata: () -> Unit = {},
+    /** Open the "Identify" provider re-match sheet for the current item. */
+    val onIdentify: () -> Unit = {},
 )
 
 /**

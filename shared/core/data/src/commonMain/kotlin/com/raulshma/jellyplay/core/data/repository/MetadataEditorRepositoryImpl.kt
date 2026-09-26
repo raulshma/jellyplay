@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.EditableItemMetadata
+import com.raulshma.jellyplay.core.model.IdentifyQuery
+import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -82,6 +84,12 @@ class MetadataEditorRepositoryImpl constructor(
 
     override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> =
         apiClient.downloadRemoteSubtitle(itemId, subtitleId)
+
+    override suspend fun identifyRemoteSearch(query: IdentifyQuery): Result<List<IdentifyResult>> =
+        apiClient.identifyRemoteSearch(query)
+
+    override suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean): Result<Unit> =
+        apiClient.applyIdentifyResult(itemId, result, replaceAllImages)
 
     override fun getItemImageUrl(
         itemId: String,

@@ -450,4 +450,15 @@
     <string name="detail_option_refresh_metadata">Atualizar metadados</string>
     <string name="detail_msg_refresh_started">Atualização de metadados em fila no servidor</string>
     <string name="detail_msg_refresh_failed">Não foi possível atualizar os metadados</string>
+    <string name="detail_option_identify">Identificar</string>
+    <string name="detail_identify_title">Identificar</string>
+    <string name="detail_identify_name">Nome</string>
+    <string name="detail_identify_year">Ano</string>
+    <string name="detail_identify_provider_id">ID do fornecedor</string>
+    <string name="detail_identify_search">Pesquisar</string>
+    <string name="detail_identify_results_empty">Nenhuma correspondência. Ajuste o nome, o ano ou o ID do fornecedor e pesquise de novo.</string>
+    <string name="detail_identify_replace_images">Substituir todas as imagens</string>
+    <string name="detail_identify_apply">Aplicar</string>
+    <string name="detail_msg_identify_applied">Metadados substituídos do fornecedor. A recarregar…</string>
+    <string name="detail_msg_identify_failed">Não foi possível identificar o item</string>
 </resources>

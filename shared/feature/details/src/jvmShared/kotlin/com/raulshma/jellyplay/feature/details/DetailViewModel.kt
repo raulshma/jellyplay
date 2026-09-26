@@ -46,6 +46,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -347,6 +348,18 @@ class DetailViewModel internal constructor(
         strings = strings,
     )
 
+    init {
+        // Fold the metadata-maintenance admin gate into the content bag (read
+        // side — a DetailUiState field, not a VM member; the ownership ratchet
+        // counts members, not bag fields). The helper's flow is cold and
+        // re-derives on every user switch.
+        scope.launch {
+            metadataAdminActions.isAdmin.collect { isAdmin ->
+                _uiState.update { it.copy(canManageMetadata = isAdmin) }
+            }
+        }
+    }
+
     /** Download-lifecycle seam: single-item/series downloads, sheets, picker. */
     internal val downloads: DownloadLifecycleActions get() = downloadLifecycleActions
 
@@ -368,17 +381,8 @@ class DetailViewModel internal constructor(
     /** Watch-party (SyncPlay) bootstrap seam. */
     internal val watchParty: WatchPartyActions get() = watchPartyActions
 
-    /** Admin metadata actions (refresh; the ⋮ menu's metadata-maintenance entries). */
+    /** Admin metadata actions (refresh + identify; the ⋮ menu's metadata-maintenance seam). */
     internal val metadataAdmin: MetadataAdminActions get() = metadataAdminActions
-
-    /**
-     * Whether the signed-in user may run server-side metadata actions (admin).
-     * Gates the ⋮ menu's "Refresh metadata" entry. Folds the helper's cold
-     * admin flow into a StateFlow on the VM's scope (same shape as
-     * [canManageSeries]).
-     */
-    val canManageMetadata: StateFlow<Boolean> =
-        metadataAdminActions.isAdmin.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     /** Seerr request-flow seam (the state-holder pattern the helpers copy). */
     internal val seerrRequests: SeerrRequestStateHolder get() = seerrRequestState

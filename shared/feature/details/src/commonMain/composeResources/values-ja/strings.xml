@@ -440,4 +440,15 @@
     <string name="detail_option_refresh_metadata">メタデータを更新</string>
     <string name="detail_msg_refresh_started">メタデータ更新をサーバーに投入しました</string>
     <string name="detail_msg_refresh_failed">メタデータを更新できませんでした</string>
+    <string name="detail_option_identify">識別</string>
+    <string name="detail_identify_title">識別</string>
+    <string name="detail_identify_name">名前</string>
+    <string name="detail_identify_year">年</string>
+    <string name="detail_identify_provider_id">プロバイダーID</string>
+    <string name="detail_identify_search">検索</string>
+    <string name="detail_identify_results_empty">一致が見つかりません。名前・年・プロバイダーIDを調整して再検索してください。</string>
+    <string name="detail_identify_replace_images">すべての画像を置き換え</string>
+    <string name="detail_identify_apply">適用</string>
+    <string name="detail_msg_identify_applied">プロバイダーからメタデータを置き換えました。再読み込み中…</string>
+    <string name="detail_msg_identify_failed">アイテムを識別できませんでした</string>
 </resources>

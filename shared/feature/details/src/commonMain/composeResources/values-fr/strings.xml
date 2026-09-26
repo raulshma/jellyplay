@@ -450,4 +450,15 @@
     <string name="detail_option_refresh_metadata">Actualiser les métadonnées</string>
     <string name="detail_msg_refresh_started">Actualisation des métadonnées lancée sur le serveur</string>
     <string name="detail_msg_refresh_failed">Impossible d’actualiser les métadonnées</string>
+    <string name="detail_option_identify">Identifier</string>
+    <string name="detail_identify_title">Identifier</string>
+    <string name="detail_identify_name">Nom</string>
+    <string name="detail_identify_year">Année</string>
+    <string name="detail_identify_provider_id">ID du fournisseur</string>
+    <string name="detail_identify_search">Rechercher</string>
+    <string name="detail_identify_results_empty">Aucune correspondance. Ajustez le nom, l’année ou l’ID du fournisseur et relancez la recherche.</string>
+    <string name="detail_identify_replace_images">Remplacer toutes les images</string>
+    <string name="detail_identify_apply">Appliquer</string>
+    <string name="detail_msg_identify_applied">Métadonnées remplacées depuis le fournisseur. Rechargement…</string>
+    <string name="detail_msg_identify_failed">Impossible d’identifier l’élément</string>
 </resources>

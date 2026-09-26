@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.EditableItemMetadata
+import com.raulshma.jellyplay.core.model.IdentifyQuery
+import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -60,6 +62,12 @@ interface MetadataEditorRepository {
     suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit>
 
     suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>>
+
+    /** The "Identify" provider search (jellyfin-web parity; Series/Movie). */
+    suspend fun identifyRemoteSearch(query: IdentifyQuery): Result<List<IdentifyResult>>
+
+    /** Applies a chosen Identify candidate onto the item (metadata + images). */
+    suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean = true): Result<Unit>
 
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit>
 

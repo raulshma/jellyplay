@@ -152,6 +152,77 @@ class MetadataApiClientImpl(
         )
     }
 
+    // ── Identify (remote search + apply) ────────────────────────────────
+    // The itemLookupApi was unused in the SDK pin until this feature; the
+    // per-type query DTOs differ only in the searchInfo shape, so the dispatch
+    // is a when over the wire type with a per-type searchInfo builder.
+
+    override suspend fun identifyRemoteSearch(query: com.raulshma.jellyplay.core.model.IdentifyQuery): Result<List<com.raulshma.jellyplay.core.model.IdentifyResult>> =
+        engine.withApi { api ->
+            val uuid = requireItemUuid(query.itemId)
+            val providerIds = query.providerIds.takeIf { it.isNotEmpty() }?.mapValues { it.value as String? }
+            val results: List<org.jellyfin.sdk.model.api.RemoteSearchResult> = when (query.itemType) {
+                "Series" -> api.itemLookupApi.getSeriesRemoteSearchResults(
+                    org.jellyfin.sdk.model.api.SeriesInfoRemoteSearchQuery(
+                        searchInfo = org.jellyfin.sdk.model.api.SeriesInfo(
+                            name = query.name,
+                            providerIds = providerIds,
+                            year = query.year,
+                            isAutomated = false,
+                        ),
+                        itemId = uuid,
+                        searchProviderName = null,
+                        includeDisabledProviders = false,
+                    ),
+                ).content
+                "Movie" -> api.itemLookupApi.getMovieRemoteSearchResults(
+                    org.jellyfin.sdk.model.api.MovieInfoRemoteSearchQuery(
+                        searchInfo = org.jellyfin.sdk.model.api.MovieInfo(
+                            name = query.name,
+                            providerIds = providerIds,
+                            year = query.year,
+                            isAutomated = false,
+                        ),
+                        itemId = uuid,
+                        searchProviderName = null,
+                        includeDisabledProviders = false,
+                    ),
+                ).content
+                else -> throw IllegalArgumentException(
+                    "Identify supports Series and Movie items, got: ${query.itemType}",
+                )
+            }
+            results.map { dto ->
+                com.raulshma.jellyplay.core.model.IdentifyResult(
+                    name = dto.name ?: "",
+                    year = dto.productionYear,
+                    providerIds = dto.providerIds.orEmpty().mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }.toMap(),
+                    searchProviderName = dto.searchProviderName,
+                    imageUrl = dto.imageUrl,
+                    overview = dto.overview,
+                )
+            }
+        }
+
+    override suspend fun applyIdentifyResult(
+        itemId: String,
+        result: com.raulshma.jellyplay.core.model.IdentifyResult,
+        replaceAllImages: Boolean,
+    ): Result<Unit> = engine.withApi { api ->
+        api.itemLookupApi.applySearchCriteria(
+            itemId = requireItemUuid(itemId),
+            replaceAllImages = replaceAllImages,
+            data = org.jellyfin.sdk.model.api.RemoteSearchResult(
+                name = result.name,
+                providerIds = result.providerIds.mapValues { it.value as String? },
+                productionYear = result.year,
+                imageUrl = result.imageUrl,
+                searchProviderName = result.searchProviderName,
+                overview = result.overview,
+            ),
+        )
+    }
+
     override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> = engine.withApi { api ->
         val uuid = requireItemUuid(itemId)
         api.imageApi.getItemImageInfos(itemId = uuid).content.map { dto ->

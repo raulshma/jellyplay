@@ -440,4 +440,15 @@
     <string name="detail_option_refresh_metadata">메타데이터 새로 고침</string>
     <string name="detail_msg_refresh_started">메타데이터 새로 고침이 서버에 요청되었습니다</string>
     <string name="detail_msg_refresh_failed">메타데이터를 새로 고침할 수 없습니다</string>
+    <string name="detail_option_identify">식별</string>
+    <string name="detail_identify_title">식별</string>
+    <string name="detail_identify_name">이름</string>
+    <string name="detail_identify_year">연도</string>
+    <string name="detail_identify_provider_id">공급자 ID</string>
+    <string name="detail_identify_search">검색</string>
+    <string name="detail_identify_results_empty">일치 항목이 없습니다. 이름, 연도 또는 공급자 ID를 조정 후 다시 검색하세요.</string>
+    <string name="detail_identify_replace_images">모든 이미지 교체</string>
+    <string name="detail_identify_apply">적용</string>
+    <string name="detail_msg_identify_applied">공급자에서 메타데이터를 교체했습니다. 새로 고치는 중…</string>
+    <string name="detail_msg_identify_failed">항목을 식별할 수 없습니다</string>
 </resources>

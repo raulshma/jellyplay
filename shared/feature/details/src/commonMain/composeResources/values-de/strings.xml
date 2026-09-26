@@ -449,4 +449,15 @@
     <string name="detail_option_refresh_metadata">Metadaten aktualisieren</string>
     <string name="detail_msg_refresh_started">Aktualisierung der Metadaten auf dem Server gestartet</string>
     <string name="detail_msg_refresh_failed">Metadaten konnten nicht aktualisiert werden</string>
+    <string name="detail_option_identify">Identifizieren</string>
+    <string name="detail_identify_title">Identifizieren</string>
+    <string name="detail_identify_name">Name</string>
+    <string name="detail_identify_year">Jahr</string>
+    <string name="detail_identify_provider_id">Anbieter-ID</string>
+    <string name="detail_identify_search">Suchen</string>
+    <string name="detail_identify_results_empty">Keine Treffer. Passe Name, Jahr oder Anbieter-ID an und suche erneut.</string>
+    <string name="detail_identify_replace_images">Alle Bilder ersetzen</string>
+    <string name="detail_identify_apply">Übernehmen</string>
+    <string name="detail_msg_identify_applied">Metadaten vom Anbieter übernommen. Wird neu geladen…</string>
+    <string name="detail_msg_identify_failed">Element konnte nicht identifiziert werden</string>
 </resources>

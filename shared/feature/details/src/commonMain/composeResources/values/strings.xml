@@ -476,4 +476,15 @@
     <string name="detail_option_refresh_metadata">Refresh metadata</string>
     <string name="detail_msg_refresh_started">Metadata refresh queued on the server</string>
     <string name="detail_msg_refresh_failed">Couldn't refresh metadata</string>
+    <string name="detail_option_identify">Identify</string>
+    <string name="detail_identify_title">Identify</string>
+    <string name="detail_identify_name">Name</string>
+    <string name="detail_identify_year">Year</string>
+    <string name="detail_identify_provider_id">Provider ID</string>
+    <string name="detail_identify_search">Search</string>
+    <string name="detail_identify_results_empty">No matches found. Adjust the name, year, or provider ID and search again.</string>
+    <string name="detail_identify_replace_images">Replace all images</string>
+    <string name="detail_identify_apply">Apply</string>
+    <string name="detail_msg_identify_applied">Metadata replaced from provider. Reloading…</string>
+    <string name="detail_msg_identify_failed">Couldn't identify the item</string>
 </resources>
