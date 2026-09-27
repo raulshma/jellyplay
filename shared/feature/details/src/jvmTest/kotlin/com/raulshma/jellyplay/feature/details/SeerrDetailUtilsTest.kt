@@ -117,6 +117,37 @@ class SeerrDetailUtilsTest {
         assertNull(youTubeThumbnailUrl(null, "abc"))
     }
 
+    // ── Watch-provider logo URL (TMDB shape) ──────────────────────────
+
+    @Test
+    fun `provider logo proxies through a configured seerr server`() {
+        assertEquals(
+            "https://seerr.example/imageproxy/tmdb/t/p/w45/netflix.png",
+            seerrProviderLogoUrl("/netflix.png", "https://seerr.example"),
+        )
+    }
+
+    @Test
+    fun `provider logo trims trailing server slashes and leading path slashes`() {
+        assertEquals(
+            "https://seerr.example/imageproxy/tmdb/t/p/w45/prime.png",
+            seerrProviderLogoUrl("prime.png", "https://seerr.example/"),
+        )
+    }
+
+    @Test
+    fun `provider logo falls back to the TMDB CDN without a server`() {
+        assertEquals(
+            "https://image.tmdb.org/t/p/w45/disney.png",
+            seerrProviderLogoUrl("/disney.png", ""),
+        )
+    }
+
+    @Test
+    fun `provider logo null for null path`() {
+        assertNull(seerrProviderLogoUrl(null, "https://seerr.example"))
+    }
+
     // ── Runtime formatting (delegates to core/ui) ─────────────────────
 
     @Test

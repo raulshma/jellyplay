@@ -2,6 +2,13 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlatformKind
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_commercial
+import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_intro
+import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_outro
+import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_preview
+import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_recap
+import com.raulshma.jellyplay.core.ui.generated.resources.core_segment_unknown
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import org.jetbrains.compose.resources.StringResource
 import kotlin.test.Test
@@ -17,7 +24,12 @@ import kotlin.test.assertTrue
  * search faces (`searchTitleRes`/`searchSubtitleRes`), and every
  * `*SearchItems` list is the pure [SettingsRowRecord.toSearchItems] projection
  * of its record list — the catalog adds nothing but the shared `ss_cat_*`
- * category resource.
+ * category resource. The search title carries the default-title fold: a null
+ * [SettingsRowRecord.searchTitleRes] restates the row's screen title, so the
+ * projection resolves it to `titleRes` — a restating declaration must never
+ * reintroduce a value-twin `ss_*_title` resource, and a genuinely distinct
+ * search title (deliberately descriptive, or a translation that diverged in
+ * any locale) must stay explicit.
  *
  * As in `SettingsSearchCatalogTest`, resource resolvability is
  * compile-time-guaranteed by the generated accessors (the JVM test never
@@ -70,7 +82,9 @@ class SettingsRowRecordTest {
             records.zip(items).forEach { (rec, item) ->
                 assertEquals(rec.id, item.id)
                 assertIs<StringResource>(item.titleRes)
-                assertEquals(rec.searchTitleRes, item.titleRes, "search title drift for ${rec.id}")
+                // the default-title fold: an explicit search title wins, a
+                // null one resolves to the record's screen title
+                assertEquals(rec.searchTitleRes ?: rec.titleRes, item.titleRes, "search title drift for ${rec.id}")
                 assertEquals(rec.searchSubtitleRes, item.subtitleRes, "search subtitle drift for ${rec.id}")
                 assertEquals(rec.keywords, item.keywords, "keywords drift for ${rec.id}")
                 assertEquals(rec.route, item.route, "route drift for ${rec.id}")
@@ -124,6 +138,18 @@ class SettingsRowRecordTest {
     }
 
     @Test
+    fun `a defaulted search title always has a screen title to fold to`() {
+        // The default-title fold resolves null searchTitleRes to titleRes;
+        // a record defaulting with a null titleRes would have nothing to fold
+        // to (toSearchItem's requireNotNull) — the no-screen-title exceptions
+        // must keep their explicit ss_*_title declarations instead.
+        val orphanDefaults = SettingsRowRecords.all
+            .filter { it.searchTitleRes == null && it.titleRes == null }
+            .map { it.id }
+        assertEquals(emptyList(), orphanDefaults, "records defaulting the search title but declaring no screen title")
+    }
+
+    @Test
     fun `rowIcon projects the record icon`() {
         // The screen-side icon resolver must be the pure record projection:
         // rowIcon(id) === record.icon for every declared row, so a screen row
@@ -136,13 +162,29 @@ class SettingsRowRecordTest {
     @Test
     fun `media segment records share the enum's core_segment resources`() {
         // The screen side is enum-driven (MediaSegmentType) and stays there;
-        // the records mirror the SAME accessors the enum names, so the
-        // resource still has exactly one declaration home.
+        // the records mirror the SAME accessors SegmentNames.kt maps per enum
+        // entry, so the resource still has exactly one declaration home — the
+        // default-title fold (null searchTitleRes resolving to titleRes) is
+        // how they share it.
         val segmentRecords = SettingsRowRecords.all.filter { it.id.startsWith("media_segment_") }
         assertEquals(MediaSegmentType.entries.size, segmentRecords.size)
         segmentRecords.forEach { rec ->
-            assertEquals(rec.titleRes, rec.searchTitleRes, "${rec.id} must reuse the enum's title accessor")
+            val type = requireNotNull(
+                MediaSegmentType.entries.firstOrNull { "media_segment_${it.name.lowercase()}" == rec.id },
+            ) { "${rec.id} does not follow the media_segment_<enum> naming" }
+            assertNull(rec.searchTitleRes, "${rec.id} must default its search title to the enum's title")
+            assertEquals(segmentTitleRes(type), rec.titleRes, "${rec.id} must reuse the enum's title accessor")
         }
+    }
+
+    /** The SegmentNames.kt title mapping, mirrored for the non-composable assertion above. */
+    private fun segmentTitleRes(type: MediaSegmentType): StringResource = when (type) {
+        MediaSegmentType.INTRO -> CoreUiRes.string.core_segment_intro
+        MediaSegmentType.OUTRO -> CoreUiRes.string.core_segment_outro
+        MediaSegmentType.PREVIEW -> CoreUiRes.string.core_segment_preview
+        MediaSegmentType.RECAP -> CoreUiRes.string.core_segment_recap
+        MediaSegmentType.COMMERCIAL -> CoreUiRes.string.core_segment_commercial
+        MediaSegmentType.UNKNOWN -> CoreUiRes.string.core_segment_unknown
     }
 
     @Test

@@ -131,7 +131,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_br
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_speed_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_speed_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_strength_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_strength_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_duck_on_transient_focus_loss_subtitle
@@ -187,7 +186,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_debanding_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_debanding_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_extra_config_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_extra_config_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_frame_drop_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_frame_drop_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_hdr_passthrough_subtitle
@@ -229,7 +227,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_b
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reset_engine_defaults_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reset_engine_defaults_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seek_duration_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seek_duration_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_clock_player_subtitle
@@ -239,7 +236,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_time_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_segments_on_seek_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_segments_on_seek_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_swipe_seek_range_subtitle
@@ -259,7 +255,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_tv_zoom_mo
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_autoplay_next_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_autoplay_next_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_cache_size_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_cache_size_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_audio_output_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_audio_output_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_audio_time_stretch_subtitle
@@ -629,7 +624,6 @@ internal val PlaybackSettingsRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.VIDEO_CACHE_SIZE,
         titleRes = Res.string.settings_video_cache_size,
-        searchTitleRes = Res.string.ss_video_cache_size_title,
         searchSubtitleRes = Res.string.ss_video_cache_size_subtitle,
         keywords = listOf("cache", "video cache", "size", "storage", "stream cache"),
         route = Route.PlaybackSettings(),
@@ -754,7 +748,6 @@ internal val PlaybackSettingsRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
         titleRes = Res.string.ss_remember_volume_title,
-        searchTitleRes = Res.string.ss_remember_volume_title,
         searchSubtitleRes = Res.string.ss_remember_volume_subtitle,
         keywords = listOf("volume", "remember", "memory", "per content", "content type", "loudness", "level", "movies", "audiobooks"),
         route = Route.PlaybackSettings(),
@@ -809,7 +802,6 @@ internal val PlaybackAdvancedVideoRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH,
         titleRes = Res.string.settings_dialogue_boost_strength,
-        searchTitleRes = Res.string.ss_dialogue_boost_strength_title,
         searchSubtitleRes = Res.string.ss_dialogue_boost_strength_subtitle,
         keywords = listOf("dialogue", "boost", "strength", "level", "speech", "amplify"),
         route = Route.PlaybackSettings(),
@@ -1101,7 +1093,6 @@ internal val MpvEngineRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.MPV_EXTRA_CONFIG,
         titleRes = Res.string.settings_advanced_config,
-        searchTitleRes = Res.string.ss_mpv_extra_config_title,
         searchSubtitleRes = Res.string.ss_mpv_extra_config_subtitle,
         keywords = listOf("mpv", "advanced", "config", "raw", "options", "editor", "custom"),
         route = Route.PlaybackSettings(),
@@ -1111,7 +1102,6 @@ internal val MpvEngineRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.RESET_ENGINE_DEFAULTS,
         titleRes = Res.string.settings_reset_to_defaults,
-        searchTitleRes = Res.string.ss_reset_engine_defaults_title,
         searchSubtitleRes = Res.string.ss_reset_engine_defaults_subtitle,
         keywords = listOf("reset", "defaults", "restore", "engine", "mpv", "vlc", "exoplayer", "configuration"),
         route = Route.PlaybackSettings(),
@@ -1431,7 +1421,6 @@ internal val LiveTvRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.MEDIA_SEGMENT_INTRO,
         titleRes = CoreUiRes.string.core_segment_intro,
-        searchTitleRes = CoreUiRes.string.core_segment_intro,
         searchSubtitleRes = CoreUiRes.string.core_segment_intro_desc,
         keywords = listOf("segment", "intro", "skip", "opening", "credits", "marker"),
         route = Route.PlaybackSettings(),
@@ -1441,7 +1430,6 @@ internal val LiveTvRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.MEDIA_SEGMENT_OUTRO,
         titleRes = CoreUiRes.string.core_segment_outro,
-        searchTitleRes = CoreUiRes.string.core_segment_outro,
         searchSubtitleRes = CoreUiRes.string.core_segment_outro_desc,
         keywords = listOf("segment", "outro", "ending", "skip", "credits", "marker"),
         route = Route.PlaybackSettings(),
@@ -1451,7 +1439,6 @@ internal val LiveTvRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.MEDIA_SEGMENT_PREVIEW,
         titleRes = CoreUiRes.string.core_segment_preview,
-        searchTitleRes = CoreUiRes.string.core_segment_preview,
         searchSubtitleRes = CoreUiRes.string.core_segment_preview_desc,
         keywords = listOf("segment", "preview", "next episode", "recap", "skip", "marker"),
         route = Route.PlaybackSettings(),
@@ -1461,7 +1448,6 @@ internal val LiveTvRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.MEDIA_SEGMENT_RECAP,
         titleRes = CoreUiRes.string.core_segment_recap,
-        searchTitleRes = CoreUiRes.string.core_segment_recap,
         searchSubtitleRes = CoreUiRes.string.core_segment_recap_desc,
         keywords = listOf("segment", "recap", "previously on", "skip", "marker"),
         route = Route.PlaybackSettings(),
@@ -1471,7 +1457,6 @@ internal val LiveTvRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.MEDIA_SEGMENT_COMMERCIAL,
         titleRes = CoreUiRes.string.core_segment_commercial,
-        searchTitleRes = CoreUiRes.string.core_segment_commercial,
         searchSubtitleRes = CoreUiRes.string.core_segment_commercial_desc,
         keywords = listOf("segment", "commercial", "ad", "advertisement", "skip", "marker"),
         route = Route.PlaybackSettings(),
@@ -1481,7 +1466,6 @@ internal val LiveTvRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.MEDIA_SEGMENT_UNKNOWN,
         titleRes = CoreUiRes.string.core_segment_unknown,
-        searchTitleRes = CoreUiRes.string.core_segment_unknown,
         searchSubtitleRes = CoreUiRes.string.core_segment_unknown_desc,
         keywords = listOf("segment", "unknown", "skip", "marker", "unidentified"),
         route = Route.PlaybackSettings(),
@@ -1491,7 +1475,6 @@ internal val LiveTvRowRecords = listOf(
     SettingsRowRecord(
         id = PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK,
         titleRes = Res.string.settings_skip_segments_on_seek,
-        searchTitleRes = Res.string.ss_skip_segments_on_seek_title,
         searchSubtitleRes = Res.string.ss_skip_segments_on_seek_subtitle,
         keywords = listOf("segment", "skip", "seek", "forward", "commercial", "auto"),
         route = Route.PlaybackSettings(),

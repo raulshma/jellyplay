@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrAuthenticator
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 
 class SeerrSettingsViewModel(
-    private val seerrRepository: SeerrRepository,
+    private val seerrAuthenticator: SeerrAuthenticator,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val secureCredentialsStore: SeerrSecureCredentialsStore,
 ) : JellyPlayViewModel() {
@@ -174,14 +174,14 @@ class SeerrSettingsViewModel(
             is SeerrProbeRequest.ApiKey -> {
                 seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.API_KEY)
                 secureCredentialsStore.setApiKey(request.apiKey)
-                seerrRepository.testApiKeyConnection().fold(
+                seerrAuthenticator.testApiKeyConnection().fold(
                     onSuccess = { ConnectionProbe.Outcome.Reachable(SeerrConnectionDetails(it.version)) },
                     onFailure = { ConnectionProbe.unreachable(it.message) },
                 )
             }
             is SeerrProbeRequest.Jellyfin -> probeLogin(
                 method = SeerrAuthMethod.JELLYFIN,
-                login = { seerrRepository.loginJellyfin(request.username, request.password) },
+                login = { seerrAuthenticator.loginJellyfin(request.username, request.password) },
                 persistCredentials = {
                     seerrPreferencesStore.setUsername(request.username)
                     secureCredentialsStore.setPassword(request.password)
@@ -189,7 +189,7 @@ class SeerrSettingsViewModel(
             )
             is SeerrProbeRequest.Local -> probeLogin(
                 method = SeerrAuthMethod.LOCAL,
-                login = { seerrRepository.loginLocal(request.email, request.password) },
+                login = { seerrAuthenticator.loginLocal(request.email, request.password) },
                 persistCredentials = {
                     seerrPreferencesStore.setEmail(request.email)
                     secureCredentialsStore.setPassword(request.password)

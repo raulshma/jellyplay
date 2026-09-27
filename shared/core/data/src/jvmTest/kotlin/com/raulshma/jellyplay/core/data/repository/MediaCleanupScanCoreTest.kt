@@ -50,7 +50,8 @@ class MediaCleanupScanCoreTest {
     }
 
     private fun buildCore(): MediaCleanupScanCore = MediaCleanupScanCore(
-        apiClient = mockk(),
+        authApiClient = mockk(),
+        mediaInfoApiClient = mockk(),
         auditLogDao = database.auditLogDao(),
         scanStateDao = database.scanStateDao(),
         json = json,

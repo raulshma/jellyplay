@@ -56,7 +56,8 @@ class CoreDataWorkerFactory : WorkerFactory() {
             )
             WatchedMediaScanWorker::class.simpleName -> WatchedMediaScanWorker(
                 context, workerParameters,
-                apiClient = koin().get(),
+                authApiClient = koin().get(),
+                mediaInfoApiClient = koin().get(),
                 scanStateDao = koin().get(),
             )
             TvWatchNextWorker::class.simpleName -> TvWatchNextWorker(

@@ -231,7 +231,7 @@ val settingsModule: Module = module {
     }
     viewModel {
         SeerrSettingsViewModel(
-            seerrRepository = get(),
+            seerrAuthenticator = get(),
             seerrPreferencesStore = get(),
             secureCredentialsStore = get(),
         )

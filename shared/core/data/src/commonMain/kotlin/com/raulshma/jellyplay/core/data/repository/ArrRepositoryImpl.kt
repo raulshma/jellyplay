@@ -72,14 +72,21 @@ import kotlinx.datetime.LocalDate
  * application scope (never cancelled — this singleton lives for the process
  * lifetime); its `SupervisorJob` context keeps a failure in one fan-out
  * branch from cancelling siblings.
+ *
+ * Also implements [SonarrSeriesOperations] — the Manage-Series-only Sonarr
+ * series-management seam split out of the aggregate interface. The members
+ * and their `withResolvedSonarrSeries` guard cluster live unchanged below;
+ * dataSeerrArrModule binds that seam over this same single, exactly the
+ * `[ArrRepository]`-over-the-impl pattern.
  */
 class ArrRepositoryImpl(
     private val radarrApiClient: RadarrApiClient,
     private val sonarrApiClient: SonarrApiClient,
-    private val seerrRepository: SeerrRepository,
+    private val seerrServiceDirectory: SeerrServiceDirectory,
     private val arrPreferencesStore: ArrPreferencesStore,
     private val cacheScope: CoroutineScope,
-) : ArrRepository {
+) : ArrRepository,
+    SonarrSeriesOperations {
 
     /** Bounded concurrency for Seerr detail fan-out during server resolution. */
     private val resolveSemaphore = Semaphore(4)
@@ -256,6 +263,34 @@ class ArrRepositoryImpl(
             }
         }
 
+    /**
+     * The deep single-row delete the two queue screens share — see the
+     * interface KDoc for the invariant. The delete leg IS the
+     * [deleteQueueItem] choreography (owning-server routing + hot-feed
+     * refresh via the [withServer] seam); the replacement search rides only
+     * a successful delete and its own result is folded away (both call sites
+     * treated a failed follow-up search as silent, so the folded shape is
+     * behavior-identical to the two hand-copied ViewModel bodies).
+     */
+    override suspend fun deleteQueueRow(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val deleted = withServer(item.serverId, item.serverKind, refresh = { refreshQueue() }) { client ->
+                client.deleteQueueItem(
+                    item.queueId,
+                    ArrQueueDeleteOptions(
+                        removeFromClient = true,
+                        blocklist = blocklist,
+                        skipRedownload = !searchAgain,
+                    ),
+                )
+            }
+            val tmdb = item.tmdbId
+            if (deleted.isSuccess && searchAgain && tmdb != null) {
+                searchForTmdb(tmdb, item.serverKind)
+            }
+            deleted
+        }
+
     override suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit> =
         withContext(cacheScope.coroutineContext) {
             val server = findServer(item.serverId, item.serverKind) ?: return@withContext noServer()
@@ -368,7 +403,10 @@ class ArrRepositoryImpl(
         Result.success(winner)
     }
 
-    // ── Sonarr series management ("Manage Series" screen) ────────────────
+    // ── Sonarr series management (the SonarrSeriesOperations seam) ───────
+    // The Manage-Series screen's exclusive family — split out of
+    // ArrRepository as its own consumer seam; the overrides below satisfy
+    // SonarrSeriesOperations, which dataSeerrArrModule binds over this single.
 
     override suspend fun resolveSonarrSeries(tvdbId: Int): Result<ArrSeriesResolution> =
         withResolvedSonarrSeries(tvdbId) { target ->
@@ -688,14 +726,14 @@ class ArrRepositoryImpl(
      * tailored UI hint.
      */
     private suspend fun discoverRadarrServers(): DiscoveryOutcome {
-        return seerrRepository.getRadarrSettings().fold(
+        return seerrServiceDirectory.getRadarrSettings().fold(
             onSuccess = { list -> DiscoveryOutcome(list.mapNotNull { it.toArrServerConfig() }) },
             onFailure = { DiscoveryOutcome(error = it.toDiscoveryError()) },
         )
     }
 
     private suspend fun discoverSonarrServers(): DiscoveryOutcome {
-        return seerrRepository.getSonarrSettings().fold(
+        return seerrServiceDirectory.getSonarrSettings().fold(
             onSuccess = { list -> DiscoveryOutcome(list.mapNotNull { it.toArrServerConfig() }) },
             onFailure = { DiscoveryOutcome(error = it.toDiscoveryError()) },
         )

@@ -9,7 +9,6 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
-import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
@@ -398,18 +397,12 @@ class DesktopAudioQueueManager(
     fun start() {
         lyricsManager.initialize(scope)
         scope.launch {
-            val items = queuePersistenceHelper.loadQueue()
-            if (items.isNotEmpty()) {
-                state._queue.value = items
-            }
-            val savedState = queuePersistenceHelper.loadState()
-            savedState?.let { s ->
-                state._currentIndex.value = s.currentIndex
-                state._currentPosition.value = s.currentPositionMs
-                state._repeatMode.value = s.repeatMode.coerceIn(0, 2)
-                state._shuffleMode.value = s.shuffleEnabled
-                state._speed.value = s.playbackSpeed
-            }
+            // Chassis command: the bulk cold-start restore (empty queue
+            // writes nothing; null state leaves the five cells untouched).
+            state.restorePersisted(
+                queue = queuePersistenceHelper.loadQueue(),
+                savedState = queuePersistenceHelper.loadState(),
+            )
             queuePersistenceHelper.observeQueue(
                 scope = scope,
                 queue = state._queue,
@@ -498,7 +491,7 @@ class DesktopAudioQueueManager(
             val track = consumePrefetched(item.id, startPositionMs)
                 ?: trackResolver.resolve(item.id, startPositionMs)
             if (track != null) {
-                state._playbackError.value = null
+                state.setLoadError(null)
                 // Android: applyReplayGain(item.normalizationGain, shuffle)
                 // before the player transition (AudioPlaybackManager advance).
                 effectsManager?.applyReplayGainForTrack(item.normalizationGain, state.shuffleMode.value)
@@ -515,8 +508,8 @@ class DesktopAudioQueueManager(
             } else {
                 // Android: an unresolvable item never enters the prebuilt
                 // playlist; the desktop discovers it here instead.
-                state._playbackError.value = "Failed to load track"
-                state._isPlaying.value = false
+                state.setLoadError("Failed to load track")
+                state.parkPlayback()
             }
         }
     }
@@ -568,6 +561,113 @@ class DesktopAudioQueueManager(
 
     // ── AudioPlayerEngine: play(itemId) — the Android play() mirror ────────
 
+    /**
+     * The shared (commonMain) play-path skeleton — everything from the stop
+     * report through the launched resolve/publish/append/load/report/lyrics/
+     * ticker choreography. This manager supplies the desktop seams: its
+     * [AudioTrackResolver] resolve, the engine `load()` write, the pre-load
+     * ReplayGain apply (its declared hook position — Android applies
+     * post-lyrics) and the next-item-only prefetch (the declared pre-warm
+     * divergence).
+     */
+    private val playPath = AudioPlayPath(
+        scope = scope,
+        playbackRepository = playbackRepository,
+        progressReporter = progressReporter,
+        state = state,
+        resolve = { itemId ->
+            trackResolver.resolve(itemId, 0L)?.let { track ->
+                val resumeTicks = track.resumePositionTicks ?: 0L
+                AudioPlayTrack(
+                    itemId = itemId,
+                    startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L,
+                    mediaSourceId = track.mediaSourceId,
+                    title = track.title,
+                    artist = track.artist,
+                    artistId = track.artistId,
+                    album = track.album,
+                    // The desktop lyric fetch rides the queue row through
+                    // state.fetchLyrics (below); these stay unfilled.
+                    lyricArtistName = null,
+                    lyricTrackName = "",
+                    lyricDurationSec = null,
+                    normalizationGain = track.normalizationGain,
+                    durationMs = track.durationMs,
+                    uri = track.uri,
+                )
+            }
+        },
+        // Divergence (declared): the resolution seam folds detail+local into
+        // one call, so a null result has no finer message than the constant.
+        loadFailureText = { "Failed to load track" },
+        clearTrackScopedState = {
+            clearAbLoop()
+            // An explicit play() changes the playback context — any
+            // next-item prefetch scheduled for the previous context is stale.
+            clearPrefetch()
+        },
+        onLoadingItemChanged = { loading -> _isLoadingItemFlag = loading },
+        acquireEngine = { getOrCreateEngine() },
+        publishDetail = { track ->
+            // Detail publish shape: the ONE site that knows the artist id
+            // and the server image url (Android play()'s detail path).
+            state.nowPlayingTracker.publishDetail(
+                itemId = track.itemId,
+                title = track.title,
+                artist = track.artist,
+                artistId = track.artistId,
+                album = track.album ?: "",
+                albumArtUrl = playbackRepository.getImageUrl(track.itemId, maxWidth = 600),
+            )
+        },
+        appendQueueItem = { track ->
+            AudioQueueItem(
+                id = track.itemId,
+                name = title.value,
+                artist = artist.value,
+                album = album.value,
+                imageUrl = albumArtUrl.value,
+                mediaSourceId = track.mediaSourceId,
+                durationMs = track.durationMs,
+                normalizationGain = track.normalizationGain,
+            )
+        },
+        // Android play(): effectsProcessor.applyReplayGain(
+        // detail.item.normalizationGain, _shuffleMode.value) — applied
+        // BEFORE the engine load here (the af chain re-push position).
+        beforeLoad = { track, clickedItem ->
+            effectsManager?.applyReplayGainForTrack(
+                clickedItem.normalizationGain ?: track.normalizationGain,
+                state.shuffleMode.value,
+            )
+        },
+        loadIntoEngine = { track, clickedItem, startPositionMs ->
+            // The resolver's uri is non-null whenever a track resolved; the
+            // guard keeps the nullable [AudioPlayTrack.uri] honest without a
+            // labeled early return.
+            val uri = track.uri
+            if (uri != null) {
+                getOrCreateEngine().load(
+                    PlaybackRequest(
+                        uri = uri,
+                        title = clickedItem.name,
+                        startPositionMs = startPositionMs,
+                        serverDurationMs = clickedItem.durationMs,
+                        normalizationGain = clickedItem.normalizationGain,
+                    ),
+                )
+            }
+        },
+        fetchLyrics = { track, clickedItem ->
+            state.fetchLyrics(
+                item = clickedItem,
+                durationSecOverride = track.durationMs.takeIf { it > 0 }?.let { it / 1000.0 },
+            )
+        },
+        afterReporting = { _, _ -> schedulePrefetchForNext() },
+        startPositionTracking = { startPositionTracking() },
+    )
+
     override fun play(itemId: String) {
         assertMainThread("play")
 
@@ -585,97 +685,7 @@ class DesktopAudioQueueManager(
             }
         }
 
-        // No-arg shape: current item + engine position from the reporter's
-        // providers; session id rotates synchronously inside.
-        progressReporter.reportStopped()
-        // A→B loop is track-specific; clear it when loading a new item.
-        clearAbLoop()        // An explicit play() changes the playback context — any next-item
-        // prefetch scheduled for the previous context is stale.
-        clearPrefetch()
-        state.currentItemId = itemId
-        _isLoadingItemFlag = true
-        state._isLoadingItem.value = true
-
-        val player = getOrCreateEngine()
-
-        scope.launch {
-            val track = trackResolver.resolve(itemId, 0L)
-            if (track != null) {
-                state._playbackError.value = null
-                // Detail publish shape: the ONE site that knows the artist id
-                // and the server image url (Android play()'s detail path).
-                state.nowPlayingTracker.publishDetail(
-                    itemId = itemId,
-                    title = track.title,
-                    artist = track.artist,
-                    artistId = track.artistId,
-                    album = track.album ?: "",
-                    albumArtUrl = playbackRepository.getImageUrl(itemId, maxWidth = 600),
-                )
-
-                val resumeTicks = track.resumePositionTicks ?: 0L
-                val startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L
-
-                val q = state._queue.value
-                val currentIdx = state.currentIndex.value
-                val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
-                if (!isInQueue) {
-                    val queueItem = AudioQueueItem(
-                        id = itemId,
-                        name = title.value,
-                        artist = artist.value,
-                        album = album.value,
-                        imageUrl = albumArtUrl.value,
-                        mediaSourceId = track.mediaSourceId,
-                        durationMs = track.durationMs,
-                        normalizationGain = track.normalizationGain,
-                    )
-                    state.appendPlayedItem(queueItem)
-                }
-
-                val clickedItem = state._queue.value.getOrNull(state.currentIndex.value)
-                if (clickedItem != null) {
-                    // Android play(): effectsProcessor.applyReplayGain(
-                    // detail.item.normalizationGain, _shuffleMode.value).
-                    effectsManager?.applyReplayGainForTrack(
-                        clickedItem.normalizationGain ?: track.normalizationGain,
-                        state.shuffleMode.value,
-                    )
-                    player.load(
-                        PlaybackRequest(
-                            uri = track.uri,
-                            title = clickedItem.name,
-                            startPositionMs = startPositionMs,
-                            serverDurationMs = clickedItem.durationMs,
-                            normalizationGain = clickedItem.normalizationGain,
-                        ),
-                    )
-
-                    playbackRepository.reportPlaybackStart(
-                        PlaybackStartInfo(
-                            itemId = itemId,
-                            sessionId = state.playSessionId,
-                            mediaSourceId = track.mediaSourceId,
-                            startPositionTicks = if (startPositionMs > 0) startPositionMs * 10_000 else null,
-                        )
-                    )
-
-                    state.fetchLyrics(
-                        item = clickedItem,
-                        durationSecOverride = track.durationMs.takeIf { it > 0 }?.let { it / 1000.0 },
-                    )
-                    // Divergence (declared): pre-warm is NEXT-ITEM-ONLY —
-                    // Android builds MediaItems for the whole queue here.
-                    schedulePrefetchForNext()
-                    startPositionTracking()
-                    progressReporter.start()
-                }
-            } else {
-                state._playbackError.value = "Failed to load track"
-            }
-            _isLoadingItemFlag = false
-            state._isLoadingItem.value = false
-        }
+        playPath.start(itemId)
     }
 
     // ── AudioQueueManager: mutations (chassis-core delegation) ─────────────
@@ -776,7 +786,7 @@ class DesktopAudioQueueManager(
     override fun setCrossfadeDurationMs(ms: Long) {
         // State mirror of Android's flag interplay; no audible crossfade on
         // desktop (declared divergence).
-        state._crossfadeDurationMs.value = ms
+        state.setCrossfadeDurationMs(ms)
         if (ms > 0) {
             gaplessEnabled = false
         } else {
@@ -787,7 +797,7 @@ class DesktopAudioQueueManager(
     override fun setGaplessEnabled(enabled: Boolean) {
         gaplessEnabled = enabled
         if (enabled) {
-            state._crossfadeDurationMs.value = 0L
+            state.setCrossfadeDurationMs(0L)
         }
     }
 
@@ -870,14 +880,9 @@ class DesktopAudioQueueManager(
                 abLoopEndMs = _abLoopEndMs.value,
             )
             plan.seekToMs?.let { e.seekTo(it) }
-            plan.publishPositionMs?.let {
-                state._currentPosition.value = it
-                lastPosition = it
-            }
-            plan.publishDurationMs?.let {
-                state._duration.value = it
-                lastDuration = it
-            }
+            state.publishTick(plan)
+            plan.publishPositionMs?.let { lastPosition = it }
+            plan.publishDurationMs?.let { lastDuration = it }
             if (plan.updateLyricIndex) {
                 lyricsManager.updateCurrentLyricIndex(state.currentPosition.value)
             }
@@ -889,16 +894,21 @@ class DesktopAudioQueueManager(
             isCurrentlyPlaying = { engine?.isPlaying?.value == true },
             isReady = { engine != null },
             onActive = { tickBody() },
+            // Prime read: the former hand-rolled loop published the first
+            // position/duration on its FIRST iteration — before any delay —
+            // while the shared ticker delays before its first tick. The
+            // ticker's synchronous prime (moved here from the manual
+            // `tickBody()` call this manager used to make after launch)
+            // seeds the display flows once — the body's own gates make this
+            // a no-op when no engine is live yet — so the transition
+            // stop-report fallback — `_duration.value * 10_000` — and the
+            // UI's first frame see the loaded item's values immediately.
+            // Synchronous on the caller's thread inside launch(): a
+            // dispatched tick could race the very fallback it feeds (the
+            // regression story lives on [EnginePositionTicker]'s
+            // primeFirstTick KDoc now).
+            primeFirstTick = true,
         ).launch()
-        // Prime read: the former hand-rolled loop published the first
-        // position/duration on its FIRST iteration — before any delay —
-        // while the shared ticker delays before its first tick. Seed the
-        // display flows once here (the body's own gates make this a no-op
-        // when no engine is live yet), so the transition stop-report
-        // fallback — `_duration.value * 10_000` — and the UI's first frame
-        // see the loaded item's values immediately, as before. Synchronous
-        // on purpose: a launched tick could race the very fallback it feeds.
-        tickBody()
     }
 
     // ── Progress reporting ─────────────────────────────────────────────────

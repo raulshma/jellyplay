@@ -29,6 +29,23 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * The process-wide SyncPlay facade and the ONLY public reach into the four
+ * cores ([SyncPlayEventHandler], [SyncPlayController], [SyncPlayPlaybackCore],
+ * [SyncPlayQueueCore] — injected here, private from here on). Consumers
+ * (the player bridge, the syncplay feature session, the video ViewModel)
+ * name intents on this manager; they never dereference a core. The cores'
+ * own members are module-internal for exactly that reason.
+ *
+ * The manager's surface is grouped by intent: group lifecycle
+ * ([joinGroup]/[leaveGroup]/[createGroup]/[reset]), observation
+ * ([events]/[currentGroupFlow]/[currentGroup]/[activeGroupId]/
+ * [isInSyncPlaySession]/[lastReconnectMs]/[ignoreWait]), the session attach
+ * seam ([attachSession]/[detachSession]), local playback reporting and queue
+ * sync (the playback-core intents), and the group transport forwarders —
+ * thin [SyncPlayController] delegation where the caller keeps owning the
+ * launch, preserving the controller's fire-and-forget routing semantics.
+ */
 class SyncPlayManager(
     /**
      * Group lifecycle + info + ping (the PlaybackRepositoryImpl ctor
@@ -42,10 +59,10 @@ class SyncPlayManager(
     private val authRepository: AuthRepository,
     private val timeSyncManager: TimeSyncManager,
     private val serverIdentityStore: ServerIdentityStore,
-    val eventHandler: SyncPlayEventHandler,
-    val syncPlayController: SyncPlayController,
-    val playbackCore: SyncPlayPlaybackCore,
-    val queueCore: SyncPlayQueueCore,
+    private val eventHandler: SyncPlayEventHandler,
+    private val syncPlayController: SyncPlayController,
+    private val playbackCore: SyncPlayPlaybackCore,
+    private val queueCore: SyncPlayQueueCore,
 ) {
     private val activeGroupIdRef = AtomicReference<String?>(null)
     private val isGroupActive = AtomicBoolean(false)
@@ -366,6 +383,165 @@ class SyncPlayManager(
      */
     fun estimateCurrentTicks(positionTicks: Long, whenMs: Long): Long =
         TimeSyncManager.projectCurrentTicks(positionTicks, timeSyncManager.remoteNow() - whenMs)
+
+    // ── Session attach seam (the folded callbacks registration) ──────────────
+
+    /**
+     * Registers [session] as the one live engine-callbacks holder of the
+     * process-wide playback core, REPLACING any previous registration.
+     * Replace-by-construction is the whole point of the fold: the former
+     * global `setCallbacks`/`clearCallbacks` pair let a stale bridge linger
+     * behind a new one unless the caller remembered to clear first — the
+     * player bridge used to defuse that hazard defensively at every attach
+     * site. Idempotent-safe: attaching twice keeps only the newest session.
+     */
+    fun attachSession(session: PlaybackCoreCallbacks) {
+        playbackCore.attachCallbacks(session)
+    }
+
+    /**
+     * Drops the callbacks registered by [attachSession] so the process-wide
+     * core stops retaining the departed player session (and through it the
+     * destroyed ViewModel). The bridge's teardown path.
+     */
+    fun detachSession() {
+        playbackCore.detachCallbacks()
+    }
+
+    // ── Local playback reporting + queue sync (playback-core intents) ────────
+
+    /**
+     * Reports a local engine playback-state transition to the group (the
+     * debounced Buffering / item-load-handshake Ready machinery). [state] is
+     * the core's private `STATE_*` Int space — the player bridge owns the
+     * EnginePlaybackState → Int encoding and remains the only caller.
+     */
+    fun onPlaybackStateChanged(state: Int) {
+        playbackCore.onPlaybackStateChanged(state)
+    }
+
+    /**
+     * The core-owned position reconcile: estimate → clamp → lane tolerance →
+     * seek + play/pause mirror. The lane vocabulary stays core-owned
+     * ([SyncPlayPlaybackCore.ReconcileLane] — declared per-lane tolerances,
+     * deliberately not unified; pinned by `SyncPlayPlaybackCoreReconcileTest`).
+     */
+    fun reconcileToServerPosition(
+        serverTicks: Long,
+        whenMs: Long,
+        lane: SyncPlayPlaybackCore.ReconcileLane,
+        groupIsPlaying: Boolean,
+    ) {
+        playbackCore.reconcileToServerPosition(serverTicks, whenMs, lane, groupIsPlaying)
+    }
+
+    /**
+     * True when the last applied group command was an Unpause — i.e. local
+     * playback that just started is group-driven, not a user resume, and must
+     * not echo another unpause request back to the server.
+     */
+    val lastGroupCommandWasUnpause: Boolean
+        get() = playbackCore.lastCommand?.command == "Unpause"
+
+    /**
+     * The position ticks a queue-driven item load should start at: the queue
+     * update's start position, superseded by the last playback command when
+     * that command is newer (both advanced by the clock projection). The one
+     * intent that reads across BOTH the queue core and the playback core —
+     * the reason it exists as a single member.
+     */
+    fun queuedItemStartPositionTicks(): Long =
+        queueCore.getStartPositionTicks(playbackCore.lastCommand)
+
+    /**
+     * Syncs the core's notion of which playlist item local Ready/Buffering
+     * reports refer to (the group's playing playlist item changed — by queue
+     * update or by reattach repopulation).
+     */
+    fun onQueueItemChanged(playlistItemId: String?) {
+        playbackCore.setCurrentPlaylistItemId(playlistItemId)
+    }
+
+    /**
+     * Arms the item-load handshake: group playback commands drop until the
+     * engine finishes loading the new item (the core's READY arm clears it).
+     */
+    fun beginPendingItemLoad() {
+        playbackCore.beginPendingItemLoad()
+    }
+
+    /**
+     * Drops the playback core's scheduled-command / correction state WITHOUT
+     * leaving the group — the per-item teardown of the player bridge (item
+     * switch, screen leave). Distinct from [reset], the full session
+     * teardown.
+     */
+    fun resetPlaybackSync() {
+        playbackCore.reset()
+    }
+
+    /** The local ignore-wait mirror (drives the player's toggle UI). */
+    val ignoreWait: StateFlow<Boolean>
+        get() = playbackCore.ignoreWait
+
+    /**
+     * The player path for ignore-wait: flips the local mirror synchronously
+     * and fires the server command fire-and-forget. The syncplay feature's
+     * awaited, mirror-free variant is [setGroupIgnoreWait].
+     */
+    fun setIgnoreWait(ignore: Boolean) {
+        playbackCore.setIgnoreWait(ignore)
+    }
+
+    // ── Group transport commands (SyncPlayController forwarders) ─────────────
+    //
+    // Thin delegation over the ONE fire-and-forget wrapper home: the callers
+    // keep owning the launch (the bridge wraps in its scope exactly as before
+    // the fold), so the controller's routing semantics are untouched.
+
+    /** Pauses the whole group. */
+    suspend fun pauseGroup() = syncPlayController.pause()
+
+    /** Unpauses the whole group. */
+    suspend fun unpauseGroup() = syncPlayController.unpause()
+
+    /** Seeks the whole group to [positionTicks]. */
+    suspend fun seekGroup(positionTicks: Long) = syncPlayController.seek(positionTicks)
+
+    /** Stops group playback. */
+    suspend fun stopGroup() = syncPlayController.stop()
+
+    /** Advances the group's queue to the item after [playlistItemId]. */
+    suspend fun nextQueueItem(playlistItemId: String) = syncPlayController.nextItem(playlistItemId)
+
+    /** Moves the group's queue back to the item before [playlistItemId]. */
+    suspend fun previousQueueItem(playlistItemId: String) = syncPlayController.previousItem(playlistItemId)
+
+    /** Points the group's existing queue at [playlistItemId] (no queue replace). */
+    suspend fun setQueueItem(playlistItemId: String) = syncPlayController.setPlaylistItem(playlistItemId)
+
+    /** Replaces the group's queue with [itemIds], playing [playingItemId]. */
+    suspend fun setNewQueue(
+        itemIds: List<String>,
+        playingItemId: String,
+        mediaSourceId: String? = null,
+        startPositionTicks: Long = 0L,
+    ) = syncPlayController.setNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
+
+    /** Sets the group's repeat mode. */
+    suspend fun setGroupRepeatMode(mode: SyncPlayRepeatMode) = syncPlayController.setRepeatMode(mode)
+
+    /** Sets the group's shuffle mode. */
+    suspend fun setGroupShuffleMode(mode: SyncPlayShuffleMode) = syncPlayController.setShuffleMode(mode)
+
+    /**
+     * The AWAITED ignore-wait transport command (the syncplay feature
+     * session's variant): sends the server command WITHOUT flipping the
+     * playback core's local mirror. [setIgnoreWait] is the player path that
+     * does both; the divergence is declared behavior preserved from the
+     * pre-fold call graph.
+     */
+    suspend fun setGroupIgnoreWait(ignore: Boolean) = syncPlayController.setIgnoreWait(ignore)
 
     /**
      * How much teardown a departure from a SyncPlay group performs. The three

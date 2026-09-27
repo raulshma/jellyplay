@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
  * negative-result caching so a known-no-lyrics item doesn't re-query.
  */
 class LyricsRepositoryImpl(
-    private val apiClient: JellyfinApiClient,
+    private val apiClient: LibraryApiClient,
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
     private val networkMonitor: NetworkMonitor,

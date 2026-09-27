@@ -24,6 +24,9 @@ import kotlin.test.assertEquals
  *  - Config changed while paused is honoured at the next loop re-check: the loop
  *    keeps cycling every POSITION_PAUSED_RECHECK_MS instead of suspending forever
  *    on `isPlaying.first { it }` (the historical bug this helper fixed).
+ *  - primeFirstTick consumers get ONE synchronous body read inside launch()
+ *    (before the first delay, gated by isReady); the default ticker still
+ *    fires its first tick one full interval after launch.
  *  - Cancelling the launched Job stops ticks.
  *
  * All tests run on runTest's virtual clock, so the suites cover minutes of paused
@@ -48,6 +51,22 @@ class EnginePositionTickerTest {
             isCurrentlyPlaying = { playing },
             onActive = { tickTimes.add(scheduler.currentTime) },
             isReady = { ready },
+        )
+
+        /**
+         * The audio managers' shape: [EnginePositionTicker]'s primeFirstTick
+         * contract — ONE synchronous body read before the loop's first delay
+         * (the manual tickBody call the desktop manager used to make after
+         * launch, now owned by the ticker).
+         */
+        fun primedTicker(scope: TestScope): EnginePositionTicker = EnginePositionTicker(
+            scopeProvider = { scope },
+            pollingIntervalMs = interval,
+            isPlayingFlow = playingFlow,
+            isCurrentlyPlaying = { playing },
+            onActive = { tickTimes.add(scheduler.currentTime) },
+            isReady = { ready },
+            primeFirstTick = true,
         )
 
         fun pause() {
@@ -229,6 +248,58 @@ class EnginePositionTickerTest {
         harness.scheduler.runCurrent()
         assertEquals(listOf(500L), harness.tickTimes, "cancelled ticker must never tick again")
     }
+    @Test
+    fun primedFirstTick_firesOnceSynchronouslyBeforeAnyDelay_thenResumesTheLoopCadence() = runTest {
+        val harness = Harness(this)
+        val job = harness.primedTicker(this).launch()
+
+        // No virtual time advanced, nothing run: the prime ran INSIDE launch()
+        // (UNDISPATCHED), so the first body read has already fired at t=0 —
+        // the audio managers' startPositionTracking contract (the first
+        // position/duration publish must land before launch() returns, or a
+        // skip in the first interval reports against duration == 0).
+        assertEquals(listOf(0L), harness.tickTimes, "prime tick is synchronous, before the first delay")
+
+        // The loop then behaves exactly as the unprimed ticker: next tick one
+        // full interval later.
+        harness.scheduler.advanceTimeBy(500)
+        harness.scheduler.runCurrent()
+        assertEquals(listOf(0L, 500L), harness.tickTimes)
+
+        job.cancel()
+    }
+
+    @Test
+    fun primedFirstTick_isSkippedWhileNotReady_andTheLoopStillWakesLater() = runTest {
+        val harness = Harness(this)
+        harness.pause() // the body's own gate makes paused primes no-ops; readiness is under test
+        harness.ready = false
+        val job = harness.primedTicker(this).launch()
+
+        // The prime is gated by the same isReady check as the loop — a
+        // player-less stretch must not run the body.
+        assertEquals(emptyList(), harness.tickTimes, "no prime while not ready")
+
+        // Becoming ready while paused hands the loop to the bounded
+        // paused-wait — still no work.
+        harness.ready = true
+        harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS * 2)
+        harness.scheduler.runCurrent()
+        assertEquals(emptyList(), harness.tickTimes)
+
+        harness.resume()
+        val resumedAt = harness.scheduler.currentTime
+        harness.scheduler.advanceTimeBy(500L)
+        harness.scheduler.runCurrent()
+        assertEquals(
+            listOf(resumedAt + 500L),
+            harness.tickTimes,
+            "first ready tick still lands one interval after resume",
+        )
+
+        job.cancel()
+    }
+
     @Test
     fun notReadyConsumer_backsOffExponentially_andResumesAtPollRateOnceReady() = runTest {
         val harness = Harness(this)

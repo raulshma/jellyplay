@@ -17,7 +17,9 @@ import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.StaleMediaItem
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AdminApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -47,8 +49,8 @@ import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.util.TimeSource
 
 /**
- * Exercises [AdminStatisticsRepositoryImpl]'s real decision logic against a
- * mocked [JellyfinApiClient] and a real in-memory Room database, with the
+ * Exercises [AdminStatisticsRepositoryImpl]'s real decision logic against
+ * mocked family clients and a real in-memory Room database, with the
  * desktop label seam ([DesktopAdminStatisticsLabels], English literals) so the
  * persisted scan rows' formatting is asserted byte-for-byte:
  *  - plugin status refresh + the 90-day audit-log prune;
@@ -63,7 +65,9 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 class AdminStatisticsRepositoryImplTest {
 
     private lateinit var database: JellyPlayDatabase
-    private val apiClient: JellyfinApiClient = mockk()
+    private val mediaInfoApiClient: MediaInfoApiClient = mockk()
+    private val adminApiClient: AdminApiClient = mockk()
+    private val authApiClient: AuthApiClient = mockk()
     private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeTest
@@ -91,9 +95,9 @@ class AdminStatisticsRepositoryImplTest {
         // session — this suite never switches identity, so the shared
         // PlaybackReportingStatusStore behaves exactly as the plain
         // StateFlow+refresh its former per-repository owner was.
-        every { apiClient.session } returns MutableStateFlow<ActiveSession?>(null)
+        every { authApiClient.session } returns MutableStateFlow<ActiveSession?>(null)
         val homeSession = HomeSession(
-            apiClient,
+            authApiClient,
             CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         val sessionCacheRegistry = SessionCacheRegistry(
@@ -101,14 +105,16 @@ class AdminStatisticsRepositoryImplTest {
             CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         return AdminStatisticsRepositoryImpl(
-            apiClient = apiClient,
+            mediaInfoApiClient = mediaInfoApiClient,
+            adminApiClient = adminApiClient,
+            authApiClient = authApiClient,
             auditLogDao = database.auditLogDao(),
             scanStateDao = database.scanStateDao(),
             json = json,
             scope = backgroundScope,
             labels = DesktopAdminStatisticsLabels,
             timeSource = timeSource,
-            playbackReportingStatusStore = PlaybackReportingStatusStore(apiClient, sessionCacheRegistry),
+            playbackReportingStatusStore = PlaybackReportingStatusStore(mediaInfoApiClient, sessionCacheRegistry),
         )
     }
 
@@ -150,7 +156,7 @@ class AdminStatisticsRepositoryImplTest {
                 itemDetailsJson = "[]",
             )
         )
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
 
         repository.refreshPlaybackReportingStatus()
 
@@ -162,7 +168,7 @@ class AdminStatisticsRepositoryImplTest {
     @Test
     fun `refresh falls back to UNAVAILABLE when the plugin check fails`() = runTest {
         val repository = buildRepository()
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.failure(IllegalStateException("down"))
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.failure(IllegalStateException("down"))
 
         repository.refreshPlaybackReportingStatus()
 
@@ -174,16 +180,16 @@ class AdminStatisticsRepositoryImplTest {
     @Test
     fun `statistics combine play counts, sessions and completion rate without the plugin`() = runTest {
         val repository = buildRepository()
-        coEvery { apiClient.getUsers() } returns Result.success(
+        coEvery { mediaInfoApiClient.getUsers() } returns Result.success(
             listOf(JellyfinUser(id = "u1", name = "Admin", isAdmin = true), JellyfinUser(id = "u2", name = "Viewer"))
         )
-        coEvery { apiClient.getSessions() } returns Result.success(listOf(SessionInfo(id = "s1", userId = "u1")))
-        coEvery { apiClient.getUserPlayedItemCount("u1", listOf("Movie")) } returns Result.success(6)
-        coEvery { apiClient.getUserPlayedItemCount("u1", listOf("Episode")) } returns Result.success(3)
-        coEvery { apiClient.getUserPlayedItemCount("u1", listOf("Audio")) } returns Result.success(1)
-        coEvery { apiClient.getUserUnplayedItemCount("u1", listOf("Movie")) } returns Result.success(2)
-        coEvery { apiClient.getUserPlayedItemCount("u2", any()) } returns Result.success(0)
-        coEvery { apiClient.getUserUnplayedItemCount("u2", any()) } returns Result.success(0)
+        coEvery { adminApiClient.getSessions() } returns Result.success(listOf(SessionInfo(id = "s1", userId = "u1")))
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Movie")) } returns Result.success(6)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Episode")) } returns Result.success(3)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", listOf("Audio")) } returns Result.success(1)
+        coEvery { mediaInfoApiClient.getUserUnplayedItemCount("u1", listOf("Movie")) } returns Result.success(2)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u2", any()) } returns Result.success(0)
+        coEvery { mediaInfoApiClient.getUserUnplayedItemCount("u2", any()) } returns Result.success(0)
 
         val stats = repository.getAllUsersWithStatistics().getOrThrow().associateBy { it.userId }
 
@@ -199,7 +205,7 @@ class AdminStatisticsRepositoryImplTest {
         assertTrue(admin.isAdmin)
         assertEquals(0L, admin.totalWatchTimeSec)
         // Plugin status was never refreshed → UNKNOWN → no plugin round-trip.
-        coVerify(exactly = 0) { apiClient.getPlaybackReportingUserActivity(any()) }
+        coVerify(exactly = 0) { mediaInfoApiClient.getPlaybackReportingUserActivity(any()) }
 
         assertFalse(stats.getValue("u2").isCurrentlyActive)
         assertEquals(0f, stats.getValue("u2").completionRate)
@@ -208,15 +214,15 @@ class AdminStatisticsRepositoryImplTest {
     @Test
     fun `an available plugin overlays per-user watch time onto the statistics`() = runTest {
         val repository = buildRepository()
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
         repository.refreshPlaybackReportingStatus()
-        coEvery { apiClient.getUsers() } returns Result.success(
+        coEvery { mediaInfoApiClient.getUsers() } returns Result.success(
             listOf(JellyfinUser(id = "u1", name = "Admin"), JellyfinUser(id = "u2", name = "Viewer"))
         )
-        coEvery { apiClient.getSessions() } returns Result.success(emptyList())
-        coEvery { apiClient.getUserPlayedItemCount(any(), any()) } returns Result.success(0)
-        coEvery { apiClient.getUserUnplayedItemCount(any(), any()) } returns Result.success(0)
-        coEvery { apiClient.getPlaybackReportingUserActivity(days = 30) } returns Result.success(
+        coEvery { adminApiClient.getSessions() } returns Result.success(emptyList())
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount(any(), any()) } returns Result.success(0)
+        coEvery { mediaInfoApiClient.getUserUnplayedItemCount(any(), any()) } returns Result.success(0)
+        coEvery { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } returns Result.success(
             listOf(PlaybackReportingActivity(userId = "u1", totalTime = 7_200L))
         )
 
@@ -241,7 +247,7 @@ class AdminStatisticsRepositoryImplTest {
             useDateAdded = false,
         )
         coEvery {
-            apiClient.getStaleItems(daysThreshold = 90, includeNeverPlayed = true, includeItemTypes = listOf("Movie"), startIndex = 0, limit = 200, useDateAdded = false)
+            mediaInfoApiClient.getStaleItems(daysThreshold = 90, includeNeverPlayed = true, includeItemTypes = listOf("Movie"), startIndex = 0, limit = 200, useDateAdded = false)
         } returns Result.success(
             Pair(
                 4,
@@ -285,12 +291,12 @@ class AdminStatisticsRepositoryImplTest {
             includePartiallyWatched = false,
             minDaysSinceWatched = 30,
         )
-        coEvery { apiClient.getUsers() } returns Result.success(
+        coEvery { mediaInfoApiClient.getUsers() } returns Result.success(
             listOf(JellyfinUser(id = "u1", name = "A"), JellyfinUser(id = "u2", name = "B"))
         )
         val shared = WatchedMediaItem(itemId = "dup", name = "Shared", type = "Movie", playCount = 3, completionPct = 1f)
         coEvery {
-            apiClient.getWatchedItems(userId = "u1", includeItemTypes = listOf("Movie"), minDaysSincePlayed = 30, keepFavorites = true, startIndex = 0, limit = 200)
+            mediaInfoApiClient.getWatchedItems(userId = "u1", includeItemTypes = listOf("Movie"), minDaysSincePlayed = 30, keepFavorites = true, startIndex = 0, limit = 200)
         } returns Result.success(
             Pair(
                 4,
@@ -303,7 +309,7 @@ class AdminStatisticsRepositoryImplTest {
             )
         )
         coEvery {
-            apiClient.getWatchedItems(userId = "u2", includeItemTypes = listOf("Movie"), minDaysSincePlayed = 30, keepFavorites = true, startIndex = 0, limit = 200)
+            mediaInfoApiClient.getWatchedItems(userId = "u2", includeItemTypes = listOf("Movie"), minDaysSincePlayed = 30, keepFavorites = true, startIndex = 0, limit = 200)
         } returns Result.success(Pair(1, listOf(shared)))
 
         val scanId = repository.detectWatchedMedia(config).getOrThrow()
@@ -328,13 +334,13 @@ class AdminStatisticsRepositoryImplTest {
         // Plugin status never refreshed → UNKNOWN → the fallback path: the
         // watch-time windows and the trend chart both derive from the pinned
         // "today" (Jan 1 2026), never the wall clock.
-        coEvery { apiClient.getUserById("u1") } returns
+        coEvery { mediaInfoApiClient.getUserById("u1") } returns
             Result.success(JellyfinUser(id = "u1", name = "Admin"))
-        coEvery { apiClient.getUserPlayedItemCount("u1", any()) } returns Result.success(0)
-        coEvery { apiClient.getUserUnplayedItemCount("u1", any()) } returns Result.success(0)
+        coEvery { mediaInfoApiClient.getUserPlayedItemCount("u1", any()) } returns Result.success(0)
+        coEvery { mediaInfoApiClient.getUserUnplayedItemCount("u1", any()) } returns Result.success(0)
         // Top-items page (PlayCount sort): empty.
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "PlayCount", sortOrder = "Descending", startIndex = 0, limit = 20)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "PlayCount", sortOrder = "Descending", startIndex = 0, limit = 20)
         } returns Result.success(Pair(0, emptyList()))
         // Watch-time breakdown (DatePlayed sort, limit 500) and the fallback
         // chart source (same sort, limit 300) share the fixture:
@@ -350,10 +356,10 @@ class AdminStatisticsRepositoryImplTest {
             runTimeTicks = 1800L * 10_000_000L, playCount = 1, lastPlayedDate = "2025-12-01T10:00:00.000Z",
         )
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 500)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 500)
         } returns Result.success(Pair(2, listOf(dec2, dec1)))
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 300)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 300)
         } returns Result.success(Pair(2, listOf(dec2, dec1)))
 
         val page = repository.getUserDetailStatistics("u1", page = 0, pageSize = 20).getOrThrow()
@@ -379,8 +385,8 @@ class AdminStatisticsRepositoryImplTest {
     @Test
     fun `removeMediaItems persists an audit entry readable through getAuditHistory`() = runTest {
         val repository = buildRepository()
-        every { apiClient.currentUser } returns flowOf(user)
-        coEvery { apiClient.deleteItems(listOf("i1", "i2")) } returns Result.success(2)
+        every { authApiClient.currentUser } returns flowOf(user)
+        coEvery { mediaInfoApiClient.deleteItems(listOf("i1", "i2")) } returns Result.success(2)
         val config = MediaCleanupConfig()
 
         val entry = repository.removeMediaItems(

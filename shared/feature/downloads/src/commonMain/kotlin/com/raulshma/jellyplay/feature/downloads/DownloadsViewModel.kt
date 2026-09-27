@@ -144,7 +144,7 @@ class DownloadsViewModel(
      * list).
      */
     val progressById: StateFlow<Map<String, DownloadProgress>> =
-        queue.activeDownloadProgress()
+        queue.getActiveDownloadProgress()
             .combine(structuralItems) { live, items -> live to items }
             .scan(emptyMap<String, DownloadProgress>()) { retained, (live, structural) ->
                 val stillDownloading = structural
@@ -181,7 +181,7 @@ class DownloadsViewModel(
             // does — bytes/speed arrive through [progressById] — so a second
             // projection drops the per-tick fields and only list-structure
             // changes (ids in order, per-item status) re-emit uiState.
-            queue.allDownloads()
+            queue.getAllDownloads()
                 .catch { e ->
                     _uiState.update {
                         it.copy(error = UserErrorMessages.resolve(e, "Failed to load downloads"), isLoading = false)
@@ -233,17 +233,17 @@ class DownloadsViewModel(
         launch {
             bulkMap(targets) { item ->
                 when (action) {
-                    DownloadBulkAction.PAUSE -> queue.pause(item.id)
+                    DownloadBulkAction.PAUSE -> queue.pauseDownload(item.id)
                     DownloadBulkAction.RESUME -> {
-                        queue.resume(item.id)
-                        queue.enqueue(item.id)
+                        queue.resumeDownload(item.id)
+                        queue.enqueueDownload(item.id)
                     }
-                    DownloadBulkAction.CANCEL -> queue.cancel(item.id)
+                    DownloadBulkAction.CANCEL -> queue.cancelDownload(item.id)
                     DownloadBulkAction.RETRY_FAILED -> {
-                        queue.retry(item.id)
-                        queue.enqueue(item.id)
+                        queue.retryDownload(item.id)
+                        queue.enqueueDownload(item.id)
                     }
-                    DownloadBulkAction.DELETE -> queue.delete(item.id)
+                    DownloadBulkAction.DELETE -> queue.deleteDownload(item.id)
                 }
             }
             if (action == DownloadBulkAction.DELETE) {
@@ -257,7 +257,7 @@ class DownloadsViewModel(
 
     fun deleteDownload(item: DownloadItem) {
         launch {
-            queue.delete(item.id)
+            queue.deleteDownload(item.id)
             if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
         }
     }
@@ -265,14 +265,14 @@ class DownloadsViewModel(
     fun moveToFront(item: DownloadItem) {
         launch {
             val maxPriority = _uiState.value.downloads.maxOfOrNull { it.priority } ?: 0
-            queue.setPriority(item.id, maxPriority + 1)
+            queue.setDownloadPriority(item.id, maxPriority + 1)
         }
     }
 
     fun lowerPriority(item: DownloadItem) {
         launch {
             val minPriority = _uiState.value.downloads.minOfOrNull { it.priority } ?: 0
-            queue.setPriority(item.id, minPriority - 1)
+            queue.setDownloadPriority(item.id, minPriority - 1)
         }
     }
 
@@ -399,7 +399,7 @@ class DownloadsViewModel(
      * list.
      */
     suspend fun forceResyncCandidates(): List<ForceResyncCandidate> =
-        queue.allDownloadsSnapshot()
+        queue.getAllDownloadsSnapshot()
             .filter { it.status in forceResyncEligibleStatuses }
             .distinctBy { it.mediaItemId }
             .map {

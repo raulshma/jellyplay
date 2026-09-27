@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seriesIdForDetail
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -228,6 +229,15 @@ class DetailViewModel internal constructor(
 
     private val seerrRequestState = SeerrRequestStateHolder(scope, remoteDiscovery.seerrRequestDelegate)
 
+    // The dialog half of the Seerr request lifecycle: which item the request
+    // dialog is open for (frozen at open) plus the open/dismiss choreography.
+    // The data half (service details, seasons, result) stays in the holder
+    // above, reached through the two constructor seams.
+    private val seerrRequestDialogHolder = SeerrRequestDialogHolder(
+        prepare = seerrRequestState::prepare,
+        clearRequestResult = seerrRequestState::clearRequestResult,
+    )
+
     /**
      * Aggregated detail-screen CONTENT state. Three upstream groups feed this
      * [StateFlow], each independently `stateIn`'d so a tick in one group (e.g.
@@ -400,6 +410,14 @@ class DetailViewModel internal constructor(
 
     /** Seerr request-flow seam (the state-holder pattern the helpers copy). */
     internal val seerrRequests: SeerrRequestStateHolder get() = seerrRequestState
+
+    /**
+     * Seerr request-DIALOG seam: the open item (frozen at open) plus the
+     * open/dismiss choreography. The screen collects `item` for the render
+     * gate and routes the open/dismiss commands here; the data-side commands
+     * (request/prefetch) stay on [seerrRequests].
+     */
+    internal val seerrRequestDialog: SeerrRequestDialogHolder get() = seerrRequestDialogHolder
 
     // Direct (non-observable) readers for the two stream-selection indices.
     // These are read synchronously at click time inside the play callback

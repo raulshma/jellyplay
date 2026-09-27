@@ -73,6 +73,9 @@ class MediaRepositoryDetailCacheGroupTest {
             sessionCacheRegistry,
         )
         repository = MediaRepositoryImpl(
+            // One union mock covers both family seams (the JellyfinApiClient
+            // mock implements each of them).
+            apiClient,
             apiClient,
             // Snapshot-store extraction: the persisted home pipeline moved
             // into the store single the Koin graph wires (inert here — this

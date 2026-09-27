@@ -13,7 +13,8 @@ import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.data.repository.withTransaction
@@ -37,7 +38,11 @@ import kotlinx.serialization.json.Json
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthRepositoryImpl constructor(
-    private val apiClient: JellyfinApiClient,
+    /** Connection lifecycle, session flows, authentication and Quick Connect. */
+    private val authApiClient: AuthApiClient,
+    /** The one-shot server-side user read ([UserApiClient.getCurrentUser]) behind
+     * the token-rejection guard and [refreshCurrentUser]'s flag refresh. */
+    private val userApiClient: UserApiClient,
     private val webSocketClient: JellyfinWebSocketClient,
     private val database: JellyPlayDatabase,
     private val serverDao: ServerDao,
@@ -80,12 +85,12 @@ class AuthRepositoryImpl constructor(
         entities.map { it.toServerInfo() }
     }.stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    override val currentServer: Flow<ServerInfo?> = apiClient.currentServer
+    override val currentServer: Flow<ServerInfo?> = authApiClient.currentServer
 
-    override val currentUser: Flow<UserInfo?> = apiClient.currentUser
+    override val currentUser: Flow<UserInfo?> = authApiClient.currentUser
 
     /**
-     * Derived from the ATOMIC [JellyfinApiClient.session] flow — `session`
+     * Derived from the ATOMIC [AuthApiClient.session] flow — `session`
      * is non-null exactly when a fully established `(server, user)` pair
      * exists (see `ActiveSession`). The previous
      * `combine(currentServer, currentUser)` shape observed the synthetic
@@ -93,12 +98,12 @@ class AuthRepositoryImpl constructor(
      * switchUser) produced, briefly reporting authenticated for an identity
      * that never existed. Never combine the two separate flows back.
      */
-    override val isAuthenticated: StateFlow<Boolean> = apiClient.session
+    override val isAuthenticated: StateFlow<Boolean> = authApiClient.session
         .map { it != null }
         .stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), false)
 
     override val currentServerUsers: StateFlow<List<UserInfo>> =
-        apiClient.currentServer.flatMapLatest { server ->
+        authApiClient.currentServer.flatMapLatest { server ->
             server?.id?.let { sid ->
                 userDao.getUsersForServer(sid).map { list ->
                     list.map { it.toUserInfo(server.address) }
@@ -107,7 +112,7 @@ class AuthRepositoryImpl constructor(
         }.stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     override suspend fun addServer(address: String): Result<ServerInfo> {
-        return apiClient.connectToServer(address).onSuccess { serverInfo ->
+        return authApiClient.connectToServer(address).onSuccess { serverInfo ->
             serverDao.insertServer(
                 ServerEntity(
                     id = serverInfo.id,
@@ -119,7 +124,7 @@ class AuthRepositoryImpl constructor(
     }
 
     override suspend fun probeServer(address: String): Result<ServerInfo> =
-        apiClient.getServerInfo(address)
+        authApiClient.getServerInfo(address)
 
     override suspend fun removeServer(serverId: String) {
         database.withTransaction {
@@ -156,7 +161,7 @@ class AuthRepositoryImpl constructor(
         if (normalizedAddress in currentAlternates) {
             return Result.failure(Exception("Address is already an alternate"))
         }
-        val info = apiClient.getServerInfo(normalizedAddress).getOrElse {
+        val info = authApiClient.getServerInfo(normalizedAddress).getOrElse {
             return Result.failure(Exception("Could not connect to server at $normalizedAddress"))
         }
         if (info.id != serverId) {
@@ -202,10 +207,10 @@ class AuthRepositoryImpl constructor(
             address = normalizedAddress,
             alternateAddresses = json.encodeToString(newAlternates),
         ).toServerInfo()
-        apiClient.setServer(updatedServer)
-        val currentUser = apiClient.currentUser.first()
+        authApiClient.setServer(updatedServer)
+        val currentUser = authApiClient.currentUser.first()
         if (currentUser != null) {
-            apiClient.setUser(currentUser.copy(serverAddress = normalizedAddress))
+            authApiClient.setUser(currentUser.copy(serverAddress = normalizedAddress))
         }
     }
 
@@ -220,11 +225,11 @@ class AuthRepositoryImpl constructor(
         val existingServerInfo = serverFromDb?.toServerInfo()
 
         return if (existingServerInfo != null) {
-            apiClient.authenticateUser(existingServerInfo, username, password)
+            authApiClient.authenticateUser(existingServerInfo, username, password)
         } else {
-            apiClient.authenticateUser(serverAddress, username, password)
+            authApiClient.authenticateUser(serverAddress, username, password)
         }.onSuccess { user ->
-            val server = apiClient.currentServer.first()
+            val server = authApiClient.currentServer.first()
             if (server != null) {
                 persistSession(server, user, username)
             }
@@ -232,15 +237,15 @@ class AuthRepositoryImpl constructor(
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> {
-        return apiClient.isQuickConnectEnabled()
+        return authApiClient.isQuickConnectEnabled()
     }
 
     override suspend fun initiateQuickConnect(): Result<QuickConnectInfo> {
-        return apiClient.initiateQuickConnect()
+        return authApiClient.initiateQuickConnect()
     }
 
     override suspend fun pollQuickConnect(secret: String): Result<QuickConnectState> {
-        return apiClient.getQuickConnectState(secret)
+        return authApiClient.getQuickConnectState(secret)
     }
 
     override suspend fun loginWithQuickConnect(
@@ -253,11 +258,11 @@ class AuthRepositoryImpl constructor(
         val existingServerInfo = serverFromDb?.toServerInfo()
 
         val serverInfo = existingServerInfo
-            ?: apiClient.currentServer.first()
+            ?: authApiClient.currentServer.first()
             ?: return Result.failure(Exception("Not connected to server"))
 
-        return apiClient.authenticateWithQuickConnect(serverInfo, secret).onSuccess { user ->
-            val server = apiClient.currentServer.first()
+        return authApiClient.authenticateWithQuickConnect(serverInfo, secret).onSuccess { user ->
+            val server = authApiClient.currentServer.first()
             if (server != null) {
                 persistSession(server, user)
             }
@@ -265,7 +270,7 @@ class AuthRepositoryImpl constructor(
     }
 
     override suspend fun authorizeQuickConnect(code: String): Result<Boolean> =
-        apiClient.authorizeQuickConnect(code)
+        authApiClient.authorizeQuickConnect(code)
 
     override suspend fun restoreSession(): Result<Unit> = runCatchingRethrowingCancellation {
         val serverId: String? = serverIdentityStore.activeServerId.first()
@@ -280,7 +285,7 @@ class AuthRepositoryImpl constructor(
                 return@runCatchingRethrowingCancellation
             }
             val server = serverEntity.toServerInfo()
-            apiClient.setServer(server)
+            authApiClient.setServer(server)
             // Address failover rationale lives on
             // [selectReachableAddressDefensively]. The probes are
             // sequential network calls, so the wait is bounded — on timeout
@@ -298,7 +303,7 @@ class AuthRepositoryImpl constructor(
             }
             val token = tokenCipher.decrypt(userEntity.accessToken)
             if (token != null) {
-                apiClient.setUser(
+                authApiClient.setUser(
                     UserInfo(
                         id = userId,
                         name = userEntity.name,
@@ -395,7 +400,7 @@ class AuthRepositoryImpl constructor(
     private suspend fun validateRestoredSession() {
         if (storedTokenRejected()) {
             Log.w("AuthRepository", "restoreSession: server rejected the stored token (401) — clearing session")
-            apiClient.disconnect()
+            authApiClient.disconnect()
             serverIdentityStore.clearSession()
         }
     }
@@ -425,7 +430,7 @@ class AuthRepositoryImpl constructor(
      * network/5xx failures keep the session so offline use is unchanged.
      */
     private suspend fun storedTokenRejected(): Boolean {
-        val rejected = runCatchingRethrowingCancellation { apiClient.getCurrentUser().exceptionOrNull() }
+        val rejected = runCatchingRethrowingCancellation { userApiClient.getCurrentUser().exceptionOrNull() }
             .getOrNull() as? com.raulshma.jellyplay.core.network.api.ApiException
             ?: return false
         return rejected.httpCode == 401
@@ -446,14 +451,14 @@ class AuthRepositoryImpl constructor(
      * cancellation instead of parking it in a discarded Result.
      */
     private suspend fun selectReachableAddressDefensively() {
-        runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
+        runCatchingRethrowingCancellation { authApiClient.selectReachableAddress() }
     }
 
     /**
      * The shared session-establishment choreography behind [switchServer]
      * and [switchUser] — the steps both used to hand-copy:
      *
-     *  1. `apiClient.disconnect()` — drop any live session first (one atomic
+     *  1. `authApiClient.disconnect()` — drop any live session first (one atomic
      *     null publish, never a synthetic `(newServer, oldUser)`
      *     intermediate).
      *  2. `setServer` with the entity's [ServerInfo] projection.
@@ -495,18 +500,18 @@ class AuthRepositoryImpl constructor(
         persistStamps: suspend (UserEntity) -> Unit,
     ): Result<Unit> {
         val server = serverEntity.toServerInfo()
-        apiClient.disconnect()
-        apiClient.setServer(server)
+        authApiClient.disconnect()
+        authApiClient.setServer(server)
         selectReachableAddressDefensively()
         if (userEntity == null) return Result.success(Unit)
-        apiClient.setUser(userEntity.toUserInfo(server.address))
+        authApiClient.setUser(userEntity.toUserInfo(server.address))
         // Guard against re-arming a revoked token: without this, tapping a
         // saved server or user adopts the dead stored token, the app lands on
         // a cached ghost home whose live calls all 401, and the next cold
         // start clears the session again — a server-screen/home bounce loop.
         if (storedTokenRejected()) {
             Log.w("AuthRepository", "$caller: stored token for ${userEntity.name} rejected (401)")
-            apiClient.disconnect()
+            authApiClient.disconnect()
             return Result.failure(sessionExpired())
         }
         serverIdentityStore.setActiveSession(server.id, userEntity.userId)
@@ -515,17 +520,17 @@ class AuthRepositoryImpl constructor(
     }
 
     override suspend fun refreshCurrentUser(): Result<UserInfo> {
-        val cached = apiClient.currentUser.first()
+        val cached = authApiClient.currentUser.first()
             ?: return Result.failure(Exception("No active user to refresh"))
 
-        val result = apiClient.getCurrentUser()
+        val result = userApiClient.getCurrentUser()
         return result.fold(
             onSuccess = { managed ->
                 val refreshed = cached.copy(
                     isAdmin = managed.policy.isAdministrator,
                     canDeleteContent = managed.policy.enableContentDeletion,
                 )
-                apiClient.setUser(refreshed)
+                authApiClient.setUser(refreshed)
                 persistRefreshedFlags(refreshed)
                 Result.success(refreshed)
             },
@@ -535,7 +540,7 @@ class AuthRepositoryImpl constructor(
                 // server remains the ultimate authority on the next call.
                 if (e is com.raulshma.jellyplay.core.network.api.ApiException && e.isAccessDenied) {
                     val demoted = cached.copy(isAdmin = false, canDeleteContent = false)
-                    apiClient.setUser(demoted)
+                    authApiClient.setUser(demoted)
                     persistRefreshedFlags(demoted)
                     Result.success(demoted)
                 } else {
@@ -565,7 +570,7 @@ class AuthRepositoryImpl constructor(
     }
 
     override suspend fun logout() {
-        apiClient.disconnect()
+        authApiClient.disconnect()
         // Clear only the active session selection — preserve the stable
         // device id and all user preferences (theme/player/EQ/onboarding/…)
         // so re-login does not orphan server-side sessions or reset settings.
@@ -573,16 +578,16 @@ class AuthRepositoryImpl constructor(
     }
 
     override suspend fun revokeServerSession() {
-        val currentUserId = apiClient.currentUser.first()?.id
+        val currentUserId = authApiClient.currentUser.first()?.id
         try {
-            apiClient.revokeServerSession()
+            authApiClient.revokeServerSession()
         } catch (_: Exception) {
             // Even if the server call fails, we should still clear local state
         }
         if (currentUserId != null) {
             removeUser(currentUserId)
         }
-        apiClient.disconnect()
+        authApiClient.disconnect()
         serverIdentityStore.clearSession()
     }
 
@@ -614,9 +619,9 @@ class AuthRepositoryImpl constructor(
             // user has its userId + accessToken cleared.
             serverDao.clearUserFromServers(userId)
         }
-        val currentUserId = apiClient.currentUser.first()?.id
+        val currentUserId = authApiClient.currentUser.first()?.id
         if (currentUserId == userId) {
-            apiClient.disconnect()
+            authApiClient.disconnect()
             serverIdentityStore.setActiveUser("")
         }
     }
@@ -627,11 +632,11 @@ class AuthRepositoryImpl constructor(
         return userDao.getUsersForServerOnce(serverId).map { it.toUserInfo() }
     }
 
-    override suspend fun postCapabilities(): Result<Unit> = apiClient.postCapabilities()
+    override suspend fun postCapabilities(): Result<Unit> = authApiClient.postCapabilities()
 
     // ── Realtime session ──
 
-    override fun serverUrl(): String? = apiClient.getServerUrl()
+    override fun serverUrl(): String? = authApiClient.getServerUrl()
 
     override val isConnected: StateFlow<Boolean>
         get() = webSocketClient.isConnected

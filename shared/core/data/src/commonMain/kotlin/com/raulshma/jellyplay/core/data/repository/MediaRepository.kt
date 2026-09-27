@@ -229,8 +229,6 @@ interface MediaRepository {
      */
     suspend fun getAlbumTracks(albumId: String, force: Boolean = false): Result<List<MediaItem>>
 
-    suspend fun getMusicVideos(parentId: String, limit: Int = 50): Result<List<MediaItem>>
-
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
     suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
@@ -322,6 +320,75 @@ interface MediaRepository {
      */
     fun notifyUserDataChanged(itemIds: List<String>)
 
+    /**
+     * The one user-data write left on the union: the offline outbox drainer
+     * calls it alongside [notifyUserDataChanged] (its synthetic-push partner),
+     * so it cannot narrow to [UserDataWriteOperations] alone yet. Its four
+     * siblings moved to that seam — their sole union caller ([UserDataMutator])
+     * injects the seam now.
+     */
+    suspend fun markPlayed(itemId: String): Result<Unit>
+
+    suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
+}
+
+/**
+ * The music-catalogue family seam of [MediaRepository]: the artist → album →
+ * track reads, the instant-mix radio seed, and the theme-song lookup — the
+ * members only music surfaces ever call. [MediaRepositoryImpl] implements
+ * this seam alongside the wide interface (the [SonarrSeriesOperations]
+ * over-the-impl pattern), so a consumer narrows without a second repository
+ * instance or a family supertype creeping back onto the union.
+ *
+ * Consumers today reach these members through BOTH shapes: the audio
+ * playback stack (AudioLibraryBrowser / AudioQueueFacade / ThemeMusicPlayer)
+ * still injects [MediaRepository], and feature:music's artist/album/home
+ * ViewModels pair catalogue reads with wide browse members
+ * ([MediaRepository.getMediaDetail] / [MediaRepository.getMediaItems] /
+ * [MediaRepository.getFavorites]) — so the four still-called members stay on
+ * the wide interface too and the impl satisfies both declarations.
+ * [getMusicVideos] retired from the union outright: it had zero callers.
+ */
+interface MusicCatalogue {
+
+    // No default arguments on the members that also sit on
+    // [MediaRepository]: Kotlin forbids an override whose two
+    // superinterfaces both declare them, so the defaults live on the wide
+    // interface only and seam-typed callers pass explicit values.
+
+    suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>>
+
+    /**
+     * [force] drops the cached track list first (the freshness lever the
+     * album detail's deferred silent refresh needs: a track user-data flip
+     * evicts `tracks_<trackId>`, never `tracks_<albumId>`, so the album's
+     * cached list can only be superseded by an explicit force).
+     */
+    suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>>
+
+    suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>>
+
+    suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>>
+
+    suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
+}
+
+/**
+ * The user-data WRITE family seam of [MediaRepository]: the five toggle/mark
+ * endpoints every user-data mutation funnels through. Its clean sole
+ * consumer is [UserDataMutatorImpl] — the protocol facade every feature
+ * consumes — which now ctor-injects this seam instead of the 40-member
+ * union. [markPlayed] additionally stays on [MediaRepository] (the offline
+ * outbox drainer pairs it with the synthetic-push fan-out member), and the
+ * impl's overrides satisfy both declarations.
+ *
+ * Not to be confused with [UserDataMutator]: THAT interface is the
+ * caller-facing protocol (flip modes, containers, optimistic rewrites) built
+ * ON TOP of this seam; this one is the repository family its write step
+ * lands on.
+ */
+interface UserDataWriteOperations {
+
     suspend fun toggleFavorite(itemId: String): Result<Boolean>
 
     suspend fun markPlayed(itemId: String): Result<Unit>
@@ -341,6 +408,4 @@ interface MediaRepository {
 
     /** Unplayed mirror of [markSeasonPlayed]. */
     suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit>
-
-    suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

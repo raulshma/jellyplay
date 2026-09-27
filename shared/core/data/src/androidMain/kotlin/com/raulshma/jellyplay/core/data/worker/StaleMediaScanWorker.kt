@@ -6,14 +6,14 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import kotlinx.coroutines.CancellationException
 import java.io.IOException
 
 class StaleMediaScanWorker(
     appContext: Context,
     workerParams: WorkerParameters,
-    private val apiClient: JellyfinApiClient,
+    private val apiClient: MediaInfoApiClient,
     private val scanStateDao: ScanStateDao,
 ) : CoroutineWorker(appContext, workerParams) {
 

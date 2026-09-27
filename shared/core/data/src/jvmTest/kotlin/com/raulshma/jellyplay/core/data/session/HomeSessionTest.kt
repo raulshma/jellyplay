@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.session
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.launch
@@ -20,8 +20,8 @@ import kotlin.test.Test
  * transitions that replaced the three per-consumer mirrors
  * (MediaRepositoryImpl, EpisodeCatalogueImpl, HomeViewModel).
  *
- * The harness drives [HomeSession] through a mockk [JellyfinApiClient] whose
- * [JellyfinApiClient.session] is a real [MutableStateFlow], with the
+ * The harness drives [HomeSession] through a mockk [AuthApiClient] whose
+ * [AuthApiClient.session] is a real [MutableStateFlow], with the
  * collector on the test scheduler (runTest's backgroundScope) so
  * `runCurrent()` deterministically advances both the classifier and the
  * transitions subscriber. The ATOMICITY of the flow itself — that a
@@ -35,7 +35,7 @@ import kotlin.test.Test
 class HomeSessionTest {
 
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val apiClient: AuthApiClient = mockk(relaxed = true)
 
     @BeforeTest
     fun setup() {

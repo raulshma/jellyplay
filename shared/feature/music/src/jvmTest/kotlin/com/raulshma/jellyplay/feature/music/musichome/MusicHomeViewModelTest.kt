@@ -86,7 +86,7 @@ class MusicHomeViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { homeDiscoveryStore.homeDiscovery } returns homeModeFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
-        every { activeDownloads.activeDownloadCount() } returns flowOf(0)
+        every { activeDownloads.getActiveDownloadCount() } returns flowOf(0)
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
         // The deferred refresher collects this for the whole VM lifetime.

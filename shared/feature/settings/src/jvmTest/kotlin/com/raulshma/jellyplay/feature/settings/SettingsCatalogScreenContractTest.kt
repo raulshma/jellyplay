@@ -87,8 +87,10 @@ class SettingsCatalogScreenContractTest {
 
     /**
      * The row records (candidate B1) sit between the holders and the catalog:
-     * each record redeclares a holder id and carries the row's title faces,
-     * and the `*SearchItems` lists are projections of the records
+     * each record redeclares a holder id and carries the row's title faces
+     * (search titles defaulting to the screen title where they merely restate
+     * it — the default-title fold; see [SettingsRowRecord]), and the
+     * `*SearchItems` lists are projections of the records
      * ([SettingsRowRecordTest] pins the projection faithfulness). The 5
      * experimental ids stay on the ExperimentalPreferenceSpecs derivation —
      * the records exception.

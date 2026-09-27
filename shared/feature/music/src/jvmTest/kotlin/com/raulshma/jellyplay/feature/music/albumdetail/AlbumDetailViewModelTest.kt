@@ -16,11 +16,9 @@ import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
-import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,7 +71,7 @@ class AlbumDetailViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = AlbumDetailViewModel(
@@ -522,17 +520,17 @@ class AlbumDetailViewModelTest {
         // must not read the whole table for an empty screen).
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coVerify(exactly = 0) { trackDownloads.downloadsFor(any()) }
+        coVerify(exactly = 0) { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) }
 
         // Loaded album → the query is scoped to exactly the loaded track ids
         // and the rows are keyed by mediaItemId for the per-row UI.
         val downloading = download("d1", "t1", DownloadStatus.DOWNLOADING)
-        every { trackDownloads.downloadsFor(listOf("t1", "t2")) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(listOf("t1", "t2")) } returns
             flowOf(listOf(downloading))
         loadAlbum()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.downloadsFor(listOf("t1", "t2")) }
+        coVerify(exactly = 1) { trackDownloads.getDownloadsByMediaItemIdsFlow(listOf("t1", "t2")) }
         assertEquals(mapOf("t1" to downloading), viewModel.trackDownloads.value)
     }
 
@@ -540,16 +538,16 @@ class AlbumDetailViewModelTest {
     fun downloadTrack_completedDownload_deletesItInsteadOfRestarting() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
             flowOf(listOf(download("d1", "t1", DownloadStatus.COMPLETED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { trackDownloads.remove(any()) } just Runs
+        coEvery { trackDownloads.deleteDownload(any()) } returns Result.success(Unit)
 
         viewModel.downloadTrack(albumTracks[0])
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.remove("d1") }
+        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1") }
         coVerify(exactly = 0) { downloadIntake.start(any()) }
     }
 
@@ -557,7 +555,7 @@ class AlbumDetailViewModelTest {
     fun downloadTrack_notYetDownloaded_flipsThroughTheIntakeSeam() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         subscribeTrackDownloads()
         advanceUntilIdle()
 
@@ -567,14 +565,14 @@ class AlbumDetailViewModelTest {
         // The resolve-detail leg lives inside DownloadIntake.flipTrack (pinned
         // in core:data); at this seam the VM only routes the track id through.
         coVerify(exactly = 1) { downloadIntake.flipTrack("t1") }
-        coVerify(exactly = 0) { trackDownloads.remove(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
     }
 
     @Test
     fun downloadTrack_skippedByTheIntake_startsNothing() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         subscribeTrackDownloads()
         advanceUntilIdle()
         coEvery { downloadIntake.flipTrack("t1") } returns TrackFlipResult.Skipped
@@ -583,14 +581,14 @@ class AlbumDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadIntake.start(any()) }
-        coVerify(exactly = 0) { trackDownloads.remove(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
     }
 
     @Test
     fun downloadAlbum_skipsCompletedTracksAndDownloadsTheRest() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
             flowOf(listOf(download("d1", "t1", DownloadStatus.COMPLETED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
@@ -602,7 +600,7 @@ class AlbumDetailViewModelTest {
         // flipped through the intake seam (detail resolution pinned in core:data).
         coVerify(exactly = 0) { downloadIntake.flipTrack("t1") }
         coVerify(exactly = 1) { downloadIntake.flipTrack("t2") }
-        coVerify(exactly = 0) { trackDownloads.remove(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
     }
 
     @Test
@@ -618,16 +616,16 @@ class AlbumDetailViewModelTest {
     fun deleteAlbumDownloads_deletesOnlyExistingDownloadRows() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
             flowOf(listOf(download("d1", "t1", DownloadStatus.PAUSED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { trackDownloads.remove(any()) } just Runs
+        coEvery { trackDownloads.deleteDownload(any()) } returns Result.success(Unit)
 
         viewModel.deleteAlbumDownloads()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.remove("d1") }
-        coVerify(exactly = 1) { trackDownloads.remove(any()) } // only t1's row
+        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1") }
+        coVerify(exactly = 1) { trackDownloads.deleteDownload(any()) } // only t1's row
     }
 }

@@ -44,14 +44,11 @@ class SeerrRequestStateHolder(
     /** True when the current TV item is anime (TMDB keyword 210024), driving anime request defaults. */
     private val _tvIsAnime = MutableStateFlow(false)
 
-    /** The item the request dialog is open for (null = closed). */
-    private val _dialogItem = MutableStateFlow<SeerrSearchItem?>(null)
-
     /**
-     * All seven state flows combined into one [SeerrRequestSnapshot] emission so
+     * All six state flows combined into one [SeerrRequestSnapshot] emission so
      * a consumer folds ONE flow into its ui state. Concurrent emissions
      * (e.g. loading services + seasons firing together when the request
-     * dialog opens) coalesce into a single update instead of seven
+     * dialog opens) coalesce into a single update instead of six
      * back-to-back ones. Cold on purpose: [stateIn]-ing here would pin a
      * never-ending child coroutine onto whatever scope constructed the
      * holder (breaks `runTest` scopes); consumers [snapshotIn] or collect on
@@ -66,8 +63,7 @@ class SeerrRequestStateHolder(
             _isLoadingServices,
             _tvSeasons,
             _tvIsAnime,
-            _dialogItem,
-        ) { (result, radarr, sonarr), loading, seasons, isAnime, dialogItem ->
+        ) { (result, radarr, sonarr), loading, seasons, isAnime ->
             SeerrRequestSnapshot(
                 requestResult = result,
                 radarrServers = radarr,
@@ -75,7 +71,6 @@ class SeerrRequestStateHolder(
                 isLoadingServices = loading,
                 tvSeasons = seasons,
                 tvIsAnime = isAnime,
-                dialogItem = dialogItem,
             )
         }.distinctUntilChanged()
 
@@ -129,31 +124,20 @@ class SeerrRequestStateHolder(
     }
 
     /**
-     * Opens the Seerr request dialog for [item]: the pending item lands on
-     * the snapshot ([SeerrRequestSnapshot.dialogItem] — the screens' `?.let`
-     * render gate) AND the open cascade fires here, not at the call site:
-     * service details for the item's media type, plus the season list for TV
-     * only (case-insensitive; Seerr reports "tv" lowercase but the casing is
-     * not contractual). Three screens used to hand-copy this choreography as
+     * Fires the request-open DATA cascade for [item]: service details for
+     * the item's media type, plus the season list for TV only
+     * (case-insensitive; Seerr reports "tv" lowercase but the casing is
+     * not contractual). What core/ui's `SeerrRequestDialogHolder.open`
+     * calls through its `prepare` seam — the dialog cell itself (WHICH item
+     * the dialog is open for) is presentation state and lives beside the
+     * dialog, not here. Screens used to hand-copy this choreography as
      * LaunchedEffect bodies — reachable by no test.
      */
-    fun openRequestDialog(item: SeerrSearchItem) {
-        _dialogItem.value = item
+    fun prepare(item: SeerrSearchItem) {
         loadServiceDetails(item.mediaType)
         if (item.mediaType.equals("tv", ignoreCase = true)) {
             loadTvSeasons(item.id)
         }
-    }
-
-    /**
-     * The ONE dialog teardown: drop the pending request item (closing the
-     * dialog) THEN clear the last request result — in that order, so the
-     * result banner never outlives the dialog it belongs to (same rule as
-     * HomeDialogSession.dismissSeerrRequest).
-     */
-    fun dismissRequestDialog() {
-        _dialogItem.value = null
-        clearRequestResult()
     }
 
     fun prefetchDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit = {}) {

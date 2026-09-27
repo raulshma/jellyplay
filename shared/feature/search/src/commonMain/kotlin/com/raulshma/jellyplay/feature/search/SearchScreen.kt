@@ -202,6 +202,7 @@ internal fun SearchScreen(
     DeferredRefreshEffect(viewModel.deferredRefresher)
 
     val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
+    val seerrDialogItem by viewModel.seerrDialogItem.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
     // The live query string is only read inside leaf composables (the search
@@ -1015,9 +1016,9 @@ internal fun SearchScreen(
     // untouched).
     QuickActionIntakeHost(quickActionIntake)
 
-    // Seerr request dialog — rendered from the holder snapshot's dialogItem;
-    // the open/dismiss choreography is the holder's.
-    seerrSnapshot.dialogItem?.let { item ->
+    // Seerr request dialog — gated on the dialog holder's frozen-at-open
+    // item; the open/dismiss choreography is the holder's.
+    seerrDialogItem?.let { item ->
         SeerrRequestDialog(
             item = item,
             snapshot = seerrSnapshot,

@@ -18,7 +18,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -53,7 +52,6 @@ import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.resolve
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
-import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
@@ -67,10 +65,7 @@ import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerHost
-import com.raulshma.jellyplay.navigation.playbackhost.HostDecision
-import com.raulshma.jellyplay.navigation.playbackhost.PlaybackHostRouter
 import com.raulshma.jellyplay.shell.ShellInfra
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun MainContent(
@@ -98,23 +93,28 @@ internal fun MainContent(
         topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
         stripPlayerRoutesOnRestore = stripPlayerRoutesOnRestore,
     )
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val userMessageBus = LocalUserMessageBus.current
     // Shared (commonMain) bus — same instance the root provider supplies to
     // the migrated ViewModels; collected alongside the legacy bus below.
     val sharedUserMessageBus = com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus.current
+    // The shell's snackbar surface — ONE host state shared by the
+    // request-dispatch holder below (the collector's presentSnackbar seam),
+    // the layout's JellyPlaySnackbarHost and the shellUserMessagePresent
+    // adapter, so all three present into the same queue.
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     // One home for the external-player launch protocol (ExternalPlayerHost,
     // beside PlaybackHostRouter): resolve → report-start → stash → chooser →
     // failure-clears-stash+error, plus the result arm's position parse +
     // report-stop — the ordering between those steps is pinned there
     // (ExternalPlayerHostTest). The host owns the pending-launch stash, so it
-    // is remembered (stateful, unlike the stateless NavRequestCollector
-    // constructed inline below); the ActivityResultLauncher arrives as a
-    // per-call seam because the shell constructs the host BEFORE the launcher
-    // (the launcher's result callback feeds host.onResult). The bus rides a
-    // rememberUpdatedState wrapper so the remembered host always posts to the
-    // composition's current bus.
+    // is remembered (stateful, unlike the stateless NavRequestCollector the
+    // remembered NavRequestController below constructs); the
+    // ActivityResultLauncher arrives as a per-call seam because the shell
+    // constructs the host BEFORE the launcher (the launcher's result callback
+    // feeds host.onResult), and the holder needs the launcher in turn. The
+    // bus rides a rememberUpdatedState wrapper so the remembered host always
+    // posts to the composition's current bus.
     val currentMessageBus by rememberUpdatedState(userMessageBus)
     val externalPlayerHost = remember {
         ExternalPlayerHost(
@@ -138,35 +138,28 @@ internal fun MainContent(
             positionMs = result.data?.extras?.get("positionMs"),
         )
     }
-    val navigator = Navigator(navigationState, navigateFilter = { route ->
-        // Thin executing adapter for PlaybackHostRouter — the single owner of
-        // the "which host mounts playback" decision. ExternalPlayer → the
-        // host above (its returned position is credited via
-        // reportExternalPlaybackStopped, so Continue Watching advances for
-        // regular videos and Live TV channels); DedicatedActivity →
-        // PlayerActivity (system PiP floats over this browse UI; back-stack
-        // choreography: shared taskAffinity, singleTask). Both return false so
-        // the route never enters an in-nav back stack. InNav/NotPlayback →
-        // true, the Navigator pushes normally.
-        when (val decision = PlaybackHostRouter.decide(route, preferences.preferredPlayer)) {
-            is HostDecision.ExternalPlayer -> {
-                scope.launch {
-                    externalPlayerHost.launch(
-                        itemId = decision.itemId,
-                        mediaSourceId = decision.mediaSourceId,
-                        startPositionTicks = decision.startPositionTicks,
-                        startChooser = { chooser -> externalPlayerLauncher.launch(chooser) },
-                    )
-                }
-                false
-            }
-            is HostDecision.DedicatedActivity -> {
-                context.startActivity(decision.args.buildIntent(context))
-                false
-            }
-            HostDecision.InNav, HostDecision.NotPlayback -> true
-        }
-    })
+
+    // The request-dispatch half of this composable (NavRequestController): the
+    // playback-host navigateFilter + its ONE identity-stable Navigator, the
+    // stateless NavRequestCollector over its seams, and the per-loop collect
+    // members the keyed effects below drive. Constructed on the holder's
+    // stability-contract keys — a fresh Navigator per recomposition here used
+    // to make the shellHost remember below and MainNavDisplay's
+    // remember(navigator, shellHost) section-graph memoization always miss,
+    // re-invoking the ~25 section builders on every tab switch, preference
+    // write or download-count emission. The preferred-player preference rides
+    // a rememberUpdatedState getter inside the holder, so an engine flip
+    // re-decides at the next navigate without rebuilding anything.
+    val navRequests = rememberNavRequestController(
+        navigationState = navigationState,
+        model = model,
+        infra = infra,
+        snackbarHostState = snackbarHostState,
+        externalPlayerHost = externalPlayerHost,
+        externalPlayerLauncher = externalPlayerLauncher,
+        preferredPlayer = preferences.preferredPlayer,
+    )
+    val navigator = navRequests.navigator
     val currentTopLevel by navigationState.topLevelRoute
     val currentRoute = navigator.currentRoute()
 
@@ -227,9 +220,12 @@ internal fun MainContent(
         }
     }
 
-    val onModeChange: (HomeMode) -> Unit = { mode ->
-        model.setHomeMode(mode)
-    }
+    // Stable on purpose: this is a key of the shellHost remember below and a
+    // ShellNavParams field, so a fresh lambda per recomposition would make
+    // both compare unequal (the former allocation made the section-graph
+    // memoization always miss). Remembered on the model, whose activity scope
+    // is the lambda's only capture.
+    val onModeChange: (HomeMode) -> Unit = remember(model) { model::setHomeMode }
 
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
     val libraryFolders by infra.sessionCoordinatorLazy.value.libraryFolders.collectAsStateWithLifecycle()
@@ -244,26 +240,16 @@ internal fun MainContent(
         }
     }
 
-    // One home for the shell's nav-request collectors (NavRequestCollector,
-    // beside RemoteNavigationRouting): every collect-then-dispatch loop that
-    // used to live inline in this body — the policy forks are pure and pinned
-    // there; the effects below are one-line launchers. The controller is
-    // stateless, so no remember: each effect captures the instance current
-    // when it (re)launches, exactly as the former inline collectors captured
-    // `navigator` (whose navigateFilter carries the playback-host decision).
-    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
-    val navRequests = NavRequestCollector(
-        topLevelKeys = ALL_TOP_LEVEL_ROUTE_KEYS,
-        navigate = navigator::navigate,
-        selectTopLevelTab = { route -> navigationState.topLevelRoute.value = route },
-        backStacks = { navigationState.backStacks.values },
-        consumePendingRoute = model::consumePendingRoute,
-        presentSnackbar = { message ->
-            snackbarHostState.showSnackbar(message = message, withDismissAction = true)
-        },
-        goBack = { navigator.goBack() },
-        dispatchKey = infra.keyDispatcher,
-    )
+    // The request-dispatch effects (NavRequestCollector's loops, driven
+    // through the remembered holder above). Keying preserved exactly from the
+    // former inline collectors: the value-keyed pending-route effect
+    // re-launches — and re-captures the holder's collector — on every new
+    // route, while the flow-keyed collectors hold their launch-time instance
+    // (NavRequestCollector's documented capture semantics; the holder's
+    // remember keys are the collector's captured seams, so the only way
+    // those captures go stale is a holder rebuild, which any re-keying effect
+    // picks up). The policy forks are pure and pinned in
+    // NavRequestCollector's suite; the effects are one-line launchers.
 
     // Deep links / launcher shortcuts / shared-text targets
     // (MainViewModel.pendingRoute). Value-keyed over the lifecycle-aware
@@ -278,37 +264,31 @@ internal fun MainContent(
     // emitted by the WebSocket receiver; the target→route mapping and the
     // multi-back-stack player pop are shared/feature/shell's pure folds
     // (feature.shell.navigation.RemoteNavigationRouting, pinned by its
-    // jvmTest). The bridge resolves
-    // INSIDE the effect body — LaunchedEffect runs after the frame applies,
-    // so its Koin construction no longer runs during any composition pass.
+    // jvmTest). The bridge resolves INSIDE the holder member — LaunchedEffect
+    // runs after the frame applies, so its Koin construction never runs
+    // during any composition pass.
     val contextMenuUnavailableMessage = stringResource(R.string.snackbar_context_menu_unavailable)
     LaunchedEffect(infra.remoteNavigationBridgeLazy) {
-        navRequests.collectRemoteNavigation(
-            targets = infra.remoteNavigationBridgeLazy.value.targets,
-            contextMenuUnavailableMessage = contextMenuUnavailableMessage,
-        )
+        navRequests.collectRemoteNavigation(contextMenuUnavailableMessage)
     }
 
     // SyncPlay auto-open: a joined group started playing (or switched items)
     // while no player is on top of any back stack → open the video player.
     // When a player IS already open, its SyncPlayBridge drives the item load
-    // in place — the player-open guard lives in the collector's pure fold.
-    // The coordinator rides the infra bundle (lazy like its five peers;
-    // resolved inside the effect body for the same post-frame reason as the
-    // bridge above).
+    // in place — the player-open guard lives in the shared pure fold. The
+    // coordinator rides the infra bundle (lazy like its peers; resolved
+    // inside the holder member for the same post-frame reason as the bridge
+    // above).
     LaunchedEffect(infra.syncPlayOpenCoordinatorLazy) {
-        navRequests.collectSyncPlayOpens(infra.syncPlayOpenCoordinatorLazy.value.openRequests)
+        navRequests.collectSyncPlayOpens()
     }
 
     // Remote-control "now playing" snackbar; the title fallback + template
-    // format live in the collector's pure fold. Resolved inside the
-    // effect body for the same post-frame reason as the bridge above.
+    // format live in the shared pure fold. Resolved inside the holder member
+    // for the same post-frame reason as the bridge above.
     val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
     androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiverLazy) {
-        navRequests.collectNowPlayingSnackbars(
-            events = infra.remoteControlReceiverLazy.value.playEvents,
-            messageTemplate = nowPlayingTemplate,
-        )
+        navRequests.collectNowPlayingSnackbars(nowPlayingTemplate)
     }
 
     val navBarColorState = remember { mutableStateOf<Color?>(null) }
@@ -459,18 +439,30 @@ internal fun MainContent(
             val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
             // Hoist the audio-mini-player navigation callbacks so all three layout branches
             // (TvContent / PhoneContent / FullScreenContent) can share identical instances
-            // instead of allocating fresh lambdas per call site.
-            val onNowPlayingClick: () -> Unit = {
-                audioItemId?.let { itemId -> navigator.navigate(Route.AudioPlayer(itemId)) }
+            // instead of allocating fresh lambdas per call site. Remembered on their only
+            // captures (the identity-stable navigator + the playback manager), and the
+            // audio state is read at CLICK TIME from the manager's flows — the desktop
+            // hooks' pattern: capturing the composed `audioItemId` instead would either
+            // go stale (keyed on the navigator alone) or rebuild the shellHost graph on
+            // every song change (keyed on the item). Equivalent while resumed, which is
+            // the only time a click can land.
+            val onNowPlayingClick: () -> Unit = remember(navigator, audioPlaybackManager) {
+                {
+                    audioPlaybackManager.currentPlayingItemId.value?.let { itemId ->
+                        navigator.navigate(Route.AudioPlayer(itemId))
+                    }
+                }
             }
-            val onAmbientClick: () -> Unit = {
-                navigator.navigate(
-                    Route.Ambient(
-                        imageUrl = audioPlaybackManager.albumArtUrl.value,
-                        title = audioPlaybackManager.title.value,
-                        artist = audioPlaybackManager.artist.value,
+            val onAmbientClick: () -> Unit = remember(navigator, audioPlaybackManager) {
+                {
+                    navigator.navigate(
+                        Route.Ambient(
+                            imageUrl = audioPlaybackManager.albumArtUrl.value,
+                            title = audioPlaybackManager.title.value,
+                            artist = audioPlaybackManager.artist.value,
+                        )
                     )
-                )
+                }
             }
 
             // Play On (cast-to-Jellyfin-session) controller — the ONE

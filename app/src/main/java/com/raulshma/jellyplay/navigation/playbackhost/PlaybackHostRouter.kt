@@ -11,8 +11,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * (see `PlaybackHostRouterTest`, which pins every cell of the current table).
  *
  * [PlaybackHostRouter.decide] has exactly one consumer: the `navigateFilter`
- * adapter in `JellyPlayApp.kt`, which executes the decision (launch external
- * player, start PlayerActivity, or let the Navigator push normally).
+ * adapter in `NavRequestController` (the request-dispatch half of MainContent),
+ * which executes the decision (launch external player, start PlayerActivity,
+ * or let the Navigator push normally).
  */
 sealed interface HostDecision {
     /**

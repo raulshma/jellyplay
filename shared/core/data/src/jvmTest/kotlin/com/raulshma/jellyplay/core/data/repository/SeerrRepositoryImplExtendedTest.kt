@@ -42,7 +42,7 @@ class SeerrRepositoryImplExtendedTest {
     // Real HomeSession over a permanently-null session flow + the registry
     // that owns identity reactions; this suite never switches identity, so
     // CacheIdentity.UNKNOWN is the detail cache's key surface.
-    private val sessionApiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient = mockk {
+    private val sessionApiClient: com.raulshma.jellyplay.core.network.api.AuthApiClient = mockk {
         every { session } returns MutableStateFlow(null)
     }
     private val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(

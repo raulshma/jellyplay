@@ -189,7 +189,7 @@ class AlbumDetailViewModel(
             if (tracks.isEmpty()) {
                 flowOf(emptyMap())
             } else {
-                downloads.downloadsFor(tracks.map { it.id })
+                downloads.getDownloadsByMediaItemIdsFlow(tracks.map { it.id })
                     .map { rows -> rows.associateBy { it.mediaItemId } }
             }
         }
@@ -214,7 +214,7 @@ class AlbumDetailViewModel(
         val existing = trackDownloads.value[track.id]
         if (existing != null && existing.status == DownloadStatus.COMPLETED) {
             launch {
-                downloads.remove(existing.id)
+                downloads.deleteDownload(existing.id)
             }
             return
         }
@@ -236,7 +236,7 @@ class AlbumDetailViewModel(
                 val existing = currentDownloads[track.id]
                 if (existing != null) {
                     launch {
-                        downloads.remove(existing.id)
+                        downloads.deleteDownload(existing.id)
                     }
                 }
             }

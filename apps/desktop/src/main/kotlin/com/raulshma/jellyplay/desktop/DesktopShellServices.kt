@@ -1,0 +1,319 @@
+package com.raulshma.jellyplay.desktop
+
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
+import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
+import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
+import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
+import com.raulshma.jellyplay.core.ui.message.UserMessage
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
+import com.raulshma.jellyplay.core.ui.navigation.NavigationState
+import com.raulshma.jellyplay.core.ui.navigation.Navigator
+import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.shell.ShellSessionController
+import com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher
+import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
+import com.raulshma.jellyplay.desktop.update.DesktopUpdateCheckController
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import org.koin.compose.koinInject
+
+/**
+ * The shell-services holder extracted from [DesktopNavScaffold] (the
+ * DesktopStartup/DesktopTrayActions extraction idiom, scaled up): ONE
+ * plain class owning the CONSTRUCTION of every non-UI service the scaffold
+ * composition needs, and — through [rememberDesktopShellServices] — the
+ * COLLECTION effects that keep them alive. The scaffold keeps the chrome
+ * (rail, NavDisplay, snackbar surface, key handling, the idle overlay's
+ * rendering) and reads these through the properties below.
+ *
+ *  - the shell session policy (ADR 0001): [sessionController] — the shared
+ *    [ShellSessionController] over this shell's own stores (no Koin
+ *    binding, the same direct construction MainViewModel performs on
+ *    Android), owning admin-status state + the 30 s refresh arbitration,
+ *    homeMode collect/persist, and the revoke/plain logout fork, on this
+ *    composition's scope so every job dies with the scaffold;
+ *  - the About update check (ADR desktop-auto-update): [updateCheckController]
+ *    — check→message mapping, browser handoff, snackbar wording; never a
+ *    silent install, browser handoff only;
+ *  - the dead-end guard: [sectionRegistry] + [guardedNavigator] — the
+ *    shell-owned ledger plus the navigator adapter that surfaces unregistered
+ *    routes as a snackbar (see [desktopGuardedNavigator] /
+ *    [desktopDeadEndMessage], pinned by DesktopNavGuardTest). The registry
+ *    starts EMPTY here; the scaffold's section-graph build attaches the
+ *    shared sections into it, which is why the graph build itself stays in
+ *    the scaffold — see the ordering note in [rememberDesktopShellServices];
+ *  - the user-message sources: [userMessageSources] — the shared
+ *    [UserMessageBus], the DesktopMusicMessageBus relay and the
+ *    remote-control receiver's DisplayMessages (the receiver is the SAME
+ *    Koin single DesktopAppRoot arms through
+ *    RealtimeSessionController.create — collecting its flow here does not
+ *    re-arm it; see [desktopUserMessageSources] for the source order and
+ *    the playEvents decision);
+ *  - the remote navigation bridge collector: [remoteNavigation] — the shared
+ *    [RemoteNavigationDispatcher] ladder over this shell's seams (pushes
+ *    through [guardedNavigator], tab switches writing `topLevelRoute`
+ *    directly, Compose focus moves, the synthesized AWT Enter for select,
+ *    the context-menu fallback message); collected by
+ *    [collectRemoteNavigation];
+ *  - the idle ambient seam: [idleAmbientController] — DesktopIdleAmbient
+ *    Controller (idle monitor + idle-gated active-remote-session count),
+ *    started/stopped by the factory's DisposableEffect;
+ *  - the live desktop audio core: [audioQueueManager], exposed because the
+ *    scaffold's ShellHostHooks now-playing/ambient lambdas read it at click
+ *    time (flows read lazily, never collected here).
+ *
+ * A plain class on constructor-injected collaborators (the
+ * DesktopUpdateCheckController idiom, no Koin awareness of its own), so the
+ * wiring is JVM-constructible and the scaffold's `remember` keys reduce to
+ * the stable inputs of [rememberDesktopShellServices].
+ *
+ * @param scope the scaffold composition's scope — every service job
+ *   (session arbitration, update check, guard snackbars, idle ticks) dies
+ *   with the composition, exactly like the inline `scope.launch` calls this
+ *   holder replaced.
+ * @param navigation the scaffold's nav3 [NavigationState] — the guard's
+ *   back stacks and the remote tab-switch seam write through it.
+ * @param showMessage the snackbar sink shared by the update check, the
+ *   dead-end guard and the remote-nav fallback messages.
+ * @param focusManager the composition's Compose FocusManager — the remote
+ *   MoveFocus seam's target.
+ * @param windowRef Main.kt's AWT window ref — the remote select seam's
+ *   Enter-key synthesis posts through it; content null until composed.
+ */
+internal class DesktopShellServices(
+    private val scope: CoroutineScope,
+    navigation: NavigationState,
+    showMessage: suspend (String) -> Unit,
+    focusManager: FocusManager,
+    windowRef: AtomicReference<ComposeWindow?>?,
+    authRepository: AuthRepository,
+    homeDiscoveryStore: HomeDiscoveryStore,
+    appUpdateRepository: AppUpdateRepository,
+    sharedUserMessageBus: UserMessageBus,
+    musicMessageBus: MusicMessageBus,
+    remoteControlReceiver: RemoteControlReceiver,
+    private val remoteNavigationBridge: RemoteNavigationBridge,
+    val audioQueueManager: DesktopAudioQueueManager,
+    activePlayerRegistry: ActivePlayerController,
+    webSocketClient: JellyfinWebSocketClient,
+    screensaverStore: ScreensaverStore,
+) {
+    /** ADR 0001's shared session-policy wiring — see class KDoc. */
+    val sessionController = ShellSessionController(
+        scope = scope,
+        nowMs = { System.currentTimeMillis() },
+        currentUser = authRepository.currentUser,
+        refreshCurrentUser = { authRepository.refreshCurrentUser() },
+        persistHomeMode = { mode -> homeDiscoveryStore.setHomeMode(mode) },
+        homeModeChanges = homeDiscoveryStore.homeDiscovery.map { it.homeMode },
+        signOut = { revoke ->
+            if (revoke) authRepository.revokeServerSession() else authRepository.logout()
+        },
+    )
+
+    /** The About row's check controller (ADR desktop-auto-update). */
+    val updateCheckController = DesktopUpdateCheckController(
+        scope = scope,
+        repository = appUpdateRepository,
+        showMessage = showMessage,
+    )
+
+    /**
+     * The shell-owned section ledger the dead-end guard derives from —
+     * EMPTY until the scaffold's section-graph build (shellEntryProvider)
+     * attaches the shared sections; guard reads before that attach see a
+     * route as a dead end, which is the safe direction.
+     */
+    val sectionRegistry = ShellSectionRegistry()
+
+    /** The guarded navigator over [sectionRegistry] — the guard's push seam. */
+    val guardedNavigator: Navigator = desktopGuardedNavigator(
+        navigation = navigation,
+        isRegistered = sectionRegistry::isRegistered,
+        scope = scope,
+        showMessage = showMessage,
+    )
+
+    /**
+     * The UserMessageHost source list — shared bus, music relay, receiver
+     * DisplayMessages, in that order (see [desktopUserMessageSources]).
+     */
+    val userMessageSources: List<Flow<UserMessage>> = desktopUserMessageSources(
+        sharedUserMessageBus = sharedUserMessageBus,
+        musicMessageBus = musicMessageBus,
+        remoteDisplayMessages = remoteControlReceiver.displayMessages,
+    )
+
+    /**
+     * The remote-navigation ladder over this shell's seams (the former
+     * DesktopRemoteNavCollector wrapper folded away): pushes through
+     * [guardedNavigator] (dead-end routes surface the guard's snackbar),
+     * tab switches write `topLevelRoute` directly — NOT through the
+     * navigator, whose pop-to-root-when-already-on-tab behavior must not
+     * fire for a remote GoHome/GoToSettings/GoToSearch — ClosePlayer pops
+     * player routes off every tab's stack, GoBack pops one entry, MoveFocus
+     * drives the Compose FocusManager (through [composeFocusDirection]),
+     * InvokeSelect synthesizes an AWT Enter pair posted through the system
+     * event queue — the exact route every real keystroke takes into the
+     * Compose preview-key chain — and OpenContextMenu keeps the default
+     * never-consumed arm (no desktop context-menu affordance), falling back
+     * to [DESKTOP_CONTEXT_MENU_UNAVAILABLE].
+     */
+    private val remoteNavigation = RemoteNavigationDispatcher(
+        topLevelKeys = DESKTOP_TOP_LEVEL_ROUTES,
+        navigate = guardedNavigator::navigate,
+        selectTab = { route -> navigation.topLevelRoute.value = route },
+        goBack = { guardedNavigator.goBack() },
+        backStacks = { navigation.backStacks.values },
+        presentMessage = showMessage,
+        moveFocus = { direction ->
+            focusManager.moveFocus(composeFocusDirection(direction))
+        },
+        invokeSelect = { DesktopKeySynthesizer.postEnterKey(windowRef?.get()) },
+    )
+
+    /**
+     * The idle "Ready to play" ambient controller — the monitor + the
+     * idle-gated active-remote-session count off the receiver socket's
+     * Sessions push; the scaffold keeps the collect reads, the overlay
+     * rendering and the input-reset hook. Idle definition unchanged:
+     * nothing playing (audio queue + engine registry), window active,
+     * debounced timeout from the screensaver store's idle-ambient settings
+     * (0 = off).
+     */
+    val idleAmbientController = DesktopIdleAmbientController(
+        settings = {
+            val slice = screensaverStore.screensaver.value
+            IdleAmbientSettings(
+                enabled = slice.idleAmbientEnabled,
+                timeoutMin = slice.idleAmbientTimeoutMin,
+            )
+        },
+        isAudioPlaying = { audioQueueManager.currentPlayingItemId.value != null },
+        isVideoActive = { activePlayerRegistry.engine != null },
+        isWindowActive = { windowRef?.get()?.let { it.isShowing && it.isActive } ?: false },
+        sessionsEvents = webSocketClient.events,
+    )
+
+    /**
+     * Consumes `RemoteNavigationBridge.targets` until cancellation — the
+     * collect half of the remote-nav seam, driven by
+     * [rememberDesktopShellServices]'s effect.
+     */
+    suspend fun collectRemoteNavigation() {
+        remoteNavigation.collect(remoteNavigationBridge.targets, DESKTOP_CONTEXT_MENU_UNAVAILABLE)
+    }
+}
+
+/**
+ * Constructs and arms [DesktopShellServices] for one scaffold composition:
+ * the `remember` over the stable inputs (Koin singles + the navigation /
+ * snackbar / focus identities) plus the two collection effects — the
+ * remote-nav collector and the idle-ambient start/stop — so the scaffold
+ * itself carries no service wiring.
+ *
+ * COMPOSITION-ORDER CONTRACT: call this AFTER the scaffold's video-surface
+ * probe registration and BEFORE its section-graph build. The graph build is
+ * what attaches the shared sections into [DesktopShellServices.sectionRegistry]
+ * (the refresh-registry provide rides the same build), and the Route.Video
+ * Player registration inside it reads the probe — so the probe must already
+ * be armed and this holder (which owns the registry the graph attaches into)
+ * must already exist when the graph-build remember runs. Nothing inside this
+ * factory composes UI, so its position only has to honor that ordering.
+ */
+@Composable
+internal fun rememberDesktopShellServices(
+    navigation: NavigationState,
+    snackbarHostState: SnackbarHostState,
+    windowRef: AtomicReference<ComposeWindow?>?,
+): DesktopShellServices {
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val showMessage: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
+
+    // Koin singles (stable for the app lifetime — keyed on anyway, the same
+    // discipline the scaffold's per-service remembers applied, so a rebound
+    // single rebuilds the holder exactly where the inline remembers would
+    // have rebuilt their one service).
+    val authRepository: AuthRepository = koinInject()
+    val homeDiscoveryStore: HomeDiscoveryStore = koinInject()
+    val appUpdateRepository: AppUpdateRepository = koinInject()
+    val sharedUserMessageBus: UserMessageBus = koinInject()
+    val musicMessageBus: MusicMessageBus = koinInject()
+    val remoteControlReceiver: RemoteControlReceiver = koinInject()
+    val remoteNavigationBridge: RemoteNavigationBridge = koinInject()
+    val audioQueueManager: DesktopAudioQueueManager = koinInject()
+    val activePlayerRegistry: ActivePlayerController = koinInject()
+    val webSocketClient: JellyfinWebSocketClient = koinInject()
+    val screensaverStore: ScreensaverStore = koinInject()
+
+    val services = remember(
+        scope,
+        navigation,
+        snackbarHostState,
+        focusManager,
+        windowRef,
+        authRepository,
+        homeDiscoveryStore,
+        appUpdateRepository,
+        sharedUserMessageBus,
+        musicMessageBus,
+        remoteControlReceiver,
+        remoteNavigationBridge,
+        audioQueueManager,
+        activePlayerRegistry,
+        webSocketClient,
+        screensaverStore,
+    ) {
+        DesktopShellServices(
+            scope = scope,
+            navigation = navigation,
+            showMessage = showMessage,
+            focusManager = focusManager,
+            windowRef = windowRef,
+            authRepository = authRepository,
+            homeDiscoveryStore = homeDiscoveryStore,
+            appUpdateRepository = appUpdateRepository,
+            sharedUserMessageBus = sharedUserMessageBus,
+            musicMessageBus = musicMessageBus,
+            remoteControlReceiver = remoteControlReceiver,
+            remoteNavigationBridge = remoteNavigationBridge,
+            audioQueueManager = audioQueueManager,
+            activePlayerRegistry = activePlayerRegistry,
+            webSocketClient = webSocketClient,
+            screensaverStore = screensaverStore,
+        )
+    }
+
+    // The remote-nav ladder collector: consumes the bridge's targets (no
+    // replay, buffered 4) until the composition leaves.
+    LaunchedEffect(services) {
+        services.collectRemoteNavigation()
+    }
+
+    // The idle-ambient lifecycle: ticks + the idle-gated session-count
+    // collector run for exactly this composition, like the scaffold's own
+    // DisposableEffect did.
+    DisposableEffect(services, scope) {
+        services.idleAmbientController.start(scope)
+        onDispose { services.idleAmbientController.stop() }
+    }
+
+    return services
+}

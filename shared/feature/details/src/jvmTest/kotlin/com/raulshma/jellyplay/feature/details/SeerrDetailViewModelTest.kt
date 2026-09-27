@@ -500,7 +500,7 @@ class SeerrDetailViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.seerrSnapshot.value.requestResult)
-        assertNull(viewModel.seerrSnapshot.value.dialogItem)
+        assertNull(viewModel.seerrDialogItem.value)
     }
 
     // ── openRequestDialog (delegates to holder, cascade included) ───────────────────────
@@ -519,7 +519,7 @@ class SeerrDetailViewModelTest {
 
         assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
         assertFalse(viewModel.seerrSnapshot.value.isLoadingServices)
-        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
+        assertNotNull(viewModel.seerrDialogItem.value)
     }
 
     @Test
@@ -534,7 +534,7 @@ class SeerrDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
-        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
+        assertNotNull(viewModel.seerrDialogItem.value)
     }
 
     // ── openRequestDialog tv seasons (cascade) ────────────────────────────

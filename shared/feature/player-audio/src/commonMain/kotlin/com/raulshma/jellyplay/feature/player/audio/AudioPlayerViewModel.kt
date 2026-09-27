@@ -208,7 +208,7 @@ class AudioPlayerViewModel(
                     downloadJob = launch {
                         // The single-id window read (the former seam's
                         // trackStatus): rows → the one row, null when none.
-                        downloads.downloadsFor(listOf(itemId))
+                        downloads.getDownloadsByMediaItemIdsFlow(listOf(itemId))
                             .map { rows -> rows.firstOrNull() }
                             .collect { download ->
                                 _currentDownloadItem.set(download)
@@ -656,7 +656,7 @@ class AudioPlayerViewModel(
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
             launch {
-                downloads.remove(existing.id)
+                downloads.deleteDownload(existing.id)
             }
             return
         }

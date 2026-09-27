@@ -11,7 +11,8 @@ import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -31,8 +32,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Unit tests for [WatchHistoryRepositoryImpl] over a mocked
- * [JellyfinApiClient]. Covers the decision logic, not the transport:
+ * Unit tests for [WatchHistoryRepositoryImpl] over mocked family
+ * clients. Covers the decision logic, not the transport:
  *  - [HeatmapFilter] → Playback-Reporting filter param + Jellyfin item-type
  *    mapping (VIDEO → "Movie,Episode" / "Movie,Episode,Series", MUSIC →
  *    "Audio", ALL → null);
@@ -48,7 +49,8 @@ import kotlin.test.assertTrue
  */
 class WatchHistoryRepositoryImplTest {
 
-    private val apiClient: JellyfinApiClient = mockk()
+    private val authApiClient: AuthApiClient = mockk()
+    private val mediaInfoApiClient: MediaInfoApiClient = mockk()
 
     private val timeSource = FakeTimeSource(todayDate = LocalDate.of(2026, 3, 10))
 
@@ -67,9 +69,9 @@ class WatchHistoryRepositoryImplTest {
         // session — this suite never switches identity, so the shared
         // PlaybackReportingStatusStore behaves exactly as the plain
         // StateFlow+refresh its former per-repository owner was.
-        every { apiClient.session } returns MutableStateFlow<ActiveSession?>(null)
+        every { authApiClient.session } returns MutableStateFlow<ActiveSession?>(null)
         val homeSession = HomeSession(
-            apiClient,
+            authApiClient,
             CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         val sessionCacheRegistry = SessionCacheRegistry(
@@ -77,11 +79,12 @@ class WatchHistoryRepositoryImplTest {
             CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         repository = WatchHistoryRepositoryImpl(
-            apiClient,
-            PlaybackReportingStatusStore(apiClient, sessionCacheRegistry),
+            authApiClient,
+            mediaInfoApiClient,
+            PlaybackReportingStatusStore(mediaInfoApiClient, sessionCacheRegistry),
             timeSource,
         )
-        coEvery { apiClient.currentUser } returns flowOf(user)
+        coEvery { authApiClient.currentUser } returns flowOf(user)
     }
 
     private fun item(
@@ -93,7 +96,7 @@ class WatchHistoryRepositoryImplTest {
     ) = MediaItem(id = id, name = name, mediaType = mediaType, playCount = playCount, lastPlayedDate = lastPlayedDate)
 
     private suspend fun makePluginAvailable() {
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
         repository.refreshPlaybackReportingStatus()
         assertEquals(PlaybackReportingStatus.AVAILABLE, repository.playbackReportingStatus.value)
     }
@@ -102,7 +105,7 @@ class WatchHistoryRepositoryImplTest {
 
     @Test
     fun `refresh marks AVAILABLE when the plugin check succeeds`() = runTest {
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
 
         repository.refreshPlaybackReportingStatus()
 
@@ -111,7 +114,7 @@ class WatchHistoryRepositoryImplTest {
 
     @Test
     fun `refresh marks UNAVAILABLE when the plugin check fails`() = runTest {
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.failure(IllegalStateException("down"))
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.failure(IllegalStateException("down"))
 
         repository.refreshPlaybackReportingStatus()
 
@@ -125,26 +128,26 @@ class WatchHistoryRepositoryImplTest {
         makePluginAvailable()
         val points = listOf(PlaybackActivityPoint(date = "2024-03-01", value = 4))
         coEvery {
-            apiClient.getPlaybackReportingPlayActivity(days = any(), dataType = "count", filter = any())
+            mediaInfoApiClient.getPlaybackReportingPlayActivity(days = any(), dataType = "count", filter = any())
         } returns Result.success(points)
 
         // Past year → the deterministic 365-day window.
         val all = repository.getDailyActivity(year = 2024, filter = HeatmapFilter.ALL)
-        coVerify(exactly = 1) { apiClient.getPlaybackReportingPlayActivity(days = 365, dataType = "count", filter = null) }
+        coVerify(exactly = 1) { mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 365, dataType = "count", filter = null) }
         assertEquals(listOf(DailyWatchActivity(date = "2024-03-01", value = 4)), all)
 
         repository.getDailyActivity(year = 2024, filter = HeatmapFilter.VIDEO)
-        coVerify(exactly = 1) { apiClient.getPlaybackReportingPlayActivity(days = 365, dataType = "count", filter = "Movie,Episode") }
+        coVerify(exactly = 1) { mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 365, dataType = "count", filter = "Movie,Episode") }
 
         repository.getDailyActivity(year = 2024, filter = HeatmapFilter.MUSIC)
-        coVerify(exactly = 1) { apiClient.getPlaybackReportingPlayActivity(days = 365, dataType = "count", filter = "Audio") }
+        coVerify(exactly = 1) { mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 365, dataType = "count", filter = "Audio") }
     }
 
     @Test
     fun `current-year day count is pinned by the clock seam's today`() = runTest {
         makePluginAvailable()
         coEvery {
-            apiClient.getPlaybackReportingPlayActivity(days = any(), dataType = "count", filter = any())
+            mediaInfoApiClient.getPlaybackReportingPlayActivity(days = any(), dataType = "count", filter = any())
         } returns Result.success(listOf(PlaybackActivityPoint(date = "2026-03-01", value = 1)))
 
         repository.getDailyActivity(year = 2026, filter = HeatmapFilter.ALL)
@@ -152,15 +155,15 @@ class WatchHistoryRepositoryImplTest {
         // Fake today = 2026-03-10: Jan 1 → Mar 10 spans 68 days, +1 inclusive
         // = 69 — the current-year window comes from the injected clock, not
         // the test machine's calendar.
-        coVerify(exactly = 1) { apiClient.getPlaybackReportingPlayActivity(days = 69, dataType = "count", filter = null) }
+        coVerify(exactly = 1) { mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 69, dataType = "count", filter = null) }
     }
 
     @Test
     fun `plugin path with a failing play-activity call degrades to the fallback`() = runTest {
         makePluginAvailable()
-        coEvery { apiClient.getPlaybackReportingPlayActivity(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { mediaInfoApiClient.getPlaybackReportingPlayActivity(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(Pair(1, listOf(item("i1", lastPlayedDate = "2024-03-01T10:00:00.000Z", playCount = 2))))
 
         val activity = repository.getDailyActivity(year = 2024, filter = HeatmapFilter.ALL)
@@ -173,7 +176,7 @@ class WatchHistoryRepositoryImplTest {
     @Test
     fun `fallback aggregates played items per day, sorted by date`() = runTest {
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = listOf("Movie", "Episode", "Series"), isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = listOf("Movie", "Episode", "Series"), isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(
             Pair(
                 3,
@@ -199,7 +202,7 @@ class WatchHistoryRepositoryImplTest {
     @Test
     fun `fallback skips items without a last played date`() = runTest {
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(Pair(2, listOf(item("a", lastPlayedDate = null), item("b", lastPlayedDate = "2024-05-05T00:00:00.000Z"))))
 
         val activity = repository.getDailyActivity(year = 2024, filter = HeatmapFilter.ALL)
@@ -212,7 +215,7 @@ class WatchHistoryRepositoryImplTest {
     @Test
     fun `played items outside the target year are excluded and stop the paging`() = runTest {
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(
             Pair(
                 3,
@@ -230,7 +233,7 @@ class WatchHistoryRepositoryImplTest {
         // order ⇒ no later page can hold a 2024 play); the rest of this page's
         // in-year items still count.
         assertEquals(listOf("new", "newer"), items.map { it.id })
-        coVerify(exactly = 1) { apiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { mediaInfoApiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -238,24 +241,24 @@ class WatchHistoryRepositoryImplTest {
         val page1 = (1..200).map { item("p1-%03d".format(it), lastPlayedDate = "2024-01-01T00:00:00.000Z") }
         val page2 = (1..200).map { item("p2-%03d".format(it), lastPlayedDate = "2024-01-02T00:00:00.000Z") }
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(Pair(400, page1))
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 200, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 200, limit = 200)
         } returns Result.success(Pair(400, page2))
 
         val items = repository.getPlayedItems(year = 2024, filter = HeatmapFilter.ALL)
 
         assertEquals(400, items.size)
         coVerify(exactly = 1) {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 200, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 200, limit = 200)
         }
     }
 
     @Test
     fun `played items with an unparseable year are skipped`() = runTest {
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = listOf("Audio"), isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = listOf("Audio"), isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(
             Pair(2, listOf(item("bad", lastPlayedDate = "not-a-date"), item("good", lastPlayedDate = "2024-02-02T00:00:00.000Z", mediaType = MediaType.AUDIO))),
         )
@@ -267,7 +270,7 @@ class WatchHistoryRepositoryImplTest {
 
     @Test
     fun `played items returns empty when signed out`() = runTest {
-        coEvery { apiClient.currentUser } returns flowOf(null)
+        coEvery { authApiClient.currentUser } returns flowOf(null)
 
         assertTrue(repository.getPlayedItems(year = 2024, filter = HeatmapFilter.ALL).isEmpty())
     }
@@ -278,7 +281,7 @@ class WatchHistoryRepositoryImplTest {
     fun `plugin path returns the reported details verbatim`() = runTest {
         makePluginAvailable()
         val details = listOf(PlaybackReportingDetail(time = "20:15", itemId = "i1", name = "Movie", type = "Movie", client = "Web", method = "DirectPlay", device = "PC", duration = 1000L))
-        coEvery { apiClient.getPlaybackReportingUserItems(userId = "u1", date = "2024-03-01", filter = "Movie,Episode") } returns Result.success(details)
+        coEvery { mediaInfoApiClient.getPlaybackReportingUserItems(userId = "u1", date = "2024-03-01", filter = "Movie,Episode") } returns Result.success(details)
 
         assertEquals(details, repository.getItemsForDay("2024-03-01", HeatmapFilter.VIDEO))
     }
@@ -286,7 +289,7 @@ class WatchHistoryRepositoryImplTest {
     @Test
     fun `fallback maps the day's played items with unknown client fidelity`() = runTest {
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(
             Pair(
                 3,
@@ -312,7 +315,7 @@ class WatchHistoryRepositoryImplTest {
     @Test
     fun `fallback with an unparseable timestamp yields an empty time`() = runTest {
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(Pair(1, listOf(item("a", lastPlayedDate = "2024-03-01 garbage"))))
 
         val details = repository.getItemsForDay("2024-03-01", HeatmapFilter.ALL)
@@ -329,17 +332,17 @@ class WatchHistoryRepositoryImplTest {
         // getPlayedItems(2026) read lands in the entry the fallback just
         // populated, so the network page runs exactly once.
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 200)
         } returns Result.success(Pair(1, listOf(item("y2026", lastPlayedDate = "2026-02-02T00:00:00.000Z"))))
 
         assertTrue(repository.getItemsForDay("bad!", HeatmapFilter.ALL).isEmpty())
         assertEquals(listOf("y2026"), repository.getPlayedItems(year = 2026, filter = HeatmapFilter.ALL).map { it.id })
-        coVerify(exactly = 1) { apiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { mediaInfoApiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `items for day returns empty when signed out`() = runTest {
-        coEvery { apiClient.currentUser } returns flowOf(null)
+        coEvery { authApiClient.currentUser } returns flowOf(null)
 
         assertTrue(repository.getItemsForDay("2024-03-01", HeatmapFilter.ALL).isEmpty())
     }
@@ -349,7 +352,7 @@ class WatchHistoryRepositoryImplTest {
     @Test
     fun `minimum activity date returns the oldest played item's date`() = runTest {
         coEvery {
-            apiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Ascending", startIndex = 0, limit = 1)
+            mediaInfoApiClient.getItemsWithUserData(userId = "u1", includeItemTypes = null, isPlayed = true, sortBy = "DatePlayed", sortOrder = "Ascending", startIndex = 0, limit = 1)
         } returns Result.success(Pair(1, listOf(item("first", lastPlayedDate = "2021-01-01T00:00:00.000Z"))))
 
         assertEquals("2021-01-01T00:00:00.000Z", repository.getMinimumActivityDate())
@@ -357,12 +360,12 @@ class WatchHistoryRepositoryImplTest {
 
     @Test
     fun `minimum activity date is null when signed out or with no played items`() = runTest {
-        coEvery { apiClient.currentUser } returns flowOf(null)
+        coEvery { authApiClient.currentUser } returns flowOf(null)
         assertNull(repository.getMinimumActivityDate())
 
-        coEvery { apiClient.currentUser } returns flowOf(user)
+        coEvery { authApiClient.currentUser } returns flowOf(user)
         coEvery {
-            apiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any())
+            mediaInfoApiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(Pair(0, emptyList()))
         assertNull(repository.getMinimumActivityDate())
     }

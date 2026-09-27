@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.shell
 
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
+import com.raulshma.jellyplay.core.model.PinLockoutState
 
 /**
  * The PIN-unlock command fold for the app lock gate: one [submit] per attempt
@@ -16,7 +17,8 @@ import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
  *
  * The controller holds no renderable state: the gate composable stays the
  * owner of its error/verifying fields and folds the returned
- * [PinSubmitOutcome] (plus [lockoutMessage]) into strings.
+ * [PinSubmitOutcome] (plus [lockoutRemainingMs] fed a live clock, then
+ * [lockoutMessage]) into strings.
  *
  * @param rateLimiter the persisted attempt counter / lockout escalation state.
  * @param appLockState the app-scoped unlocked flag this controller flips on
@@ -90,6 +92,21 @@ class PinGateController(
     }
 
     companion object {
+
+        /**
+         * Pure lockout-DISPLAY decision: how much of the rate-limit window
+         * held by [state] still remains at [nowMs]. `0` when no lockout is
+         * recorded; positive while the window holds; non-positive once it
+         * has expired — deadline == now already counts as expired, the same
+         * edge [submit]'s click-time re-check applies. Extracted from
+         * MainActivity's gate (where it used to sit beside a
+         * `remember { System.currentTimeMillis() }` that froze at first
+         * composition and kept the keypad dead past expiry) so the display
+         * wiring is an assertable fold the composition feeds a LIVE clock;
+         * [submit]'s own click-time re-check stays the authority for clicks.
+         */
+        fun lockoutRemainingMs(state: PinLockoutState, nowMs: Long): Long =
+            if (state.isLockedOut) state.lockoutUntilEpochMs - nowMs else 0L
 
         /**
          * Pure fold of a remaining lockout duration into the message shapes

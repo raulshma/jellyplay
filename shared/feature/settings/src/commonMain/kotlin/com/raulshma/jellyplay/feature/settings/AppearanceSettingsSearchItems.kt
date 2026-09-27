@@ -50,7 +50,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_color_blind_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_color_blind_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_compact_episode_list_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_compact_episode_list_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_contrast_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_contrast_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_date_format_subtitle
@@ -74,7 +73,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_vi
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_hide_on_scroll_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_hide_on_scroll_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_labels_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_labels_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_delivery_day_subtitle
@@ -112,7 +110,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_musi
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_scheduler_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_scheduler_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_style_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_style_title
 
 /**
  * The single-source row ids of this file's settings-search declarations.
@@ -237,7 +234,6 @@ internal val AppearanceThemeRowRecords = listOf(
     SettingsRowRecord(
         id = AppearanceSettingsIds.THEME_STYLE,
         titleRes = Res.string.settings_theme_style,
-        searchTitleRes = Res.string.ss_theme_style_title,
         searchSubtitleRes = Res.string.ss_theme_style_subtitle,
         keywords = listOf("theme", "style", "variant", "synthwave", "soothing", "monochrome", "vivid", "aurora", "sakura", "vector", "pop", "pastel", "neon", "retro", "look"),
         route = Route.AppearanceSettings(),
@@ -323,7 +319,6 @@ internal val AppearanceThemeRowRecords = listOf(
     SettingsRowRecord(
         id = AppearanceSettingsIds.ACCENT_COLOR,
         titleRes = CoreUiRes.string.core_ui_accent_color_title,
-        searchTitleRes = CoreUiRes.string.core_ui_accent_color_title,
         searchSubtitleRes = CoreUiRes.string.core_ui_accent_color_subtitle,
         keywords = listOf("accent", "color", "theme", "swatch", "palette", "customize"),
         route = Route.AppearanceSettings(),
@@ -333,7 +328,6 @@ internal val AppearanceThemeRowRecords = listOf(
     SettingsRowRecord(
         id = AppearanceSettingsIds.COLOR_STYLE,
         titleRes = CoreUiRes.string.core_ui_color_style_title,
-        searchTitleRes = CoreUiRes.string.core_ui_color_style_title,
         searchSubtitleRes = CoreUiRes.string.core_ui_color_style_subtitle,
         keywords = listOf("color style", "palette", "vibe", "generated", "mood", "theme"),
         route = Route.AppearanceSettings(),
@@ -386,7 +380,6 @@ internal val AppearanceNavigationRowRecords = listOf(
     SettingsRowRecord(
         id = AppearanceSettingsIds.NAV_HIDE_ON_SCROLL,
         titleRes = Res.string.settings_nav_hide_on_scroll,
-        searchTitleRes = Res.string.ss_nav_hide_on_scroll_title,
         searchSubtitleRes = Res.string.ss_nav_hide_on_scroll_subtitle,
         keywords = listOf("navigation", "hide", "scroll", "auto hide", "bottom bar", "collapsible"),
         route = Route.AppearanceSettings(),
@@ -451,7 +444,6 @@ internal val AppearanceLibraryRowRecords = listOf(
     SettingsRowRecord(
         id = AppearanceSettingsIds.COMPACT_EPISODE_LIST,
         titleRes = Res.string.settings_compact_episode_list,
-        searchTitleRes = Res.string.ss_compact_episode_list_title,
         searchSubtitleRes = Res.string.ss_compact_episode_list_subtitle,
         keywords = listOf("episode", "list", "compact", "vertical", "layout", "rows", "dense"),
         route = Route.AppearanceSettings(),

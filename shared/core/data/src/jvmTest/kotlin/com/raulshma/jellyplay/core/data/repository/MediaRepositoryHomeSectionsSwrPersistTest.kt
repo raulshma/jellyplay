@@ -117,6 +117,9 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
             fakeTimeSource,
         )
         return MediaRepositoryImpl(
+            // One union mock covers both family seams (the JellyfinApiClient
+            // mock implements each of them).
+            apiClient,
             apiClient,
             homeSnapshotStore,
             playedStateSync,

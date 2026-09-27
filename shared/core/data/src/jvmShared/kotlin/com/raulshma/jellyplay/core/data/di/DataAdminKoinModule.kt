@@ -64,7 +64,9 @@ internal val dataAdminModule: Module = module {
 
     single {
         AdminStatisticsRepositoryImpl(
-            apiClient = get(),
+            mediaInfoApiClient = get(),
+            adminApiClient = get(),
+            authApiClient = get(),
             auditLogDao = get(),
             scanStateDao = get(),
             json = get(),

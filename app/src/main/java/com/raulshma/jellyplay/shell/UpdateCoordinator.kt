@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.shell
 
 import android.content.Intent
-import com.raulshma.jellyplay.core.concurrency.RestartableJob
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder
@@ -15,9 +14,12 @@ import com.raulshma.jellyplay.update.UpdateState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -43,25 +45,41 @@ class UpdateCoordinator (
     private var downloadJob: Job? = null
 
     /**
-     * User's "download updates automatically" preference, mirrored from
-     * [ExperimentalStore] so the update sheet can render + toggle it while a
-     * flow is active without subscribing to the whole experimental slice.
+     * User's "download updates automatically" preference — a single-owner
+     * projection of [ExperimentalStore.experimental]: the store is the only
+     * writer, [setSelfUpdateDownloadEnabled] persists through it alone, and
+     * this flow derives from the store and nothing else. (Formerly a
+     * hand-synced mirror with TWO writers — the launch-time collector and
+     * the setter — the exact drift shape MainViewModel's `isGoingOnline`
+     * KDoc calls out.) Rides this coordinator's own
+     * [ShellCoordinator.commandScope], not the caller's start-scope, because
+     * the coordinator is a Koin single that outlives the activity-scoped
+     * ViewModel — a caller-scope projection would freeze on ViewModel rebuild.
+     * Materialized lazily so constructing the coordinator still never touches
+     * the Main dispatcher; `false` initial + eager sharing preserves the
+     * former mirror's first-value behavior (`false` until the store's current
+     * value arrives, then always the persisted value).
      */
-    private val _selfUpdateDownloadEnabled = MutableStateFlow(false)
-    val selfUpdateDownloadEnabled: StateFlow<Boolean> = _selfUpdateDownloadEnabled.asStateFlow()
+    val selfUpdateDownloadEnabled: StateFlow<Boolean> by lazy {
+        experimentalStore.experimental
+            .map { it.selfUpdateDownloadEnabled }
+            .stateIn(commandScope, SharingStarted.Eagerly, false)
+    }
 
     /**
-     * Begins mirroring the auto-download preference on [scope]. Safe to call
-     * again (e.g. after activity-state loss rebuilt the ViewModel):
-     * [RestartableJob] cancels the previous collector first, so it is never
-     * duplicated.
+     * Shell-start hook (MainViewModel's init starts every coordinator
+     * uniformly). Materializes the projection above — the direct replacement
+     * for the launch-time mirror collector this hook used to launch — so the
+     * store's persisted value is live before the update sheet first renders.
+     * [scope] is retained for that uniform wiring; with the mirror gone there
+     * is no caller-scope collector left to (re)start, so the old
+     * cancel-then-replace restart-safety is moot: the projection is created
+     * once for this coordinator's lifetime and can never be duplicated.
      */
     fun start(scope: CoroutineScope) {
-        lifecycleJob.launchIn(scope) {
-            experimentalStore.experimental.collect { prefs ->
-                _selfUpdateDownloadEnabled.value = prefs.selfUpdateDownloadEnabled
-            }
-        }
+        // Reading `.value` materializes the lazy projection above and starts
+        // its eager sharing, warming it with the store's current value.
+        selfUpdateDownloadEnabled.value
     }
 
     /**
@@ -148,11 +166,14 @@ class UpdateCoordinator (
     }
 
     /**
-     * Persists the "download updates automatically" preference. Also exposed
-     * from the update sheet so the toggle takes effect from either place.
+     * Persists the "download updates automatically" preference (exposed from
+     * the update sheet so the toggle takes effect there and in Settings).
+     * The store write is the ONLY write — the projection above surfaces the
+     * new value when DataStore re-emits, so there is no mirror to keep in
+     * step (the former optimistic local write was exactly the second writer
+     * the projection removed).
      */
     fun setSelfUpdateDownloadEnabled(enabled: Boolean) {
-        _selfUpdateDownloadEnabled.value = enabled
         commandScope.launch { experimentalStore.setSelfUpdateDownloadEnabled(enabled) }
     }
 

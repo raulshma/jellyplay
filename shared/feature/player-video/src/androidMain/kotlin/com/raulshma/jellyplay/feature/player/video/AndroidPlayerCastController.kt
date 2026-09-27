@@ -46,10 +46,10 @@ import kotlinx.coroutines.flow.StateFlow
  *    `backgroundCastingEnabled` (the background-cast transport controls live in
  *    the VM because they own the system [MediaSession]).
  *
- * NOT owned here: [VideoPlayerViewModel.detachForBackgroundCast] /
- * [reattachFromBackgroundCast] — those rebuild the system [MediaSession] around
- * the cast / local player through the media-session controller; they stay in
- * the VM until media-session ownership is itself extracted.
+ * NOT owned here: the background-cast detach/reattach pair — those rebuild
+ * the system [MediaSession] around the cast / local player through the
+ * media-session controller; they live in [BackgroundCastController] now
+ * (extracted from the VM, which routes its Detach/Reattach events to it).
  *
  * (renamed from `PlayerCastController` — the commonMain
  * [PlayerCastController] seam interface took the old name; this class is its

@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -40,7 +40,7 @@ import kotlin.test.assertTrue
  */
 class LyricsRepositoryImplTest {
 
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
     private val lrcLibApi: LrcLibApi = mockk(relaxed = true)
     private val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)

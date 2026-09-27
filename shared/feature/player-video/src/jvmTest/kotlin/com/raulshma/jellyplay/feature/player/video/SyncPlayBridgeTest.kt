@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -32,7 +31,6 @@ class SyncPlayBridgeTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
     private lateinit var syncPlayManager: SyncPlayManager
-    private lateinit var playbackCore: SyncPlayPlaybackCore
     private lateinit var engine: MediaEngine
     private lateinit var bridge: SyncPlayBridge
 
@@ -44,11 +42,9 @@ class SyncPlayBridgeTest {
 
     @BeforeTest
     fun setUp() {
-        playbackCore = mockk(relaxed = true)
-        every { playbackCore.ignoreWait } returns MutableStateFlow(false)
         syncPlayManager = mockk(relaxed = true)
-        every { syncPlayManager.playbackCore } returns playbackCore
         every { syncPlayManager.isInSyncPlaySession } returns false
+        every { syncPlayManager.ignoreWait } returns MutableStateFlow(false)
         // start() launches the event listener on the Unconfined scope; a
         // RELAXED mock for `events` makes that collector throw
         // KotlinNothingValueException inside the launched coroutine, which
@@ -169,9 +165,9 @@ class SyncPlayBridgeTest {
             participantCount = 1,
             isPlaying = false,
         )
-        every { playbackCore.lastCommand } returns null
+        every { syncPlayManager.lastGroupCommandWasUnpause } returns false
         bridge.onIsPlayingChanged(true)
-        coVerify { syncPlayManager.syncPlayController.unpause() }
+        coVerify { syncPlayManager.unpauseGroup() }
     }
 
     @Test
@@ -184,7 +180,7 @@ class SyncPlayBridgeTest {
             isPlaying = true,
         )
         bridge.onIsPlayingChanged(true)
-        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+        coVerify(exactly = 0) { syncPlayManager.unpauseGroup() }
     }
 
     @Test
@@ -196,21 +192,15 @@ class SyncPlayBridgeTest {
             participantCount = 1,
             isPlaying = false,
         )
-        every { playbackCore.lastCommand } returns com.raulshma.jellyplay.core.model.SyncPlayPlaybackCommand(
-            command = "Unpause",
-            whenMs = 0L,
-            positionTicks = 0L,
-            playlistItemId = "",
-            emittedAtMs = 0L,
-        )
+        every { syncPlayManager.lastGroupCommandWasUnpause } returns true
         bridge.onIsPlayingChanged(true)
-        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+        coVerify(exactly = 0) { syncPlayManager.unpauseGroup() }
     }
 
     @Test
     fun onIsPlayingChanged_pauseEvent_doesNothing() {
         bridge.onIsPlayingChanged(false)
-        coVerify(exactly = 0) { syncPlayManager.syncPlayController.unpause() }
+        coVerify(exactly = 0) { syncPlayManager.unpauseGroup() }
     }
 
     // ─── onSyncStateChanged ───────────────────────────────────────────────────
@@ -234,20 +224,21 @@ class SyncPlayBridgeTest {
     @Test
     fun reset_clearsCoreAndCallbacksAndSyncingFlag() {
         bridge.reset()
-        verify { playbackCore.reset() }
-        verify { playbackCore.clearCallbacks() }
+        verify { syncPlayManager.resetPlaybackSync() }
+        verify { syncPlayManager.detachSession() }
         assertFalse(bridge.state.value.isSyncPlaySyncing)
     }
 
     // ─── start / reattachSession: shared attach core ──────────────────────────
 
     /**
-     * Pins the folded attach core: defensive clear → setCallbacks → group
-     * display population → core playlist id, in that order (the former
-     * byte-identical start()/reattachSession() bodies).
+     * Pins the folded attach core: attachSession (the replace-by-construction
+     * registration — the former defensive clear → setCallbacks pair is gone)
+     * → group display population → core playlist id, in that order (the
+     * former byte-identical start()/reattachSession() bodies).
      */
     @Test
-    fun start_clearsThenSetsCallbacksAndPopulatesLiveGroup() {
+    fun start_registersSessionAndPopulatesLiveGroup() {
         every { syncPlayManager.isInSyncPlaySession } returns true
         every { syncPlayManager.currentGroup } returns SyncPlayGroup(
             groupId = "g",
@@ -257,9 +248,8 @@ class SyncPlayBridgeTest {
         )
         bridge.start()
         verifyOrder {
-            playbackCore.clearCallbacks()
-            playbackCore.setCallbacks(bridge)
-            playbackCore.setCurrentPlaylistItemId(null)
+            syncPlayManager.attachSession(bridge)
+            syncPlayManager.onQueueItemChanged(null)
         }
         assertEquals("grp", bridge.state.value.syncPlayGroupName)
         assertEquals(2, bridge.state.value.syncPlayParticipantCount)
@@ -277,9 +267,8 @@ class SyncPlayBridgeTest {
         )
         bridge.reattachSession()
         verifyOrder {
-            playbackCore.clearCallbacks()
-            playbackCore.setCallbacks(bridge)
-            playbackCore.setCurrentPlaylistItemId("pl-1")
+            syncPlayManager.attachSession(bridge)
+            syncPlayManager.onQueueItemChanged("pl-1")
         }
         assertEquals("grp", bridge.state.value.syncPlayGroupName)
         assertEquals(3, bridge.state.value.syncPlayParticipantCount)
@@ -289,44 +278,44 @@ class SyncPlayBridgeTest {
     fun reattachSession_whenNotInSession_isNoOp() {
         every { syncPlayManager.isInSyncPlaySession } returns false
         bridge.reattachSession()
-        verify(exactly = 0) { playbackCore.clearCallbacks() }
-        verify(exactly = 0) { playbackCore.setCallbacks(any()) }
+        verify(exactly = 0) { syncPlayManager.attachSession(any()) }
+        verify(exactly = 0) { syncPlayManager.onQueueItemChanged(any()) }
     }
 
     // ─── setIgnoreWait ────────────────────────────────────────────────────────
 
     @Test
-    fun setIgnoreWait_delegatesToPlaybackCore() {
+    fun setIgnoreWait_delegatesToManager() {
         bridge.setIgnoreWait(true)
-        verify { playbackCore.setIgnoreWait(true) }
+        verify { syncPlayManager.setIgnoreWait(true) }
     }
 
     // ─── togglePlayPause ──────────────────────────────────────────────────────
 
     @Test
-    fun togglePlayPause_whenEnginePlaying_pausesAndNotifiesController() {
+    fun togglePlayPause_whenEnginePlaying_pausesAndNotifiesGroup() {
         every { engine.isPlaying } returns MutableStateFlow(true)
         bridge.togglePlayPause()
         verify { engine.pause() }
-        coVerify { syncPlayManager.syncPlayController.pause() }
+        coVerify { syncPlayManager.pauseGroup() }
         assertEquals(listOf(false), isPlayingWrites)
     }
 
     @Test
-    fun togglePlayPause_whenEngineNotPlaying_unpausesViaController() {
+    fun togglePlayPause_whenEngineNotPlaying_unpausesGroup() {
         every { engine.isPlaying } returns MutableStateFlow(false)
         bridge.togglePlayPause()
         verify(exactly = 0) { engine.pause() }
-        coVerify { syncPlayManager.syncPlayController.unpause() }
+        coVerify { syncPlayManager.unpauseGroup() }
     }
 
     // ─── seekTo ───────────────────────────────────────────────────────────────
 
     @Test
-    fun seekTo_seeksEngineAndNotifiesControllerInTicks() {
+    fun seekTo_seeksEngineAndNotifiesGroupInTicks() {
         bridge.seekTo(5_000L)
         verify { engine.seekTo(5_000L) }
-        coVerify { syncPlayManager.syncPlayController.seek(5_000L * 10_000) }
+        coVerify { syncPlayManager.seekGroup(5_000L * 10_000) }
     }
 
     // ─── leaveGroup ───────────────────────────────────────────────────────────
@@ -335,7 +324,7 @@ class SyncPlayBridgeTest {
     fun leaveGroup_clearsSessionUiStateAndResetsCore() {
         bridge.leaveGroup()
         coVerify { syncPlayManager.leaveGroup() }
-        verify { playbackCore.reset() }
+        verify { syncPlayManager.resetPlaybackSync() }
         assertNull(bridge.state.value.syncPlayGroupName)
         assertEquals(0, bridge.state.value.syncPlayParticipantCount)
         assertFalse(bridge.state.value.isInSyncPlaySession)
@@ -377,21 +366,21 @@ class SyncPlayBridgeTest {
     // ─── sendNextItem / sendPreviousItem / sendStop ───────────────────────────
 
     @Test
-    fun sendStop_delegatesToController() {
+    fun sendStop_delegatesToGroupTransport() {
         bridge.sendStop()
-        coVerify { syncPlayManager.syncPlayController.stop() }
+        coVerify { syncPlayManager.stopGroup() }
     }
 
     @Test
-    fun sendNextItem_delegatesToController() {
+    fun sendNextItem_delegatesToGroupTransport() {
         bridge.sendNextItem("pl-item-1")
-        coVerify { syncPlayManager.syncPlayController.nextItem("pl-item-1") }
+        coVerify { syncPlayManager.nextQueueItem("pl-item-1") }
     }
 
     @Test
-    fun sendPreviousItem_delegatesToController() {
+    fun sendPreviousItem_delegatesToGroupTransport() {
         bridge.sendPreviousItem("pl-item-1")
-        coVerify { syncPlayManager.syncPlayController.previousItem("pl-item-1") }
+        coVerify { syncPlayManager.previousQueueItem("pl-item-1") }
     }
 
     // ─── onPlaybackStateChanged gating ────────────────────────────────────────
@@ -400,7 +389,7 @@ class SyncPlayBridgeTest {
     fun onPlaybackStateChanged_whenNotInSession_isNoOp() {
         every { syncPlayManager.isInSyncPlaySession } returns false
         bridge.onPlaybackStateChanged(EnginePlaybackState.READY)
-        verify(exactly = 0) { playbackCore.onPlaybackStateChanged(any()) }
+        verify(exactly = 0) { syncPlayManager.onPlaybackStateChanged(any()) }
     }
 
     @Test
@@ -408,14 +397,14 @@ class SyncPlayBridgeTest {
         every { syncPlayManager.isInSyncPlaySession } returns true
         engineProvider = { null }
         bridge.onPlaybackStateChanged(EnginePlaybackState.READY)
-        verify(exactly = 0) { playbackCore.onPlaybackStateChanged(any()) }
+        verify(exactly = 0) { syncPlayManager.onPlaybackStateChanged(any()) }
     }
 
     @Test
     fun onPlaybackStateChanged_whenInSessionWithEngine_delegatesToCore() {
         every { syncPlayManager.isInSyncPlaySession } returns true
         bridge.onPlaybackStateChanged(EnginePlaybackState.READY)
-        verify { playbackCore.onPlaybackStateChanged(3) }
+        verify { syncPlayManager.onPlaybackStateChanged(3) }
     }
 
     /**
@@ -428,27 +417,27 @@ class SyncPlayBridgeTest {
     fun onPlaybackStateChanged_ended_foldsToCoreEndedCode() {
         every { syncPlayManager.isInSyncPlaySession } returns true
         bridge.onPlaybackStateChanged(EnginePlaybackState.ENDED)
-        verify { playbackCore.onPlaybackStateChanged(4) }
+        verify { syncPlayManager.onPlaybackStateChanged(4) }
     }
 
     @Test
     fun onPlaybackStateChanged_error_foldsToCoreStoppedCode() {
         every { syncPlayManager.isInSyncPlaySession } returns true
         bridge.onPlaybackStateChanged(EnginePlaybackState.ERROR)
-        verify { playbackCore.onPlaybackStateChanged(1) }
+        verify { syncPlayManager.onPlaybackStateChanged(1) }
     }
 
     @Test
     fun onPlaybackStateChanged_buffering_foldsToCoreBufferingCode() {
         every { syncPlayManager.isInSyncPlaySession } returns true
         bridge.onPlaybackStateChanged(EnginePlaybackState.BUFFERING)
-        verify { playbackCore.onPlaybackStateChanged(2) }
+        verify { syncPlayManager.onPlaybackStateChanged(2) }
     }
 
     @Test
     fun onPlaybackStateChanged_idle_foldsToCoreIdleCode() {
         every { syncPlayManager.isInSyncPlaySession } returns true
         bridge.onPlaybackStateChanged(EnginePlaybackState.IDLE)
-        verify { playbackCore.onPlaybackStateChanged(1) }
+        verify { syncPlayManager.onPlaybackStateChanged(1) }
     }
 }

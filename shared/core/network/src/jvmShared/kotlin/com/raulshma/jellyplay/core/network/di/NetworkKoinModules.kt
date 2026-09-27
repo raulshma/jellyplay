@@ -186,7 +186,7 @@ val networkJvmModule: Module = module {
         )
     }
 
-    single { ActivityLogRealtimeChannel(get(), get(), get()) }
+    single { ActivityLogRealtimeChannel(get(), get(), get(), get()) }
     single {
         ScheduledTasksRealtimeChannel(
             webSocketClient = get(),

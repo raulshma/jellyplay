@@ -46,12 +46,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
-import com.composables.icons.tabler.outline.Ban
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Refresh
-import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -71,6 +69,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.FeatureDisabledState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.QueueDeleteConfirmActions
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_blocklist_search
@@ -559,7 +558,9 @@ private fun DeleteActionDialog(
     // Three-way choice (remove-only / remove + search / blocklist + search): this
     // is a selection dialog, not a binary confirm. The real actions live in the
     // `content` slot as full-width buttons; `confirmText` is omitted so no primary
-    // confirm button renders, and Cancel lives in the dismiss slot.
+    // confirm button renders, and Cancel lives in the dismiss slot. The legs
+    // themselves are core:ui's shared QueueDeleteConfirmActions cluster (the
+    // requests detail sheet renders the same cluster inline) — labels only.
     ConfirmDialog(
         title = if (bulk) {
             stringResource(Res.string.arrqueue_remove_selected_title)
@@ -576,36 +577,15 @@ private fun DeleteActionDialog(
         tone = ConfirmTone.DESTRUCTIVE,
         icon = Tabler.Outline.Trash,
         content = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { onConfirm(false, false); onDismiss() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(Res.string.arrqueue_remove_only))
-                }
-                OutlinedButton(
-                    onClick = { onConfirm(false, true); onDismiss() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(Res.string.arrqueue_remove_search))
-                }
-                OutlinedButton(
-                    onClick = { onConfirm(true, true); onDismiss() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Icon(Tabler.Outline.Ban, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(Res.string.arrqueue_blocklist_search))
-                }
-            }
+            QueueDeleteConfirmActions(
+                onChoose = { blocklist, searchAgain ->
+                    onConfirm(blocklist, searchAgain)
+                    onDismiss()
+                },
+                removeOnlyLabel = stringResource(Res.string.arrqueue_remove_only),
+                removeSearchLabel = stringResource(Res.string.arrqueue_remove_search),
+                blocklistSearchLabel = stringResource(Res.string.arrqueue_blocklist_search),
+            )
         },
     )
 }

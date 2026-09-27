@@ -21,7 +21,19 @@ import kotlin.test.assertTrue
  * Baseline: 23 members — the 22 of the DetailUiEvent intent fold plus ONE
  * seam for the metadata-maintenance feature (MetadataAdminActions hosts both
  * refresh and identify behind a single accessor; its admin gate rides the
- * DetailUiState bag as `canManageMetadata`, not a member). Before the fold
+ * DetailUiState bag as `canManageMetadata`, not a member).
+ *
+ * 2026-09-27, ceiling 23 → 24 (documented, one-time): the Seerr
+ * request-dialog extraction moved the dialog cell OUT of core:data's
+ * SeerrRequestStateHolder and core:model's SeerrRequestSnapshot (the
+ * presentation vocabulary no longer rides the data snapshot) into the
+ * feature-facing SeerrRequestDialogHolder — the extracted-module shape this
+ * ratchet prescribes. Its VM wiring is one accessor (`seerrRequestDialog`),
+ * replacing the `dialogItem` field every snapshot consumer previously
+ * carried: the net surface across VM + snapshot did not grow, it moved to
+ * the layer that owns it. This is a member RELOCATION, not accretion; the
+ * ceiling stays 24 unless another relocation removes it.
+ * Before the fold
  * the VM exposed ~48 members: the same read/helper/funnel surfaces minus
  * onEvent, plus 27 public command funs (loadItem, forceRefresh,
  * loadEpisodesForSeason, selectSubtitle, selectAudio, selectLocalSubtitle,
@@ -41,7 +53,7 @@ import kotlin.test.assertTrue
 class DetailViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 23
+    private val maxPublicInternalMembers = 24
 
     /**
      * A class-body declaration line at the ViewModel's single level of

@@ -48,12 +48,13 @@ class TrackDownloadActionsTest {
         val removedIds = mutableListOf<String>()
         var windowReads = 0
         override val isSupported: Boolean = true
-        override fun downloadsFor(ids: List<String>): Flow<List<DownloadItem>> {
+        override fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadItem>> {
             windowReads += 1
             return rows
         }
-        override suspend fun remove(downloadId: String) {
-            removedIds += downloadId
+        override suspend fun deleteDownload(id: String): Result<Unit> {
+            removedIds += id
+            return Result.success(Unit)
         }
     }
 

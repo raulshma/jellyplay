@@ -32,7 +32,6 @@ import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
-import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
@@ -84,11 +83,10 @@ internal class HomeViewModel(
     private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: HomeNewsletterGate,
-    /** The four datastore stores bundled at construction — see [HomeStores]. */
+    /** The five datastore stores bundled at construction — see [HomeStores]. */
     private val prefs: HomeStores,
     private val preferencesEditor: PreferencesEditor,
     private val seerrRequestDelegate: SeerrRequestDelegate,
-    private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
     /**
      * The single owner of identity transitions (replaces this VM's own
@@ -163,7 +161,7 @@ internal class HomeViewModel(
      * The section-preference mirrors, bundled in one [HomeSectionPrefs] value
      * so the prefs collector below diffs and adopts each emission with a
      * single comparison/assignment; the refresher consumes the snapshot
-     * directly via its sectionPrefsProvider.
+     * directly via [HomeFetchInputs.sectionPrefs].
      */
     private var sectionPrefs = HomeSectionPrefs()
     private var androidTvWatchNextEnabled = true
@@ -195,18 +193,21 @@ internal class HomeViewModel(
      *
      * Constructed through [homeRefresherFactory] (the construction seam that
      * owns its pure-DI collaborators); the per-call inputs are the preference
-     * mirrors above, exposed as read-only providers so the mirrors stay
-     * owned by the prefs collector in one place.
+     * mirrors above, exposed as the read-only providers bundled in one
+     * [HomeFetchInputs] so the mirrors stay owned by the prefs collector
+     * in one place.
      */
     private val refresher = homeRefresherFactory.create(
         scope = scope,
         offlineModeManager = offlineModeManager,
         awaitOutboxDrained = syncStatus::awaitOutboxDrained,
-        sectionPrefsProvider = { sectionPrefs },
-        seerrPreferencesProvider = { seerrPreferences },
-        discoverEnabledProvider = { discoverEnabled },
-        directArrEnabledProvider = { directArrEnabled },
-        androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
+        fetchInputs = HomeFetchInputs(
+            sectionPrefs = { sectionPrefs },
+            seerrPreferences = { seerrPreferences },
+            discoverEnabled = { discoverEnabled },
+            directArrEnabled = { directArrEnabled },
+            androidTvWatchNextEnabled = { androidTvWatchNextEnabled },
+        ),
     )
 
     /**
@@ -485,10 +486,10 @@ internal class HomeViewModel(
         }
 
         launch {
-            seerrPreferencesStore.preferences.collect { prefs ->
+            prefs.seerrPreferences.preferences.collect { seerrPrefs ->
                 val wasEnabled = discoverEnabled
-                seerrPreferences = prefs
-                val nowEnabled = prefs.enabled && prefs.discoverEnabled
+                seerrPreferences = seerrPrefs
+                val nowEnabled = seerrPrefs.enabled && seerrPrefs.discoverEnabled
                 discoverEnabled = nowEnabled
                 _uiState.update { it.copy(discoverEnabled = nowEnabled) }
                 if (nowEnabled && !wasEnabled) {

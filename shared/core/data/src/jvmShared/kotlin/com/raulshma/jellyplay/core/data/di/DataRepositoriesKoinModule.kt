@@ -50,7 +50,8 @@ internal val dataRepositoriesModule: Module = module {
 
     single {
         AuthRepositoryImpl(
-            apiClient = get(),
+            authApiClient = get(),
+            userApiClient = get(),
             webSocketClient = get<JellyfinWebSocketClient>(),
             database = get(),
             serverDao = get(),
@@ -84,7 +85,7 @@ internal val dataRepositoriesModule: Module = module {
     single { ItemPlaybackPreferenceRepositoryImpl(get(), get(), get()) }
     single<ItemPlaybackPreferenceRepository> { get<ItemPlaybackPreferenceRepositoryImpl>() }
 
-    single { MetadataEditorRepositoryImpl(get()) }
+    single { MetadataEditorRepositoryImpl(get(), get(), get()) }
     single<MetadataEditorRepository> { get<MetadataEditorRepositoryImpl>() }
 
     single { SeenMediaRepositoryImpl(get()) }
@@ -111,7 +112,7 @@ internal val dataRepositoriesModule: Module = module {
     // reset it. Declared BEFORE both consumer singles below.
     single { PlaybackReportingStatusStore(get(), get()) }
 
-    single { WatchHistoryRepositoryImpl(get(), get(), get()) }
+    single { WatchHistoryRepositoryImpl(get(), get(), get(), get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
     single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }

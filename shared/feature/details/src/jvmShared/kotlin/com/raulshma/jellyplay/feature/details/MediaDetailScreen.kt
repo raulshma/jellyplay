@@ -398,9 +398,11 @@ fun MediaDetailScreen(
             val downloadFlow = remember(itemId) { viewModel.downloads.downloadFlow(itemId) }
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
-            // Seerr integration state (the holder's single snapshot, folded
-            // into uiState as-is — its dialogItem gates the request dialog)
+            // Seerr integration state (the data holder's single snapshot,
+            // folded into uiState as-is) plus the dialog holder's frozen-at-open
+            // item — the render gate for the request dialog below.
             val seerrRequest = uiState.seerrRequest
+            val seerrDialogItem by viewModel.seerrRequestDialog.item.collectAsStateWithLifecycle()
 
             // Seerr card loading state for prefetch animation: one root-level
             // bundle of the callback + loading state; descendant rows read them
@@ -650,7 +652,7 @@ fun MediaDetailScreen(
                 val seerrCallbacks = remember(viewModel, onVideoClick) {
                     SeerrCallbacks(
                         onSeerrRequest = { item: SeerrSearchItem ->
-                            viewModel.seerrRequests.openRequestDialog(item)
+                            viewModel.seerrRequestDialog.open(item)
                         },
                         onVideoClick = onVideoClick,
                     )
@@ -738,17 +740,17 @@ fun MediaDetailScreen(
                     )
                 }
 
-                // Seerr request dialog — the holder owns the open cascade and
-                // the dismiss ordering; the screen only gates the render on
-                // the snapshot's dialogItem.
-                seerrRequest.dialogItem?.let { item ->
+                // Seerr request dialog — the dialog holder owns the open
+                // cascade and the dismiss ordering; the screen only gates the
+                // render on its frozen-at-open item.
+                seerrDialogItem?.let { item ->
                     SeerrRequestDialog(
                         item = item,
                         snapshot = seerrRequest,
                         onConfirm = { (serverId, profileId, rootFolder, tags, seasons) ->
                             viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
-                        onDismiss = { viewModel.seerrRequests.dismissRequestDialog() },
+                        onDismiss = { viewModel.seerrRequestDialog.dismiss() },
                     )
                 }
             } // CompositionLocalProvider

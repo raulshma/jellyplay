@@ -70,7 +70,14 @@ class SeerrRepositoryImpl(
      * binding. Nullable; a null manager skips the offline gate.
      */
     private val offlineModeManager: OfflineModeManager? = null,
-) : SeerrRepository {
+) : SeerrRepository,
+    // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
+    // same single carries the service-directory, request-lifecycle and auth
+    // families alongside the union — [SeerrServiceDirectory] /
+    // [SeerrRequestLifecycle] / [SeerrAuthenticator].
+    SeerrServiceDirectory,
+    SeerrRequestLifecycle,
+    SeerrAuthenticator {
 
     // Both fields carried @Volatile on the pre-15B JVM sources; the promotion
     // keeps it via kotlin.concurrent.Volatile (common;

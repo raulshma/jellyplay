@@ -67,9 +67,9 @@ class DownloadsViewModelResyncAndFormatTest {
         offlineRepository = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
-        every { downloadRepository.allDownloads() } returns downloadsFlow
-        every { downloadRepository.activeDownloadProgress() } returns MutableStateFlow(emptyMap())
-        coEvery { downloadRepository.allDownloadsSnapshot() } answers { downloadsFlow.value }
+        every { downloadRepository.getAllDownloads() } returns downloadsFlow
+        every { downloadRepository.getActiveDownloadProgress() } returns MutableStateFlow(emptyMap())
+        coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         every { offlineRepository.getUpdatesCount() } returns updatesCount
         every { offlineRepository.getItemsWithUpdates() } returns updateRows
@@ -129,7 +129,7 @@ class DownloadsViewModelResyncAndFormatTest {
         // The snapshot read is uncapped; a UI list that hasn't emitted (or an
         // empty one) must not hide downloaded items from the picker.
         downloadsFlow.value = emptyList()
-        coEvery { downloadRepository.allDownloadsSnapshot() } returns listOf(
+        coEvery { downloadRepository.getAllDownloadsSnapshot() } returns listOf(
             item("snap", status = DownloadStatus.COMPLETED),
         )
         advanceUntilIdle()

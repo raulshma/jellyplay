@@ -1036,7 +1036,6 @@
     <string name="settings_skip_segments_on_seek">跳转时跳过片段</string>
     <string name="settings_skip_segments_on_seek_on">向前跳转落在自动跳过片段内时自动跳过</string>
     <string name="settings_skip_segments_on_seek_off">关闭</string>
-    <string name="ss_skip_segments_on_seek_title">跳转时跳过片段</string>
     <string name="ss_skip_segments_on_seek_subtitle">向前跳转落在片段内时自动跳过该片段</string>
     <string name="settings_syncplay_join_summary">加入行为：%1$s</string>
     <string name="settings_join_behavior">加入行为</string>
@@ -1463,7 +1462,6 @@
     <string name="ss_audio_caching_enabled_subtitle">为即将播放的曲目缓冲以即时播放</string>
     <string name="ss_audio_cache_size_title">音频缓存大小</string>
     <string name="ss_audio_cache_size_subtitle">已缓存音频的最大磁盘空间</string>
-    <string name="ss_video_cache_size_title">视频缓存大小</string>
     <string name="ss_video_cache_size_subtitle">已缓存视频的最大磁盘空间</string>
     <string name="ss_audio_prefetch_lookahead_title">音频预取前瞻</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">向前缓冲的即将播放曲目数量</string>
@@ -1654,7 +1652,6 @@
     <string name="ss_idle_ambient_timeout_subtitle">闲置屏幕出现前的等待时间</string>
     <string name="ss_home_backdrop_title">主页背景</string>
     <string name="ss_home_backdrop_subtitle">将主视觉艺术图模糊为环境背景</string>
-    <string name="ss_compact_episode_list_title">紧凑剧集列表</string>
     <string name="ss_compact_episode_list_subtitle">在手机上以垂直列表而非横向一行显示剧集</string>
     <string name="ss_nav_bar_customization_title">导航栏</string>
     <string name="ss_nav_bar_customization_subtitle">显示、隐藏和重新排列导航栏项目</string>
@@ -1664,13 +1661,10 @@
     <string name="ss_newsletter_sections_subtitle">选择通讯中显示的版块</string>
     <string name="ss_dialogue_boost_strength_title">对白增强强度</string>
     <string name="ss_dialogue_boost_strength_subtitle">对白增强程度</string>
-    <string name="ss_mpv_extra_config_title">高级配置</string>
     <string name="ss_mpv_extra_config_subtitle">原始 mpv 选项（mpv.conf 样式）</string>
-    <string name="ss_reset_engine_defaults_title">重置为默认</string>
     <string name="ss_reset_engine_defaults_subtitle">恢复 MPV、LibVLC 或 ExoPlayer 设置</string>
     <string name="ss_audio_prefetch_backfill_title">回填数量</string>
     <string name="ss_audio_prefetch_backfill_subtitle">为重新播放而保留缓存的近期曲目数</string>
-    <string name="ss_audio_cache_clear_title">清除音频缓存</string>
     <string name="ss_audio_cache_clear_subtitle">删除所有已缓存的音频数据</string>
     <string name="ss_subtitle_tester_title">字幕样式测试器</string>
     <string name="ss_subtitle_tester_subtitle">跨引擎预览样式</string>

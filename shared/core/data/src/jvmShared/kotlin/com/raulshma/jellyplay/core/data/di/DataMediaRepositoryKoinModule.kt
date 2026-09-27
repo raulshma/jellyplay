@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
@@ -26,6 +27,7 @@ import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayController
@@ -110,7 +112,8 @@ internal val dataMediaRepositoryModule: Module = module {
     }
     single {
         MediaRepositoryImpl(
-            apiClient = get(),
+            libraryApiClient = get(),
+            syncPlayApiClient = get(),
             homeSnapshotStore = get(),
             playedStateSync = get(),
             episodeCatalogue = get(),
@@ -122,6 +125,14 @@ internal val dataMediaRepositoryModule: Module = module {
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
+    // Family seams over the same single (the SonarrSeriesOperations
+    // over-the-impl pattern in dataSeerrArrModule): the music-catalogue reads
+    // and the user-data writes, so single-family consumers inject the seam
+    // instead of the union. UserDataMutatorImpl already does (the user-data
+    // family's clean sole consumer); the music playback stack still resolves
+    // MediaRepository and migrates consumer-by-consumer.
+    single<MusicCatalogue> { get<MediaRepositoryImpl>() }
+    single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
@@ -176,7 +187,9 @@ internal val dataMediaRepositoryModule: Module = module {
             // other's graphs (UnifiedMediaDetailProviderImpl ctor-injects
             // MediaRepository; UserDataMutator reaches MediaDetailProvider),
             // and deferring construction keeps this module out of any cycle.
-            mediaRepository = lazy { get<MediaRepository>() },
+            // The write dep is the family seam, not the union — the mutator
+            // is the user-data-write family's clean sole consumer.
+            userDataWrites = lazy { get<UserDataWriteOperations>() },
             mediaDetailProvider = lazy { get<MediaDetailProvider>() },
         )
     }

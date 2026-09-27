@@ -23,8 +23,8 @@ import kotlin.test.assertTrue
 
 /**
  * Unit tests for [UserDataMutatorImpl] — the user-data mutation protocol over
- * mocked [MediaRepository] (the write) and [MediaDetailProvider] (the
- * optimistic rewrite). Pins:
+ * mocked [UserDataWriteOperations] (the write family seam) and
+ * [MediaDetailProvider] (the optimistic rewrite). Pins:
  *  - the write seam per direction (markPlayed/markUnplayed, toggleFavorite,
  *    markSeasonPlayed);
  *  - the post-success refresh pass ordering: containers → provider item
@@ -41,7 +41,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserDataMutatorImplTest {
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val userDataWrites: UserDataWriteOperations = mockk()
     private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
 
     private lateinit var mutator: UserDataMutatorImpl
@@ -58,7 +58,7 @@ class UserDataMutatorImplTest {
     @BeforeTest
     fun setup() {
         mutator = UserDataMutatorImpl(
-            mediaRepository = lazy { mediaRepository },
+            userDataWrites = lazy { userDataWrites },
             mediaDetailProvider = lazy { mediaDetailProvider },
         )
     }
@@ -67,7 +67,7 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `setPlayed writes via markPlayed and patches containers optimistically`() = runTest {
-        coEvery { mediaRepository.markPlayed("ep-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("ep-1") } returns Result.success(Unit)
         var patched: MediaItem? = null
         val container = UserDataContainer { _, patch -> patched = patch(episode) }
 
@@ -81,7 +81,7 @@ class UserDataMutatorImplTest {
         assertTrue(result.isSuccess)
         assertEquals("ep-1", result.getOrThrow().itemId)
         assertTrue(result.getOrThrow().played == true)
-        coVerify(exactly = 1) { mediaRepository.markPlayed("ep-1") }
+        coVerify(exactly = 1) { userDataWrites.markPlayed("ep-1") }
         // The optimistic patch mirrors the server's resume-point clearing.
         assertTrue(patched!!.isPlayed)
         assertEquals(0L, patched!!.playbackPositionTicks)
@@ -91,21 +91,21 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `setPlayed unplayed routes to markUnplayed and also clears the resume point`() = runTest {
-        coEvery { mediaRepository.markUnplayed("ep-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markUnplayed("ep-1") } returns Result.success(Unit)
         var patched: MediaItem? = null
         val container = UserDataContainer { _, patch -> patched = patch(episode) }
 
         val result = mutator.setPlayed("ep-1", played = false, containers = listOf(container), mode = UserDataMutator.FlipMode.Optimistic)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { mediaRepository.markUnplayed("ep-1") }
+        coVerify(exactly = 1) { userDataWrites.markUnplayed("ep-1") }
         assertFalse(patched!!.isPlayed)
         assertEquals(0L, patched!!.playbackPositionTicks)
     }
 
     @Test
     fun `an episode mutation with a seriesId drops the series catalogue last`() = runTest {
-        coEvery { mediaRepository.markPlayed("ep-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("ep-1") } returns Result.success(Unit)
         val callOrder = mutableListOf<String>()
         coEvery { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) } answers { callOrder.add("item-state"); Unit }
         every { mediaDetailProvider.invalidate("series-1") } answers { callOrder.add("invalidate"); Unit }
@@ -117,7 +117,7 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `a failed write performs no optimistic patching`() = runTest {
-        coEvery { mediaRepository.markPlayed("ep-1") } returns Result.failure(IllegalStateException("offline"))
+        coEvery { userDataWrites.markPlayed("ep-1") } returns Result.failure(IllegalStateException("offline"))
         var patched = false
         val container = UserDataContainer { _, _ -> patched = true }
 
@@ -131,7 +131,7 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `Silent mode skips the container rewrite but still aligns the provider session`() = runTest {
-        coEvery { mediaRepository.markPlayed("ep-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("ep-1") } returns Result.success(Unit)
         var patched = false
         val container = UserDataContainer { _, _ -> patched = true }
 
@@ -147,7 +147,7 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `Silent mode still drops the residual series catalogue`() = runTest {
-        coEvery { mediaRepository.markPlayed("ep-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("ep-1") } returns Result.success(Unit)
 
         mutator.setPlayed("ep-1", played = true, containers = emptyList(), mode = UserDataMutator.FlipMode.Silent, seriesId = "series-1")
 
@@ -158,7 +158,7 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `setFavorite carries the resolved target and preserves the resume point`() = runTest {
-        coEvery { mediaRepository.toggleFavorite("ep-1") } returns Result.success(true)
+        coEvery { userDataWrites.toggleFavorite("ep-1") } returns Result.success(true)
         var patched: MediaItem? = null
         val container = UserDataContainer { _, patch -> patched = patch(episode) }
 
@@ -176,7 +176,7 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `a failed favorite write performs no optimistic pass`() = runTest {
-        coEvery { mediaRepository.toggleFavorite("ep-1") } returns Result.failure(IllegalStateException("offline"))
+        coEvery { userDataWrites.toggleFavorite("ep-1") } returns Result.failure(IllegalStateException("offline"))
         var patched = false
         val container = UserDataContainer { _, _ -> patched = true }
 
@@ -189,7 +189,7 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `setSeasonPlayed rewrites every episode of the season optimistically`() = runTest {
-        coEvery { mediaRepository.markSeasonPlayed("season-1", "series-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markSeasonPlayed("season-1", "series-1") } returns Result.success(Unit)
         val transform = slot<(List<MediaItem>) -> List<MediaItem>>()
         coEvery { mediaDetailProvider.applyOptimisticSeasonRewrite("series-1", "season-1", capture(transform)) } returns Unit
 
@@ -211,18 +211,18 @@ class UserDataMutatorImplTest {
 
     @Test
     fun `setSeasonPlayed unplayed routes to markSeasonUnplayed`() = runTest {
-        coEvery { mediaRepository.markSeasonUnplayed("season-1", "series-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markSeasonUnplayed("season-1", "series-1") } returns Result.success(Unit)
         coEvery { mediaDetailProvider.applyOptimisticSeasonRewrite(any(), any(), any()) } returns Unit
 
         val result = mutator.setSeasonPlayed("series-1", "season-1", played = false)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { mediaRepository.markSeasonUnplayed("season-1", "series-1") }
+        coVerify(exactly = 1) { userDataWrites.markSeasonUnplayed("season-1", "series-1") }
     }
 
     @Test
     fun `a failed season write skips the provider rewrite`() = runTest {
-        coEvery { mediaRepository.markSeasonPlayed("season-1", "series-1") } returns Result.failure(IllegalStateException("offline"))
+        coEvery { userDataWrites.markSeasonPlayed("season-1", "series-1") } returns Result.failure(IllegalStateException("offline"))
 
         assertTrue(mutator.setSeasonPlayed("series-1", "season-1", played = true).isFailure)
         coVerify(exactly = 0) { mediaDetailProvider.applyOptimisticSeasonRewrite(any(), any(), any()) }
@@ -233,8 +233,8 @@ class UserDataMutatorImplTest {
     @Test
     fun `concurrent mutations serialize in launch order`() = runTest {
         val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.markPlayed("a") } coAnswers { gate.await(); Result.success(Unit) }
-        coEvery { mediaRepository.markUnplayed("b") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("a") } coAnswers { gate.await(); Result.success(Unit) }
+        coEvery { userDataWrites.markUnplayed("b") } returns Result.success(Unit)
         val completions = mutableListOf<String>()
 
         val first = async {

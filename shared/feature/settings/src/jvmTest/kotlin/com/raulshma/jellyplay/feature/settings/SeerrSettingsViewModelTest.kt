@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrAuthenticator
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
@@ -57,7 +57,7 @@ class SeerrSettingsViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var seerrRepository: SeerrRepository
+    private lateinit var seerrAuthenticator: SeerrAuthenticator
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
     private lateinit var secureCredentialsStore: SeerrSecureCredentialsStore
     private val preferencesState = MutableStateFlow(SeerrPreferences())
@@ -65,7 +65,7 @@ class SeerrSettingsViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        seerrRepository = mockk(relaxed = true)
+        seerrAuthenticator = mockk(relaxed = true)
         seerrPreferencesStore = mockk(relaxed = true)
         secureCredentialsStore = mockk(relaxed = true)
         every { seerrPreferencesStore.preferences } returns preferencesState
@@ -80,7 +80,7 @@ class SeerrSettingsViewModelTest {
     }
 
     private fun viewModel() =
-        SeerrSettingsViewModel(seerrRepository, seerrPreferencesStore, secureCredentialsStore)
+        SeerrSettingsViewModel(seerrAuthenticator, seerrPreferencesStore, secureCredentialsStore)
 
     private fun seedPreferences(prefs: SeerrPreferences) {
         preferencesState.value = prefs
@@ -134,14 +134,14 @@ class SeerrSettingsViewModelTest {
             ),
             viewModel.connectionStatus.value,
         )
-        coVerify(exactly = 0) { seerrRepository.testApiKeyConnection() }
+        coVerify(exactly = 0) { seerrAuthenticator.testApiKeyConnection() }
     }
 
     @Test
     fun `an api-key test persists credentials then reports the connected version`() = runTest {
         seedPreferences(SeerrPreferences(serverUrl = "https://seerr.example"))
         every { secureCredentialsStore.getApiKey() } returns "stored-key"
-        coEvery { seerrRepository.testApiKeyConnection() } returns
+        coEvery { seerrAuthenticator.testApiKeyConnection() } returns
             Result.success(SeerrStatusResponse(version = "2.0"))
         val viewModel = viewModel()
         awaitUntil { viewModel.serverUrl == "https://seerr.example" && viewModel.apiKey == "stored-key" }
@@ -155,14 +155,14 @@ class SeerrSettingsViewModelTest {
         coVerify(exactly = 1) { seerrPreferencesStore.setServerUrl("https://seerr.example") }
         coVerify(exactly = 1) { seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.API_KEY) }
         coVerify(exactly = 1) { secureCredentialsStore.setApiKey("stored-key") }
-        coVerify(exactly = 1) { seerrRepository.testApiKeyConnection() }
+        coVerify(exactly = 1) { seerrAuthenticator.testApiKeyConnection() }
     }
 
     @Test
     fun `a failed connection test surfaces the error and clears the spinner`() = runTest {
         seedPreferences(SeerrPreferences(serverUrl = "https://seerr.example"))
         every { secureCredentialsStore.getApiKey() } returns "stored-key"
-        coEvery { seerrRepository.testApiKeyConnection() } returns
+        coEvery { seerrAuthenticator.testApiKeyConnection() } returns
             Result.failure(RuntimeException("refused"))
         val viewModel = viewModel()
         awaitUntil { viewModel.serverUrl == "https://seerr.example" && viewModel.apiKey == "stored-key" }

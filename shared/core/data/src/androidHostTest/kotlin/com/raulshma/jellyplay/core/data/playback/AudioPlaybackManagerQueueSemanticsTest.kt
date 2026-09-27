@@ -113,16 +113,16 @@ private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
  * [StandardTestDispatcher] scope, so `play()`'s async resolve/pre-warm body
  * stays PARKED on the scheduler forever — no network machinery, no
  * queueLoadingJob guards, no pre-warm player writes ever run. The stub is
- * made the manager's live engine by writing the private `exoPlayer` field
- * directly (the `playerFactory` test seam only RETURNS a player from
- * `getOrCreatePlayer()` — it never assigns the field, so without this write
- * `EngineDispatch.isLive` and every `exoPlayer ?: return` adapter guard
- * would stay dead). With the field set, the chassis's engine gate is live
- * and every engine write below lands synchronously on the stub. The stub
- * never fires player events, so chassis-driven cursor writes are asserted
- * directly, the way the core suite asserts its recording dispatch; the ONE
- * async write the adapter performs (the shuffle/undo playlist rebuild) is
- * awaited via a main-looper drain loop.
+ * made the manager's live engine by the `playerFactory` seam itself:
+ * `getOrCreatePlayer()` ASSIGNS the factory result to the private
+ * `exoPlayer` field (the same tail `createPlayer()` has always had), so the
+ * first play-path prefix arms `EngineDispatch.isLive` and every
+ * `exoPlayer ?: return` adapter guard synchronously — the former
+ * reflection write into the field is retired. The stub never fires player
+ * events, so chassis-driven cursor writes are asserted directly, the way
+ * the core suite asserts its recording dispatch; the ONE async write the
+ * adapter performs (the shuffle/undo playlist rebuild) is awaited via a
+ * main-looper drain loop.
  */
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -186,26 +186,12 @@ class AudioPlaybackManagerQueueSemanticsTest {
             audioStreamCache = mockk(relaxed = true),
             audioPrefetchEngine = mockk(relaxed = true),
             playbackScope = scope,
-            // Guarantees getOrCreatePlayer NEVER falls through to the real
-            // createPlayer() path while exoPlayer is still null (the factory
-            // result is returned unassigned — see attachEngine).
+            // getOrCreatePlayer() ASSIGNS the factory result to the private
+            // exoPlayer field (the createPlayer() tail shape) — the stub
+            // becomes the live engine on the first play-path prefix, and no
+            // real media3 engine is ever built.
             playerFactory = { player },
         )
-
-        /**
-         * Arms the engine gate: writes the stub into the manager's private
-         * `exoPlayer` field (the only holder [EngineDispatch.isLive] and the
-         * `exoPlayer ?: return` adapter guards read). Reflection is the one
-         * seam that keeps the player fully stub-synchronous — the real
-         * createPlayer() path would build a media3 engine whose playlist
-         * writes ride its internal playback thread.
-         */
-        fun attachEngine() {
-            AudioPlaybackManager::class.java
-                .getDeclaredField("exoPlayer")
-                .apply { isAccessible = true }
-                .set(manager, player)
-        }
 
         fun close() {
             scope.cancel()
@@ -241,14 +227,14 @@ class AudioPlaybackManagerQueueSemanticsTest {
     private fun items(vararg ids: String) = ids.map { item(it) }
 
     /**
-     * Brings the engine live (the reflection write above) and seeds the
-     * chassis queue; playQueue's onPlayRequested hook runs play()'s
-     * synchronous prefix and parks its resolve body on the test scheduler,
-     * then the queue is mirrored into the stub playlist — the shape play()'s
-     * whole-queue pre-warm leaves the real player in.
+     * Brings the engine live and seeds the chassis queue; playQueue's
+     * onPlayRequested hook runs play()'s synchronous prefix (whose
+     * engine acquisition assigns the stub through the playerFactory seam)
+     * and parks its resolve body on the test scheduler, then the queue is
+     * mirrored into the stub playlist — the shape play()'s whole-queue
+     * pre-warm leaves the real player in.
      */
     private fun Harness.seedLive(rows: List<AudioQueueItem>, index: Int) {
-        attachEngine()
         manager.playQueue(rows, index)
         mirrorQueueToPlayer()
     }
@@ -456,7 +442,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
     fun shuffleWithoutAnEngineFlipsOnlyTheFlag() {
         val h = newHarness()
         // Seed through the chassis cells directly: this pin needs the
-        // null-engine gate (no attachEngine here, so exoPlayer stays null).
+        // null-engine gate (no play()/playQueue here, so exoPlayer stays null).
         h.manager.state._queue.value = items("a", "b", "c")
         h.manager.state._currentIndex.value = 1
 

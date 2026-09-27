@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -47,7 +47,7 @@ class ManageSeriesViewModelTest {
 
     private lateinit var strings: DetailStrings
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var arrRepository: ArrRepository
+    private lateinit var arrRepository: SonarrSeriesOperations
     private lateinit var viewModel: ManageSeriesViewModel
 
     @BeforeTest

@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
-import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
@@ -560,8 +559,10 @@ class RequestsViewModelTest {
             serverKind = ArrServiceKind.RADARR,
         )
         coEvery { arrRepository.getQueueForTmdb(42) } returns queueItem
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.success(Unit)
-        coEvery { arrRepository.searchForTmdb(any(), any()) } returns Result.success(emptyList())
+        // The option mapping + replacement search + queue refresh live in the
+        // repository's deep deleteQueueRow now; this seam hands over the
+        // cached row + the dialog flags only.
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
 
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -573,13 +574,9 @@ class RequestsViewModelTest {
         viewModel.removeQueueItem(42, blocklist = true, searchAgain = true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) {
-            arrRepository.deleteQueueItem(
-                queueItem,
-                ArrQueueDeleteOptions(removeFromClient = true, blocklist = true, skipRedownload = false),
-            )
-        }
-        coVerify(exactly = 1) { arrRepository.searchForTmdb(42, ArrServiceKind.RADARR) }
+        // The search intent rides the flags (the repo fires the follow-up on
+        // its success leg — pinned in ArrRepositoryImplTest).
+        coVerify(exactly = 1) { arrRepository.deleteQueueRow(queueItem, blocklist = true, searchAgain = true) }
         val state = viewModel.state.value
         assertFalse(state.queueItems.containsKey(42))
         assertFalse(state.downloadProgress.containsKey(42))
@@ -594,7 +591,7 @@ class RequestsViewModelTest {
         viewModel.removeQueueItem(42, blocklist = false, searchAgain = false)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { arrRepository.deleteQueueItem(any(), any()) }
+        coVerify(exactly = 0) { arrRepository.deleteQueueRow(any(), any(), any()) }
     }
 
     @Test
@@ -611,7 +608,7 @@ class RequestsViewModelTest {
             serverKind = ArrServiceKind.RADARR,
         )
         coEvery { arrRepository.getQueueForTmdb(42) } returns queueItem
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
 
         val viewModel = newViewModel()
         advanceUntilIdle()

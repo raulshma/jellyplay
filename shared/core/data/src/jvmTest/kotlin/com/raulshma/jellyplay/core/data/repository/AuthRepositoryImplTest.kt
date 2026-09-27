@@ -105,7 +105,10 @@ class AuthRepositoryImplTest {
         every { serverDao.getAllServers() } returns flowOf(emptyList())
         every { userDao.getUsersForServer(any()) } returns flowOf(emptyList())
         repository = AuthRepositoryImpl(
-            apiClient = apiClient,
+            // One union mock covers both family seams (the JellyfinApiClient
+            // mock implements each of them).
+            authApiClient = apiClient,
+            userApiClient = apiClient,
             webSocketClient = webSocketClient,
             database = database,
             serverDao = serverDao,
@@ -313,7 +316,8 @@ class AuthRepositoryImplTest {
         // the test scheduler so its virtual-time delay is deterministic
         // (same local-construction pattern as the session-flow test below).
         val repo = AuthRepositoryImpl(
-            apiClient = apiClient,
+            authApiClient = apiClient,
+            userApiClient = apiClient,
             webSocketClient = webSocketClient,
             database = database,
             serverDao = serverDao,
@@ -569,7 +573,8 @@ class AuthRepositoryImplTest {
         every { apiClient.currentServer } returns MutableStateFlow(testServer)
         every { apiClient.currentUser } returns MutableStateFlow(testUser)
         val repo = AuthRepositoryImpl(
-            apiClient = apiClient,
+            authApiClient = apiClient,
+            userApiClient = apiClient,
             webSocketClient = webSocketClient,
             database = database,
             serverDao = serverDao,

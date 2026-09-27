@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import io.mockk.coEvery
 import io.mockk.every
@@ -64,7 +64,7 @@ import kotlin.test.assertNull
 class HomeSectionsSnapshotStoreTest {
 
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val apiClient: AuthApiClient = mockk(relaxed = true)
     private val fakeTimeSource = FakeTimeSource()
 
     private lateinit var database: JellyPlayDatabase

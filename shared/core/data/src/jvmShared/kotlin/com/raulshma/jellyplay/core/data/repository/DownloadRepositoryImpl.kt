@@ -111,8 +111,11 @@ class DownloadRepositoryImpl(
     // verbatim, so the engine implements them DIRECTLY instead of behind
     // per-read verbatim-forward adapters (the deleted JvmDownloadQueue /
     // JvmTrackDownloadStatusWindow / JvmActiveDownloadCount /
-    // JvmSeriesEpisodeDownloads). The differently-named members forward to
-    // this class's own repository methods one-to-one.
+    // JvmSeriesEpisodeDownloads). Their members carry this class's own
+    // repository vocabulary, so the repository overrides in this file ARE
+    // the seam implementations — the former differently-named one-line
+    // forwarders are gone; only [isSupported], which no repository member
+    // spells, is declared down with the seam section.
     DownloadQueue,
     TrackDownloadStatusWindow,
     ActiveDownloadCount,
@@ -178,50 +181,14 @@ class DownloadRepositoryImpl(
         downloadDao.getActiveDownloadCount()
 
     // ── promoted read seams (see the supertype list above) ────────────────
-    // One-to-one forwards onto the repository methods; dataJvmModule binds
-    // each interface over this single. TrackDownloadStatusWindow.downloadsFor
-    // deliberately IS the single getDownloadsByMediaItemIdsFlow IN-query —
-    // not the N combined per-id flows the deleted JvmTrackDownloadStatusWindow
-    // adapter re-expressed (reverted divergence: same rows, one narrow query).
+    // The seam members are the repository overrides above and below under
+    // their primary names (dataJvmModule binds each interface over this
+    // single). The window read deliberately IS the single
+    // getDownloadsByMediaItemIdsFlow IN-query — not the N combined per-id
+    // flows the deleted JvmTrackDownloadStatusWindow adapter re-expressed
+    // (reverted divergence: same rows, one narrow query).
 
     override val isSupported: Boolean = true
-
-    override fun allDownloads(): Flow<List<DownloadItem>> = getAllDownloads()
-
-    override fun activeDownloadProgress(): Flow<Map<String, DownloadProgress>> =
-        getActiveDownloadProgress()
-
-    override suspend fun allDownloadsSnapshot(): List<DownloadItem> = getAllDownloadsSnapshot()
-
-    override suspend fun pause(id: String): Result<Unit> = pauseDownload(id)
-
-    override suspend fun resume(id: String): Result<Unit> = resumeDownload(id)
-
-    override fun enqueue(id: String) = enqueueDownload(id)
-
-    override suspend fun cancel(id: String): Result<Unit> = cancelDownload(id)
-
-    override suspend fun retry(id: String): Result<Unit> = retryDownload(id)
-
-    override suspend fun delete(id: String): Result<Unit> = deleteDownload(id)
-
-    override suspend fun setPriority(id: String, priority: Int): Result<Unit> =
-        setDownloadPriority(id, priority)
-
-    override fun downloadsFor(ids: List<String>): Flow<List<DownloadItem>> =
-        getDownloadsByMediaItemIdsFlow(ids)
-
-    override suspend fun remove(downloadId: String) {
-        // Result ignored — the same fire-and-forget contract the deleted
-        // JvmTrackDownloadStatusWindow adapter carried (the hosts' remove
-        // paths have no error surface on a failed delete).
-        deleteDownload(downloadId)
-    }
-
-    override fun activeDownloadCount(): Flow<Int> = getActiveDownloadCount()
-
-    override suspend fun downloadedEpisodeIds(seriesId: String): Set<String> =
-        getDownloadedEpisodeIdsForSeries(seriesId)
 
     override fun observeCompletedDownloadedIds(): Flow<Set<String>> =
         downloadDao.getCompletedDownloadedItemIds().map(List<String>::toSet).distinctUntilChanged()

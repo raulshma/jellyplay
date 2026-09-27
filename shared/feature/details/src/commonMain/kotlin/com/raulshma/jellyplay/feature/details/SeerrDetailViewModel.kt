@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.isAvailable
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.withPendingRequest
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
@@ -54,6 +55,15 @@ class SeerrDetailViewModel constructor(
 
     private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
+    // The dialog half of the request lifecycle: which item the request dialog
+    // is open for (frozen at open) plus the open/dismiss choreography. The
+    // data half (service details, seasons, result) stays in the holder above,
+    // reached through the two constructor seams.
+    private val seerrRequestDialog = SeerrRequestDialogHolder(
+        prepare = seerrRequestState::prepare,
+        clearRequestResult = seerrRequestState::clearRequestResult,
+    )
+
     /** Atomic snapshot of the Seerr-detail screen content state. */
     val uiState: StateFlow<SeerrDetailUiState> = _uiState
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrDetailUiState())
@@ -62,6 +72,9 @@ class SeerrDetailViewModel constructor(
     // holder's snapshot is the single interface — commands go through the
     // wrappers below.
     val seerrSnapshot: StateFlow<SeerrRequestSnapshot> = seerrRequestState.snapshotIn(scope)
+
+    /** The item the request dialog is open for (null = closed) — the render gate. */
+    val seerrDialogItem: StateFlow<SeerrSearchItem?> = seerrRequestDialog.item
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
@@ -208,14 +221,15 @@ class SeerrDetailViewModel constructor(
     }
 
     /**
-     * Opens the Seerr request dialog for [item]: the item plus the open
-     * cascade (service details, TV seasons for tv) are owned by the holder —
-     * the screen's dialog renders from the snapshot's `dialogItem`.
+     * Opens the Seerr request dialog for [item]: the item lands on
+     * [seerrDialogItem] frozen at open time, and the open cascade (service
+     * details, TV seasons for tv) fires through the dialog holder's
+     * `prepare` seam.
      */
-    fun openRequestDialog(item: SeerrSearchItem) = seerrRequestState.openRequestDialog(item)
+    fun openRequestDialog(item: SeerrSearchItem) = seerrRequestDialog.open(item)
 
     /** Closes the dialog and clears the last request result (holder-owned ordering). */
-    fun dismissRequestDialog() = seerrRequestState.dismissRequestDialog()
+    fun dismissRequestDialog() = seerrRequestDialog.dismiss()
 
     fun toggleSeason(tvId: Int, seasonNumber: Int) {
         if (_uiState.value.selectedSeasonNumber == seasonNumber) {

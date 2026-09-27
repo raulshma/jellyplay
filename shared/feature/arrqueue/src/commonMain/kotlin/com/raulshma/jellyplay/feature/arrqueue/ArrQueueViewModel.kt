@@ -161,13 +161,16 @@ class ArrQueueViewModel(
      * BEFORE the repository call (clear-before-action — failure surfaces
      * through the message channel and never reopens the dialog), run the
      * single command, and dispatch its [Result] to EXACTLY ONE arm — the
-     * caller's success arm, or the collapsed failure arm (Raw when the
-     * exception carries a message, the unknown-error resource otherwise).
-     * The busy flag settles once after either arm.
+     * caller's (optional) success arm, or the collapsed failure arm (Raw when
+     * the exception carries a message, the unknown-error resource otherwise).
+     * The busy flag settles once after either arm. The success arm defaults
+     * to empty: the single-row delete's follow-up choreography moved into the
+     * repository's deep [ArrRepository.deleteQueueRow], so its ladder call
+     * has nothing left to run on success.
      */
     private fun runQueueAction(
         action: suspend () -> Result<Unit>,
-        onSuccess: suspend () -> Unit,
+        onSuccess: suspend () -> Unit = {},
     ) {
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
@@ -182,26 +185,14 @@ class ArrQueueViewModel(
 
     /**
      * Deletes a single queue row. [blocklist] adds the release to the *arr
-     * blocklist; [searchAgain] triggers a fresh search for a replacement.
+     * blocklist; [searchAgain] triggers a fresh search for a replacement —
+     * the option mapping, replacement search and queue refresh are all the
+     * repository's [ArrRepository.deleteQueueRow] deep member (the former
+     * hand-copied choreography), so the guard ladder has no success arm left.
      */
     fun deleteItem(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean) {
         runQueueAction(
-            action = {
-                arrRepository.deleteQueueItem(
-                    item,
-                    ArrQueueDeleteOptions(
-                        removeFromClient = true,
-                        blocklist = blocklist,
-                        skipRedownload = !searchAgain,
-                    ),
-                )
-            },
-            onSuccess = {
-                if (searchAgain) {
-                    val tmdb = item.tmdbId
-                    if (tmdb != null) arrRepository.searchForTmdb(tmdb, item.serverKind)
-                }
-            },
+            action = { arrRepository.deleteQueueRow(item, blocklist, searchAgain) },
         )
     }
 

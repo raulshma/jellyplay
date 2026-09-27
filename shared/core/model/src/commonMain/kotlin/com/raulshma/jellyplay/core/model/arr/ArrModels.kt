@@ -471,7 +471,7 @@ data class ArrDownloadSummary(
  * A resolved Sonarr series for the "Manage Series" screen: the owning server
  * plus the Sonarr-internal series id needed by all episode/season/series
  * operations. Produced by
- * [com.raulshma.jellyplay.core.data.repository.ArrRepository.resolveSonarrSeries]
+ * [com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations.resolveSonarrSeries]
  * by probing each configured Sonarr server for a tvdb match.
  */
 @Immutable

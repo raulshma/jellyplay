@@ -1246,7 +1246,6 @@
     <string name="settings_skip_segments_on_seek">Skip Segments on Seek</string>
     <string name="settings_skip_segments_on_seek_on">Forward seeks past auto-skip segments</string>
     <string name="settings_skip_segments_on_seek_off">Off</string>
-    <string name="ss_skip_segments_on_seek_title">Skip Segments on Seek</string>
     <string name="ss_skip_segments_on_seek_subtitle">Auto-skip a segment a forward seek lands in</string>
     <string name="settings_syncplay_join_summary">Join behavior: %1$s</string>
     <string name="settings_join_behavior">Join Behavior</string>
@@ -1651,7 +1650,6 @@
     <string name="ss_audio_caching_enabled_subtitle">Buffer upcoming tracks for instant playback</string>
     <string name="ss_audio_cache_size_title">Audio Cache Size</string>
     <string name="ss_audio_cache_size_subtitle">Maximum disk space for cached audio</string>
-    <string name="ss_video_cache_size_title">Video Cache Size</string>
     <string name="ss_video_cache_size_subtitle">Maximum disk space for cached video</string>
     <string name="ss_audio_prefetch_lookahead_title">Audio Prefetch Look-ahead</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">Number of upcoming tracks to buffer ahead</string>
@@ -1839,7 +1837,6 @@
     <string name="ss_idle_ambient_timeout_subtitle">How long to wait before the idle screen appears</string>
     <string name="ss_home_backdrop_title">Home Backdrop</string>
     <string name="ss_home_backdrop_subtitle">Blur the hero artwork as an ambient background</string>
-    <string name="ss_compact_episode_list_title">Compact Episode List</string>
     <string name="ss_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>
     <string name="ss_nav_bar_customization_title">Navigation Bar</string>
     <string name="ss_nav_bar_customization_subtitle">Show, hide, and reorder navigation bar items</string>
@@ -1849,13 +1846,10 @@
     <string name="ss_newsletter_sections_subtitle">Choose which sections appear in the newsletter</string>
     <string name="ss_dialogue_boost_strength_title">Dialogue Boost Strength</string>
     <string name="ss_dialogue_boost_strength_subtitle">Level of dialogue amplification</string>
-    <string name="ss_mpv_extra_config_title">Advanced Configuration</string>
     <string name="ss_mpv_extra_config_subtitle">Raw mpv options (mpv.conf style)</string>
-    <string name="ss_reset_engine_defaults_title">Reset to Defaults</string>
     <string name="ss_reset_engine_defaults_subtitle">Restore MPV, LibVLC, or ExoPlayer settings</string>
     <string name="ss_audio_prefetch_backfill_title">Back-fill Count</string>
     <string name="ss_audio_prefetch_backfill_subtitle">Recent tracks kept cached for replay</string>
-    <string name="ss_audio_cache_clear_title">Clear Audio Cache</string>
     <string name="ss_audio_cache_clear_subtitle">Delete all cached audio bytes</string>
     <string name="ss_subtitle_tester_title">Subtitle style tester</string>
     <string name="ss_subtitle_tester_subtitle">Preview styles across engines</string>

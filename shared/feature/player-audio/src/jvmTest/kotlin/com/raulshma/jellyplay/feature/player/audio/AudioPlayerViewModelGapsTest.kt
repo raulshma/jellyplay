@@ -171,7 +171,7 @@ class AudioPlayerViewModelGapsTest {
         every { engine.getImageUrl(any()) } returns "https://srv/Items/x/Images/Primary"
         every { engine.undoLastQueueOperation() } returns false
         every {
-            downloads.downloadsFor(any())
+            downloads.getDownloadsByMediaItemIdsFlow(any())
         } answers {
             // Per-id state flows behind the window's single IN-query read, so
             // per-item state changes propagate to the fake like a live Room
@@ -450,7 +450,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 1) { downloads.remove("dl-1") }
+        coVerify(exactly = 1) { downloads.deleteDownload("dl-1") }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
@@ -461,7 +461,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.remove(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
         coVerify(exactly = 1) { trackDownloadActions.flip("track-1") }
     }
 
@@ -471,7 +471,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.remove(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 

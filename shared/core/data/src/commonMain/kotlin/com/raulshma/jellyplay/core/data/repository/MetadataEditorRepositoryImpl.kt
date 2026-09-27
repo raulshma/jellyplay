@@ -10,20 +10,24 @@ import com.raulshma.jellyplay.core.model.MetadataEditorInfo
 import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MetadataApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 
 class MetadataEditorRepositoryImpl constructor(
-    private val apiClient: JellyfinApiClient,
+    private val libraryApiClient: LibraryApiClient,
+    private val metadataApiClient: MetadataApiClient,
+    private val playbackApiClient: PlaybackApiClient,
 ) : MetadataEditorRepository {
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> =
-        apiClient.getMediaDetail(itemId)
+        libraryApiClient.getMediaDetail(itemId)
 
     override suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo> =
-        apiClient.getMetadataEditorInfo(itemId)
+        metadataApiClient.getMetadataEditorInfo(itemId)
 
     override suspend fun updateItem(itemId: String, metadata: EditableItemMetadata): Result<Unit> =
-        apiClient.updateItem(
+        metadataApiClient.updateItem(
             itemId, metadata.name, metadata.originalTitle, metadata.sortName,
             metadata.overview, metadata.tagline, metadata.genres, metadata.tags,
             metadata.studios, metadata.communityRating, metadata.criticRating,
@@ -40,7 +44,7 @@ class MetadataEditorRepositoryImpl constructor(
     override suspend fun refreshItemMetadata(
         itemId: String,
         params: MetadataRefreshParams,
-    ): Result<Unit> = apiClient.refreshItemMetadata(
+    ): Result<Unit> = metadataApiClient.refreshItemMetadata(
         itemId,
         params.metadataRefreshMode,
         params.imageRefreshMode,
@@ -49,13 +53,13 @@ class MetadataEditorRepositoryImpl constructor(
     )
 
     override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> =
-        apiClient.getItemImageInfo(itemId)
+        metadataApiClient.getItemImageInfo(itemId)
 
     override suspend fun setItemImage(itemId: String, imageType: String, imageBytes: ByteArray): Result<Unit> =
-        apiClient.setItemImage(itemId, imageType, imageBytes)
+        metadataApiClient.setItemImage(itemId, imageType, imageBytes)
 
     override suspend fun deleteItemImage(itemId: String, imageType: String, imageIndex: Int?): Result<Unit> =
-        apiClient.deleteItemImage(itemId, imageType, imageIndex)
+        metadataApiClient.deleteItemImage(itemId, imageType, imageIndex)
 
     override suspend fun getRemoteImages(
         itemId: String,
@@ -63,13 +67,13 @@ class MetadataEditorRepositoryImpl constructor(
         provider: String?,
         startIndex: Int?,
         limit: Int?,
-    ): Result<RemoteImageResult> = apiClient.getRemoteImages(itemId, imageType, provider, startIndex, limit)
+    ): Result<RemoteImageResult> = metadataApiClient.getRemoteImages(itemId, imageType, provider, startIndex, limit)
 
     override suspend fun getRemoteImageProviders(itemId: String): Result<List<ImageProviderInfo>> =
-        apiClient.getRemoteImageProviders(itemId)
+        metadataApiClient.getRemoteImageProviders(itemId)
 
     override suspend fun downloadRemoteImage(itemId: String, imageType: String, imageUrl: String): Result<Unit> =
-        apiClient.downloadRemoteImage(itemId, imageType, imageUrl)
+        metadataApiClient.downloadRemoteImage(itemId, imageType, imageUrl)
 
     override suspend fun uploadSubtitle(
         itemId: String,
@@ -78,22 +82,22 @@ class MetadataEditorRepositoryImpl constructor(
         language: String?,
         isForced: Boolean,
         isHearingImpaired: Boolean,
-    ): Result<Unit> = apiClient.uploadSubtitle(itemId, data, fileName, language, isForced, isHearingImpaired)
+    ): Result<Unit> = metadataApiClient.uploadSubtitle(itemId, data, fileName, language, isForced, isHearingImpaired)
 
     override suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit> =
-        apiClient.deleteSubtitle(itemId, index)
+        metadataApiClient.deleteSubtitle(itemId, index)
 
     override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> =
-        apiClient.searchRemoteSubtitles(itemId, language)
+        metadataApiClient.searchRemoteSubtitles(itemId, language)
 
     override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> =
-        apiClient.downloadRemoteSubtitle(itemId, subtitleId)
+        playbackApiClient.downloadRemoteSubtitle(itemId, subtitleId)
 
     override suspend fun identifyRemoteSearch(query: IdentifyQuery): Result<List<IdentifyResult>> =
-        apiClient.identifyRemoteSearch(query)
+        metadataApiClient.identifyRemoteSearch(query)
 
     override suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean): Result<Unit> =
-        apiClient.applyIdentifyResult(itemId, result, replaceAllImages)
+        metadataApiClient.applyIdentifyResult(itemId, result, replaceAllImages)
 
     override fun getItemImageUrl(
         itemId: String,
@@ -101,5 +105,5 @@ class MetadataEditorRepositoryImpl constructor(
         maxWidth: Int?,
         imageIndex: Int?,
         tag: String?,
-    ): String = apiClient.getImageUrl(itemId, imageType, maxWidth, imageIndex, tag)
+    ): String = libraryApiClient.getImageUrl(itemId, imageType, maxWidth, imageIndex, tag)
 }

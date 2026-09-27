@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.playback
 
 import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,8 +22,18 @@ import kotlinx.coroutines.launch
  * Originally declared inside `feature:player:video`, moved to `core:data`
  * to break the only feature→feature dependency in the codebase:
  * `feature:livetv → feature:player:video`. The engine reference is typed as
- * [RemotePlayableEngine] (a `core.data.remote` interface) so no `feature:player:video` import
- * leaks in here. The video `MediaEngine` implements [RemotePlayableEngine] directly.
+ * [RemotePlayableEngine] so the broad deposit/reclaim seam stays module-agnostic
+ * (no `feature:player:video` module import — the types the reclaim capability
+ * below mentions live in `core:player-contract`, which this module already
+ * api-depends on, so no cycle). The video `MediaEngine` implements
+ * [RemotePlayableEngine] directly.
+ *
+ * The typed reclaim follows the repo's "a narrowing is a typed capability,
+ * not a cast" rule (the `MediaEngine.asMedia3Player` precedent): the video
+ * feature — the only depositor — registers the typed view of its engine AT
+ * DEPOSIT TIME via [enterMiniMode]'s [asMediaEngine] lambda, and
+ * [tryReclaimMediaEngine] hands that back; no call site narrows the broad
+ * engine with an `as?` (the former reclaim-site downcast is gone).
  *
  * V3 livetv conveyor: moved into :shared:core:data commonMain (Koin-owned —
  * the @Singleton/@Inject annotations were stripped at the move, one framework
@@ -54,6 +65,14 @@ class VideoMiniPlayerState {
     private var _engine: RemotePlayableEngine? = null
     val engine: RemotePlayableEngine? get() = _engine
 
+    /**
+     * The typed-reclaim capability registered by the depositor at deposit
+     * time (see [enterMiniMode]). Cleared wherever the engine leaves
+     * ([tryReclaimEngine] / [release]); a stale registration is unreachable
+     * because the mini-mode gate guards every consumer.
+     */
+    private var reclaimAsMediaEngine: ((broad: RemotePlayableEngine) -> MediaEngine?)? = null
+
     private var job: Job? = null
     private var timeoutJob: Job? = null
     private val miniScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -70,8 +89,18 @@ class VideoMiniPlayerState {
         mediaSourceId: String?,
         title: String,
         subtitle: String,
+        /**
+         * Typed reclaim capability: narrows THIS deposit to the player-contract
+         * [MediaEngine] at reclaim time. The video feature — the only depositor —
+         * registers the typed view of the same instance it deposits (a plain
+         * `{ engine }` capturing its own typed reference: identity holds by
+         * construction, no runtime type test). `null` (the default) leaves the
+         * deposit reclaimable only through the broad [tryReclaimEngine] seam.
+         */
+        asMediaEngine: ((broad: RemotePlayableEngine) -> MediaEngine?)? = null,
     ) {
         _engine = engine
+        reclaimAsMediaEngine = asMediaEngine
         _itemId.value = itemId
         _mediaSourceId = mediaSourceId
         _title.value = title
@@ -100,9 +129,28 @@ class VideoMiniPlayerState {
         timeoutJob = null
         _isMiniMode.value = false
         _engine = null
+        reclaimAsMediaEngine = null
         _itemId.value = null
         _mediaSourceId = null
         return engine
+    }
+
+    /**
+     * The video feature's typed reclaim: pops the mini session and hands back
+     * the engine as the player-contract [MediaEngine], through the capability
+     * the depositor registered at deposit time. Guards are checked BEFORE the
+     * pop — an absent capability must NOT consume the deposit (the popped
+     * engine would be dropped without ever being released, a native-memory
+     * leak); the mini session survives untouched for the auto-release window.
+     * This is a strict improvement over the former reclaim-site `as?`
+     * downcast, which popped first and silently dropped a non-MediaEngine.
+     */
+    fun tryReclaimMediaEngine(itemId: String): MediaEngine? {
+        if (!_isMiniMode.value) return null
+        if (_itemId.value != itemId) return null
+        val reclaim = reclaimAsMediaEngine ?: return null
+        val engine = tryReclaimEngine(itemId) ?: return null
+        return reclaim(engine)
     }
 
     fun togglePlayPause() {
@@ -118,6 +166,7 @@ class VideoMiniPlayerState {
         timeoutJob = null
         engine?.release()
         _engine = null
+        reclaimAsMediaEngine = null
         _itemId.value = null
         _mediaSourceId = null
         _isMiniMode.value = false

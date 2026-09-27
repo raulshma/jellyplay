@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,8 +20,8 @@ import kotlin.test.Test
 /**
  * Reaction coverage for [SessionCacheRegistry] — the single subscriber that
  * turns [HomeSession] transitions into cache drops. The harness drives a real
- * [HomeSession] through a mockk [JellyfinApiClient] whose
- * [JellyfinApiClient.session] is a real [MutableStateFlow], with BOTH the
+ * [HomeSession] through a mockk [AuthApiClient] whose
+ * [AuthApiClient.session] is a real [MutableStateFlow], with BOTH the
  * classifier and the registry's collector on the test scheduler
  * (`backgroundScope`), so `runCurrent()` deterministically advances
  * session emission → classification → reaction. This mirrors the seam
@@ -31,7 +31,7 @@ import kotlin.test.Test
 class SessionCacheRegistryTest {
 
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val apiClient: AuthApiClient = mockk(relaxed = true)
 
     @BeforeTest
     fun setup() {

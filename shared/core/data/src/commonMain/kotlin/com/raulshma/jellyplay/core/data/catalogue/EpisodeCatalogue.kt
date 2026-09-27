@@ -30,7 +30,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
  *
  * ## Dependency direction
  *
- * The catalogue depends on `JellyfinApiClient` and `OfflineRepository` only —
+ * The catalogue depends on `LibraryApiClient` and `OfflineRepository` only —
  * **never** on `MediaRepository`. `MediaRepositoryImpl` instead depends on the
  * catalogue, so the three legacy methods (`getSeasons`/`getEpisodes`/
  * `getAllEpisodesGrouped`) become thin passthroughs over the snapshot. This

@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,7 +29,7 @@ import org.junit.Test
  */
 class PlayedStateSyncImplTest {
 
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()

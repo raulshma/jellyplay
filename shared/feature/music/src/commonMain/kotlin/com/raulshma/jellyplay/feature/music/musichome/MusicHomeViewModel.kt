@@ -73,7 +73,7 @@ class MusicHomeViewModel(
 
     val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
-    val activeDownloadCount = activeDownloads.activeDownloadCount()
+    val activeDownloadCount = activeDownloads.getActiveDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {

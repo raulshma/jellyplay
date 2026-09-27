@@ -119,12 +119,19 @@ class AudioCrossfader(
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
+                    // ONE in-sink chain order (core:data `inSinkAudioChain`),
+                    // over the crossfade twin instances: channel mix first —
+                    // it may change the channel count, so every downstream
+                    // processor must see the remixed layout. No balance
+                    // processor: the crossfade secondary mirrors the video
+                    // shape here (the primary music sink is the only balance
+                    // rider; see the factory's divergence note).
                     .setAudioProcessors(
-                        arrayOf(
-                            effectsProcessor.crossfadeChannelMixProcessor,
-                            effectsProcessor.crossfadeDynamicsProcessor,
-                            effectsProcessor.crossfadeReplayGainProcessor,
-                            effectsProcessor.crossfadeHighPassProcessor,
+                        inSinkAudioChain(
+                            channelMixProcessor = effectsProcessor.crossfadeChannelMixProcessor,
+                            dynamicsProcessor = effectsProcessor.crossfadeDynamicsProcessor,
+                            replayGainProcessor = effectsProcessor.crossfadeReplayGainProcessor,
+                            highPassProcessor = effectsProcessor.crossfadeHighPassProcessor,
                         ),
                     )
                     .setEnableFloatOutput(enableFloatOutput)

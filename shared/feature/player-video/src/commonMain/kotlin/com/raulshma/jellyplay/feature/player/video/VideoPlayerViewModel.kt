@@ -8,10 +8,8 @@ import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
-import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
-import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -28,15 +26,12 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSegmentType
-import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.currentPlatform
 import com.raulshma.jellyplay.core.model.isAudioType
@@ -500,7 +495,7 @@ class VideoPlayerViewModel(
         },
         onStreamsRefreshed = { streams, newSubtitleStreamIndex ->
             _uiState.update { it.copy(videoFx = it.videoFx.copy(detectedAspectRatio = detectAspectRatio(streams))) }
-            updatePipAspectRatio(streams)
+            pipTransport.updatePipAspectRatio(streams)
             // Rebuild the audio/subtitle track options from the refreshed server
             // streams. The side-load above re-emits the engine's availableTracks
             // (its own collector re-runs this), but that emission is async — call
@@ -576,6 +571,35 @@ class VideoPlayerViewModel(
         },
     )
 
+    /**
+     * The PiP-facing surface (the [SubtitlePreviewController] shape): the
+     * transport registration behind the PiP window's remote actions and the
+     * aspect/source-rect pushes. Re-armed from init AND from the
+     * `rearmTransports` session hook — see PipTransportController's KDoc for
+     * why the re-arm must ride the load lifecycle. The dispatch lambdas read
+     * later-declared collaborators lazily (the episodeContinuation /
+     * trackSelectionHelper pattern — invoked long after construction).
+     */
+    private val pipTransport = PipTransportController(
+        pipController = pipController,
+        getEngine = { playerSessionManager.engine },
+        routedPlay = { play -> routedPlay(play) },
+        seekByStep = { direction -> seekByStep(direction) },
+        playNextEpisode = { episodeContinuation.playNextEpisode() },
+    )
+
+    /**
+     * The background-cast media-session swap (the [SubtitlePreviewController]
+     * shape): hands the session to the cast receiver on detach and rebuilds
+     * the local player session on reattach. The onEvent arms route to it.
+     */
+    private val backgroundCast = BackgroundCastController(
+        castManager = castManager,
+        mediaSessionController = mediaSessionController,
+        getEngine = { playerSessionManager.engine },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+    )
+
     private val _passOutEvents = Channel<String>(Channel.BUFFERED)
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
 
@@ -606,9 +630,9 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.RetryWithEngine -> retryWithEngine(event.playerType)
             is VideoPlayerUiEvent.DismissPlaybackError -> dismissPlaybackError()
             is VideoPlayerUiEvent.SetControlsVisible -> setControlsVisible(event.visible)
-            is VideoPlayerUiEvent.InstallUserFont -> installUserFont(event.uri)
-            is VideoPlayerUiEvent.ReattachFromBackgroundCast -> reattachFromBackgroundCast()
-            is VideoPlayerUiEvent.DetachForBackgroundCast -> detachForBackgroundCast()
+            is VideoPlayerUiEvent.InstallUserFont -> subtitleFont.installUserFont(event.uri)
+            is VideoPlayerUiEvent.ReattachFromBackgroundCast -> backgroundCast.reattachFromBackgroundCast()
+            is VideoPlayerUiEvent.DetachForBackgroundCast -> backgroundCast.detachForBackgroundCast()
             is VideoPlayerUiEvent.SetScreenLocked -> setScreenLocked(event.locked)
             is VideoPlayerUiEvent.TransportPlay -> routedPlay(event.play)
             is VideoPlayerUiEvent.SeekTo -> seekTo(event.positionMs)
@@ -617,9 +641,9 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.UserInteraction -> onUserInteraction()
             is VideoPlayerUiEvent.StartHoldSpeed -> startHoldSpeed()
             is VideoPlayerUiEvent.StopHoldSpeed -> stopHoldSpeed()
-            is VideoPlayerUiEvent.ApplySubtitleStyle -> applySubtitleStyle()
+            is VideoPlayerUiEvent.ApplySubtitleStyle -> subtitleFont.applySubtitleStyle()
             is VideoPlayerUiEvent.UpdatePipSourceRect ->
-                updatePipSourceRect(event.left, event.top, event.right, event.bottom)
+                pipTransport.updatePipSourceRect(event.left, event.top, event.right, event.bottom)
             is VideoPlayerUiEvent.PlayPreviousEpisode -> episodeContinuation.playPreviousEpisode()
             is VideoPlayerUiEvent.PlayNextEpisode -> episodeContinuation.playNextEpisode()
             is VideoPlayerUiEvent.MarkWatchedAndSkip -> episodeContinuation.markWatchedAndSkip()
@@ -629,8 +653,8 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.ToggleVideoStats -> toggleVideoStats()
             is VideoPlayerUiEvent.ToggleAudioOnly -> toggleAudioOnly()
             is VideoPlayerUiEvent.SetSubtitleDelay -> setSubtitleDelay(event.ms)
-            is VideoPlayerUiEvent.SkipIntro -> skipIntro()
-            is VideoPlayerUiEvent.SkipSegment -> skipSegment(event.segment)
+            is VideoPlayerUiEvent.SkipIntro -> segmentDispatch.skipIntro()
+            is VideoPlayerUiEvent.SkipSegment -> segmentDispatch.skipSegment(event.segment)
             is VideoPlayerUiEvent.SaveBrightness -> saveBrightness(event.level)
             is VideoPlayerUiEvent.SetPlaybackSpeed -> setPlaybackSpeed(event.speed)
             is VideoPlayerUiEvent.SelectAudioTrack -> selectAudioTrack(event.option)
@@ -643,7 +667,7 @@ class VideoPlayerViewModel(
                 setSeriesSubtitlePreference(event.language, event.forced, event.hearingImpaired)
             is VideoPlayerUiEvent.SetSeriesSubtitleDisabled -> setSeriesSubtitleDisabled(event.disabled)
             is VideoPlayerUiEvent.SetAspectRatio -> setAspectRatio(event.ratio)
-            is VideoPlayerUiEvent.SetSubtitleStyle -> setSubtitleStyle(event.style)
+            is VideoPlayerUiEvent.SetSubtitleStyle -> subtitleStyleController.setStyle(event.style)
             is VideoPlayerUiEvent.SetPlaybackMode -> setPlaybackMode(event.mode)
             is VideoPlayerUiEvent.SetStreamingQuality -> setStreamingQuality(event.quality)
             is VideoPlayerUiEvent.SetAdaptiveBitrateEnabled -> setAdaptiveBitrateEnabled(event.enabled)
@@ -677,6 +701,29 @@ class VideoPlayerViewModel(
         currentPosition = _currentPositionMs.value,
         duration = _durationMs.value,
     )
+
+    /**
+     * The ONE position-aware snapshot fold behind the segment-skip dispatch
+     * ([SegmentDispatchController.getFacts]): every fact the skip ladder
+     * consults, read from a single [positionAwareState] snapshot so the
+     * active segment and its end ticks can never come from different reads
+     * (the pairing rule SegmentDispatchFacts exists to enforce).
+     */
+    private fun segmentDispatchFacts(): SegmentDispatchFacts {
+        val state = positionAwareState()
+        val seg = state.activeSegment
+        return SegmentDispatchFacts(
+            cinemaIntroActive = state.cinemaIntroState != null,
+            isOutroNearEnd = state.isOutroNearEnd,
+            canSkipToNext = autoplayController.canSkipToNext(state.episodes.nextEpisode),
+            segments = SegmentSnapshot(
+                activeType = seg?.type,
+                activeEndTicks = seg?.let { state.segmentEndTicks(it) },
+                introEndTicks = state.introSegmentEndTicks,
+                creditEndTicks = state.creditSegmentEndTicks,
+            ),
+        )
+    }
 
     /**
      * The seek entry point. [userInitiated] marks the paths a human drove —
@@ -806,7 +853,7 @@ class VideoPlayerViewModel(
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
         getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled },
-        onAutoSkip = { segment -> autoSkipSegment(segment) },
+        onAutoSkip = { segment -> segmentDispatch.autoSkipSegment(segment) },
         onPlaybackEndedNoNext = { onEndedWithNoNext() },
         onWatchedThresholdReached = { itemId ->
             // Forwarded into the episode-continuation controller declared
@@ -936,7 +983,7 @@ class VideoPlayerViewModel(
             // The engine-event coordinator re-arm that used to run here is
             // session-owned as of B2 — PlaybackSession.initialize performs it
             // directly after this hook.
-            registerPipTransport()
+            pipTransport.registerPipTransport()
         }
 
         override fun resetForNewItem(selection: MediaStreamSelection) {
@@ -959,8 +1006,12 @@ class VideoPlayerViewModel(
                 audioStreamIndex = request.audioStreamIndex,
             )
 
+        // Typed reclaim (no downcast): the mini-player holder resolves the
+        // player-contract MediaEngine through the capability the depositing
+        // video feature registered at deposit time — the asMedia3Player
+        // "typed capability, not a cast" rule.
         override fun tryReclaimMiniPlayer(itemId: String): com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? =
-            videoMiniPlayerState.tryReclaimEngine(itemId) as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+            videoMiniPlayerState.tryReclaimMediaEngine(itemId)
 
         override fun onMiniPlayerReclaimed() {
             // Reclaim promotes an already-playing mini-player engine to
@@ -1234,6 +1285,27 @@ class VideoPlayerViewModel(
     /** True while a next-episode advance is in flight and unsettled (#146). */
     val isNextEpisodeLoading: StateFlow<Boolean> get() = episodeContinuation.isNextEpisodeLoading
 
+    /**
+     * The segment-skip dispatch glue (the [SubtitlePreviewController] shape):
+     * the skip buttons, the reporter's auto-skip arm and the shared effect
+     * executor — the pure decision halves live in SegmentSkipPolicy.kt. The
+     * facts snapshot is built by [segmentDispatchFacts] (ONE position-aware
+     * read); the effect lambdas route back onto this VM's seek funnel, the
+     * continuation controller, the session's cinema advance and the
+     * "Skipped …" notice. Declared after [playbackSession] /
+     * [episodeContinuation]; the reporter's `onAutoSkip` lambda (declared
+     * above) reads it lazily — the trackSelectionHelper pattern, invoked long
+     * after construction.
+     */
+    private val segmentDispatch = SegmentDispatchController(
+        getFacts = { segmentDispatchFacts() },
+        getSegmentEndTicks = { segment -> _uiState.value.segmentEndTicks(segment) },
+        seekTo = { positionMs, userInitiated -> seekTo(positionMs, userInitiated) },
+        playNextEpisode = { episodeContinuation.playNextEpisode() },
+        advanceCinemaIntro = { playbackSession.advanceCinemaIntro() },
+        showSkippedNotice = { segmentType -> showSkippedSegmentNotice(segmentType) },
+    )
+
     // markWatchedAndSkip / markUnwatchedAndQuit (the overflow mark-and-then
     // orchestration) moved into EpisodeContinuationController — the onEvent
     // arms above route to it directly.
@@ -1397,6 +1469,24 @@ class VideoPlayerViewModel(
     )
 
     /**
+     * The user-font install + the direct engine re-apply of the current
+     * subtitle style (the [SubtitlePreviewController] shape, beside
+     * [subtitleStyleController]): the style-edit choreography stays in the
+     * style controller; this sibling owns the font-facing pick and the
+     * engine-surface re-apply. PRIVATE — every driver arrives as a
+     * VideoPlayerUiEvent (InstallUserFont / ApplySubtitleStyle /
+     * SetSubtitleStyle), so unlike the screen-driven controller slices it
+     * adds nothing to the public member count (the ownership-test ceiling).
+     */
+    private val subtitleFont = SubtitleFontController(
+        scope = scope,
+        fontProvider = fontProvider,
+        getEngine = { playerSessionManager.engine },
+        getStyleMirror = { _uiState.value.subtitleStyle },
+        editStyle = { style -> subtitleStyleController.setStyle(style) },
+    )
+
+    /**
      * Owns the uniform engine-effect setters (night mode, audio delay,
      * decoder, passthrough, normalization, channel mix, bass, virtualizer,
      * reverb) and the [com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState]
@@ -1492,7 +1582,7 @@ class VideoPlayerViewModel(
         // remote-action intents (play/pause/skip/next) to the active engine.
         // Also re-armed on every load via the rearmTransports hook — see
         // [reArmPipTransport] for why the re-arm must ride the load lifecycle.
-        registerPipTransport()
+        pipTransport.registerPipTransport()
         // The PiP-dismissal discharge (pause → teardown → close → the
         // defensive latch clear, issue #145) lives on the shared core:data
         // helper — this host supplies only its teardown list and its close
@@ -1738,41 +1828,6 @@ class VideoPlayerViewModel(
                         if (s.isBuffering == buffering) s else s.copy(isBuffering = buffering)
                     }
                 }
-            }
-        }
-    }
-
-    /**
-     * Arms the PiP transport bridge so the Activity can dispatch PiP remote-action
-     * intents (play/pause/skip/next) to the active engine. The assignment mechanics
-     * and the why-re-arm lifecycle rationale (Activity-scoped VM, reset() on release,
-     * init never re-runs) live in [reArmPipTransport]; this body owns only the VOD
-     * action mapping. Idempotent and safe to call repeatedly (init + every load).
-     */
-    private fun registerPipTransport() {
-        reArmPipTransport(pipController) { action ->
-            val engine = playerSessionManager.engine
-            if (engine == null) {
-                // PiP bypasses the MediaSession entirely (broadcast -> PipTransport
-                // -> engine), so this silently no-ops when no engine is bound.
-                // Log so a stale transport is diagnosable instead of dead-buttons.
-                Log.w(TAG, "PiP action $action dropped: no active player engine")
-                return@reArmPipTransport
-            }
-            Log.d(TAG, "PiP action $action -> engine")
-            when (action) {
-                // PLAY/PAUSE route through the shared funnel (A1): same
-                // SyncPlay -> cast -> local order as the screen's transport,
-                // previously raw engine.play()/pause() that bypassed routing
-                // while in a SyncPlay group or casting.
-                PipAction.PLAY -> routedPlay(play = true)
-                PipAction.PAUSE -> routedPlay(play = false)
-                // Skip steps route through the shared funnel (C3): same clamp
-                // math and same SyncPlay/cast/local routing as the screen's
-                // skip buttons, previously computed inline with only a 0-floor.
-                PipAction.SKIP_FORWARD -> seekByStep(+1)
-                PipAction.SKIP_BACKWARD -> seekByStep(-1)
-                PipAction.NEXT -> episodeContinuation.playNextEpisode()
             }
         }
     }
@@ -2040,69 +2095,17 @@ class VideoPlayerViewModel(
         // of the in-app resize mode, so it does not need re-deriving here.
     }
 
-    /**
-     * Pushes the server-reported video stream dimensions into [PipController]
-     * as a `width to height` pair so the PiP window matches the content
-     * (16:9, 4:3, 21:9, …) instead of always letterboxing to 16:9 (the
-     * androidMain adapter maps the pair onto android.util.Rational). Falls
-     * back to `null` (→ 16:9 in the Activity) when the stream or its
-     * dimensions are unknown.
-     */
-    private fun updatePipAspectRatio(streams: List<com.raulshma.jellyplay.core.model.MediaStream>) {
-        val video = streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
-        val w = video?.width
-        val h = video?.height
-        pipController.setPipAspectRatio(
-            if (w != null && h != null && h != 0) w to h else null
-        )
-    }
-
-    /**
-     * Forwards the video surface's window bounds to [PipController] as the PiP
-     * source-rect hint. Thin wrapper so the screen does not reach through the
-     * ViewModel into the controller. (Four window-bounds ints rather than a
-     * Rect — the seam crosses into platform code on desktop too.)
-     */
-    private fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {
-        pipController.updatePipSourceRect(left, top, right, bottom)
-    }
+    // updatePipAspectRatio / updatePipSourceRect (the PiP window's
+    // aspect-ratio + source-rect pushes) moved into PipTransportController
+    // with the transport registration; the projector's streams-refresh seam
+    // and the UpdatePipSourceRect event arm route to it.
 
     // Subtitle style/delay + dialogue-boost choreography (the style edit
     // persist, the per-item delay write + its debounced engine apply, the
     // per-item boost persist) lives in [SubtitleStyleController] since A7;
-    // the functions below are the screen/PiP-facing funnels.
-
-    private fun setSubtitleStyle(style: SubtitleStyle) {
-        subtitleStyleController.setStyle(style)
-    }
-
-    /**
-     * Installs a user-picked font (from a SAF `OpenDocument` pick) via
-     * [FontProvider.installUserFont], then applies the resulting family
-     * name/path as a style edit through [SubtitleStyleController.setStyle]
-     * (mirror write + engine sync + global persist with the per-item offset
-     * preserved).
-     *
-     * No-op if the copy/parse fails (FontProvider returns null), leaving the
-     * bundled fallback font in place. (The uri stringifies at the API
-     * boundary — Android hands a SAF Uri's string form, desktop a file URI.)
-     */
-    private fun installUserFont(uri: String) {
-        launch {
-            val installed = fontProvider.installUserFont(uri) ?: return@launch
-            subtitleStyleController.setStyle(
-                _uiState.value.subtitleStyle.copy(
-                    fontFamilyPath = installed.file.absolutePath,
-                    fontFamilyName = installed.familyName,
-                )
-            )
-        }
-    }
-
-    private fun applySubtitleStyle() {
-        val engine = playerSessionManager.engine ?: return
-        engine.applySubtitleStyle(_uiState.value.subtitleStyle)
-    }
+    // the user-font install + the direct engine style re-apply live in
+    // [subtitleFont] (SubtitleFontController); the functions below are the
+    // remaining screen/PiP-facing funnels.
 
     private fun toggleDialogueBoost() {
         subtitleStyleController.toggleDialogueBoost()
@@ -2428,13 +2431,13 @@ class VideoPlayerViewModel(
 
     private fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {
         launch {
-            syncPlayManager.syncPlayController.setRepeatMode(mode)
+            syncPlayManager.setGroupRepeatMode(mode)
         }
     }
 
     private fun setSyncPlayShuffleMode(mode: SyncPlayShuffleMode) {
         launch {
-            syncPlayManager.syncPlayController.setShuffleMode(mode)
+            syncPlayManager.setGroupShuffleMode(mode)
         }
     }
 
@@ -2447,9 +2450,11 @@ class VideoPlayerViewModel(
         }
     }
 
-    private fun skipIntro() {
-        dispatchSegmentSkip(SegmentSkipKind.INTRO)
-    }
+    // skipIntro / skipSegment / autoSkipSegment + the shared dispatch and
+    // effect executor moved into SegmentDispatchController — the pure
+    // decision halves already lived in SegmentSkipPolicy.kt; the VM keeps the
+    // ONE facts snapshot fold ([segmentDispatchFacts]) because it reads the
+    // position-aware ui state, which no migrated controller may touch.
 
     /**
      * Cinema Mode is only attempted on fresh starts (never on resume / next-episode
@@ -2499,66 +2504,8 @@ class VideoPlayerViewModel(
     }
 
     // (skipCredits died in the X1a dead-surface cut: no caller anywhere —
-    // the overlays expose only the intro button, and [skipSegment] covers the
-    // tapped active segment regardless of type.)
-
-    /**
-     * The overlay button press for the active segment (user-initiated — the
-     * seek itself is the feedback, so no confirmation notice).
-     */
-    private fun skipSegment(segment: com.raulshma.jellyplay.core.model.MediaSegment) {
-        executeSegmentSkip(segmentEndSeekTarget(_uiState.value.segmentEndTicks(segment)), userInitiated = true)
-    }
-
-    /**
-     * The position-tick auto-skip arm (`PlaybackProgressReporter`'s
-     * `onAutoSkip`): not user-initiated (never clamped) and confirmed with
-     * the "Skipped …" notice so an invisible automatic jump is explained.
-     */
-    private fun autoSkipSegment(segment: com.raulshma.jellyplay.core.model.MediaSegment) {
-        executeSegmentSkip(segmentEndSeekTarget(_uiState.value.segmentEndTicks(segment)), userInitiated = false)
-        showSkippedSegmentNotice(segment.type)
-    }
-
-    /**
-     * Shared dispatch for the skip buttons: snapshot the position-aware state,
-     * reduce it to a [SegmentSkipTarget] via the pure policy in
-     * SegmentSkipPolicy.kt, then execute the one-line effect. The active
-     * segment's end ticks resolve against the current uiState here (the old
-     * `skipSegment` read), keeping the API-match lookup effect-side; the
-     * policy sees only plain values.
-     */
-    private fun dispatchSegmentSkip(kind: SegmentSkipKind) {
-        val state = positionAwareState()
-        val seg = state.activeSegment
-        executeSegmentSkip(
-            segmentSkipTarget(
-                kind = kind,
-                cinemaIntroActive = state.cinemaIntroState != null,
-                isOutroNearEnd = state.isOutroNearEnd,
-                canSkipToNext = autoplayController.canSkipToNext(state.episodes.nextEpisode),
-                segments = SegmentSnapshot(
-                    activeType = seg?.type,
-                    // Resolved against the same snapshot the active segment
-                    // came from — a fresh _uiState read could pair one
-                    // read's segment with another read's end ticks.
-                    activeEndTicks = seg?.let { state.segmentEndTicks(it) },
-                    introEndTicks = state.introSegmentEndTicks,
-                    creditEndTicks = state.creditSegmentEndTicks,
-                ),
-            ),
-            userInitiated = true,
-        )
-    }
-
-    private fun executeSegmentSkip(target: SegmentSkipTarget, userInitiated: Boolean) {
-        when (target) {
-            is SegmentSkipTarget.SeekToPosition -> seekTo(target.positionMs, userInitiated)
-            SegmentSkipTarget.SkipToNextEpisode -> episodeContinuation.playNextEpisode()
-            SegmentSkipTarget.AdvanceCinemaIntro -> playbackSession.advanceCinemaIntro()
-            SegmentSkipTarget.None -> Unit
-        }
-    }
+    // the overlays expose only the intro button, and the dispatch controller's
+    // skipSegment covers the tapped active segment regardless of type.)
 
     private fun applyMediaDetail(detail: MediaDetail) {
         mediaDetail = detail
@@ -2683,33 +2630,10 @@ class VideoPlayerViewModel(
 
     // endregion
 
-    /**
-     * Background-cast orchestration: swaps the media-session owner between the
-     * cast player and the local engine. Real cross-controller flow — the cast
-     * slice's own transport lives on [cast].
-     */
-    private fun detachForBackgroundCast() {
-        castManager.markBackgroundCasting(true)
-        castManager.softRelease()
-
-        // The cast receiver's player is resolved behind the androidMain seam;
-        // the controller no-ops when no cast session is active.
-        mediaSessionController.createForBackgroundCast("jellyplay_cast_bg")
-    }
-
-    private fun reattachFromBackgroundCast() {
-        if (!castManager.isBackgroundCasting) return
-        castManager.markBackgroundCasting(false)
-
-        val engine = playerSessionManager.engine
-        if (engine != null) {
-            val sessionState = playerSessionManager.sessionState.value
-            val itemId = sessionState.currentItemId ?: return
-            // The controller narrows the engine to its media3 player via
-            // asMedia3Player and no-ops when the engine hosts none.
-            mediaSessionController.createForPlayer(engine, "jellyplay_video_$itemId", itemId)
-        }
-    }
+    // detachForBackgroundCast / reattachFromBackgroundCast (the media-session
+    // owner swap between the cast player and the local engine) moved into
+    // BackgroundCastController; the Reattach/Detach event arms above route to
+    // it — the window-session → event → controller flow is unchanged.
 
     private fun toggleVideoStats() {
         val newValue = !_uiState.value.uiPrefs.showVideoStats

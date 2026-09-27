@@ -22,7 +22,8 @@ import com.raulshma.jellyplay.shell.ShellInfra
  * [SignedOutAuthHost], with the update sheet overlaid above every branch.
  *
  * The former 1.6k-line single file is split per concern, same package:
- * [MainContent] (MainContent.kt), the layout branches + [ShellNavParams]
+ * [MainContent] (MainContent.kt), the request-dispatch holder
+ * (NavRequestController.kt), the layout branches + [ShellNavParams]
  * (ShellLayouts.kt), [MainNavDisplay] (MainNavDisplay.kt), the shell overlays
  * (ShellOverlays.kt), and the pure folds (FullScreenRoutePolicy.kt,
  * NavRequestCollector.kt, the remote-navigation routing folds and
@@ -101,13 +102,19 @@ fun JellyPlayApp(
                     com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {
+                    // ADR 0001: the revoke/plain fork dispatches through
+                    // the shared ShellSessionController, whose sign-out
+                    // action lands in SessionCoordinator (remote-control
+                    // stop + sign-out) — the same fork desktop runs
+                    // against AuthRepository. Remembered on the ViewModel so
+                    // MainContent receives a STABLE lambda: it is a key of
+                    // the shellHost hooks remember (and a ShellNavParams
+                    // field), and a fresh lambda per recomposition here —
+                    // this root recomposes on every preference write — made
+                    // the section-graph memoization behind them always miss.
+                    val onLogout: (Boolean) -> Unit = remember(viewModel) { viewModel::logout }
                     MainContent(
-                        // ADR 0001: the revoke/plain fork dispatches through
-                        // the shared ShellSessionController, whose sign-out
-                        // action lands in SessionCoordinator (remote-control
-                        // stop + sign-out) — the same fork desktop runs
-                        // against AuthRepository.
-                        onLogout = { revoke -> viewModel.logout(revoke) },
+                        onLogout = onLogout,
                         model = viewModel,
                         preferences = preferences,
                         infra = infra,

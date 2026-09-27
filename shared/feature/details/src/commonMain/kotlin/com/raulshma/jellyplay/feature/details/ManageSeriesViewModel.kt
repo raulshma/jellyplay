@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +23,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_
  * Loads the series' tvdb id from Jellyfin, resolves the owning Sonarr server,
  * then fetches every episode grouped by season. All mutations (monitor toggle,
  * delete file, search, refresh/scan) resolve the owning server internally via
- * [ArrRepository]; the screen only ever deals with tvdb ids.
+ * the [SonarrSeriesOperations] seam (the Manage-Series-exclusive split of the
+ * former ArrRepository family — this screen is its one consumer, so it injects
+ * only that narrow surface); the screen only ever deals with tvdb ids.
  *
  * State is a single [MutableStateFlow]<[ManageSeriesUiState]> for atomic
  * snapshots (mirrors the DetailUiState single-state model). One-shot feedback
@@ -40,7 +42,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_
 class ManageSeriesViewModel internal constructor(
     private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
-    private val arrRepository: ArrRepository,
+    private val sonarr: SonarrSeriesOperations,
 ) : JellyPlayViewModel() {
 
     private val _uiState = MutableStateFlow(ManageSeriesUiState())
@@ -97,7 +99,7 @@ class ManageSeriesViewModel internal constructor(
             tvdbId = resolvedTvdb
 
             // 2. Resolve the owning Sonarr server.
-            val resolutionResult = arrRepository.resolveSonarrSeries(resolvedTvdb)
+            val resolutionResult = sonarr.resolveSonarrSeries(resolvedTvdb)
             val resolution = resolutionResult.getOrNull()
             if (resolutionResult.isFailure || resolution == null) {
                 _uiState.update {
@@ -119,7 +121,7 @@ class ManageSeriesViewModel internal constructor(
     private fun refresh() {
         val tvdb = tvdbId ?: return
         launch {
-            val result = arrRepository.getSonarrEpisodes(tvdb)
+            val result = sonarr.getSonarrEpisodes(tvdb)
             result.onSuccess { episodes ->
                 _uiState.update {
                     it.copy(
@@ -137,7 +139,7 @@ class ManageSeriesViewModel internal constructor(
     private fun loadEpisodesInternal() {
         val tvdb = tvdbId ?: return
         launch {
-            val result = arrRepository.getSonarrEpisodes(tvdb)
+            val result = sonarr.getSonarrEpisodes(tvdb)
             result.onSuccess { episodes ->
                 _uiState.update {
                     val bySeason = groupBySeason(episodes)
@@ -167,7 +169,7 @@ class ManageSeriesViewModel internal constructor(
         // Optimistic update.
         _uiState.update { it.updateEpisode(episode.copy(monitored = newMonitored)) }
         launch {
-            arrRepository.monitorSonarrEpisodes(tvdb, listOf(episode.id), newMonitored)
+            sonarr.monitorSonarrEpisodes(tvdb, listOf(episode.id), newMonitored)
                 .onSuccess { refresh() }
                 .onFailure { e ->
                     // Revert on failure.
@@ -181,7 +183,7 @@ class ManageSeriesViewModel internal constructor(
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Episode(episode.id)) }
         launch {
-            arrRepository.searchSonarrEpisodes(tvdb, listOf(episode.id))
+            sonarr.searchSonarrEpisodes(tvdb, listOf(episode.id))
                 .onSuccess {
                     _uiState.update {
                         it.copy(actionTarget = null, userMessage = "Searching for ${episode.title}…")
@@ -211,7 +213,7 @@ class ManageSeriesViewModel internal constructor(
         val pending = state.pendingDelete.confirm(inFlight = state.isDeleting) ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Episode(pending.id), isDeleting = true) }
         launch {
-            arrRepository.deleteSonarrEpisodeFile(tvdb, pending.episodeFileId)
+            sonarr.deleteSonarrEpisodeFile(tvdb, pending.episodeFileId)
                 .onSuccess {
                     _uiState.update {
                         it.copy(actionTarget = null, userMessage = "Deleted ${pending.title}.")
@@ -234,7 +236,7 @@ class ManageSeriesViewModel internal constructor(
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Season(seasonNumber)) }
         launch {
-            arrRepository.searchMonitoredSonarrSeason(tvdb, seasonNumber)
+            sonarr.searchMonitoredSonarrSeason(tvdb, seasonNumber)
                 .onSuccess {
                     _uiState.update {
                         it.copy(actionTarget = null, userMessage = "Searching monitored episodes in season $seasonNumber…")
@@ -258,7 +260,7 @@ class ManageSeriesViewModel internal constructor(
             it.updateSeason(seasonNumber) { ep -> ep.copy(monitored = targetMonitored) }
         }
         launch {
-            arrRepository.monitorSonarrEpisodes(tvdb, seasonEps.map { it.id }, targetMonitored)
+            sonarr.monitorSonarrEpisodes(tvdb, seasonEps.map { it.id }, targetMonitored)
                 .onSuccess { refresh() }
                 .onFailure { e ->
                     // Revert.
@@ -274,7 +276,7 @@ class ManageSeriesViewModel internal constructor(
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Series(SeriesAction.REFRESH)) }
         launch {
-            arrRepository.refreshSonarrSeries(tvdb)
+            sonarr.refreshSonarrSeries(tvdb)
                 .onSuccess {
                     _uiState.update { it.copy(actionTarget = null, userMessage = "Refreshing series metadata…") }
                 }
@@ -289,8 +291,8 @@ class ManageSeriesViewModel internal constructor(
         _uiState.update { it.copy(actionTarget = ActionTarget.Series(SeriesAction.REFRESH_AND_SCAN)) }
         launch {
             // Sonarr: refresh + rescan are separate commands; fire both.
-            arrRepository.refreshSonarrSeries(tvdb)
-            arrRepository.rescanSonarrSeries(tvdb)
+            sonarr.refreshSonarrSeries(tvdb)
+            sonarr.rescanSonarrSeries(tvdb)
                 .onSuccess {
                     _uiState.update { it.copy(actionTarget = null, userMessage = "Refreshing & scanning series…") }
                 }
@@ -304,7 +306,7 @@ class ManageSeriesViewModel internal constructor(
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Series(SeriesAction.SEARCH)) }
         launch {
-            arrRepository.searchSonarrSeries(tvdb)
+            sonarr.searchSonarrSeries(tvdb)
                 .onSuccess {
                     _uiState.update { it.copy(actionTarget = null, userMessage = "Searching all monitored missing episodes…") }
                 }

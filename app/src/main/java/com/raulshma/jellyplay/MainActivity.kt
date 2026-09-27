@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.PinGateController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
@@ -362,8 +363,27 @@ class MainActivity : FragmentActivity() {
                     val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
                         pinRateLimiter.getPinLockoutState()
                     }
-                    val now = remember { System.currentTimeMillis() }
-                    val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
+                    // Live clock for the lockout display. The former
+                    // `remember { System.currentTimeMillis() }` computed "now"
+                    // ONCE per composition, so a lockout that expired while
+                    // the gate stayed up kept `enabled` false (keypad dead)
+                    // and the countdown message stale until the pref itself
+                    // changed. The tick is 1s-granular, restarts whenever the
+                    // limiter state changes (the remember key above), and
+                    // self-terminates the moment no lockout holds — an
+                    // unlocked gate never ticks.
+                    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(lockoutState) {
+                        while (PinGateController.lockoutRemainingMs(lockoutState, nowMs) > 0L) {
+                            delay(1_000L)
+                            nowMs = System.currentTimeMillis()
+                        }
+                    }
+                    // Pure display decision (pinned beside PinGateController's
+                    // other folds): the composition only supplies the live
+                    // clock; the keypad revives when this hits zero.
+                    val lockoutRemainingMs = PinGateController.lockoutRemainingMs(lockoutState, nowMs)
+                    val lockoutActive = lockoutRemainingMs > 0L
                     AuthChallengeScreen(
                         title = if (preferences.biometricLockEnabled && preferences.pinHash == null) stringResource(R.string.auth_title_biometric) else stringResource(R.string.auth_title_pin),
                         subtitle = stringResource(R.string.auth_subtitle),
@@ -401,7 +421,7 @@ class MainActivity : FragmentActivity() {
                         },
                         onErrorClear = { pinError = null },
                         errorMessage = if (lockoutActive) {
-                            PinGateController.lockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                            PinGateController.lockoutMessage(lockoutRemainingMs)
                                 .resolve(context)
                         } else {
                             pinError

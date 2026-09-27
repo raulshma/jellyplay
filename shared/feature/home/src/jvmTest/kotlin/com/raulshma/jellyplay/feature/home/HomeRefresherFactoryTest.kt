@@ -125,17 +125,19 @@ class HomeRefresherFactoryTest {
             scope = scope,
             offlineModeManager = offlineModeManager,
             awaitOutboxDrained = { true },
-            sectionPrefsProvider = {
-                HomeSectionPrefs(
-                    query = HomeSectionQuery(),
-                    homeSectionOrder = HomeSectionType.CONFIGURABLE,
-                    mergeContinueWatchingAndNextUp = false,
-                )
-            },
-            seerrPreferencesProvider = { SeerrPreferences() },
-            discoverEnabledProvider = { false },
-            directArrEnabledProvider = { false },
-            androidTvWatchNextEnabledProvider = { true },
+            fetchInputs = HomeFetchInputs(
+                sectionPrefs = {
+                    HomeSectionPrefs(
+                        query = HomeSectionQuery(),
+                        homeSectionOrder = HomeSectionType.CONFIGURABLE,
+                        mergeContinueWatchingAndNextUp = false,
+                    )
+                },
+                seerrPreferences = { SeerrPreferences() },
+                discoverEnabled = { false },
+                directArrEnabled = { false },
+                androidTvWatchNextEnabled = { true },
+            ),
         ).also { refresher = it }
     }
 

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -130,9 +131,15 @@ class AudioQueueStateCore(
 
     // ── State cells: initial values identical to both twins' managers ──────
     // internal: same-module adopters (the jvmMain manager + jvmTest suites)
-    // write through the cells where a choreography STAYS adapter-side
-    // (start()'s persistence restore, play()'s detail path, the ticker);
-    // everyone else reads the read-only flows below.
+    // read the cells and — only where a choreography STAYS adapter-side —
+    // write through the narrow commands below (restore / tick publish /
+    // load-error / load-flag / park / crossfade duration), so every WRITE to
+    // these cells has one core-side home; everyone else reads the read-only
+    // flows below. The ONE declared exception is the Android adapter's
+    // `_currentIndex` transition writes (the media3 transition-echo
+    // reconciliation — [reportsRideEngineTransition]'s carve-out), and the
+    // jvmTest/androidHostTest seeds, which write the cells directly by the
+    // same internal visibility.
 
     internal val _queue = MutableStateFlow<List<AudioQueueItem>>(emptyList())
     val queue: StateFlow<List<AudioQueueItem>> = _queue.asStateFlow()
@@ -203,6 +210,92 @@ class AudioQueueStateCore(
 
     private var unshuffledQueue: List<AudioQueueItem> = emptyList()
 
+    // ── Narrow write commands (adapter-owned choreography, core-side writes) ─
+
+    /**
+     * Cold-start persistence restore — the ONE bulk write of the persisted
+     * queue + state snapshot both managers' `start()`/restore paths used to
+     * hand-roll cell-by-cell. An EMPTY [queue] writes nothing (the restored
+     * queue only replaces the default when rows exist); a NULL [savedState]
+     * leaves the five state cells untouched — both the historical guards.
+     * Repeat mode is coerced into 0..2 here, the only translation the sites
+     * performed. NOT a queue mutation: no undo snapshot, no shape
+     * invalidation, no transition — a restore rehydrates the last session,
+     * it does not change the current one.
+     */
+    internal fun restorePersisted(queue: List<AudioQueueItem>, savedState: AudioQueueStateEntity?) {
+        if (queue.isNotEmpty()) {
+            _queue.value = queue
+        }
+        savedState?.let { saved ->
+            _currentIndex.value = saved.currentIndex
+            _currentPosition.value = saved.currentPositionMs
+            _repeatMode.value = saved.repeatMode.coerceIn(0, 2)
+            _shuffleMode.value = saved.shuffleEnabled
+            _speed.value = saved.playbackSpeed
+        }
+    }
+
+    /**
+     * The position ticker's display write — applies a [AudioQueuePolicy
+     * .positionTickPlan]'s position/duration publishes (null fields leave
+     * their cell untouched, the plan's dedup contract). The adapter keeps
+     * its own `lastPublished*` locals in sync from the same plan — the
+     * command writes only the chassis cells.
+     */
+    internal fun publishTick(plan: AudioQueuePolicy.PositionTickPlan) {
+        plan.publishPositionMs?.let { _currentPosition.value = it }
+        plan.publishDurationMs?.let { _duration.value = it }
+    }
+
+    /**
+     * Load-path error publish (the play-path skeleton's failure/clear arms
+     * and the per-item resolve failures). Null CLEARS — the successful-load
+     * arm. Runtime engine errors keep their own fed mirror
+     * ([onEngineError]); this is the loader's surface.
+     */
+    internal fun setLoadError(message: String?) {
+        _playbackError.value = message
+    }
+
+    /**
+     * Arms the play-path load: claims the session's item id and raises the
+     * loading flag ([AudioPlayPath]'s synchronous prefix). The item claim
+     * rides WITH the flag deliberately — every hand-written play() made the
+     * two writes adjacent, and the claim must land before the async resolve
+     * so the same-item fast path sees it.
+     */
+    internal fun beginItemLoad(itemId: String) {
+        currentItemId = itemId
+        _isLoadingItem.value = true
+    }
+
+    /** Disarms the play-path load (the skeleton's body tail — mirror order: adapter flag first). */
+    internal fun endItemLoad() {
+        _isLoadingItem.value = false
+    }
+
+    /**
+     * Parks playback (isPlaying off, cursor/display untouched). The shared
+     * "session is no longer producing audio" write behind the chassis's own
+     * empty-park arms and the adapter's unresolvable-load park.
+     */
+    internal fun parkPlayback() {
+        _isPlaying.value = false
+    }
+
+    /**
+     * The crossfade-duration setting write (both managers' `setCrossfadeDurationMs`
+     * / `setGaplessEnabled` bodies). The crossfade/gapless FLAG interplay around
+     * the write stays adapter-side (desktop has no crossfader — its declared
+     * divergence — so its interplay only mirrors the flags); this command owns
+     * only the cell, so the Android adapter's local duplicate crossfade cell
+     * could fold into the chassis's (one cell, one home, same initial value).
+     */
+    internal fun setCrossfadeDurationMs(ms: Long) {
+        _crossfadeDurationMs.value = ms
+    }
+
     // ── Queue mutations (the AudioQueueManager choreography) ───────────────
 
     fun playQueue(items: List<AudioQueueItem>, startIndex: Int) {
@@ -246,7 +339,7 @@ class AudioQueueStateCore(
                 _currentIndex.value = -1
                 // Android: playlist emptied → player idle, metadata kept.
                 dispatch.stop()
-                _isPlaying.value = false
+                parkPlayback()
             }
         } else if (index < _currentIndex.value) {
             _currentIndex.value -= 1
@@ -261,7 +354,7 @@ class AudioQueueStateCore(
         _currentIndex.value = -1
         // Android: clearMediaItems parks the player idle; metadata is kept.
         dispatch.stop()
-        _isPlaying.value = false
+        parkPlayback()
     }
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
@@ -439,6 +532,16 @@ class AudioQueueStateCore(
     }
 
     /**
+     * The engine's repeat-mode edge (the Android player listener's
+     * `onRepeatModeChanged` — media3 is the source of truth when the user
+     * changes repeat from a notification/controller and the player informs
+     * us). Guarded by the caller: only a CHANGED value is forwarded.
+     */
+    fun onEngineRepeatModeChanged(mode: Int) {
+        _repeatMode.value = mode
+    }
+
+    /**
      * Track end. Android: under repeat ≥ 1 the player never reaches ENDED
      * (ALL wraps, ONE replays); mid-queue advances are ordinary transitions.
      * Desktop: the same outcomes, driven from the single-item engine's ENDED.
@@ -458,7 +561,7 @@ class AudioQueueStateCore(
         } else {
             // End of queue under RepeatNone — Android's STATE_ENDED path:
             // isPlaying off, index stays on the ended item, metadata kept.
-            _isPlaying.value = false
+            parkPlayback()
             onQueueExhausted()
         }
     }

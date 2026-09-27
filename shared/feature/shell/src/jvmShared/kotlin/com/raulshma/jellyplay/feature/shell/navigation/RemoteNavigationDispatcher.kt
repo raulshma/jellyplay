@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The ONE remote-navigation ladder both shells run — the exhaustive
- * when([NavigationTarget]) the Android `NavRequestCollector` and the desktop
- * `DesktopRemoteNavCollector` used to hand-copy beside the
+ * when([NavigationTarget]) the Android `NavRequestCollector` and the
+ * desktop shell used to hand-copy beside the
  * [RemoteNavigationRouting] folds. The hand-copies had drifted (the
  * survey-measured fork): desktop routed [NavigationTarget.GoToTopLevel]
  * through its navigator, whose pop-to-root-when-already-on-tab behavior
@@ -38,9 +38,14 @@ import kotlinx.coroutines.flow.Flow
  *
  * The two per-shell collectors that are NOT part of this ladder (Android's
  * SyncPlay auto-open and now-playing snackbar loops) dispatch through the
- * same sinks and the companion folds below, so their policies live here too;
- * desktop simply arms none of their flows today (no SyncPlay coordinator, no
- * remote-control receiver on that shell).
+ * same sinks and the companion folds below, so their policies live here too.
+ * Desktop arms none of their flows DELIBERATELY: it has no SyncPlay
+ * coordinator, and since the receiver port the shell arms the receiver's
+ * other outputs instead — its DisplayMessages ride the user-message host
+ * while its playEvents stay uncollected (the desktop dispatcher twins
+ * already open the player for every remote Play, which is the confirmation
+ * the now-playing banner exists to give; the decision is documented at the
+ * collection seam in `desktopUserMessageSources`).
  */
 class RemoteNavigationDispatcher(
     /**

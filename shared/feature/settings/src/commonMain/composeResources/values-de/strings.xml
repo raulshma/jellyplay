@@ -1036,7 +1036,6 @@
     <string name="settings_skip_segments_on_seek">Segmente beim Spulen überspringen</string>
     <string name="settings_skip_segments_on_seek_on">Vorwärtssprünge überspringen Auto-Skip-Segmente</string>
     <string name="settings_skip_segments_on_seek_off">Aus</string>
-    <string name="ss_skip_segments_on_seek_title">Segmente beim Spulen überspringen</string>
     <string name="ss_skip_segments_on_seek_subtitle">Ein Segment, in dem ein Vorwärtssprung landet, automatisch überspringen</string>
     <string name="settings_syncplay_join_summary">Beitrittsverhalten: %1$s</string>
     <string name="settings_join_behavior">Beitrittsverhalten</string>
@@ -1461,7 +1460,6 @@
     <string name="ss_audio_caching_enabled_subtitle">Anstehende Tracks für sofortige Wiedergabe puffern</string>
     <string name="ss_audio_cache_size_title">Audio-Cache-Größe</string>
     <string name="ss_audio_cache_size_subtitle">Maximaler Speicherplatz für zwischengespeicherte Audios</string>
-    <string name="ss_video_cache_size_title">Video-Cache-Größe</string>
     <string name="ss_video_cache_size_subtitle">Maximaler Speicherplatz für gecachte Videos</string>
     <string name="ss_audio_prefetch_lookahead_title">Audio-Prefetch-Vorgriff</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">Anzahl der vorgeladenen, kommenden Tracks</string>
@@ -1652,7 +1650,6 @@
     <string name="ss_idle_ambient_timeout_subtitle">Wie lange gewartet wird, bis der Ruhebildschirm erscheint</string>
     <string name="ss_home_backdrop_title">Start-Hintergrund</string>
     <string name="ss_home_backdrop_subtitle">Hero-Artwork als ambienten Hintergrund weichzeichnen</string>
-    <string name="ss_compact_episode_list_title">Kompakte Episodenliste</string>
     <string name="ss_compact_episode_list_subtitle">Episoden auf dem Smartphone als vertikale Liste statt in einer horizontalen Reihe anzeigen</string>
     <string name="ss_nav_bar_customization_title">Navigationsleiste</string>
     <string name="ss_nav_bar_customization_subtitle">Elemente der Navigationsleiste ein-, ausblenden und neu anordnen</string>
@@ -1662,13 +1659,10 @@
     <string name="ss_newsletter_sections_subtitle">Wählen, welche Abschnitte im Newsletter erscheinen</string>
     <string name="ss_dialogue_boost_strength_title">Dialog-Verstärkung Stärke</string>
     <string name="ss_dialogue_boost_strength_subtitle">Stärke der Dialog-Verstärkung</string>
-    <string name="ss_mpv_extra_config_title">Erweiterte Konfiguration</string>
     <string name="ss_mpv_extra_config_subtitle">Raw mpv-Optionen (mpv.conf-Stil)</string>
-    <string name="ss_reset_engine_defaults_title">Auf Standard zurücksetzen</string>
     <string name="ss_reset_engine_defaults_subtitle">MPV-, LibVLC- oder ExoPlayer-Einstellungen wiederherstellen</string>
     <string name="ss_audio_prefetch_backfill_title">Backfill-Anzahl</string>
     <string name="ss_audio_prefetch_backfill_subtitle">Zuletzt gespielte Titel, die für Wiederholung gecacht bleiben</string>
-    <string name="ss_audio_cache_clear_title">Audio-Cache leeren</string>
     <string name="ss_audio_cache_clear_subtitle">Alle gecachten Audio-Bytes löschen</string>
     <string name="ss_subtitle_tester_title">Untertitel-Stil-Tester</string>
     <string name="ss_subtitle_tester_subtitle">Stile engineübergreifend vorschauen</string>

@@ -13,7 +13,14 @@ persistence layer is Room 3 (`androidx.room3`) on android/jvm.
 DI is Koin-only repo-wide. Player code lives in two shared modules:
 `shared/core/player-contract` (the engine-agnostic `MediaEngine` contract and
 engine-shared machinery) and `shared/feature/player-video` (the VOD player
-screen, ViewModel, and session collaborators). The two desktop-and-Android shells register their nav sections through one
+screen, ViewModel, and session collaborators). Package↔module anomaly, by
+recorded decision: ALL of `player-contract`'s commonMain declares the
+`com.raulshma.jellyplay.feature.player.video.engine` package (zero-import-churn
+when the contract split out of the feature), and two contract files borrow
+`core.data` packages (`PlayerLifecycleCallbacks`, `RemotePlayableEngine`) —
+grepping by package alone cannot tell module; the dependency edge that matters
+is recorded in `shared/core/player-contract/build.gradle.kts`. New
+player-contract files keep using the contract's canonical feature package. The two desktop-and-Android shells register their nav sections through one
 aggregator module, `shared/feature/shell` (`appSections` + `ShellHostHooks` +
 a registration ledger the desktop dead-end guard derives from). Paths below
 are relative to the repo root.
@@ -114,10 +121,9 @@ are relative to the repo root.
  delegates to it).
 - **`EnginePositionTicker`** (`shared/core/player-contract/src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/engine/EnginePositionTicker.kt`)
  is the shared polling-ticker loop used by every `positionFlow`. It lives in
- `:shared:core:player-contract` so both the production adapters
+ `:shared:core:player-contract` so the production adapters
  (`:shared:feature:player-video` via `ReloadablePlayerEngine.positionFlowWithTicker`)
- and the test-double `FakeMediaEngine` (a common-pure twin in player-video's
- `jvmTest` — KMP testFixtures are unsupported on AGP 9) share one
+ and any test double over the contract share one
  implementation — the bounded paused-wait (`POSITION_PAUSED_RECHECK_MS = 2_500L`),
  play↔pause edge detection and `delay(pollingIntervalMs)` live in exactly one
  place.
@@ -219,13 +225,25 @@ are relative to the repo root.
  cast path; player-video's `CastManager` seam dropped
  `castPlayerForSession` accordingly (the legacy core:data member feeds
  `VideoMediaSessionFactory`'s provider wiring directly).
-- **`EnginePositionTicker` first tick**: `startPositionTracking` primes
- one synchronous `tickBody` read after launch — without it the ticker
- delayed before its FIRST tick where the former hand-rolled loops
- published position/duration immediately (the stop-report
- `_duration.value * 10_000` fallback read 0 and advance stop reports
- were suppressed; the regression surfaced when DesktopAudioQueueManager
- adopted the ticker).
+- **`EnginePositionTicker` first tick**: the ticker itself primes one
+ synchronous `onActive` read before the loop (`primeFirstTick`, 2026-09-27
+ — moved into `launch()` from the desktop manager's manual post-launch
+ `tickBody()` call, which had been the only prime; the flag rides
+ `CoroutineStart.UNDISPATCHED` so the read lands on the CALLER's thread
+ inside `launch()`, preserving the load-bearing synchronicity — a
+ dispatched tick could race the very stop-report fallback it feeds).
+ Without it the ticker delayed before its FIRST tick where the former
+ hand-rolled loops published position/duration immediately (the stop-report
+ `_duration.value * 10_000` fallback read 0 and advance stop reports were
+ suppressed; the regression surfaced when DesktopAudioQueueManager adopted
+ the ticker — and Android music had the same latent hole until the flag).
+ BOTH audio managers pass `primeFirstTick = true` (their tick bodies
+ publish through dedup-guarded state flows, so the prime is idempotent);
+ the video adapters keep the default OFF because their `positionFlow`
+ shells already prime via the surrounding `callbackFlow`'s initial
+ `trySend(currentPositionMs)` — an unconditional prime would double-publish
+ the same first value down a conflated channel. Pinned by
+ `EnginePositionTickerTest`'s prime pair.
 
 ## Playback session (`PlaybackSession`)
 
@@ -649,6 +667,26 @@ playingItemId/positionTicks from PlayQueueUpdate events; the screen
 renders playingName) — only the server-producer never fills them, now
 KDoc-relevant. Pinned by `SyncPlayPlaybackCoreReconcileTest`.
 
+**Narrow-intent facade (2026-09-27)**: the manager's four cores are
+`private` — the 26 former reach-through sites (`manager.playbackCore` /
+`manager.syncPlayController` from the bridge, the syncplay feature's
+`JvmSyncPlaySession`, the video VM) go through manager intents instead:
+command forwarders (`stopGroup`/`nextQueueItem`/`previousQueueItem`/
+`unpauseGroup`/`pauseGroup`/`seekGroup`/`setQueueItem`/`setNewQueue`/
+`setGroupRepeatMode`/`setGroupShuffleMode`/`setGroupIgnoreWait`),
+observations (`ignoreWait`, `lastGroupCommandWasUnpause`,
+`queuedItemStartPositionTicks` — the one cross-core read), and the
+playback-core lifecycle (`onQueueItemChanged`, `beginPendingItemLoad`,
+`reconcileToServerPosition`, `onPlaybackStateChanged`, `setIgnoreWait`,
+`resetPlaybackSync`). The global mutable callback seam folded into
+`attachSession(session)`/`detachSession()` (replace-by-construction over
+`SyncPlayPlaybackCore`'s now-`internal` `attachCallbacks`/
+`detachCallbacks`) — `SyncPlayBridge.attach`'s defensive
+clear-then-set is gone. The playback-core `@Volatile` session flags are
+private with accessor-shaped intents; NO phase-machine rewrite (the
+CorrectionPulse/Reconcile suites drive the flag choreography under
+virtual time — rewriting would churn pins for no gain).
+
 ## State slices (`VideoPlayerUiState`)
 
 > **deepening cohort (player VMs/screens):** the god-VM funnel
@@ -659,6 +697,12 @@ KDoc-relevant. Pinned by `SyncPlayPlaybackCoreReconcileTest`.
 > (beside `SettingsProjector`; diff-guarded seeds, distinct rebuild
 > triggers, jvmTest-pinned). Player-live gained **`LiveSessionManager`**
 > (the VOD `PlayerSessionManager`'s twin for source resolution),
+> **`LivePlaybackSession`** (2026-09-27: the VOD `PlaybackSession` shape
+> at live scale — tune/zap/retry/fallback choreography + engine-decision
+> execution moved VERBATIM out of `LiveTvPlayerViewModel` (1,108 → 635
+> lines), emitting the 14-member `LivePlaybackEvent` sealed pipe the VM
+> folds into UI state; the deferred-zap machine and the issue-#145
+> PiP-dismiss latch moved with their KDocs; 11-row `LivePlaybackSessionTest`),
 > **`LiveFallbackPhase`** (the extracted ExoLiveEngine error-phase
 > machine, commonMain, pinned), and **`LiveMuteMemory`** (the pre-mute
 > remember/restore chip). `dischargePipDismissal`
@@ -671,7 +715,24 @@ KDoc-relevant. Pinned by `SyncPlayPlaybackCoreReconcileTest`.
 > center/lock/trickplay overlays → `VideoPlayerScreenOverlays.kt`, status
 > badges → `VideoPlayerScreenInfo.kt`, sheet routing →
 > `VideoPlayerScreenSheets.kt` (composition-shape-only, bodies
-> byte-identical).
+> byte-identical). The controls chrome got the same split (2026-09-27):
+> `PlayerControls.kt` keeps the root + the `@Immutable` bundle carriers;
+> `PrimaryMediaControls.kt` / `TvControllableSeekBar.kt` /
+> `PlayerControlsHeader.kt` are verbatim siblings. Four more
+> controller extractions completed the VM campaign (2026-09-27, ratchet
+> migrated-controllers 13 → 17, `godStateWiringCount` unchanged at 3):
+> `PipTransportController` (PiP transport registration + aspect/
+> source-rect), `SubtitleFontController` (style application + user-font
+> install), `BackgroundCastController` (detach/reattach pair),
+> `SegmentDispatchController` (skip/cinema dispatch over a single
+> `SegmentDispatchFacts` snapshot — the VM-side facts builder preserves
+> the load-bearing single-read pairing rule). The mini-player reclaim
+> seam is typed (2026-09-27): `VideoMiniPlayerState.enterMiniMode`
+> takes a deposit-time `asMediaEngine` capability lambda and
+> `tryReclaimMediaEngine(itemId)` returns the `MediaEngine` WITHOUT a
+> reclaim-site downcast — the feature vouches for its own deposit
+> (`{ engine }`, identity by construction); a capability miss returns
+> null WITHOUT consuming the deposit.
 
 `VideoPlayerUiState` (`shared/feature/player-video/src/commonMain/kotlin/.../VideoPlayerUiState.kt`)
 is seven stored slices — `gestures` (`GesturePrefsState`), `segmentState`
@@ -715,7 +776,8 @@ ViewModel wants — `stateIn(scope, WhileSubscribed(5_000), SeerrRequestSnapshot
 coroutine onto the constructing scope (breaks `runTest` scopes). Everything
 else on the holder is a command: `requestMedia` (owns the whole
 loading → success/error result choreography), `prefetchDetails`,
-`loadServiceDetails`, `loadTvSeasons`, `clearRequestResult`. There is no public
+`loadServiceDetails`, `loadTvSeasons`, `prepare(item)` (the request-open data
+cascade — see below), `clearRequestResult`. There is no public
 per-field state accessor and no `setRequestResult` escape hatch.
 `SeerrRequestSnapshot` itself lives in `shared/core/model/.../seerr/` with the
 other Seerr state models so core/ui can see it: `SeerrRequestDialog`'s
@@ -739,27 +801,47 @@ untouched. Pure and unit-tested; no feature-code imports. The status
 DECISIONS that ride on these enums are model-level too:
 `SeerrStatusDecisions.kt` (`SeerrRequestItem.effectiveMediaStatus` +
 the `SeerrMediaStatus` availability predicates — see Shared UI
-vocabulary); the label/color presentation stays requests-local.
+vocabulary); the label/color presentation stays requests-local. The
+request-BUTTON decision joined them (2026-09-27): `seerrRequestButtonState(
+mediaInfo)` beside `SeerrStatusDecisions` returns the sealed
+`SeerrRequestButtonState` (`Available` / `Requested.Processing|Pending|
+ExistingRequest` / `NotRequested`) — the full gating + precedence fold
+(available > processing > pending > existing-request > requestable) that
+`SeerrActionButtons` used to hand-roll inline; `SeerrDetailScreen` renders
+from it (thin renderer), `SeerrStatusDecisionsTest` pins the 12-row table.
+The two surfaces map the state to their OWN (label, icon, color) — the
+requests list's `RequestStatusPresentation` table is requests-internal
+(star topology: core:model must not learn a feature's Res class) and the
+vocabularies only partially intersect.
 
-The request-dialog open/close choreography is the holder's too:
-`SeerrRequestSnapshot.dialogItem` plus two commands — `openRequestDialog(item)`
-sets the item and fires the cascade itself (`loadServiceDetails`, and
-`loadTvSeasons` only when mediaType equals "tv" ignoring case), and
-`dismissRequestDialog` clears the item THEN the result, in that order. The
-three former per-screen `LaunchedEffect` cascades (media-detail, Seerr detail,
-search) render `snapshot.dialogItem` and decide nothing; pinned in
-`SeerrRequestStateHolderTest`. Nuance: the dialog's item is frozen at open
-time — Seerr-detail used to recompute it from the optimistic PENDING flip;
-the in-dialog state change now travels through the result field.
+The request-dialog open/close choreography is SPLIT by layer. The data half is
+the holder's `prepare(item)`: `loadServiceDetails` for the item's media type,
+plus `loadTvSeasons` only when mediaType equals "tv" ignoring case. The dialog
+cell itself is presentation state and lives BESIDE the dialog:
+`SeerrRequestDialogHolder` (shared/core/ui, next to the `SeerrRequestDialog`
+composable) owns `item: StateFlow<SeerrSearchItem?>` (null = closed — the
+screens' `?.let` render gate) plus `open`/`dismiss`, constructed per-VM over
+the data holder through two constructor seams (`prepare`/`clearRequestResult`
+— core/ui cannot see core:data). Nuance: the item is frozen at open time —
+only open/dismiss write it (Seerr-detail used to recompute it from the
+optimistic PENDING flip; the in-dialog state change travels through the result
+field), and `dismiss` clears the item THEN the result, in that order, so the
+result banner never outlives the dialog it belongs to. Pinned in
+`SeerrRequestDialogHolderTest` (the dialog rows moved out of
+`SeerrRequestStateHolderTest`, which still pins the `prepare` cascade).
 
-Four ViewModels construct a per-VM instance (deliberately not a shared Koin
-single — each passes its own `scope` to `SeerrRequestDelegate`): `DetailViewModel`
-and `SearchViewModel`/`SeerrDetailViewModel` expose `snapshotIn(scope)` as
-`seerrSnapshot` (Search/Seerr-detail) or fold it into uiState as a single
-`seerrRequest` field (`DetailUiState`); `HomeViewModel` embeds it into
-`HomeUiState.seerrRequestState` alongside its `requestItem`. Screens read only
-snapshot fields; commands go through the ViewModel wrappers (or the
-`viewModel.seerrRequests` seam on the media-detail screen).
+Four ViewModels construct a per-VM instance of BOTH holders (deliberately not
+a shared Koin single — each passes its own `scope` to `SeerrRequestDelegate`):
+`DetailViewModel` and `SearchViewModel`/`SeerrDetailViewModel` expose
+`snapshotIn(scope)` as `seerrSnapshot` (Search/Seerr-detail) or fold it into
+uiState as a single `seerrRequest` field (`DetailUiState`), with the dialog
+item exposed as `seerrDialogItem` (Search/Seerr-detail) or the
+`viewModel.seerrRequestDialog` seam (media-detail); `HomeViewModel` embeds the
+data holder into `HomeUiState.seerrRequestState` alongside its own
+feature-local `requestItem` cell + `HomeDialogSession` (Home never used the
+holder's dialog members). Screens read only snapshot fields; commands go
+through the ViewModel wrappers (or the `viewModel.seerrRequests` seam on the
+media-detail screen).
 
 **`SeerrRequestDefaults`** (shared/core/ui, beside the dialog) is the
 request sheet's preselect decision table: default server index
@@ -941,12 +1023,30 @@ appear in several, and every visible card must flip together).
 
 `HomeRefresherFactory` (`@Inject`) is the construction seam: it owns the nine
 pure-DI collaborators; `create` takes only VM-owned runtime inputs (scope,
-the sync holder's drain gate, the preference-mirror providers) plus
-`offlineModeManager` (a DI bean the VM itself uses for ToggleOfflineMode, so
-it stays on `create` rather than the factory). `SyncStatusStateHolderFactory`
-(core/data) is the same move for the sync holder. `HomeRefresherTest` still
+the sync holder's drain gate, the `HomeFetchInputs` bundle, plus
+`offlineModeManager` — a DI bean the VM itself uses for ToggleOfflineMode, so
+it stays on `create` rather than the factory). 2026-09-27: the refresher
+constructor's five per-call preference providers folded into ONE
+**`HomeFetchInputs`** snapshot (sectionPrefs / seerrPreferences /
+discoverEnabled / directArrEnabled / androidTvWatchNextEnabled — all
+`() ->` lambdas, re-read per use), and the Seerr-discover fan-out + Arr
+recently-grabbed fetch bodies moved verbatim into the factory-owned
+**`HomeDiscoverSources`** collaborator beside `DiscoverRowsCoordinator`
+(the refresher keeps WHEN — the fetch-group schedule, awaits, and roll
+drain; sources own WHAT; both share the `HomeRefreshState` store seam, so
+`sections` stays single-writer). `HomeStores` carries the stores bundle
+(now five — `seerrPreferences` moved in when the VM took the wide path
+once). `SyncStatusStateHolderFactory`
+(core:data) is the same move for the sync holder. `HomeRefresherTest` still
 constructs the refresher directly — the factory delegates, it adds no
-behavioural seam.
+behavioural seam. The dice-roll protocol's cross-layer composition
+(registry ↔ repo epoch ↔ network row epoch) is pinned by
+`DiscoverRollContractTest` (home jvmTest): refresh→roll→refresh survival,
+the both-epoch-guards-refuse-stale-writes case, and the
+last-suspension-before-drain case, over the real shared `TtlCache`/
+`cacheThrough` epoch engine behind a `MediaRepository` double (the full
+real stack is unconstructible across the module api edges — the gap is
+documented in the test).
 
 **Discover-row roll registry.** `rollDiscoverRow`'s dice re-roll orders
 against in-flight fetches through ONE registry, `rolledRowGenerations`
@@ -1853,9 +1953,12 @@ WorkSchedulers). The aggregate names are unchanged — consumers and
 
 **`MediaRepository` union shrink (landed)**: `MediaRepository` no longer
 extends `LiveTvRepository` / `SyncPlayRepository` / `NewsletterRepository` /
-`PlaylistRepository` — its interface is its own 42 members (the former
+`PlaylistRepository` — its interface is its own 40 members (the former
 86-member union forced every media consumer to learn four unrelated
-families). `MediaRepositoryImpl` implements `MediaRepository` +
+families; the second shrink wave, 2026-09-27, retired `getMusicVideos`
+(zero callers) and the four user-data write members whose sole union caller
+migrated — see the family seams below). `MediaRepositoryImpl` implements
+`MediaRepository` +
 `SyncPlayRepository` plus the two cache-invalidation seams
 (`MediaRepositoryCacheInvalidation`, `MediaCacheInvalidator`) and is bound
 as the `MediaRepository` single; the three family surfaces have their own
@@ -1869,6 +1972,52 @@ consumers inject BOTH `MediaRepository` and `PlaylistRepository` (music
 browse/playlist VMs, `AudioPlayerViewModel`, `LibraryLayoutViewModel`,
 `AudioLibraryBrowser`) — different singles since the facade split, with
 cross-surface cache invalidation carried by the shared internals single.
+
+**Repository family seams (2026-09-27)**, the per-family narrowing the
+surface ratchet's KDoc mandates — interfaces appended beside their wide
+interface, impl satisfies both, over-the-impl Koin singles
+(`single<Family> { get<MediaRepositoryImpl>() }`), consumers migrate per
+call-site census, `MediaRepositorySurfaceTest` cap lowered 45 → 40 with
+rationale lines:
+- **`MusicCatalogue`** (`getArtistAlbums`/`getAlbumTracks`/`getMusicVideos`/
+  `getInstantMix`/`getThemeSongs`) and **`UserDataWriteOperations`**
+  (`toggleFavorite`/`markPlayed`/`markUnplayed`/`markSeasonPlayed`/
+  `markSeasonUnplayed` — NOT the caller-facing `UserDataMutator` protocol
+  facade, which sits ON TOP of this seam and now ctor-injects it). The
+  music family's remaining MediaRepository callers are mixed-consumer
+  ViewModels plus the playback stack, so its four still-called members stay
+  on the union; the write family's sole clean consumer
+  (`UserDataMutatorImpl`) migrated off the union. Members carry NO default
+  arguments on the seam — Kotlin forbids an override whose two
+  superinterfaces both declare them, so defaults live on the wide interface
+  only.
+- **`SeerrRepository`** split the same way (cap 43 → 37, retired members
+  listed in `SeerrRepositorySurfaceTest`'s `retiredMembers` so re-adding
+  fails even under the cap): **`SeerrServiceDirectory`** (the *arr settings
+  family — sole consumer `ArrRepositoryImpl`), **`SeerrRequestLifecycle`**
+  (moderation + polling; `RequestsViewModel` is a mixed consumer and stays
+  on the union — the seam is its declared retirement target), and
+  **`SeerrAuthenticator`** (the credential trio — sole consumer
+  `SeerrSettingsViewModel`). `SeerrRequestStateHolder` keeps the request
+  MODAL flow, not moderation.
+- **`SonarrSeriesOperations`** (same file as `ArrRepository`): the 9-member
+  tvdbId-keyed "Manage Series" family left the 27-member union (now 18) —
+  sole consumer `ManageSeriesViewModel` injects the seam; the impl's
+  `withResolvedSonarrSeries` guard cluster became `override`s.
+- **`ArrRepository.deleteQueueRow(item, blocklist, searchAgain)`** is the
+  one deep queue-delete member: it owns the `ArrQueueDeleteOptions` mapping
+  (`removeFromClient=true`, `skipRedownload = !searchAgain`), the
+  search-again follow-up, and the queue refresh. Both former copy sites
+  (`RequestsViewModel.removeQueueItem`, `ArrQueueViewModel.deleteItem`) are
+  one-liners; the three-way confirm dialog is the shared
+  `core:ui` `QueueDeleteConfirmActions` (labels parameterized — the two
+  string pairs differ per locale).
+- **Download role interfaces** (`DownloadQueue`/`TrackDownloadActions`/
+  `ActiveDownloadCount`/`SeriesEpisodeDownloads`) renamed their members to
+  the repository's vocabulary (`pauseDownload`, `getAllDownloads`, …) so
+  `DownloadRepositoryImpl`'s ~12 one-line alias bodies are gone — the
+  `override` does the aliasing; the role interfaces remain the consumer
+  seams.
 
 **`HomeSectionsSnapshotStore`** (core:data jvmShared
 `repository/HomeSectionsSnapshotStore.kt`) is the
@@ -2221,7 +2370,20 @@ opportunistically). The next per-touch batch closed the SyncPlay family
 takes `syncPlayApiClient` + `authApiClient` (the postCapabilities
 pre-join call), `SyncPlayController` narrows to `SyncPlayApiClient`,
 `TimeSyncManager` to `PlaybackApiClient` (`getServerTime` is its only
-call), and `EpisodeCatalogueImpl` to `LibraryApiClient`.
+call), and `EpisodeCatalogueImpl` to `LibraryApiClient`. The batch CLOSED
+(2026-09-27): every remaining union constructor injector takes the family
+singles its body actually calls — the workers (MediaInfo/Auth),
+`ServerHealthMonitor` (Auth), `HomeSession` (Auth),
+`PlayedStateSyncImpl`/`LyricsRepositoryImpl` (Library),
+`WatchHistoryRepositoryImpl`/`MediaCleanupScanCore` (Auth+MediaInfo),
+`PlaybackReportingStatusStore` (MediaInfo), `MetadataEditorRepositoryImpl`
+(Library+Metadata+Playback), `AdminStatisticsRepositoryImpl`
+(MediaInfo+Admin+Auth), `AuthRepositoryImpl` (Auth+User),
+`MediaRepositoryImpl` (Library+SyncPlay), `ActivityLogRealtimeChannel`
+(Auth+Admin) — with `DataKoinModulesTest`/`NetworkKoinModulesTest` pinning
+resolution. No production constructor names the union anymore; it survives
+only as `JellyfinApiClientImpl`'s Koin binding type (test doubles may still
+mock the union where one mock legitimately feeds several seams).
 
 Migration chain hygiene: the chain is split into era files beside the
 slim `Migrations.kt` registry — `Migrations1To23` / `Migration24To25` /
@@ -2762,7 +2924,21 @@ Seerr's client keeps its bare base-URL + credential pair
 > resolution site; `MainContent` is down to five params), and the
 > UserMessageHost wiring is ONE shared composable,
 > **`rememberShellUserMessages(present, sources…)`** (feature/shell) — both
-> shells supply only their `present` adapter.
+> shells supply only their `present` adapter. 2026-09-27: the desktop
+> scaffold's service cluster (session controller, update check, guarded
+> navigator, user-message sources, remote-nav dispatcher, idle ambient) is
+> constructed by the **`DesktopShellServices`** holder
+> (`apps/desktop/.../DesktopShellServices.kt`, the
+> `DesktopUpdateCheckController` idiom) instead of inline in
+> `DesktopNavScaffold` (648 → ~500 lines; the video-surface probe stays
+> scaffold-side ABOVE the holder — the section graph reads it during
+> build); the pass-through `DesktopRemoteNavCollector` is deleted
+> (`composeFocusDirection` stays as a top-level declaration); and the
+> remote-control receiver's `displayMessages` flow is wired as the
+> desktop's third user-message source (server Display Message pushes no
+> longer dead-end on desktop; `playEvents` deliberately uncollected — the
+> RemoteNavigationBridge already opens the player, documented at the
+> seam).
 
 The **`NavDestination` registry** (core/ui `navigation/`) is the single home
 for top-level destination facts — persisted customization key, icon, rail
@@ -2812,7 +2988,11 @@ one shared update fact (a pure companion fold → `UpdateAvailable` /
 `UpdateCoordinator` is structurally richer; the desktop check follows
 `docs/adr/desktop-auto-update.md` — the inert sentinel was replaced by the
 channel-flag decorator, and the staged v0.11.1 hardening adds the repo
-allow-list + asset redirect gates). Android's rendered
+allow-list + asset redirect gates). `UpdateCoordinator`'s
+`selfUpdateDownloadEnabled` is a single-owner projection
+(`experimentalStore.experimental.map { ... }.stateIn(Eagerly)`; the setter
+writes only the store) — the hand-synced mirror with two writers is gone
+(2026-09-27). Android's rendered
 homeMode stays `MainPreferences`-derived (the ADR's "other duties stay"),
 so Android passes `homeModeChanges = null` while desktop feeds the store
 flow for its optimistic rail switch. Platform-conditional blocks (rail,
@@ -2905,7 +3085,21 @@ Constructor-lambda controller + pure companion folds
 (`pendingRouteDispatch` / `syncPlayAutoOpenRoute` /
 `nowPlayingSnackbarMessage`); the composables keep one-line effects. The
 external-player launch branch rides `ExternalPlayerHost` (App shell
-section). Pinned by `NavRequestCollectorTest`.
+section). Pinned by `NavRequestCollectorTest`. 2026-09-27: the parallel
+`PendingRouteDispatch` vocabulary is GONE — `pendingRouteDispatch` returns
+the shared `RemoteRouteDispatch?` (null = none) and the two one-line
+companion delegates were inlined at their single call sites; and the
+request-dispatch half of `MainContent` (holder construction + the five
+collectors + the external-player host/launcher wiring) is extracted into
+the `NavRequestController` holder (`navigation/NavRequestController.kt`,
+the `DesktopUpdateCheckController` idiom). The holder is what makes the
+section-graph memoization TRUE: it remembers the `Navigator` with stable
+keys (`preferredPlayer` rides `rememberUpdatedState` read at decide-time)
+and identity-stable hook lambdas, so `MainNavDisplay`'s
+`remember(navigator, shellHost) { shellEntryProvider(...) }` no longer
+re-invokes the ~25 shared section builders on every tab switch / pref
+write / offline flip / download-count emission — the invariant its KDoc
+always promised.
 
 **Play On one home**: `PlayOnViewModel` IS the controller —
 `JellyfinRemotePlayCastStrategy` is private, and the shell resolves the
@@ -2966,7 +3160,14 @@ icon, isAdvanced, platforms)` (the `*Res` fields are Compose `StringResource`s �
 locale resolves lazily at render/match time); `SettingsSearchCatalog`
 aggregates the per-screen lists in one curated flat order (258 items — the
 matcher's stable sort uses that order as the tiebreaker, so keep additions
-deliberate). The `ss_<id>_title`/`ss_<id>_subtitle` strings live in
+deliberate). Catalog records are declared as
+`SettingsRowRecord`s whose `searchTitleRes` is OPTIONAL (`Int? = null`):
+the fold resolves a null to the row's own `titleRes` (2026-09-27 — the
+~19 restating per-row duplicates were deleted across the four catalogs,
+with 6 now-unreferenced `ss_*_title` strings removed in all 9 locales;
+locale-divergent titles are kept explicit on purpose — base-English
+value-equality is NOT collapse evidence, only every-locale value-equality
+is). The `ss_<id>_title`/`ss_<id>_subtitle` strings live in
 feature/settings' Compose resources; the 14 `ss_cat_*` category strings stay
 in shared/core/ui because both feature modules render them.
 
@@ -3466,9 +3667,14 @@ tap), the record-failure-then-re-read-limiter ordering, and the success
 ordering (unlock → clear error via `submit`'s `onUnlocked` hook → reset
 limiter) over constructor-injected `PinRateLimiter`/`AppLockState`/`verifyPin`
 seam/clock. The pure
-`lockoutMessage(remainingMs)` fold sits on its companion; the Activity is a
+`lockoutMessage(remainingMs)` fold sits on its companion, joined (2026-09-27)
+by the pure `lockoutRemainingMs(state, nowMs)` DISPLAY fold — the lock
+screen feeds it a live 1-second clock (self-terminating while unlocked)
+instead of a frozen `remember { System.currentTimeMillis() }`, so the
+keypad revives when a lockout expires without a new failed attempt (the
+frozen-clock bug the fold kills). The Activity is a
 thin render adapter. Pinned by `PinGateControllerTest` (lockout race,
-failure accounting, boundaries).
+failure accounting, boundaries, the remaining-ms ladder).
 
 **`IncomingIntentRequest`** (app `deeplink/`): the pure classify step
 behind MainActivity's intent handling — an intent →
@@ -3883,8 +4089,10 @@ overlap). See docs/adr/0004-playback-focus.md.
  publish, publish dedup on coerced values, duration coercion, the
  lyric-index gate). Declared divergences encoded, not copied: repeat-ONE
  at track end stays adapter-side (media3 internal / desktop engine
- replay); Android-only tick duties (crossfade check, bandwidth sampling)
- remain in the Android ticker. `AudioPlaybackManager` (androidMain) and
+ replay); Android-only tick duties (crossfade check, bandwidth sampling —
+ the latter via the `AudioBandwidthSampler` collaborator, core:data
+ androidMain `playback/`) remain in the Android ticker.
+ `AudioPlaybackManager` (androidMain) and
  `DesktopAudioQueueManager` are thin policy callers; the desktop KDoc
  parity table points at this module as the pin.
  `AudioQueuePolicyTest` pins it.
@@ -3913,7 +4121,56 @@ overlap). See docs/adr/0004-playback-focus.md.
  guards, crossfader and Play-On routing; routing them through the port
  is a redesign (see Deferred designs). Pinned by
  `AudioQueueStateCoreTest` (22 tests over a recording dispatch) + the
- `DesktopAudioQueueManagerTest` suite (jvmTest, beside it).
+ `DesktopAudioQueueManagerTest` suite (jvmTest, beside it). The core also
+ owns the chassis cell WRITES through narrow commands (2026-09-27):
+ `restorePersisted` (the bulk cold-start restore both managers' `start()`
+ paths used to hand-roll cell-by-cell), `publishTick` (the position
+ ticker's plan-driven display write), `setLoadError` (the load-path error
+ surface), `beginItemLoad`/`endItemLoad` (the play-path item claim +
+ loading-flag pair), `parkPlayback` (the shared isPlaying-off write) and
+ `setCrossfadeDurationMs` (the crossfade-setting write — the Android
+ manager's parallel local crossfade cell folded into the chassis's, so
+ the chassis is the one cell owner on BOTH adapters) —
+ adapters keep choreography but no longer write the cells raw; the
+ `_currentIndex` transition writes stay adapter-side by the same declared
+ choreography carve-out, and the cells stay `internal` for the observer
+ wiring + jvmTest seeds.
+- **`AudioPlayPath`** (commonMain `playback/`, beside the chassis) is the
+ ONE user-play choreography skeleton (2026-09-27) — the ~90-line mirror
+ `play(itemId)` cores of both audio managers folded out of androidMain/
+ jvmMain: stop report → track-scoped clear → item claim + loading arm →
+ engine acquire (synchronous prefix), then resolve → error publish →
+ detail publish → out-of-queue append through the chassis → engine load →
+ server start report (`*10_000` resume ticks) → lyrics → position ticker +
+ progress reporter (launched body), with the loading-flag disarm at the
+ tail (deliberately NOT a `finally` — a mid-body exception left it armed
+ in both originals). Narrow seams: `resolve` (Android folds its
+ detail+local ladder here, killing the former ~50-line intra-file copy of
+ the append/build/play fallback), `publishDetail`, `loadIntoEngine`, plus
+ no-op-default hook points carrying the declared divergences: Play-On
+ cast routing + same-item guards stay in the adapters' `play()` prefixes,
+ Android's whole-queue pre-warm rides `afterLoad` while the desktop's
+ next-item-only prefetch rides `afterReporting`, and the ReplayGain apply
+ position stays per-adapter (desktop beforeLoad, Android afterReporting —
+ already divergent in the hand-written bodies). Android's queue-only
+ local-file fallback runs a REDUCED arm (`AudioPlayTrack
+ .reportsToServer = false`): publish + append + load + ticker, no report/
+ lyrics/ReplayGain/reporter — and the load error it fell back from stays
+ published (the historical quirk). Pinned by the two manager suites'
+ play-path cases, unmodified.
+- **`inSinkAudioChain`** (core:data androidMain `playback/
+ InSinkAudioChain.kt`) is the ONE in-sink DSP chain order (2026-09-27) —
+ the `DefaultAudioSink.Builder.setAudioProcessors` array was hand-written
+ in three places (music's `createPlayer`, the crossfade secondary in
+ `AudioCrossfader`, video's `ExoPlayerEngine`) and copy variance here is
+ silent signal corruption, not a compile error. Order policy: channel mix
+ FIRST (it may change the channel count — downstream processors must see
+ the remixed layout), then dynamics compressor, ReplayGain, the
+ dialogue-boost high-pass, and balance LAST when present. Declared
+ divergence the factory encodes: L/R balance rides the sink ONLY on music
+ (`AudioEffectsManager.lrBalance` → the `BalanceAudioProcessor` tail
+ slot); video has no balance surface at all and the crossfade secondary
+ mirrors that shape — both pass no balance processor.
 - **`PeriodicProgressReportLoop`** (commonMain `playback/`, beside the
  reporters) is the ONE periodic progress loop, shared by both local
  players: `AudioProgressReporter` (local audio) and player-video's

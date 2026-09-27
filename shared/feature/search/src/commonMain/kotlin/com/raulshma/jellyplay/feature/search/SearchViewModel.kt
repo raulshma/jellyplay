@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -323,8 +324,8 @@ internal class SearchViewModel(
                 seerrRequestState.requestMedia(
                     event.item, event.seasons, event.serverId, event.profileId, event.rootFolder, event.tags,
                 )
-            is SearchUiEvent.OpenSeerrRequestDialog -> seerrRequestState.openRequestDialog(event.item)
-            is SearchUiEvent.DismissSeerrRequestDialog -> seerrRequestState.dismissRequestDialog()
+            is SearchUiEvent.OpenSeerrRequestDialog -> seerrRequestDialog.open(event.item)
+            is SearchUiEvent.DismissSeerrRequestDialog -> seerrRequestDialog.dismiss()
             is SearchUiEvent.PrefetchSeerrDetails ->
                 seerrRequestState.prefetchDetails(event.tmdbId, event.mediaType, event.onDone)
         }
@@ -359,6 +360,18 @@ internal class SearchViewModel(
 
     private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
+    // The dialog half of the request lifecycle: which item the request dialog
+    // is open for (frozen at open) plus the open/dismiss choreography. The
+    // data half (service details, seasons, result) stays in the holder above,
+    // reached through the two constructor seams.
+    private val seerrRequestDialog = SeerrRequestDialogHolder(
+        prepare = seerrRequestState::prepare,
+        clearRequestResult = seerrRequestState::clearRequestResult,
+    )
+
     /** Seerr request lifecycle state (the holder's single snapshot interface). */
     val seerrSnapshot: StateFlow<SeerrRequestSnapshot> = seerrRequestState.snapshotIn(scope)
+
+    /** The item the request dialog is open for (null = closed) — the render gate. */
+    val seerrDialogItem: StateFlow<SeerrSearchItem?> = seerrRequestDialog.item
 }

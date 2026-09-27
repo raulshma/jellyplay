@@ -16,7 +16,8 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -62,7 +63,10 @@ import kotlinx.serialization.json.Json
  * repository-level suite never reached (cancel-stop, FAILED tail, cap).
  */
 internal class MediaCleanupScanCore(
-    private val apiClient: JellyfinApiClient,
+    /** The admin identity stamp for the audit entry (`currentUser.first()`). */
+    private val authApiClient: AuthApiClient,
+    /** The stale/watched scan fetches + the bulk delete the audit entry records. */
+    private val mediaInfoApiClient: MediaInfoApiClient,
     private val auditLogDao: AuditLogDao,
     private val scanStateDao: ScanStateDao,
     private val json: Json,
@@ -121,7 +125,7 @@ internal class MediaCleanupScanCore(
                     null
                 } else {
                     pageStartIndex = startIndex
-                    val result = apiClient.getStaleItems(
+                    val result = mediaInfoApiClient.getStaleItems(
                         daysThreshold = config.daysThreshold,
                         includeNeverPlayed = config.includeNeverPlayed,
                         includeItemTypes = config.includeItemTypes.toList(),
@@ -212,12 +216,12 @@ internal class MediaCleanupScanCore(
         runScan(
             scanId = scanId,
             fetchNextPage = {
-                val list = users ?: apiClient.getUsers().getOrDefault(emptyList()).also { users = it }
+                val list = users ?: mediaInfoApiClient.getUsers().getOrDefault(emptyList()).also { users = it }
                 val user = list.getOrNull(userIndex)
                 if (user == null) {
                     null
                 } else {
-                    val result = apiClient.getWatchedItems(
+                    val result = mediaInfoApiClient.getWatchedItems(
                         userId = user.id,
                         includeItemTypes = config.includeItemTypes.toList(),
                         minDaysSincePlayed = config.minDaysSinceWatched,
@@ -363,11 +367,11 @@ internal class MediaCleanupScanCore(
         actionType: CleanupActionType,
         config: MediaCleanupConfig,
     ): Result<AuditLogEntry> = runCatchingRethrowingCancellation {
-        val currentUser = apiClient.currentUser.first()
+        val currentUser = authApiClient.currentUser.first()
         val adminId = currentUser?.id ?: ""
         val adminName = currentUser?.name ?: ""
 
-        val deleted = apiClient.deleteItems(itemIds).getOrThrow()
+        val deleted = mediaInfoApiClient.deleteItems(itemIds).getOrThrow()
 
         val itemDetails = itemIds.map { id ->
             AuditItemDetail(

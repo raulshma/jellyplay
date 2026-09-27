@@ -57,7 +57,7 @@ internal val dataCoreLeafModule: Module = module {
     // straight from Koin.
     single { PhotoFolderPrefetcher(get()) }
 
-    // JellyfinApiClient resolves from :shared:core:network's networkJvmModule.
+    // AuthApiClient resolves from :shared:core:network's networkJvmModule.
     single { ServerHealthMonitor(get(), get()) }
 
     single { RemoteNavigationBridge() }

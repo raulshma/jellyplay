@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.DynamicsCompressorAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.HighPassFilterAudioProcessor
+import com.raulshma.jellyplay.core.data.playback.inSinkAudioChain
 import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
@@ -458,12 +459,20 @@ class ExoPlayerEngine(
                 enableAudioTrackPlaybackParams: Boolean,
             ): DefaultAudioSink {
                 return DefaultAudioSink.Builder(context)
+                    // ONE in-sink chain order, shared with the music sink
+                    // (core:data `inSinkAudioChain`): channel mix first — it
+                    // may change the channel count, so every downstream
+                    // processor must see the remixed layout — then
+                    // dynamics/ReplayGain and the dialogue-boost high-pass.
+                    // No balance processor: video has no L/R balance surface
+                    // (the declared divergence from music's in-sink balance,
+                    // recorded on the factory's KDoc).
                     .setAudioProcessors(
-                        arrayOf(
-                            channelMixProcessor,
-                            dynamicsProcessor,
-                            replayGainProcessor,
-                            highPassFilter,
+                        inSinkAudioChain(
+                            channelMixProcessor = channelMixProcessor,
+                            dynamicsProcessor = dynamicsProcessor,
+                            replayGainProcessor = replayGainProcessor,
+                            highPassProcessor = highPassFilter,
                         ),
                     )
                     .setEnableFloatOutput(enableFloatOutput)

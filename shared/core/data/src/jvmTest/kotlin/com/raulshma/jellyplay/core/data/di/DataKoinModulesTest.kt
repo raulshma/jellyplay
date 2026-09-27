@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -19,6 +20,11 @@ import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.SeerrAuthenticator
+import com.raulshma.jellyplay.core.data.repository.SeerrRequestLifecycle
+import com.raulshma.jellyplay.core.data.repository.SeerrServiceDirectory
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriterCore
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
@@ -147,6 +153,39 @@ class DataKoinModulesTest {
             assertResolves<OfflineRepository>(koin)
             assertResolves<SeerrRepository>(koin)
             assertResolves<ArrRepository>(koin)
+            // The Manage-Series Sonarr series-management seam must resolve to
+            // the SAME ArrRepositoryImpl single as the aggregate — one impl,
+            // two seams (the RealtimeConnection alias precedent).
+            assertTrue(
+                koin.get<SonarrSeriesOperations>() === koin.get<ArrRepository>(),
+                "SonarrSeriesOperations must alias the ArrRepositoryImpl single (one impl, two seams)",
+            )
+            // The family seams of the two widest repository interfaces follow
+            // the same alias contract: MediaRepository's music-catalogue and
+            // user-data-write families, and SeerrRepository's
+            // service-directory / request-lifecycle / auth families — each
+            // resolves to the SAME impl single as its union, never a second
+            // repository instance.
+            assertTrue(
+                koin.get<MusicCatalogue>() === koin.get<MediaRepository>(),
+                "MusicCatalogue must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<UserDataWriteOperations>() === koin.get<MediaRepository>(),
+                "UserDataWriteOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),
+                "SeerrServiceDirectory must alias the SeerrRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<SeerrRequestLifecycle>() === koin.get<SeerrRepository>(),
+                "SeerrRequestLifecycle must alias the SeerrRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<SeerrAuthenticator>() === koin.get<SeerrRepository>(),
+                "SeerrAuthenticator must alias the SeerrRepositoryImpl single (one impl, two seams)",
+            )
             assertResolves<StoragePolicy>(koin)
             assertResolves<TimeSource>(koin)
             assertResolves<HomeSession>(koin)

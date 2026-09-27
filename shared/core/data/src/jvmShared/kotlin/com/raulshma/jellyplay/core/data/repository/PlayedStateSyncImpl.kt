@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ReconcileOutc
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -27,7 +27,7 @@ import java.time.format.DateTimeFormatter
 //    accessor) — the only body-level change, one-for-one mechanical.
 //  - `android.util.Log` → the module's Log facade.
 class PlayedStateSyncImpl(
-    private val apiClient: JellyfinApiClient,
+    private val apiClient: LibraryApiClient,
     private val offlineRepository: OfflineRepository,
     private val playbackOutboxRepository: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,

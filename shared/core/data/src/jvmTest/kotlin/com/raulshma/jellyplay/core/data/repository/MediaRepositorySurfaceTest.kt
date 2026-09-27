@@ -43,9 +43,16 @@ class MediaRepositorySurfaceTest {
      * composed (invalidateDiscoverRowCache, seedDiscoverRowCache) retired to
      * impl-private machinery — a seam that only worked when callers
      * hand-sequenced its members in one order was the caller-side convention
-     * the deep operation exists to kill.
+     * the deep operation exists to kill. 40 after the family-seam split:
+     * the music-catalogue family (MusicCatalogue) and the user-data-write
+     * family (UserDataWriteOperations) got their own seams over the same
+     * impl; getMusicVideos (zero callers repo-wide) plus the four writes
+     * whose sole union caller (UserDataMutator) now injects the seam
+     * (toggleFavorite, markUnplayed, markSeasonPlayed, markSeasonUnplayed)
+     * retired off the union. The still-called family members stay until
+     * their remaining wide-interface callers migrate.
      */
-    private val maxInterfaceMembers = 45
+    private val maxInterfaceMembers = 40
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

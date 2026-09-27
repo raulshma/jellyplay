@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -44,7 +44,7 @@ import kotlin.test.assertTrue
  */
 class PlayedStateSyncImplResilienceTest {
 
-    private lateinit var apiClient: JellyfinApiClient
+    private lateinit var apiClient: LibraryApiClient
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var outboxRepository: PlaybackOutboxRepository
     private lateinit var offlineModeManager: OfflineModeManager

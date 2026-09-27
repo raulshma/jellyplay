@@ -42,8 +42,11 @@ import kotlin.test.assertTrue
  * legacy suite existed): the DIRECT_ARR_INTEGRATION flag gate on refresh, the
  * queue-flow mirror, selection state (toggle/selectAll/clear incl. the rowKey
  * format with the empty-serverId fallback), pending-action dialog state, the
- * delete-options mapping (removeFromClient=true, skipRedownload=!searchAgain),
- * the searchAgain→searchForTmdb fan-out (tmdbId-null rows skipped), bulk
+ * single-row delete's flag hand-off to the repository's deep deleteQueueRow
+ * (the option mapping + follow-up search that used to live here moved there —
+ * pinned in ArrRepositoryImplTest), the bulk delete-options mapping
+ * (removeFromClient=true, skipRedownload=!searchAgain) with its
+ * searchAgain→searchForTmdb fan-out (tmdbId-null rows skipped), bulk
  * filtering, and the ArrQueueMessage seal emissions per action outcome
  * (identity asserts on the generated StringResource, admin conveyor
  * precedent; cold first() works because the channel is BUFFERED — downloads
@@ -238,46 +241,45 @@ class ArrQueueViewModelTest {
     }
 
     // ── delete options mapping + searchAgain fan-out ──────────────────────
+    // The dialog-flag → ArrQueueDeleteOptions mapping and the tmdb-ful
+    // replacement-search follow-up moved into the repository's deep
+    // deleteQueueRow (pinned in ArrRepositoryImplTest); this seam now pins
+    // the flag hand-off and the guard ladder around it.
 
     @Test
-    fun deleteItem_maps_dialog_flags_to_arr_options() = runTest(mainDispatcher) {
-        val optionsSlot = slot<ArrQueueDeleteOptions>()
-        coEvery { arrRepository.deleteQueueItem(any(), capture(optionsSlot)) } returns Result.success(Unit)
-        coEvery { arrRepository.searchForTmdb(any(), any()) } returns Result.success(emptyList())
+    fun deleteItem_hands_the_dialog_flags_to_the_deep_delete() = runTest(mainDispatcher) {
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
         advanceUntilIdle()
         val target = item(1)
 
         viewModel.deleteItem(target, blocklist = false, searchAgain = true)
         advanceUntilIdle()
-        assertEquals(
-            ArrQueueDeleteOptions(removeFromClient = true, blocklist = false, skipRedownload = false),
-            optionsSlot.captured,
-        )
+        coVerify(exactly = 1) { arrRepository.deleteQueueRow(target, blocklist = false, searchAgain = true) }
 
         viewModel.deleteItem(target, blocklist = true, searchAgain = false)
         advanceUntilIdle()
-        assertEquals(
-            ArrQueueDeleteOptions(removeFromClient = true, blocklist = true, skipRedownload = true),
-            optionsSlot.captured,
-        )
+        coVerify(exactly = 1) { arrRepository.deleteQueueRow(target, blocklist = true, searchAgain = false) }
         assertFalse(viewModel.state.value.actionInProgress)
     }
 
     @Test
-    fun deleteItem_search_again_skips_items_without_tmdb() = runTest(mainDispatcher) {
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.success(Unit)
-        coEvery { arrRepository.searchForTmdb(any(), any()) } returns Result.success(emptyList())
+    fun deleteItem_passes_each_row_through_regardless_of_tmdb() = runTest(mainDispatcher) {
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        viewModel.deleteItem(item(1, tmdbId = null), blocklist = false, searchAgain = true)
+        // The tmdbId-null skip is the repository's decision now (it owns the
+        // follow-up search); the VM hands every row over as-is.
+        val noTmdb = item(1, tmdbId = null)
+        viewModel.deleteItem(noTmdb, blocklist = false, searchAgain = true)
         advanceUntilIdle()
-        coVerify(exactly = 0) { arrRepository.searchForTmdb(any(), any()) }
+        coVerify(exactly = 1) { arrRepository.deleteQueueRow(noTmdb, blocklist = false, searchAgain = true) }
 
-        viewModel.deleteItem(item(2, tmdbId = 42, kind = ArrServiceKind.SONARR), blocklist = false, searchAgain = true)
+        val withTmdb = item(2, tmdbId = 42, kind = ArrServiceKind.SONARR)
+        viewModel.deleteItem(withTmdb, blocklist = false, searchAgain = true)
         advanceUntilIdle()
-        coVerify(exactly = 1) { arrRepository.searchForTmdb(42, ArrServiceKind.SONARR) }
+        coVerify(exactly = 1) { arrRepository.deleteQueueRow(withTmdb, blocklist = false, searchAgain = true) }
     }
 
     @Test
@@ -324,7 +326,7 @@ class ArrQueueViewModelTest {
 
     @Test
     fun deleteItem_failure_with_message_emits_raw() = runTest(mainDispatcher) {
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -336,7 +338,7 @@ class ArrQueueViewModelTest {
 
     @Test
     fun deleteItem_failure_without_message_emits_unknown_error_resource() = runTest(mainDispatcher) {
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.failure(RuntimeException(null as String?))
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.failure(RuntimeException(null as String?))
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -409,7 +411,7 @@ class ArrQueueViewModelTest {
 
     @Test
     fun successful_delete_emits_no_message() = runTest(mainDispatcher) {
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.success(Unit)
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
         val viewModel = newViewModel()
         advanceUntilIdle()
 

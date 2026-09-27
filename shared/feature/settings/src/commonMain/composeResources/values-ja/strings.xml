@@ -1034,7 +1034,6 @@
     <string name="settings_skip_segments_on_seek">シーク時にセグメントをスキップ</string>
     <string name="settings_skip_segments_on_seek_on">前方シークが自動スキップ対象に重なった場合にスキップします</string>
     <string name="settings_skip_segments_on_seek_off">オフ</string>
-    <string name="ss_skip_segments_on_seek_title">シーク時にセグメントをスキップ</string>
     <string name="ss_skip_segments_on_seek_subtitle">前方シークの着地点がセグメント内なら自動でスキップします</string>
     <string name="settings_syncplay_join_summary">参加動作：%1$s</string>
     <string name="settings_join_behavior">参加動作</string>
@@ -1461,7 +1460,6 @@
     <string name="ss_audio_caching_enabled_subtitle">即時再生のため次のトラックをバッファーします</string>
     <string name="ss_audio_cache_size_title">オーディオキャッシュサイズ</string>
     <string name="ss_audio_cache_size_subtitle">キャッシュされたオーディオの最大ディスク容量</string>
-    <string name="ss_video_cache_size_title">動画キャッシュサイズ</string>
     <string name="ss_video_cache_size_subtitle">キャッシュされた動画の最大ディスク容量</string>
     <string name="ss_audio_prefetch_lookahead_title">オーディオ先読み数</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">先読みしてバッファーする次のトラック数</string>
@@ -1652,7 +1650,6 @@
     <string name="ss_idle_ambient_timeout_subtitle">アイドル画面が表示されるまでの待ち時間</string>
     <string name="ss_home_backdrop_title">ホームの背景</string>
     <string name="ss_home_backdrop_subtitle">ヒーローアートワークをぼかしてアンビエント背景に</string>
-    <string name="ss_compact_episode_list_title">コンパクトなエピソードリスト</string>
     <string name="ss_compact_episode_list_subtitle">モバイルでは横1列の代わりに縦型リストでエピソードを表示</string>
     <string name="ss_nav_bar_customization_title">ナビゲーションバー</string>
     <string name="ss_nav_bar_customization_subtitle">ナビゲーションバーの項目の表示・非表示・並べ替え</string>
@@ -1662,13 +1659,10 @@
     <string name="ss_newsletter_sections_subtitle">ニュースレターに表示するセクションを選択</string>
     <string name="ss_dialogue_boost_strength_title">ダイアログブースト強度</string>
     <string name="ss_dialogue_boost_strength_subtitle">ダイアログ増幅のレベル</string>
-    <string name="ss_mpv_extra_config_title">詳細設定</string>
     <string name="ss_mpv_extra_config_subtitle">生 mpv オプション（mpv.conf 形式）</string>
-    <string name="ss_reset_engine_defaults_title">デフォルトにリセット</string>
     <string name="ss_reset_engine_defaults_subtitle">MPV、LibVLC、ExoPlayer の設定を復元</string>
     <string name="ss_audio_prefetch_backfill_title">バックフィル数</string>
     <string name="ss_audio_prefetch_backfill_subtitle">再再生用にキャッシュに残す最近のトラック数</string>
-    <string name="ss_audio_cache_clear_title">オーディオキャッシュをクリア</string>
     <string name="ss_audio_cache_clear_subtitle">キャッシュされたすべてのオーディオデータを削除</string>
     <string name="ss_subtitle_tester_title">字幕スタイルテスター</string>
     <string name="ss_subtitle_tester_subtitle">エンジン間のスタイルをプレビュー</string>

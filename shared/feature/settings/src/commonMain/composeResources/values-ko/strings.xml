@@ -1034,7 +1034,6 @@
     <string name="settings_skip_segments_on_seek">탐색 시 세그먼트 건너뛰기</string>
     <string name="settings_skip_segments_on_seek_on">앞으로 탐색이 자동 건너뛰기 세그먼트에 닿으면 건너뜁니다</string>
     <string name="settings_skip_segments_on_seek_off">끔</string>
-    <string name="ss_skip_segments_on_seek_title">탐색 시 세그먼트 건너뛰기</string>
     <string name="ss_skip_segments_on_seek_subtitle">앞으로 탐색이 도착한 세그먼트를 자동으로 건너뜁니다</string>
     <string name="settings_syncplay_join_summary">참여 동작: %1$s</string>
     <string name="settings_join_behavior">참여 동작</string>
@@ -1461,7 +1460,6 @@
     <string name="ss_audio_caching_enabled_subtitle">즉시 재생을 위해 다음 트랙을 버퍼링합니다</string>
     <string name="ss_audio_cache_size_title">오디오 캐시 크기</string>
     <string name="ss_audio_cache_size_subtitle">캐시된 오디오의 최대 디스크 공간입니다</string>
-    <string name="ss_video_cache_size_title">동영상 캐시 크기</string>
     <string name="ss_video_cache_size_subtitle">캐시된 동영상의 최대 디스크 공간</string>
     <string name="ss_audio_prefetch_lookahead_title">오디오 사전 가져오기 미리보기</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">미리 버퍼링할 다음 트랙 수입니다</string>
@@ -1652,7 +1650,6 @@
     <string name="ss_idle_ambient_timeout_subtitle">유휴 화면이 나타나기까지 대기할 시간</string>
     <string name="ss_home_backdrop_title">홈 배경</string>
     <string name="ss_home_backdrop_subtitle">히어로 아트워크를 앰비언트 배경으로 블러</string>
-    <string name="ss_compact_episode_list_title">간결한 에피소드 목록</string>
     <string name="ss_compact_episode_list_subtitle">모바일에서 가로 행 대신 세로 목록으로 에피소드 표시</string>
     <string name="ss_nav_bar_customization_title">내비게이션 바</string>
     <string name="ss_nav_bar_customization_subtitle">내비게이션 바 항목 표시, 숨기기, 순서 변경</string>
@@ -1662,13 +1659,10 @@
     <string name="ss_newsletter_sections_subtitle">뉴스레터에 표시할 섹션 선택</string>
     <string name="ss_dialogue_boost_strength_title">대화 부스트 강도</string>
     <string name="ss_dialogue_boost_strength_subtitle">대화 증폭 수준</string>
-    <string name="ss_mpv_extra_config_title">고급 구성</string>
     <string name="ss_mpv_extra_config_subtitle">원시 mpv 옵션(mpv.conf 스타일)</string>
-    <string name="ss_reset_engine_defaults_title">기본값으로 재설정</string>
     <string name="ss_reset_engine_defaults_subtitle">MPV, LibVLC 또는 ExoPlayer 설정 복원</string>
     <string name="ss_audio_prefetch_backfill_title">백필 수</string>
     <string name="ss_audio_prefetch_backfill_subtitle">다시 재생을 위해 캐시에 보관된 최근 트랙</string>
-    <string name="ss_audio_cache_clear_title">오디오 캐시 지우기</string>
     <string name="ss_audio_cache_clear_subtitle">캐시된 모든 오디오 데이터 삭제</string>
     <string name="ss_subtitle_tester_title">자막 스타일 테스터</string>
     <string name="ss_subtitle_tester_subtitle">엔진 간 스타일 미리 보기</string>

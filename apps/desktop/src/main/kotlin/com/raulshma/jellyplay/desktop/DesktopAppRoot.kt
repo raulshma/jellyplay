@@ -173,7 +173,12 @@ internal fun DesktopAppRoot(
     // Desktop receiver port: realtime socket + capabilities + the
     // remote-control receiver, driven off the auth state for the life of the
     // composition (survives the sign-in → scaffold swap because it lives
-    // HERE, like the harness hosts above; torn down with the window).
+    // HERE, like the harness hosts above; torn down with the window). The
+    // receiver's user-visible outputs are collected DOWNSTREAM: the scaffold's
+    // DesktopShellServices adds its displayMessages to the user-message host
+    // (same Koin single — collecting the flow does not re-arm the receiver),
+    // while its playEvents stay deliberately uncollected (the decision is
+    // documented at the collection seam, desktopUserMessageSources).
     // The choreography itself is the SHARED RealtimeSessionController now
     // (shared/feature/shell) — the former DesktopSessionCoordinator held only
     // this wiring and died with the fold; the per-shell share is the client

@@ -17,8 +17,6 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
-import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
-import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
@@ -29,7 +27,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
@@ -39,7 +36,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSeasonDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceServer
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
@@ -404,6 +400,7 @@ private class FakeArrRepository : ArrRepository {
     override suspend fun testServer(server: ArrServerConfig): Result<Unit> = unused()
     override suspend fun deleteQueueItem(item: ArrQueueItem, options: ArrQueueDeleteOptions): Result<Unit> = unused()
     override suspend fun deleteQueueItems(items: List<ArrQueueItem>, options: ArrQueueDeleteOptions): Result<Unit> = unused()
+    override suspend fun deleteQueueRow(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean): Result<Unit> = unused()
     override suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit> = unused()
     override suspend fun importQueueItem(item: ArrQueueItem): Result<Unit> = unused()
     override suspend fun deleteBlocklistItem(item: ArrBlocklistItem): Result<Unit> = unused()
@@ -415,15 +412,6 @@ private class FakeArrRepository : ArrRepository {
         seasonNumber: Int?,
         episodeNumber: Int?,
     ): Result<ArrRedownloadResult> = unused()
-    override suspend fun resolveSonarrSeries(tvdbId: Int): Result<ArrSeriesResolution> = unused()
-    override suspend fun getSonarrEpisodes(tvdbId: Int): Result<List<ArrSeriesEpisode>> = unused()
-    override suspend fun monitorSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>, monitored: Boolean): Result<Unit> = unused()
-    override suspend fun deleteSonarrEpisodeFile(tvdbId: Int, episodeFileId: Int): Result<Unit> = unused()
-    override suspend fun searchSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>): Result<Unit> = unused()
-    override suspend fun searchMonitoredSonarrSeason(tvdbId: Int, seasonNumber: Int): Result<Unit> = unused()
-    override suspend fun refreshSonarrSeries(tvdbId: Int): Result<Unit> = unused()
-    override suspend fun rescanSonarrSeries(tvdbId: Int): Result<Unit> = unused()
-    override suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit> = unused()
 
     private fun unused(): Nothing = error("unused in calendar tests")
 }
@@ -465,9 +453,9 @@ private class FakeSeerrRepository : SeerrRepository {
     }
 
     override suspend fun testConnection(): Result<SeerrStatusResponse> = unused()
-    override suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse> = unused()
-    override suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse> = unused()
-    override suspend fun testApiKeyConnection(): Result<SeerrStatusResponse> = unused()
+    // (The auth trio, the *arr settings pair and editRequest moved to the
+    // SeerrAuthenticator / SeerrServiceDirectory / SeerrRequestLifecycle
+    // family seams — no longer members this fake must implement.)
     override suspend fun search(query: String, page: Int): Result<SeerrSearchResponse> = unused()
     override suspend fun getTvSeasonDetails(tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> = unused()
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> = unused()
@@ -475,8 +463,6 @@ private class FakeSeerrRepository : SeerrRepository {
     override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> = unused()
     override suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> = unused()
     override suspend fun getTmdbReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>> = unused()
-    override suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>> = unused()
-    override suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>> = unused()
     override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> = unused()
     override suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>> = unused()
     override suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail> = unused()
@@ -505,16 +491,6 @@ private class FakeSeerrRepository : SeerrRepository {
     override suspend fun retryRequest(id: Int): Result<SeerrRequestItem> = unused()
     override suspend fun deleteRequest(id: Int): Result<Unit> = unused()
     override suspend fun deleteMedia(mediaId: Int, is4k: Boolean): Result<Unit> = unused()
-    override suspend fun editRequest(
-        id: Int,
-        mediaType: String,
-        mediaId: Int,
-        serverId: Int?,
-        profileId: Int?,
-        rootFolder: String?,
-        tags: List<Int>?,
-        seasons: List<Int>?,
-    ): Result<SeerrRequestItem> = unused()
     override suspend fun getRequestCount(): Result<SeerrRequestCount> = unused()
     override suspend fun getCurrentUser(): Result<SeerrCurrentUser> = unused()
     override fun isConnected(): Flow<Boolean> = unused()

@@ -571,7 +571,7 @@ class SearchViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.seerrSnapshot.value.requestResult)
-        assertNull(viewModel.seerrSnapshot.value.dialogItem)
+        assertNull(viewModel.seerrDialogItem.value)
     }
 
     @Test
@@ -588,7 +588,7 @@ class SearchViewModelTest {
 
         assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
         assertFalse(viewModel.seerrSnapshot.value.isLoadingServices)
-        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
+        assertNotNull(viewModel.seerrDialogItem.value)
     }
 
     @Test
@@ -603,7 +603,7 @@ class SearchViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
-        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
+        assertNotNull(viewModel.seerrDialogItem.value)
     }
 
     @Test
@@ -619,7 +619,7 @@ class SearchViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")), viewModel.seerrSnapshot.value.tvSeasons)
-        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
+        assertNotNull(viewModel.seerrDialogItem.value)
         assertEquals(false, viewModel.seerrSnapshot.value.tvIsAnime)
     }
 

@@ -49,7 +49,7 @@ class ArrRedownloadLadderTest {
     private fun newHarness(server: ArrServerConfig): Triple<RadarrApiClient, SonarrApiClient, ArrRepositoryImpl> {
         val radarr = mockk<RadarrApiClient>(relaxed = true)
         val sonarr = mockk<SonarrApiClient>(relaxed = true)
-        val seerr = mockk<SeerrRepository>(relaxed = true)
+        val seerr = mockk<SeerrServiceDirectory>(relaxed = true)
         coEvery { seerr.getRadarrSettings() } returns Result.success(emptyList())
         coEvery { seerr.getSonarrSettings() } returns Result.success(emptyList())
         val prefs = mockk<ArrPreferencesStore>(relaxed = true)

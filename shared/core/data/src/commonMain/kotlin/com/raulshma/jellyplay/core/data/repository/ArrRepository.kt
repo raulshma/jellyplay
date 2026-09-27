@@ -50,6 +50,13 @@ import kotlinx.datetime.LocalDate
  * Every read method is safe to call when the flag is disabled: queue/calendar
  * flows simply emit empty lists, and [resolveServers] returns an empty
  * [ArrServiceSummary].
+ *
+ * The Sonarr series-management family this interface used to carry
+ * (resolve/get/monitor/delete/search/refresh/rescan per tvdb id) moved to its
+ * own consumer seam, [SonarrSeriesOperations] — it serves exactly one screen
+ * (feature:details' Manage Series) that otherwise injects nothing else from
+ * here, so keeping it on the aggregate taught every requests/arrqueue/
+ * calendar/settings consumer about a surface it never calls.
  */
 interface ArrRepository {
 
@@ -137,6 +144,22 @@ interface ArrRepository {
      */
     suspend fun deleteQueueItems(items: List<ArrQueueItem>, options: ArrQueueDeleteOptions): Result<Unit>
 
+    /**
+     * The ONE deep queue-row delete both queue surfaces (requests' detail
+     * sheet, arrqueue's row screen) share — the former per-ViewModel
+     * copy-paste choreography, owned once here: maps the two confirm-dialog
+     * booleans onto [ArrQueueDeleteOptions] (`removeFromClient` is always
+     * true — both surfaces remove from the download client), deletes through
+     * the owning server with the same routing + hot-queue-feed refresh as
+     * [deleteQueueItem], then — only when [searchAgain] is set AND the row
+     * carries a tmdb id — queues the replacement [searchForTmdb] follow-up.
+     *
+     * INVARIANT: the follow-up's own failure never fails the returned
+     * [Result] — both surfaces treat a failed replacement search as silent
+     * (the delete itself succeeded); only the delete's result surfaces.
+     */
+    suspend fun deleteQueueRow(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean): Result<Unit>
+
     /** Force-sends a queued release to its download client. */
     suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit>
 
@@ -190,12 +213,30 @@ interface ArrRepository {
         episodeNumber: Int? = null,
     ): Result<ArrRedownloadResult>
 
-    // ── Sonarr series management ("Manage Series" screen) ────────────────
-    //
-    // All keyed by the series' tvdb id (the same identity Jellyfin exposes in
-    // MediaDetail.providerIds). Each method resolves the owning Sonarr server
-    // + internal series id internally via [resolveSonarrSeries], so the UI
-    // never needs to know which server tracks the series.
+    companion object {
+        /** TTL for the resolved-servers cache. */
+        const val SERVER_CACHE_TTL_MS = 60_000L
+    }
+}
+
+/**
+ * The Sonarr series-management family the "Manage Series" screen
+ * (feature:details' ManageSeriesViewModel) consumes — split out of
+ * [ArrRepository] because it serves exactly that one screen while every other
+ * ArrRepository consumer (requests / arrqueue / calendar / settings) never
+ * touches it, so the aggregate interface was teaching all of them about a
+ * surface they don't use. The JVM actual is the same
+ * [ArrRepositoryImpl] single (dataJvmModule binds this seam over it, exactly
+ * the `[ArrRepository]`-over-the-impl pattern), so server resolution + the
+ * `withResolvedSonarrSeries` guard cluster stay shared with the aggregate's
+ * queue/calendar/blocklist paths.
+ *
+ * All members are keyed by the series' tvdb id (the same identity Jellyfin
+ * exposes in MediaDetail.providerIds). Each member resolves the owning Sonarr
+ * server + internal series id internally via [resolveSonarrSeries], so the UI
+ * never needs to know which server tracks the series.
+ */
+interface SonarrSeriesOperations {
 
     /**
      * Resolves the Sonarr server + internal series id for [tvdbId]. Returns the
@@ -231,10 +272,5 @@ interface ArrRepository {
 
     /** Queues a `SeriesSearch` — search all monitored missing episodes (`POST /command`). */
     suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit>
-
-    companion object {
-        /** TTL for the resolved-servers cache. */
-        const val SERVER_CACHE_TTL_MS = 60_000L
-    }
 }
 

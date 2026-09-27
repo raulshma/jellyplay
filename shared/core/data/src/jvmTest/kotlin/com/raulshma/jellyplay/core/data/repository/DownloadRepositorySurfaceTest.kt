@@ -155,7 +155,7 @@ class DownloadRepositorySurfaceTest {
         assertTrue(
             countMembers(interfaceBody("DownloadRepository")) > 0 &&
                 interfaceBody("DownloadRepository").contains("getAllDownloads") &&
-                interfaceBody("TrackDownloadStatusWindow").contains("downloadsFor"),
+                interfaceBody("TrackDownloadStatusWindow").contains("getDownloadsByMediaItemIdsFlow"),
             "interface body parse found no members — the ratchet is vacuous",
         )
     }

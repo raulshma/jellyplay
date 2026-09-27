@@ -10,12 +10,6 @@ interface SeerrRepository {
 
     suspend fun testConnection(): Result<SeerrStatusResponse>
 
-    suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse>
-
-    suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse>
-
-    suspend fun testApiKeyConnection(): Result<SeerrStatusResponse>
-
     suspend fun search(query: String, page: Int = 1): Result<SeerrSearchResponse>
 
     suspend fun getMovieDetails(tmdbId: Int): Result<SeerrMovieDetails>
@@ -51,10 +45,6 @@ interface SeerrRepository {
         rootFolder: String? = null,
         tags: List<Int>? = null,
     ): Result<SeerrMediaRequest>
-
-    suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>>
-
-    suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>>
 
     // ── /service/ endpoints (used by request modal) ──
 
@@ -123,17 +113,6 @@ interface SeerrRepository {
 
     suspend fun deleteMedia(mediaId: Int, is4k: Boolean = false): Result<Unit>
 
-    suspend fun editRequest(
-        id: Int,
-        mediaType: String,
-        mediaId: Int,
-        serverId: Int? = null,
-        profileId: Int? = null,
-        rootFolder: String? = null,
-        tags: List<Int>? = null,
-        seasons: List<Int>? = null,
-    ): Result<SeerrRequestItem>
-
     suspend fun getRequestCount(): Result<SeerrRequestCount>
 
     suspend fun getCurrentUser(): Result<SeerrCurrentUser>
@@ -162,4 +141,100 @@ interface SeerrRepository {
      */
     fun startPolling()
     fun stopPolling()
+}
+
+/**
+ * The *arr service-discovery family seam of [SeerrRepository]: the
+ * credential-bearing `/settings/{radarr,sonarr}` reads plus the `/service/`
+ * server + detail trio the request modal rides. Clean sole consumer:
+ * [ArrRepositoryImpl]'s Seerr-discovery merge (it calls only the settings
+ * pair) — it injects this seam now, and that pair retired from the wide
+ * interface with the migration. [SeerrRequestDelegate] still reaches the
+ * `/service/` trio through the wide interface (it mixes in requestMedia and
+ * the TMDB detail reads), so the trio stays on [SeerrRepository] with
+ * [SeerrRepositoryImpl] satisfying both declarations (the
+ * [SonarrSeriesOperations] over-the-impl pattern).
+ */
+interface SeerrServiceDirectory {
+
+    suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>>
+
+    suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>>
+
+    suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>>
+
+    suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>>
+
+    /**
+     * One `/service/{radarr,sonarr}/{id}` detail fetch — the kind-paired
+     * `getServiceRadarrDetail`/`getServiceSonarrDetail` members folded onto
+     * [ArrServiceKind] (the two endpoints differ only in path, and the two
+     * payloads mirror field-for-field under the [SeerrServiceDetail] sealed
+     * parent). Callers narrow with `filterIsInstance` when a typed list is
+     * needed (see [com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate]).
+     */
+    suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail>
+}
+
+/**
+ * The request-lifecycle family seam of [SeerrRepository]: the moderation
+ * commands (approve/decline/retry/delete/edit plus the media remove) and the
+ * shared poll loop's refcounted start/stop. The named consumer is the
+ * requests feature, which today is a MIXED consumer — the same screen reads
+ * the badge streams ([SeerrRepository.pendingRequestCount] /
+ * [SeerrRepository.currentUser]), the request list and the TMDB enrich
+ * details — so it keeps injecting [SeerrRepository], and every still-called
+ * member here remains on the wide interface with [SeerrRepositoryImpl]
+ * satisfying both. [editRequest] (zero callers repo-wide) retired to this
+ * seam alone. [com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate]
+ * / `SeerrRequestStateHolder` deliberately do NOT own these: they carry the
+ * request-MODAL flow (requestMedia + service details + prefetch), not the
+ * moderation commands.
+ */
+interface SeerrRequestLifecycle {
+
+    suspend fun approveRequest(id: Int): Result<SeerrRequestItem>
+
+    suspend fun declineRequest(id: Int): Result<SeerrRequestItem>
+
+    suspend fun retryRequest(id: Int): Result<SeerrRequestItem>
+
+    suspend fun deleteRequest(id: Int): Result<Unit>
+
+    suspend fun deleteMedia(mediaId: Int, is4k: Boolean): Result<Unit>
+
+    suspend fun editRequest(
+        id: Int,
+        mediaType: String,
+        mediaId: Int,
+        serverId: Int? = null,
+        profileId: Int? = null,
+        rootFolder: String? = null,
+        tags: List<Int>? = null,
+        seasons: List<Int>? = null,
+    ): Result<SeerrRequestItem>
+
+    /** See [SeerrRepository.startPolling] for the refcount + cadence contract. */
+    fun startPolling()
+
+    /** See [SeerrRepository.stopPolling]. */
+    fun stopPolling()
+}
+
+/**
+ * The auth family seam of [SeerrRepository]: the three credential-exchange
+ * members the Seerr settings screen's connection probe drives. Sole
+ * consumer: `SeerrSettingsViewModel` (clean — it touches nothing else on the
+ * repository), migrated to this seam; the three members retired from the
+ * wide interface with it. [SeerrRepository.testConnection] stays on the
+ * core's connection/prefs family — nothing calls it through the repository
+ * today, making it the next retirement candidate the ratchet records.
+ */
+interface SeerrAuthenticator {
+
+    suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse>
+
+    suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse>
+
+    suspend fun testApiKeyConnection(): Result<SeerrStatusResponse>
 }

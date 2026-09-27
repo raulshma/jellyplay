@@ -50,7 +50,8 @@ fun routeForNavigationTarget(target: NavigationTarget): Route? = when (target) {
     // Not a navigation — the collector branches to [popPlayerRoutes] instead.
     NavigationTarget.ClosePlayer -> null
     // Not a navigation — the collector branches to the back-stack pop /
-    // focus-or-key-synthesis seams (NavRequestCollector / DesktopRemoteNavCollector).
+    // focus-or-key-synthesis seams (NavRequestCollector on Android, the
+    // desktop shell's RemoteNavigationDispatcher wiring in DesktopShellServices).
     NavigationTarget.GoBack,
     is NavigationTarget.MoveFocus,
     NavigationTarget.InvokeSelect,

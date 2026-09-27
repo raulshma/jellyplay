@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGat
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
-import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
@@ -291,24 +290,18 @@ class RequestsViewModel(
     /**
      * Removes the *arr queue row for [tmdbId]. When [blocklist] is true the
      * release is added to the *arr blocklist (won't be grabbed again). When
-     * [searchAgain] is true a fresh search command is queued after removal.
-     * Updates UI state + triggers a queue refresh on success.
+     * [searchAgain] is true a fresh search command is queued after removal —
+     * the option mapping, replacement search and queue refresh are the
+     * repository's [ArrRepository.deleteQueueRow] deep member (the former
+     * hand-copied choreography); this side owns only the requests-screen
+     * state: drop the cached enrichment and refresh the list on success.
      */
     fun removeQueueItem(tmdbId: Int, blocklist: Boolean, searchAgain: Boolean) {
         val item = _state.value.queueItems[tmdbId] ?: return
-        val kind = item.serverKind
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            val options = ArrQueueDeleteOptions(
-                removeFromClient = true,
-                blocklist = blocklist,
-                skipRedownload = !searchAgain,
-            )
-            arrRepository.deleteQueueItem(item, options)
+            arrRepository.deleteQueueRow(item, blocklist, searchAgain)
                 .onSuccess {
-                    if (searchAgain) {
-                        arrRepository.searchForTmdb(tmdbId, kind)
-                    }
                     // Drop the cached progress + item; refresh re-populates if still present.
                     updateState { s ->
                         s.copy(

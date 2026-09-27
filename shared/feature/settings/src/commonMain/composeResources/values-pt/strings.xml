@@ -1036,7 +1036,6 @@
     <string name="settings_skip_segments_on_seek">Saltar segmentos ao procurar</string>
     <string name="settings_skip_segments_on_seek_on">Buscas para frente saltam segmentos com salto automático</string>
     <string name="settings_skip_segments_on_seek_off">Desativado</string>
-    <string name="ss_skip_segments_on_seek_title">Saltar segmentos ao procurar</string>
     <string name="ss_skip_segments_on_seek_subtitle">Salta automaticamente um segmento onde uma busca para frente cair</string>
     <string name="settings_syncplay_join_summary">Comportamento de adesão: %1$s</string>
     <string name="settings_join_behavior">Comportamento de adesão</string>
@@ -1463,7 +1462,6 @@
     <string name="ss_audio_caching_enabled_subtitle">Colocar as próximas faixas em buffer para reprodução imediata</string>
     <string name="ss_audio_cache_size_title">Tamanho da Cache de Áudio</string>
     <string name="ss_audio_cache_size_subtitle">Espaço máximo em disco para áudio em cache</string>
-    <string name="ss_video_cache_size_title">Tamanho da Cache de Vídeo</string>
     <string name="ss_video_cache_size_subtitle">Espaço máximo em disco para vídeo em cache</string>
     <string name="ss_audio_prefetch_lookahead_title">Antecipação de Pré-carregamento de Áudio</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">Número de faixas seguintes a colocar em buffer</string>
@@ -1654,7 +1652,6 @@
     <string name="ss_idle_ambient_timeout_subtitle">Quanto tempo esperar antes de o ecrã de inatividade aparecer</string>
     <string name="ss_home_backdrop_title">Fundo do início</string>
     <string name="ss_home_backdrop_subtitle">Desfocar a imagem de destaque como fundo ambiente</string>
-    <string name="ss_compact_episode_list_title">Lista de episódios compacta</string>
     <string name="ss_compact_episode_list_subtitle">Mostrar episódios como uma lista vertical no telemóvel em vez de uma linha horizontal</string>
     <string name="ss_nav_bar_customization_title">Barra de navegação</string>
     <string name="ss_nav_bar_customization_subtitle">Mostrar, ocultar e reordenar os itens da barra de navegação</string>
@@ -1664,13 +1661,10 @@
     <string name="ss_newsletter_sections_subtitle">Escolher as secções que aparecem na newsletter</string>
     <string name="ss_dialogue_boost_strength_title">Intensidade do reforço de diálogos</string>
     <string name="ss_dialogue_boost_strength_subtitle">Nível de amplificação do diálogo</string>
-    <string name="ss_mpv_extra_config_title">Configuração avançada</string>
     <string name="ss_mpv_extra_config_subtitle">Opções raw do mpv (estilo mpv.conf)</string>
-    <string name="ss_reset_engine_defaults_title">Repor predefinições</string>
     <string name="ss_reset_engine_defaults_subtitle">Repor as definições de MPV, LibVLC ou ExoPlayer</string>
     <string name="ss_audio_prefetch_backfill_title">Número de retrocesso</string>
     <string name="ss_audio_prefetch_backfill_subtitle">Faixas recentes mantidas em cache para reproduzir novamente</string>
-    <string name="ss_audio_cache_clear_title">Limpar cache de áudio</string>
     <string name="ss_audio_cache_clear_subtitle">Eliminar todos os bytes de áudio em cache</string>
     <string name="ss_subtitle_tester_title">Testador de estilos de legenda</string>
     <string name="ss_subtitle_tester_subtitle">Pré-visualizar estilos entre motores</string>

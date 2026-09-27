@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * JvmTrackDownloadStatusWindowTest (the id-honesty pin the former player-audio
  * window test carried, ported once more when the promoted-interface pass made
  * [DownloadRepositoryImpl] the JVM [TrackDownloadStatusWindow] itself): the
- * player's window is the single now-playing track today, but `downloadsFor`
+ * player's window is the single now-playing track today, but the window read
  * must answer for EVERY requested id, in the DAO's emission order, through
  * ONE `getDownloadsByMediaItemIdsFlow` IN-query — never N per-id flows (the
  * re-expressed N-flow shape the deleted JvmTrackDownloadStatusWindow adapter
@@ -78,13 +78,13 @@ class DownloadRepositoryStatusWindowTest {
     )
 
     @Test
-    fun downloadsFor_answersThroughTheSingleInQueryInEmissionOrder() = runTest {
+    fun getDownloadsByMediaItemIdsFlow_answersThroughTheSingleInQueryInEmissionOrder() = runTest {
         val b = entity("b")
         val c = entity("c")
         val ids = listOf("a", "b", "c")
         every { downloadDao.getDownloadsByMediaItemIdsFlow(ids) } returns flowOf(listOf(b, c))
 
-        val rows = window.downloadsFor(ids).first()
+        val rows = window.getDownloadsByMediaItemIdsFlow(ids).first()
 
         // Every requested id answered by the IN query, rows in emission order,
         // missing ids (a) simply absent — the album screen's original shape.
@@ -94,21 +94,21 @@ class DownloadRepositoryStatusWindowTest {
     }
 
     @Test
-    fun downloadsFor_neverFansOutToPerIdFlows() = runTest {
+    fun getDownloadsByMediaItemIdsFlow_neverFansOutToPerIdFlows() = runTest {
         val ids = listOf("a", "b")
         every { downloadDao.getDownloadsByMediaItemIdsFlow(ids) } returns flowOf(emptyList())
 
-        assertTrue(window.downloadsFor(ids).first().isEmpty())
+        assertTrue(window.getDownloadsByMediaItemIdsFlow(ids).first().isEmpty())
 
         verify(exactly = 0) { downloadDao.getDownloadByMediaItemIdFlow(any()) }
         verify(exactly = 0) { downloadDao.getAllDownloads(any()) }
     }
 
     @Test
-    fun downloadsFor_emptyIds_isAnEmptyInQuery() = runTest {
+    fun getDownloadsByMediaItemIdsFlow_emptyIds_isAnEmptyInQuery() = runTest {
         every { downloadDao.getDownloadsByMediaItemIdsFlow(emptyList()) } returns flowOf(emptyList())
 
-        assertTrue(window.downloadsFor(emptyList()).first().isEmpty())
+        assertTrue(window.getDownloadsByMediaItemIdsFlow(emptyList()).first().isEmpty())
 
         verify(exactly = 1) { downloadDao.getDownloadsByMediaItemIdsFlow(emptyList()) }
         verify(exactly = 0) { downloadDao.getDownloadByMediaItemIdFlow(any()) }

@@ -33,7 +33,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserDataMutatorTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val userDataWrites: UserDataWriteOperations = mockk(relaxed = true)
     private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
 
     private lateinit var mutator: UserDataMutatorImpl
@@ -44,7 +44,7 @@ class UserDataMutatorTest {
         // cluster flip converted the ctor params) — mockk cannot mock
         // kotlin.Lazy directly, so the real `lazy { }` wraps the mock; the
         // impl only reads .value.
-        val lazyRepo: Lazy<MediaRepository> = lazy { mediaRepository }
+        val lazyRepo: Lazy<UserDataWriteOperations> = lazy { userDataWrites }
         val lazyProvider: Lazy<MediaDetailProvider> = lazy { mediaDetailProvider }
         mutator = UserDataMutatorImpl(lazyRepo, lazyProvider)
     }
@@ -85,7 +85,7 @@ class UserDataMutatorTest {
         val untouched1 = item("b")
         val untouched2 = item("c", isPlayed = true)
         val container = ListContainer(listOf(target, untouched1, untouched2))
-        coEvery { mediaRepository.markPlayed("a") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("a") } returns Result.success(Unit)
 
         val result = mutator.setPlayed(
             itemId = "a",
@@ -106,14 +106,14 @@ class UserDataMutatorTest {
     fun `optimistic setPlayed zeroes resume position in both directions`() = runTest {
         // played → true: an in-progress item loses its resume bar.
         val playedContainer = ListContainer(listOf(item("a", positionTicks = 5_000_000_000L)))
-        coEvery { mediaRepository.markPlayed("a") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("a") } returns Result.success(Unit)
         mutator.setPlayed("a", played = true, mode = UserDataMutator.FlipMode.Optimistic, containers = listOf(playedContainer))
         assertEquals(0L, playedContainer.current.single().playbackPositionTicks)
 
         // played → false: the server also clears resume on manual unwatch;
         // the local mirror must not retain a phantom in-progress bar.
         val unplayedContainer = ListContainer(listOf(item("b", isPlayed = true, positionTicks = 5_000_000_000L)))
-        coEvery { mediaRepository.markUnplayed("b") } returns Result.success(Unit)
+        coEvery { userDataWrites.markUnplayed("b") } returns Result.success(Unit)
         mutator.setPlayed("b", played = false, mode = UserDataMutator.FlipMode.Optimistic, containers = listOf(unplayedContainer))
         val flipped = unplayedContainer.current.single()
         assertFalse(flipped.isPlayed)
@@ -123,12 +123,12 @@ class UserDataMutatorTest {
     @Test
     fun `silent setPlayed calls repository but rewrites nothing`() = runTest {
         val container = ListContainer(listOf(item("a")))
-        coEvery { mediaRepository.markPlayed("a") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("a") } returns Result.success(Unit)
 
         val result = mutator.setPlayed(itemId = "a", played = true, containers = listOf(container))
 
         assertEquals(Result.success(AppliedMutation(itemId = "a", played = true)), result)
-        coVerify(exactly = 1) { mediaRepository.markPlayed("a") }
+        coVerify(exactly = 1) { userDataWrites.markPlayed("a") }
         // The grid contract: no container flip — but the provider session
         // (an open detail screen, e.g. under the player) is still aligned.
         assertFalse(container.current.single().isPlayed)
@@ -142,7 +142,7 @@ class UserDataMutatorTest {
     fun `write failure returns the failure with no flip and no provider call`() = runTest {
         val container = ListContainer(listOf(item("a", positionTicks = 5_000_000_000L)))
         val failure = RuntimeException("catastrophic I/O")
-        coEvery { mediaRepository.markPlayed("a") } returns Result.failure(failure)
+        coEvery { userDataWrites.markPlayed("a") } returns Result.failure(failure)
 
         val result = mutator.setPlayed(
             itemId = "a",
@@ -162,7 +162,7 @@ class UserDataMutatorTest {
 
     @Test
     fun `optimistic setPlayed rewrites provider session and invalidates series only when supplied`() = runTest {
-        coEvery { mediaRepository.markPlayed("ep-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("ep-1") } returns Result.success(Unit)
 
         mutator.setPlayed(
             itemId = "ep-1",
@@ -177,7 +177,7 @@ class UserDataMutatorTest {
         coVerify(exactly = 1) { mediaDetailProvider.invalidate("series-1") }
 
         // Without a series scope (movie / non-series item) no catalogue drop.
-        coEvery { mediaRepository.markPlayed("movie-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markPlayed("movie-1") } returns Result.success(Unit)
         mutator.setPlayed(itemId = "movie-1", played = true, mode = UserDataMutator.FlipMode.Optimistic)
         coVerify(exactly = 0) { mediaDetailProvider.invalidate("movie-1") }
         coVerify(exactly = 1) { mediaDetailProvider.invalidate(any()) }
@@ -188,7 +188,7 @@ class UserDataMutatorTest {
     @Test
     fun `setFavorite resolves the target from the repository Result and preserves resume`() = runTest {
         val container = ListContainer(listOf(item("a", isFavorite = false, positionTicks = 5_000_000_000L)))
-        coEvery { mediaRepository.toggleFavorite("a") } returns Result.success(true)
+        coEvery { userDataWrites.toggleFavorite("a") } returns Result.success(true)
 
         val result = mutator.setFavorite(
             itemId = "a",
@@ -212,7 +212,7 @@ class UserDataMutatorTest {
     fun `silent setFavorite still returns the resolved target`() = runTest {
         // The audio player's scalar case: no containers, no provider session,
         // but the resolved favorite target must come back for its uiState flip.
-        coEvery { mediaRepository.toggleFavorite("track-1") } returns Result.success(false)
+        coEvery { userDataWrites.toggleFavorite("track-1") } returns Result.success(false)
 
         val result = mutator.setFavorite(itemId = "track-1")
 
@@ -225,7 +225,7 @@ class UserDataMutatorTest {
     @Test
     fun `setFavorite failure returns the failure with no flip`() = runTest {
         val container = ListContainer(listOf(item("a")))
-        coEvery { mediaRepository.toggleFavorite("a") } returns Result.failure(RuntimeException("boom"))
+        coEvery { userDataWrites.toggleFavorite("a") } returns Result.failure(RuntimeException("boom"))
 
         val result = mutator.setFavorite(
             itemId = "a",
@@ -242,7 +242,7 @@ class UserDataMutatorTest {
 
     @Test
     fun `setSeasonPlayed wraps the season-aware repo call and rewrites the provider season`() = runTest {
-        coEvery { mediaRepository.markSeasonPlayed("season-1", "series-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markSeasonPlayed("season-1", "series-1") } returns Result.success(Unit)
         var capturedTransform: ((List<MediaItem>) -> List<MediaItem>)? = null
         coEvery { mediaDetailProvider.applyOptimisticSeasonRewrite("series-1", "season-1", any()) } coAnswers {
             capturedTransform = thirdArg()
@@ -251,8 +251,8 @@ class UserDataMutatorTest {
         val result = mutator.setSeasonPlayed(seriesId = "series-1", seasonId = "season-1", played = true)
 
         assertEquals(AppliedMutation(itemId = "season-1", played = true), result.getOrThrow())
-        coVerify(exactly = 1) { mediaRepository.markSeasonPlayed("season-1", "series-1") }
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        coVerify(exactly = 1) { userDataWrites.markSeasonPlayed("season-1", "series-1") }
+        coVerify(exactly = 0) { userDataWrites.markPlayed(any()) }
         // The rewrite flips every episode of the season and clears resume in
         // both directions (server-side cascade mirrored locally).
         val episodes = listOf(
@@ -266,7 +266,7 @@ class UserDataMutatorTest {
 
     @Test
     fun `setSeasonPlayed unplayed mirror clears resume too`() = runTest {
-        coEvery { mediaRepository.markSeasonUnplayed("season-1", "series-1") } returns Result.success(Unit)
+        coEvery { userDataWrites.markSeasonUnplayed("season-1", "series-1") } returns Result.success(Unit)
         var capturedTransform: ((List<MediaItem>) -> List<MediaItem>)? = null
         coEvery { mediaDetailProvider.applyOptimisticSeasonRewrite("series-1", "season-1", any()) } coAnswers {
             capturedTransform = thirdArg()
@@ -274,7 +274,7 @@ class UserDataMutatorTest {
 
         mutator.setSeasonPlayed(seriesId = "series-1", seasonId = "season-1", played = false)
 
-        coVerify(exactly = 1) { mediaRepository.markSeasonUnplayed("season-1", "series-1") }
+        coVerify(exactly = 1) { userDataWrites.markSeasonUnplayed("season-1", "series-1") }
         val rewritten = capturedTransform!!.invoke(listOf(item("e1", isPlayed = true, positionTicks = 5_000_000_000L)))
         assertFalse(rewritten.single().isPlayed)
         assertEquals(0L, rewritten.single().playbackPositionTicks)
@@ -282,7 +282,7 @@ class UserDataMutatorTest {
 
     @Test
     fun `setSeasonPlayed failure returns the failure and skips the provider rewrite`() = runTest {
-        coEvery { mediaRepository.markSeasonPlayed("season-1", "series-1") } returns Result.failure(RuntimeException("boom"))
+        coEvery { userDataWrites.markSeasonPlayed("season-1", "series-1") } returns Result.failure(RuntimeException("boom"))
 
         val result = mutator.setSeasonPlayed(seriesId = "series-1", seasonId = "season-1", played = true)
 
@@ -296,12 +296,12 @@ class UserDataMutatorTest {
     fun `concurrent setPlayed calls execute in launch order`() = runTest {
         val order = mutableListOf<String>()
         val releaseFirst = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.markPlayed("a") } coAnswers {
+        coEvery { userDataWrites.markPlayed("a") } coAnswers {
             releaseFirst.await()
             order += "a"
             Result.success(Unit)
         }
-        coEvery { mediaRepository.markPlayed("b") } coAnswers {
+        coEvery { userDataWrites.markPlayed("b") } coAnswers {
             order += "b"
             Result.success(Unit)
         }
