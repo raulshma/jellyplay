@@ -9,13 +9,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,12 +46,11 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Calendar
 import com.composables.icons.tabler.outline.ChevronLeft
 import com.composables.icons.tabler.outline.ChevronRight
-import com.composables.icons.tabler.outline.Database
 import com.composables.icons.tabler.outline.Refresh
-import com.composables.icons.tabler.outline.Settings
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.FeatureDisabledState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
@@ -154,6 +151,9 @@ fun UpcomingCalendarScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 !featureEnabled -> FeatureDisabledState(
+                    title = stringResource(Res.string.calendar_feature_disabled_title),
+                    body = stringResource(Res.string.calendar_feature_disabled_desc),
+                    ctaLabel = stringResource(Res.string.calendar_open_settings),
                     onOpenSettings = onOpenArrSettings,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -423,39 +423,5 @@ private fun DayHeader(date: LocalDate, today: LocalDate, count: Int) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-// ── States ─────────────────────────────────────────────────────────────────
-
-@Composable
-private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Tabler.Outline.Database,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(Res.string.calendar_feature_disabled_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(Res.string.calendar_feature_disabled_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onOpenSettings, shape = ShapeCache.smooth12) {
-                Icon(Tabler.Outline.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text(stringResource(Res.string.calendar_open_settings))
-            }
-        }
     }
 }

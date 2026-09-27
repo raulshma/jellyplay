@@ -46,10 +46,7 @@ import org.koin.core.module.Module
  *    commonMain Module val) contribute no entries.
  *
  * Order follows the Android shell's historical list; Koin registration order
- * is inert here (definitions are keyed, no overrides among features) — the
- * only order-sensitive registration in either shell, desktop's
- * desktopAppUpdateModule override, stays LAST in the desktop shell's own
- * list per docs/adr/desktop-auto-update.md.
+ * is inert here (definitions are keyed, no overrides among features).
  *
  * Per-module notes below are the MERGED conveyor history of both shells'
  * former inline lists (registration is graph-shaped, routing is per-screen).

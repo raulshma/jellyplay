@@ -39,9 +39,11 @@ import kotlin.test.assertTrue
  *  - the selected-file poll skips the multi-MB content re-download when the
  *    file's size/dateModified metadata is unchanged, marks appended lines
  *    `isNew`, and clearSelectedLogFile cancels the poll and resets state;
- *  - loadMoreActivity is re-entry safe: a second call while an older-page
- *    fetch is still in flight is dropped, so a fast fling cannot re-fetch and
- *    double-append the same server page (startIndex = currentSize).
+ *  - loadMoreActivity is re-entry safe via the PageAppender guard: a second
+ *    call while an older-page fetch is still in flight is dropped, so a fast
+ *    fling cannot re-fetch and double-append the same server page
+ *    (startIndex = currentSize); the skip pager never goes terminal — an
+ *    empty server page leaves the gate open.
  *
  * The 5s file poll runs on the test scheduler, so only explicit
  * advanceTimeBy/runCurrent steps drive it — a bare advanceUntilIdle while a
@@ -352,5 +354,26 @@ class LogsViewModelTest {
             advanceUntilIdle()
 
             coVerify(exactly = 1) { adminRepository.getActivityLogEntries(startIndex = 100, limit = 50) }
+        }
+
+    @Test
+    fun `loadMoreActivity has no terminal gate so an exhausted server is re-polled`() =
+        runTest(mainDispatcher) {
+            val vm = loadedViewModel(initial = (0L until 50L).map { entry(it) })
+            // The skip pager tracks no hasMore: every more-fetch of an
+            // exhausted server answers empty, and the gate stays open so the
+            // next tap re-polls the same startIndex.
+            coEvery { adminRepository.getActivityLogEntries(startIndex = 50, limit = 50) } returns
+                Result.success(emptyList())
+
+            vm.loadMoreActivity()
+            advanceUntilIdle()
+            assertFalse(vm.state.isLoadingMoreActivity)
+
+            vm.loadMoreActivity()
+            advanceUntilIdle()
+
+            coVerify(exactly = 2) { adminRepository.getActivityLogEntries(startIndex = 50, limit = 50) }
+            assertEquals(50, vm.state.activityEntries.size)
         }
 }

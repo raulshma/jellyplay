@@ -76,7 +76,7 @@ class AudioPlaybackManager(
     private val bandwidthInterceptor: com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor,
     private val lyricsManager: AudioLyricsManager,
     private val effectsProcessor: AudioEffectsProcessor,
-    private val sleepTimerManager: SleepTimerManager,
+    private val sleepCountdown: SleepCountdown,
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
     private val audioStreamCache: AudioStreamCache,
     private val audioPrefetchEngine: AudioPrefetchEngine,
@@ -237,7 +237,7 @@ class AudioPlaybackManager(
         // Android has no next-item resolve-cache to invalidate (the pre-warm
         // reads the flows live) — the desktop's prefetch clear stays desktop's.
         onQueueShapeInvalidated = {},
-        onQueueExhausted = { sleepTimerManager.triggerEndOfEpisode() },
+        onQueueExhausted = { sleepCountdown.triggerEndOfEpisode() },
         // ReplayGain context passes isShuffled fresh at every apply site here,
         // so the shuffle-flag hook stays default.
         onShuffleModeChanged = {},

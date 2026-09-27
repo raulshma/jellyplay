@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -86,7 +86,7 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloads: TrackDownloadStatusWindow
     private lateinit var trackDownloadActions: TrackDownloadActions
-    private lateinit var sleepTimerManager: AudioSleepTimerManager
+    private lateinit var sleepCountdown: SleepCountdown
     private lateinit var cast: AudioPlayerCast
 
     private lateinit var viewModel: AudioPlayerViewModel
@@ -134,7 +134,7 @@ class AudioPlayerViewModelGapsTest {
         userDataMutator = mockk(relaxed = true)
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
         trackDownloadActions = mockk(relaxed = true)
-        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
+        sleepCountdown = mockk<SleepCountdown>(relaxed = true)
         cast = mockk(relaxed = true)
         val audioQueueFacade = mockk<com.raulshma.jellyplay.core.data.playback.AudioQueueFacade>(relaxed = true)
 
@@ -198,7 +198,7 @@ class AudioPlayerViewModelGapsTest {
             userDataMutator = userDataMutator,
             downloads = downloads,
             trackDownloadActions = trackDownloadActions,
-            sleepTimerManager = sleepTimerManager,
+            sleepCountdown = sleepCountdown,
             cast = cast,
             audioQueueFacade = audioQueueFacade,
         )
@@ -526,7 +526,7 @@ class AudioPlayerViewModelGapsTest {
     fun sleepTimerExpiry_pausesTheEngine_ratherThanToggling() {
         val onExpired = slot<() -> Unit>()
         viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimer(60_000L))
-        verify { sleepTimerManager.setOnTimerExpired(capture(onExpired)) }
+        verify { sleepCountdown.setOnTimerExpired(capture(onExpired)) }
 
         // Simulate the manager firing after the countdown: the callback must
         // PAUSE — if the user paused manually after arming, a toggle would

@@ -140,6 +140,18 @@
     <string name="core_ui_cd_offline">Offline</string>
     <string name="core_ui_cd_server_unreachable">Server unreachable</string>
 
+    <!-- Active-filter bar (shared by Library + Search; see ActiveFiltersBar).
+         The ONE per-dimension label table for both screens — they used to keep
+         their own and had drifted (library rendered raw enum names and the
+         English-only PlayedStatus.displayName). Same copy the search screen's
+         strings carried; "Downloaded" reuses core_ui_downloaded. -->
+    <string name="core_filter_played_all">All</string>
+    <string name="core_filter_played_played">Played</string>
+    <string name="core_filter_played_unplayed">Unplayed</string>
+    <string name="core_filter_rating_plus">%1$s+</string>
+    <string name="core_filter_in_progress">In Progress</string>
+    <string name="core_clear_all">Clear all</string>
+
     <!-- Settings search categories (the item title/subtitle strings live in :feature:settings) -->
     <string name="ss_cat_about">About</string>
     <string name="ss_cat_account">Account</string>

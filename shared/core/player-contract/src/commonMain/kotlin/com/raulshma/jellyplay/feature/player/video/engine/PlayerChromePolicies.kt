@@ -1,13 +1,18 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 /**
- * Pure player-chrome timing policies shared by BOTH player screens (the VOD
+ * Player-chrome policies shared by BOTH player screens (the VOD
  * `VideoPlayerScreen` and the live `LivePlayerScreen`). They live in the
  * engine-agnostic player-contract home (beside [EnginePositionTicker]) so the
  * two screens cite ONE implementation instead of carrying byte-identical
- * copies.
+ * copies. Every declaration is a pure function except [mirrorPlaying], which
+ * is lifecycle-attached (it launches a collector into the receiver scope).
  */
 
 /**
@@ -53,5 +58,47 @@ suspend fun liveWindowRefreshLoop(
     while (active()) {
         onTick()
         delay(tickMs)
+    }
+}
+
+/**
+ * The play-state MIRROR both player hosts run over their engine's `isPlaying`
+ * flow: every value fans out to the host's sinks in order — the uiState
+ * write, the PiP icon mirror and (VOD only) the SyncPlay forward — so the
+ * host Activity can render the correct play/pause icon on the PiP window and
+ * its collaborators stay fed from ONE collector instead of hand-rolled
+ * per-host copies (the live host previously lacked the guard — the drift
+ * this dedup closes).
+ *
+ * Same-value emissions are swallowed BEFORE any sink runs: a redundant
+ * `isPlaying` emission must not allocate a fresh uiState copy (invalidating
+ * every uiState collector) nor re-fire the collaborator forwards. The guard
+ * is per-mirror: a fresh mirror always delivers its FIRST value, so a
+ * re-armed mirror replays the current state to its sinks — the VOD host
+ * re-arms alongside its coordinator, and its uiState sink keeps its own
+ * same-value check against the live uiState for exactly that replay.
+ *
+ * Launches the collector as a child of the receiver's scope and returns its
+ * [Job] so the host can cancel it (the VOD host cancels via its parent
+ * outputs job and ignores this return; the live host relies on `onCleared`
+ * tearing down `viewModelScope`).
+ *
+ * Sink order is load-bearing: the [sinks] array is positional (the hosts
+ * document which sink is which at their call sites — e.g. the uiState write
+ * must precede the collaborator forwards), not a name-keyed protocol. The
+ * guard assumes nothing about the source's conflation: a plain-Flow source
+ * with genuine same-value repeats would have those repeats swallowed HERE
+ * (by design — sinks are idempotent mirrors), while distinct consecutive
+ * values always fan out.
+ */
+fun CoroutineScope.mirrorPlaying(
+    source: Flow<Boolean>,
+    vararg sinks: (Boolean) -> Unit,
+): Job = launch {
+    var last: Boolean? = null
+    source.collect { isPlaying ->
+        if (last == isPlaying) return@collect
+        last = isPlaying
+        sinks.forEach { it(isPlaying) }
     }
 }

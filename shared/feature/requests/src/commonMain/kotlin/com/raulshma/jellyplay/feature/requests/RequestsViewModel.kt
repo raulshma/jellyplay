@@ -6,8 +6,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
@@ -26,7 +25,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -87,7 +85,7 @@ data class RequestsUiState(
 class RequestsViewModel(
     private val seerrRepository: SeerrRepository,
     private val arrRepository: ArrRepository,
-    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    private val experimentalGate: ExperimentalFeatureGate,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(RequestsUiState())
@@ -95,22 +93,11 @@ class RequestsViewModel(
 
     private val enrichSemaphore = Semaphore(4)
 
-    /**
-     * Whether the Direct *arr Integration experimental flag is enabled.
-     *
-     * Eagerly shared (not `WhileSubscribed`) because [enrichDownloadProgress]
-     * reads it via `.value` without holding a collector; under
-     * `WhileSubscribed` the upstream preferences Flow would never start and
-     * `.value` would stay `false` forever, leaving the entire *arr
-     * download-progress + queue-management feature unreachable.
-     */
-    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.directArrEnabled()
-        .stateIn(scope, SharingStarted.Eagerly, false)
-
     // Eagerly shared (not `WhileSubscribed`): [loadRequests] reads it via
-    // `.value` without holding a collector (same trap as [directArrEnabled]
-    // above) and no screen collects it — under `WhileSubscribed` the value
-    // would stay `null` forever and "My Requests" would never filter.
+    // `.value` without holding a collector (the same trap that pins
+    // [ExperimentalFeatureGate.directArrEnabled]'s Eagerly sharing) and no
+    // screen collects it — under `WhileSubscribed` the value would stay
+    // `null` forever and "My Requests" would never filter.
     val currentUser: StateFlow<SeerrCurrentUser?> = seerrRepository.currentUser
         .stateIn(scope, SharingStarted.Eagerly, null)
 
@@ -279,7 +266,7 @@ class RequestsViewModel(
      * sheet falls back to Seerr's raw `downloadStatus` text.
      */
     private fun enrichDownloadProgress(requests: List<SeerrRequestItem>) {
-        if (!directArrEnabled.value) return
+        if (!experimentalGate.directArrEnabled.value) return
         val distinctTmdbIds = requests.mapNotNull { it.media.tmdbId.takeIf { id -> id != 0 } }.distinct()
         if (distinctTmdbIds.isEmpty()) return
         enrichEach(

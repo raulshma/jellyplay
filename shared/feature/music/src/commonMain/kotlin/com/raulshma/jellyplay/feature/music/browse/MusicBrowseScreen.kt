@@ -53,8 +53,8 @@ import com.raulshma.jellyplay.feature.music.components.MusicCollectionPagedGrid
 import com.raulshma.jellyplay.feature.music.components.PagedList
 import com.raulshma.jellyplay.feature.music.components.SimpleCollectionGrid
 import com.raulshma.jellyplay.feature.music.components.TrackRow
-import com.raulshma.jellyplay.feature.music.components.rememberPagedCollectionStatus
-import com.raulshma.jellyplay.feature.music.components.rememberSimpleCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.rememberSimpleCollectionStatus
 import kotlinx.coroutines.launch
 
 /**

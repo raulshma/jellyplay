@@ -45,6 +45,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -148,6 +149,15 @@ class DetailViewModel internal constructor(
     private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     private val readerAnnotationsRepository: ReaderAnnotationsRepository? = null,
     private val bookTocProber: BookTocProber? = null,
+    /**
+     * Dispatcher for the smart-play resolution launches ([computeSeriesSmartPlayTarget]
+     * / [computeEpisodeSmartPlayTarget]): production resolves off Main, but the
+     * result is a uiState write the screen (and tests) read immediately after a
+     * load settles — a hardcoded Default dispatcher makes that read race the
+     * update (a real worker thread the test scheduler cannot order against).
+     * Tests inject the test dispatcher so `advanceUntilIdle` covers the launch.
+     */
+    private val smartPlayDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -1066,7 +1076,7 @@ class DetailViewModel internal constructor(
     }
 
     private fun computeSeriesSmartPlayTarget() {
-        launch(Dispatchers.Default) {
+        launch(smartPlayDispatcher) {
             val state = _uiState.value
             val sorted = state.sortedEpisodes.takeIf { it.isNotEmpty() }
             if (sorted == null) {
@@ -1085,7 +1095,7 @@ class DetailViewModel internal constructor(
     }
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
-        launch(Dispatchers.Default) {
+        launch(smartPlayDispatcher) {
             val sorted = _uiState.value.sortedEpisodes.takeIf { it.isNotEmpty() } ?: return@launch
             // The episode must still be present in the current sorted view.
             if (sorted.none { it.id == currentEpisode.id }) {

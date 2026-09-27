@@ -201,12 +201,12 @@ internal fun DesktopNavScaffold(
     // this shell's OWN update surface. The check→message mapping, the
     // browser handoff and the snackbar wording live in
     // DesktopUpdateCheckController (extracted; pinned by its test — never a
-    // silent install, browser handoff only). The repository binding was
-    // REPLACED by desktopAppUpdateModule (DesktopKoinModules) with the
-    // real-version actual: a packaged release-lane build reports genuine
-    // newer releases from the GitHub feed, a dev build stays "up to date" by
-    // construction. The row itself is pref-gated by selfUpdateCheckEnabled
-    // (default on).
+    // silent install, browser handoff only). desktopAppUpdateModule
+    // (DesktopKoinModules) is the ONE AppUpdateRepository definition, built
+    // on the injected DesktopInstalledVersion: a packaged release-lane build
+    // reports genuine newer releases from the GitHub feed, a dev build stays
+    // "up to date" by construction. The row itself is pref-gated by
+    // selfUpdateCheckEnabled (default on).
     val appUpdateRepository: AppUpdateRepository = koinInject()
     val updateCheckController = remember(scope, appUpdateRepository, snackbarHostState) {
         DesktopUpdateCheckController(
@@ -297,15 +297,20 @@ internal fun DesktopNavScaffold(
     // ── remote navigation bridge collector ─────────────────────────
     // Desktop ignored RemoteNavigationBridge entirely before the receiver
     // port — remote Play → desktop, SyncPlay-driven opens and ClosePlayer
-    // all dead-ended. The folds are DesktopRemoteNavigation's pure halves;
-    // this effect only dispatches: pushes through the guarded navigator
-    // (dead-end routes surface the guard's snackbar), ClosePlayer pops
-    // player routes off every tab's stack, GoBack pops one entry, MoveFocus
-    // drives the Compose FocusManager (through [composeFocusDirection], the
-    // extracted four-branch mapping), and InvokeSelect synthesizes an AWT
-    // Enter pair posted through the system event queue — the exact route
-    // every real keystroke takes into the Compose preview-key chain (the
-    // player's media-key bridge included when a player route is on top).
+    // all dead-ended. The LADDER is shared/feature/shell's
+    // RemoteNavigationDispatcher (beside the RemoteNavigationRouting folds);
+    // this wiring only supplies the desktop seams: pushes through the
+    // guarded navigator (dead-end routes surface the guard's snackbar), tab
+    // switches write topLevelRoute directly — NOT through the navigator,
+    // whose pop-to-root-when-already-on-tab behavior must not fire for a
+    // remote GoHome/GoToSettings/GoToSearch (the Android shell's select
+    // semantics, now shared) — ClosePlayer pops player routes off every
+    // tab's stack, GoBack pops one entry, MoveFocus drives the Compose
+    // FocusManager (through [composeFocusDirection], the extracted
+    // four-branch mapping), and InvokeSelect synthesizes an AWT Enter pair
+    // posted through the system event queue — the exact route every real
+    // keystroke takes into the Compose preview-key chain (the player's
+    // media-key bridge included when a player route is on top).
     val remoteNavigationBridge: com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge = koinInject()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val desktopRemoteNavCollector = remember(
@@ -315,7 +320,9 @@ internal fun DesktopNavScaffold(
         windowRef,
     ) {
         DesktopRemoteNavCollector(
+            topLevelKeys = DESKTOP_TOP_LEVEL_ROUTES,
             navigate = guardedNavigator::navigate,
+            selectTab = { route -> navigation.topLevelRoute.value = route },
             goBack = { guardedNavigator.goBack() },
             backStacks = { navigation.backStacks.values },
             moveFocus = { direction ->

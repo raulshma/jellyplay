@@ -4,11 +4,11 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard
-import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.SleepCountdownClock
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -83,16 +83,21 @@ internal val dataSessionPlaybackModule: Module = module {
 
     single { QueuePersistenceHelper(get()) }
 
-    // Playback flips: SleepTimerManager moved from the legacy :core:data
-    // shim — SystemClock.elapsedRealtime became the TimeSource seam above
-    // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
-    // unchanged). The audio/live player VMs resolve this single through Koin
-    // directly since their migrations; legacy core:data's
+    // Playback flips: the sleep-timer countdown (then SleepTimerManager) moved
+    // from the legacy :core:data shim — SystemClock.elapsedRealtime became the
+    // TimeSource seam above, and the sleep-timer fold later collapsed that
+    // manager into the commonMain [SleepCountdown] core (the alias
+    // AudioSleepTimerManager interface died with it: every host — video VM,
+    // audio VM, both queue managers, the reader — resolves THIS single, whose
+    // clock binds the same TimeSource single, so the wall-clock timing model
+    // is unchanged). The audio/live player VMs resolve this single through
+    // Koin directly since their migrations; legacy core:data's
     // AudioPlaybackManager resolves this single from androidCoreDataModule.
-    // No other consumer needs the AudioSleepTimerManager interface, so only
-    // the Koin alias exists here.
-    single { SleepTimerManager(get()) }
-    single<AudioSleepTimerManager> { get<SleepTimerManager>() }
+    single {
+        SleepCountdown(
+            clock = SleepCountdownClock { get<TimeSource>().nowElapsedRealtimeMillis() },
+        )
+    }
 
     // Playback flips: AdaptiveBitrateManager moved from the legacy
     // core:data shim — ConnectivityManager became the NetworkMonitor seam

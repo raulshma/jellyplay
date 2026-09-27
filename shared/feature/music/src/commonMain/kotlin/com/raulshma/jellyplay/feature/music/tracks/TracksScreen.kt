@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
 import com.raulshma.jellyplay.feature.music.components.MusicSortMenuButton
 import com.raulshma.jellyplay.feature.music.components.PagedList
 import com.raulshma.jellyplay.feature.music.components.TrackRow
-import com.raulshma.jellyplay.feature.music.components.rememberPagedCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode

@@ -173,7 +173,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
             effectsProcessor = mockk(relaxed = true) {
                 every { pitchSemitones } returns MutableStateFlow(0f)
             },
-            sleepTimerManager = mockk(relaxed = true),
+            sleepCountdown = mockk(relaxed = true),
 // Relaxed StateFlow stubs answer .value with a boxed Object and blow up
             // the production Boolean reads (play()'s "Play On" gate) — stub the
             // three flags with real flows, disconnected by default.

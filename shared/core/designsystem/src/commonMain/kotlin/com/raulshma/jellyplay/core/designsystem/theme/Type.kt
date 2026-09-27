@@ -209,59 +209,77 @@ val JellyPlayExpressiveTitles: Typography
     ),
 )
 
-val SynthwaveTypography: Typography
-    @Composable get() = Typography(
-    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = synthwaveDisplayFontFamily),
-    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = synthwaveDisplayFontFamily),
-    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = synthwaveDisplayFontFamily),
-    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = synthwaveDisplayFontFamily),
-    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = synthwaveDisplayFontFamily),
-    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = synthwaveDisplayFontFamily),
-    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = synthwaveDisplayFontFamily),
-    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = synthwaveDisplayFontFamily),
-    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = synthwaveDisplayFontFamily),
-    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = synthwaveBodyFontFamily),
-    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = synthwaveBodyFontFamily),
-    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = synthwaveBodyFontFamily),
-    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = synthwaveBodyFontFamily),
-    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = synthwaveBodyFontFamily),
-    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = synthwaveBodyFontFamily),
-)
+/**
+ * Shared scaffold for the seven variant typographies: the per-role family
+ * substitution across all 15 MD3 slots lives here once — display/headline/
+ * title take [display], body/label take [body] — and [tweak] lets each
+ * variant declare only the slots it actually deviates on, applied after the
+ * family substitution as a [Typography.copy]. Slots the tweak doesn't name
+ * keep the family-substituted base style verbatim.
+ *
+ * [base] is an explicit parameter (not a defaulted [JellyPlayTypography]
+ * read) so the builder stays a pure function the commonTest suite can pin;
+ * the composable family reads happen at the variant declarations.
+ */
+internal fun variantTypography(
+    base: Typography,
+    display: FontFamily,
+    body: FontFamily = display,
+    tweak: Typography.() -> Typography = { this },
+): Typography {
+    val withFamilies = Typography(
+        displayLarge = base.displayLarge.copy(fontFamily = display),
+        displayMedium = base.displayMedium.copy(fontFamily = display),
+        displaySmall = base.displaySmall.copy(fontFamily = display),
+        headlineLarge = base.headlineLarge.copy(fontFamily = display),
+        headlineMedium = base.headlineMedium.copy(fontFamily = display),
+        headlineSmall = base.headlineSmall.copy(fontFamily = display),
+        titleLarge = base.titleLarge.copy(fontFamily = display),
+        titleMedium = base.titleMedium.copy(fontFamily = display),
+        titleSmall = base.titleSmall.copy(fontFamily = display),
+        bodyLarge = base.bodyLarge.copy(fontFamily = body),
+        bodyMedium = base.bodyMedium.copy(fontFamily = body),
+        bodySmall = base.bodySmall.copy(fontFamily = body),
+        labelLarge = base.labelLarge.copy(fontFamily = body),
+        labelMedium = base.labelMedium.copy(fontFamily = body),
+        labelSmall = base.labelSmall.copy(fontFamily = body),
+    )
+    return withFamilies.tweak()
+}
 
+val SynthwaveTypography: Typography
+    @Composable get() = variantTypography(
+        JellyPlayTypography,
+        display = synthwaveDisplayFontFamily,
+        body = synthwaveBodyFontFamily,
+    )
+
+// The old hand-copied block also restated base weights on six more slots
+// (headlineLarge/headlineSmall/titleLarge/titleMedium/labelLarge/labelSmall);
+// those were no-ops against JellyPlayTypography's defaults, so only the real
+// deviations are declared here.
 val SoothingTypography: Typography
-    @Composable get() = Typography(
-    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
-    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
-    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = soothingFontFamily, letterSpacing = (-0.01).em),
-    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Bold, letterSpacing = (-0.005).em),
-    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Bold, letterSpacing = (-0.005).em),
-    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.005).em),
-    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Bold, letterSpacing = 0.em),
-    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold, letterSpacing = 0.em),
-    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold, letterSpacing = 0.em),
-    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = soothingFontFamily, letterSpacing = 0.1.sp),
-    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = soothingFontFamily, letterSpacing = 0.1.sp),
-    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = soothingFontFamily, letterSpacing = 0.1.sp),
-    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold),
-    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.SemiBold),
-    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = soothingFontFamily, fontWeight = FontWeight.Medium),
-)
+    @Composable get() = variantTypography(JellyPlayTypography, soothingFontFamily) {
+        copy(
+            displayLarge = displayLarge.copy(letterSpacing = (-0.01).em),
+            displayMedium = displayMedium.copy(letterSpacing = (-0.01).em),
+            displaySmall = displaySmall.copy(letterSpacing = (-0.01).em),
+            headlineLarge = headlineLarge.copy(letterSpacing = (-0.005).em),
+            headlineMedium = headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.005).em),
+            headlineSmall = headlineSmall.copy(letterSpacing = (-0.005).em),
+            titleLarge = titleLarge.copy(letterSpacing = 0.em),
+            titleMedium = titleMedium.copy(letterSpacing = 0.em),
+            titleSmall = titleSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.em),
+            bodyLarge = bodyLarge.copy(letterSpacing = 0.1.sp),
+            bodyMedium = bodyMedium.copy(letterSpacing = 0.1.sp),
+            bodySmall = bodySmall.copy(letterSpacing = 0.1.sp),
+            labelMedium = labelMedium.copy(fontWeight = FontWeight.SemiBold),
+        )
+    }
 
 val MonochromeTypography: Typography
-    @Composable get() = Typography(
-    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = monochromeDisplayFontFamily),
-    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = monochromeDisplayFontFamily),
-    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = monochromeDisplayFontFamily),
-    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = monochromeDisplayFontFamily),
-    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = monochromeDisplayFontFamily),
-    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = monochromeDisplayFontFamily),
-    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = monochromeDisplayFontFamily),
-    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = monochromeDisplayFontFamily),
-    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = monochromeDisplayFontFamily),
-    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = monochromeBodyFontFamily),
-    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = monochromeBodyFontFamily),
-    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = monochromeBodyFontFamily),
-    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = monochromeBodyFontFamily),
-    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = monochromeBodyFontFamily),
-    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = monochromeBodyFontFamily),
-)
+    @Composable get() = variantTypography(
+        JellyPlayTypography,
+        display = monochromeDisplayFontFamily,
+        body = monochromeBodyFontFamily,
+    )

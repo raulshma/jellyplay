@@ -233,6 +233,61 @@ class DownloadsViewModelTest {
         assertEquals(DownloadsUserMessage.Deleted, viewModel.messages.first())
     }
 
+    // ── Confirmation hosts (the screen's former remember{} machines) ─────
+    // DownloadsScreen drives its two delete dialogs off these hosts; the
+    // synchronous settle arm is the pinned fix for the documented
+    // "confirm write never cleared" bug.
+
+    @Test
+    fun pendingDelete_host_show_holds_the_item_for_the_dialog() = runTest(mainDispatcher) {
+        val target = item("d1", status = DownloadStatus.COMPLETED)
+
+        viewModel.pendingDelete.show(target)
+
+        assertEquals(target, viewModel.pendingDelete.item)
+        assertTrue(viewModel.pendingDelete.isPending)
+        // A second show replaces the pending target rather than stacking.
+        val other = item("d2", status = DownloadStatus.COMPLETED)
+        viewModel.pendingDelete.show(other)
+        assertEquals(other, viewModel.pendingDelete.item)
+    }
+
+    @Test
+    fun pendingDelete_host_confirm_returns_the_target_and_clears_synchronously() = runTest(mainDispatcher) {
+        val target = item("d1", status = DownloadStatus.COMPLETED)
+        viewModel.pendingDelete.show(target)
+
+        val confirmed = viewModel.pendingDelete.confirm()
+
+        assertEquals(target, confirmed)
+        // The settle arm is INSIDE confirm: nothing stays armed for the next
+        // open (the old screen-held machine's documented failure mode).
+        assertFalse(viewModel.pendingDelete.isPending)
+        assertNull(viewModel.pendingDelete.item)
+        assertNull(viewModel.pendingDelete.confirm())
+    }
+
+    @Test
+    fun pendingDelete_host_dismiss_clears_without_returning_a_target() = runTest(mainDispatcher) {
+        viewModel.pendingDelete.show(item("d1", status = DownloadStatus.COMPLETED))
+
+        viewModel.pendingDelete.dismiss(inFlight = false)
+
+        assertFalse(viewModel.pendingDelete.isPending)
+        assertNull(viewModel.pendingDelete.item)
+    }
+
+    @Test
+    fun pendingBulkDelete_host_round_trips_the_unit_payload_with_the_same_settle() = runTest(mainDispatcher) {
+        assertFalse(viewModel.pendingBulkDelete.isPending)
+
+        viewModel.pendingBulkDelete.show(Unit)
+
+        assertTrue(viewModel.pendingBulkDelete.isPending)
+        assertEquals(Unit, viewModel.pendingBulkDelete.confirm())
+        assertFalse(viewModel.pendingBulkDelete.isPending)
+    }
+
     // ── Selection ─────────────────────────────────────────────────────────
 
     @Test

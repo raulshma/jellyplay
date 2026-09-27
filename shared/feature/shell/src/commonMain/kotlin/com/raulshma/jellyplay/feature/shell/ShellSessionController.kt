@@ -22,9 +22,9 @@ import kotlinx.coroutines.launch
  * structurally richer mapping that stays put per the desktop auto-update ADR.
  *
  * Desktop renders [UpdateAvailable] / [UpToDate] / [Failed] as snackbar text;
- * its inert self-update sentinel (no desktop self-update — the
- * `999999.0.0` version sentinel makes `isUpdateAvailable` permanently false)
- * is untouched by this mapping.
+ * its no-self-update posture (no desktop self-update — the
+ * DesktopAppUpdateRepository decorator pins `isUpdateAvailable` false for dev
+ * builds) is untouched by this mapping.
  */
 sealed interface UpdateCheckMessage {
     /** A newer release exists; [latestVersion] is the tag-derived version. */

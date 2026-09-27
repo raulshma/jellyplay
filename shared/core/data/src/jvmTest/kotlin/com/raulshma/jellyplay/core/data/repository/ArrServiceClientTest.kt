@@ -22,10 +22,11 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the Radarr/Sonarr dispatch seam ([ArrServiceClient]): each adapter
- * forwards the bound [ArrServerConfig]'s baseUrl + apiKey and the call's own
- * arguments to exactly its injected client, and [ArrServiceClient.postCommand]
- * forwards only its client's subset of the parameter union — a kind-mismatched
- * parameter is silently dropped (never cross-wired to the other client).
+ * forwards the bound [ArrServerConfig] connection itself (the clients read its
+ * baseUrl + apiKey) and the call's own arguments to exactly its injected
+ * client, and [ArrServiceClient.postCommand] forwards only its client's subset
+ * of the parameter union — a kind-mismatched parameter is silently dropped
+ * (never cross-wired to the other client).
  */
 class ArrServiceClientTest {
 
@@ -69,16 +70,16 @@ class ArrServiceClientTest {
         radarrClient.exerciseForwardingSurface()
 
         coVerify {
-            radarr.getQueue("https://radarr.example", "key")
-            radarr.deleteQueueItem("https://radarr.example", "key", 42, deleteOptions)
-            radarr.deleteQueueItems("https://radarr.example", "key", listOf(1, 2), deleteOptions)
-            radarr.grabQueueItem("https://radarr.example", "key", 7)
-            radarr.importQueueItem("https://radarr.example", "key", "guid-9")
-            radarr.getCalendar("https://radarr.example", "key", "2026-01-01", "2026-01-31")
-            radarr.getBlocklist("https://radarr.example", "key")
-            radarr.deleteBlocklistItem("https://radarr.example", "key", 3)
-            radarr.deleteBlocklistItems("https://radarr.example", "key", listOf(3, 4))
-            radarr.testConnection("https://radarr.example", "key")
+            radarr.getQueue(server)
+            radarr.deleteQueueItem(server, 42, deleteOptions)
+            radarr.deleteQueueItems(server, listOf(1, 2), deleteOptions)
+            radarr.grabQueueItem(server, 7)
+            radarr.importQueueItem(server, "guid-9")
+            radarr.getCalendar(server, "2026-01-01", "2026-01-31")
+            radarr.getBlocklist(server)
+            radarr.deleteBlocklistItem(server, 3)
+            radarr.deleteBlocklistItems(server, listOf(3, 4))
+            radarr.testConnection(server)
         }
         verify { sonarr wasNot Called }
     }
@@ -88,16 +89,16 @@ class ArrServiceClientTest {
         sonarrClient.exerciseForwardingSurface()
 
         coVerify {
-            sonarr.getQueue("https://radarr.example", "key")
-            sonarr.deleteQueueItem("https://radarr.example", "key", 42, deleteOptions)
-            sonarr.deleteQueueItems("https://radarr.example", "key", listOf(1, 2), deleteOptions)
-            sonarr.grabQueueItem("https://radarr.example", "key", 7)
-            sonarr.importQueueItem("https://radarr.example", "key", "guid-9")
-            sonarr.getCalendar("https://radarr.example", "key", "2026-01-01", "2026-01-31")
-            sonarr.getBlocklist("https://radarr.example", "key")
-            sonarr.deleteBlocklistItem("https://radarr.example", "key", 3)
-            sonarr.deleteBlocklistItems("https://radarr.example", "key", listOf(3, 4))
-            sonarr.testConnection("https://radarr.example", "key")
+            sonarr.getQueue(server)
+            sonarr.deleteQueueItem(server, 42, deleteOptions)
+            sonarr.deleteQueueItems(server, listOf(1, 2), deleteOptions)
+            sonarr.grabQueueItem(server, 7)
+            sonarr.importQueueItem(server, "guid-9")
+            sonarr.getCalendar(server, "2026-01-01", "2026-01-31")
+            sonarr.getBlocklist(server)
+            sonarr.deleteBlocklistItem(server, 3)
+            sonarr.deleteBlocklistItems(server, listOf(3, 4))
+            sonarr.testConnection(server)
         }
         verify { radarr wasNot Called }
     }
@@ -106,7 +107,7 @@ class ArrServiceClientTest {
     fun radarr_postCommand_forwardsOnlyRadarrsParameterSubset() = runTest {
         val command = ArrCommand(id = 1, name = "SearchMovie", status = "queued")
         coEvery {
-            radarr.postCommand(any(), any(), any(), any(), any())
+            radarr.postCommand(any(), any(), any(), any())
         } returns Result.success(command)
 
         val result = radarrClient.postCommand(
@@ -121,7 +122,7 @@ class ArrServiceClientTest {
         assertEquals(command, result.getOrThrow())
         coVerify(exactly = 1) {
             radarr.postCommand(
-                "https://radarr.example", "key", ArrCommandName.SEARCH_MOVIE,
+                server, ArrCommandName.SEARCH_MOVIE,
                 movieIds = listOf(7), episodeIds = listOf(9),
             )
         }
@@ -131,7 +132,7 @@ class ArrServiceClientTest {
     fun sonarr_postCommand_forwardsOnlySonarrsParameterSubset() = runTest {
         val command = ArrCommand(id = 2, name = "SeriesSearch", status = "queued")
         coEvery {
-            sonarr.postCommand(any(), any(), any(), any(), any(), any())
+            sonarr.postCommand(any(), any(), any(), any(), any())
         } returns Result.success(command)
 
         val result = sonarrClient.postCommand(
@@ -146,7 +147,7 @@ class ArrServiceClientTest {
         assertEquals(command, result.getOrThrow())
         coVerify(exactly = 1) {
             sonarr.postCommand(
-                "https://radarr.example", "key", ArrCommandName.SEARCH_SERIES,
+                server, ArrCommandName.SEARCH_SERIES,
                 seriesId = 99, episodeIds = listOf(11), seasonNumber = 3,
             )
         }
@@ -155,7 +156,7 @@ class ArrServiceClientTest {
     @Test
     fun failures_passThroughUnchanged() = runTest {
         val boom = IOException("connection refused")
-        coEvery { sonarr.testConnection(any(), any()) } returns Result.failure(boom)
+        coEvery { sonarr.testConnection(any()) } returns Result.failure(boom)
 
         val result = sonarrClient.testConnection()
 

@@ -48,6 +48,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
@@ -57,12 +58,17 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridCellSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionRung
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.pagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.pagedCollectionRung
+import com.raulshma.jellyplay.core.ui.components.toPagedRefreshPhase
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
@@ -160,25 +166,29 @@ internal fun FavoritesScreen(
                 onTypeSelected = { viewModel.setMediaTypeFilter(it) },
             )
 
-            when {
-                pagingItems.loadState.refresh is LoadState.Loading && pagingItems.itemCount == 0 -> {
+            // The shared refresh ladder (core:ui chassis); the InitialLoading
+            // rung keeps this screen's delayed-spinner policy (per-site).
+            when (pagedCollectionRung(pagingItems.loadState.refresh.toPagedRefreshPhase(), pagingItems.itemCount)) {
+                PagedCollectionRung.InitialLoading -> {
                     com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen()
                 }
-                pagingItems.loadState.refresh is LoadState.Error -> {
+                PagedCollectionRung.RefreshError -> {
                     com.raulshma.jellyplay.core.ui.components.ErrorScreen(
-                        message = (pagingItems.loadState.refresh as LoadState.Error).error.message
-                            ?: stringResource(Res.string.library_failed_to_load_favorites),
+                        message = UserErrorMessages.resolve(
+                            (pagingItems.loadState.refresh as LoadState.Error).error,
+                            stringResource(Res.string.library_failed_to_load_favorites),
+                        ),
                         onRetry = { pagingItems.retry() },
                     )
                 }
-                pagingItems.itemCount == 0 && pagingItems.loadState.refresh is LoadState.NotLoading -> {
+                PagedCollectionRung.Empty -> {
                     com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
                         icon = Tabler.Outline.Heart,
                         title = stringResource(Res.string.library_no_favorites),
                         description = stringResource(Res.string.library_no_favorites_description),
                     )
                 }
-                else -> {
+                PagedCollectionRung.Content -> {
                     val gridState = rememberLazyGridState()
                     // Shared adaptive metrics (LibraryScreen/GroupedLibraryContent/
                     // PhotoAlbumScreen precedent) instead of the hand-rolled
@@ -204,7 +214,7 @@ internal fun FavoritesScreen(
                         verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                         modifier = Modifier.fillMaxSize(),
                         extraContent = {
-                            if (pagingItems.loadState.append is LoadState.Loading) {
+                            if (pagedAppendRung(pagingItems.loadState.append.toPagedRefreshPhase()) == PagedAppendRung.Loading) {
                                 item {
                                     Box(
                                         modifier = Modifier

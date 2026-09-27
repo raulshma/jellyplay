@@ -2,10 +2,9 @@ package com.raulshma.jellyplay.feature.player.video
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
@@ -58,6 +57,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.engine.mirrorPlaying
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
@@ -93,8 +93,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Minimum resolved duration (ms) before smart-download auto-cleanup may fire. */
-private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
+// The smart-download cleanup duration gate (MIN_DURATION_FOR_SMART_DELETE_MS)
+// moved into EpisodeContinuationController.kt with the cleanup itself.
 
 /**
  * How long a next-episode load may hold its single-flight latch while waiting
@@ -202,7 +202,7 @@ class VideoPlayerViewModel(
     val playerLifecycleManager: PlayerLifecycleManager,
     val pipController: PipController,
     val videoMiniPlayerState: VideoMiniPlayerState,
-    private val sleepTimerManager: SleepTimerManager,
+    private val sleepCountdown: SleepCountdown,
     private val userMessageBus: PlayerVideoMessageBus,
     private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
     // Public for the screen: the zoom-safe Compose overlay consumes the same
@@ -378,7 +378,8 @@ class VideoPlayerViewModel(
     private var engineEventOutputsJob: Job? = null
 
     // @Volatile: written from launched coroutines (applyMediaDetail) and read
-    // cross-coroutine (playNextEpisode); without it readers can see stale null.
+    // cross-coroutine (the episode-continuation controller's next-episode
+    // advance through the getDetail seam); without it readers can see stale null.
     @Volatile
     private var mediaDetail: MediaDetail? = null
 
@@ -451,7 +452,7 @@ class VideoPlayerViewModel(
         isOffline = { offlineModeManager.isOffline },
     )
     internal val sleepTimer = SleepTimerController(
-        sleepTimerManager = sleepTimerManager,
+        sleepCountdown = sleepCountdown,
         audioStore = stores.audio,
         scope = scope,
         getEngine = { playerSessionManager.engine },
@@ -599,7 +600,7 @@ class VideoPlayerViewModel(
                 subtitleStreamIndex = event.subtitleStreamIndex,
                 audioStreamIndex = event.audioStreamIndex,
             )
-            is VideoPlayerUiEvent.PlayEpisode -> playEpisode(event.episodeId, event.startPositionTicks)
+            is VideoPlayerUiEvent.PlayEpisode -> episodeContinuation.playEpisode(event.episodeId, event.startPositionTicks)
             is VideoPlayerUiEvent.RestartPlayback -> restartPlayback()
             is VideoPlayerUiEvent.RetryPlayback -> retryPlayback()
             is VideoPlayerUiEvent.RetryWithEngine -> retryWithEngine(event.playerType)
@@ -619,10 +620,10 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.ApplySubtitleStyle -> applySubtitleStyle()
             is VideoPlayerUiEvent.UpdatePipSourceRect ->
                 updatePipSourceRect(event.left, event.top, event.right, event.bottom)
-            is VideoPlayerUiEvent.PlayPreviousEpisode -> playPreviousEpisode()
-            is VideoPlayerUiEvent.PlayNextEpisode -> playNextEpisode()
-            is VideoPlayerUiEvent.MarkWatchedAndSkip -> markWatchedAndSkip()
-            is VideoPlayerUiEvent.MarkUnwatchedAndQuit -> markUnwatchedAndQuit()
+            is VideoPlayerUiEvent.PlayPreviousEpisode -> episodeContinuation.playPreviousEpisode()
+            is VideoPlayerUiEvent.PlayNextEpisode -> episodeContinuation.playNextEpisode()
+            is VideoPlayerUiEvent.MarkWatchedAndSkip -> episodeContinuation.markWatchedAndSkip()
+            is VideoPlayerUiEvent.MarkUnwatchedAndQuit -> episodeContinuation.markUnwatchedAndQuit()
             is VideoPlayerUiEvent.ToggleDialogueBoost -> toggleDialogueBoost()
             is VideoPlayerUiEvent.SetDialogueBoostStrength -> setDialogueBoostStrength(event.strength)
             is VideoPlayerUiEvent.ToggleVideoStats -> toggleVideoStats()
@@ -652,11 +653,11 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetRenderQuality -> setRenderQuality(event.quality)
             is VideoPlayerUiEvent.ClearRenderOverride -> clearRenderOverride()
             is VideoPlayerUiEvent.CycleDeinterlace -> cycleDeinterlace()
-            is VideoPlayerUiEvent.CancelAutoplay -> cancelAutoplay()
+            is VideoPlayerUiEvent.CancelAutoplay -> episodeContinuation.cancelAutoplay()
             is VideoPlayerUiEvent.SetVideoAutoplayNext -> setVideoAutoplayNext(event.enabled)
             is VideoPlayerUiEvent.SetSyncPlayRepeatMode -> setSyncPlayRepeatMode(event.mode)
             is VideoPlayerUiEvent.SetSyncPlayShuffleMode -> setSyncPlayShuffleMode(event.mode)
-            is VideoPlayerUiEvent.LoadSeasonEpisodes -> loadSeasonEpisodes(event.seasonId)
+            is VideoPlayerUiEvent.LoadSeasonEpisodes -> episodeContinuation.loadSeason(event.seasonId)
         }
     }
 
@@ -808,7 +809,11 @@ class VideoPlayerViewModel(
         onAutoSkip = { segment -> autoSkipSegment(segment) },
         onPlaybackEndedNoNext = { onEndedWithNoNext() },
         onWatchedThresholdReached = { itemId ->
-            handleSmartDownloadCleanup(itemId)
+            // Forwarded into the episode-continuation controller declared
+            // below — the lambda only runs long after construction, so its
+            // (lazy) read of the not-yet-initialised property is safe (the
+            // trackSelectionHelper.persistRememberedTrack pattern).
+            episodeContinuation.handleSmartDownloadCleanup(itemId)
             // Closes the gap where playback crossed the watched threshold but no
             // clean Stop telemetry reached the server (process kill / crash),
             // leaving the item unplayed server-side.
@@ -967,10 +972,12 @@ class VideoPlayerViewModel(
 
         override fun hydrateReclaimedItem(itemId: String, detail: MediaDetail) {
             // Old loadReclaimedEngine-hook tail: the uiState-writing
-            // hydration fetches, in their old order.
+            // hydration fetches, in their old order. (Lazy forward into the
+            // episode-continuation controller declared below — invoked long
+            // after construction.)
             fetchMediaSegments(itemId)
-            episodeNavigator.refreshAdjacent(detail)
-            episodeNavigator.loadSeries(detail)
+            episodeContinuation.refreshAdjacent(detail)
+            episodeContinuation.loadSeries(detail)
         }
 
         override fun releaseMiniPlayerState() {
@@ -1076,8 +1083,8 @@ class VideoPlayerViewModel(
             startPositionTracking = { progressReporter.startPositionTracking() },
             startProgressReporting = { progressReporter.startProgressReporting() },
             fetchMediaSegments = { itemId -> fetchMediaSegments(itemId) },
-            fetchAdjacentEpisodes = { detail -> episodeNavigator.refreshAdjacent(detail) },
-            loadSeriesEpisodes = { detail -> episodeNavigator.loadSeries(detail) },
+            fetchAdjacentEpisodes = { detail -> episodeContinuation.refreshAdjacent(detail) },
+            loadSeriesEpisodes = { detail -> episodeContinuation.loadSeries(detail) },
             // No terminal-outcome action today; stated explicitly here so a
             // future consumer is a construction-site change, not a hidden
             // default somewhere else.
@@ -1167,171 +1174,78 @@ class VideoPlayerViewModel(
     )
 
     /**
-     * Episode navigation (season/episode browsing, adjacent discovery,
-     * previous/next choreography with the #146 single-flight latch) — the
-     * extracted module; the VM keeps thin funnels for the screen, the PiP
-     * transport and the autoplay decision.
+     * Episode continuation — the extracted module behind the season/episode
+     * browsing, adjacent discovery, previous/next choreography with the #146
+     * single-flight latch, the "mark watched & skip" / "mark unwatched & quit"
+     * overflow orchestration, the autoplay-cancel wiring, the Up Next
+     * overlay's loading flag and the smart-download cleanup
+     * ([EpisodeContinuationController]); the VM keeps thin funnels for the
+     * screen, the PiP transport and the end-of-playback autoplay decision.
+     *
+     * Declared after [playbackSession] (the navigator latches onto its
+     * events). The lambdas below capture only stable handles and read
+     * later-declared collaborators lazily — invoked long after construction,
+     * the trackSelectionHelper.persistRememberedTrack pattern — so the
+     * load-bearing construction order (progressReporter / sessionHost /
+     * sessionLoadPipeline above) is unchanged.
      */
-    private val episodeNavigator = EpisodeNavigator(
+    private val episodeContinuation = EpisodeContinuationController(
         scope = scope,
         sessionState = playerSessionManager.sessionState,
         sessionEvents = playbackSession.events,
+        episodeCatalogue = episodeCatalogue,
         getDetail = { mediaDetail },
         getSeriesId = { mediaDetail?.item?.seriesId ?: _uiState.value.media.seriesId },
-        episodeCatalogue = episodeCatalogue,
-        trySyncPlayNext = { nextItemId ->
-            routeSyncPlayAdvance(nextItemId) { currentPlaylistItemId ->
-                syncPlay.sendNextItem(currentPlaylistItemId)
-            }
-        },
-        trySyncPlayPrevious = { previousItemId ->
-            routeSyncPlayAdvance(previousItemId) { currentPlaylistItemId ->
-                syncPlay.sendPreviousItem(currentPlaylistItemId)
-            }
-        },
-        onAdvanceFrom = { currentItemId ->
-            if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
-                runCatchingRethrowingCancellation { userDataMutator.setPlayed(currentItemId, played = true) }
-            }
-        },
-        reportLoadError = {
-            userMessageBus.error(getString(Res.string.player_video_error_next_episode_load))
+        updateEpisodes = { update ->
+            _uiState.update { it.copy(episodes = update(it.episodes)) }
         },
         initializeItem = { itemId, startPositionTicks ->
             initialize(itemId, null, startPositionTicks)
         },
-        updateEpisodes = { update ->
-            _uiState.update { it.copy(episodes = update(it.episodes)) }
+        reportLoadError = {
+            userMessageBus.error(getString(Res.string.player_video_error_next_episode_load))
         },
+        isInSyncPlayGroup = { syncPlayManager.isInSyncPlaySession },
+        getCurrentGroup = { syncPlayManager.currentGroup },
+        sendNextItem = { currentPlaylistItemId ->
+            syncPlay.sendNextItem(currentPlaylistItemId)
+        },
+        sendPreviousItem = { currentPlaylistItemId ->
+            syncPlay.sendPreviousItem(currentPlaylistItemId)
+        },
+        isIncognito = { cachedAggregate.videoPlayer.incognitoModeEnabled },
+        markPlayed = { itemId -> userDataMutator.setPlayed(itemId, played = true) },
+        recordPlayedOffline = { itemId -> offlinePlaybackFacade.recordPlayed(itemId) },
+        markUnwatched = { itemId -> userDataMutator.setPlayed(itemId, played = false) },
+        getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
+        hasNextEpisode = { _uiState.value.episodes.nextEpisode != null },
+        isInSyncPlaySession = { _uiState.value.isInSyncPlaySession },
+        closePlayer = { _closePlayer.trySend(Unit) },
+        cancelAutoplayDecision = { autoplayController.cancel() },
+        setAutoplayCancelledMirror = { cancelled ->
+            _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = cancelled)) }
+        },
+        isSmartDownloadsEnabled = { stores.downloads.downloads.value.smartDownloadsEnabled },
+        getDurationMs = { _uiState.value.duration },
+        deleteDownload = { itemId -> offlinePlaybackFacade.deleteDownload(itemId) },
+        notifySmartDownloadDeleted = { userMessageBus.info(PlayerVideoMessage.SmartDownloadDeleted) },
     )
 
     /** True while a next-episode advance is in flight and unsettled (#146). */
-    val isNextEpisodeLoading: StateFlow<Boolean> get() = episodeNavigator.isNextEpisodeLoading
+    val isNextEpisodeLoading: StateFlow<Boolean> get() = episodeContinuation.isNextEpisodeLoading
 
-    /**
-     * The group-queue check the next/previous advance lambdas share: when the
-     * SyncPlay group's queue holds the sibling item, the advance goes through
-     * the group command ([send] receives the currently-playing queue entry)
-     * and returns true; false falls back to a local reload.
-     */
-    private fun routeSyncPlayAdvance(
-        siblingItemId: String,
-        send: (currentPlaylistItemId: String) -> Unit,
-    ): Boolean {
-        if (!syncPlayManager.isInSyncPlaySession) return false
-        val group = syncPlayManager.currentGroup
-        val currentPlaylistItemId = group?.playingPlaylistItemId
-        val siblingInQueue = group?.playlistItemMap?.values?.contains(siblingItemId) == true
-        if (currentPlaylistItemId != null && siblingInQueue) {
-            send(currentPlaylistItemId)
-            return true
-        }
-        return false
-    }
-
-    /** Loads one season's episode list (episode sheet season click). */
-    private fun loadSeasonEpisodes(seasonId: String) = episodeNavigator.loadSeason(seasonId)
-
-    /** Starts playback of a picked episode at its saved position. */
-    private fun playEpisode(episodeId: String, startPositionTicks: Long = 0L) {
-        initialize(episodeId, null, startPositionTicks)
-    }
-
-    private fun playPreviousEpisode() = episodeNavigator.previous()
-
-    private fun playNextEpisode() = episodeNavigator.next()
-
-    /**
-     * "Mark watched & skip": marks the current item played through
-     * the SAME mutation path the watched-threshold callback uses —
-     * `UserDataMutator.setPlayed` (PlayedStateSync fan-out + self-invalidation;
-     * an offline session lands in the playback outbox), or the local-only
-     * offline mark in incognito ([OfflinePlaybackFacade.recordPlayed], the
-     * threshold callback's incognito arm). `SeenMediaRepository` is
-     * notification de-dup and is deliberately not consulted. Then advances to
-     * the next episode (reusing [playNextEpisode] so the SyncPlay group-queue
-     * routing and the #146 single-flight latch apply unchanged), or closes
-     * the player when there is no next. The advance itself marks played again
-     * (`EpisodeNavigator.onAdvanceFrom`) — idempotent server-side, and it is
-     * what covers the episode BEFORE the threshold callback would.
-     *
-     * NonCancellable: the player may tear down immediately after the advance
-     * close, exactly when the mark must survive (same reasoning as the
-     * threshold callback's launch).
-     */
-    private fun markWatchedAndSkip() {
-        val decision = decideWatchedActions(
-            hasNext = _uiState.value.episodes.nextEpisode != null,
-            incognito = cachedAggregate.videoPlayer.incognitoModeEnabled,
-            isInSyncPlay = _uiState.value.isInSyncPlaySession,
-        )
-        val itemId = playerSessionManager.sessionState.value.currentItemId
-        if (itemId != null) {
-            launch(NonCancellable) {
-                when (decision.watchedMarkPath) {
-                    WatchedMarkPath.SERVER ->
-                        runCatchingRethrowingCancellation { userDataMutator.setPlayed(itemId, played = true) }
-                    WatchedMarkPath.OFFLINE_LOCAL ->
-                        runCatchingRethrowingCancellation { offlinePlaybackFacade.recordPlayed(itemId) }
-                }
-            }
-        }
-        if (decision.watchedAdvancesToNext) {
-            playNextEpisode()
-        } else {
-            _closePlayer.trySend(Unit)
-        }
-    }
-
-    /**
-     * "Mark unwatched & exit": clears the played flag through
-     * [UserDataMutator.setPlayed] (server/outbox path — incognito is a no-op
-     * mark by design, the decision helper says so) and closes the player. The
-     * unwatching is the feature's point: the threshold callback or an
-     * auto-advance may have marked the item while the user watched something
-     * else in it.
-     */
-    private fun markUnwatchedAndQuit() {
-        val decision = decideWatchedActions(
-            hasNext = _uiState.value.episodes.nextEpisode != null,
-            incognito = cachedAggregate.videoPlayer.incognitoModeEnabled,
-            isInSyncPlay = _uiState.value.isInSyncPlaySession,
-        )
-        val itemId = playerSessionManager.sessionState.value.currentItemId
-        if (decision.unwatchedMarkApplied && itemId != null) {
-            launch(NonCancellable) {
-                runCatchingRethrowingCancellation { userDataMutator.setPlayed(itemId, played = false) }
-            }
-        }
-        _closePlayer.trySend(Unit)
-    }
+    // markWatchedAndSkip / markUnwatchedAndQuit (the overflow mark-and-then
+    // orchestration) moved into EpisodeContinuationController — the onEvent
+    // arms above route to it directly.
 
     private var engineCollectionJob: Job? = null
 
     // The subtitle-delay apply job (subtitleDelayApplyJob) moved into
     // SubtitleStyleController with the debounce it backs (A7).
 
-    /**
-     * Auto-removes a finished download when the user crosses the watched
-     * threshold, gated by the `smartDownloadsEnabled` preference.
-     *
-     * Guards against the two risks flagged in the architecture analysis:
-     * - *Premature delete on misreported duration*: the reporter derives
-     * "95% watched" from `position / duration`. A live stream or a buggy
-     * container can report a tiny/growing duration and trip the threshold
-     * almost immediately. We require the resolved duration to be at least
-     * [MIN_DURATION_FOR_SMART_DELETE_MS] before deleting.
-     * - *Silent destructive action*: the deletion is now surfaced to the
-     * user via [userMessageBus] instead of happening invisibly.
-     */
-    private fun handleSmartDownloadCleanup(itemId: String) {
-        if (!stores.downloads.downloads.value.smartDownloadsEnabled) return
-        if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
-        launch {
-            if (!offlinePlaybackFacade.deleteDownload(itemId)) return@launch
-            userMessageBus.info(PlayerVideoMessage.SmartDownloadDeleted)
-        }
-    }
+    // handleSmartDownloadCleanup (the smart-download auto-remove behind the
+    // watched-threshold callback) moved into EpisodeContinuationController;
+    // the reporter's callback above forwards into it.
 
     val hapticsEnabled: Boolean get() = stores.appearance.appearance.value.hapticsEnabled
 
@@ -1801,20 +1715,23 @@ class VideoPlayerViewModel(
         engineEventOutputsJob?.cancel()
         val coordinator = playbackSession.engineEventCoordinator
         engineEventOutputsJob = launch {
-            launch {
-                coordinator.isPlaying.collect { isPlaying ->
-                    // Guard against same-value updates so a redundant isPlaying
-                    // emission does not allocate a fresh uiState copy and
-                    // invalidate every uiState collector.
+            // The play-state mirror (uiState write + SyncPlay forward + PiP
+            // icon) is the shared [mirrorPlaying] collector — its same-value
+            // guard and fan-out order live in player-contract.
+            mirrorPlaying(
+                coordinator.isPlaying,
+                // The mirror already swallows same-value emissions; this second
+                // check trims only the re-arm replay, where the live uiState
+                // may already hold the replayed value — skip the copy so the
+                // uiState collectors are not invalidated.
+                { isPlaying ->
                     _uiState.update { s ->
                         if (s.isPlaying == isPlaying) s else s.copy(isPlaying = isPlaying)
                     }
-                    syncPlay.onIsPlayingChanged(isPlaying)
-                    // Mirror play state so the Activity can render the correct
-                    // play/pause icon on the PiP window.
-                    pipController.setPlaying(isPlaying)
-                }
-            }
+                },
+                { isPlaying -> syncPlay.onIsPlayingChanged(isPlaying) },
+                { isPlaying -> pipController.setPlaying(isPlaying) },
+            )
             launch {
                 coordinator.isBuffering.collect { buffering ->
                     _uiState.update { s ->
@@ -1855,7 +1772,7 @@ class VideoPlayerViewModel(
                 // skip buttons, previously computed inline with only a 0-floor.
                 PipAction.SKIP_FORWARD -> seekByStep(+1)
                 PipAction.SKIP_BACKWARD -> seekByStep(-1)
-                PipAction.NEXT -> playNextEpisode()
+                PipAction.NEXT -> episodeContinuation.playNextEpisode()
             }
         }
     }
@@ -2482,15 +2399,13 @@ class VideoPlayerViewModel(
         configChangeIntent.tryEmit(Unit)
     }
 
-    private fun cancelAutoplay() {
-        autoplayController.cancel()
-        _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = true)) }
-    }
+    // cancelAutoplay (the Up Next overlay's countdown dismissal) moved into
+    // EpisodeContinuationController; the CancelAutoplay arm above routes to it.
 
     private fun handlePlaybackEnded() {
         val next = _uiState.value.episodes.nextEpisode
         if (autoplayController.shouldAutoPlayNext(next)) {
-            playNextEpisode()
+            episodeContinuation.playNextEpisode()
         } else {
             onEndedWithNoNext()
         }
@@ -2639,7 +2554,7 @@ class VideoPlayerViewModel(
     private fun executeSegmentSkip(target: SegmentSkipTarget, userInitiated: Boolean) {
         when (target) {
             is SegmentSkipTarget.SeekToPosition -> seekTo(target.positionMs, userInitiated)
-            SegmentSkipTarget.SkipToNextEpisode -> playNextEpisode()
+            SegmentSkipTarget.SkipToNextEpisode -> episodeContinuation.playNextEpisode()
             SegmentSkipTarget.AdvanceCinemaIntro -> playbackSession.advanceCinemaIntro()
             SegmentSkipTarget.None -> Unit
         }
@@ -2651,9 +2566,9 @@ class VideoPlayerViewModel(
         // (overview, people, artwork, series id) goes through the projector.
         _uiState.update { it.copy(chapters = detail.chapters) }
         mediaContentProjector.onDetail(detail, artworkUrl = getImageUrl(detail.item.id, 400))
-        // The episode-slice write goes through the navigator's seam — it is
-        // the slice's single writer (CONTEXT.md).
-        episodeNavigator.adoptSeasonOf(detail)
+        // The episode-slice write goes through the continuation controller's
+        // seam — the navigator is the slice's single writer (CONTEXT.md).
+        episodeContinuation.adoptSeasonOf(detail)
         fetchCompanionLyrics(detail)
         applyVolumeMemory(detail)
     }
@@ -2965,9 +2880,9 @@ class VideoPlayerViewModel(
         // not reset — by its owning controller above. The surviving leaves are
         // declared in [keepAcrossItems].
         _uiState.update { it.keepAcrossItems() }
-        // The episode-slice reset goes through the navigator's seam — it is
-        // the slice's single writer (CONTEXT.md).
-        episodeNavigator.resetForItemSwitch()
+        // The episode-slice reset goes through the continuation controller's
+        // seam — the navigator is the slice's single writer (CONTEXT.md).
+        episodeContinuation.resetForItemSwitch()
 
         // Clear the high-frequency display streams the seek bar reads. They live
         // outside uiState (to avoid ~4 Hz whole-screen recomposition) and are

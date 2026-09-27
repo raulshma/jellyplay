@@ -1,15 +1,11 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.data.paging.JellyfinPagingSource
 import com.raulshma.jellyplay.core.data.paging.pagedMediaPager
 import com.raulshma.jellyplay.core.data.paging.searchPagingSource
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
@@ -34,17 +30,14 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroup
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroups
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.withContext
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
 // core:data shim (same package/name). Ctor-level transforms only — method
@@ -74,7 +67,20 @@ import kotlinx.coroutines.withContext
 // inside the module, and no external code names the concrete type.
 class MediaRepositoryImpl internal constructor(
     private val apiClient: JellyfinApiClient,
-    private val homeSectionCacheDao: HomeSectionCacheDao,
+    /**
+     * The deep "home-sections snapshot store": the single owner of the
+     * PERSISTED half of the home pipeline (the Room SWR snapshot — persist
+     * dedup choreography, identity-scoped privacy clear, the two cold-open
+     * reads). Injected (not constructed) so `getHomeSections`' persist hook,
+     * `getCachedHomeSections` and `getOfflineHomeLayout` delegate to it, the
+     * same shape as the [episodeCatalogue] delegation. The store depends on
+     * the DAO + `HomeSession` + `TimeSource` only (never on
+     * `MediaRepository`), so this edge does NOT form a DI cycle — both are
+     * Koin singles in `core:data` and the constructor edge fixes the
+     * direction. The IN-MEMORY half ([homeSectionsCache], the roll epoch,
+     * the SWR layering) stays here.
+     */
+    private val homeSnapshotStore: HomeSectionsSnapshotStore,
     private val playedStateSync: PlayedStateSync,
     /**
      * The deep "Episode Catalogue": the single owner of the series
@@ -226,7 +232,8 @@ class MediaRepositoryImpl internal constructor(
     // TTL comes from the shared home freshness policy (HomeFreshness); the
     // clock is the injected [timeSource]'s MONOTONIC read — TtlCache's
     // contract requires one, and the same fake drives the Room SWR ceiling's
-    // wall-clock read.
+    // wall-clock read. The PERSISTED half of the home pipeline (the Room SWR
+    // snapshot its dedup/fetch choreography) lives on [homeSnapshotStore].
     private val homeSectionsCache = TtlCache<HomeSectionsResult>(
         maxSize = 1,
         ttlMs = HomeFreshness.REPO_MEMORY_TTL_MS,
@@ -331,26 +338,9 @@ class MediaRepositoryImpl internal constructor(
             // (which has no identity context). Null only on SignedIn,
             // which the registry excludes.
             transition.previousIdentity?.let { previous ->
-                clearHomeSectionsForIdentity(previous.serverId, previous.userId)
+                homeSnapshotStore.clearIdentity(previous.serverId, previous.userId)
             }
         }
-    }
-
-    /**
-     * Clears the persisted home-section SWR snapshot for a single (server, user).
-     * Failure is logged, not swallowed: this runs on logout / identity switch and
-     * a silent failure would leave the just-logged-out user's home payload in the
-     // table, to be served to a different user on the next cold open.
-     */
-    private suspend fun clearHomeSectionsForIdentity(serverId: String, userId: String) {
-        runCatchingRethrowingCancellation { homeSectionCacheDao.clearForIdentity(serverId, userId) }
-            .onFailure { e ->
-                Log.w(
-                    "MediaRepo",
-                    "Failed to clear home-section SWR cache for server=$serverId user=$userId",
-                    e,
-                )
-            }
     }
 
     override suspend fun getHomeSections(
@@ -374,8 +364,10 @@ class MediaRepositoryImpl internal constructor(
                 // snapshot for stale-while-revalidate on cold open (the in-memory
                 // cache is lost on process death) after the in-memory put, and
                 // never on a cache hit, so a hit cannot slide the persisted row's
-                // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
-                onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
+                // fetchedAt forward and defeat the 24h SWR staleness ceiling.
+                // The choreography itself (dedup window, encode, upsert) lives
+                // on the [homeSnapshotStore].
+                onFetched = { homeSnapshotStore.persist(cacheKey, it) },
                 currentEpoch = discoverRollEpoch::get,
             ) {
                 // The query value object crosses the repo → network seam intact;
@@ -432,157 +424,15 @@ class MediaRepositoryImpl internal constructor(
 
     override suspend fun getCachedHomeSections(
         query: HomeSectionQuery,
-    ): HomeSectionsResult? {
-        // Read identity from the source flow (via HomeSession's sanctioned
-        // suspend read), not the mirror: this runs from the Home VM's
-        // currentUser collector, which can fire before the session's identity
-        // observer has written the mirror. .first() is suspend + non-blocking
-        // and guarantees the current value, so the SWR read never misses due
-        // to an observe ordering race.
-        val identity = homeSession.currentIdentity() ?: return null
-        val entity = homeSectionCacheDao.get(identity.serverId, identity.userId, query.cacheKey()) ?: return null
-        // SWR staleness ceiling (HomeFreshness): a snapshot older than 24h
-        // must not instant-paint — return null so a cold open shows the
-        // spinner instead of ancient content, then the normal refresh
-        // proceeds and upserts a fresh row.
-        if (!HomeFreshness.isRoomSnapshotFresh(entity.fetchedAt, timeSource.nowEpochMillis())) {
-            return null
-        }
-        // Decode the payload off the caller's (Main) dispatcher — this is the
-        // cold-open critical path and the blob spans hundreds of MediaItems.
-        return withContext(Dispatchers.Default) { entity.payload }
-    }
+    ): HomeSectionsResult? =
+        // The persisted read's contracts (identity-source-flow read, the 24h
+        // SWR staleness ceiling, the off-dispatch decode) live on the store.
+        homeSnapshotStore.cached(query)
 
-    override suspend fun getOfflineHomeLayout(): HomeSectionsResult? {
-        val identity = homeSession.currentIdentity() ?: return null
-        // Key-agnostic latest row and no freshness ceiling, by contract (see
-        // the interface KDoc): the offline home re-filters membership against
-        // the offline store, so staleness only costs section ORDER/titles,
-        // never content. Decode off the caller's dispatcher like the SWR read.
-        val entity = homeSectionCacheDao.getLatestForIdentity(identity.serverId, identity.userId)
-            ?: return null
-        return withContext(Dispatchers.Default) { entity.payload }
-    }
-
-    /**
-     * In-memory record of the last home snapshot this process persisted (or
-     * verified byte-identical) for one (server, user, cacheKey): the DB row's
-     * `fetchedAt` it was computed against, plus the cheap fingerprint of the
-     * payload ([HomeSnapshotFingerprint]). Lets the dedup window in
-     * [persistHomeSectionsSnapshot] skip the full JSON re-encode on
-     * usually-identical foreground refreshes. Null until the first persist
-     * of the process — a miss simply takes the exact encode+compare path.
-     */
-    private class HomeSnapshotDedupState(
-        val serverId: String,
-        val userId: String,
-        val cacheKey: String,
-        val rowFetchedAt: Long,
-        val fingerprint: Int,
-    )
-
-    // @Volatile: persistHomeSectionsSnapshot runs on the caller's dispatcher
-    // (the home refresh path), which is not pinned to one thread.
-    @Volatile
-    private var lastHomeSnapshotDedup: HomeSnapshotDedupState? = null
-
-    private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
-        val identity = homeSession.currentIdentity() ?: return
-        // Fire-and-forget persist on the home refresh path: a cancelled
-        // collector must still cancel, not park cancellation in a discarded
-        // Result — the block suspends on Room reads/writes and the encode.
-        runCatchingRethrowingCancellation {
-            // Foreground refreshes arrive ~once/minute with usually-identical
-            // content; when the prior row is younger than the refresh cadence
-            // and the payload is byte-identical, the rewrite would advance
-            // nothing (fetchedAt refreshes at the next real change) — skip it.
-            // Rows older than the window still rewrite, preserving the 24h
-            // fetchedAt SWR staleness ceiling for every other path.
-            val now = timeSource.nowEpochMillis()
-            val existing = homeSectionCacheDao.get(identity.serverId, identity.userId, cacheKey)
-            // Computed once here: the cheap-path check and both
-            // rememberHomeSnapshotDedup exits below all need the same value.
-            val fingerprint = HomeSnapshotFingerprint.of(result)
-            // Cheap-path dedup: inside the window, a fingerprint
-            // match against the last payload this process persisted/verified
-            // for this exact (server, user, cacheKey, row) skips the full
-            // encode — that encode used to run on every ~1/min refresh and
-            // allocate a several-hundred-KB string even when byte-identical.
-            // INVARIANT: fingerprint equal ⇒ the encode would have been
-            // byte-identical is NOT guaranteed (only section identity, item
-            // ids and their user-data fields are fingerprinted — see
-            // [HomeSnapshotFingerprint]), so a metadata-only change inside
-            // the window persists one refresh cycle later.
-            // Fingerprint unequal, window expired, or no prior state ⇒ the
-            // exact pre-existing encode+compare+write path below runs.
-            if (existing != null && now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS) {
-                val last = lastHomeSnapshotDedup
-                if (last != null &&
-                    last.serverId == identity.serverId &&
-                    last.userId == identity.userId &&
-                    last.cacheKey == cacheKey &&
-                    last.rowFetchedAt == existing.fetchedAt &&
-                    last.fingerprint == fingerprint
-                ) {
-                    return
-                }
-            }
-            // Encode off the caller's (Main) dispatcher — this runs on every
-            // successful home refresh (min. once/minute in foreground).
-            val payloadJson = withContext(Dispatchers.Default) {
-                com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(result)
-            }
-            if (existing != null &&
-                now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS &&
-                existing.payloadJson == payloadJson
-            ) {
-                // Byte-identical inside the window: remember the fingerprint
-                // (against this row's fetchedAt) so the next in-window
-                // refresh can take the cheap path above.
-                rememberHomeSnapshotDedup(identity, cacheKey, existing.fetchedAt, fingerprint)
-                return
-            }
-            homeSectionCacheDao.upsert(
-                HomeSectionCacheEntity(
-                    serverId = identity.serverId,
-                    userId = identity.userId,
-                    cacheKey = cacheKey,
-                    payloadJson = payloadJson,
-                    // Wall-clock on purpose: this value must survive a reboot to
-                    // serve the next cold open, and monotonic clocks reset on
-                    // boot. Goes through the injected [TimeSource] (wall-clock
-                    // read in production) — the in-memory TTL above uses the
-                    // same seam's monotonic read, so both freshness gates
-                    // share one test fake.
-                    // fetchedAt is load-bearing: getCachedHomeSections reads it
-                    // against HomeFreshness's 24h SWR staleness ceiling.
-                    fetchedAt = now,
-                ),
-            )
-            rememberHomeSnapshotDedup(identity, cacheKey, now, fingerprint)
-        }
-    }
-
-    /**
-     * Records [lastHomeSnapshotDedup] for the row fetchedAt the fingerprint
-     * was computed against — both persist paths (skipped rewrite and fresh
-     * upsert) funnel through here. Takes the fingerprint the caller already
-     * computed rather than recomputing it.
-     */
-    private fun rememberHomeSnapshotDedup(
-        identity: SessionIdentity,
-        cacheKey: String,
-        rowFetchedAt: Long,
-        fingerprint: Int,
-    ) {
-        lastHomeSnapshotDedup = HomeSnapshotDedupState(
-            serverId = identity.serverId,
-            userId = identity.userId,
-            cacheKey = cacheKey,
-            rowFetchedAt = rowFetchedAt,
-            fingerprint = fingerprint,
-        )
-    }
+    override suspend fun getOfflineHomeLayout(): HomeSectionsResult? =
+        // Key-agnostic latest row, no freshness ceiling — the contracts live
+        // on the store.
+        homeSnapshotStore.offlineLayout()
 
     override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> =
         libraryFoldersCache.getOrFetch({ homeSession.cacheIdentity() }, "folders", force = force) {
@@ -1082,7 +932,7 @@ class MediaRepositoryImpl internal constructor(
         // (which have no identity context). Clearing wholesale here would wipe
         // every user's snapshot on any sync, defeating the multi-account SWR
         // benefit. The registry action clears the previous identity's rows
-        // directly via clearHomeSectionsForIdentity() — see the init block above.
+        // directly via homeSnapshotStore.clearIdentity() — see the init block above.
     }
 
     //  Facade split: the three NewsletterRepository members that used to live
@@ -1104,8 +954,9 @@ class MediaRepositoryImpl internal constructor(
         // MediaRepositoryInternals) at their construction sites above — same
         // values, one readable answer for "what is stale where".
 
-        /** Window within which a byte-identical home SWR persist is skipped (foreground refresh cadence). */
-        private const val HOME_PERSIST_DEDUP_WINDOW_MS = 60 * 1000L
+        // The home-persist dedup window (HOME_PERSIST_DEDUP_WINDOW_MS, 60s)
+        // moved with the persisted half of the home pipeline into
+        // HomeSectionsSnapshotStore's companion.
     }
 
     override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> =

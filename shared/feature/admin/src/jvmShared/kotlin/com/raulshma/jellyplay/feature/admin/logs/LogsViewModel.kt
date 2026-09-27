@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.Job
@@ -49,6 +50,9 @@ class LogsViewModel(
 
         /** Cap for the live dedup id set — 2× the display buffer it guards. */
         const val MAX_LIVE_ENTRY_IDS = MAX_LIVE_ENTRIES * 2
+
+        /** Server page size for the paginated activity fetch (cold load + more-loads). */
+        const val ACTIVITY_PAGE_SIZE = 50
     }
 
     private var liveCollectJob: Job? = null
@@ -75,7 +79,7 @@ class LogsViewModel(
                 fetch = {
                     runCatchingRethrowingCancellation {
                         val logFilesDeferred = async { adminRepository.getLogFiles() }
-                        val activityDeferred = async { adminRepository.getActivityLogEntries(limit = 50) }
+                        val activityDeferred = async { adminRepository.getActivityLogEntries(limit = ACTIVITY_PAGE_SIZE) }
                         logFilesDeferred.await() to activityDeferred.await()
                     }
                 },
@@ -283,20 +287,34 @@ class LogsViewModel(
     }
 
     /**
-     * Fetches the next activity page at `startIndex = currentSize`. Re-entry
-     * safe: a fast fling used to fire this re-entrantly with the same
-     * startIndex before the buffer grew, double-appending the same server
-     * page (the screen's `!isLoadingMore` guard was fed a hardcoded `false`).
-     * The in-flight flag is raised synchronously (before the coroutine) and
-     * mirrored into [LogsState.isLoadingMoreActivity] so both this guard and
-     * the screen's infinite-list guard see it.
+     * Fetches the next activity page at `startIndex = currentSize`, routed
+     * through the [PageAppender] guard: a call landing while an older-page
+     * fetch is in flight is suppressed — a fast fling used to fire this
+     * re-entrantly with the same startIndex before the buffer grew,
+     * double-appending the same server page (the screen's `!isLoadingMore`
+     * guard was fed a hardcoded `false`). The in-flight flag stays in
+     * [LogsState] (the stateless guard reads the site's flag), raised
+     * synchronously before the coroutine so both this guard and the
+     * screen's infinite-list guard see it. The fetch offset stays the live
+     * list size — skip-based rather than page-numbered, since live-tail
+     * prepends keep the size off any page multiple — so the guard's
+     * returned ordinal is unused; what's adopted is the suppress-or-proceed
+     * decision, with `hasMore` held true: the skip pager has no terminal
+     * gate, an exhausted server just answers with an empty page.
      */
     fun loadMoreActivity() {
-        if (_state.value.isLoadingMoreActivity) return
-        _state.value = _state.value.copy(isLoadingMoreActivity = true)
+        val s = _state.value
+        PageAppender.nextPageOrNull(
+            // Synthetic ordinal — this skip pager has no page math (see KDoc);
+            // only the guard's suppress-or-proceed decision is consumed.
+            currentPage = s.activityEntries.size / ACTIVITY_PAGE_SIZE,
+            inFlight = s.isLoadingMoreActivity,
+            hasMore = true,
+        ) ?: return
+        _state.value = s.copy(isLoadingMoreActivity = true)
         launch {
             val currentSize = _state.value.activityEntries.size
-            val result = adminRepository.getActivityLogEntries(startIndex = currentSize, limit = 50)
+            val result = adminRepository.getActivityLogEntries(startIndex = currentSize, limit = ACTIVITY_PAGE_SIZE)
             result.onSuccess { more ->
                 activityEntriesBuffer.addAll(more)
                 _state.value = _state.value.copy(

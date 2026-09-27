@@ -249,6 +249,11 @@ class DetailViewModelTest {
             themeMusicPlayer = themeMusicPlayer,
             actionFactories = actionFactories,
             mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+            // Smart-play resolution rides the test scheduler: the production
+            // Default-dispatcher launch races `advanceUntilIdle` (the flake in
+            // smartPlay_resumeTakesPrecedenceOverNextUp), the injected
+            // dispatcher makes the post-load uiState read deterministic.
+            smartPlayDispatcher = mainDispatcher,
         )
     }
 

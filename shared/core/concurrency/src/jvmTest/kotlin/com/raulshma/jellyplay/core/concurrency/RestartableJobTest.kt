@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.shell
+package com.raulshma.jellyplay.core.concurrency
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -8,8 +8,8 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /**
  * Pins the single-restartable-slot contract: [RestartableJob.launchIn] must

@@ -11,17 +11,13 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
-import org.koin.core.context.startKoin
-import org.koin.core.context.stopKoin
-import org.koin.dsl.module
 
 /**
  * Pure-logic tests for the desktop auto-update client
  * (docs/adr/desktop-auto-update.md): the installed-version classification
  * from the generated build-info channel, the dev-build suppression in
- * [DesktopAppUpdateRepository], the browser-link picker (with the
- * Android-APK false-attach guard), and the Koin load-order contract the
- * Main.kt override relies on. The network feed itself is the shared
+ * [DesktopAppUpdateRepository], and the browser-link picker (with the
+ * Android-APK false-attach guard). The network feed itself is the shared
  * GitHubReleasesApiImpl (tested in :shared:core:network); nothing here
  * touches it.
  */
@@ -265,26 +261,5 @@ class DesktopAppUpdateTest {
     fun nullAndEmptyInfo_pickNothing() {
         assertNull(DesktopUpdateLinks.pick(null))
         assertNull(DesktopUpdateLinks.pick(info(htmlUrl = "", assetName = null, assetUrl = null)))
-    }
-
-    // --------------------------------- Koin load-order contract (override)
-
-    private interface ProbeService
-    private class EarlyProbe : ProbeService
-    private class LateProbe : ProbeService
-
-    @Test
-    fun allowOverride_laterModuleWinsTheMapping() {
-        // The exact contract Main.kt relies on: with allowOverride(true), the
-        // definition loaded LAST (desktopAppUpdateModule, after
-        // desktopDataModule) wins the mapping.
-        val early = module { single<ProbeService> { EarlyProbe() } }
-        val late = module { single<ProbeService> { LateProbe() } }
-        try {
-            val app = startKoin { allowOverride(true); modules(early, late) }
-            assertTrue(app.koin.get<ProbeService>() is LateProbe)
-        } finally {
-            stopKoin()
-        }
     }
 }

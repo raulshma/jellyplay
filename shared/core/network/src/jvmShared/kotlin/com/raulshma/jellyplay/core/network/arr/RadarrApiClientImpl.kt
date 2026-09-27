@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import kotlinx.serialization.encodeToString
 import okhttp3.OkHttpClient
@@ -39,78 +40,70 @@ class RadarrApiClientImpl(
     /** The one v3 endpoint engine, carrying Radarr's divergent bits. */
     private val engine = ArrV3Client(okHttpClient, ArrV3Service.RADARR)
 
-    override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> =
-        engine.getQueue(baseUrl, apiKey, RadarrQueueResource.serializer(), RadarrQueueResource::toArrQueueItem)
+    override suspend fun getQueue(server: ArrServerConfig): Result<List<ArrQueueItem>> =
+        engine.getQueue(server, RadarrQueueResource.serializer(), RadarrQueueResource::toArrQueueItem)
 
     override suspend fun deleteQueueItem(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         id: Int,
         options: ArrQueueDeleteOptions,
-    ): Result<Unit> = engine.deleteQueueItem(baseUrl, apiKey, id, options)
+    ): Result<Unit> = engine.deleteQueueItem(server, id, options)
 
     override suspend fun deleteQueueItems(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         ids: List<Int>,
         options: ArrQueueDeleteOptions,
-    ): Result<Unit> = engine.deleteQueueItems(baseUrl, apiKey, ids, options)
+    ): Result<Unit> = engine.deleteQueueItems(server, ids, options)
 
-    override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        engine.grabQueueItem(baseUrl, apiKey, id)
+    override suspend fun grabQueueItem(server: ArrServerConfig, id: Int): Result<Unit> =
+        engine.grabQueueItem(server, id)
 
-    override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> =
-        engine.importQueueItem(baseUrl, apiKey, downloadId)
+    override suspend fun importQueueItem(server: ArrServerConfig, downloadId: String): Result<Unit> =
+        engine.importQueueItem(server, downloadId)
 
     override suspend fun getCalendar(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         start: String,
         end: String,
     ): Result<List<ArrCalendarItem>> =
-        engine.getCalendar(baseUrl, apiKey, start, end, RadarrMovieResource.serializer(), RadarrMovieResource::toCalendarItem)
+        engine.getCalendar(server, start, end, RadarrMovieResource.serializer(), RadarrMovieResource::toCalendarItem)
 
     override suspend fun getHistory(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         eventType: Int?,
     ): Result<List<ArrHistoryItem>> =
-        engine.getHistory(baseUrl, apiKey, eventType, RadarrHistoryRecord.serializer(), RadarrHistoryRecord::toArrHistoryItem)
+        engine.getHistory(server, eventType, RadarrHistoryRecord.serializer(), RadarrHistoryRecord::toArrHistoryItem)
 
     override suspend fun getBlocklist(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int,
         pageSize: Int,
     ): Result<List<ArrBlocklistItem>> =
         engine.getBlocklist(
-            baseUrl, apiKey, page, pageSize,
+            server, page, pageSize,
             RadarrBlocklistRecord.serializer(), RadarrBlocklistRecord::toArrBlocklistItem,
         )
 
-    override suspend fun deleteBlocklistItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        engine.deleteBlocklistItem(baseUrl, apiKey, id)
+    override suspend fun deleteBlocklistItem(server: ArrServerConfig, id: Int): Result<Unit> =
+        engine.deleteBlocklistItem(server, id)
 
-    override suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit> =
-        engine.deleteBlocklistItems(baseUrl, apiKey, ids)
+    override suspend fun deleteBlocklistItems(server: ArrServerConfig, ids: List<Int>): Result<Unit> =
+        engine.deleteBlocklistItems(server, ids)
 
     override suspend fun getWanted(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int,
         pageSize: Int,
     ): Result<List<ArrWantedItem>> =
-        engine.getWanted(baseUrl, apiKey, page, pageSize, RadarrMovieResource.serializer(), RadarrMovieResource::toArrWantedItem)
+        engine.getWanted(server, page, pageSize, RadarrMovieResource.serializer(), RadarrMovieResource::toArrWantedItem)
 
     override suspend fun postCommand(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         commandName: ArrCommandName,
         movieIds: List<Int>?,
         episodeIds: List<Int>?,
     ): Result<ArrCommand> = engine.postCommand(
-        baseUrl,
-        apiKey,
+        server,
         engine.json.encodeToString(
             RadarrCommandRequest(
                 name = commandName.serialName,
@@ -120,18 +113,18 @@ class RadarrApiClientImpl(
         ),
     )
 
-    override suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?> {
+    override suspend fun findMovieIdByTmdb(server: ArrServerConfig, tmdbId: Int): Result<Int?> {
         // /api/v3/movie?tmdbId= returns a single-element array (or empty when
         // no match). Decoded as a list rather than a bare object so the
         // not-tracked case is a clean empty list instead of a parse error.
         return engine.getList(
-            baseUrl, apiKey, "/movie", listOf("tmdbId" to tmdbId.toString()), RadarrMovieResource.serializer(),
+            server, "/movie", listOf("tmdbId" to tmdbId.toString()), RadarrMovieResource.serializer(),
         ).map { list -> list.firstOrNull()?.id }
     }
 
-    override suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?> =
+    override suspend fun getMovieForTmdb(server: ArrServerConfig, tmdbId: Int): Result<RadarrMovieInfo?> =
         engine.getList(
-            baseUrl, apiKey, "/movie", listOf("tmdbId" to tmdbId.toString()), RadarrMovieResource.serializer(),
+            server, "/movie", listOf("tmdbId" to tmdbId.toString()), RadarrMovieResource.serializer(),
         ).map { list ->
             list.firstOrNull()?.let {
                 RadarrMovieInfo(
@@ -143,19 +136,17 @@ class RadarrApiClientImpl(
             }
         }
 
-    override suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit> =
-        engine.deletePath(baseUrl, apiKey, "/movieFile/$movieFileId")
+    override suspend fun deleteMovieFile(server: ArrServerConfig, movieFileId: Int): Result<Unit> =
+        engine.deletePath(server, "/movieFile/$movieFileId")
 
     override suspend fun monitorMovies(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         movieIds: List<Int>,
         monitored: Boolean,
     ): Result<Unit> {
         if (movieIds.isEmpty()) return Result.success(Unit)
         return engine.putJson(
-            baseUrl,
-            apiKey,
+            server,
             "/movie/monitor",
             engine.json.encodeToString(
                 RadarrMovieMonitorRequest(movieIds = movieIds, monitored = monitored),
@@ -163,6 +154,6 @@ class RadarrApiClientImpl(
         )
     }
 
-    override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> =
-        engine.testConnection(baseUrl, apiKey)
+    override suspend fun testConnection(server: ArrServerConfig): Result<Unit> =
+        engine.testConnection(server)
 }

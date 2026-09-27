@@ -39,6 +39,31 @@ class SeerrPreferencesStore constructor(
         val DISCOVER_REGION = stringPreferencesKey("seerr_discover_region")
     }
 
+    // Single source of truth for Seerr preference defaults: the read path
+    // ([readSeerrPreferences]) falls back to these for absent/corrupt values,
+    // and [disconnect] writes them back — mapOf preserves insertion order, so
+    // the reset write order is stable. Identity keys (server URL, auth method,
+    // username, email) are not listed: disconnect removes those and the read
+    // path re-applies their inline fallbacks.
+    // buildMap, not `key to value`: DataStore's infix Preferences.Pair `to`
+    // on Key<T> would shadow kotlin's Pair `to` and break the map literal.
+    private val BOOLEAN_DEFAULTS: Map<Preferences.Key<Boolean>, Boolean> = buildMap {
+        put(Keys.ENABLED, false)
+        put(Keys.SEARCH_ENABLED, false)
+        put(Keys.RECOMMENDATIONS_ENABLED, false)
+        put(Keys.DISCOVER_ENABLED, false)
+        put(Keys.DISCOVER_TRENDING, true)
+        put(Keys.DISCOVER_POPULAR_MOVIES, true)
+        put(Keys.DISCOVER_POPULAR_TV, true)
+        put(Keys.DISCOVER_UPCOMING_MOVIES, true)
+        put(Keys.DISCOVER_UPCOMING_TV, true)
+    }
+
+    private val STRING_DEFAULTS: Map<Preferences.Key<String>, String> = buildMap {
+        put(Keys.STREAMING_REGION, "US")
+        put(Keys.DISCOVER_REGION, "US")
+    }
+
     val preferences: StateFlow<SeerrPreferences> =
         dataStore.sliceStateFlow(scope, seed = SeerrPreferences(), read = ::readSeerrPreferences)
 
@@ -49,18 +74,24 @@ class SeerrPreferencesStore constructor(
         authMethod = prefs[Keys.AUTH_METHOD].toEnumOrNull() ?: SeerrAuthMethod.API_KEY,
         username = prefs[Keys.USERNAME] ?: "",
         email = prefs[Keys.EMAIL] ?: "",
-        enabled = prefs[Keys.ENABLED] ?: false,
-        searchEnabled = prefs[Keys.SEARCH_ENABLED] ?: false,
-        recommendationsEnabled = prefs[Keys.RECOMMENDATIONS_ENABLED] ?: false,
-        discoverEnabled = prefs[Keys.DISCOVER_ENABLED] ?: false,
-        discoverTrending = prefs[Keys.DISCOVER_TRENDING] ?: true,
-        discoverPopularMovies = prefs[Keys.DISCOVER_POPULAR_MOVIES] ?: true,
-        discoverPopularTv = prefs[Keys.DISCOVER_POPULAR_TV] ?: true,
-        discoverUpcomingMovies = prefs[Keys.DISCOVER_UPCOMING_MOVIES] ?: true,
-        discoverUpcomingTv = prefs[Keys.DISCOVER_UPCOMING_TV] ?: true,
-        streamingRegion = prefs[Keys.STREAMING_REGION] ?: "US",
-        discoverRegion = prefs[Keys.DISCOVER_REGION] ?: "US",
+        enabled = prefs.booleanWithDefault(Keys.ENABLED),
+        searchEnabled = prefs.booleanWithDefault(Keys.SEARCH_ENABLED),
+        recommendationsEnabled = prefs.booleanWithDefault(Keys.RECOMMENDATIONS_ENABLED),
+        discoverEnabled = prefs.booleanWithDefault(Keys.DISCOVER_ENABLED),
+        discoverTrending = prefs.booleanWithDefault(Keys.DISCOVER_TRENDING),
+        discoverPopularMovies = prefs.booleanWithDefault(Keys.DISCOVER_POPULAR_MOVIES),
+        discoverPopularTv = prefs.booleanWithDefault(Keys.DISCOVER_POPULAR_TV),
+        discoverUpcomingMovies = prefs.booleanWithDefault(Keys.DISCOVER_UPCOMING_MOVIES),
+        discoverUpcomingTv = prefs.booleanWithDefault(Keys.DISCOVER_UPCOMING_TV),
+        streamingRegion = prefs.stringWithDefault(Keys.STREAMING_REGION),
+        discoverRegion = prefs.stringWithDefault(Keys.DISCOVER_REGION),
     )
+
+    private fun Preferences.booleanWithDefault(key: Preferences.Key<Boolean>): Boolean =
+        this[key] ?: BOOLEAN_DEFAULTS.getValue(key)
+
+    private fun Preferences.stringWithDefault(key: Preferences.Key<String>): String =
+        this[key] ?: STRING_DEFAULTS.getValue(key)
 
     suspend fun setServerUrl(url: String) {
         dataStore.edit { it[Keys.SERVER_URL] = url.trim() }
@@ -129,17 +160,8 @@ class SeerrPreferencesStore constructor(
             prefs.remove(Keys.AUTH_METHOD)
             prefs.remove(Keys.USERNAME)
             prefs.remove(Keys.EMAIL)
-            prefs[Keys.ENABLED] = false
-            prefs[Keys.SEARCH_ENABLED] = false
-            prefs[Keys.RECOMMENDATIONS_ENABLED] = false
-            prefs[Keys.DISCOVER_ENABLED] = false
-            prefs[Keys.DISCOVER_TRENDING] = true
-            prefs[Keys.DISCOVER_POPULAR_MOVIES] = true
-            prefs[Keys.DISCOVER_POPULAR_TV] = true
-            prefs[Keys.DISCOVER_UPCOMING_MOVIES] = true
-            prefs[Keys.DISCOVER_UPCOMING_TV] = true
-            prefs[Keys.STREAMING_REGION] = "US"
-            prefs[Keys.DISCOVER_REGION] = "US"
+            BOOLEAN_DEFAULTS.forEach { (key, default) -> prefs[key] = default }
+            STRING_DEFAULTS.forEach { (key, default) -> prefs[key] = default }
         }
     }
 }

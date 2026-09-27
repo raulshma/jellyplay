@@ -300,7 +300,7 @@ class ArrRepositoryImpl(
                             // Resolve tmdbId → Radarr movie id first; if the movie isn't tracked
                             // (lookup returns null), fall back to a global MissingMoviesSearch
                             // rather than silently no-op'ing.
-                            val movieId = radarrApiClient.findMovieIdByTmdb(srv.baseUrl, srv.apiKey, tmdbId)
+                            val movieId = radarrApiClient.findMovieIdByTmdb(srv, tmdbId)
                                 .getOrNull()
                             if (movieId != null) {
                                 client.postCommand(command, movieIds = listOf(movieId))
@@ -374,7 +374,7 @@ class ArrRepositoryImpl(
         withResolvedSonarrSeries(tvdbId) { target ->
             Result.success(
                 ArrSeriesResolution(
-                    serverId = target.serverId,
+                    serverId = target.server.id,
                     seriesId = target.seriesId,
                     title = target.title,
                     monitored = target.monitored,
@@ -385,7 +385,7 @@ class ArrRepositoryImpl(
 
     override suspend fun getSonarrEpisodes(tvdbId: Int): Result<List<ArrSeriesEpisode>> =
         withResolvedSonarrSeries(tvdbId) { target ->
-            sonarrApiClient.getEpisodesForSeries(target.baseUrl, target.apiKey, target.seriesId)
+            sonarrApiClient.getEpisodesForSeries(target.server, target.seriesId)
         }
 
     override suspend fun monitorSonarrEpisodes(
@@ -394,12 +394,12 @@ class ArrRepositoryImpl(
         monitored: Boolean,
     ): Result<Unit> = withResolvedSonarrSeries(tvdbId) { target ->
         if (episodeIds.isEmpty()) Result.success(Unit)
-        else sonarrApiClient.monitorEpisodes(target.baseUrl, target.apiKey, episodeIds, monitored)
+        else sonarrApiClient.monitorEpisodes(target.server, episodeIds, monitored)
     }
 
     override suspend fun deleteSonarrEpisodeFile(tvdbId: Int, episodeFileId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
-            sonarrApiClient.deleteEpisodeFile(target.baseUrl, target.apiKey, episodeFileId)
+            sonarrApiClient.deleteEpisodeFile(target.server, episodeFileId)
         }
 
     override suspend fun searchSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>): Result<Unit> =
@@ -408,7 +408,7 @@ class ArrRepositoryImpl(
                 Result.success(Unit)
             } else {
                 sonarrApiClient.postCommand(
-                    target.baseUrl, target.apiKey,
+                    target.server,
                     ArrCommandName.SEARCH_EPISODES, episodeIds = episodeIds,
                 ).map { }
             }
@@ -417,7 +417,7 @@ class ArrRepositoryImpl(
     override suspend fun searchMonitoredSonarrSeason(tvdbId: Int, seasonNumber: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.SEASON_SEARCH,
                 seriesId = target.seriesId,
                 seasonNumber = seasonNumber,
@@ -427,7 +427,7 @@ class ArrRepositoryImpl(
     override suspend fun refreshSonarrSeries(tvdbId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.REFRESH_SERIES, seriesId = target.seriesId,
             ).map { }
         }
@@ -435,7 +435,7 @@ class ArrRepositoryImpl(
     override suspend fun rescanSonarrSeries(tvdbId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.RESCAN_SERIES, seriesId = target.seriesId,
             ).map { }
         }
@@ -443,7 +443,7 @@ class ArrRepositoryImpl(
     override suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.SEARCH_SERIES, seriesId = target.seriesId,
             ).map { }
         }
@@ -476,12 +476,10 @@ class ArrRepositoryImpl(
     private suspend fun resolveSonarrSeriesForSeries(tvdbId: Int): ResolvedSonarrSeries? {
         val summary = resolveServers().getOrDefault(ArrServiceSummary())
         for (srv in summary.sonarrServers) {
-            val info = sonarrApiClient.getSeriesInfo(srv.baseUrl, srv.apiKey, tvdbId).getOrNull()
+            val info = sonarrApiClient.getSeriesInfo(srv, tvdbId).getOrNull()
             if (info != null) {
                 return ResolvedSonarrSeries(
-                    serverId = srv.id,
-                    baseUrl = srv.baseUrl,
-                    apiKey = srv.apiKey,
+                    server = srv,
                     seriesId = info.id,
                     title = info.title,
                     monitored = info.monitored,
@@ -492,11 +490,9 @@ class ArrRepositoryImpl(
         return null
     }
 
-    /** Private carrier for a resolved Sonarr series + its owning server credentials. */
+    /** Private carrier for a resolved Sonarr series + its owning server connection. */
     private data class ResolvedSonarrSeries(
-        val serverId: String,
-        val baseUrl: String,
-        val apiKey: String,
+        val server: ArrServerConfig,
         val seriesId: Int,
         val title: String,
         val monitored: Boolean,

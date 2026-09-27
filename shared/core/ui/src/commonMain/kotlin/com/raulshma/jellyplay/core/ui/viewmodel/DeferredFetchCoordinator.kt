@@ -105,6 +105,12 @@ fun <T, U> DeferredFetchState<T>.wholeScreenPhase(
  * published); a non-[Exception] throwable is not a fetch failure — it
  * rethrows and surfaces as it always did.
  *
+ * The music home is the one `Unit`-content host: its multi-field uiState,
+ * loud partial-section publish, quiet offline gate and past-the-gate error
+ * reset stay hand-rolled in its fetch body (which recovers the loud/silent
+ * split from the loading phase the loud entry publishes), riding this class
+ * for the single-flight slot, the re-arm table and the deferred refresher.
+ *
  * Single-flight: one fetch-job slot shared by loud and silent loads — a loud
  * load cancels an in-flight silent one (it regenerates the same data
  * loudly), and the deferred refresh skips itself while any load is active,

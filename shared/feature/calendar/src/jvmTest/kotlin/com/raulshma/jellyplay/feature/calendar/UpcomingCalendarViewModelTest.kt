@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaType
@@ -120,7 +121,11 @@ class UpcomingCalendarViewModelTest {
     private fun newViewModel() = UpcomingCalendarViewModel(
         arrRepository = arr,
         seerrRepository = seerr,
-        experimentalStore = experimentalStore,
+        // The gate rides the test Main dispatcher (not the store's Unconfined
+        // scope) so it still reports the cold `false` seed while VM init's
+        // synchronous refresh() runs — the HEAD init-timing the flag tests pin
+        // (ExperimentalFeatureGate's KDoc). advanceUntilIdle warms it.
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
 
     private fun item(

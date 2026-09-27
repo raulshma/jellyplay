@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.shell
 
 import android.content.Intent
+import com.raulshma.jellyplay.core.concurrency.RestartableJob
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder

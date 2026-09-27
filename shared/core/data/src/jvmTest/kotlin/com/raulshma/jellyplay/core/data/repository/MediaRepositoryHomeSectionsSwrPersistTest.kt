@@ -4,7 +4,6 @@ import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.model.ActiveSession
-import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -20,7 +19,6 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -33,35 +31,32 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the PERSISTED halves of the home-sections pipeline that
- * [MediaRepositoryHomeSectionsCacheTest] (in-memory TTL, identity keying,
- * SWR staleness ceiling) leaves open:
+ * Pins the REPO-level choreography around the home-sections SWR pipeline —
+ * the parts [HomeSectionsSnapshotStoreTest] (the extracted persisted half's
+ * direct suite: dedup window, fingerprint cheap/encode paths, fetchedAt
+ * semantics, identity-scoped clear, offline layout) cannot see:
  *
- *  1. the SWR snapshot persist ([MediaRepositoryImpl.persistHomeSectionsSnapshot])
- *     — fetch-path-only writes, and the 60s byte-identical dedup window that
- *     keeps the ~1/min foreground refresh from re-encoding + rewriting a
- *     several-hundred-KB payload that did not change (a rewrite would also
- *     slide `fetchedAt` forward, which the 24h ceiling reads);
- *  2. [MediaRepositoryImpl.getOfflineHomeLayout] — the offline home's
- *     key-agnostic layout mirror with NO freshness ceiling (staleness only
- *     costs order/titles offline, never content);
- *  3. the identity-transition reaction — a user/server switch clears the
- *     PREVIOUS identity's SWR rows (privacy: the just-logged-out user's home
- *     payload must not cold-open for the next user), while a first sign-in
- *     clears nothing;
- *  4. [MediaRepositoryImpl.notifyUserDataChanged] — the synthetic push the
+ *  1. the fetch-path-only persist hook — `getOrFetch`'s `onFetched` runs
+ *     [HomeSectionsSnapshotStore.persist] after the in-memory put on the
+ *     FETCH path only, never on a cache hit, so a hit cannot slide the
+ *     persisted row's `fetchedAt` forward and defeat the 24h SWR staleness
+ *     ceiling;
+ *  2. the identity-transition reaction — a user/server switch or sign-out
+ *     routes the transition's PREVIOUS identity into
+ *     [HomeSectionsSnapshotStore.clearIdentity] (privacy: the just-logged-out
+ *     user's home payload must not cold-open for the next user), while a
+ *     first sign-in clears nothing;
+ *  3. [MediaRepositoryImpl.notifyUserDataChanged] — the synthetic push the
  *     offline outbox drain uses to refresh open screens without a WS echo:
  *     distinct item ids under the current identity, and a silent no-op for
  *     an empty list or a missing identity.
  *
- * The DAO mock is backed by an in-memory map so the dedup path observes the
- * rows it itself persisted (a plain relaxed mock would answer `get` with
- * null and never exercise the window).
+ * The DAO mock is backed by an in-memory map so the persist path observes
+ * the rows it itself persisted (a plain relaxed mock would answer `get` with
+ * null and never exercise the row state).
  */
 class MediaRepositoryHomeSectionsSwrPersistTest {
 
@@ -78,11 +73,6 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
     init {
         coEvery { homeSectionCacheDao.get(any(), any(), any()) } answers {
             storedRows[Triple(firstArg(), secondArg(), thirdArg())]
-        }
-        coEvery { homeSectionCacheDao.getLatestForIdentity(any(), any()) } answers {
-            storedRows.values
-                .filter { it.serverId == firstArg<String>() && it.userId == secondArg<String>() }
-                .maxByOrNull { it.fetchedAt }
         }
         coEvery { homeSectionCacheDao.upsert(any()) } answers {
             val entity = firstArg<HomeSectionCacheEntity>()
@@ -118,9 +108,17 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
             homeSession,
             sessionCacheRegistry,
         )
+        // Snapshot-store extraction: the repo delegates the persisted half of
+        // the home pipeline to this store (the same single the Koin graph
+        // wires); the suite's pins stay end-to-end through the real store.
+        val homeSnapshotStore = HomeSectionsSnapshotStore(
+            homeSectionCacheDao,
+            homeSession,
+            fakeTimeSource,
+        )
         return MediaRepositoryImpl(
             apiClient,
-            homeSectionCacheDao,
+            homeSnapshotStore,
             playedStateSync,
             episodeCatalogue,
             realtimeChannel,
@@ -133,7 +131,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         )
     }
 
-    private fun homeResult(positionTicks: Long = 30_000_000L) = Result.success(
+    private fun homeResult() = Result.success(
         HomeSectionsResult(
             sections = listOf(
                 HomeSection(
@@ -145,7 +143,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
                             id = "item-1",
                             name = "Item 1",
                             mediaType = MediaType.MOVIE,
-                            playbackPositionTicks = positionTicks,
+                            playbackPositionTicks = 30_000_000L,
                         ),
                     ),
                 ),
@@ -196,159 +194,10 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         assertEquals(1_000L, row.fetchedAt)
     }
 
-    @Test
-    fun `a byte-identical forced refresh inside the dedup window skips the rewrite`() = runBlocking {
-        val repository = buildRepository()
-        signIn()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-
-        repository.getHomeSections(HomeSectionQuery()) // persist #1
-        fakeTimeSource.nowMs += 30_000L // 30s — inside the 60s dedup window
-        repository.getHomeSections(HomeSectionQuery(), force = true) // refetch, identical
-
-        // One row, still stamped with the FIRST fetch's fetchedAt — the dedup
-        // window skipped both the encode-compare rewrite and the upsert.
-        val row = storedRows.values.single()
-        assertEquals(1_000L, row.fetchedAt)
-        coVerify(exactly = 1) { homeSectionCacheDao.upsert(any()) }
-    }
-
-    @Test
-    fun `an identical refresh past the dedup window rewrites the row`() = runBlocking {
-        val repository = buildRepository()
-        signIn()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-
-        repository.getHomeSections(HomeSectionQuery())
-        fakeTimeSource.nowMs += 61_000L // past the window → the rewrite is due
-        repository.getHomeSections(HomeSectionQuery(), force = true)
-
-        val row = storedRows.values.single()
-        assertEquals(1_000L + 61_000L, row.fetchedAt)
-        coVerify(exactly = 2) { homeSectionCacheDao.upsert(any()) }
-    }
-
-    @Test
-    fun `a changed payload persists immediately even inside the dedup window`() = runBlocking {
-        val repository = buildRepository()
-        signIn()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns
-            homeResult(positionTicks = 30_000_000L) andThen
-            homeResult(positionTicks = 45_000_000L)
-
-        repository.getHomeSections(HomeSectionQuery()) // position 30M
-        fakeTimeSource.nowMs += 30_000L // inside the window…
-        repository.getHomeSections(HomeSectionQuery(), force = true) // …but the content moved
-
-        coVerify(exactly = 2) { homeSectionCacheDao.upsert(any()) }
-        // The persisted payload decodes back to the NEW position — a user-data
-        // change must never be held hostage by the dedup window.
-        val decoded = repository.getCachedHomeSections(HomeSectionQuery())!!
-        assertEquals(45_000_000L, decoded.sections.single().items.single().playbackPositionTicks)
-    }
-
-    @Test
-    fun `a refresh without an identity persists nothing`() = runBlocking {
-        // Signed out between fetch and persist (edge of the identity race):
-        // currentIdentity() is null → the snapshot is dropped, not keyed to a
-        // stale/unknown identity.
-        val repository = buildRepository()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-
-        // Signed out for the whole call: the fetch runs under the UNKNOWN
-        // cache identity but the persist drops the snapshot (currentIdentity
-        // is null) instead of keying it to a stale/unknown identity.
-        repository.getHomeSections(HomeSectionQuery())
-
-        assertTrue(storedRows.isEmpty())
-    }
-
-    // ── getOfflineHomeLayout: the offline home's layout mirror ──────────────
-
-    @Test
-    fun `getOfflineHomeLayout returns the latest persisted payload`() = runBlocking {
-        val repository = buildRepository()
-        signIn()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-        repository.getHomeSections(HomeSectionQuery())
-
-        val layout = repository.getOfflineHomeLayout()
-
-        assertNotNull(layout)
-        assertEquals(listOf("item-1"), layout.sections.single().items.map { it.id })
-    }
-
-    @Test
-    fun `getOfflineHomeLayout is key-agnostic across query changes`() = runBlocking {
-        // A preference change while offline shifts the cacheKey; the offline
-        // home still renders the last layout the user actually saw.
-        val repository = buildRepository()
-        signIn()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-
-        val customQuery = HomeSectionQuery(hiddenCwItemIds = setOf("x"))
-        repository.getHomeSections(customQuery) // persists under the custom key
-
-        val layout = repository.getOfflineHomeLayout()
-
-        assertNotNull(layout)
-        assertEquals("item-1", layout.sections.single().items.single().id)
-    }
-
-    @Test
-    fun `getOfflineHomeLayout prefers the newest row across cache keys`() = runBlocking {
-        // Two keys persist for the identity (a pref change shifted the
-        // cacheKey mid-session): the offline home must render the payload of
-        // the LATEST fetch, not whichever row the DAO happens to return —
-        // stale content is exactly the "offline home shows pre-watch state"
-        // regression class.
-        val repository = buildRepository()
-        signIn()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns
-            homeResult(positionTicks = 30_000_000L) andThen
-            homeResult(positionTicks = 45_000_000L)
-
-        repository.getHomeSections(HomeSectionQuery()) // default key, t=1000
-        fakeTimeSource.nowMs += 30_000L
-        repository.getHomeSections(HomeSectionQuery(hiddenCwItemIds = setOf("x")), force = true) // newer key
-
-        val layout = repository.getOfflineHomeLayout()
-
-        assertNotNull(layout)
-        assertEquals(45_000_000L, layout.sections.single().items.single().playbackPositionTicks)
-    }
-
-    @Test
-    fun `getOfflineHomeLayout has no freshness ceiling`() = runBlocking {
-        // Deliberate contrast with getCachedHomeSections: a 25h-old row must
-        // still render offline (staleness only costs section order/titles —
-        // content is re-filtered against the offline store).
-        val repository = buildRepository()
-        signIn()
-        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-        repository.getHomeSections(HomeSectionQuery())
-
-        fakeTimeSource.nowMs += 25 * 60 * 60_000L
-        assertNotNull(repository.getOfflineHomeLayout())
-        assertNull(repository.getCachedHomeSections(HomeSectionQuery()))
-    }
-
-    @Test
-    fun `getOfflineHomeLayout returns null without an identity or rows`() = runBlocking {
-        val repository = buildRepository()
-
-        assertNull(repository.getOfflineHomeLayout()) // signed out
-
-        signIn()
-        assertNull(repository.getOfflineHomeLayout()) // signed in, nothing persisted
-    }
-
-    @Test
-    fun `getCachedHomeSections returns null without an identity`() = runBlocking {
-        val repository = buildRepository()
-
-        assertNull(repository.getCachedHomeSections(HomeSectionQuery()))
-    }
+    // (The 60s dedup window's own pins — in-window skip, past-window rewrite,
+    // immediate changed-payload persist, no-identity no-op — and the two
+    // cold-open reads' pins moved to HomeSectionsSnapshotStoreTest, the
+    // extracted store's direct suite.)
 
     // ── Identity transitions clear the PREVIOUS identity's SWR rows ────────
 

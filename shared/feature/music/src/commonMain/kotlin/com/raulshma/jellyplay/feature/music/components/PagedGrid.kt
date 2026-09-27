@@ -12,14 +12,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import com.composables.icons.tabler.Tabler
@@ -27,13 +25,17 @@ import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
-import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionRung
+import com.raulshma.jellyplay.core.ui.components.PagedRefreshPhase
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.components.pagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.pagedCollectionRung
+import com.raulshma.jellyplay.core.ui.components.simpleCollectionRung
+import com.raulshma.jellyplay.core.ui.components.toPagedRefreshPhase
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -44,127 +46,14 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_loa
 import com.raulshma.jellyplay.feature.music.generated.resources.music_nothing_found
 
 /**
- * The paging refresh phase the ladder decisions read. A own-able vocabulary
- * (rather than taking [LoadState] directly) because paging-common's
- * `LoadState.NotLoading` instance is not constructible outside the library —
- * the sealed mapping in [LoadState.toPagedRefreshPhase] is compiler-checked.
- */
-enum class PagedRefreshPhase { LOADING, ERROR, SETTLED }
-
-/** The one sealed mapping from the paging refresh/append [LoadState]. */
-fun LoadState.toPagedRefreshPhase(): PagedRefreshPhase = when (this) {
-    is LoadState.Error -> PagedRefreshPhase.ERROR
-    is LoadState.Loading -> PagedRefreshPhase.LOADING
-    is LoadState.NotLoading -> PagedRefreshPhase.SETTLED
-}
-
-/**
- * The pure refresh-ladder decision behind [PagedGrid]/[PagedList]: which
- * full-screen rung to render from the paging refresh phase and the live
- * item count. Content wins over the spinner once pages exist — a re-sort or
- * pull-to-refresh over cached pages shows the stale content plus the refresh
- * affordance, not a blank screen. Pinned by `PagedCollectionLadderTest`.
- */
-sealed interface PagedCollectionRung {
-    /** Refresh in flight with nothing to show yet — full-screen loading. */
-    data object InitialLoading : PagedCollectionRung
-
-    /** Refresh failed — full-screen error with retry (even over stale pages). */
-    data object RefreshError : PagedCollectionRung
-
-    /** Refresh settled with no items — empty state. */
-    data object Empty : PagedCollectionRung
-
-    /** Items to show — the collection body (grid or list). */
-    data object Content : PagedCollectionRung
-}
-
-fun pagedCollectionRung(refresh: PagedRefreshPhase, itemCount: Int): PagedCollectionRung = when {
-    refresh == PagedRefreshPhase.ERROR -> PagedCollectionRung.RefreshError
-    refresh == PagedRefreshPhase.LOADING && itemCount == 0 -> PagedCollectionRung.InitialLoading
-    itemCount == 0 -> PagedCollectionRung.Empty
-    else -> PagedCollectionRung.Content
-}
-
-/**
- * The list-sourced twin of [pagedCollectionRung] — the same rung vocabulary
- * over [SimpleListCollection][com.raulshma.jellyplay.feature.music.collection.SimpleListCollection]
- * state. Declared precedence difference: an in-flight load shows the
- * full-screen spinner even over stale items (the list twin keeps no
- * content-over-refresh carry; the header status and pull-to-refresh affordance
- * still render), and an error rung shows only once loading settles. Pinned by
- * `PagedCollectionLadderTest`.
- */
-fun simpleCollectionRung(isLoading: Boolean, error: Throwable?, itemCount: Int): PagedCollectionRung = when {
-    isLoading -> PagedCollectionRung.InitialLoading
-    error != null -> PagedCollectionRung.RefreshError
-    itemCount == 0 -> PagedCollectionRung.Empty
-    else -> PagedCollectionRung.Content
-}
-
-/**
- * The pure append-rung decision: what the load-more footer renders while the
- * next page streams in. Retry means the caller must re-invoke
- * [LazyPagingItems.retry] (append failures retry the page, not the whole
- * query — the refresh call belongs to the pull-to-refresh/error screens
- * only). Pinned by `PagedCollectionLadderTest`.
- */
-sealed interface PagedAppendRung {
-    /** No append in flight — no footer. */
-    data object Hidden : PagedAppendRung
-
-    /** Next page loading — spinner footer. */
-    data object Loading : PagedAppendRung
-
-    /** Next page failed — error footer wired to [LazyPagingItems.retry]. */
-    data object Retry : PagedAppendRung
-}
-
-fun pagedAppendRung(append: PagedRefreshPhase): PagedAppendRung = when (append) {
-    PagedRefreshPhase.LOADING -> PagedAppendRung.Loading
-    PagedRefreshPhase.ERROR -> PagedAppendRung.Retry
-    PagedRefreshPhase.SETTLED -> PagedAppendRung.Hidden
-}
-
-/**
- * Derives the scaffold [HeaderStatus] for a paged collection — the one place
- * the refresh load states map onto the header indicator. Screens place the
- * indicator in their own scaffold actions (route-family visuals); the policy
- * lives here once.
- */
-@Composable
-fun <T : Any> rememberPagedCollectionStatus(items: LazyPagingItems<T>): HeaderStatus {
-    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
-    return resolveHeaderStatus(
-        isLoading = items.loadState.refresh is LoadState.Loading,
-        hasError = items.loadState.refresh is LoadState.Error,
-        networkStatus = networkStatus,
-    )
-}
-
-/**
- * [rememberPagedCollectionStatus]'s twin for list-sourced collections
- * ([SimpleListCollection] state, e.g. the genres/playlists tabs): same
- * resolve policy over the collection's loading/error flags.
- */
-@Composable
-fun rememberSimpleCollectionStatus(isLoading: Boolean, hasError: Boolean): HeaderStatus {
-    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
-    return resolveHeaderStatus(
-        isLoading = isLoading,
-        hasError = hasError,
-        networkStatus = networkStatus,
-    )
-}
-
-/**
  * The ONE paged-collection ladder for the music module, grid variant —
- * refresh loading/error/empty decisions ([pagedCollectionRung]), pull-to-
- * refresh, the append footer ([pagedAppendRung]) and the TV-focusable
- * adaptive grid, composed once. Every paged music grid (browse tab pages and
- * the standalone screens) renders through this; the browse pages previously
- * hand-rolled a refresh-only subset without pull-to-refresh or the append
- * footer — folding here is a declared pure addition on that side.
+ * refresh loading/error/empty decisions ([pagedCollectionRung] from the
+ * core:ui chassis), pull-to-refresh, the append footer ([pagedAppendRung])
+ * and the TV-focusable adaptive grid, composed once. Every paged music grid
+ * (browse tab pages and the standalone screens) renders through this; the
+ * browse pages previously hand-rolled a refresh-only subset without
+ * pull-to-refresh or the append footer — folding here is a declared pure
+ * addition on that side.
  *
  * Layout knobs (columns/padding/arrangements) stay at the call sites so each
  * route family keeps its own grid geometry; only the ladder is shared.

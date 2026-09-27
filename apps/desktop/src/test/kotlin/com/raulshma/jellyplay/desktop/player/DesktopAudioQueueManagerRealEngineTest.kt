@@ -4,7 +4,8 @@ import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.SleepCountdownClock
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
@@ -83,7 +84,7 @@ class DesktopAudioQueueManagerRealEngineTest {
             imageUrlProvider = FakeImages(),
             queuePersistenceHelper = QueuePersistenceHelper(InMemoryQueueDao()),
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
-            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
             engineFactory = {
                 MpvDesktopEngine(extraOptions = mapOf("vo" to "null", "ao" to "null"))
@@ -211,7 +212,7 @@ class DesktopAudioQueueManagerRealEngineTest {
             imageUrlProvider = FakeImages(),
             queuePersistenceHelper = QueuePersistenceHelper(InMemoryQueueDao()),
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
-            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
             // Production parity: the same engine shape desktopPlayerModule
             // uses (audio-only MpvDesktopEngine), plus ao=null so headless CI
@@ -293,7 +294,7 @@ class DesktopAudioQueueManagerRealEngineTest {
             imageUrlProvider = FakeImages(),
             queuePersistenceHelper = QueuePersistenceHelper(InMemoryQueueDao()),
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
-            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
             // sw variant: vo=libmpv (frames nobody pulls — audio is the
             // subject here) + ao=null, the sw engine tests' own recipe.
@@ -347,7 +348,7 @@ class DesktopAudioQueueManagerRealEngineTest {
             imageUrlProvider = FakeImages(),
             queuePersistenceHelper = QueuePersistenceHelper(InMemoryQueueDao()),
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
-            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
             engineFactory = { MpvDesktopEngine(extraOptions = mapOf("vo" to "null", "ao" to "null")) },
             mainThreadGuard = false,

@@ -958,7 +958,7 @@ private fun HomeTailSheets(
         SeerrRequestDialog(
             item = item,
             snapshot = state.seerrRequestState.snapshot,
-            onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+            onConfirm = { (serverId, profileId, rootFolder, tags, seasons) ->
                 viewModel.onEvent(HomeUiEvent.RequestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags))
             },
             onDismiss = { dialogSession.dismissSeerrRequest() },

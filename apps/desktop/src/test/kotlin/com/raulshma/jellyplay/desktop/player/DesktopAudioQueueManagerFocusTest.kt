@@ -3,7 +3,8 @@ package com.raulshma.jellyplay.desktop.player
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.SleepCountdownClock
 import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.FocusAudioAttributes
 import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
@@ -78,7 +79,7 @@ class DesktopAudioQueueManagerFocusTest {
             // next test's uncaught-exception gate (the RealEngine suites get
             // this from manager.start(); the focus harness never starts).
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()).also { it.initialize(scope) },
-            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
             engineFactory = { FakeMediaEngine().also { engines += it } },
             mainThreadGuard = false,

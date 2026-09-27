@@ -6,8 +6,9 @@ import android.content.ContextWrapper
 
 /**
  * Walks the ContextWrapper chain to find the hosting Activity. Promoted from
- * the player-video module (now shared/feature/player-video) so both VOD and
- * live players can use it.
+ * the player-video module (now shared/feature/player-video) so all three
+ * player screens — the VOD player, the live TV player and the book reader —
+ * can use it.
  */
 fun Context.findActivity(): Activity? {
     var context = this

@@ -21,7 +21,7 @@ import kotlinx.coroutines.test.setMain
 
 /**
  * Direct pins for [VideoMiniPlayerState]'s engine-retention choreography on
- * virtual time (the SleepTimerManagerTest setMain idiom): the 5-minute
+ * virtual time (the former SleepTimerManagerTest setMain idiom): the 5-minute
  * auto-release timeout that frees the native video engine after the user
  * dismisses the mini player, the reclaim identity guard (a different item
  * must never receive someone else's engine), the release reset ladder, and

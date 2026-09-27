@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.feature.player.video.state.SleepTimerState
 import kotlinx.coroutines.CoroutineScope
@@ -17,10 +17,10 @@ import kotlinx.coroutines.launch
  * outro is reached.
  *
  * Extracted from [VideoPlayerViewModel], continuing the collaborator pattern
- * established by [SubtitleManager] / [VideoEffectsController]. The
- * [SleepTimerManager] singleton already owns the countdown + fade ramp +
- * `remainingMs` StateFlow; this class owns only the residue that lived in the
- * VM:
+ * established by [SubtitleManager] / [VideoEffectsController]. The countdown
+ * itself is core:data's [SleepCountdown] core (the single fold home of the
+ * former SleepTimerManager — its KDoc records the alias kill); this class
+ * owns only the residue that lived in the VM:
  *  - `preSleepVolume` capture/restore (so cancel never slams to full volume),
  *  - the two callbacks closing over the current engine (pause on expire,
  *    setVolume on each fade tick — both skip writes while the user is muted),
@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
  * and always reads the *current* engine (the VM swaps engines on retry).
  */
 internal class SleepTimerController(
-    private val sleepTimerManager: SleepTimerManager,
+    private val sleepCountdown: SleepCountdown,
     private val audioStore: AudioStore,
     private val scope: CoroutineScope,
     private val getEngine: () -> com.raulshma.jellyplay.feature.player.video.engine.MediaEngine?,
@@ -50,12 +50,12 @@ internal class SleepTimerController(
     val state: StateFlow<SleepTimerState> = _state.asStateFlow()
 
     /**
-     * Countdown display, sourced directly from [SleepTimerManager]. Kept OUT
+     * Countdown display, sourced directly from [SleepCountdown]. Kept OUT
      * of any wide state bag (and out of [state]) so a 5 s tick — or the 100 ms
      * fade-out burst — re-invalidates only the leaf composables that render
      * the countdown (overflow-menu label, SleepTimerSheet).
      */
-    val remainingMs: StateFlow<Long> get() = sleepTimerManager.remainingMs
+    val remainingMs: StateFlow<Long> get() = sleepCountdown.sleepTimerRemainingMs
 
     /**
      * Volume captured when a timed timer starts fading, so [cancelSleepTimer]
@@ -84,14 +84,14 @@ internal class SleepTimerController(
         } else {
             null
         }
-        sleepTimerManager.setOnTimerExpired { getEngine()?.pause() }
-        sleepTimerManager.setOnFadeProgress { progress ->
+        sleepCountdown.setOnTimerExpired { getEngine()?.pause() }
+        sleepCountdown.setOnExpiring { progress ->
             // Skip volume writes while user-muted; let mute state win. The
             // fade is PROGRAMMATIC: engines with per-content-type
             // volume memory must not capture it as a user level.
             if (!isMuted()) getEngine()?.setVolume(progress, isUserChange = false)
         }
-        sleepTimerManager.start(durationMs)
+        sleepCountdown.startSleepTimer(durationMs)
         _state.update {
             it.copy(
                 sleepTimerActive = true,
@@ -115,9 +115,9 @@ internal class SleepTimerController(
         // so cancelSleepTimer leaves the current volume untouched instead of
         // restoring a stale captured level.
         preSleepVolume = null
-        sleepTimerManager.setOnTimerExpired { getEngine()?.pause() }
-        sleepTimerManager.setOnFadeProgress(null)
-        sleepTimerManager.startEndOfEpisode()
+        sleepCountdown.setOnTimerExpired { getEngine()?.pause() }
+        sleepCountdown.setOnExpiring(null)
+        sleepCountdown.startEndOfEpisodeTimer()
         _state.update {
             it.copy(
                 sleepTimerActive = true,
@@ -133,7 +133,7 @@ internal class SleepTimerController(
      * end-of-episode timer with no fade), the current volume is left untouched.
      */
     fun cancelSleepTimer() {
-        sleepTimerManager.cancel()
+        sleepCountdown.cancelSleepTimer()
         val engine = getEngine()
         if (engine != null && !isMuted()) {
             // Restore is programmatic too — cancel must not look like the user
@@ -152,10 +152,10 @@ internal class SleepTimerController(
     /**
      * Fire the end-of-episode pause. No-op unless an end-of-episode timer is
      * active (the autoplay controller invokes this when the credits outro is
-     * reached). Delegates the mode + active guard to [SleepTimerManager].
+     * reached). Delegates the mode + active guard to [SleepCountdown].
      */
     fun triggerSleepTimerEndOfEpisode() {
-        sleepTimerManager.triggerEndOfEpisode()
+        sleepCountdown.triggerEndOfEpisode()
     }
 
     /**
@@ -172,6 +172,6 @@ internal class SleepTimerController(
 
     /** Tear down callbacks so a released engine is never touched by a stray tick. */
     fun onRelease() {
-        sleepTimerManager.setOnFadeProgress(null)
+        sleepCountdown.setOnExpiring(null)
     }
 }

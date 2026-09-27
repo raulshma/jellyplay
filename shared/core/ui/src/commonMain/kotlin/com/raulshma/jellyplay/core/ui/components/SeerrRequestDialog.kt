@@ -91,78 +91,81 @@ import com.composables.icons.tabler.outline.*
 private const val TAG = "SeerrRequestDialog"
 
 /**
- * Snapshot-fold overload — the single home for the
- * [SeerrRequestSnapshot] → dialog-field mapping so every screen folds the
- * holder's state the same way (a new snapshot field lands here once instead
- * of once per screen).
+ * The request dialog's static inputs — everything the sheet renders options
+ * FROM, bundled so the item/server/season/anime fields no longer travel as
+ * five loose parameters through every layer and call site. The request
+ * lifecycle fields (loading services / requesting / success / error) and the
+ * confirm callback are deliberately NOT here: they change on a different
+ * cadence than the inputs.
+ *
+ * The media-type gates stay in [SeerrRequestPanel] (the one place that owns
+ * `item.mediaType`); callers pass the raw lists and flag undecorated.
+ * [SeerrRequestDialog] constructs it from the holder's [SeerrRequestSnapshot]
+ * on each composition — cheap value construction, no `remember` needed.
  */
-@Composable
-fun SeerrRequestDialog(
-    item: SeerrSearchItem,
-    snapshot: SeerrRequestSnapshot,
-    onConfirm: (
-        serverId: Int?,
-        profileId: Int?,
-        rootFolder: String?,
-        tags: List<Int>?,
-        seasons: List<Int>?,
-    ) -> Unit,
-    onDismiss: () -> Unit,
-) = SeerrRequestDialog(
-    item = item,
-    radarrServers = snapshot.radarrServers,
-    sonarrServers = snapshot.sonarrServers,
-    seasons = snapshot.tvSeasons,
-    tvIsAnime = snapshot.tvIsAnime,
-    isLoadingServices = snapshot.isLoadingServices,
-    isRequesting = snapshot.requestResult?.isLoading == true,
-    requestSuccess = snapshot.requestResult?.success,
-    requestError = snapshot.requestResult?.error,
-    onConfirm = onConfirm,
-    onDismiss = onDismiss,
+data class SeerrRequestInputs(
+    val item: SeerrSearchItem,
+    val radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
+    val sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
+    val seasons: List<SeerrSeason> = emptyList(),
+    val tvIsAnime: Boolean = false,
 )
 
 /**
- * Enhanced request dialog that mirrors the Seerr web UI request options.
+ * What a confirmed request submits — the exact tuple the panel's Request
+ * button used to emit as a five-parameter `onConfirm` call, now one value so
+ * a new request option is a field here instead of an edit in every layer and
+ * call site. Field order mirrors the old tuple, so call sites destructure
+ * positionally and their lambda bodies stay untouched. `null` keeps the old
+ * absent-value semantics (movies submit `seasons = null`; an empty tag
+ * selection submits `tags = null`).
+ */
+data class SeerrRequestSelection(
+    val serverId: Int? = null,
+    val profileId: Int? = null,
+    val rootFolder: String? = null,
+    val tags: List<Int>? = null,
+    val seasons: List<Int>? = null,
+)
+
+/**
+ * Request dialog entry that mirrors the Seerr web UI request options. For
+ * movies: shows destination server, quality profile, root folder, tags. For
+ * TV: shows all of the above plus season selection.
  *
- * For movies: shows destination server, quality profile, root folder, tags.
- * For TV: shows all of the above plus season selection.
+ * The single home for the [SeerrRequestSnapshot] → dialog-fields fold (a new
+ * snapshot field lands here once instead of once per screen) and for the
+ * sheet shells; the body itself is [SeerrRequestPanel], extracted so UI tests
+ * can drive the selection logic without a separate sheet window (same pattern
+ * as ConfirmPanel/ConfirmDialog). [onConfirm] receives the panel's resolved
+ * [SeerrRequestSelection].
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeerrRequestDialog(
     item: SeerrSearchItem,
-    radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
-    sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
-    seasons: List<SeerrSeason> = emptyList(),
-    tvIsAnime: Boolean = false,
-    isLoadingServices: Boolean = false,
-    isRequesting: Boolean = false,
-    requestSuccess: Boolean? = null,
-    requestError: String? = null,
-    onConfirm: (
-        serverId: Int?,
-        profileId: Int?,
-        rootFolder: String?,
-        tags: List<Int>?,
-        seasons: List<Int>?,
-    ) -> Unit = { _, _, _, _, _ -> },
+    snapshot: SeerrRequestSnapshot,
+    onConfirm: (SeerrRequestSelection) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val inputs = SeerrRequestInputs(
+        item = item,
+        radarrServers = snapshot.radarrServers,
+        sonarrServers = snapshot.sonarrServers,
+        seasons = snapshot.tvSeasons,
+        tvIsAnime = snapshot.tvIsAnime,
+    )
+    val isRequesting = snapshot.requestResult?.isLoading == true
     val colorScheme = MaterialTheme.colorScheme
     val isTvDevice = LocalTvMode.current
 
     val content: @Composable ColumnScope.() -> Unit = {
         SeerrRequestPanel(
-            item = item,
-            radarrServers = radarrServers,
-            sonarrServers = sonarrServers,
-            seasons = seasons,
-            tvIsAnime = tvIsAnime,
-            isLoadingServices = isLoadingServices,
+            inputs = inputs,
+            isLoadingServices = snapshot.isLoadingServices,
             isRequesting = isRequesting,
-            requestSuccess = requestSuccess,
-            requestError = requestError,
+            requestSuccess = snapshot.requestResult?.success,
+            requestError = snapshot.requestResult?.error,
             onConfirm = onConfirm,
             onDismiss = onDismiss,
         )
@@ -193,24 +196,22 @@ fun SeerrRequestDialog(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SeerrRequestPanel(
-    item: SeerrSearchItem,
-    radarrServers: List<SeerrRadarrServiceDetail> = emptyList(),
-    sonarrServers: List<SeerrSonarrServiceDetail> = emptyList(),
-    seasons: List<SeerrSeason> = emptyList(),
-    tvIsAnime: Boolean = false,
-    isLoadingServices: Boolean = false,
-    isRequesting: Boolean = false,
-    requestSuccess: Boolean? = null,
-    requestError: String? = null,
-    onConfirm: (
-        serverId: Int?,
-        profileId: Int?,
-        rootFolder: String?,
-        tags: List<Int>?,
-        seasons: List<Int>?,
-    ) -> Unit = { _, _, _, _, _ -> },
-    onDismiss: () -> Unit = {},
+    inputs: SeerrRequestInputs,
+    isLoadingServices: Boolean,
+    isRequesting: Boolean,
+    requestSuccess: Boolean?,
+    requestError: String?,
+    onConfirm: (SeerrRequestSelection) -> Unit,
+    onDismiss: () -> Unit,
 ) {
+    // Unpack the inputs once — the body below predates the [SeerrRequestInputs]
+    // bundle and reads the same names it always has.
+    val item = inputs.item
+    val radarrServers = inputs.radarrServers
+    val sonarrServers = inputs.sonarrServers
+    val seasons = inputs.seasons
+    val tvIsAnime = inputs.tvIsAnime
+
     // The media-type gates live HERE — the one place that owns item.mediaType —
     // so callers pass the raw seasons list and tvIsAnime flag undecorated.
     val isTv = item.mediaType.equals("tv", ignoreCase = true)
@@ -674,7 +675,15 @@ internal fun SeerrRequestPanel(
                                         }
                                     } else null
 
-                                    onConfirm(serverId, profileId, rootFolder, tags, resolvedSeasons)
+                                    onConfirm(
+                                        SeerrRequestSelection(
+                                            serverId = serverId,
+                                            profileId = profileId,
+                                            rootFolder = rootFolder,
+                                            tags = tags,
+                                            seasons = resolvedSeasons,
+                                        ),
+                                    )
                                 },
                                 enabled = !isRequesting && (!isTv || (effectiveSeasons.isNotEmpty() && (selectAllSeasons || selectedSeasonNumbers.isNotEmpty()))),
                                 shape = ShapeCache.smooth12,

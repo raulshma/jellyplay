@@ -11,8 +11,8 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
-import com.raulshma.jellyplay.feature.shell.navigation.popPlayerRoutes
-import com.raulshma.jellyplay.feature.shell.navigation.routeForNavigationTarget
+import com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher
+import com.raulshma.jellyplay.feature.shell.navigation.RemoteRouteDispatch
 import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import kotlinx.coroutines.flow.Flow
 
@@ -28,8 +28,10 @@ import kotlinx.coroutines.flow.Flow
  * external request, apply one small policy fork, drive the navigator or the
  * snackbar host — and the forks are pure companion folds
  * ([pendingRouteDispatch], [syncPlayAutoOpenRoute],
- * [nowPlayingSnackbarMessage]) in the shared pure-fold style (the
- * `feature.shell.navigation.RemoteNavigationRouting` precedent), so
+ * [nowPlayingSnackbarMessage]) that delegate to the shared
+ * `feature.shell.navigation.RemoteNavigationDispatcher` folds (the one
+ * remote-navigation LADDER both shells run — ladder dispatch, tab-vs-push
+ * policy, SyncPlay guard and now-playing format included), so
  * both halves are JVM-pinned through fake lambdas
  * (`NavRequestCollectorTest`; the PinGateController shape).
  *
@@ -83,6 +85,33 @@ internal class NavRequestCollector(
 ) {
 
     /**
+     * The shared ladder (feature.shell.navigation
+     * [RemoteNavigationDispatcher]) over this collector's seams — the
+     * exhaustive when(NavigationTarget) and the tab-vs-push fork are ITS now,
+     * not a hand-copy. The Android-specific arms are lambdas over
+     * [dispatchKey], keeping the keycode vocabulary in the :app
+     * `RemoteNavigationRouting.kt`: D-pad directions and the select arm
+     * synthesize their keycodes unconditionally, while the context-menu arm
+     * reports consumption so an unconsumed menu key falls back to the
+     * standard message. Pushes ride the filter-carrying [navigate] seam; tab
+     * switches ride [selectTopLevelTab] (bypassing the Navigator — no
+     * pop-to-root on the selected tab); the context-menu fallback presents
+     * through [presentSnackbar], exactly as this class's former inline
+     * ladder did.
+     */
+    private val remoteNavigation = RemoteNavigationDispatcher(
+        topLevelKeys = topLevelKeys,
+        navigate = navigate,
+        selectTab = selectTopLevelTab,
+        goBack = goBack,
+        backStacks = backStacks,
+        presentMessage = presentSnackbar,
+        moveFocus = { direction -> dispatchKey?.invoke(keyCodeForFocusDirection(direction)) },
+        invokeSelect = { dispatchKey?.invoke(REMOTE_SELECT_KEYCODE) },
+        contextMenuKey = { dispatchKey?.invoke(REMOTE_CONTEXT_MENU_KEYCODE) == true },
+    )
+
+    /**
      * The tab-vs-nested fork for one shell-pending route — the decision the
      * inline `pendingRoute` collector made with its `if
      * (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route))`. A top-level route SWITCHES
@@ -119,48 +148,20 @@ internal class NavRequestCollector(
     /**
      * Consume remote "Play" / "Playstate" / "GeneralCommand" navigation
      * requests emitted by the WebSocket receiver
-     * (`RemoteNavigationBridge.targets`). The target→route mapping and the
-     * Jellyfin-web "Stop" pop (`ClosePlayer` → player entries off the top of
-     * EVERY back stack) are shared/feature/shell's pure folds
-     * (`feature.shell.navigation.RemoteNavigationRouting`); pushed
-     * routes go through the filter-carrying [navigate] seam.
-     *
-     * Navigation ladder: [NavigationTarget.GoBack] pops via [goBack];
-     * [NavigationTarget.MoveFocus] / [NavigationTarget.InvokeSelect] /
-     * [NavigationTarget.OpenContextMenu] synthesize D-pad/center/menu key
-     * events through [dispatchKey] (Compose's own key handling interprets
-     * them); a context-menu key nothing consumed falls back to the standard
-     * user message; [NavigationTarget.GoToTopLevel] reuses the pure
-     * [pendingRouteDispatch] tab-vs-push fork.
+     * (`RemoteNavigationBridge.targets`). The whole ladder — the
+     * target→route mapping, the Jellyfin-web "Stop" pop
+     * (`ClosePlayer` → player entries off the top of EVERY back stack), the
+     * navigation-ladder arms and the tab-vs-push fork — is
+     * shared/feature/shell's [RemoteNavigationDispatcher], constructed over
+     * this class's seams as [remoteNavigation]; this member is the Android
+     * wiring only (keycode vocabulary, filter-carrying push, direct
+     * tab-switch seam).
      */
     suspend fun collectRemoteNavigation(
         targets: Flow<NavigationTarget>,
         contextMenuUnavailableMessage: String,
     ) {
-        targets.collect { target ->
-            when (target) {
-                NavigationTarget.ClosePlayer -> popPlayerRoutes(backStacks())
-                NavigationTarget.GoBack -> goBack()
-                is NavigationTarget.MoveFocus -> dispatchKey?.invoke(keyCodeForFocusDirection(target.direction))
-                NavigationTarget.InvokeSelect -> dispatchKey?.invoke(REMOTE_SELECT_KEYCODE)
-                NavigationTarget.OpenContextMenu -> {
-                    val handled = dispatchKey?.invoke(REMOTE_CONTEXT_MENU_KEYCODE) == true
-                    if (!handled) presentSnackbar(contextMenuUnavailableMessage)
-                }
-                is NavigationTarget.GoToTopLevel,
-                is NavigationTarget.OpenVideoPlayer,
-                is NavigationTarget.OpenAudioPlayer,
-                is NavigationTarget.OpenMediaDetail -> {
-                    routeForNavigationTarget(target)?.let { route ->
-                        when (pendingRouteDispatch(route, topLevelKeys)) {
-                            is PendingRouteDispatch.SwitchTab -> selectTopLevelTab(route)
-                            is PendingRouteDispatch.Push -> navigate(route)
-                            PendingRouteDispatch.None -> Unit
-                        }
-                    }
-                }
-            }
-        }
+        remoteNavigation.collect(targets, contextMenuUnavailableMessage)
     }
 
     /**
@@ -192,12 +193,23 @@ internal class NavRequestCollector(
 
     companion object {
 
-        /** The pure half of [dispatchPendingRoute] — see that member's KDoc. */
+        /**
+         * The pure half of [dispatchPendingRoute] — see that member's KDoc.
+         * The decision table is the shared
+         * [RemoteNavigationDispatcher.routeDispatch]; this wrapper only adds
+         * the None arm the nullable pending route needs (and maps the shared
+         * [RemoteRouteDispatch] vocabulary onto this class's public
+         * [PendingRouteDispatch]).
+         */
         fun pendingRouteDispatch(route: Route?, topLevelKeys: Set<Route>): PendingRouteDispatch =
-            when {
-                route == null -> PendingRouteDispatch.None
-                topLevelKeys.contains(route) -> PendingRouteDispatch.SwitchTab(route)
-                else -> PendingRouteDispatch.Push(route)
+            when (
+                val dispatch = RemoteNavigationDispatcher.routeDispatch(
+                    route ?: return PendingRouteDispatch.None,
+                    topLevelKeys,
+                )
+            ) {
+                is RemoteRouteDispatch.SwitchTab -> PendingRouteDispatch.SwitchTab(dispatch.route)
+                is RemoteRouteDispatch.Push -> PendingRouteDispatch.Push(dispatch.route)
             }
 
         /**
@@ -208,27 +220,28 @@ internal class NavRequestCollector(
          * player screens. Top-only by design: a player buried below a
          * non-player top does NOT veto (its screen is not visible), and an
          * AudioPlayer top does not either (it is not the SyncPlay surface).
+         * Delegates to the shared
+         * [RemoteNavigationDispatcher.syncPlayAutoOpenRoute]; the request is
+         * spread to fields because the request type is app-owned.
          */
         fun syncPlayAutoOpenRoute(
             request: SyncPlayOpenRequest,
             backStacks: Collection<List<NavKey>>,
         ): Route.VideoPlayer? =
-            if (backStacks.any { it.lastOrNull() is Route.VideoPlayer }) {
-                null
-            } else {
-                Route.VideoPlayer(
-                    itemId = request.itemId,
-                    startPositionTicks = request.startPositionTicks,
-                )
-            }
+            RemoteNavigationDispatcher.syncPlayAutoOpenRoute(
+                itemId = request.itemId,
+                startPositionTicks = request.startPositionTicks,
+                backStacks = backStacks,
+            )
 
         /**
          * The now-playing snackbar fold: the item's display title, falling
          * back to the raw item id when the server sent a blank title, into
-         * the localized template (`snackbar_now_playing`, one %s).
+         * the localized template (`snackbar_now_playing`, one %s). Delegates
+         * to the shared [RemoteNavigationDispatcher.nowPlayingMessage].
          */
         fun nowPlayingSnackbarMessage(event: PlayEventPayload, messageTemplate: String): String =
-            messageTemplate.format(event.title.ifBlank { event.itemId })
+            RemoteNavigationDispatcher.nowPlayingMessage(event, messageTemplate)
     }
 }
 

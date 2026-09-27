@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,12 +48,10 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.Ban
 import com.composables.icons.tabler.outline.Check
-import com.composables.icons.tabler.outline.Database
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Search
-import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -71,6 +68,7 @@ import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.FeatureDisabledState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
@@ -165,6 +163,9 @@ fun ArrQueueScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 !featureEnabled -> FeatureDisabledState(
+                    title = stringResource(Res.string.arrqueue_disabled_title),
+                    body = stringResource(Res.string.arrqueue_disabled_body),
+                    ctaLabel = stringResource(Res.string.arrqueue_open_settings),
                     onOpenSettings = onOpenArrSettings,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -473,38 +474,6 @@ private fun StatusChip(status: ArrDownloadStatus) {
 }
 
 // ── States ────────────────────────────────────────────────────────────────
-
-@Composable
-private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Tabler.Outline.Database,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(Res.string.arrqueue_disabled_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(Res.string.arrqueue_disabled_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onOpenSettings, shape = ShapeCache.smooth12) {
-                Icon(Tabler.Outline.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(Res.string.arrqueue_open_settings))
-            }
-        }
-    }
-}
 
 @Composable
 private fun EmptyQueueState(modifier: Modifier = Modifier) {

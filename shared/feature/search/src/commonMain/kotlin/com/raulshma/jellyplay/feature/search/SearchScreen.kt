@@ -13,7 +13,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -41,11 +40,17 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.PagedRefreshPhase
+import com.raulshma.jellyplay.core.ui.components.pagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.toPagedRefreshPhase
 import com.raulshma.jellyplay.core.model.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
@@ -80,6 +85,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.LibraryFilterDimension
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
@@ -88,9 +94,9 @@ import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
+import com.raulshma.jellyplay.core.ui.components.ActiveFiltersBar
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
-import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -137,7 +143,6 @@ import com.raulshma.jellyplay.feature.search.generated.resources.search_clear_se
 import com.raulshma.jellyplay.feature.search.generated.resources.search_did_you_mean
 import com.raulshma.jellyplay.feature.search.generated.resources.search_failed
 import com.raulshma.jellyplay.feature.search.generated.resources.search_failed_to_load_more
-import com.raulshma.jellyplay.feature.search.generated.resources.search_filter_rating_plus
 import com.raulshma.jellyplay.feature.search.generated.resources.search_filter_status
 import com.raulshma.jellyplay.feature.search.generated.resources.search_no_results_found
 import com.raulshma.jellyplay.feature.search.generated.resources.search_on_device
@@ -155,6 +160,22 @@ import com.raulshma.jellyplay.feature.search.generated.resources.search_title
 import com.raulshma.jellyplay.feature.search.generated.resources.search_try_adjusting_filters
 import com.raulshma.jellyplay.feature.search.generated.resources.search_voice_prompt
 import com.raulshma.jellyplay.feature.search.generated.resources.search_voice_search
+
+/**
+ * This screen's active-filter bar vocabulary: which dimensions render as
+ * dismiss tags, and in which order — preserved verbatim from the hand-rolled
+ * bar this replaces (media types → genres → years → tags → min rating →
+ * status; library passes its own list). The shared [ActiveFiltersBar] renders
+ * whatever it is given, so per-screen subsets stay explicit.
+ */
+private val searchActiveFilterDimensions = listOf(
+    LibraryFilterDimension.MEDIA_TYPES,
+    LibraryFilterDimension.GENRES,
+    LibraryFilterDimension.YEARS,
+    LibraryFilterDimension.TAGS,
+    LibraryFilterDimension.MIN_RATING,
+    LibraryFilterDimension.PLAYED_STATUS,
+)
 
 /**
  * @param pendingSearchQuery the shell's prefill channel: a non-null value
@@ -195,8 +216,7 @@ internal fun SearchScreen(
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
 
     val pagedResults = viewModel.pagedResults.collectAsLazyPagingItems()
-    val isRefreshing = pagedResults.loadState.refresh is LoadState.Loading
-    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val refreshPhase = pagedResults.loadState.refresh.toPagedRefreshPhase()
 
     // Only persist the query to "Recent Searches" once the pager confirms a
     // non-empty result set for it. See [SearchHistoryRecorder] — the effect
@@ -204,11 +224,7 @@ internal fun SearchScreen(
     // recomposing per keystroke.
     SearchHistoryRecorder(pagedResults = pagedResults, viewModel = viewModel)
 
-    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
-        isLoading = isRefreshing,
-        hasError = pagedResults.loadState.refresh is LoadState.Error,
-        networkStatus = networkStatus,
-    )
+    val headerStatus = rememberPagedCollectionStatus(pagedResults)
 
     // Active-filter detection is the canonical [LibraryFilters.hasActiveFilters]
     // fold — the exact predicate the Library screen reads, so the badge,
@@ -446,95 +462,22 @@ internal fun SearchScreen(
                     enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + expandVertically(),
                     exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + shrinkVertically(),
                 ) {
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        filters.mediaTypes.forEach { mediaType ->
-                            GlassDismissTag(
-                                label = mediaType.mediaTypeDisplayName(),
-                                onDismiss = {
-                                    viewModel.onEvent(SearchUiEvent.ToggleMediaType(mediaType))
-                                },
-                            )
-                        }
-                        filters.genres.forEach { genre ->
-                            GlassDismissTag(
-                                label = genre,
-                                onDismiss = {
-                                    viewModel.onEvent(
-                                        SearchUiEvent.UpdateFilters(
-                                            filters.copy(genres = filters.genres - genre)
-                                        )
-                                    )
-                                },
-                            )
-                        }
-                        filters.years.forEach { year ->
-                            GlassDismissTag(
-                                label = year.toString(),
-                                onDismiss = {
-                                    viewModel.onEvent(
-                                        SearchUiEvent.UpdateFilters(
-                                            filters.copy(years = filters.years - year)
-                                        )
-                                    )
-                                },
-                            )
-                        }
-                        filters.tags.forEach { tag ->
-                            GlassDismissTag(
-                                label = tag,
-                                onDismiss = {
-                                    viewModel.onEvent(
-                                        SearchUiEvent.UpdateFilters(
-                                            filters.copy(tags = filters.tags - tag)
-                                        )
-                                    )
-                                },
-                            )
-                        }
-                        if (filters.minRating > 0f) {
-                            GlassDismissTag(
-                                label = stringResource(Res.string.search_filter_rating_plus, filters.minRating),
-                                onDismiss = {
-                                    viewModel.onEvent(
-                                        SearchUiEvent.UpdateFilters(filters.copy(minRating = 0f))
-                                    )
-                                },
-                            )
-                        }
-                        if (filters.playedStatus != PlayedStatus.ALL) {
-                            GlassDismissTag(
-                                label = filters.playedStatus.playedStatusLabel(),
-                                onDismiss = {
-                                    viewModel.onEvent(SearchUiEvent.SetPlayedStatus(PlayedStatus.ALL))
-                                },
-                            )
-                        }
-                        val clearAllFocusState = rememberTvFocusState()
-                        Box(
-                            modifier = Modifier
-                                .then(clearAllFocusState.focusModifier)
-                                .tvFocusIndicator(clearAllFocusState, ShapeCache.smooth8)
-                                .clip(ShapeCache.smooth8)
-                                .clickable(role = androidx.compose.ui.semantics.Role.Button) {
-                                    viewModel.onEvent(SearchUiEvent.ClearFilters)
-                                }
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                        ) {
-                            Text(
-                                text = stringResource(Res.string.search_clear_all),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
+                    // The shared active-filter bar (core:ui) over the canonical
+                    // [LibraryFilters.activeTags] fold — the same fold the
+                    // library screen reads. Dismiss semantics are unchanged:
+                    // each tag's clear() is the exact `filters.copy(...)` the
+                    // hand-rolled lambdas performed (ToggleMediaType/
+                    // SetPlayedStatus computed the identical copies), routed
+                    // through the same UpdateFilters write. The clear-all chip
+                    // gained Library's press-scale/shape-morph animation — the
+                    // declared unification in ActiveFiltersBar's KDoc.
+                    ActiveFiltersBar(
+                        tags = filters.activeTags(searchActiveFilterDimensions),
+                        onTagDismiss = { tag ->
+                            viewModel.onEvent(SearchUiEvent.UpdateFilters(tag.clear()))
+                        },
+                        onClearAll = { viewModel.onEvent(SearchUiEvent.ClearFilters) },
+                    )
                 }
 
                 // ── Result count ──
@@ -714,8 +657,7 @@ internal fun SearchScreen(
                 val surface = computeSearchSurface(
                     itemCount = pagedResults.itemCount,
                     queryHasText = queryHasText,
-                    isRefreshing = isRefreshing,
-                    refreshFailed = pagedResults.loadState.refresh is LoadState.Error,
+                    refreshPhase = refreshPhase,
                     showSeerr = showSeerr,
                     showSeerrError = showSeerrError,
                     showOffline = showOffline,
@@ -993,7 +935,7 @@ internal fun SearchScreen(
                             }
 
                             // ── Append loading (gradient fade + progress bar) ──
-                            if (pagedResults.loadState.append is LoadState.Loading) {
+                            if (pagedAppendRung(pagedResults.loadState.append.toPagedRefreshPhase()) == PagedAppendRung.Loading) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
@@ -1020,11 +962,12 @@ internal fun SearchScreen(
                             }
 
                             // ── Append error ──
-                            if (pagedResults.loadState.append is LoadState.Error) {
-                                val appendError = pagedResults.loadState.append as LoadState.Error
+                            if (pagedAppendRung(pagedResults.loadState.append.toPagedRefreshPhase()) == PagedAppendRung.Retry) {
                                 AppendErrorFooter(
-                                    message = appendError.error.message
-                                        ?: stringResource(Res.string.search_failed_to_load_more),
+                                    message = UserErrorMessages.resolve(
+                                        (pagedResults.loadState.append as LoadState.Error).error,
+                                        stringResource(Res.string.search_failed_to_load_more),
+                                    ),
                                     onRetry = { pagedResults.retry() },
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
@@ -1035,7 +978,7 @@ internal fun SearchScreen(
 
                             // ── Refresh loading / error (the fold's phase) ──
                             when (surface.refresh) {
-                                SearchSurface.RefreshPhase.LOADING -> {
+                                PagedRefreshPhase.LOADING -> {
                                     Box(
                                         modifier = Modifier.fillMaxSize(),
                                         contentAlignment = Alignment.Center,
@@ -1048,15 +991,17 @@ internal fun SearchScreen(
                                         )
                                     }
                                 }
-                                SearchSurface.RefreshPhase.ERROR -> {
+                                PagedRefreshPhase.ERROR -> {
                                     ErrorScreen(
-                                        message = (pagedResults.loadState.refresh as LoadState.Error).error.message
-                                            ?: stringResource(Res.string.search_failed),
+                                        message = UserErrorMessages.resolve(
+                                            (pagedResults.loadState.refresh as LoadState.Error).error,
+                                            stringResource(Res.string.search_failed),
+                                        ),
                                         onRetry = { pagedResults.refresh() },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
-                                SearchSurface.RefreshPhase.IDLE -> Unit
+                                PagedRefreshPhase.SETTLED -> Unit
                             }
                         }
                     }
@@ -1076,7 +1021,7 @@ internal fun SearchScreen(
         SeerrRequestDialog(
             item = item,
             snapshot = seerrSnapshot,
-            onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+            onConfirm = { (serverId, profileId, rootFolder, tags, seasons) ->
                 viewModel.onEvent(
                     SearchUiEvent.RequestSeerrMedia(
                         item, seasons, serverId, profileId, rootFolder, tags,

@@ -44,19 +44,25 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Photo
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridCellSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
-import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionRung
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.components.pagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.pagedCollectionRung
+import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.toPagedRefreshPhase
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -83,13 +89,8 @@ fun PhotoAlbumScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val photos = viewModel.pagedItems.collectAsLazyPagingItems()
     val sortOption by viewModel.sortOption.collectAsStateWithLifecycle()
-    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
 
-    val headerStatus = resolveHeaderStatus(
-        isLoading = photos.loadState.refresh is LoadState.Loading,
-        hasError = photos.loadState.refresh is LoadState.Error,
-        networkStatus = networkStatus,
-    )
+    val headerStatus = rememberPagedCollectionStatus(photos)
 
     LaunchedEffect(parentId) {
         viewModel.setParentId(parentId)
@@ -164,25 +165,29 @@ fun PhotoAlbumScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    photos.loadState.refresh is LoadState.Loading && photos.itemCount == 0 -> {
+                // The shared refresh ladder (core:ui chassis) — content wins
+                // over the spinner once pages exist; this screen's own
+                // pull-to-refresh gate above is unchanged.
+                when (pagedCollectionRung(photos.loadState.refresh.toPagedRefreshPhase(), photos.itemCount)) {
+                    PagedCollectionRung.InitialLoading -> {
                         ScreenLoadingState()
                     }
-                    photos.loadState.refresh is LoadState.Error -> {
+                    PagedCollectionRung.RefreshError -> {
                         ErrorScreen(
-                            message = (photos.loadState.refresh as LoadState.Error)
-                                .error.message
-                                ?: stringResource(Res.string.photos_failed_to_load_photos),
+                            message = UserErrorMessages.resolve(
+                                (photos.loadState.refresh as LoadState.Error).error,
+                                stringResource(Res.string.photos_failed_to_load_photos),
+                            ),
                             onRetry = { photos.refresh() },
                         )
                     }
-                    photos.itemCount == 0 -> {
+                    PagedCollectionRung.Empty -> {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Photo,
                             title = stringResource(Res.string.photos_no_photos_found),
                         )
                     }
-                    else -> {
+                    PagedCollectionRung.Content -> {
                         TvFocusableGrid(
                             itemCount = photos.itemCount,
                             key = photos.safeItemKey { it.id },
@@ -219,26 +224,29 @@ fun PhotoAlbumScreen(
                     }
                 }
 
-                when (val appendState = photos.loadState.append) {
-                    is LoadState.Loading -> {
+                when (pagedAppendRung(photos.loadState.append.toPagedRefreshPhase())) {
+                    PagedAppendRung.Loading -> {
                         JellyPlayLoadingIndicator(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(16.dp),
                         )
                     }
-                    is LoadState.Error -> {
-                        Text(
-                            text = appendState.error.message
-                                ?: stringResource(Res.string.photos_failed_to_load_more),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
+                    PagedAppendRung.Retry -> {
+                        // Declared unification: the former raw-Text append
+                        // error becomes the shared retry footer.
+                        AppendErrorFooter(
+                            message = UserErrorMessages.resolve(
+                                (photos.loadState.append as LoadState.Error).error,
+                                stringResource(Res.string.photos_failed_to_load_more),
+                            ),
+                            onRetry = { photos.retry() },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(16.dp),
                         )
                     }
-                    is LoadState.NotLoading -> Unit
+                    PagedAppendRung.Hidden -> Unit
                 }
             }
         }

@@ -1,49 +1,27 @@
 package com.raulshma.jellyplay.feature.music.genres
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
-import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
-import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
+import com.raulshma.jellyplay.feature.music.components.PagedList
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
-import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_more
 import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_tracks
 import com.raulshma.jellyplay.feature.music.generated.resources.music_no_tracks_found
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.*
+import com.composables.icons.tabler.outline.Music
 
 @Composable
 fun GenreDetailScreen(
@@ -53,21 +31,7 @@ fun GenreDetailScreen(
     viewModel: GenreDetailViewModel = koinViewModel(),
 ) {
     val tracks = viewModel.tracks.collectAsLazyPagingItems()
-    val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
-    val headerStatus = resolveHeaderStatus(
-        isLoading = tracks.loadState.refresh is LoadState.Loading,
-        hasError = tracks.loadState.refresh is LoadState.Error,
-        networkStatus = networkStatus,
-    )
-
-    // TV focus-on-launch: focus the first track once data arrives so D-pad input lands on content,
-    // not the navigation drawer.
-    val listFocusRequester = androidx.compose.runtime.remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = listFocusRequester,
-        itemCount = tracks.itemCount,
-        tag = "genre_detail_init",
-    )
+    val headerStatus = rememberPagedCollectionStatus(tracks)
 
     JellyPlayScreenScaffold(
         title = genreName,
@@ -79,95 +43,54 @@ fun GenreDetailScreen(
             )
         },
     ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = tracks.loadState.refresh) {
-                is LoadState.Loading -> {
-                    ScreenLoadingState()
-                }
-                is LoadState.Error -> {
-                    ErrorScreen(
-                        message = UserErrorMessages.resolve(refreshState.error, stringResource(Res.string.music_failed_load_tracks)),
-                        onRetry = { tracks.refresh() },
-                    )
-                }
-                is LoadState.NotLoading -> {
-                    if (tracks.itemCount == 0) {
-                        ScreenEmptyState(
-                            icon = Tabler.Outline.Music,
-                            title = stringResource(Res.string.music_no_tracks_found),
-                        )
-                    } else {
-                        val adaptiveInfo = LocalAdaptiveInfo.current
-                        val isTv = LocalTvMode.current
-                        LazyColumn(
-                            contentPadding = PaddingValues(
-                                bottom = adaptiveInfo.bottomPadding(isTv),
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .tvFocusRestorer()
-                                .focusRequester(listFocusRequester),
-                        ) {
-                            items(
-                                count = tracks.itemCount,
-                                key = tracks.safeItemKey { it.id },
-                                contentType = { "mediaItem" },
-                            ) { index ->
-                                val track = tracks[index]
-                                if (track != null) {
-                                    // Memoize per-item so getImageUrl + the click
-                                    // lambdas aren't rebuilt on every recomposition
-                                    // of this visible row (matches Tracks/Search).
-                                    val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
-                                    val onClick = remember(track.id) {
-                                        {
-                                            val loadedTracks = tracks.itemSnapshotList.items
-                                            val clickIndex = loadedTracks.indexOfFirst { it.id == track.id }
-                                            viewModel.playAll(loadedTracks, if (clickIndex >= 0) clickIndex else 0)
-                                            onItemClick(track.id)
-                                        }
-                                    }
-                                    val onAddToQueue = remember(track.id) { { viewModel.addToQueue(track) } }
-                                    TrackRow(
-                                        name = track.name,
-                                        artist = track.albumArtist,
-                                        album = track.album,
-                                        duration = track.runTimeTicks?.let { ticks ->
-                                            com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
-                                        },
-                                        imageUrl = imageUrl,
-                                        onClick = onClick,
-                                        onAddToQueue = onAddToQueue,
-                                        blurHash = track.blurHashes.primary,
-                                    )
-                                }
-                            }
-                        }
-                    }
+        val adaptiveInfo = LocalAdaptiveInfo.current
+        val isTv = LocalTvMode.current
+        // The music module's one paged ladder (list variant): refresh
+        // loading/error/empty decisions, the append footer and the TV
+        // focus-on-launch grab (first row takes D-pad focus once data
+        // arrives) — previously hand-rolled here even inside music. No
+        // pull-to-refresh on this route, matching the old wiring. Declared
+        // delta: the chassis's content-wins precedence keeps the stale page
+        // visible during a deferred refresh where the hand-rolled ladder
+        // blanked to a full-screen spinner.
+        PagedList(
+            items = tracks,
+            itemKey = { it.id },
+            contentPadding = PaddingValues(
+                bottom = adaptiveInfo.bottomPadding(isTv),
+            ),
+            rowSpacing = 2.dp,
+            pullToRefresh = false,
+            emptyIcon = Tabler.Outline.Music,
+            emptyTitle = stringResource(Res.string.music_no_tracks_found),
+            errorFallbackMessage = stringResource(Res.string.music_failed_load_tracks),
+            tvInitialFocusTag = "genre_detail_init",
+        ) { track ->
+            // Memoize per-item so getImageUrl + the click
+            // lambdas aren't rebuilt on every recomposition
+            // of this visible row (matches Tracks/Search).
+            val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
+            val onClick = remember(track.id) {
+                {
+                    val loadedTracks = tracks.itemSnapshotList.items
+                    val clickIndex = loadedTracks.indexOfFirst { it.id == track.id }
+                    viewModel.playAll(loadedTracks, if (clickIndex >= 0) clickIndex else 0)
+                    onItemClick(track.id)
                 }
             }
-
-            when (val appendState = tracks.loadState.append) {
-                is LoadState.Loading -> {
-                    JellyPlayLoadingIndicator(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                    )
-                }
-                is LoadState.Error -> {
-                    AppendErrorFooter(
-                        message = appendState.error.message
-                            ?: stringResource(Res.string.music_failed_load_more),
-                        onRetry = { tracks.retry() },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                    )
-                }
-                is LoadState.NotLoading -> Unit
-            }
+            val onAddToQueue = remember(track.id) { { viewModel.addToQueue(track) } }
+            TrackRow(
+                name = track.name,
+                artist = track.albumArtist,
+                album = track.album,
+                duration = track.runTimeTicks?.let { ticks ->
+                    com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
+                },
+                imageUrl = imageUrl,
+                onClick = onClick,
+                onAddToQueue = onAddToQueue,
+                blurHash = track.blurHashes.primary,
+            )
         }
     }
 }

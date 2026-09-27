@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.music.components
+package com.raulshma.jellyplay.core.ui.components
 
 import androidx.paging.LoadState
 import kotlin.test.Test
@@ -6,10 +6,10 @@ import kotlin.test.assertEquals
 
 /**
  * Pins the collection ladder's pure decisions — the refresh rung the
- * grid/list variants render and the append rung driving the load-more
- * footer. These replace the three hand-rolled ladders (browse PagedGrid's
- * refresh-only subset, the browse tracks page's copy, the standalone
- * screens' per-screen `when` blocks). The [LoadState] → [PagedRefreshPhase]
+ * paged/list collection variants render and the append rung driving the
+ * load-more footer. The chassis (promoted from the music module's PagedGrid)
+ * replaces the hand-rolled per-screen `when` blocks across the library/
+ * search/photos/music screens. The [LoadState] → [PagedRefreshPhase]
  * mapping is compiler-checked (`LoadState.NotLoading` is not constructible
  * outside paging); the constructible arms are pinned here too.
  */

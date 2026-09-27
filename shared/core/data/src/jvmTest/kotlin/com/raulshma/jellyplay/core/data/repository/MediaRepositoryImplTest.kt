@@ -87,13 +87,23 @@ class MediaRepositoryImplTest {
             sessionCacheRegistry,
         )
         val internals = MediaRepositoryInternals(apiClient, homeSession)
+        val timeSource = SystemTimeSource()
+        // Snapshot-store extraction: the repo now ctor-injects the persisted
+        // half of the home pipeline (the same store the Koin graph wires);
+        // this suite never touches home persistence, so the relaxed DAO
+        // mock under the store is inert.
+        val homeSnapshotStore = HomeSectionsSnapshotStore(
+            homeSectionCacheDao,
+            homeSession,
+            timeSource,
+        )
         repository = MediaRepositoryImpl(
             apiClient,
-            homeSectionCacheDao,
+            homeSnapshotStore,
             playedStateSync,
             episodeCatalogue,
             userDataRealtimeChannel,
-            SystemTimeSource(),
+            timeSource,
             homeSession,
             sessionCacheRegistry,
             internals,

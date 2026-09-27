@@ -74,7 +74,10 @@ class MediaRepositoryDetailCacheGroupTest {
         )
         repository = MediaRepositoryImpl(
             apiClient,
-            homeSectionCacheDao,
+            // Snapshot-store extraction: the persisted home pipeline moved
+            // into the store single the Koin graph wires (inert here — this
+            // suite pins the detail-cache key grammar).
+            HomeSectionsSnapshotStore(homeSectionCacheDao, homeSession, SystemTimeSource()),
             playedStateSync,
             episodeCatalogue,
             userDataRealtimeChannel,

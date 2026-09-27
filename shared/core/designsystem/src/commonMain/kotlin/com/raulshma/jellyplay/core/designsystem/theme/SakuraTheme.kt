@@ -32,20 +32,4 @@ fun getSakuraColorScheme(accent: String, isDark: Boolean): ColorScheme {
 
 /** Sakura typography — rounded Quicksand throughout for a soft, friendly feel. */
 val SakuraTypography: Typography
-    @Composable get() = Typography(
-    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = sakuraFontFamily),
-    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = sakuraFontFamily),
-    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = sakuraFontFamily),
-    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = sakuraFontFamily),
-    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = sakuraFontFamily),
-    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = sakuraFontFamily),
-    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = sakuraFontFamily),
-    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = sakuraFontFamily),
-    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = sakuraFontFamily),
-    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = sakuraFontFamily),
-    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = sakuraFontFamily),
-    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = sakuraFontFamily),
-    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = sakuraFontFamily),
-    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = sakuraFontFamily),
-    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = sakuraFontFamily),
-)
+    @Composable get() = variantTypography(JellyPlayTypography, sakuraFontFamily)

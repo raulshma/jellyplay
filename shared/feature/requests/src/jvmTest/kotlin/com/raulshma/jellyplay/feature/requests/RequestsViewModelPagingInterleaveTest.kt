@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.requests
 
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
@@ -17,6 +18,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,7 +106,7 @@ class RequestsViewModelPagingInterleaveTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalStore = experimentalStore,
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
 
     @Test

@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineSessionShell
 import com.raulshma.jellyplay.feature.player.video.engine.FallbackPolicy
 import com.raulshma.jellyplay.feature.player.video.engine.WatchdogScope
+import com.raulshma.jellyplay.feature.player.video.engine.mirrorPlaying
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error_buffering_timeout
@@ -710,12 +711,15 @@ class LiveTvPlayerViewModel(
             // re-arms on BUFFERING and its timeout decision lands in
             // [executeEngineDecision].)
         }.launchIn(viewModelScope)
-        eng.isPlaying.onEach {
-            _state.value = _state.value.copy(isPlaying = it)
-            // Mirror play state so the host Activity renders the correct
-            // play/pause icon on the PiP window.
-            pip?.setPlaying(it)
-        }.launchIn(viewModelScope)
+        // The play-state mirror (uiState write + PiP icon) is the shared
+        // [mirrorPlaying] collector — the VOD host feeds it one more sink
+        // (SyncPlay). The same-value guard is newly adopted here: the
+        // hand-rolled copy re-copied state on every emission.
+        viewModelScope.mirrorPlaying(
+            eng.isPlaying,
+            { isPlaying -> _state.value = _state.value.copy(isPlaying = isPlaying) },
+            { isPlaying -> pip?.setPlaying(isPlaying) },
+        )
         eng.isAtLiveEdge.onEach { _state.value = _state.value.copy(isAtLiveEdge = it) }
             .launchIn(viewModelScope)
         eng.positionMs.onEach { _positionMs.value = it }

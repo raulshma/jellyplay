@@ -2,8 +2,8 @@ package com.raulshma.jellyplay.feature.admin.devices
 
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.model.DeviceInfo
-import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 
@@ -12,31 +12,12 @@ data class DevicesState(
     val error: String? = null,
     val devices: List<DeviceInfo> = emptyList(),
     val isRefreshing: Boolean = false,
-    /**
-     * Delete-confirmation machine (replaces the old showDeleteDialog +
-     * selectedDevice pair). Settle arm: clears on BOTH outcomes — the dialog
-     * always closed on delete and the reload stayed unconditional. Guard
-     * source: the machine's dismiss/confirm rule; [isDeleting] is the
-     * caller-owned in-flight fact it reads.
-     */
-    val pendingDelete: PendingConfirmation<DeviceInfo> = PendingConfirmation(),
-    /** True while a delete request is in flight — also the dialog's confirmLoading. */
+    /** True while a delete request is in flight — also the dialog's confirmLoading and the delete-confirmation host's in-flight fact. */
     val isDeleting: Boolean = false,
     val showEditNameDialog: Boolean = false,
     val editDeviceId: String = "",
     val editCustomName: String = "",
-) {
-    /** The delete dialog's open flag, derived from the pending machine. */
-    val showDeleteDialog: Boolean get() = pendingDelete.isPending
-
-    /**
-     * The device awaiting delete confirmation — the dialog's payload.
-     * Compatibility alias for the pre-fold `selectedDevice` field name (the
-     * screen and suite read it unchanged); the value is the machine's
-     * pending delete target.
-     */
-    val selectedDevice: DeviceInfo? get() = pendingDelete.item
-}
+)
 
 class DevicesViewModel(
     private val adminRepository: AdminRepository,
@@ -44,6 +25,15 @@ class DevicesViewModel(
 
     private val _state = composeState(DevicesState())
     val state: DevicesState get() = _state.value
+
+    /**
+     * Delete-confirmation host (replaces the old showDeleteDialog +
+     * selectedDevice state pair). Settle arm: clears on BOTH outcomes — the
+     * dialog always closed on delete and the reload stayed unconditional.
+     * Guard source: the host's dismiss/confirm rule; [DevicesState.isDeleting]
+     * is the caller-owned in-flight fact it reads.
+     */
+    val deleteConfirmation = ConfirmationHost<DeviceInfo>()
 
     init {
         loadDevices()
@@ -78,17 +68,13 @@ class DevicesViewModel(
     }
 
     /** Opens the delete-confirm dialog for [device]. */
-    fun showDeleteDialog(device: DeviceInfo) {
-        _state.value = _state.value.copy(pendingDelete = _state.value.pendingDelete.hold(device))
-    }
+    fun showDeleteDialog(device: DeviceInfo) = deleteConfirmation.show(device)
 
     /**
-     * Refused while a delete is in flight (machine rule; [DevicesState.isDeleting]
+     * Refused while a delete is in flight (host rule; [DevicesState.isDeleting]
      * is the caller-owned fact) — the dialog stays open until the request settles.
      */
-    fun dismissDeleteDialog() {
-        _state.value = _state.value.copy(pendingDelete = _state.value.pendingDelete.dismiss(_state.value.isDeleting))
-    }
+    fun dismissDeleteDialog() = deleteConfirmation.dismiss(inFlight = _state.value.isDeleting)
 
     /**
      * Deletes the pending device. Settle arm: clears on BOTH outcomes — the
@@ -97,14 +83,12 @@ class DevicesViewModel(
      * spans the request so a second confirm and a dismiss are refused.
      */
     fun deleteDevice() {
-        val device = _state.value.pendingDelete.confirm(inFlight = _state.value.isDeleting) ?: return
+        val device = deleteConfirmation.confirm(inFlight = _state.value.isDeleting) ?: return
         launch {
             _state.value = _state.value.copy(isDeleting = true)
             adminRepository.deleteDevice(device.id)
-            _state.value = _state.value.copy(
-                isDeleting = false,
-                pendingDelete = _state.value.pendingDelete.clear(),
-            )
+            _state.value = _state.value.copy(isDeleting = false)
+            deleteConfirmation.clear()
             loadDevices()
         }
     }

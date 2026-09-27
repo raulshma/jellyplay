@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.arrqueue
 
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
@@ -17,6 +18,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,11 +49,11 @@ import kotlin.test.assertTrue
  * precedent; cold first() works because the channel is BUFFERED — downloads
  * conveyor pattern).
  *
- * Init-timing note pinned by the flag tests: `directArrEnabled` is
- * stateIn(Eagerly, initial = false), and init calls refresh() synchronously
- * BEFORE the sharing coroutine runs — so the very first refresh always sees
- * the initial false and no-ops, exactly like HEAD (same rationale as
- * RequestsViewModel.directArrEnabled, quoted in the VM's KDoc).
+ * Init-timing note pinned by the flag tests: the gate's flow is
+ * stateIn(Eagerly, initial = false) on the test Main scope, and init calls
+ * refresh() synchronously BEFORE the sharing coroutine runs — so the very
+ * first refresh always sees the initial false and no-ops, exactly like HEAD
+ * (rationale now quoted once in ExperimentalFeatureGate's KDoc).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrQueueViewModelTest {
@@ -94,7 +96,7 @@ class ArrQueueViewModelTest {
 
     private fun newViewModel(): ArrQueueViewModel = ArrQueueViewModel(
         arrRepository = arrRepository,
-        experimentalStore = experimentalStore,
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
 
     private fun item(

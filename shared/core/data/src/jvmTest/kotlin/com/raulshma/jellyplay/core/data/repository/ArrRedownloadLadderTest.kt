@@ -100,7 +100,7 @@ class ArrRedownloadLadderTest {
     /** First lookup returns [movie]; the verify re-query returns it file-less. */
     private suspend fun stubRadarrLookupThenVerified(radarr: RadarrApiClient, movie: RadarrMovieInfo) {
         var calls = 0
-        coEvery { radarr.getMovieForTmdb("https://r1.local", "k", 555) } answers {
+        coEvery { radarr.getMovieForTmdb(radarrSrv, 555) } answers {
             calls++
             Result.success(if (calls == 1) movie else movie.copy(hasFile = false, movieFileId = 0))
         }
@@ -112,7 +112,7 @@ class ArrRedownloadLadderTest {
             Row(
                 "not tracked aborts at the DELETE_FILE gate",
                 arrange = { r, _ ->
-                    coEvery { r.getMovieForTmdb("https://r1.local", "k", 555) } returns Result.success(null)
+                    coEvery { r.getMovieForTmdb(radarrSrv, 555) } returns Result.success(null)
                 },
                 expectedSteps = listOf(
                     step(ArrRedownloadStep.DELETE_FILE, ArrRedownloadStepStatus.FAILED, "Movie (tmdb 555) not tracked in Radarr."),
@@ -122,7 +122,7 @@ class ArrRedownloadLadderTest {
             Row(
                 "lookup failure aborts with the error",
                 arrange = { r, _ ->
-                    coEvery { r.getMovieForTmdb(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
+                    coEvery { r.getMovieForTmdb(any(), any()) } returns Result.failure(RuntimeException("boom"))
                 },
                 expectedSteps = listOf(
                     step(ArrRedownloadStep.DELETE_FILE, ArrRedownloadStepStatus.FAILED, "Radarr lookup failed: boom."),
@@ -133,8 +133,8 @@ class ArrRedownloadLadderTest {
                 "no file skips the delete",
                 arrange = { r, _ ->
                     stubRadarrLookupThenVerified(r, radarrMovie(fileId = 0, hasFile = false, monitored = false))
-                    coEvery { r.monitorMovies(any(), any(), any(), any()) } returns Result.success(Unit)
-                    coEvery { r.postCommand(any(), any(), any(), any(), any()) } returns
+                    coEvery { r.monitorMovies(any(), any(), any()) } returns Result.success(Unit)
+                    coEvery { r.postCommand(any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "SearchMovie", "queued"))
                 },
                 expectedSteps = listOf(
@@ -145,15 +145,15 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = true,
                 postVerify = { r, _ ->
-                    coVerify(exactly = 0) { r.deleteMovieFile(any(), any(), any()) }
+                    coVerify(exactly = 0) { r.deleteMovieFile(any(), any()) }
                 },
             ),
             Row(
                 "delete failure is a hard gate",
                 arrange = { r, _ ->
-                    coEvery { r.getMovieForTmdb("https://r1.local", "k", 555) } returns
+                    coEvery { r.getMovieForTmdb(radarrSrv, 555) } returns
                         Result.success(radarrMovie(fileId = 9001, hasFile = true, monitored = false))
-                    coEvery { r.deleteMovieFile("https://r1.local", "k", 9001) } returns
+                    coEvery { r.deleteMovieFile(radarrSrv, 9001) } returns
                         Result.failure(ApiException.fromHttp(409, "Root folder missing"))
                 },
                 expectedSteps = listOf(
@@ -161,18 +161,18 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = false,
                 postVerify = { r, _ ->
-                    coVerify(exactly = 0) { r.postCommand(any(), any(), any(), any(), any()) }
+                    coVerify(exactly = 0) { r.postCommand(any(), any(), any(), any()) }
                 },
             ),
             Row(
                 "verify failure does NOT gate (Radarr continues best-effort)",
                 arrange = { r, _ ->
                     // Both lookups see hasFile=true, so the verify re-check fails.
-                    coEvery { r.getMovieForTmdb("https://r1.local", "k", 555) } returns
+                    coEvery { r.getMovieForTmdb(radarrSrv, 555) } returns
                         Result.success(radarrMovie(fileId = 9001, hasFile = true, monitored = false))
-                    coEvery { r.deleteMovieFile("https://r1.local", "k", 9001) } returns Result.success(Unit)
-                    coEvery { r.monitorMovies(any(), any(), any(), any()) } returns Result.success(Unit)
-                    coEvery { r.postCommand(any(), any(), any(), any(), any()) } returns
+                    coEvery { r.deleteMovieFile(radarrSrv, 9001) } returns Result.success(Unit)
+                    coEvery { r.monitorMovies(any(), any(), any()) } returns Result.success(Unit)
+                    coEvery { r.postCommand(any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "SearchMovie", "queued"))
                 },
                 expectedSteps = listOf(
@@ -187,8 +187,8 @@ class ArrRedownloadLadderTest {
                 "already monitored skips the monitor step",
                 arrange = { r, _ ->
                     stubRadarrLookupThenVerified(r, radarrMovie(fileId = 9001, hasFile = true, monitored = true))
-                    coEvery { r.deleteMovieFile("https://r1.local", "k", 9001) } returns Result.success(Unit)
-                    coEvery { r.postCommand(any(), any(), any(), any(), any()) } returns
+                    coEvery { r.deleteMovieFile(radarrSrv, 9001) } returns Result.success(Unit)
+                    coEvery { r.postCommand(any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "SearchMovie", "queued"))
                 },
                 expectedSteps = listOf(
@@ -199,16 +199,16 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = true,
                 postVerify = { r, _ ->
-                    coVerify(exactly = 0) { r.monitorMovies(any(), any(), any(), any()) }
+                    coVerify(exactly = 0) { r.monitorMovies(any(), any(), any()) }
                 },
             ),
             Row(
                 "full success runs all four steps",
                 arrange = { r, _ ->
                     stubRadarrLookupThenVerified(r, radarrMovie(fileId = 9001, hasFile = true, monitored = false))
-                    coEvery { r.deleteMovieFile("https://r1.local", "k", 9001) } returns Result.success(Unit)
-                    coEvery { r.monitorMovies(any(), any(), any(), any()) } returns Result.success(Unit)
-                    coEvery { r.postCommand(any(), any(), any(), any(), any()) } returns
+                    coEvery { r.deleteMovieFile(radarrSrv, 9001) } returns Result.success(Unit)
+                    coEvery { r.monitorMovies(any(), any(), any()) } returns Result.success(Unit)
+                    coEvery { r.postCommand(any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "SearchMovie", "queued"))
                 },
                 expectedSteps = listOf(
@@ -219,7 +219,7 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = true,
                 postVerify = { r, _ ->
-                    coVerify { r.deleteMovieFile("https://r1.local", "k", 9001) }
+                    coVerify { r.deleteMovieFile(radarrSrv, 9001) }
                 },
             ),
         )
@@ -233,13 +233,13 @@ class ArrRedownloadLadderTest {
     )
 
     private suspend fun stubSonarrSeriesLookup(sonarr: SonarrApiClient, seriesId: Int? = 10) {
-        coEvery { sonarr.findSeriesByTvdb("https://s1.local", "k", 123) } returns Result.success(seriesId)
+        coEvery { sonarr.findSeriesByTvdb(sonarrSrv, 123) } returns Result.success(seriesId)
     }
 
     /** First episode lookup returns [episode]; the verify re-query returns it file-less. */
     private suspend fun stubSonarrLookupThenVerified(sonarr: SonarrApiClient, episode: SonarrEpisodeInfo) {
         var calls = 0
-        coEvery { sonarr.getEpisodeInfo(any(), any(), any(), any(), any()) } answers {
+        coEvery { sonarr.getEpisodeInfo(any(), any(), any(), any()) } answers {
             calls++
             Result.success(if (calls == 1) episode else episode.copy(hasFile = false, episodeFileId = 0))
         }
@@ -256,7 +256,7 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = false,
                 postVerify = { _, s ->
-                    coVerify(exactly = 0) { s.findSeriesByTvdb(any(), any(), any()) }
+                    coVerify(exactly = 0) { s.findSeriesByTvdb(any(), any()) }
                 },
             ),
             Row(
@@ -270,7 +270,7 @@ class ArrRedownloadLadderTest {
             Row(
                 "series lookup failure aborts with the error",
                 arrange = { _, s ->
-                    coEvery { s.findSeriesByTvdb(any(), any(), any()) } returns Result.failure(RuntimeException("down"))
+                    coEvery { s.findSeriesByTvdb(any(), any()) } returns Result.failure(RuntimeException("down"))
                 },
                 expectedSteps = listOf(
                     step(ArrRedownloadStep.DELETE_FILE, ArrRedownloadStepStatus.FAILED, "Sonarr lookup failed: down."),
@@ -281,7 +281,7 @@ class ArrRedownloadLadderTest {
                 "episode lookup failure aborts with the error",
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } returns
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } returns
                         Result.failure(RuntimeException("nope"))
                 },
                 expectedSteps = listOf(
@@ -295,8 +295,8 @@ class ArrRedownloadLadderTest {
                 episodeNumber = 12,
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } returns Result.success(null)
-                    coEvery { s.getSeasonSummaries("https://s1.local", "k", 10) } returns Result.success(
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } returns Result.success(null)
+                    coEvery { s.getSeasonSummaries(sonarrSrv, 10) } returns Result.success(
                         listOf(
                             SonarrSeasonSummary(0, listOf(1, 2, 3)),
                             SonarrSeasonSummary(1, (1..12).toList()),
@@ -318,8 +318,8 @@ class ArrRedownloadLadderTest {
                 episodeNumber = 12,
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } returns Result.success(null)
-                    coEvery { s.getSeasonSummaries("https://s1.local", "k", 10) } returns Result.success(
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } returns Result.success(null)
+                    coEvery { s.getSeasonSummaries(sonarrSrv, 10) } returns Result.success(
                         listOf(
                             SonarrSeasonSummary(0, emptyList()),
                             SonarrSeasonSummary(1, (1..12).toList()),
@@ -339,8 +339,8 @@ class ArrRedownloadLadderTest {
                 "episode not found with no seasons says so",
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } returns Result.success(null)
-                    coEvery { s.getSeasonSummaries("https://s1.local", "k", 10) } returns Result.success(emptyList())
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } returns Result.success(null)
+                    coEvery { s.getSeasonSummaries(sonarrSrv, 10) } returns Result.success(emptyList())
                 },
                 expectedSteps = listOf(
                     step(
@@ -356,8 +356,8 @@ class ArrRedownloadLadderTest {
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
                     stubSonarrLookupThenVerified(s, sonarrEpisode(fileId = 0, hasFile = false, monitored = false))
-                    coEvery { s.monitorEpisodes(any(), any(), any(), any()) } returns Result.success(Unit)
-                    coEvery { s.postCommand(any(), any(), any(), any(), any(), any()) } returns
+                    coEvery { s.monitorEpisodes(any(), any(), any()) } returns Result.success(Unit)
+                    coEvery { s.postCommand(any(), any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "EpisodeSearch", "queued"))
                 },
                 expectedSteps = listOf(
@@ -368,16 +368,16 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = true,
                 postVerify = { _, s ->
-                    coVerify(exactly = 0) { s.deleteEpisodeFile(any(), any(), any()) }
+                    coVerify(exactly = 0) { s.deleteEpisodeFile(any(), any()) }
                 },
             ),
             Row(
                 "delete failure is a hard gate",
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } returns
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } returns
                         Result.success(sonarrEpisode(fileId = 500, hasFile = true, monitored = false))
-                    coEvery { s.deleteEpisodeFile("https://s1.local", "k", 500) } returns
+                    coEvery { s.deleteEpisodeFile(sonarrSrv, 500) } returns
                         Result.failure(ApiException.fromHttp(409, "Root folder missing"))
                 },
                 expectedSteps = listOf(
@@ -385,7 +385,7 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = false,
                 postVerify = { _, s ->
-                    coVerify(exactly = 0) { s.postCommand(any(), any(), any(), any(), any(), any()) }
+                    coVerify(exactly = 0) { s.postCommand(any(), any(), any(), any(), any()) }
                 },
             ),
             Row(
@@ -393,9 +393,9 @@ class ArrRedownloadLadderTest {
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
                     // Both lookups see hasFile=true, so the verify re-check fails.
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } returns
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } returns
                         Result.success(sonarrEpisode(fileId = 500, hasFile = true, monitored = false))
-                    coEvery { s.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
+                    coEvery { s.deleteEpisodeFile(sonarrSrv, 500) } returns Result.success(Unit)
                 },
                 expectedSteps = listOf(
                     step(ArrRedownloadStep.DELETE_FILE, ArrRedownloadStepStatus.SUCCESS, null),
@@ -403,8 +403,8 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = false,
                 postVerify = { _, s ->
-                    coVerify(exactly = 0) { s.monitorEpisodes(any(), any(), any(), any()) }
-                    coVerify(exactly = 0) { s.postCommand(any(), any(), any(), any(), any(), any()) }
+                    coVerify(exactly = 0) { s.monitorEpisodes(any(), any(), any()) }
+                    coVerify(exactly = 0) { s.postCommand(any(), any(), any(), any(), any()) }
                 },
             ),
             Row(
@@ -412,8 +412,8 @@ class ArrRedownloadLadderTest {
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
                     stubSonarrLookupThenVerified(s, sonarrEpisode(fileId = 500, hasFile = true, monitored = true))
-                    coEvery { s.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
-                    coEvery { s.postCommand(any(), any(), any(), any(), any(), any()) } returns
+                    coEvery { s.deleteEpisodeFile(sonarrSrv, 500) } returns Result.success(Unit)
+                    coEvery { s.postCommand(any(), any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "EpisodeSearch", "queued"))
                 },
                 expectedSteps = listOf(
@@ -424,7 +424,7 @@ class ArrRedownloadLadderTest {
                 ),
                 expectedComplete = true,
                 postVerify = { _, s ->
-                    coVerify(exactly = 0) { s.monitorEpisodes(any(), any(), any(), any()) }
+                    coVerify(exactly = 0) { s.monitorEpisodes(any(), any(), any()) }
                 },
             ),
             Row(
@@ -432,12 +432,12 @@ class ArrRedownloadLadderTest {
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
                     var calls = 0
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } answers {
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } answers {
                         calls++
                         Result.success(if (calls == 1) sonarrEpisode(fileId = 500, hasFile = true, monitored = true) else null)
                     }
-                    coEvery { s.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
-                    coEvery { s.postCommand(any(), any(), any(), any(), any(), any()) } returns
+                    coEvery { s.deleteEpisodeFile(sonarrSrv, 500) } returns Result.success(Unit)
+                    coEvery { s.postCommand(any(), any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "EpisodeSearch", "queued"))
                 },
                 expectedSteps = listOf(
@@ -457,7 +457,7 @@ class ArrRedownloadLadderTest {
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
                     var calls = 0
-                    coEvery { s.getEpisodeInfo(any(), any(), any(), any(), any()) } answers {
+                    coEvery { s.getEpisodeInfo(any(), any(), any(), any()) } answers {
                         calls++
                         if (calls == 1) {
                             Result.success(sonarrEpisode(fileId = 500, hasFile = true, monitored = false))
@@ -465,9 +465,9 @@ class ArrRedownloadLadderTest {
                             Result.failure(RuntimeException("flaky"))
                         }
                     }
-                    coEvery { s.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
-                    coEvery { s.monitorEpisodes("https://s1.local", "k", listOf(7), true) } returns Result.success(Unit)
-                    coEvery { s.postCommand(any(), any(), any(), any(), any(), any()) } returns
+                    coEvery { s.deleteEpisodeFile(sonarrSrv, 500) } returns Result.success(Unit)
+                    coEvery { s.monitorEpisodes(sonarrSrv, listOf(7), true) } returns Result.success(Unit)
+                    coEvery { s.postCommand(any(), any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "EpisodeSearch", "queued"))
                 },
                 expectedSteps = listOf(
@@ -487,9 +487,9 @@ class ArrRedownloadLadderTest {
                 arrange = { _, s ->
                     stubSonarrSeriesLookup(s)
                     stubSonarrLookupThenVerified(s, sonarrEpisode(fileId = 500, hasFile = true, monitored = false))
-                    coEvery { s.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
-                    coEvery { s.monitorEpisodes("https://s1.local", "k", listOf(7), true) } returns Result.success(Unit)
-                    coEvery { s.postCommand(any(), any(), any(), any(), any(), any()) } returns
+                    coEvery { s.deleteEpisodeFile(sonarrSrv, 500) } returns Result.success(Unit)
+                    coEvery { s.monitorEpisodes(sonarrSrv, listOf(7), true) } returns Result.success(Unit)
+                    coEvery { s.postCommand(any(), any(), any(), any(), any()) } returns
                         Result.success(ArrCommand(1, "EpisodeSearch", "queued"))
                 },
                 expectedSteps = listOf(
@@ -501,9 +501,9 @@ class ArrRedownloadLadderTest {
                 expectedComplete = true,
                 postVerify = { _, s ->
                     coVerify {
-                        s.deleteEpisodeFile("https://s1.local", "k", 500)
+                        s.deleteEpisodeFile(sonarrSrv, 500)
                         s.postCommand(
-                            "https://s1.local", "k", ArrCommandName.SEARCH_EPISODES,
+                            sonarrSrv, ArrCommandName.SEARCH_EPISODES,
                             seriesId = null, episodeIds = listOf(7),
                         )
                     }

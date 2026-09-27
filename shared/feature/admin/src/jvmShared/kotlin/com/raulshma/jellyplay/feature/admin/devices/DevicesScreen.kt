@@ -116,10 +116,10 @@ fun DevicesScreen(
         tag = "devices_init",
     )
 
-    if (state.showDeleteDialog) {
+    if (viewModel.deleteConfirmation.isPending) {
         ConfirmDialog(
             title = stringResource(Res.string.admin_delete_device_title),
-            message = stringResource(Res.string.admin_delete_device_body, state.selectedDevice?.displayName() ?: ""),
+            message = stringResource(Res.string.admin_delete_device_body, viewModel.deleteConfirmation.item?.displayName() ?: ""),
             confirmText = stringResource(Res.string.admin_delete),
             dismissText = stringResource(Res.string.admin_cancel),
             tone = ConfirmTone.DESTRUCTIVE,

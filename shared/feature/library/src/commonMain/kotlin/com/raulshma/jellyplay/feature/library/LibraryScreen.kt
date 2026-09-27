@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import androidx.compose.animation.AnimatedContent
@@ -28,7 +29,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -114,11 +114,17 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultEffectsTween
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.ActiveFiltersBar
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionRung
+import com.raulshma.jellyplay.core.ui.components.pagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.pagedCollectionRung
+import com.raulshma.jellyplay.core.ui.components.rememberSimpleCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.toPagedRefreshPhase
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.model.coreClearFiltersLabel
@@ -142,11 +148,11 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.model.GroupBy
+import com.raulshma.jellyplay.core.model.LibraryFilterDimension
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.GroupedLibraryContent
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterChipRow
@@ -171,10 +177,8 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_action_group
 import com.raulshma.jellyplay.feature.library.generated.resources.library_all
-import com.raulshma.jellyplay.feature.library.generated.resources.library_clear_all
 import com.raulshma.jellyplay.feature.library.generated.resources.library_failed_to_load_items
 import com.raulshma.jellyplay.feature.library.generated.resources.library_failed_to_load_more_items
-import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_downloaded
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filters
 import com.raulshma.jellyplay.feature.library.generated.resources.library_group_by
 import com.raulshma.jellyplay.feature.library.generated.resources.library_group_by_genre
@@ -240,6 +244,23 @@ fun libraryBackAction(
     !inSectionMode && hasActiveFilters -> LibraryBackAction.ClearFilters
     else -> null
 }
+
+/**
+ * This screen's active-filter bar vocabulary: which dimensions render as
+ * dismiss tags, and in which order — preserved verbatim from the hand-rolled
+ * bar this replaces (media types → status → downloaded → genres; search passes
+ * its own list). The shared [ActiveFiltersBar] renders whatever it is given,
+ * so a dimension only one screen surfaces stays a caller decision. Note the
+ * Status sheet's resumable toggle deliberately does NOT add a tag here (same
+ * as before): an active resumable filter shows the bar with just the clear-all
+ * chip.
+ */
+private val libraryActiveFilterDimensions = listOf(
+    LibraryFilterDimension.MEDIA_TYPES,
+    LibraryFilterDimension.PLAYED_STATUS,
+    LibraryFilterDimension.IS_DOWNLOADED,
+    LibraryFilterDimension.GENRES,
+)
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -321,12 +342,11 @@ internal fun LibraryScreen(
             viewModel.onEvent(LibraryUiEvent.PrefetchPhotoFolderChildUrls(snapshot.items))
         }
     }
-    val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
-
-    val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
+    // The VM's loading/error flags (not the paging load states — the library
+    // pager is event-driven) through the shared header-status seam.
+    val headerStatus = rememberSimpleCollectionStatus(
         isLoading = isLoading,
         hasError = error != null,
-        networkStatus = networkStatus,
     )
 
     val gridState = rememberLazyGridState(
@@ -710,104 +730,22 @@ internal fun LibraryScreen(
                             MaterialTheme.motionScheme.fastEffectsSpec()
                         ) + shrinkVertically(),
                     ) {
-                        FlowRow(
-                            // No vertical interception here: the tags can wrap to
-                            // several lines, so Up/Down must stay geometric to move
-                            // between wrapped lines. Exiting the row upward lands on
-                            // the action row geometrically; Down falls into the grid.
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp)
-                                .padding(top = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            filters.mediaTypes.forEach { mediaType ->
-                                GlassDismissTag(
-                                    label = mediaType.name,
-                                    onDismiss = {
-                                        viewModel.onEvent(
-                                            LibraryUiEvent.UpdateFilters(
-                                                filters.copy(mediaTypes = filters.mediaTypes - mediaType)
-                                            )
-                                        )
-                                    },
-                                )
-                            }
-                            if (filters.playedStatus != PlayedStatus.ALL) {
-                                GlassDismissTag(
-                                    label = filters.playedStatus.displayName,
-                                    onDismiss = {
-                                        viewModel.onEvent(
-                                            LibraryUiEvent.UpdateFilters(
-                                                filters.copy(playedStatus = PlayedStatus.ALL)
-                                            )
-                                        )
-                                    },
-                                )
-                            }
-                            if (filters.isDownloaded == true) {
-                                GlassDismissTag(
-                                    label = stringResource(Res.string.library_filter_downloaded),
-                                    onDismiss = {
-                                        viewModel.onEvent(
-                                            LibraryUiEvent.UpdateFilters(filters.copy(isDownloaded = null))
-                                        )
-                                    },
-                                )
-                            }
-                            filters.genres.forEach { genre ->
-                                GlassDismissTag(
-                                    label = genre,
-                                    onDismiss = {
-                                        viewModel.onEvent(
-                                            LibraryUiEvent.UpdateFilters(
-                                                filters.copy(genres = filters.genres - genre)
-                                            )
-                                        )
-                                    },
-                                )
-                            }
-                            val clearAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                            val clearAllInteractionSource = remember { MutableInteractionSource() }
-                            val isClearAllPressed by clearAllInteractionSource.collectIsPressedAsState()
-                            val clearAllScale by animateFloatAsState(
-                                targetValue = if (isClearAllPressed) 0.95f else 1f,
-                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                                label = "clearAllPressedScale"
-                            )
-                            val clearAllShapeMorph by animateFloatAsState(
-                                targetValue = if (isClearAllPressed) 1f else 0f,
-                                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                                label = "clearAllShapeMorph"
-                            )
-                            val clearAllShape = remember(clearAllShapeMorph) {
-                                if (clearAllShapeMorph > 0.5f) ShapeCache.smooth12 else ShapeCache.smooth8
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .graphicsLayer {
-                                        scaleX = clearAllScale * clearAllFocusState.scale
-                                        scaleY = clearAllScale * clearAllFocusState.scale
-                                    }
-                                    .clip(clearAllShape)
-                                    .then(clearAllFocusState.focusModifier)
-                                    .tvFocusIndicator(clearAllFocusState, clearAllShape)
-                                    .clickable(
-                                        interactionSource = clearAllInteractionSource,
-                                        indication = null,
-                                    onClick = { viewModel.onEvent(LibraryUiEvent.ClearFilters) }
-                                )
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                            ) {
-                                Text(
-                                    text = stringResource(Res.string.library_clear_all),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
-                        }
+                        // The shared active-filter bar (core:ui) over the
+                        // canonical [LibraryFilters.activeTags] fold — the same
+                        // fold the search screen reads. No vertical D-pad
+                        // interception here: the tags wrap to several lines, so
+                        // Up/Down stays geometric between them; exiting upward
+                        // lands on the action row, Down falls into the grid.
+                        // Dismiss semantics are unchanged: each tag's clear() is
+                        // the exact `filters.copy(...)` the hand-rolled lambdas
+                        // performed, routed through the same UpdateFilters write.
+                        ActiveFiltersBar(
+                            tags = filters.activeTags(libraryActiveFilterDimensions),
+                            onTagDismiss = { tag ->
+                                viewModel.onEvent(LibraryUiEvent.UpdateFilters(tag.clear()))
+                            },
+                            onClearAll = { viewModel.onEvent(LibraryUiEvent.ClearFilters) },
+                        )
                     }
 
                     AnimatedVisibility(
@@ -851,49 +789,52 @@ internal fun LibraryScreen(
                         .fillMaxSize()
                         .openDrawerOnLeftExit(),
                 ) {
-                    // Initial load (no items yet) shows the center indicator only;
-                    // a refresh with existing items shows the pull-to-refresh
-                    // indicator above (via isRefreshing) and keeps the content
-                    // visible — the two must never render together.
-                    when {
-                        pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount == 0 -> {
+                    // The shared refresh ladder (core:ui chassis): initial load
+                    // (no items yet) shows the center indicator only; a refresh
+                    // with existing items shows the pull-to-refresh indicator
+                    // above (via isRefreshing) and keeps the content visible —
+                    // the two must never render together.
+                    when (pagedCollectionRung(pagedItems.loadState.refresh.toPagedRefreshPhase(), pagedItems.itemCount)) {
+                        PagedCollectionRung.InitialLoading -> {
                             DelayedLoadingScreen()
                         }
 
-                        pagedItems.loadState.refresh is LoadState.Error -> {
-                            val refreshError = pagedItems.loadState.refresh as LoadState.Error
+                        PagedCollectionRung.RefreshError -> {
                             ErrorScreen(
-                                message = refreshError.error.message
-                                    ?: stringResource(Res.string.library_failed_to_load_items),
+                                message = UserErrorMessages.resolve(
+                                    (pagedItems.loadState.refresh as LoadState.Error).error,
+                                    stringResource(Res.string.library_failed_to_load_items),
+                                ),
                                 onRetry = { pagedItems.refresh() },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
 
-                        else -> {
-                            if (pagedItems.itemCount == 0) {
-                                // ScreenEmptyState owns the TV focus sink/action grab — a
-                                // hand-rolled empty state left the screen with zero focusables and
-                                // the drawer rail captured focus.
-                                ScreenEmptyState(
-                                    icon = if (offlineAutoFilter) Tabler.Outline.CloudOff else Tabler.Outline.Search,
-                                    title = stringResource(
-                                        if (offlineAutoFilter) Res.string.library_no_downloads_offline
-                                        else Res.string.library_no_items_found
-                                    ),
-                                    actionLabel = if (hasActiveFilters) {
-                                        coreClearFiltersLabel()
-                                    } else {
-                                        null
-                                    },
-                                    onAction = if (hasActiveFilters) {
-                                        { viewModel.onEvent(LibraryUiEvent.ClearFilters) }
-                                    } else {
-                                        null
-                                    },
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            } else {
+                        PagedCollectionRung.Empty -> {
+                            // ScreenEmptyState owns the TV focus sink/action grab — a
+                            // hand-rolled empty state left the screen with zero focusables and
+                            // the drawer rail captured focus.
+                            ScreenEmptyState(
+                                icon = if (offlineAutoFilter) Tabler.Outline.CloudOff else Tabler.Outline.Search,
+                                title = stringResource(
+                                    if (offlineAutoFilter) Res.string.library_no_downloads_offline
+                                    else Res.string.library_no_items_found
+                                ),
+                                actionLabel = if (hasActiveFilters) {
+                                    coreClearFiltersLabel()
+                                } else {
+                                    null
+                                },
+                                onAction = if (hasActiveFilters) {
+                                    { viewModel.onEvent(LibraryUiEvent.ClearFilters) }
+                                } else {
+                                    null
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        PagedCollectionRung.Content -> {
                                 // Drive the view-mode swap through AnimatedContent so each
                                 // branch receives its own AnimatedVisibilityScope. That scope
                                 // is published via LocalAnimatedVisibilityScope, letting the
@@ -1184,7 +1125,6 @@ internal fun LibraryScreen(
                                 }
                                 } // close CompositionLocalProvider
                                 } // close AnimatedContent content lambda
-                            }
                         }
                     }
 
@@ -1345,7 +1285,7 @@ internal fun LibraryScreen(
                         }
                     }
 
-                    if (pagedItems.loadState.append is LoadState.Loading) {
+                    if (pagedAppendRung(pagedItems.loadState.append.toPagedRefreshPhase()) == PagedAppendRung.Loading) {
                         val footerGradientBrush = remember(backgroundColor) {
                             Brush.verticalGradient(
                                 colors = listOf(
@@ -1371,11 +1311,12 @@ internal fun LibraryScreen(
                         }
                     }
 
-                    if (pagedItems.loadState.append is LoadState.Error) {
-                        val appendError = pagedItems.loadState.append as LoadState.Error
+                    if (pagedAppendRung(pagedItems.loadState.append.toPagedRefreshPhase()) == PagedAppendRung.Retry) {
                         AppendErrorFooter(
-                            message = appendError.error.message
-                                ?: stringResource(Res.string.library_failed_to_load_more_items),
+                            message = UserErrorMessages.resolve(
+                                (pagedItems.loadState.append as LoadState.Error).error,
+                                stringResource(Res.string.library_failed_to_load_more_items),
+                            ),
                             onRetry = { pagedItems.retry() },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)

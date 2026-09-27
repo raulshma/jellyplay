@@ -5,8 +5,7 @@ import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
@@ -20,11 +19,8 @@ import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_impo
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_unknown_error
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 
 /**
@@ -67,7 +63,7 @@ data class ArrQueueUiState(
 
 class ArrQueueViewModel(
     private val arrRepository: ArrRepository,
-    experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    experimentalGate: ExperimentalFeatureGate,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(ArrQueueUiState())
@@ -84,17 +80,11 @@ class ArrQueueViewModel(
     val messages: Flow<ArrQueueMessage> = messageChannel.receiveAsFlow()
 
     /**
-     * Whether the Direct *arr Integration experimental flag is enabled.
-     *
-     * Eagerly shared (not `WhileSubscribed`) so the value is always available
-     * to [loadQueue] / [refresh] reads via `.value`; mirrors the rationale in
-     * `RequestsViewModel.directArrEnabled`.
+     * Whether the Direct *arr Integration experimental flag is enabled —
+     * [ExperimentalFeatureGate.directArrEnabled] verbatim (rationale and
+     * init-timing notes live on the gate).
      */
-    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.directArrEnabled()
-        .stateIn(scope, SharingStarted.Eagerly, false)
-
-    /** Hot stream of the combined queue, mirrored into UI state. */
-    val featureEnabled: StateFlow<Boolean> = directArrEnabled
+    val featureEnabled: StateFlow<Boolean> = experimentalGate.directArrEnabled
 
     init {
         // Mirror the repository's queue flow into UI state. Empty until the
@@ -108,7 +98,7 @@ class ArrQueueViewModel(
     }
 
     fun refresh() {
-        if (!directArrEnabled.value) {
+        if (!featureEnabled.value) {
             _state.value = _state.value.copy(isLoading = false, error = null)
             return
         }

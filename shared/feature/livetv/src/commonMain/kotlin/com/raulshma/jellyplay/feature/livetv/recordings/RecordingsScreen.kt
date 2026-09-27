@@ -89,8 +89,9 @@ fun RecordingsScreen(
         tag = "recordings_init",
     )
 
-    // Delete confirm dialog. Long-press a recording to open it.
-    uiState.pendingDelete?.let { recording ->
+    // Delete confirm dialog. Long-press a recording to open it; the machine
+    // lives on the ViewModel ([RecordingsViewModel.deleteConfirmation]).
+    viewModel.deleteConfirmation.item?.let { recording ->
         ConfirmDialog(
             title = stringResource(Res.string.livetv_delete_recording_title),
             message = stringResource(Res.string.livetv_delete_recording_body, recording.name),

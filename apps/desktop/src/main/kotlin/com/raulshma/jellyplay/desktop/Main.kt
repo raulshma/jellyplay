@@ -88,14 +88,9 @@ fun main() {
     startupPerf.scheduleMeasurementHooksIfRequested()
 
     val koinApp = startKoin {
-        // Koin 4 dropped the per-definition override flag; the global switch
-        // exists for exactly ONE deliberate replacement — the
-        // desktopAppUpdateModule at the END of desktopKoinModules' list
-        // REPLACES desktopDataModule's sentinel-bound AppUpdateRepository
-        // single with the real-version desktop auto-update actual
-        // (docs/adr/desktop-auto-update.md). Loaded last so it wins; the
-        // KoinModuleRegistrationGuardTest ratchets every other registration.
-        allowOverride(true)
+        // Koin's default no-override policy holds — every definition in the
+        // list is keyed and unique (the desktop auto-update binding is the
+        // ONE AppUpdateRepository definition; docs/adr/desktop-auto-update.md).
         // The module list itself is DesktopKoinModules.kt (the fold): the
         // shared core graph, this shell's platform actuals, and the ONE
         // spread of sharedFeatureModules both JVM shells consume. Startup

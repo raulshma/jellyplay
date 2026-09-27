@@ -83,11 +83,11 @@ class RecordingsViewModelTest {
     fun showDeleteDialog_and_dismissDeleteDialog_round_trip() = runTest(mainDispatcher) {
         val rec = recording("r1")
         viewModel.showDeleteDialog(rec)
-        assertEquals(rec, viewModel.uiState.value.pendingDelete)
+        assertEquals(rec, viewModel.deleteConfirmation.item)
 
         viewModel.dismissDeleteDialog()
 
-        assertEquals(null, viewModel.uiState.value.pendingDelete)
+        assertEquals(null, viewModel.deleteConfirmation.item)
     }
 
     @Test
@@ -99,7 +99,7 @@ class RecordingsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.deleteRecording("r1") }
-        assertEquals(null, viewModel.uiState.value.pendingDelete)
+        assertEquals(null, viewModel.deleteConfirmation.item)
         assertFalse(viewModel.uiState.value.isDeleting)
         assertEquals(null, viewModel.uiState.value.error)
         // init load + post-delete reload.
@@ -130,7 +130,7 @@ class RecordingsViewModelTest {
 
         assertEquals("locked", viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isDeleting)
-        assertEquals(rec, viewModel.uiState.value.pendingDelete)
+        assertEquals(rec, viewModel.deleteConfirmation.item)
     }
 
     @Test
@@ -153,11 +153,11 @@ class RecordingsViewModelTest {
         assertTrue(viewModel.uiState.value.isDeleting)
 
         viewModel.dismissDeleteDialog()
-        assertEquals(recording("r1"), viewModel.uiState.value.pendingDelete)
+        assertEquals(recording("r1"), viewModel.deleteConfirmation.item)
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertEquals(null, viewModel.uiState.value.pendingDelete)
+        assertEquals(null, viewModel.deleteConfirmation.item)
     }
 
     // The null-tag policy itself lives on the interface default now (pinned

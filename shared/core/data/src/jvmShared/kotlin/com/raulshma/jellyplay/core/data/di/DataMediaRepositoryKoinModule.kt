@@ -39,6 +39,7 @@ import com.raulshma.jellyplay.core.data.worker.OkHttpDownloadTransferClient
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.HomeSectionsSnapshotStore
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
@@ -94,10 +95,23 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
         )
     }
+    // The home-sections snapshot store: the deep owner of the PERSISTED half
+    // of the home pipeline (the Room SWR snapshot — dedup-window persist
+    // choreography, identity-scoped privacy clear, the two cold-open reads).
+    // Declared BEFORE its one consumer below: MediaRepositoryImpl
+    // ctor-injects this single (the EpisodeCatalogueImpl precedent), keeping
+    // the construction edge acyclic and one-instance across the graph.
+    single {
+        HomeSectionsSnapshotStore(
+            homeSectionCacheDao = get(),
+            homeSession = get(),
+            timeSource = get(),
+        )
+    }
     single {
         MediaRepositoryImpl(
             apiClient = get(),
-            homeSectionCacheDao = get(),
+            homeSnapshotStore = get(),
             playedStateSync = get(),
             episodeCatalogue = get(),
             userDataRealtimeChannel = get(),

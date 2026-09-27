@@ -176,7 +176,7 @@ class DesktopAudioQueueManager(
     private val imageUrlProvider: ImageUrlProvider,
     private val queuePersistenceHelper: QueuePersistenceHelper,
     private val lyricsManager: AudioLyricsManager,
-    private val sleepTimerManager: SleepTimerManager,
+    private val sleepCountdown: SleepCountdown,
     private val scope: CoroutineScope,
     /**
      * Constructs the DEDICATED audio-only engine on first play (production:
@@ -324,7 +324,7 @@ class DesktopAudioQueueManager(
         dispatch = engineDispatch,
         enginePositionMs = { engine?.currentPositionMs },
         onQueueShapeInvalidated = { clearPrefetch() },
-        onQueueExhausted = { sleepTimerManager.triggerEndOfEpisode() },
+        onQueueExhausted = { sleepCountdown.triggerEndOfEpisode() },
         onShuffleModeChanged = {
             state.currentItemOrNull()?.let { current ->
                 effectsManager?.applyReplayGainForTrack(current.normalizationGain, state.shuffleMode.value)

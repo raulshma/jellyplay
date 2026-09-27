@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.arr
 
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.network.api.HttpExecutor
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -123,24 +124,23 @@ internal class ArrClientSupport(
     /** Status-only request execution; see [HttpExecutor.parseUnit]. */
     suspend fun parseUnit(request: Request): Result<Unit> = http.parseUnit(request)
 
-    suspend fun deleteRequest(baseUrl: String, apiKey: String, path: String): Result<Unit> {
+    suspend fun deleteRequest(server: ArrServerConfig, path: String): Result<Unit> {
         val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
+            .url(buildUrl(server.baseUrl, path))
+            .withApiKey(server.apiKey)
             .delete()
             .build()
         return parseUnit(request)
     }
 
     suspend fun postEmpty(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         path: String,
     ): Result<Unit> {
         val body = "{}".toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
+            .url(buildUrl(server.baseUrl, path))
+            .withApiKey(server.apiKey)
             .post(body)
             .build()
         return parseUnit(request)

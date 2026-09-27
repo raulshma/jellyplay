@@ -118,15 +118,15 @@ class DevicesViewModelTest {
         coEvery { adminRepository.deleteDevice("d-1") } returns Result.success(Unit)
 
         viewModel.showDeleteDialog(phone)
-        assertEquals(phone, viewModel.state.selectedDevice)
-        assertTrue(viewModel.state.showDeleteDialog)
+        assertEquals(phone, viewModel.deleteConfirmation.item)
+        assertTrue(viewModel.deleteConfirmation.isPending)
 
         viewModel.deleteDevice()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { adminRepository.deleteDevice("d-1") }
-        assertFalse(viewModel.state.showDeleteDialog)
-        assertNull(viewModel.state.selectedDevice)
+        assertFalse(viewModel.deleteConfirmation.isPending)
+        assertNull(viewModel.deleteConfirmation.item)
         // deleteDevice ends with a reload.
         coVerify(atLeast = 2) { adminRepository.getDevices() }
     }
@@ -148,8 +148,8 @@ class DevicesViewModelTest {
 
         viewModel.dismissDeleteDialog()
 
-        assertFalse(viewModel.state.showDeleteDialog)
-        assertNull(viewModel.state.selectedDevice)
+        assertFalse(viewModel.deleteConfirmation.isPending)
+        assertNull(viewModel.deleteConfirmation.item)
     }
 
     @Test
@@ -167,14 +167,14 @@ class DevicesViewModelTest {
         viewModel.dismissDeleteDialog()
 
         // The machine refuses a dismiss while in flight — the dialog stays open.
-        assertEquals(phone, viewModel.state.selectedDevice)
-        assertTrue(viewModel.state.showDeleteDialog)
+        assertEquals(phone, viewModel.deleteConfirmation.item)
+        assertTrue(viewModel.deleteConfirmation.isPending)
 
         gate.complete(Unit)
         advanceUntilIdle()
         // Settle arm: clears on BOTH outcomes.
-        assertNull(viewModel.state.selectedDevice)
-        assertFalse(viewModel.state.showDeleteDialog)
+        assertNull(viewModel.deleteConfirmation.item)
+        assertFalse(viewModel.deleteConfirmation.isPending)
     }
 
     @Test
@@ -193,7 +193,7 @@ class DevicesViewModelTest {
         coVerify(exactly = 1) { adminRepository.deleteDevice("d-1") }
         gate.complete(Unit)
         advanceUntilIdle()
-        assertNull(viewModel.state.selectedDevice)
+        assertNull(viewModel.deleteConfirmation.item)
     }
 
     // ── rename flow ──

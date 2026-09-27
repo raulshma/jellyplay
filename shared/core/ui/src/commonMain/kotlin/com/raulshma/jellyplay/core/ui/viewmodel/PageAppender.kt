@@ -6,13 +6,16 @@ package com.raulshma.jellyplay.core.ui.viewmodel
  * facts every hand-copied append-page ladder drifted on — the in-flight
  * guard (double-fire suppression), the terminal `hasMore` gate, and the
  * page-index math. Call sites: Requests' page navigation (guards on
- * `isLoading`) and admin Stats Detail's `loadMore` (guards on
- * `isLoadingMore && hasMoreItems`); the former Logs defect was fixed earlier
- * and stays where it is.
+ * `isLoading`), admin Stats Detail's `loadMore` (guards on
+ * `isLoadingMore && hasMoreItems`), and Logs' `loadMoreActivity` (guards on
+ * `isLoadingMoreActivity`; its pager is skip-based — the fetch offset is the
+ * live list size — so only the guard is adopted, with `hasMore` held true).
  *
- * Deliberately STATELESS: both call sites keep their in-flight flag in ui
+ * Deliberately STATELESS: every call site keeps its in-flight flag in ui
  * state (Requests' `isLoading` doubles as the cold-load flag; Stats Detail's
- * `isLoadingMore` is raised by its load-ladder start arm), so the guard
+ * `isLoadingMore` is raised by its load-ladder start arm; Logs'
+ * `isLoadingMoreActivity` is raised synchronously before its fetch
+ * coroutine), so the guard
  * READS the site's flag instead of owning a second one that could disagree
  * with what the screen renders. What the appender owns is the decision,
  * written once — including Requests' declared delta: a Next tap landing

@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.shell
+package com.raulshma.jellyplay.core.concurrency
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -9,6 +9,13 @@ import kotlinx.coroutines.launch
  * [launchIn] cancels the previous occupant before launching, so re-calling
  * a coordinator's start (e.g. after activity-state loss rebuilt the
  * ViewModel) never duplicates collectors.
+ *
+ * Distinct sibling vocabulary to [TaskBundle]: TaskBundle is the KEYED
+ * multi-slot variant (several named cancel-and-replace slots on one object,
+ * deliberately not thread-safe), while this is ONE unnamed slot made safe
+ * under concurrent callers with `@Synchronized`. Reach for TaskBundle when
+ * a host owns several independent relaunchable jobs; for this when there is
+ * exactly one.
  */
 class RestartableJob {
     private var job: Job? = null

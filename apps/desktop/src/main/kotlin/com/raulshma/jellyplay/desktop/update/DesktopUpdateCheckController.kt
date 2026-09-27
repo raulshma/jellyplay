@@ -31,8 +31,8 @@ import kotlinx.coroutines.withContext
  *
  * @param scope the shell's composition scope — the launched job dies with
  *   the scaffold, exactly like the inline `scope.launch` it replaces.
- * @param repository the Koin-resolved single (the desktopAppUpdateModule
- *   override: release-lane builds report genuine releases, dev builds stay
+ * @param repository the Koin-resolved single (desktopAppUpdateModule:
+ *   release-lane builds report genuine releases, dev builds stay
  *   "up to date" by construction).
  * @param showMessage the snackbar sink.
  * @param openInBrowser the browser handoff; injected so tests pin the
@@ -67,8 +67,8 @@ internal class DesktopUpdateCheckController(
  * Desktop rendering of the shared [UpdateCheckMessage] — ADR 0001's split:
  * the check→message mapping lives in ShellSessionController (commonMain),
  * the WORDING is this shell's own surface. The available branch is LIVE
- * (ADR desktop-auto-update: desktopAppUpdateModule replaced the sentinel, so
- * a release-lane build can genuinely report a newer release) and pairs the
+ * (ADR desktop-auto-update: the desktop binding compares the real installed
+ * version, so a release-lane build can genuinely report a newer release) and pairs the
  * version announcement with the browser-handoff outcome:
  * [openedReleasePage] means AWT already opened the release page, otherwise
  * the message points at the releases page the user can visit manually. Dev

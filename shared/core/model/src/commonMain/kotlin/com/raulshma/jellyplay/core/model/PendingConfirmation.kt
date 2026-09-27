@@ -20,10 +20,13 @@ import androidx.compose.runtime.Immutable
  * arm — clear on success only, clear on both outcomes, or clear when the
  * dialog pops — and [clear] is the settle-time write the caller invokes.
  *
- * Boundary vs core/ui's `ConfirmState` (the composition-scoped
- * closure-payload machine behind `rememberConfirmState()`): that one stays
- * for closure-payload dialogs; this is the typed-payload machine for VM
- * uiState and screen `remember { }` sites.
+ * Boundary vs core/ui's machines: `ConfirmState` (the composition-scoped
+ * closure-payload machine behind `rememberConfirmState()`) stays for
+ * closure-payload dialogs, and `ConfirmationHost` is the stateful
+ * VM-embeddable wrapper that owns one instance of this algebra plus its
+ * writes (the synchronous-settle arm). This class remains the pure write
+ * algebra underneath both — UiState-embedded machines and `remember { }`
+ * sites use it directly.
  */
 @Immutable
 data class PendingConfirmation<T>(val item: T? = null) {

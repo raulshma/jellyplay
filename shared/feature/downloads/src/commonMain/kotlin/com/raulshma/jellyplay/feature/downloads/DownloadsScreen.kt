@@ -82,8 +82,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ResyncCategory
+import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.formatEta
+import com.raulshma.jellyplay.core.model.formatSpeed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -211,24 +213,12 @@ fun DownloadsScreen(
         }
     }
 
-    // Pending delete confirmations. Deleting a completed download removes the
-    // file from disk, so we confirm first — matching the unified
-    // MediaDetailScreen delete confirmations. Two separate machines
-    // ([PendingConfirmation]): single-item and bulk selection.
-    /**
-     * Pending single-item delete. Settle arm: [PendingConfirmation.clear] in
-     * the confirm handler (previously the confirm write never cleared —
-     * declared delta). The deletes are fire-and-forget VM calls, so the
-     * machine settles synchronously and the guard's in-flight arm is
-     * unreachable here (dismiss/confirm pass `inFlight = false`).
-     */
-    var pendingDelete by remember { mutableStateOf(PendingConfirmation<DownloadItem>()) }
-    /**
-     * Pending bulk delete of the current selection. Settle arm:
-     * [PendingConfirmation.clear] in the confirm handler (previously never
-     * cleared — declared delta). Same synchronous settle as [pendingDelete].
-     */
-    var pendingBulkDelete by remember { mutableStateOf(PendingConfirmation<Unit>()) }
+    // Pending delete confirmations live on the ViewModel now — two
+    // [ConfirmationHost] machines ([DownloadsViewModel.pendingDelete], single
+    // item, and [DownloadsViewModel.pendingBulkDelete], bulk selection) whose
+    // synchronous settle arm subsumes this screen's old "confirm write never
+    // cleared" screen-held remember{} machines. The dialogs stay here, driven
+    // by the hosts, at the bottom of this body.
     var showResyncSheet by remember { mutableStateOf(false) }
     var showForceResyncSheet by remember { mutableStateOf(false) }
 
@@ -371,7 +361,7 @@ fun DownloadsScreen(
         // `totalStorageBytes > 0` visibility rule the inline Text had.
         DownloadsStorageUsedText(
             totalStorageBytes = viewModel.totalStorageBytes,
-            formatBytes = viewModel::formatBytes,
+            formatBytes = Long::formatBytes,
             horizontalPadding = adaptiveInfo.contentPadding(isTv),
         )
 
@@ -382,14 +372,14 @@ fun DownloadsScreen(
                 description = stringResource(Res.string.downloads_empty_description),
             )
         } else {
-            // Hoist the three pure formatter lambdas once above the list. They
-            // only delegate to viewModel and are identical across rows, so
-            // allocating them per-row per-recomposition (the list recomposes on
-            // every progress tick / speed sample) was pure churn (11 fresh
-            // lambdas/row).
-            val formatBytes = remember(viewModel) { { v: Long -> viewModel.formatBytes(v) } }
-            val formatSpeed = remember(viewModel) { { v: Long -> viewModel.formatSpeed(v) } }
-            val formatEta = remember(viewModel) { { d: Long, t: Long, s: Long -> viewModel.formatEta(d, t, s) } }
+            // The rows' three formatters are the shared core-model ByteFormatter
+            // extensions, passed as static references — identical across rows,
+            // no per-row allocation (the list recomposes on every progress
+            // tick / speed sample) and no ViewModel hop (the former
+            // DownloadsViewModel forwards are gone).
+            val formatBytes = Long::formatBytes
+            val formatSpeed = Long::formatSpeed
+            val formatEta = ::formatEta
             // Index flagged-update rows by mediaItemId so each list row can
             // render an "update available" dot without a per-row scan. Computed
             // in composable scope (above the LazyColumn) so `remember` is valid.
@@ -477,7 +467,7 @@ fun DownloadsScreen(
                             onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
                             onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
                             onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
-                            onDelete = { pendingDelete = pendingDelete.hold(download) },
+                            onDelete = { viewModel.pendingDelete.show(download) },
                             onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
                             onMoveToFront = { viewModel.moveToFront(download) },
                             onLowerPriority = { viewModel.lowerPriority(download) },
@@ -498,7 +488,7 @@ fun DownloadsScreen(
                         onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
                         onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
                         onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
-                        onBulkDelete = { pendingBulkDelete = pendingBulkDelete.hold(Unit) },
+                        onBulkDelete = { viewModel.pendingBulkDelete.show(Unit) },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
@@ -517,44 +507,42 @@ fun DownloadsScreen(
         }
     }
 
-    pendingDelete.item?.let { item ->
+    viewModel.pendingDelete.item?.let { item ->
         ConfirmDialog(
             title = stringResource(Res.string.downloads_delete_download_title),
-            message = stringResource(Res.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)),
+            message = stringResource(Res.string.downloads_delete_download_message, item.name, item.totalSizeBytes.formatBytes()),
             confirmText = stringResource(Res.string.downloads_delete),
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
-                val target = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                // Settle: confirm clears the machine synchronously (the arm
+                // that makes the old never-cleared bug impossible), then the
+                // delete fires as a fire-and-forget VM call.
+                val target = viewModel.pendingDelete.confirm() ?: return@ConfirmDialog
                 viewModel.deleteDownload(target)
-                // Settle: clear the machine (was never cleared on confirm
-                // before the migration).
-                pendingDelete = pendingDelete.clear()
             },
-            onDismiss = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
+            onDismiss = { viewModel.pendingDelete.dismiss(inFlight = false) },
         )
     }
 
-    if (pendingBulkDelete.isPending) {
+    if (viewModel.pendingBulkDelete.isPending) {
         val count = selectedIds.size
         val freedBytes = selectedItems.sumOf { it.totalSizeBytes }
         ConfirmDialog(
             title = stringResource(Res.string.downloads_delete_downloads_title),
             message = pluralStringResource(Res.plurals.downloads_delete_downloads_message, count, count) +
-                if (freedBytes > 0) stringResource(Res.string.downloads_frees_up_sentence, viewModel.formatBytes(freedBytes)) else "",
+                if (freedBytes > 0) stringResource(Res.string.downloads_frees_up_sentence, freedBytes.formatBytes()) else "",
             confirmText = stringResource(Res.string.downloads_delete),
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
-                pendingBulkDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                // Settle: same synchronous arm as the single-item machine.
+                viewModel.pendingBulkDelete.confirm() ?: return@ConfirmDialog
                 viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
-                // Settle: clear the machine (was never cleared on confirm
-                // before the migration).
-                pendingBulkDelete = pendingBulkDelete.clear()
             },
-            onDismiss = { pendingBulkDelete = pendingBulkDelete.dismiss(inFlight = false) },
+            onDismiss = { viewModel.pendingBulkDelete.dismiss(inFlight = false) },
         )
     }
 

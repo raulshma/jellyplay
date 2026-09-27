@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.RadioState
 import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
@@ -65,7 +65,7 @@ class AudioPlayerViewModel(
     private val userDataMutator: UserDataMutator,
     private val downloads: TrackDownloadStatusWindow,
     private val trackDownloadActions: TrackDownloadActions,
-    private val sleepTimerManager: AudioSleepTimerManager,
+    private val sleepCountdown: SleepCountdown,
 ) : JellyPlayViewModel() {
 
     /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
@@ -99,13 +99,13 @@ class AudioPlayerViewModel(
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
 
     /**
-     * Sleep-timer countdown, sourced directly from the AudioSleepTimerManager. Kept OUT
+     * Sleep-timer countdown, sourced directly from the SleepCountdown core. Kept OUT
      * of [uiState] (mirroring [currentPosition]) so a 5 s tick — or the 100 ms
      * fade-out burst — does not copy the whole [AudioPlayerUiState] and
      * re-invalidate the screen root. Collected only by the leaf composables
      * that render the countdown (top-bar label, AudioSleepTimerSheet).
      */
-    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.sleepTimerRemainingMs
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepCountdown.sleepTimerRemainingMs
 
     /**
      * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
@@ -174,7 +174,7 @@ class AudioPlayerViewModel(
     /** Owns the sleep-timer starts/cancel/expiry + store writes + slice updates. */
     internal val sleepTimer = AudioSleepTimerController(
         scope = scope,
-        sleepTimerManager = sleepTimerManager,
+        sleepCountdown = sleepCountdown,
         audioStore = audioStore,
         engine = engine,
         updateState = { transform -> _uiState.update { it.copy(sleepTimer = transform(it.sleepTimer)) } },
@@ -337,8 +337,8 @@ class AudioPlayerViewModel(
         }
         launch {
             combine(
-                sleepTimerManager.isSleepTimerActive,
-                sleepTimerManager.isEndOfEpisodeMode,
+                sleepCountdown.isSleepTimerActive,
+                sleepCountdown.isEndOfEpisodeMode,
             ) { active, endOfEpisode ->
                 _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(active = active, endOfEpisode = endOfEpisode)) }
             }.collect {}

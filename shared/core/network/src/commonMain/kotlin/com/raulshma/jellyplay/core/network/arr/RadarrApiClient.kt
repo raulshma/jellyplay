@@ -7,14 +7,27 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
 /**
  * Direct client for a Radarr v3 instance.
  *
  * Mirrors the [com.raulshma.jellyplay.core.network.seerr.SeerrApiClient]
- * template: every method is `suspend`, takes `baseUrl` + `apiKey` as the first
- * two params, and returns [Result]. URLs target the Radarr `/api/v3` root;
+ * template — every method is `suspend` and returns [Result] — with one
+ * deliberate divergence: every method takes one [ArrServerConfig] `server`
+ * connection as its first parameter where Seerr takes a bare `baseUrl` +
+ * credential pair. The `(baseUrl, apiKey)` couple used to travel unnamed
+ * through every signature, so each endpoint cost two extra params and every
+ * binding call site re-spelled the pair; the connection object gives it one
+ * name and one construction site (the repository's resolved, de-duped server
+ * list — the same type `testConnection`-style probes already routed by).
+ * Only [ArrServerConfig.baseUrl] + [ArrServerConfig.apiKey] are read here;
+ * the identity fields (`id`/`name`/`kind`/`isManual`) stay routing/UI
+ * metadata. Seerr keeps its own parameter shape on purpose (cookie-carrying;
+ * see the `ArrClientSupport` KDoc on the deliberate sibling split).
+ *
+ * URLs target the Radarr `/api/v3` root;
  * authentication is the `X-Api-Key` header. No Flow — the consuming repository
  * decides cadence and caches via `TtlCache`.
  *
@@ -31,15 +44,14 @@ import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 interface RadarrApiClient {
 
     /** `GET /api/v3/queue?includeMovie=true` — active downloads with movie metadata. */
-    suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>>
+    suspend fun getQueue(server: ArrServerConfig): Result<List<ArrQueueItem>>
 
     /**
      * `DELETE /api/v3/queue/{id}` — removes one queue row. [options] maps to
      * the `removeFromClient` / `blocklist` / `skipRedownload` query params.
      */
     suspend fun deleteQueueItem(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         id: Int,
         options: ArrQueueDeleteOptions = ArrQueueDeleteOptions(),
     ): Result<Unit>
@@ -49,14 +61,13 @@ interface RadarrApiClient {
      * Body: `{ "ids": [...] }`.
      */
     suspend fun deleteQueueItems(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         ids: List<Int>,
         options: ArrQueueDeleteOptions = ArrQueueDeleteOptions(),
     ): Result<Unit>
 
     /** `POST /api/v3/queue/grab/{id}` — force-send a queued release to the download client. */
-    suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit>
+    suspend fun grabQueueItem(server: ArrServerConfig, id: Int): Result<Unit>
 
     /**
      * Force-imports an already-importable release via the documented 2-step
@@ -71,15 +82,14 @@ interface RadarrApiClient {
      * [downloadId] is the download-client guid from the queue row (NOT the
      * queue id). Fails with a friendly 404 when no importable files are found.
      */
-    suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit>
+    suspend fun importQueueItem(server: ArrServerConfig, downloadId: String): Result<Unit>
 
     /**
      * `GET /api/v3/calendar?start=...&end=...` — movies with cinematic/digital
      * release dates inside `[start, end]` (ISO-8601 dates, inclusive).
      */
     suspend fun getCalendar(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         start: String,
         end: String,
     ): Result<List<ArrCalendarItem>>
@@ -88,29 +98,26 @@ interface RadarrApiClient {
      * `GET /api/v3/history?eventType=...` — recent grab/import/fail events.
      */
     suspend fun getHistory(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         eventType: Int? = null,
     ): Result<List<ArrHistoryItem>>
 
     /** `GET /api/v3/blocklist` — paginated blocklist (rejected releases). */
     suspend fun getBlocklist(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int = 1,
         pageSize: Int = 50,
     ): Result<List<ArrBlocklistItem>>
 
     /** `DELETE /api/v3/blocklist/{id}` — remove one blocklist entry (re-enables search). */
-    suspend fun deleteBlocklistItem(baseUrl: String, apiKey: String, id: Int): Result<Unit>
+    suspend fun deleteBlocklistItem(server: ArrServerConfig, id: Int): Result<Unit>
 
     /** `DELETE /api/v3/blocklist/bulk` — remove multiple blocklist entries. */
-    suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit>
+    suspend fun deleteBlocklistItems(server: ArrServerConfig, ids: List<Int>): Result<Unit>
 
     /** `GET /api/v3/wanted/missing` — monitored movies without a file. */
     suspend fun getWanted(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int = 1,
         pageSize: Int = 50,
     ): Result<List<ArrWantedItem>>
@@ -125,8 +132,7 @@ interface RadarrApiClient {
      * command like [ArrCommandName.SEARCH_MOVIE].
      */
     suspend fun postCommand(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         commandName: ArrCommandName,
         movieIds: List<Int>? = null,
         episodeIds: List<Int>? = null,
@@ -138,14 +144,14 @@ interface RadarrApiClient {
      * (the movie isn't tracked). Used to translate tmdbId → the internal id
      * Radarr commands like [ArrCommandName.SEARCH_MOVIE] require.
      */
-    suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?>
+    suspend fun findMovieIdByTmdb(server: ArrServerConfig, tmdbId: Int): Result<Int?>
 
     /**
      * `GET /api/v3/movie?tmdbId=...` → maps the full [RadarrMovieInfo] needed
      * for the delete & re-download flow (internal id, movieFileId, hasFile,
      * monitored). Returns null when Radarr has no movie matching [tmdbId].
      */
-    suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?>
+    suspend fun getMovieForTmdb(server: ArrServerConfig, tmdbId: Int): Result<RadarrMovieInfo?>
 
     /**
      * `DELETE /api/v3/movieFile/{id}` — deletes a movie's file (the same flow
@@ -154,7 +160,7 @@ interface RadarrApiClient {
      * Returns 200 (not 204); a 409 indicates the movie's root folder is missing
      * or empty (surfaced as an actionable error).
      */
-    suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit>
+    suspend fun deleteMovieFile(server: ArrServerConfig, movieFileId: Int): Result<Unit>
 
     /**
      * `PUT /api/v3/movie/monitor` — toggles the monitored flag on one or more
@@ -163,8 +169,7 @@ interface RadarrApiClient {
      * file delete, so this is a safety net, not always required).
      */
     suspend fun monitorMovies(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         movieIds: List<Int>,
         monitored: Boolean,
     ): Result<Unit>
@@ -172,7 +177,7 @@ interface RadarrApiClient {
     /**
      * `GET /api/v3/system/status` — connection probe. Succeeds iff 2xx.
      */
-    suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit>
+    suspend fun testConnection(server: ArrServerConfig): Result<Unit>
 }
 
 /**

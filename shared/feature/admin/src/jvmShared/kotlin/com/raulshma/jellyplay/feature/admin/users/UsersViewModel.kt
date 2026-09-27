@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ManagedUser
-import com.raulshma.jellyplay.core.model.PendingConfirmation
+import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 
@@ -16,28 +16,9 @@ data class UsersState(
     val currentUserId: String? = null,
     val adminCount: Int = 0,
     val showCreateDialog: Boolean = false,
-    /**
-     * Delete-confirmation machine (replaces the old showDeleteDialog +
-     * selectedUser pair). Settle arm: clears on SUCCESS only — a failed
-     * delete keeps the dialog open over the error. Guard source: the
-     * machine's dismiss/confirm rule; [isDeleting] is the caller-owned
-     * in-flight fact it reads.
-     */
-    val pendingDelete: PendingConfirmation<ManagedUser> = PendingConfirmation(),
-    /** True while a delete request is in flight — also the dialog's confirmLoading. */
+    /** True while a delete request is in flight — also the dialog's confirmLoading and the delete-confirmation host's in-flight fact. */
     val isDeleting: Boolean = false,
-) {
-    /** The delete dialog's open flag, derived from the pending machine. */
-    val showDeleteDialog: Boolean get() = pendingDelete.isPending
-
-    /**
-     * The user awaiting delete confirmation — the dialog's payload.
-     * Compatibility alias for the pre-fold `selectedUser` field name (the
-     * screen and suite read it unchanged); the value is the machine's
-     * pending delete target.
-     */
-    val selectedUser: ManagedUser? get() = pendingDelete.item
-}
+)
 
 /** Decode cap for the 40 dp row avatar (128 px covers ~3.2x density). */
 internal const val AVATAR_MAX_WIDTH = 128
@@ -48,6 +29,15 @@ class UsersViewModel(
 
     private val _state = composeState(UsersState())
     val state: UsersState get() = _state.value
+
+    /**
+     * Delete-confirmation host (replaces the old showDeleteDialog +
+     * selectedUser state pair). Settle arm: clears on SUCCESS only — a
+     * failed delete keeps the dialog open over the error. Guard source: the
+     * host's dismiss/confirm rule; [UsersState.isDeleting] is the
+     * caller-owned in-flight fact it reads.
+     */
+    val deleteConfirmation = ConfirmationHost<ManagedUser>()
 
     /**
      * Avatar URL for a list row: the repository's bearer-less
@@ -131,17 +121,13 @@ class UsersViewModel(
     }
 
     /** Opens the delete-confirm dialog for [user]. */
-    fun showDeleteDialog(user: ManagedUser) {
-        _state.value = _state.value.copy(pendingDelete = _state.value.pendingDelete.hold(user))
-    }
+    fun showDeleteDialog(user: ManagedUser) = deleteConfirmation.show(user)
 
     /**
-     * Refused while a delete is in flight (machine rule; [UsersState.isDeleting]
+     * Refused while a delete is in flight (host rule; [UsersState.isDeleting]
      * is the caller-owned fact) — the dialog stays open until the request settles.
      */
-    fun dismissDeleteDialog() {
-        _state.value = _state.value.copy(pendingDelete = _state.value.pendingDelete.dismiss(_state.value.isDeleting))
-    }
+    fun dismissDeleteDialog() = deleteConfirmation.dismiss(inFlight = _state.value.isDeleting)
 
     /**
      * Deletes the pending user. Settle arm: clears on SUCCESS only — the
@@ -150,16 +136,13 @@ class UsersViewModel(
      * confirm and a dismiss are refused.
      */
     fun deleteUser() {
-        val user = _state.value.pendingDelete.confirm(inFlight = _state.value.isDeleting) ?: return
+        val user = deleteConfirmation.confirm(inFlight = _state.value.isDeleting) ?: return
         launch {
             _state.value = _state.value.copy(isDeleting = true)
             val result = adminRepository.deleteUser(user.id)
             if (result.isSuccess) {
-                _state.value = _state.value.copy(
-                    isDeleting = false,
-                    pendingDelete = _state.value.pendingDelete.clear(),
-                    error = null,
-                )
+                _state.value = _state.value.copy(isDeleting = false, error = null)
+                deleteConfirmation.clear()
                 loadUsers()
             } else {
                 Log.e("Users", "Failed to delete user", result.exceptionOrNull())

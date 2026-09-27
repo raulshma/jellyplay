@@ -85,14 +85,14 @@ class UsersViewModelTest {
         val viewModel = UsersViewModel(adminRepository)
         advanceUntilIdle()
         viewModel.showDeleteDialog(regular)
-        assertTrue(viewModel.state.showDeleteDialog)
+        assertTrue(viewModel.deleteConfirmation.isPending)
 
         viewModel.deleteUser()
         advanceUntilIdle()
 
         coVerify { adminRepository.deleteUser("u-reg") }
-        assertTrue(!viewModel.state.showDeleteDialog)
-        assertNull(viewModel.state.selectedUser)
+        assertTrue(!viewModel.deleteConfirmation.isPending)
+        assertNull(viewModel.deleteConfirmation.item)
     }
 
     @Test
@@ -143,14 +143,14 @@ class UsersViewModelTest {
         viewModel.dismissDeleteDialog()
 
         // The machine refuses a dismiss while in flight — the dialog stays open.
-        assertEquals(regular, viewModel.state.selectedUser)
-        assertTrue(viewModel.state.showDeleteDialog)
+        assertEquals(regular, viewModel.deleteConfirmation.item)
+        assertTrue(viewModel.deleteConfirmation.isPending)
 
         gate.complete(Unit)
         advanceUntilIdle()
         // Settle arm: success-only clear — the delete succeeded, dialog closed.
-        assertNull(viewModel.state.selectedUser)
-        assertFalse(viewModel.state.showDeleteDialog)
+        assertNull(viewModel.deleteConfirmation.item)
+        assertFalse(viewModel.deleteConfirmation.isPending)
     }
 
     @Test
@@ -172,7 +172,7 @@ class UsersViewModelTest {
         coVerify(exactly = 1) { adminRepository.deleteUser("u-reg") }
         gate.complete(Unit)
         advanceUntilIdle()
-        assertNull(viewModel.state.selectedUser)
+        assertNull(viewModel.deleteConfirmation.item)
     }
 
     @AfterTest

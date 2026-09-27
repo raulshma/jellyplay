@@ -108,8 +108,8 @@ fun UsersScreen(
         )
     }
 
-    if (state.showDeleteDialog) {
-        val target = state.selectedUser
+    if (viewModel.deleteConfirmation.isPending) {
+        val target = viewModel.deleteConfirmation.item
         ConfirmDialog(
             title = stringResource(Res.string.admin_delete_user_title),
             message = stringResource(Res.string.admin_delete_user_body, target?.name ?: ""),

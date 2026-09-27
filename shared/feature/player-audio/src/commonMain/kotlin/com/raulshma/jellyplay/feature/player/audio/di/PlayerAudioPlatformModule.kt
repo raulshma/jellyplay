@@ -8,7 +8,7 @@ import org.koin.core.module.Module
  * [org.koin.core.module.Module.includes] so the app composition roots keep
  * registering the single `playerAudioModule`):
  *  - jvmShared actual: empty — android/desktop resolve
- *    [com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager] from
+ *    [com.raulshma.jellyplay.core.data.playback.SleepCountdown] from
  *    the existing dataJvmModule binding, and the player's download window
  *    ([com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow],
  *    which the former feature-local AudioTrackDownloads seam was folded

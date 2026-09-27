@@ -12,9 +12,7 @@ import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.SelectionState
-import com.raulshma.jellyplay.core.model.formatBytes
-import com.raulshma.jellyplay.core.model.formatEta
-import com.raulshma.jellyplay.core.model.formatSpeed
+import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -74,6 +72,26 @@ class DownloadsViewModel(
 
     private val _uiState = stateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.flow
+
+    // ── Delete confirmations ─────────────────────────────────────────────
+    // Deleting a completed download removes the file from disk, so we confirm
+    // first — matching the unified MediaDetailScreen delete confirmations.
+    // The machines moved here out of the screen's remember{} state; both use
+    // ConfirmationHost's synchronous settle arm.
+
+    /**
+     * Pending single-item delete. Settle arm: [ConfirmationHost.confirm]'s
+     * synchronous clear — the deletes are fire-and-forget VM calls, so the
+     * machine settles at the confirm tap and the guard's in-flight arm is
+     * unreachable (dismiss/confirm pass `inFlight = false`). The screen's
+     * old machine documented "previously the confirm write never cleared" —
+     * with the settle arm inside [ConfirmationHost.confirm] that delta is
+     * structurally impossible.
+     */
+    val pendingDelete = ConfirmationHost<DownloadItem>()
+
+    /** Pending bulk delete of the current selection. Same synchronous settle as [pendingDelete]. */
+    val pendingBulkDelete = ConfirmationHost<Unit>()
 
     /**
      * One-shot delete feedback, screen-forward seam replacing the legacy
@@ -394,11 +412,4 @@ class DownloadsViewModel(
                     episodeNumber = it.episodeNumber,
                 )
             }
-
-    fun formatBytes(bytes: Long): String = bytes.formatBytes()
-
-    fun formatSpeed(speedBytesPerSec: Long): String = speedBytesPerSec.formatSpeed()
-
-    fun formatEta(downloadedBytes: Long, totalBytes: Long, speedBytesPerSec: Long): String =
-        com.raulshma.jellyplay.core.model.formatEta(downloadedBytes, totalBytes, speedBytesPerSec)
 }

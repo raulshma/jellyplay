@@ -24,7 +24,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.music.components.MusicSortMenuButton
 import com.raulshma.jellyplay.feature.music.components.MusicCollectionPagedGrid
-import com.raulshma.jellyplay.feature.music.components.rememberPagedCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_artists
 

@@ -67,7 +67,10 @@ class MediaRepositoryCacheInvalidationTest {
         )
         return MediaRepositoryImpl(
             apiClient,
-            homeSectionCacheDao,
+            // Snapshot-store extraction: the persisted home pipeline moved
+            // into the store single the Koin graph wires (inert here — this
+            // suite pins the detail/series cache choreography).
+            HomeSectionsSnapshotStore(homeSectionCacheDao, homeSession, SystemTimeSource()),
             playedStateSync,
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),

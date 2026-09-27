@@ -745,7 +745,7 @@ fun MediaDetailScreen(
                     SeerrRequestDialog(
                         item = item,
                         snapshot = seerrRequest,
-                        onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                        onConfirm = { (serverId, profileId, rootFolder, tags, seasons) ->
                             viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
                         onDismiss = { viewModel.seerrRequests.dismissRequestDialog() },
