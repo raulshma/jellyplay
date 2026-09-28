@@ -346,6 +346,7 @@
     <string name="settings_orientation_subtitle">デフォルトの画面の向き</string>
     <string name="settings_gestures">ジェスチャー</string>
     <string name="settings_gestures_on">スワイプとタップのジェスチャーが有効</string>
+    <string name="settings_gestures_tap_only">タップジェスチャーが有効、スワイプは無効</string>
     <string name="settings_gestures_off">タップジェスチャーが無効</string>
     <string name="settings_default_speed">デフォルトの速度</string>
     <string name="settings_default_speed_subtitle">初期の再生速度</string>

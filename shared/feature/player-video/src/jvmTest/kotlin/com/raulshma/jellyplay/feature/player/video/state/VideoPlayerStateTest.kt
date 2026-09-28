@@ -68,13 +68,13 @@ class VideoPlayerStateTest {
     @Test
     fun gesturePrefsState_defaultValuesAndCopy() {
         val state = GesturePrefsState()
-        assertTrue(state.gesturesEnabled)
+        assertTrue(state.tapGesturesEnabled)
         assertTrue(state.holdSpeedEnabled)
         assertEquals(2.0f, state.holdSpeedMultiplier, 0.001f)
         assertEquals(10_000L, state.seekDurationMs)
 
-        val updated = state.copy(gesturesEnabled = false, holdSpeedMultiplier = 3.0f)
-        assertFalse(updated.gesturesEnabled)
+        val updated = state.copy(tapGesturesEnabled = false, holdSpeedMultiplier = 3.0f)
+        assertFalse(updated.tapGesturesEnabled)
         assertEquals(3.0f, updated.holdSpeedMultiplier, 0.001f)
     }
 

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
@@ -19,9 +20,10 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  *    trickplayEnabled, trickplayOnSeekGesture, showPlaybackMetadata, showClock,
  *    showTimeRemaining, keepScreenOnDuringVideo, streamingQuality,
  *    adaptiveBitrateEnabled, playbackMode
- *  - `gestures`: gesturesEnabled, holdSpeedEnabled, holdSpeedMultiplier,
- *    defaultSpeed, swipeSeekMaxMs, seekDurationMs, rememberBrightness,
- *    brightnessLevel, gestureIndicatorSide, frameRateMatching, refreshRateMode
+ *  - `gestures`: tapGesturesEnabled, swipeGesturesEnabled, holdSpeedEnabled,
+ *    holdSpeedMultiplier, defaultSpeed, swipeSeekMaxMs, seekDurationMs,
+ *    rememberBrightness, brightnessLevel, gestureIndicatorSide,
+ *    frameRateMatching, refreshRateMode
  *  - `videoFx`: aspectRatio (parsed from `videoDefaultAspectRatio`), tvZoomModePercent
  *  - `segmentState`: segmentBehaviors (with the INTRO/OUTRO auto-skip flags OR-ed in)
  *  - `episodes`: videoEpisodeBrowserEnabled
@@ -82,7 +84,8 @@ internal object PlayerPrefsSeed {
                     playbackMode = agg.playback.playbackMode,
                 ),
                 gestures = gestures.copy(
-                    gesturesEnabled = agg.videoPlayer.videoGesturesEnabled,
+                    tapGesturesEnabled = agg.videoPlayer.videoGestureMode != GestureMode.NONE,
+                    swipeGesturesEnabled = agg.videoPlayer.videoGestureMode == GestureMode.ALL,
                     holdSpeedEnabled = agg.videoPlayer.videoHoldSpeedEnabled,
                     holdSpeedMultiplier = agg.videoPlayer.videoHoldSpeedMultiplier,
                     defaultSpeed = agg.videoPlayer.videoDefaultSpeed,

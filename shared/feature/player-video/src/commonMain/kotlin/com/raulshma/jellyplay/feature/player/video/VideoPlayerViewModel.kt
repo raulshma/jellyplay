@@ -2909,14 +2909,15 @@ class VideoPlayerViewModel(
             keepScreenOnDuringVideo = uiPrefs.keepScreenOnDuringVideo,
         ),
         // gestures: the prefs-mirror leaves carry across an item switch
-        // (seek window, gesture toggle, default speed, swipe cap,
+        // (seek window, gesture tier flags, default speed, swipe cap,
         // brightness flag + level); the runtime leaves (hold-speed
         // toggle/multiplier/active flag, indicator side, frame-rate
         // matching, refresh-rate mode) reset to defaults. Fresh slice —
         // same tight semantics as uiPrefs above.
         gestures = GesturePrefsState(
             seekDurationMs = gestures.seekDurationMs,
-            gesturesEnabled = gestures.gesturesEnabled,
+            tapGesturesEnabled = gestures.tapGesturesEnabled,
+            swipeGesturesEnabled = gestures.swipeGesturesEnabled,
             defaultSpeed = gestures.defaultSpeed,
             swipeSeekMaxMs = gestures.swipeSeekMaxMs,
             rememberBrightness = gestures.rememberBrightness,

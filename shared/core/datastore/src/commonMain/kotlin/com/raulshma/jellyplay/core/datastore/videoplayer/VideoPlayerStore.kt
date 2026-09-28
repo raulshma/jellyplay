@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -65,6 +66,7 @@ class VideoPlayerStore constructor(
         val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey("video_default_orientation")
         val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey("video_default_aspect_ratio")
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
+        val VIDEO_GESTURE_MODE = stringPreferencesKey("video_gesture_mode")
         val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey("video_pass_out_protection_hours")
         val VIDEO_SKIP_BACK_ON_RESUME_MS = longPreferencesKey("video_skip_back_on_resume_ms")
         val VIDEO_HOLD_SPEED_ENABLED = booleanPreferencesKey("video_hold_speed_enabled")
@@ -126,7 +128,7 @@ class VideoPlayerStore constructor(
         videoControlsTimeoutMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_CONTROLS_TIMEOUT_MS, "video_controls_timeout_ms", 5_000L),
         videoDefaultOrientation = readOrientation(prefs),
         videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
-        videoGesturesEnabled = PreferenceCodec.readBool(prefs, Keys.VIDEO_GESTURES_ENABLED, "video_gestures_enabled", true),
+        videoGestureMode = readGestureMode(prefs),
         videoPassOutProtectionHours = PreferenceCodec.readInt(prefs, Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, "video_pass_out_protection_hours", 0),
         videoSkipBackOnResumeMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS, "video_skip_back_on_resume_ms", 0L),
         videoHoldSpeedEnabled = PreferenceCodec.readBool(prefs, Keys.VIDEO_HOLD_SPEED_ENABLED, "video_hold_speed_enabled", true),
@@ -190,6 +192,23 @@ class VideoPlayerStore constructor(
 
     private fun readGestureIndicatorSide(prefs: Preferences): GestureIndicatorSide =
         prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE].toEnumOrNull() ?: GestureIndicatorSide.OPPOSITE
+
+    /**
+     * Reads the gesture mode, falling back to the legacy
+     * `video_gestures_enabled` boolean when the enum key is absent: an
+     * explicit legacy `false` (gestures disabled) migrates to
+     * [GestureMode.NONE]; anything else — legacy `true` or a fresh install —
+     * lands on [GestureMode.ALL]. The legacy key is never written again
+     * (except factory reset), so the first mode change retires it.
+     */
+    private fun readGestureMode(prefs: Preferences): GestureMode {
+        prefs[Keys.VIDEO_GESTURE_MODE]?.toEnumOrNull<GestureMode>()?.let { return it }
+        return if (PreferenceCodec.readBool(prefs, Keys.VIDEO_GESTURES_ENABLED, "video_gestures_enabled", true)) {
+            GestureMode.ALL
+        } else {
+            GestureMode.NONE
+        }
+    }
 
     private fun readPreloadBufferSize(prefs: Preferences): PreloadBufferSize =
         prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE].toEnumOrNull() ?: PreloadBufferSize.MEDIUM
@@ -262,8 +281,8 @@ class VideoPlayerStore constructor(
         dataStore.edit { it[Keys.VIDEO_DEFAULT_ORIENTATION] = mode.name }
     }
 
-    suspend fun setVideoGesturesEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled }
+    suspend fun setVideoGestureMode(mode: GestureMode) {
+        dataStore.edit { it[Keys.VIDEO_GESTURE_MODE] = mode.name }
     }
 
     suspend fun setVideoPassOutProtectionHours(hours: Int) {
@@ -449,6 +468,7 @@ class VideoPlayerStore constructor(
             Keys.VIDEO_DEFAULT_ORIENTATION,
             Keys.VIDEO_DEFAULT_ASPECT_RATIO,
             Keys.VIDEO_GESTURES_ENABLED,
+            Keys.VIDEO_GESTURE_MODE,
             Keys.VIDEO_PASS_OUT_PROTECTION_HOURS,
             Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
             Keys.VIDEO_HOLD_SPEED_ENABLED,
@@ -498,7 +518,11 @@ class VideoPlayerStore constructor(
             prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = slice.videoControlsTimeoutMs
             prefs[Keys.VIDEO_DEFAULT_ORIENTATION] = slice.videoDefaultOrientation.name
             prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = slice.videoDefaultAspectRatio
-            prefs[Keys.VIDEO_GESTURES_ENABLED] = slice.videoGesturesEnabled
+            prefs[Keys.VIDEO_GESTURE_MODE] = slice.videoGestureMode.name
+            // The legacy boolean is superseded by the mode key; clear it so a
+            // restored snapshot cannot disagree with what [readGestureMode]
+            // would fall back to if the mode key were ever lost.
+            prefs.remove(Keys.VIDEO_GESTURES_ENABLED)
             prefs[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = slice.videoPassOutProtectionHours
             prefs[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = slice.videoSkipBackOnResumeMs
             prefs[Keys.VIDEO_HOLD_SPEED_ENABLED] = slice.videoHoldSpeedEnabled
@@ -548,7 +572,7 @@ data class VideoPlayerSlice(
     val videoControlsTimeoutMs: Long = 5_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoDefaultAspectRatio: String = "AUTO",
-    val videoGesturesEnabled: Boolean = true,
+    val videoGestureMode: GestureMode = GestureMode.ALL,
     val videoPassOutProtectionHours: Int = 0,
     val videoSkipBackOnResumeMs: Long = 0L,
     val videoHoldSpeedEnabled: Boolean = true,

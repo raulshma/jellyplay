@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
@@ -56,7 +57,7 @@ class VideoPlayerStoreTest {
         assertEquals(0.5f, slice.videoBrightnessLevel)
         assertEquals(1.0f, slice.videoDefaultSpeed)
         assertEquals(SegmentBehavior.DEFAULT_BEHAVIORS, slice.segmentBehaviors)
-        assertTrue(slice.videoGesturesEnabled)
+        assertTrue(slice.videoGestureMode == GestureMode.ALL)
         assertTrue(slice.videoAutoplayNext)
         assertFalse(slice.incognitoModeEnabled)
     }
@@ -97,11 +98,48 @@ class VideoPlayerStoreTest {
     }
 
     @Test
-    fun `setVideoGesturesEnabled toggles`() = runTest {
-        store.setVideoGesturesEnabled(false)
-        assertFalse(store.videoPlayer.first().videoGesturesEnabled)
-        store.setVideoGesturesEnabled(true)
-        assertTrue(store.videoPlayer.first().videoGesturesEnabled)
+    fun `setVideoGestureMode round-trips`() = runTest {
+        store.setVideoGestureMode(GestureMode.TAP_ONLY)
+        assertEquals(GestureMode.TAP_ONLY, store.videoPlayer.first().videoGestureMode)
+        store.setVideoGestureMode(GestureMode.NONE)
+        assertEquals(GestureMode.NONE, store.videoPlayer.first().videoGestureMode)
+        store.setVideoGestureMode(GestureMode.ALL)
+        assertEquals(GestureMode.ALL, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `legacy video_gestures_enabled false migrates to NONE`() = runTest {
+        // Pre-mode install with gestures disabled: no `video_gesture_mode` key,
+        // so readGestureMode falls back to the legacy boolean.
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_gestures_enabled")] = false
+        }
+        assertEquals(GestureMode.NONE, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `legacy video_gestures_enabled true migrates to ALL`() = runTest {
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_gestures_enabled")] = true
+        }
+        assertEquals(GestureMode.ALL, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `video_gesture_mode key wins over legacy boolean`() = runTest {
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_gestures_enabled")] = false
+            it[androidx.datastore.preferences.core.stringPreferencesKey("video_gesture_mode")] = "TAP_ONLY"
+        }
+        assertEquals(GestureMode.TAP_ONLY, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `corrupt video_gesture_mode falls back to legacy boolean`() = runTest {
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.stringPreferencesKey("video_gesture_mode")] = "BOGUS"
+        }
+        assertEquals(GestureMode.ALL, store.videoPlayer.first().videoGestureMode)
     }
 
     @Test
@@ -159,7 +197,7 @@ class VideoPlayerStoreTest {
             videoControlsTimeoutMs = 10_000L,
             videoDefaultOrientation = OrientationMode.LOCKED_LANDSCAPE,
             videoDefaultAspectRatio = "16:9",
-            videoGesturesEnabled = false,
+            videoGestureMode = GestureMode.TAP_ONLY,
             videoPassOutProtectionHours = 24,
             videoSkipBackOnResumeMs = 10_000L,
             videoHoldSpeedEnabled = false,

@@ -55,7 +55,7 @@ internal data class PlaybackCoreBundle(
         videoSeekDurationMs = video.videoSeekDurationMs,
         videoDefaultOrientation = video.videoDefaultOrientation,
         videoControlsTimeoutMs = video.videoControlsTimeoutMs,
-        videoGesturesEnabled = video.videoGesturesEnabled,
+        videoGestureMode = video.videoGestureMode,
         videoHoldSpeedEnabled = video.videoHoldSpeedEnabled,
         videoHoldSpeedMultiplier = video.videoHoldSpeedMultiplier,
         videoDefaultSpeed = video.videoDefaultSpeed,

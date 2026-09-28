@@ -133,7 +133,8 @@ class PlayerStateSlicesDefaultsTest {
     @Test
     fun gesturePrefsState_defaults() {
         val state = GesturePrefsState()
-        assertTrue(state.gesturesEnabled)
+        assertTrue(state.tapGesturesEnabled)
+        assertTrue(state.swipeGesturesEnabled)
         assertTrue(state.holdSpeedEnabled)
         assertEquals(2.0f, state.holdSpeedMultiplier, 0.001f)
         assertFalse(state.isHoldSpeedActive)

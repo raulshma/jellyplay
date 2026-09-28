@@ -402,6 +402,21 @@ enum class GestureIndicatorSide(val displayName: String, val constant: String) {
     SAME("Same side", "same"),
 }
 
+/**
+ * Which touch-gesture tiers the video player responds to. [TAP_ONLY] keeps
+ * taps, double-tap seek, long-press hold-speed and pinch-zoom active while
+ * disabling the single-finger swipe surface (swipe seek / brightness /
+ * volume / edge swipe) — the granular split the legacy all-or-nothing
+ * `video_gestures_enabled` boolean could not express.
+ */
+@Immutable
+@Serializable
+enum class GestureMode(override val displayName: String, val constant: String) : HasDisplayName {
+    ALL("All gestures", "all"),
+    TAP_ONLY("Tap only", "tap_only"),
+    NONE("Off", "none"),
+}
+
 @Immutable
 @Serializable
 enum class PreloadBufferSize(

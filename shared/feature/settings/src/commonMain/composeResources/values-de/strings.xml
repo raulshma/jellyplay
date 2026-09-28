@@ -346,6 +346,7 @@
     <string name="settings_orientation_subtitle">Standard-Bildschirmausrichtung</string>
     <string name="settings_gestures">Gesten</string>
     <string name="settings_gestures_on">Wisch- und Tipp-Gesten aktiv</string>
+    <string name="settings_gestures_tap_only">Tipp-Gesten aktiv, Wischen deaktiviert</string>
     <string name="settings_gestures_off">Touch-Gesten deaktiviert</string>
     <string name="settings_default_speed">Standardgeschwindigkeit</string>
     <string name="settings_default_speed_subtitle">Anfängliche Wiedergabegeschwindigkeit</string>

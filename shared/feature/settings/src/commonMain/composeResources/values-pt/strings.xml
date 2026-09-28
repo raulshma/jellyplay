@@ -346,6 +346,7 @@
     <string name="settings_orientation_subtitle">Orientação predefinida do ecrã</string>
     <string name="settings_gestures">Gestos</string>
     <string name="settings_gestures_on">Gestos de deslizar e tocar ativos</string>
+    <string name="settings_gestures_tap_only">Gestos de tocar ativos, deslizar desativado</string>
     <string name="settings_gestures_off">Gestos de toque desativados</string>
     <string name="settings_default_speed">Velocidade predefinida</string>
     <string name="settings_default_speed_subtitle">Velocidade inicial de reprodução</string>

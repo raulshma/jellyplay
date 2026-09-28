@@ -744,7 +744,7 @@ fun VideoPlayerScreen(
                 )
                 .then(
                     Modifier.playerTapAndZoomGestures(
-                        gesturesEnabled = uiState.gestures.gesturesEnabled,
+                        tapGesturesEnabled = uiState.gestures.tapGesturesEnabled,
                         isScreenLocked = isScreenLocked,
                         onUserInteraction = { viewModel.onEvent(VideoPlayerUiEvent.UserInteraction) },
                         isHoldSpeedActive = { uiState.gestures.isHoldSpeedActive },
@@ -920,7 +920,7 @@ fun VideoPlayerScreen(
                 seekState = seekState,
                 gestureController = gestureController,
                 gestureIndicatorSide = uiState.gestures.gestureIndicatorSide,
-                gesturesEnabled = uiState.gestures.gesturesEnabled && !isScreenLocked,
+                swipeGesturesEnabled = uiState.gestures.swipeGesturesEnabled && !isScreenLocked,
                 swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,
                 showControls = showControls,
                 onShowControlsChange = { showControls = it },

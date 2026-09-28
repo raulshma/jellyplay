@@ -114,7 +114,7 @@ internal fun GestureOverlay(
     brightnessFlow: StateFlow<Float>,
     volumeFlow: StateFlow<Float>,
     indicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
-    gesturesEnabled: Boolean,
+    swipeGesturesEnabled: Boolean,
     swipeSeekMaxMs: Long,
     showControls: Boolean,
     onSeekGesture: (Long) -> Unit,
@@ -202,7 +202,7 @@ internal fun GestureOverlay(
                 )
             }
             .then(
-                if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx, deadZonePx) {
+                if (swipeGesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx, deadZonePx) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val startX = down.position.x

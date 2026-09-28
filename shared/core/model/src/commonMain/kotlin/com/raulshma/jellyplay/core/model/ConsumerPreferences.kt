@@ -101,7 +101,7 @@ data class OnboardingPreferences(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val videoSeekDurationMs: Long = 10_000L,
-    val videoGesturesEnabled: Boolean = true,
+    val videoGestureMode: GestureMode = GestureMode.ALL,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoAutoplayNext: Boolean = true,
     val audioDefaultSpeed: Float = 1.0f,

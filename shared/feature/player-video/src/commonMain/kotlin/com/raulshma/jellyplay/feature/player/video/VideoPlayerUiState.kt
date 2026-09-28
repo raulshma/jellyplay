@@ -221,7 +221,8 @@ data class VideoPlayerUiState(
     val uiPrefs: PlayerUiPrefsState = PlayerUiPrefsState(),
     /**
      * Gesture / hold-speed / seek-window / brightness / frame-rate prefs.
-     * Formerly flat fields (`gesturesEnabled` / `holdSpeedEnabled` /
+     * Formerly flat fields (`gesturesEnabled` (now the tap/swipe tier pair) /
+     * `holdSpeedEnabled` /
      * `holdSpeedMultiplier` / `isHoldSpeedActive` / `defaultSpeed` /
      * `swipeSeekMaxMs` / `seekDurationMs` / `rememberBrightness` /
      * `brightnessLevel` / `gestureIndicatorSide` / `frameRateMatching` /

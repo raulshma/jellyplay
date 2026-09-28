@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.alternateShippedEngineOrProbe
 import com.raulshma.jellyplay.core.datastore.clampedPreferredPlayer
 import com.raulshma.jellyplay.core.datastore.createPreferenceSliceGraph
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -143,7 +144,8 @@ class VideoPlayerAggregateStoreTest {
         val initial = aggregateStore.aggregate.first()
 
         // Touch one field per slice and confirm each surfaces in the aggregate.
-        graph.videoPlayerStore.setVideoGesturesEnabled(!initial.videoPlayer.videoGesturesEnabled)
+        val flippedMode = if (initial.videoPlayer.videoGestureMode == GestureMode.TAP_ONLY) GestureMode.NONE else GestureMode.TAP_ONLY
+        graph.videoPlayerStore.setVideoGestureMode(flippedMode)
         assertNotEquals(initial.videoPlayer, aggregateStore.aggregate.first().videoPlayer)
 
         graph.audioStore.setAudioAutoplayNext(!initial.audio.audioAutoplayNext)

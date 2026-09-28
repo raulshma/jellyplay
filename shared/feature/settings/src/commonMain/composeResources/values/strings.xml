@@ -440,6 +440,7 @@
     <string name="settings_orientation_subtitle">Default screen orientation</string>
     <string name="settings_gestures">Gestures</string>
     <string name="settings_gestures_on">Swipe and tap gestures active</string>
+    <string name="settings_gestures_tap_only">Tap gestures active, swipes disabled</string>
     <string name="settings_gestures_off">Touch gestures disabled</string>
     <string name="settings_default_speed">Default Speed</string>
     <string name="settings_default_speed_subtitle">Initial playback speed</string>
@@ -1536,7 +1537,7 @@
     <string name="ss_orientation_title">Screen Orientation</string>
     <string name="ss_orientation_subtitle">Default screen orientation during video playback</string>
     <string name="ss_gestures_title">Playback Gestures</string>
-    <string name="ss_gestures_subtitle">Toggle swipe gestures for brightness, volume, and seeking</string>
+    <string name="ss_gestures_subtitle">Choose tap and swipe gestures for brightness, volume, and seeking</string>
     <string name="ss_gesture_indicator_side_title">Gesture Indicator Side</string>
     <string name="ss_gesture_indicator_side_subtitle">Show brightness/volume bar opposite or same side as the gesture</string>
     <string name="ss_default_speed_title">Default Playback Speed</string>

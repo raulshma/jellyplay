@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.ExternalPlayerApp
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.StillWatchingMode
@@ -219,6 +220,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gest
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gestures
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gestures_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gestures_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gestures_tap_only
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hold_to_seek_speed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hold_to_seek_speed_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hwdec_override
@@ -736,13 +738,27 @@ private fun PlaybackPlayerGroup(
                         )
                     }
                     if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackSettingsIds.GESTURES, rowFlags)) {
-                        SettingToggleItem(
+                        val gesturesTitle = rowTitle(PlaybackSettingsIds.GESTURES)
+                        val gesturesSubtitle = when (preferences.videoGestureMode) {
+                            GestureMode.ALL -> stringResource(Res.string.settings_gestures_on)
+                            GestureMode.TAP_ONLY -> stringResource(Res.string.settings_gestures_tap_only)
+                            GestureMode.NONE -> stringResource(Res.string.settings_gestures_off)
+                        }
+                        SettingListItem(
                             icon = rowIcon(PlaybackSettingsIds.GESTURES),
-                            title = rowTitle(PlaybackSettingsIds.GESTURES),
-                            subtitle = if (preferences.videoGesturesEnabled) stringResource(Res.string.settings_gestures_on) else stringResource(Res.string.settings_gestures_off),
-                            checked = preferences.videoGesturesEnabled,
+                            title = gesturesTitle,
+                            subtitle = gesturesSubtitle,
+                            trailingText = preferences.videoGestureMode.displayName,
                             highlighted = highlightSettingId == PlaybackSettingsIds.GESTURES,
-                            onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setVideoGesturesEnabled(it) } },
+                            onClick = {
+                                activePicker.value = PickerState.List(
+                                    title = gesturesTitle,
+                                    items = GestureMode.entries,
+                                    label = { it.displayName },
+                                    isSelected = { it == preferences.videoGestureMode },
+                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setVideoGestureMode(it) } },
+                                )
+                            },
                         )
                         val gestureIndicatorTitle = rowTitle(PlaybackSettingsIds.GESTURE_INDICATOR_SIDE)
                         SettingListItem(

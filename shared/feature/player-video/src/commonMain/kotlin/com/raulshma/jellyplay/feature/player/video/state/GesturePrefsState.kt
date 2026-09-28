@@ -2,13 +2,19 @@ package com.raulshma.jellyplay.feature.player.video.state
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 
 /**
- * Gesture / hold-speed / brightness / frame-rate preference slice.
+ * Gesture / hold-speed / brightness / frame-rate preference slice. The two
+ * tier flags are derived from the stored [GestureMode] at seed time:
+ * tap covers taps / double-tap seek / long-press hold-speed / pinch-zoom;
+ * swipe covers the single-finger drag surface (seek, brightness, volume,
+ * edge swipe).
  */
 @Immutable
 data class GesturePrefsState(
-    val gesturesEnabled: Boolean = true,
+    val tapGesturesEnabled: Boolean = true,
+    val swipeGesturesEnabled: Boolean = true,
     val holdSpeedEnabled: Boolean = true,
     val holdSpeedMultiplier: Float = 2.0f,
     val isHoldSpeedActive: Boolean = false,

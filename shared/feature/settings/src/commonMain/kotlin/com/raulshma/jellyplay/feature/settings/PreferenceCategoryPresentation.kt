@@ -227,7 +227,7 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_orientation_title, { it.videoPlayer.videoDefaultOrientation }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_default_aspect_title, { it.videoPlayer.videoDefaultAspectRatio }, ::identity),
     DiffField(Res.string.ss_preload_buffer_title, { it.videoPlayer.videoPreloadBufferSize }, { v -> v.enumDisplay() }),
-    DiffField(Res.string.ss_gestures_title, { it.videoPlayer.videoGesturesEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_gestures_title, { it.videoPlayer.videoGestureMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_pass_out_protection_title, { it.videoPlayer.videoPassOutProtectionHours }, Int::toString),
     DiffField(Res.string.ss_skip_back_on_resume_title, { it.videoPlayer.videoSkipBackOnResumeMs }, Long::millisToSeconds),
     DiffField(Res.string.diff_hold_to_speed, { it.videoPlayer.videoHoldSpeedEnabled }, Boolean::onOff),

@@ -346,6 +346,7 @@
     <string name="settings_orientation_subtitle">기본 화면 방향</string>
     <string name="settings_gestures">제스처</string>
     <string name="settings_gestures_on">스와이프 및 탭 제스처 활성</string>
+    <string name="settings_gestures_tap_only">탭 제스처 활성, 스와이프 비활성</string>
     <string name="settings_gestures_off">터치 제스처 사용 안 함</string>
     <string name="settings_default_speed">기본 속도</string>
     <string name="settings_default_speed_subtitle">초기 재생 속도</string>

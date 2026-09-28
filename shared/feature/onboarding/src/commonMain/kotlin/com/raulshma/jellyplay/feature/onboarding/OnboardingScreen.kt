@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.Res
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_next
@@ -186,13 +187,17 @@ fun OnboardingScreen(
                                 preferredPlayer = preferences.preferredPlayer,
                                 streamingQuality = preferences.streamingQuality,
                                 seekDurationMs = preferences.videoSeekDurationMs,
-                                gesturesEnabled = preferences.videoGesturesEnabled,
+                                gesturesEnabled = preferences.videoGestureMode != GestureMode.NONE,
                                 defaultOrientation = preferences.videoDefaultOrientation,
                                 autoplayNext = preferences.videoAutoplayNext,
                                 onPreferredPlayerChange = { playerType -> viewModel.edit { it.playback.setPreferredPlayer(playerType) } },
                                 onStreamingQualityChange = { quality -> viewModel.edit { it.playback.setStreamingQuality(quality) } },
                                 onSeekDurationChange = { ms -> viewModel.edit { it.videoPlayer.setVideoSeekDurationMs(ms) } },
-                                onGesturesEnabledChange = { enabled -> viewModel.edit { it.videoPlayer.setVideoGesturesEnabled(enabled) } },
+                                onGesturesEnabledChange = { enabled ->
+                                    viewModel.edit {
+                                        it.videoPlayer.setVideoGestureMode(if (enabled) GestureMode.ALL else GestureMode.NONE)
+                                    }
+                                },
                                 onDefaultOrientationChange = { mode -> viewModel.edit { it.videoPlayer.setVideoDefaultOrientation(mode) } },
                                 onAutoplayNextChange = { enabled -> viewModel.edit { it.videoPlayer.setVideoAutoplayNext(enabled) } },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),

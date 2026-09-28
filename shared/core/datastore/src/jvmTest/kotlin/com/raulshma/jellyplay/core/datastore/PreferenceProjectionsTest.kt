@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.ExperimentalPreferences
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
@@ -113,11 +114,12 @@ class PreferenceProjectionsTest {
         val videoBefore = projections.videoPlayerPreferences.first()
         val audioBefore = projections.audioPlayerPreferences.first()
 
-        graph.videoPlayerStore.setVideoGesturesEnabled(!videoBefore.videoGesturesEnabled)
+        val flipped = if (videoBefore.videoGestureMode == GestureMode.TAP_ONLY) GestureMode.NONE else GestureMode.TAP_ONLY
+        graph.videoPlayerStore.setVideoGestureMode(flipped)
 
         val videoAfter = projections.videoPlayerPreferences.first()
         assertNotEquals(videoBefore, videoAfter)
-        assertEquals(!videoBefore.videoGesturesEnabled, videoAfter.videoGesturesEnabled)
+        assertEquals(flipped, videoAfter.videoGestureMode)
         // The audio projection must be unaffected by a video-only write.
         assertEquals(audioBefore, projections.audioPlayerPreferences.first())
     }

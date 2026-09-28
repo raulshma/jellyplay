@@ -346,6 +346,7 @@
     <string name="settings_orientation_subtitle">Orientation d'écran par défaut</string>
     <string name="settings_gestures">Gestes</string>
     <string name="settings_gestures_on">Gestes de balayage et d'appui actifs</string>
+    <string name="settings_gestures_tap_only">Gestes d'appui actifs, balayage désactivé</string>
     <string name="settings_gestures_off">Gestes tactiles désactivés</string>
     <string name="settings_default_speed">Vitesse par défaut</string>
     <string name="settings_default_speed_subtitle">Vitesse de lecture initiale</string>

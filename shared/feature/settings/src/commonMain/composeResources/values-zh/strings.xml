@@ -346,6 +346,7 @@
     <string name="settings_orientation_subtitle">默认屏幕方向</string>
     <string name="settings_gestures">手势</string>
     <string name="settings_gestures_on">滑动和点击手势已启用</string>
+    <string name="settings_gestures_tap_only">点击手势已启用，滑动手势已禁用</string>
     <string name="settings_gestures_off">触摸手势已禁用</string>
     <string name="settings_default_speed">默认速度</string>
     <string name="settings_default_speed_subtitle">初始播放速度</string>
