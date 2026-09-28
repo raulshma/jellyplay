@@ -1291,7 +1291,7 @@
     <string name="settings_advanced_config">Advanced Configuration</string>
     <string name="settings_raw_mpv_options">Raw mpv options (mpv.conf style)</string>
     <string name="settings_advanced_mpv_config">Advanced MPV Configuration</string>
-    <string name="settings_mpv_helper_text">One option per line (key=value). Applied after the settings above, so a value here overrides its structured counterpart. Blank lines and # comments are ignored.</string>
+    <string name="settings_mpv_helper_text">One option per line (key=value). Applied after the settings above, so a value here overrides its structured counterpart. Blank lines and # comments are ignored. Subtitle styling keys (sub-color, sub-pos, …) also take priority over the app subtitle settings.</string>
     <string name="settings_reset_mpv">Restore all MPV settings</string>
     <string name="settings_audio_time_stretch">Audio Time Stretch</string>
     <string name="settings_audio_time_stretch_on">Pitch-corrected speed change</string>

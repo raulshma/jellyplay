@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MpvStyleMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvSubtitleSideLoadPlan
 import com.raulshma.jellyplay.feature.player.video.engine.MpvTlsOptions
 import com.raulshma.jellyplay.feature.player.video.engine.MpvTrackCatalog
+import com.raulshma.jellyplay.feature.player.video.engine.MpvUserSubtitleKeys
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackVolumePolicy
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
@@ -408,6 +409,20 @@ open class MpvDesktopEngine(
     // changes reconfigure the vo pipeline, `audio-device` re-opens the ao —
     // both only ever written on a real change.
     @Volatile private var lastAppliedEngineConfigProps: Map<String, String> = emptyMap()
+
+    /**
+     * The `sub-*` styling keys the user explicitly owns via the in-app
+     * Advanced MPV Configuration — the desktop mpv runs with `config=no`
+     * (no on-disk mpv.conf), so the extra-config text is the sole ownership
+     * source. Refreshed on every config push; [applySubtitleStyle] skips
+     * owned keys so the user's value wins (issue #165, desktop parity).
+     */
+    @Volatile private var userOwnedSubtitleKeys: Set<String> = emptySet()
+
+    private fun refreshUserOwnedSubtitleKeys(config: EngineConfig) {
+        val mpvCfg = config.engineSpecific as? MpvEngineConfig ?: MpvEngineConfig()
+        userOwnedSubtitleKeys = MpvUserSubtitleKeys.ownedKeys(mpvConfText = null, extraConfigText = mpvCfg.mpvExtraConfig)
+    }
 
     // ── HDR passthrough state ───────────────────────────────────────
     // The display-target probe: pending from FILE_LOADED until the first
@@ -961,6 +976,9 @@ open class MpvDesktopEngine(
      */
     override fun applySubtitleStyle(style: SubtitleStyle) {
         val context = aliveCtx() ?: return
+        // User-owned sub-* keys (in-app extra config; desktop has no on-disk
+        // mpv.conf) are skipped so the user's value wins for the session.
+        val owned = userOwnedSubtitleKeys
         if (!style.applyCustomStyle) {
             // Reset to mpv/libass native defaults — the tested reset pairs and
             // magnitudes from the mapping's DEFAULTS table, so a custom→default
@@ -969,30 +987,32 @@ open class MpvDesktopEngine(
             // sub-ass-override to "scale"; the canonical reset is "no"
             // (embedded ASS styling fully honored), matching Android's
             // default branch.
-            MpvStyleMapping.defaultEntries().forEach { (k, v) ->
+            MpvUserSubtitleKeys.filterOwned(MpvStyleMapping.defaultEntries(), owned).forEach { (k, v) ->
                 MpvLib.setPropertyString(context, k, v)
             }
-            MpvLib.setPropertyDouble(context, "sub-border-size", MpvStyleMapping.defaultBorderSize)
-            MpvLib.setPropertyDouble(context, "sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
+            if ("sub-border-size" !in owned) MpvLib.setPropertyDouble(context, "sub-border-size", MpvStyleMapping.defaultBorderSize)
+            if ("sub-shadow-offset" !in owned) MpvLib.setPropertyDouble(context, "sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
             return
         }
         // Custom branch: string-typed pairs straight from the mapping, then the
         // engine-applied numeric magnitudes (Android splits the same way
         // between customStyleEntries and typed setters).
-        MpvStyleMapping.customStyleEntries(style).forEach { (k, v) ->
+        MpvUserSubtitleKeys.filterOwned(MpvStyleMapping.customStyleEntries(style), owned).forEach { (k, v) ->
             MpvLib.setPropertyString(context, k, v)
         }
         val values = MpvStyleMapping.computeValues(style)
-        MpvLib.setPropertyDouble(context, "sub-font-size", values.fontSize.toDouble())
-        MpvLib.setPropertyDouble(context, "sub-border-size", values.outlineSize)
-        MpvLib.setPropertyDouble(context, "sub-shadow-offset", values.shadowOffset)
+        if ("sub-font-size" !in owned) MpvLib.setPropertyDouble(context, "sub-font-size", values.fontSize.toDouble())
+        if ("sub-border-size" !in owned) MpvLib.setPropertyDouble(context, "sub-border-size", values.outlineSize)
+        if ("sub-shadow-offset" !in owned) MpvLib.setPropertyDouble(context, "sub-shadow-offset", values.shadowOffset)
         // sub-pos is measured bottom-up in percent; the app's verticalPosition
         // is top-down (0 = top edge).
-        MpvLib.setPropertyDouble(
-            context,
-            "sub-pos",
-            (100.0 - style.verticalPosition * 100.0).coerceIn(0.0, 100.0),
-        )
+        if ("sub-pos" !in owned) {
+            MpvLib.setPropertyDouble(
+                context,
+                "sub-pos",
+                (100.0 - style.verticalPosition * 100.0).coerceIn(0.0, 100.0),
+            )
+        }
     }
 
     // ── MediaEngine: aspect ratio ───────────────────────────────────────────
@@ -1026,6 +1046,9 @@ open class MpvDesktopEngine(
         if (currentConfig == config) return
         val old = currentConfig
         currentConfig = config
+        // Ownership first: an edited extra config re-claims/renounces sub-*
+        // keys before any style re-apply below consults the set.
+        refreshUserOwnedSubtitleKeys(config)
         onConfigChanged(old, config)
     }
 
@@ -1072,6 +1095,7 @@ open class MpvDesktopEngine(
 
     private fun applyConfigToMpv(config: EngineConfig) {
         val context = aliveCtx() ?: return
+        refreshUserOwnedSubtitleKeys(config)
         MpvLib.setPropertyDouble(context, "audio-delay", config.audioDelayMs / 1000.0)
         MpvLib.setPropertyDouble(context, "sub-delay", config.subtitleDelayMs / 1000.0)
         MpvLib.setPropertyString(context, "hwdec", hwdecFor(config.decoderMode))
