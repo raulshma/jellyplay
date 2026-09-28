@@ -424,6 +424,20 @@ open class MpvDesktopEngine(
         userOwnedSubtitleKeys = MpvUserSubtitleKeys.ownedKeys(mpvConfText = null, extraConfigText = mpvCfg.mpvExtraConfig)
     }
 
+    // Ownership-gated scalar setters (issue #165): a no-op when the key is
+    // user-owned via the extra config, mirroring the Android engine's
+    // safeSet*UnlessUserOwned wrappers; the pair lists get the same gate from
+    // MpvUserSubtitleKeys.filterOwned at the call sites.
+    private fun setPropertyStringUnlessUserOwned(context: Pointer, key: String, value: String) {
+        if (key in userOwnedSubtitleKeys) return
+        MpvLib.setPropertyString(context, key, value)
+    }
+
+    private fun setPropertyDoubleUnlessUserOwned(context: Pointer, key: String, value: Double) {
+        if (key in userOwnedSubtitleKeys) return
+        MpvLib.setPropertyDouble(context, key, value)
+    }
+
     // ── HDR passthrough state ───────────────────────────────────────
     // The display-target probe: pending from FILE_LOADED until the first
     // stats tick where mpv's `video-target-params/gamma` resolves (the target
@@ -990,8 +1004,8 @@ open class MpvDesktopEngine(
             MpvUserSubtitleKeys.filterOwned(MpvStyleMapping.defaultEntries(), owned).forEach { (k, v) ->
                 MpvLib.setPropertyString(context, k, v)
             }
-            if ("sub-border-size" !in owned) MpvLib.setPropertyDouble(context, "sub-border-size", MpvStyleMapping.defaultBorderSize)
-            if ("sub-shadow-offset" !in owned) MpvLib.setPropertyDouble(context, "sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
+            setPropertyDoubleUnlessUserOwned(context, "sub-border-size", MpvStyleMapping.defaultBorderSize)
+            setPropertyDoubleUnlessUserOwned(context, "sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
             return
         }
         // Custom branch: string-typed pairs straight from the mapping, then the
@@ -1001,18 +1015,16 @@ open class MpvDesktopEngine(
             MpvLib.setPropertyString(context, k, v)
         }
         val values = MpvStyleMapping.computeValues(style)
-        if ("sub-font-size" !in owned) MpvLib.setPropertyDouble(context, "sub-font-size", values.fontSize.toDouble())
-        if ("sub-border-size" !in owned) MpvLib.setPropertyDouble(context, "sub-border-size", values.outlineSize)
-        if ("sub-shadow-offset" !in owned) MpvLib.setPropertyDouble(context, "sub-shadow-offset", values.shadowOffset)
-        // sub-pos is measured bottom-up in percent; the app's verticalPosition
-        // is top-down (0 = top edge).
-        if ("sub-pos" !in owned) {
-            MpvLib.setPropertyDouble(
-                context,
-                "sub-pos",
-                (100.0 - style.verticalPosition * 100.0).coerceIn(0.0, 100.0),
-            )
-        }
+        setPropertyDoubleUnlessUserOwned(context, "sub-font-size", values.fontSize.toDouble())
+        setPropertyDoubleUnlessUserOwned(context, "sub-border-size", values.outlineSize)
+        setPropertyDoubleUnlessUserOwned(context, "sub-shadow-offset", values.shadowOffset)
+        // sub-pos conversion lives in MpvStyleMapping so desktop rounds
+        // identically to Android's engine.
+        setPropertyDoubleUnlessUserOwned(
+            context,
+            "sub-pos",
+            MpvStyleMapping.subPosPercent(style).toDouble(),
+        )
     }
 
     // ── MediaEngine: aspect ratio ───────────────────────────────────────────

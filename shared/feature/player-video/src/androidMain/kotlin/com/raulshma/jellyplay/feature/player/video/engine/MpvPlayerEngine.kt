@@ -323,7 +323,7 @@ class MpvPlayerEngine(
         }
 
         override fun initOptions() {
-            val configDir = java.io.File(context.filesDir, "mpv")
+            val configDir = mpvConfigDir
             mpv.setOptionString("config", "yes")
             mpv.setOptionString("config-dir", configDir.absolutePath)
 
@@ -345,7 +345,9 @@ class MpvPlayerEngine(
             // so libass matches it exactly under the none provider. Overridden
             // per-style in applySubtitleStyleProperties when the user picks a
             // font, and ASS tracks ignore sub-font unless sub-ass-override=force.
-            fontProvider.bundledFallbackFamilyName()?.let { mpv.setOptionString("sub-font", it) }
+            // Yields to a user-owned sub-font like every other styling key —
+            // this is an init option, so an ungated write would beat mpv.conf.
+            fontProvider.bundledFallbackFamilyName()?.let { mpv.safeSetOptionUnlessUserOwned("sub-font", it) }
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
@@ -373,11 +375,10 @@ class MpvPlayerEngine(
             // These static sub-* options yield to user-owned keys (mpv.conf /
             // extra config) — sub-visibility and the margin pair are always
             // app-owned (runtime/UI-driven) and skip the check.
-            val owned = userOwnedSubtitleKeys
-            if ("sub-scale-with-window" !in owned) mpv.setOptionString("sub-scale-with-window", "no")
-            if ("sub-auto" !in owned) mpv.setOptionString("sub-auto", "fuzzy")
+            mpv.safeSetOptionUnlessUserOwned("sub-scale-with-window", "no")
+            mpv.safeSetOptionUnlessUserOwned("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
-            if ("sub-ass-override" !in owned) mpv.setOptionString("sub-ass-override", "scale")
+            mpv.safeSetOptionUnlessUserOwned("sub-ass-override", "scale")
             mpv.setOptionString("keep-open", "yes")
             applySubtitleStyleOptions(mpv, currentConfig.subtitleStyle)
             mpv.setOptionString("panscan", "0.0")
@@ -718,6 +719,9 @@ class MpvPlayerEngine(
     // worst (af/vf-class properties) a pipeline re-init.
     @Volatile private var lastAppliedEngineConfigProps: Map<String, String> = emptyMap()
 
+    /** mpv's config-dir (`<filesDir>/mpv`); the user's `mpv.conf` lives here. */
+    private val mpvConfigDir: java.io.File get() = java.io.File(context.filesDir, "mpv")
+
     /**
      * The `sub-*` styling keys the user explicitly owns via `<filesDir>/mpv/mpv.conf`
      * or the in-app Advanced MPV Configuration — see [MpvUserSubtitleKeys].
@@ -729,7 +733,7 @@ class MpvPlayerEngine(
     @Volatile private var userOwnedSubtitleKeys: Set<String> = emptySet()
 
     private fun refreshUserOwnedSubtitleKeys() {
-        val confFile = java.io.File(java.io.File(context.filesDir, "mpv"), "mpv.conf")
+        val confFile = java.io.File(mpvConfigDir, "mpv.conf")
         val confText = if (confFile.isFile) {
             try { confFile.readText() } catch (_: Exception) { null }
         } else null
@@ -766,13 +770,18 @@ class MpvPlayerEngine(
             // framedrop, skiploopfilter, the demuxer budgets, the audio trio
             // (audio-device / audio-exclusive / audio-spdif via the output
             // mode + passthrough reconciliation) and the extra-config lines.
+            // mpvExtraConfig lives in engineSpecific, so any change that
+            // re-applies engine pairs or subtitle style may also have
+            // re-claimed/renounced sub-* ownership — refresh once here (a
+            // combined change used to read the conf twice) so both re-applies
+            // below run against fresh ownership.
+            if (delta.sharedPairsChanged || delta.subtitleStyleChanged) {
+                refreshUserOwnedSubtitleKeys()
+            }
+
             if (delta.sharedPairsChanged) {
                 // engineSpecific + audioPassthrough + audioPassthroughCodecs
                 // + deinterlace + hdrSource (see EngineConfigDelta.sharedPairsChanged).
-                // mpvExtraConfig lives in engineSpecific, so an edited extra
-                // config re-claims/renounces sub-* ownership before the pairs
-                // (and any style re-apply below) run.
-                refreshUserOwnedSubtitleKeys()
                 val pairs = MpvConfigMapping.configPairs(
                     config = mpvCfg,
                     audioPassthrough = newConfig.audioPassthrough,
@@ -794,9 +803,9 @@ class MpvPlayerEngine(
             }
 
             if (delta.subtitleStyleChanged) {
-                // Re-read ownership so a conf/extra-config edit that arrived
-                // with (or since) the last change is honored by the re-apply.
-                refreshUserOwnedSubtitleKeys()
+                // Ownership was refreshed above, so a conf/extra-config edit
+                // that arrived with (or since) the last change is honored by
+                // the re-apply.
                 applySubtitleStyleInternal(newConfig.subtitleStyle)
             }
 
@@ -1003,7 +1012,7 @@ class MpvPlayerEngine(
         // so a surviving native ref on it is harmless.
         val viewContext = context.applicationContext
         val fontsDir = fontProvider.provideFontsDir()
-        val configDir = java.io.File(context.filesDir, "mpv")
+        val configDir = mpvConfigDir
         if (!configDir.exists()) {
             configDir.mkdirs()
         }
@@ -1640,8 +1649,8 @@ class MpvPlayerEngine(
         val owned = userOwnedSubtitleKeys
         if (style.applyCustomStyle) {
             MpvUserSubtitleKeys.filterOwned(customSubtitleStyleEntries(style, values), owned).forEach { (k, v) -> mpv.safeSetOption(k, v) }
-            if ("sub-font" !in owned) mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            if ("sub-scale" !in owned) mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE).toString())
+            mpv.safeSetOptionUnlessUserOwned("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetOptionUnlessUserOwned("sub-scale", (style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE).toString())
         } else {
             // Reset to mpv native defaults — the subset mpv needs at init time
             // (ass-override, typeface toggles, font, scale). All reset strings
@@ -1649,16 +1658,13 @@ class MpvPlayerEngine(
             // (sourced from its single DEFAULTS table via defaultInitEntries),
             // so this branch cannot drift from DEFAULTS and is unit-covered.
             MpvUserSubtitleKeys.filterOwned(MpvStyleMapping.defaultInitEntries(), owned).forEach { (k, v) -> mpv.safeSetOption(k, v) }
-            if ("sub-font" !in owned) mpv.safeSetOption("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            if ("sub-scale" !in owned) mpv.safeSetOption("sub-scale", MpvStyleMapping.defaultScale.toString())
+            mpv.safeSetOptionUnlessUserOwned("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetOptionUnlessUserOwned("sub-scale", MpvStyleMapping.defaultScale.toString())
         }
 
-        if ("sub-font-size" !in owned) mpv.safeSetOption("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toString())
-        if ("sub-pos" !in owned) {
-            val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
-            mpv.safeSetOption("sub-pos", subPosValue.toString())
-        }
-        if ("sub-margin-y" !in owned) mpv.safeSetOption("sub-margin-y", values.marginY.toString())
+        mpv.safeSetOptionUnlessUserOwned("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toString())
+        mpv.safeSetOptionUnlessUserOwned("sub-pos", MpvStyleMapping.subPosPercent(style).toString())
+        mpv.safeSetOptionUnlessUserOwned("sub-margin-y", values.marginY.toString())
         mpv.safeSetOption("sub-delay", (currentConfig.subtitleDelayMs / 1000.0).toString())
     }
 
@@ -1673,10 +1679,10 @@ class MpvPlayerEngine(
             // Numeric properties are typed (Double) for the runtime path.
             // sub-border-* are the canonical mpv/libass names; sub-outline-* are
             // deprecated aliases that silently no-op on some libass versions.
-            if ("sub-border-size" !in owned) mpv.safeSetPropertyDouble("sub-border-size", values.outlineSize)
-            if ("sub-shadow-offset" !in owned) mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
-            if ("sub-font" !in owned) mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            if ("sub-scale" !in owned) mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE)
+            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-border-size", values.outlineSize)
+            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-shadow-offset", values.shadowOffset)
+            mpv.safeSetPropertyStringUnlessUserOwned("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-scale", style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE)
         } else {
             // Reset to mpv native defaults — string pairs and numeric magnitudes
             // both come from the tested MpvStyleMapping (sourced from its single
@@ -1687,18 +1693,15 @@ class MpvPlayerEngine(
                 if (k == "sub-ass-justify") mpv.safeSetPropertyBoolean(k, false)
                 else mpv.safeSetPropertyString(k, v)
             }
-            if ("sub-font" !in owned) mpv.safeSetPropertyString("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            if ("sub-border-size" !in owned) mpv.safeSetPropertyDouble("sub-border-size", MpvStyleMapping.defaultBorderSize)
-            if ("sub-shadow-offset" !in owned) mpv.safeSetPropertyDouble("sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
-            if ("sub-scale" !in owned) mpv.safeSetPropertyDouble("sub-scale", MpvStyleMapping.defaultScale)
+            mpv.safeSetPropertyStringUnlessUserOwned("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-border-size", MpvStyleMapping.defaultBorderSize)
+            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
+            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-scale", MpvStyleMapping.defaultScale)
         }
 
-        if ("sub-font-size" !in owned) mpv.safeSetPropertyDouble("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toDouble())
-        if ("sub-pos" !in owned) {
-            val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
-            mpv.safeSetPropertyInt("sub-pos", subPosValue)
-        }
-        if ("sub-margin-y" !in owned) mpv.safeSetPropertyInt("sub-margin-y", values.marginY)
+        mpv.safeSetPropertyDoubleUnlessUserOwned("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toDouble())
+        mpv.safeSetPropertyIntUnlessUserOwned("sub-pos", MpvStyleMapping.subPosPercent(style))
+        mpv.safeSetPropertyIntUnlessUserOwned("sub-margin-y", values.marginY)
         mpv.safeSetPropertyDouble("sub-delay", currentConfig.subtitleDelayMs / 1000.0)
     }
 
@@ -1818,6 +1821,31 @@ class MpvPlayerEngine(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set property $name to $value", e)
         }
+    }
+
+    // Ownership-gated variants of the safe setters (issue #165): a no-op when
+    // the key is user-owned via mpv.conf / extra config, so no scalar write
+    // site can forget the check the pair lists get from
+    // MpvUserSubtitleKeys.filterOwned. Keys the app functionally drives at
+    // runtime (sub-visibility, sub-delay) never route through these.
+    private fun MPV.safeSetOptionUnlessUserOwned(name: String, value: String) {
+        if (name in userOwnedSubtitleKeys) return
+        safeSetOption(name, value)
+    }
+
+    private fun MPV.safeSetPropertyStringUnlessUserOwned(name: String, value: String) {
+        if (name in userOwnedSubtitleKeys) return
+        safeSetPropertyString(name, value)
+    }
+
+    private fun MPV.safeSetPropertyDoubleUnlessUserOwned(name: String, value: Double) {
+        if (name in userOwnedSubtitleKeys) return
+        safeSetPropertyDouble(name, value)
+    }
+
+    private fun MPV.safeSetPropertyIntUnlessUserOwned(name: String, value: Int) {
+        if (name in userOwnedSubtitleKeys) return
+        safeSetPropertyInt(name, value)
     }
 }
 

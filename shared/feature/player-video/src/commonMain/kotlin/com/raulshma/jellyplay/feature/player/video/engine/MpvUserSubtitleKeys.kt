@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
-import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
-
 /**
  * Per-key mpv.conf ownership for subtitle styling (issue #165).
  *
@@ -63,11 +61,30 @@ object MpvUserSubtitleKeys {
     fun filterOwned(entries: List<Pair<String, String>>, owned: Set<String>): List<Pair<String, String>> =
         if (owned.isEmpty()) entries else entries.filter { it.first !in owned }
 
-    /** True when the app must NOT write [key] because the user owns it. */
-    fun isOwned(key: String, owned: Set<String>): Boolean = owned.contains(key)
-
-    private fun keysFrom(text: String): Set<String> =
-        parseMpvConfigOptions(text)
-            .map { it.key }
-            .filterTo(mutableSetOf()) { it.startsWith("sub-") && it !in APP_OWNED_ALWAYS }
+    /**
+     * Top-level `sub-*` keys set by [text]. Parsed per-line rather than via
+     * [parseMpvConfigOptions] because ownership must be section-aware: keys
+     * under a `[profile]` header are NOT attributed — mpv applies them only
+     * when the profile activates, and the engines never write them back, so
+     * claiming them would yield the key to nobody (user styling AND app
+     * styling both skipped). A section header runs to the next header or EOF,
+     * matching mpv.conf semantics.
+     */
+    private fun keysFrom(text: String): Set<String> {
+        var inProfileSection = false
+        return text.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .mapNotNull { line ->
+                if (line.startsWith("[") && line.endsWith("]")) {
+                    inProfileSection = true
+                    return@mapNotNull null
+                }
+                if (inProfileSection) return@mapNotNull null
+                val eq = line.indexOf('=')
+                val key = if (eq >= 0) line.substring(0, eq).trim() else line
+                key.takeIf { it.isNotEmpty() && it.startsWith("sub-") && it !in APP_OWNED_ALWAYS }
+            }
+            .toSet()
+    }
 }

@@ -102,6 +102,16 @@ class AppearanceStore constructor(
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
+    /**
+     * The manual layout override (issue #166). Surfaced independently so the
+     * desktop shell can rewire its adaptive locals without collecting (and
+     * recomposing on) the whole appearance aggregate.
+     */
+    val layoutMode: StateFlow<LayoutMode> = appearance
+        .map { it.layoutMode }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), LayoutMode.AUTO)
+
     internal fun read(prefs: Preferences): AppearanceSlice = AppearanceSlice(
         dynamicTheming = PreferenceCodec.readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
         themeMode = readThemeMode(prefs),

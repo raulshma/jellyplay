@@ -223,6 +223,16 @@ object MpvStyleMapping {
     /** Reset magnitude for `sub-scale` (sourced from [DEFAULTS]). */
     val defaultScale: Double = DEFAULTS.SCALE
 
+    /**
+     * `sub-pos` is measured bottom-up in percent while the app's
+     * [SubtitleStyle.verticalPosition] is top-down (0 = top edge). Shared by
+     * both platform engines so the conversion cannot drift — the desktop
+     * engine formerly kept a private untruncated floating-point copy of this
+     * math that rounded differently from Android's integer form.
+     */
+    fun subPosPercent(style: SubtitleStyle): Int =
+        (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
+
 
     private fun colorToMpvHex(color: Int, opacity: Float): String {
         val alpha = (opacity.coerceIn(0f, 1f) * 255).toInt().coerceIn(0, 255)

@@ -183,19 +183,30 @@ fun OnboardingScreen(
                         }
 
                         OnboardingStep.VIDEO_PLAYER -> {
+                            // One binary switch can't express GestureMode's three
+                            // states: re-enabling must restore a TAP_ONLY user's
+                            // choice, not silently upgrade them to ALL.
+                            var lastEnabledGestureMode by remember {
+                                mutableStateOf(preferences.videoGestureMode.takeIf { it != GestureMode.NONE })
+                            }
                             VideoPlayerStep(
                                 preferredPlayer = preferences.preferredPlayer,
                                 streamingQuality = preferences.streamingQuality,
                                 seekDurationMs = preferences.videoSeekDurationMs,
-                                gesturesEnabled = preferences.videoGestureMode != GestureMode.NONE,
+                                gesturesEnabled = preferences.videoGestureMode.tapsEnabled,
                                 defaultOrientation = preferences.videoDefaultOrientation,
                                 autoplayNext = preferences.videoAutoplayNext,
                                 onPreferredPlayerChange = { playerType -> viewModel.edit { it.playback.setPreferredPlayer(playerType) } },
                                 onStreamingQualityChange = { quality -> viewModel.edit { it.playback.setStreamingQuality(quality) } },
                                 onSeekDurationChange = { ms -> viewModel.edit { it.videoPlayer.setVideoSeekDurationMs(ms) } },
                                 onGesturesEnabledChange = { enabled ->
+                                    if (preferences.videoGestureMode != GestureMode.NONE) {
+                                        lastEnabledGestureMode = preferences.videoGestureMode
+                                    }
                                     viewModel.edit {
-                                        it.videoPlayer.setVideoGestureMode(if (enabled) GestureMode.ALL else GestureMode.NONE)
+                                        it.videoPlayer.setVideoGestureMode(
+                                            if (enabled) lastEnabledGestureMode ?: GestureMode.ALL else GestureMode.NONE,
+                                        )
                                     }
                                 },
                                 onDefaultOrientationChange = { mode -> viewModel.edit { it.videoPlayer.setVideoDefaultOrientation(mode) } },

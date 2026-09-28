@@ -70,8 +70,7 @@ class PlayerPrefsSeedTest {
             playbackMode = PlaybackMode.FORCE_TRANSCODE,
         ),
         gestures = GesturePrefsState(
-            tapGesturesEnabled = true,
-            swipeGesturesEnabled = true,
+            gestureMode = GestureMode.ALL,
             holdSpeedEnabled = true,
             holdSpeedMultiplier = 2.0f,
             isHoldSpeedActive = true,
@@ -356,7 +355,7 @@ class PlayerPrefsSeedTest {
     fun gesturesOn_autoplayOn_seedOverAnAllOffReceiver() {
         val base = baseState()
         val offReceiver = base.copy(
-            gestures = base.gestures.copy(tapGesturesEnabled = false, swipeGesturesEnabled = false, holdSpeedEnabled = false),
+            gestures = base.gestures.copy(gestureMode = GestureMode.NONE, holdSpeedEnabled = false),
             autoplay = base.autoplay.copy(videoAutoplayNext = false),
         )
         val agg = VideoPlayerAggregate(

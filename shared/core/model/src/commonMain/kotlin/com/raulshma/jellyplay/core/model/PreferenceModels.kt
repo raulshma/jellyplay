@@ -414,7 +414,13 @@ enum class GestureIndicatorSide(val displayName: String, val constant: String) {
 enum class GestureMode(override val displayName: String, val constant: String) : HasDisplayName {
     ALL("All gestures", "all"),
     TAP_ONLY("Tap only", "tap_only"),
-    NONE("Off", "none"),
+    NONE("Off", "none");
+
+    /** Tap tier: taps, double-tap seek, long-press hold-speed, pinch-zoom. */
+    val tapsEnabled: Boolean get() = this != NONE
+
+    /** Swipe tier: single-finger seek / brightness / volume / edge swipe. */
+    val swipesEnabled: Boolean get() = this == ALL
 }
 
 /**

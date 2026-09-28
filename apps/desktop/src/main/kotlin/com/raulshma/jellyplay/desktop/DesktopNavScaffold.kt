@@ -485,8 +485,8 @@ internal fun DesktopNavScaffold(
         // DeviceClass/InputMode tokens Android's shell does. isTv=false — the
         // TV branch never runs on this shell.
         val appearanceStore: AppearanceStore = koinInject()
-        val appearanceSlice by appearanceStore.appearance.collectAsState()
-        val desktopAdaptiveInfo = appearanceSlice.layoutMode.applyOverride(rememberAdaptiveInfo())
+        val layoutMode by appearanceStore.layoutMode.collectAsState()
+        val desktopAdaptiveInfo = layoutMode.applyOverride(rememberAdaptiveInfo())
         val desktopUiEnvironment = rememberJellyPlayUiEnvironment(
             adaptiveInfo = desktopAdaptiveInfo,
             isTv = false,

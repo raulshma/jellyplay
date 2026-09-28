@@ -2916,8 +2916,7 @@ class VideoPlayerViewModel(
         // same tight semantics as uiPrefs above.
         gestures = GesturePrefsState(
             seekDurationMs = gestures.seekDurationMs,
-            tapGesturesEnabled = gestures.tapGesturesEnabled,
-            swipeGesturesEnabled = gestures.swipeGesturesEnabled,
+            gestureMode = gestures.gestureMode,
             defaultSpeed = gestures.defaultSpeed,
             swipeSeekMaxMs = gestures.swipeSeekMaxMs,
             rememberBrightness = gestures.rememberBrightness,

@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -76,10 +75,30 @@ class MpvUserSubtitleKeysTest {
     }
 
     @Test
-    fun `isOwned mirrors set membership`() {
-        val owned = setOf("sub-pos")
-        assertTrue(MpvUserSubtitleKeys.isOwned("sub-pos", owned))
-        assertFalse(MpvUserSubtitleKeys.isOwned("sub-margin-y", owned))
-        assertFalse(MpvUserSubtitleKeys.isOwned("sub-pos", emptySet()))
+    fun `keys under a profile section are not attributed`() {
+        val owned = MpvUserSubtitleKeys.ownedKeys(
+            """
+                sub-color=#FFFF0000
+                [myprofile]
+                sub-pos=95
+                sub-font-size=80
+                [other]
+                sub-bold=yes
+            """.trimIndent(),
+            null,
+        )
+        // Only the top-level key claims ownership; the section keys would
+        // never be written by the app either, so attributing them would
+        // yield the keys to nobody.
+        assertEquals(setOf("sub-color"), owned)
+    }
+
+    @Test
+    fun `section header in extra config does not stop later top-level conf keys`() {
+        val owned = MpvUserSubtitleKeys.ownedKeys(
+            mpvConfText = "sub-color=green",
+            extraConfigText = "[profile]\nsub-pos=95",
+        )
+        assertEquals(setOf("sub-color"), owned)
     }
 }
