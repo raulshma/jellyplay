@@ -41,9 +41,15 @@ import androidx.navigation3.ui.NavDisplay
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.ServerHealth
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
+import com.raulshma.jellyplay.core.ui.adaptive.applyOverride
+import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalPullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
@@ -471,11 +477,27 @@ internal fun DesktopNavScaffold(
                 consume = {},
             )
         }
+        // Adaptive shell wiring (issue #166): the shared screens previously
+        // rendered against LocalAdaptiveInfo's Compact DEFAULT because this
+        // scaffold never provided it — desktop was permanently phone-layout
+        // regardless of window size. Provide the live measurement (the Compose
+        // window frame) plus the stored layout override, and derive the same
+        // DeviceClass/InputMode tokens Android's shell does. isTv=false — the
+        // TV branch never runs on this shell.
+        val appearanceStore: AppearanceStore = koinInject()
+        val appearanceSlice by appearanceStore.appearance.collectAsState()
+        val desktopAdaptiveInfo = appearanceSlice.layoutMode.applyOverride(rememberAdaptiveInfo())
+        val desktopUiEnvironment = rememberJellyPlayUiEnvironment(
+            adaptiveInfo = desktopAdaptiveInfo,
+            isTv = false,
+        )
         CompositionLocalProvider(
             LocalNetworkStatus provides networkMonitor.networkStatus,
             LocalServerHealth provides serverHealth,
             LocalSurpriseOnLaunch provides surpriseController,
             LocalPullToRefreshRegistry provides refreshRegistry,
+            LocalAdaptiveInfo provides desktopAdaptiveInfo,
+            LocalJellyPlayUi provides desktopUiEnvironment,
             // The shared screens post one-shot messages through the commonMain
             // message.LocalUserMessageBus; provide the SAME bus instance the
             // UserMessageHost above collects, so those messages reach this

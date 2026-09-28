@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_bar_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll
@@ -72,6 +73,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_searc
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_watched_items_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_watched_items_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_layout_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_layout_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_title
@@ -139,6 +142,7 @@ internal object AppearanceSettingsIds {
     const val OLED_MODE = "oled_mode"
     const val CONTRAST = "contrast"
     const val LIBRARY_VIEW_MODE = "library_view_mode"
+    const val LAYOUT_MODE = "layout_mode"
     const val THEME_MUSIC = "theme_music"
     const val NAV_LABELS = "nav_labels"
     const val ACCENT_COLOR = "accent_color"
@@ -300,6 +304,17 @@ internal val AppearanceThemeRowRecords = listOf(
         keywords = listOf("library", "view", "grid", "list", "layout"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.LayoutGrid,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = AppearanceSettingsIds.LAYOUT_MODE,
+        titleRes = Res.string.settings_layout_mode,
+        searchTitleRes = Res.string.ss_layout_mode_title,
+        searchSubtitleRes = Res.string.ss_layout_mode_subtitle,
+        keywords = listOf("layout", "tablet", "phone", "adaptive", "two pane", "window", "compact", "expanded"),
+        route = Route.AppearanceSettings(),
+        icon = Tabler.Outline.Devices,
         isAdvanced = true
     )
 ,

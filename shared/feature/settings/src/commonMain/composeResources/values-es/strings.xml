@@ -396,6 +396,8 @@
     <string name="settings_performance_token">Rendimiento</string>
     <string name="settings_contrast_suffix">Contraste %1$s</string>
     <string name="settings_library_view_mode">Modo de vista de la biblioteca</string>
+    <string name="settings_layout_mode">Diseño</string>
+    <string name="settings_layout_mode_subtitle">Elegir diseño automático, de teléfono o de tablet</string>
     <string name="settings_library_view_grid">Mostrar los elementos en una cuadrícula</string>
     <string name="settings_library_view_list">Mostrar los elementos en una lista</string>
     <string name="settings_library_view_thumb">Mostrar los elementos como miniaturas apaisadas</string>
@@ -1217,6 +1219,8 @@
     <string name="ss_contrast_subtitle">Ajusta el contraste del sistema: estándar, medio o alto</string>
     <string name="ss_library_view_mode_title">Modo de vista de biblioteca</string>
     <string name="ss_library_view_mode_subtitle">Muestra los elementos de la biblioteca en cuadrícula o lista</string>
+    <string name="ss_layout_mode_title">Diseño</string>
+    <string name="ss_layout_mode_subtitle">Forzar el diseño de teléfono o tablet en lugar de seguir el tamaño de la ventana</string>
     <string name="ss_home_mode_title">Modo de inicio</string>
     <string name="ss_home_mode_subtitle">Define el diseño predeterminado de inicio: vídeo o música</string>
     <string name="ss_hero_section_title">Mostrar sección destacada</string>

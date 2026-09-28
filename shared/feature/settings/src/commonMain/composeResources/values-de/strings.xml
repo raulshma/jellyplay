@@ -396,6 +396,8 @@
     <string name="settings_performance_token">Leistung</string>
     <string name="settings_contrast_suffix">%1$s-Kontrast</string>
     <string name="settings_library_view_mode">Mediathek-Ansichtsmodus</string>
+    <string name="settings_layout_mode">Layout</string>
+    <string name="settings_layout_mode_subtitle">Automatisches, Telefon- oder Tablet-Layout wählen</string>
     <string name="settings_library_view_grid">Einträge in einer Rasteransicht anzeigen</string>
     <string name="settings_library_view_list">Einträge in einer Listenansicht anzeigen</string>
     <string name="settings_library_view_thumb">Einträge als Querformat-Vorschaubilder anzeigen</string>
@@ -1215,6 +1217,8 @@
     <string name="ss_contrast_subtitle">Systemkontrast anpassen: Standard, Mittel oder Hoch</string>
     <string name="ss_library_view_mode_title">Mediathek-Ansichtsmodus</string>
     <string name="ss_library_view_mode_subtitle">Mediathekseinträge als Raster oder Liste anzeigen</string>
+    <string name="ss_layout_mode_title">Layout</string>
+    <string name="ss_layout_mode_subtitle">Telefon- oder Tablet-Layout erzwingen statt der Fenstergröße zu folgen</string>
     <string name="ss_home_mode_title">Startseiten-Modus</string>
     <string name="ss_home_mode_subtitle">Standard-Startseitenlayout festlegen: Video oder Musik</string>
     <string name="ss_hero_section_title">Hero-Bereich anzeigen</string>

@@ -417,6 +417,20 @@ enum class GestureMode(override val displayName: String, val constant: String) :
     NONE("Off", "none"),
 }
 
+/**
+ * Manual override for the adaptive window-size layout (issue #166). AUTO
+ * keeps the measured [com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass];
+ * PHONE / TABLET clamp it so phones can opt into the expanded two-pane shell
+ * and tablets into the compact single-pane one, as many apps allow.
+ */
+@Immutable
+@Serializable
+enum class LayoutMode(override val displayName: String, val constant: String) : HasDisplayName {
+    AUTO("Auto", "auto"),
+    PHONE("Phone", "phone"),
+    TABLET("Tablet", "tablet"),
+}
+
 @Immutable
 @Serializable
 enum class PreloadBufferSize(

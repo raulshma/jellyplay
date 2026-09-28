@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -121,6 +122,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_libr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_list
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_masonry
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_thumb
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at_subtitle
@@ -369,6 +372,7 @@ fun AppearanceSettingsScreen(
                         showAdvanced,
                         isDarkActive,
                         isAndroid12,
+                        isTv,
                     ) {
                         buildList {
                             val variant = ThemeVariant.fromId(preferences.themeVariant)
@@ -387,6 +391,9 @@ fun AppearanceSettingsScreen(
                             if (showAdvanced) {
                                 add(AppearanceSettingsIds.CONTRAST)
                                 add(AppearanceSettingsIds.LIBRARY_VIEW_MODE)
+                                // Layout override is touch/desktop-only: the TV
+                                // branch bypasses the width-class fork entirely.
+                                if (!isTv) add(AppearanceSettingsIds.LAYOUT_MODE)
                                 add(AppearanceSettingsIds.THEME_MUSIC)
                                 add(AppearanceSettingsIds.NAV_LABELS)
                                 add(AppearanceSettingsIds.DATE_FORMAT)
@@ -546,6 +553,25 @@ fun AppearanceSettingsScreen(
                                     highlighted = highlightSettingId == AppearanceSettingsIds.LIBRARY_VIEW_MODE,
                                     onClick = {
                                         viewModel.edit { it.library.setLibraryViewMode(preferences.libraryViewMode.next) }
+                                    },
+                                )
+                            }
+                            AppearanceSettingsIds.LAYOUT_MODE -> {
+                                val layoutTitle = rowTitle(AppearanceSettingsIds.LAYOUT_MODE)
+                                SettingListItem(
+                                    icon = Tabler.Outline.Devices,
+                                    title = layoutTitle,
+                                    subtitle = stringResource(Res.string.settings_layout_mode_subtitle),
+                                    trailingText = preferences.layoutMode.displayName,
+                                    highlighted = highlightSettingId == AppearanceSettingsIds.LAYOUT_MODE,
+                                    onClick = {
+                                        activePicker = PickerState.List(
+                                            title = layoutTitle,
+                                            items = LayoutMode.entries,
+                                            label = { it.displayName },
+                                            isSelected = { it == preferences.layoutMode },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setLayoutMode(it) } },
+                                        )
                                     },
                                 )
                             }

@@ -396,6 +396,8 @@
     <string name="settings_performance_token">性能</string>
     <string name="settings_contrast_suffix">%1$s 对比度</string>
     <string name="settings_library_view_mode">媒体库视图模式</string>
+    <string name="settings_layout_mode">布局</string>
+    <string name="settings_layout_mode_subtitle">选择自动、手机或平板布局</string>
     <string name="settings_library_view_grid">以网格布局显示项目</string>
     <string name="settings_library_view_list">以列表布局显示项目</string>
     <string name="settings_library_view_thumb">以横向缩略图显示项目</string>
@@ -1217,6 +1219,8 @@
     <string name="ss_contrast_subtitle">调整系统对比度：标准、中或高</string>
     <string name="ss_library_view_mode_title">媒体库视图模式</string>
     <string name="ss_library_view_mode_subtitle">以网格或列表布局显示媒体库项目</string>
+    <string name="ss_layout_mode_title">布局</string>
+    <string name="ss_layout_mode_subtitle">强制使用手机或平板布局，而不跟随窗口大小</string>
     <string name="ss_home_mode_title">主页模式</string>
     <string name="ss_home_mode_subtitle">设置默认主页屏幕布局：视频或音乐</string>
     <string name="ss_hero_section_title">显示主推板块</string>

@@ -396,6 +396,8 @@
     <string name="settings_performance_token">Prestazioni</string>
     <string name="settings_contrast_suffix">Contrasto %1$s</string>
     <string name="settings_library_view_mode">Modalità vista libreria</string>
+    <string name="settings_layout_mode">Layout</string>
+    <string name="settings_layout_mode_subtitle">Scegli layout automatico, telefono o tablet</string>
     <string name="settings_library_view_grid">Mostra gli elementi in una griglia</string>
     <string name="settings_library_view_list">Mostra gli elementi in un elenco</string>
     <string name="settings_library_view_thumb">Mostra gli elementi come miniature in paesaggio</string>
@@ -1219,6 +1221,8 @@
     <string name="ss_contrast_subtitle">Regola il contrasto di sistema: standard, medio o alto</string>
     <string name="ss_library_view_mode_title">Modalità visualizzazione libreria</string>
     <string name="ss_library_view_mode_subtitle">Mostra gli elementi della libreria in griglia o elenco</string>
+    <string name="ss_layout_mode_title">Layout</string>
+    <string name="ss_layout_mode_subtitle">Forza il layout da telefono o tablet invece di seguire le dimensioni della finestra</string>
     <string name="ss_home_mode_title">Modalità home</string>
     <string name="ss_home_mode_subtitle">Imposta il layout predefinito della home: video o musica</string>
     <string name="ss_hero_section_title">Mostra sezione hero</string>

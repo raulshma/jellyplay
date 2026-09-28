@@ -426,6 +426,7 @@ data class AppearanceScreenPreferences(
     val dateFormatPreference: DateFormatPreference = DateFormatPreference.SYSTEM,
     val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
     val handMode: HandMode = HandMode.RIGHT,
+    val layoutMode: LayoutMode = LayoutMode.AUTO,
     val hapticsEnabled: Boolean = true,
     val scheduledThemeStartHour: Int = 22,
     val scheduledThemeEndHour: Int = 7,

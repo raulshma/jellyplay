@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.adaptive.applyOverride
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.components.BackExitConfirmation
@@ -357,7 +358,12 @@ internal fun MainContent(
     // payloads are already seam UserMessages, so the plain overload.
     rememberShellUserMessages(presentUserMessage, sharedUserMessageBus.messages)
 
-    val adaptiveInfo = rememberAdaptiveInfo()
+    // The manual layout override (issue #166) clamps the measured width class
+    // BEFORE anything consumes it: the shell's isExpanded fork below, the TV/
+    // phone DeviceClass tokens, and every downstream LocalAdaptiveInfo reader
+    // (rail vs bottom bar, two-pane details, grids) all follow the override
+    // from this single site.
+    val adaptiveInfo = preferences.layoutMode.applyOverride(rememberAdaptiveInfo())
     val uiEnvironment = rememberJellyPlayUiEnvironment(
         adaptiveInfo = adaptiveInfo,
         isTv = isTv,

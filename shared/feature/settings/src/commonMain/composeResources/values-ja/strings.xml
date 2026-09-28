@@ -396,6 +396,8 @@
     <string name="settings_performance_token">パフォーマンス</string>
     <string name="settings_contrast_suffix">%1$s コントラスト</string>
     <string name="settings_library_view_mode">ライブラリーの表示モード</string>
+    <string name="settings_layout_mode">レイアウト</string>
+    <string name="settings_layout_mode_subtitle">自動、電話、タブレットのレイアウトを選択</string>
     <string name="settings_library_view_grid">アイテムをグリッドで表示</string>
     <string name="settings_library_view_list">アイテムをリストで表示</string>
     <string name="settings_library_view_thumb">アイテムを横長のサムネイルで表示</string>
@@ -1215,6 +1217,8 @@
     <string name="ss_contrast_subtitle">システムのコントラストを調整します: 標準、中、高</string>
     <string name="ss_library_view_mode_title">ライブラリ表示モード</string>
     <string name="ss_library_view_mode_subtitle">ライブラリアイテムをグリッドまたはリストで表示します</string>
+    <string name="ss_layout_mode_title">レイアウト</string>
+    <string name="ss_layout_mode_subtitle">ウィンドウサイズに従わず、電話またはタブレットのレイアウトを強制します</string>
     <string name="ss_home_mode_title">ホームモード</string>
     <string name="ss_home_mode_subtitle">デフォルトのホーム画面レイアウトを設定します: 動画または音楽</string>
     <string name="ss_hero_section_title">ヒーローセクションを表示</string>

@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
@@ -83,6 +84,7 @@ class AppearanceStore constructor(
         val SCHEDULED_THEME_END_HOUR = intPreferencesKey("scheduled_theme_end_hour")
         val COLOR_BLIND_MODE = stringPreferencesKey("color_blind_mode")
         val HAND_MODE = stringPreferencesKey("hand_mode")
+        val LAYOUT_MODE = stringPreferencesKey("layout_mode")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
     }
@@ -127,6 +129,7 @@ class AppearanceStore constructor(
         scheduledThemeEndHour = PreferenceCodec.readInt(prefs, Keys.SCHEDULED_THEME_END_HOUR, "scheduled_theme_end_hour", 7),
         colorBlindMode = readColorBlindMode(prefs),
         handMode = readHandMode(prefs),
+        layoutMode = readLayoutMode(prefs),
     )
 
     private fun readThemeMode(prefs: Preferences): ThemeMode =
@@ -164,6 +167,9 @@ class AppearanceStore constructor(
 
     private fun readHandMode(prefs: Preferences): HandMode =
         prefs[Keys.HAND_MODE].toEnumOrNull() ?: HandMode.RIGHT
+
+    private fun readLayoutMode(prefs: Preferences): LayoutMode =
+        prefs[Keys.LAYOUT_MODE].toEnumOrNull() ?: LayoutMode.AUTO
 
     // ------------------------------------------------------------------
     // Setters
@@ -278,6 +284,10 @@ class AppearanceStore constructor(
         dataStore.edit { it[Keys.HAND_MODE] = mode.name }
     }
 
+    suspend fun setLayoutMode(mode: LayoutMode) {
+        dataStore.edit { it[Keys.LAYOUT_MODE] = mode.name }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
@@ -307,7 +317,7 @@ class AppearanceStore constructor(
             Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
             Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
             Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
-            Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
+            Keys.COLOR_BLIND_MODE, Keys.HAND_MODE, Keys.LAYOUT_MODE,
         )
         PreferenceResetCategory.MISC_APP -> listOf(
             Keys.HAPTICS_ENABLED,
@@ -353,6 +363,7 @@ class AppearanceStore constructor(
             it[Keys.SCHEDULED_THEME_END_HOUR] = slice.scheduledThemeEndHour
             it[Keys.COLOR_BLIND_MODE] = slice.colorBlindMode.name
             it[Keys.HAND_MODE] = slice.handMode.name
+            it[Keys.LAYOUT_MODE] = slice.layoutMode.name
         }
     }
 }
@@ -390,4 +401,5 @@ data class AppearanceSlice(
     val scheduledThemeEndHour: Int = 7,
     val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
     val handMode: HandMode = HandMode.RIGHT,
+    val layoutMode: LayoutMode = LayoutMode.AUTO,
 )

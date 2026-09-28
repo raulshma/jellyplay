@@ -500,6 +500,8 @@
     <string name="settings_performance_token">Performance</string>
     <string name="settings_contrast_suffix">%1$s contrast</string>
     <string name="settings_library_view_mode">Library View Mode</string>
+    <string name="settings_layout_mode">Layout</string>
+    <string name="settings_layout_mode_subtitle">Choose auto, phone, or tablet layout</string>
     <string name="settings_library_view_grid">Display items in a grid layout</string>
     <string name="settings_library_view_list">Display items in a list layout</string>
     <string name="settings_library_view_thumb">Display items as landscape thumbnails</string>
@@ -1466,6 +1468,8 @@
     <string name="ss_contrast_subtitle">Adjust system contrast: standard, medium, or high</string>
     <string name="ss_library_view_mode_title">Library View Mode</string>
     <string name="ss_library_view_mode_subtitle">Display library items in grid or list layouts</string>
+    <string name="ss_layout_mode_title">Layout</string>
+    <string name="ss_layout_mode_subtitle">Force the phone or tablet layout instead of following the window size</string>
     <string name="ss_home_mode_title">Home Mode</string>
     <string name="ss_home_mode_subtitle">Set default home screen layout: video or music</string>
     <string name="ss_hero_section_title">Show Hero Section</string>

@@ -396,6 +396,8 @@
     <string name="settings_performance_token">성능</string>
     <string name="settings_contrast_suffix">%1$s 대비</string>
     <string name="settings_library_view_mode">라이브러리 보기 모드</string>
+    <string name="settings_layout_mode">레이아웃</string>
+    <string name="settings_layout_mode_subtitle">자동, 휴대전화 또는 태블릿 레이아웃 선택</string>
     <string name="settings_library_view_grid">항목을 격자 레이아웃으로 표시</string>
     <string name="settings_library_view_list">항목을 목록 레이아웃으로 표시</string>
     <string name="settings_library_view_thumb">항목을 가로 섬네일로 표시</string>
@@ -1215,6 +1217,8 @@
     <string name="ss_contrast_subtitle">시스템 대비를 조정합니다: 표준, 중간, 높음</string>
     <string name="ss_library_view_mode_title">라이브러리 보기 모드</string>
     <string name="ss_library_view_mode_subtitle">라이브러리 항목을 그리드 또는 목록 레이아웃으로 표시합니다</string>
+    <string name="ss_layout_mode_title">레이아웃</string>
+    <string name="ss_layout_mode_subtitle">창 크기를 따르지 않고 휴대전화 또는 태블릿 레이아웃을 강제합니다</string>
     <string name="ss_home_mode_title">홈 모드</string>
     <string name="ss_home_mode_subtitle">기본 홈 화면 레이아웃을 설정합니다: 비디오 또는 음악</string>
     <string name="ss_hero_section_title">히어로 섹션 표시</string>
