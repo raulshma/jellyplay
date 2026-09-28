@@ -63,6 +63,8 @@ class MediaFilterSheetSectionsTest {
             minRating = 3.5f,
             isResumable = true,
             isDownloaded = false,
+            hasSubtitles = true,
+            hasTrailer = false,
         )
 
         assertEquals(
@@ -76,6 +78,8 @@ class MediaFilterSheetSectionsTest {
                 minRating = 3.5f,
                 isResumable = true,
                 isDownloaded = null,
+                hasSubtitles = true,
+                hasTrailer = null,
             ),
             draft.appliedTo(LibraryFilters(), LibraryFilterSheetSections),
         )
@@ -90,6 +94,7 @@ class MediaFilterSheetSectionsTest {
             playedStatus = PlayedStatus.UNPLAYED,
             isResumable = true,
             isDownloaded = null,
+            hasSubtitles = true,
         )
         val draft = MediaFilterDraft(current)
             .withGenreToggled("Action")
@@ -102,6 +107,7 @@ class MediaFilterSheetSectionsTest {
                 sortBy = SortOption.DATE_ADDED,
                 playedStatus = PlayedStatus.UNPLAYED,
                 isResumable = true,
+                hasSubtitles = true,
             ),
             draft.appliedTo(current, SearchFilterSheetSections),
         )
@@ -134,6 +140,21 @@ class MediaFilterSheetSectionsTest {
         val applied = draft.appliedTo(LibraryFilters(), LibraryFilterSheetSections)
         assertNull(applied.isResumable)
         assertNull(applied.isDownloaded)
+        assertNull(applied.hasSubtitles)
+        assertNull(applied.hasTrailer)
+    }
+
+    @Test
+    fun `presence toggles flip independently and seed from the current filters`() {
+        val draft = MediaFilterDraft(LibraryFilters(hasSubtitles = true))
+            .withHasTrailerToggled()
+
+        assertEquals(true, draft.hasSubtitles)
+        assertEquals(true, draft.hasTrailer)
+
+        val untoggled = draft.withHasSubtitlesToggled()
+        assertEquals(false, untoggled.hasSubtitles)
+        assertEquals(true, untoggled.hasTrailer)
     }
 
     @Test
@@ -148,6 +169,8 @@ class MediaFilterSheetSectionsTest {
             minRating = 3.5f,
             isResumable = true,
             isDownloaded = true,
+            hasSubtitles = true,
+            hasTrailer = true,
         )
 
         assertEquals(

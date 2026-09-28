@@ -239,4 +239,61 @@ class AdminApiClientImplTest {
         assertEquals("/System/Logs/Log", request.pathTemplate)
         assertEquals("server-6381.log", request.queryParameters["name"])
     }
+
+    // ── Backups: the raw-path request shapes (the /System/Logs/Log hatch) ──
+
+    @Test
+    fun `listBackups issues GET Backup and decodes the manifest array`() = runTest {
+        client.nextBody = """
+            [{"backupEngineVersion":"1.0.0.0","dateCreated":"2026-09-28T10:15:00Z",
+              "options":{"metadata":true,"trickplay":false,"subtitles":true,"database":true},
+              "path":"/backups/jf.zip","serverVersion":"10.11.2"}]
+        """.trimIndent()
+
+        val backups = admin.listBackups().getOrThrow()
+
+        val request = client.requests.single()
+        assertEquals("GET", request.method)
+        assertEquals("/Backup", request.pathTemplate)
+        val backup = backups.single()
+        assertEquals("/backups/jf.zip", backup.path)
+        assertEquals("10.11.2", backup.serverVersion)
+        assertEquals(true, backup.options.database)
+        assertEquals(false, backup.options.trickplay)
+    }
+
+    @Test
+    fun `createBackup posts Backup-Create with the component options body`() = runTest {
+        client.nextBody = """{"path":"/backups/new.zip","serverVersion":"10.11.2"}"""
+
+        val created = admin.createBackup(
+            com.raulshma.jellyplay.core.model.BackupComponentOptions(
+                metadata = true,
+                trickplay = false,
+                subtitles = true,
+                database = true,
+            ),
+        ).getOrThrow()
+
+        val request = client.requests.single()
+        assertEquals("POST", request.method)
+        assertEquals("/Backup/Create", request.pathTemplate)
+        val body = request.requestBody as BackupOptionsDto
+        assertEquals(true, body.metadata)
+        assertEquals(false, body.trickplay)
+        assertEquals(true, body.subtitles)
+        assertEquals(true, body.database)
+        assertEquals("/backups/new.zip", created.path)
+    }
+
+    @Test
+    fun `restoreBackup posts Backup-Restore naming the archive`() = runTest {
+        admin.restoreBackup("jellyfin-20260928.zip").getOrThrow()
+
+        val request = client.requests.single()
+        assertEquals("POST", request.method)
+        assertEquals("/Backup/Restore", request.pathTemplate)
+        val body = request.requestBody as BackupRestoreRequestDto
+        assertEquals("jellyfin-20260928.zip", body.archiveFileName)
+    }
 }

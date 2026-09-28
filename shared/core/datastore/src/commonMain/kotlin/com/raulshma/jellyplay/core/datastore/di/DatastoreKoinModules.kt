@@ -105,6 +105,8 @@ val datastoreCommonModule = module {
         DownloadsStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
             get(DatastoreQualifiers.applicationScope),
+            // The per-user auto-download allow-list namespace (u_<userId>::).
+            get<ServerIdentityStore>(),
         )
     }
 

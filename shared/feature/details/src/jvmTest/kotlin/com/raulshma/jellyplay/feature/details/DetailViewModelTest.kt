@@ -220,6 +220,7 @@ class DetailViewModelTest {
             ),
             metadataAdmin = MetadataAdminActions.Factory(
                 editorRepository = mockk<MetadataEditorRepository>(relaxed = true),
+                mediaRepository = mockk(relaxed = true),
                 authRepository = mockk<AuthRepository>(relaxed = true),
             ),
         )

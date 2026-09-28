@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.arrqueue.di
 
 import com.raulshma.jellyplay.feature.arrqueue.ArrQueueViewModel
+import com.raulshma.jellyplay.feature.arrqueue.ReleaseSearchViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -29,6 +30,13 @@ val arrqueueModule: Module = module {
         ArrQueueViewModel(
             arrRepository = get(),
             experimentalGate = get(),
+        )
+    }
+    // The release sheet's driver over the ArrReleaseOperations seam (the
+    // dataSeerrArrModule binding over ArrRepositoryImpl).
+    viewModel {
+        ReleaseSearchViewModel(
+            arrReleaseOperations = get(),
         )
     }
 }

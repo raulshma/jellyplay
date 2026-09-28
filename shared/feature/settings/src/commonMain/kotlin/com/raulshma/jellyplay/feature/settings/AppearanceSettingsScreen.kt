@@ -151,6 +151,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_over
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
@@ -161,6 +162,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
@@ -780,6 +783,24 @@ fun AppearanceSettingsScreen(
                         checked = preferences.skipSpecials,
                         highlighted = highlightSettingId == AppearanceSettingsIds.SKIP_SPECIALS,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setSkipSpecials(it) } },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Eye,
+                        title = rowTitle(AppearanceSettingsIds.SHOW_MISSING_EPISODES),
+                        subtitle = stringResource(Res.string.settings_show_missing_episodes_subtitle),
+                        checked = preferences.showMissingEpisodes,
+                        highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_MISSING_EPISODES,
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setShowMissingEpisodes(it) } },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Photo,
+                        title = rowTitle(AppearanceSettingsIds.PREFER_LOGOS),
+                        subtitle = stringResource(Res.string.settings_prefer_logos_subtitle),
+                        checked = preferences.preferLogos,
+                        highlighted = highlightSettingId == AppearanceSettingsIds.PREFER_LOGOS,
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setPreferLogos(it) } },
                     )
 
                     SettingToggleItem(

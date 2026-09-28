@@ -99,6 +99,12 @@ class MetadataEditorRepositoryImpl constructor(
     override suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean): Result<Unit> =
         metadataApiClient.applyIdentifyResult(itemId, result, replaceAllImages)
 
+    override suspend fun mergeVersions(itemIds: List<String>): Result<Unit> =
+        metadataApiClient.mergeVersions(itemIds)
+
+    override suspend fun splitVersions(itemId: String): Result<Unit> =
+        metadataApiClient.splitVersions(itemId)
+
     override fun getItemImageUrl(
         itemId: String,
         imageType: String,

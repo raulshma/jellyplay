@@ -20,6 +20,7 @@ import org.jellyfin.sdk.model.api.NameGuidPair
 import org.jellyfin.sdk.model.api.UploadSubtitleDto
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.model.toFileInfo
+import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
 
 class MetadataApiClientImpl(
@@ -224,6 +225,34 @@ class MetadataApiClientImpl(
                     searchProviderName = result.searchProviderName,
                     overview = result.overview,
                 ),
+        )
+    }
+
+    // ── Version group/split (jellyfin-web parity, admin) ────────────────
+    // The Jellyfin SDK has no typed API for either endpoint, so both ride the
+    // raw-path escape hatch (the AdminApiClientImpl /System/Logs/Log
+    // precedent). Both endpoints require elevation — the server 403s
+    // non-admins; the UI gates the entries on the same isAdmin seam.
+
+    override suspend fun mergeVersions(itemIds: List<String>): Result<Unit> {
+        // Fail fast on a degenerate call: the server rejects < 2 ids with 400,
+        // and a client-side guard keeps the error message local.
+        if (itemIds.size < 2) {
+            throw IllegalArgumentException("mergeVersions requires at least 2 item ids")
+        }
+        return engine.withApi { api ->
+            api.request(
+                method = HttpMethod.POST,
+                pathTemplate = MERGE_VERSIONS_PATH,
+                queryParameters = mapOf(MERGE_VERSIONS_IDS_QUERY to mergeVersionsIdsValue(itemIds)),
+            )
+        }
+    }
+
+    override suspend fun splitVersions(itemId: String): Result<Unit> = engine.withApi { api ->
+        api.request(
+            method = HttpMethod.DELETE,
+            pathTemplate = splitVersionsPath(itemId),
         )
     }
 
@@ -450,3 +479,16 @@ private fun org.jellyfin.sdk.model.api.RemoteImageInfo.toAppRemoteImageInfo(): R
     voteCount = voteCount,
     ratingType = ratingType.serialName.hashCode(),
 )
+
+// ── Merge/Split raw-path request shapes (pure, jvmTest-covered) ─────────
+// Extracted so the wire contract — path template + comma-joined ids query —
+// has a direct test surface without an engine.
+
+internal const val MERGE_VERSIONS_PATH: String = "/Videos/MergeVersions"
+internal const val MERGE_VERSIONS_IDS_QUERY: String = "ids"
+
+/** The `ids` query value: the item ids comma-joined in call order. */
+internal fun mergeVersionsIdsValue(itemIds: List<String>): String = itemIds.joinToString(",")
+
+/** The split path template: `/Videos/{itemId}/AlternateSources`. */
+internal fun splitVersionsPath(itemId: String): String = "/Videos/$itemId/AlternateSources"

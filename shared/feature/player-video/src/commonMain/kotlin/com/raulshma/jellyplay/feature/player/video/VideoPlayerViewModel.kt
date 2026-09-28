@@ -208,6 +208,14 @@ class VideoPlayerViewModel(
     private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
+    /**
+     * The app-wide now-playing seam (feature 4.2): the session manager
+     * publishes loads through it; this VM owns the end/stop events
+     * ([NowPlayingReporter.markEnded] on the session's PlaybackEnded,
+     * [NowPlayingReporter.clear] on the full release — NOT on the per-item
+     * re-initialization, where the session manager's release also runs).
+     */
+    private val nowPlayingReporter: com.raulshma.jellyplay.core.data.playback.NowPlayingReporter,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
@@ -360,6 +368,23 @@ class VideoPlayerViewModel(
         offlineMediaProbe = platform.offlineMediaProbe,
         offlineModeManager = offlineModeManager,
         userMessageBus = userMessageBus,
+        // Preferred-version memory: item scope wins over series scope, the
+        // same precedence the ItemPlaybackPreferenceResolver applies to the
+        // language rows. Consulted by loadOnline before the first-sources
+        // fallback.
+        getPreferredMediaSourceId = { itemId, seriesId ->
+            itemPlaybackPreferenceRepository.get(
+                com.raulshma.jellyplay.core.model.PlaybackPrefScope.ITEM,
+                itemId,
+            )?.preferredMediaSourceId
+                ?: seriesId?.let {
+                    itemPlaybackPreferenceRepository.get(
+                        com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
+                        it,
+                    )?.preferredMediaSourceId
+                }
+        },
+        nowPlayingReporter = nowPlayingReporter,
     )
 
     // ── Engine-event orchestration ──────────────────────────────────────────
@@ -604,6 +629,63 @@ class VideoPlayerViewModel(
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
 
     /**
+     * The "Still watching?" confirm overlay's state (feature 1.3); `null` =
+     * hidden. Raised by the end-of-playback gate ([handlePlaybackEnded], the
+     * episode arm) and by the session's hours arm
+     * (`SessionEvent.StillWatchingPrompt`); answered via
+     * [continueStillWatching] / [stopStillWatching], auto-dismissed (as Stop)
+     * by [tickStillWatching]. The screen collects this at the overlay tier.
+     */
+    private val _stillWatchingPrompt = kotlinx.coroutines.flow.MutableStateFlow<StillWatchingPromptState?>(null)
+    val stillWatchingPrompt: kotlinx.coroutines.flow.StateFlow<StillWatchingPromptState?> = _stillWatchingPrompt
+
+    /** Raises the confirm overlay with the up-next countdown as its auto-dismiss budget. */
+    private fun showStillWatchingPrompt(reason: StillWatchingReason) {
+        _stillWatchingPrompt.value = StillWatchingPromptState.forReason(
+            reason = reason,
+            countdownSeconds = _uiState.value.autoplay.autoPlayCountdownSec,
+        )
+    }
+
+    /**
+     * "Still watching?" → Continue: the counter resets and the requested arm
+     * proceeds — the episode arm advances to the next episode, the hours arm
+     * resumes the (session-paused) engine.
+     */
+    private fun continueStillWatching() {
+        val reason = _stillWatchingPrompt.value?.reason
+        _stillWatchingPrompt.value = null
+        autoplayController.onUserInteraction()
+        when (reason) {
+            StillWatchingReason.EPISODE_COUNT -> episodeContinuation.playNextEpisode()
+            StillWatchingReason.HOURS_IDLE, null -> resumePlayback()
+        }
+    }
+
+    /**
+     * "Still watching?" → Stop (and the overlay's expiry route): pause and
+     * cancel autoplay — no answer means stop autoplaying. Reuses the Up Next
+     * overlay's cancel funnel so the decision clock AND its uiState mirror
+     * flip together.
+     */
+    private fun stopStillWatching() {
+        _stillWatchingPrompt.value = null
+        playerSessionManager.engine?.pause()
+        episodeContinuation.cancelAutoplay()
+    }
+
+    /** The overlay's once-per-second auto-dismiss tick; expiry is a Stop. */
+    private fun tickStillWatching() {
+        val current = _stillWatchingPrompt.value ?: return
+        val next = current.tick()
+        if (next == null) {
+            stopStillWatching()
+        } else {
+            _stillWatchingPrompt.value = next
+        }
+    }
+
+    /**
      * The single command funnel (the AudioPlayerUiEvent / AudioPlayerViewModel
      * `.onEvent` precedent): every user intent the screen expresses arrives as
      * a [VideoPlayerUiEvent] and routes once here to a private handler — the
@@ -617,14 +699,23 @@ class VideoPlayerViewModel(
      */
     fun onEvent(event: VideoPlayerUiEvent) {
         when (event) {
-            is VideoPlayerUiEvent.Initialize -> initialize(
-                itemId = event.itemId,
-                mediaSourceId = event.mediaSourceId,
-                startPositionTicks = event.startPositionTicks,
-                subtitleStreamIndex = event.subtitleStreamIndex,
-                audioStreamIndex = event.audioStreamIndex,
-            )
-            is VideoPlayerUiEvent.PlayEpisode -> episodeContinuation.playEpisode(event.episodeId, event.startPositionTicks)
+            is VideoPlayerUiEvent.Initialize -> {
+                // A user-driven player open: the still-watching streak starts
+                // fresh (auto-advance loads bypass onEvent and keep it).
+                autoplayController.onUserInteraction()
+                initialize(
+                    itemId = event.itemId,
+                    mediaSourceId = event.mediaSourceId,
+                    startPositionTicks = event.startPositionTicks,
+                    subtitleStreamIndex = event.subtitleStreamIndex,
+                    audioStreamIndex = event.audioStreamIndex,
+                )
+            }
+            is VideoPlayerUiEvent.PlayEpisode -> {
+                // Manual episode navigation resets the still-watching streak.
+                autoplayController.onUserInteraction()
+                episodeContinuation.playEpisode(event.episodeId, event.startPositionTicks)
+            }
             is VideoPlayerUiEvent.RestartPlayback -> restartPlayback()
             is VideoPlayerUiEvent.RetryPlayback -> retryPlayback()
             is VideoPlayerUiEvent.RetryWithEngine -> retryWithEngine(event.playerType)
@@ -644,9 +735,21 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.ApplySubtitleStyle -> subtitleFont.applySubtitleStyle()
             is VideoPlayerUiEvent.UpdatePipSourceRect ->
                 pipTransport.updatePipSourceRect(event.left, event.top, event.right, event.bottom)
-            is VideoPlayerUiEvent.PlayPreviousEpisode -> episodeContinuation.playPreviousEpisode()
-            is VideoPlayerUiEvent.PlayNextEpisode -> episodeContinuation.playNextEpisode()
-            is VideoPlayerUiEvent.MarkWatchedAndSkip -> episodeContinuation.markWatchedAndSkip()
+            is VideoPlayerUiEvent.PlayPreviousEpisode -> {
+                // Manual navigation: the still-watching streak restarts.
+                autoplayController.onUserInteraction()
+                episodeContinuation.playPreviousEpisode()
+            }
+            is VideoPlayerUiEvent.PlayNextEpisode -> {
+                // Manual navigation: the still-watching streak restarts.
+                autoplayController.onUserInteraction()
+                episodeContinuation.playNextEpisode()
+            }
+            is VideoPlayerUiEvent.MarkWatchedAndSkip -> {
+                // A deliberate user advance — resets the still-watching streak.
+                autoplayController.onUserInteraction()
+                episodeContinuation.markWatchedAndSkip()
+            }
             is VideoPlayerUiEvent.MarkUnwatchedAndQuit -> episodeContinuation.markUnwatchedAndQuit()
             is VideoPlayerUiEvent.ToggleDialogueBoost -> toggleDialogueBoost()
             is VideoPlayerUiEvent.SetDialogueBoostStrength -> setDialogueBoostStrength(event.strength)
@@ -661,6 +764,8 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SelectSubtitleTrack -> selectSubtitleTrack(event.option)
             is VideoPlayerUiEvent.ResetAudioTrack -> resetAudioTrack()
             is VideoPlayerUiEvent.ResetSubtitleTrack -> resetSubtitleTrack()
+            is VideoPlayerUiEvent.SelectMediaSource -> selectMediaSource(event.mediaSourceId)
+            is VideoPlayerUiEvent.SetPreferredMediaVersion -> setPreferredMediaVersion(event.remember)
             is VideoPlayerUiEvent.SetSeriesAudioLanguagePreference ->
                 setSeriesAudioLanguagePreference(event.language)
             is VideoPlayerUiEvent.SetSeriesSubtitlePreference ->
@@ -678,6 +783,9 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.ClearRenderOverride -> clearRenderOverride()
             is VideoPlayerUiEvent.CycleDeinterlace -> cycleDeinterlace()
             is VideoPlayerUiEvent.CancelAutoplay -> episodeContinuation.cancelAutoplay()
+            is VideoPlayerUiEvent.StillWatchingContinue -> continueStillWatching()
+            is VideoPlayerUiEvent.StillWatchingStop -> stopStillWatching()
+            is VideoPlayerUiEvent.StillWatchingTick -> tickStillWatching()
             is VideoPlayerUiEvent.SetVideoAutoplayNext -> setVideoAutoplayNext(event.enabled)
             is VideoPlayerUiEvent.SetSyncPlayRepeatMode -> setSyncPlayRepeatMode(event.mode)
             is VideoPlayerUiEvent.SetSyncPlayShuffleMode -> setSyncPlayShuffleMode(event.mode)
@@ -745,6 +853,11 @@ class VideoPlayerViewModel(
         // session's position store) + the coalesced offline-mirror write are
         // session-owned since B3; the display write and the engine command
         // stay here.
+        if (userInitiated) {
+            // A user-initiated seek resets the pass-out interaction clock and
+            // feeds the still-watching counter through the same signal.
+            playbackSession.engineEventCoordinator.onUserInteraction()
+        }
         val effectiveTargetMs = if (userInitiated) {
             resolveForwardSeekSegmentClamp(
                 targetMs = positionMs,
@@ -777,6 +890,9 @@ class VideoPlayerViewModel(
      * go through here. [direction] < 0 steps back, anything else forward.
      */
     private fun seekByStep(direction: Int) {
+        // User-initiated step: resets the interaction clock + the
+        // still-watching counter (the SyncPlay/cast arms bypass seekTo).
+        playbackSession.engineEventCoordinator.onUserInteraction()
         val engine = playerSessionManager.engine
         val target = stepSeekTargetMs(
             direction = direction,
@@ -988,6 +1104,9 @@ class VideoPlayerViewModel(
 
         override fun resetForNewItem(selection: MediaStreamSelection) {
             autoplayController.resetForNewItem()
+            // Defensive: a prompt can never survive an item switch (its own
+            // Continue/Stop arms clear it first; this catches a racing load).
+            _stillWatchingPrompt.value = null
             _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = false)) }
             // Coordinator fallback-latch reset — a pure latch flip that ran
             // between the (session-owned) seek-latch and Stop-dedup resets in
@@ -1083,6 +1202,7 @@ class VideoPlayerViewModel(
             },
             onSessionPrefsApplied = { agg ->
                 autoplayController.setEnabled(agg.videoPlayer.videoAutoplayNext)
+                autoplayController.setStillWatchingThreshold(agg.videoPlayer.stillWatchingEpisodeThreshold)
             },
             restoreRememberedMuted = { agg ->
                 if (agg.videoPlayer.videoRememberMuted && agg.videoPlayer.videoMuted) {
@@ -1221,6 +1341,9 @@ class VideoPlayerViewModel(
             getString(Res.string.player_direct_play_fallback, errorText)
         },
         passOutHours = _uiState.flow.map { it.uiPrefs.passOutProtectionHours }.distinctUntilChanged(),
+        upgradesPassOutToOverlay = {
+            StillWatchingGate.upgradesPassOutToOverlay(cachedAggregate.videoPlayer.stillWatchingMode)
+        },
         onEngineEventCoordinatorRearmed = { startEngineEventCoordinatorOutputs() },
     )
 
@@ -1575,6 +1698,11 @@ class VideoPlayerViewModel(
                     SessionEvent.ClosePlayerRequested -> _closePlayer.trySend(Unit)
                     SessionEvent.PassOutPause ->
                         _passOutEvents.trySend("Playback paused — pass-out protection")
+                    is SessionEvent.StillWatchingPrompt ->
+                        // The session's hours arm: the engine is already
+                        // paused; the overlay's Continue resumes, Stop keeps
+                        // it paused and cancels autoplay.
+                        showStillWatchingPrompt(event.reason)
                 }
             }
         }
@@ -1607,6 +1735,12 @@ class VideoPlayerViewModel(
                 val oldAggregate = cachedAggregate
                 cachedAggregate = agg
                 prefsFanout.onAggregateChanged(oldAggregate, agg)
+                // Still-watching threshold seed (feature 1.3) — the
+                // change-time counterpart of onSessionPrefsApplied, the same
+                // diff-guard the fanout's controller seeds use.
+                if (oldAggregate.videoPlayer.stillWatchingEpisodeThreshold != agg.videoPlayer.stillWatchingEpisodeThreshold) {
+                    autoplayController.setStillWatchingThreshold(agg.videoPlayer.stillWatchingEpisodeThreshold)
+                }
             }
         }
         launch {
@@ -1829,6 +1963,15 @@ class VideoPlayerViewModel(
                     }
                 }
             }
+            launch {
+                // Step 4's interaction signal (feature 1.3): every
+                // user-initiated play/pause/seek/speed command and screen
+                // interaction routes through the coordinator's ONE intake;
+                // this collector feeds the same signal to the still-watching
+                // episode counter (the pass-out clock is reset inside the
+                // intake itself).
+                coordinator.userInteractions.collect { autoplayController.onUserInteraction() }
+            }
         }
     }
 
@@ -1855,6 +1998,10 @@ class VideoPlayerViewModel(
      * longer route a press to a stale target.
      */
     private fun routedPlay(play: Boolean) {
+        // A user-initiated play/pause: reset the pass-out interaction clock
+        // (previously only the resume transition reset it) — the episode
+        // counter rides the same signal (feature 1.3).
+        playbackSession.engineEventCoordinator.onUserInteraction()
         when {
             _uiState.value.isInSyncPlaySession -> syncPlay.togglePlayPause()
             cast.isConnectedFlow.value -> if (play) cast.castPlay() else cast.castPause()
@@ -1988,6 +2135,9 @@ class VideoPlayerViewModel(
     }
 
     private fun setPlaybackSpeed(speed: Float) {
+        // A user-initiated speed change resets the pass-out interaction clock
+        // and feeds the still-watching counter through the same signal.
+        playbackSession.engineEventCoordinator.onUserInteraction()
         _uiState.update { it.copy(playbackSpeed = speed) }
         playerSessionManager.engine?.setPlaybackSpeed(speed)
     }
@@ -2030,6 +2180,33 @@ class VideoPlayerViewModel(
      */
     private fun reloadForStreamChange(selection: MediaStreamSelection) {
         playbackSession.reloadForStreamChange(selection)
+    }
+
+    /**
+     * Switches the playing version (media source) of the current item — the
+     * Version sheet's pick. Thin delegate to
+     * [PlaybackSession.switchMediaSource], which swaps at the current
+     * position via `PlayerSessionManager.switchMediaSource`.
+     */
+    private fun selectMediaSource(mediaSourceId: String) {
+        playbackSession.switchMediaSource(mediaSourceId)
+    }
+
+    /**
+     * Saves/clears the "remember this version" preference for the current
+     * item/series. Remembering pins the CURRENT media source id (SERIES scope
+     * for an episode, ITEM scope for a standalone movie); forgetting clears
+     * both scopes so no leftover row keeps winning.
+     */
+    private fun setPreferredMediaVersion(remember: Boolean) {
+        if (remember) {
+            val currentSourceId = playerSessionManager.sessionState.value.currentMediaSource?.id
+            if (currentSourceId != null) {
+                playbackPreferenceWriter.setPreferredMediaSource(currentSourceId)
+            }
+        } else {
+            playbackPreferenceWriter.clearPreferredMediaSource()
+        }
     }
 
     private fun resetAudioTrack() {
@@ -2406,9 +2583,27 @@ class VideoPlayerViewModel(
     // EpisodeContinuationController; the CancelAutoplay arm above routes to it.
 
     private fun handlePlaybackEnded() {
+        // The app-wide now-playing seam's Ended event (feature 4.2): a
+        // genuine end-of-stream, fired before the autoplay/advance decision
+        // so shell hooks see ended-then-started for an auto-advance chain.
+        nowPlayingReporter.markEnded()
         val next = _uiState.value.episodes.nextEpisode
         if (autoplayController.shouldAutoPlayNext(next)) {
-            episodeContinuation.playNextEpisode()
+            // "Still watching?" gate (feature 1.3, episode arm): when the
+            // unattended streak reached the armed threshold (mode
+            // EPISODES/BOTH, no SyncPlay — group pacing wins), raise the
+            // confirm overlay INSTEAD of advancing; no answer stops autoplay.
+            if (StillWatchingGate.shouldPrompt(
+                    mode = cachedAggregate.videoPlayer.stillWatchingMode,
+                    episodeCheck = autoplayController.needsStillWatchingCheck(),
+                    isInSyncPlaySession = _uiState.value.isInSyncPlaySession,
+                )
+            ) {
+                showStillWatchingPrompt(StillWatchingReason.EPISODE_COUNT)
+            } else {
+                autoplayController.recordAutoAdvance()
+                episodeContinuation.playNextEpisode()
+            }
         } else {
             onEndedWithNoNext()
         }
@@ -2845,6 +3040,12 @@ class VideoPlayerViewModel(
     }
 
     private fun performRelease() {
+        // The now-playing seam's Stopped event (feature 4.2): the FULL
+        // teardown — not the per-item re-initialization, which shares
+        // [PlaybackSession]'s internals release — abandons playback without
+        // an end-of-stream, so the shell-level consumers (Discord presence,
+        // hooks) drop the activity here.
+        nowPlayingReporter.clear()
         pipController.requestAutoEnterPip(false)
         // Tear down the engine-event collectors BEFORE the engine is released so
         // no policy observes a released engine mid-teardown (the decisions

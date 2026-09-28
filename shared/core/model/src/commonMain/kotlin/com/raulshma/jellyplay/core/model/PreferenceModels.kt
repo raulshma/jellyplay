@@ -102,6 +102,34 @@ enum class PlayerType(val displayName: String, val description: String) {
     }
 }
 
+/**
+ * Which third-party player app the external hand-off targets when
+ * [PlayerType.EXTERNAL] is the preferred player. `SYSTEM_CHOOSER` (the
+ * default) keeps the historical `Intent.createChooser` hand-off; every other
+ * arm carries the per-player launch component (`packageName`/`activity`) the
+ * shell targets directly when the app is installed — falling back to the
+ * chooser when it is not (the jellyfin-android auto-revert pattern).
+ */
+@Immutable
+@Serializable
+enum class ExternalPlayerApp(
+    val displayName: String,
+    val packageName: String,
+    /** Launch activity class name; `null` for the chooser arm. */
+    val activity: String?,
+) {
+    SYSTEM_CHOOSER("Ask every time", "", null),
+    MPV("mpv-android", "is.xyz.mpv", "is.xyz.mpv.MPVActivity"),
+    MX_PLAYER_FREE("MX Player", "com.mxtech.videoplayer.ad", "com.mxtech.videoplayer.ActivityScreen"),
+    MX_PLAYER_PRO("MX Player Pro", "com.mxtech.videoplayer.pro", "com.mxtech.videoplayer.ActivityScreen"),
+    VLC("VLC", "org.videolan.vlc", "org.videolan.vlc.StartActivity"),
+    MPV_KT("mpvKt", "live.mehiz.mpvkt", "live.mehiz.mpvkt.ui.player.PlayerActivity"),
+    ;
+
+    /** True when this arm carries a concrete launch component to resolve. */
+    val isTargeted: Boolean get() = activity != null
+}
+
 @Immutable
 @Serializable
 data class SubtitleStyle(
@@ -244,6 +272,93 @@ enum class LiveStreamOption(override val displayName: String) : HasDisplayName {
     AUTO("Auto"),
     DIRECT_STREAM("Direct Stream"),
     TRANSCODE("Transcode"),
+}
+
+/**
+ * Which copy serves playback when an item both has a completed download and
+ * a reachable server. `PREFER_DOWNLOADED` is the historical behaviour (the
+ * local file always wins); `PREFER_STREAMING` plays the server copy instead
+ * whenever the device is online. Offline mode is untouched: with no server
+ * to stream from, a usable download always plays.
+ */
+@Immutable
+@Serializable
+enum class OfflinePlaybackPreference(override val displayName: String) : HasDisplayName {
+    PREFER_DOWNLOADED("Prefer Downloaded"),
+    PREFER_STREAMING("Prefer Streaming"),
+}
+
+/**
+ * Which "Still watching?" trigger arms are on. The episode arm asks for
+ * confirmation after N consecutive auto-played episodes; the hours arm
+ * upgrades the pre-existing pass-out protection's silent pause into the same
+ * confirm overlay (the hours value stays the `video_pass_out_protection_hours`
+ * key — one setting surface, two triggers). [OFF] keeps both silent.
+ */
+@Immutable
+@Serializable
+enum class StillWatchingMode(override val displayName: String) : HasDisplayName {
+    OFF("Off"),
+    EPISODES("Episodes"),
+    HOURS("Hours"),
+    BOTH("Episodes & Hours"),
+}
+
+/**
+ * One toggle of the per-codec audio-passthrough allow-list. The master
+ * `audio_passthrough` boolean gates passthrough as a whole; each codec here
+ * decides whether THAT codec may be bitstreamed raw to the receiver (a
+ * disabled codec is dropped from the engine's passthrough list and from the
+ * server profile's direct-play audio set, so the server transcodes it to a
+ * codec the user allows).
+ *
+ * The per-engine raw tokens ride the enum so every consumer (mpv
+ * `audio-spdif`, libVLC `--codec`, the Jellyfin device profile) composes its
+ * list from one table:
+ *  - [mpvKey] — the mpv `audio-spdif` token (`dtshd` is mpv's historical
+ *    alias for dts-hd, kept for byte parity with the legacy list).
+ *  - [vlcKey] — the libVLC `--codec` allowlist token.
+ *  - [jellyfinKeys] — the Jellyfin direct-play audio codec tokens this
+ *    toggle covers (dts-hd rides ffmpeg's `dca` decoder; TrueHD is spelled
+ *    `truehd` and `mlp` in the profile codec lists).
+ */
+@Immutable
+@Serializable
+enum class AudioPassthroughCodec(
+    override val displayName: String,
+    val mpvKey: String,
+    val vlcKey: String,
+    val jellyfinKeys: Set<String>,
+) : HasDisplayName {
+    AC3("Dolby Digital (AC3)", "ac3", "ac3", setOf("ac3")),
+    EAC3("Dolby Digital Plus (E-AC3)", "eac3", "eac3", setOf("eac3")),
+    DTS("DTS", "dts", "dts", setOf("dts")),
+    DTS_HD("DTS-HD", "dtshd", "dtshd", setOf("dca")),
+    TRUEHD("Dolby TrueHD", "truehd", "truehd", setOf("truehd", "mlp")),
+    ;
+
+    companion object {
+        /** The full allow-list — the historical single-boolean behaviour. */
+        val ALL: Set<AudioPassthroughCodec> = entries.toSet()
+    }
+}
+
+/**
+ * The maximum speaker layout the audio output may use. `AUTO` defers to the
+ * source and the audio-effects chain; every other value caps the output —
+ * a source with more channels is downmixed to the nearest allowed layout.
+ * [channelCount] is the raw speaker count (the Jellyfin
+ * `AudioChannels` LessThanEqual profile condition value); [mpvAudioChannelsKey]
+ * is mpv's `audio-channels` layout token (`null` = mpv's `auto` default).
+ */
+@Immutable
+@Serializable
+enum class MaxAudioChannelsEnum(override val displayName: String, val channelCount: Int?, val mpvAudioChannelsKey: String?) : HasDisplayName {
+    AUTO("Auto", null, null),
+    MONO("Mono", 1, "mono"),
+    STEREO("Stereo", 2, "stereo"),
+    FIVE_POINT_ONE("5.1", 6, "5.1"),
+    SEVEN_POINT_ONE("7.1", 8, "7.1"),
 }
 
 @Immutable

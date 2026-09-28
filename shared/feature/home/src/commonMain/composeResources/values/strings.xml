@@ -100,4 +100,15 @@
     <string name="home_download_started">Download started</string>
     <string name="home_download_start_failed">Couldn't start the download</string>
     <string name="home_series_download_queued">Episodes queued for download</string>
+
+    <!-- "Hidden from Next Up" management screen. -->
+    <string name="next_up_hidden_title">Hidden from Next Up</string>
+    <string name="next_up_hidden_empty">Nothing hidden</string>
+    <string name="next_up_hidden_empty_subtitle">Series you remove from the Next Up row appear here to restore.</string>
+    <string name="next_up_hidden_restore_all">Restore All</string>
+    <string name="next_up_hidden_restore_all_cd">Restore every hidden series to Next Up</string>
+    <string name="next_up_hidden_restore_all_title">Restore all to Next Up?</string>
+    <string name="next_up_hidden_restore_all_message">All %1$d hidden series will reappear in the Next Up row.</string>
+    <string name="next_up_hidden_restore_cd">Restore %1$s to Next Up</string>
+    <string name="next_up_hidden_unknown">Unknown series</string>
 </resources>

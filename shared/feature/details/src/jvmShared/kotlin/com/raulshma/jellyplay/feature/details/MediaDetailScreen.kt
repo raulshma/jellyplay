@@ -73,6 +73,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_mark_se
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_mark_series_watched_confirm_title
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_no_episodes_queued
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_watch_party_started
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_split_versions
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_split_confirm_message
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_split_confirm_title
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_episodes_queued
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -163,6 +166,16 @@ fun MediaDetailScreen(
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
     /** "Refresh metadata" mode sheet (⋮ menu → Refresh metadata). */
     var showRefreshMetadataSheet by remember { mutableStateOf(false) }
+    /** Version picker sheet (chevron beside Play / ⋮ menu → Version). */
+    var showVersionPicker by remember { mutableStateOf(false) }
+    /** Split-versions confirm (⋮ menu → Split versions, admin). */
+    var showSplitConfirm by remember { mutableStateOf(false) }
+    /**
+     * The version picked in the version picker for the CURRENT item; null =
+     * the server's default (first) source. Keyed reset on item change so the
+     * pending pick never leaks across items.
+     */
+    var selectedVersionId by remember(detail?.item?.id) { mutableStateOf<String?>(null) }
 
     // Route deep-link: a card long-press Download on a series lands here so
     // the user picks seasons/episodes. Seed the sheet once the detail resolves
@@ -417,6 +430,7 @@ fun MediaDetailScreen(
                 val rememberedGetChapterImageUrl = remember(viewModel) {
                     { id: String, index: Int, tag: String? -> viewModel.getChapterImageUrl(id, index, tag) }
                 }
+                val rememberedGetLogoUrl = remember(viewModel) { { id: String -> viewModel.getLogoUrl(id) } }
 
                 // Series id used by season-episode fetches. Keyed on BOTH the
                 // item id and the resolved series id so it recomputes once the
@@ -448,6 +462,7 @@ fun MediaDetailScreen(
                     persistedSeasonId = preferences.lastViewedSeasonBySeries[seriesIdForSeasons],
                     selectedSubtitleIndex = uiState.selectedSubtitleIndex,
                     selectedAudioIndex = uiState.selectedAudioIndex,
+                    selectedVersionId = selectedVersionId,
                     isDownloading = downloads.isDownloading,
                     isDownloadingSeries = downloads.isDownloadingSeries,
                     activeDownload = activeDownload,
@@ -499,11 +514,13 @@ fun MediaDetailScreen(
                     rememberedGetImageUrl,
                     rememberedGetBackdropUrl,
                     rememberedGetChapterImageUrl,
+                    rememberedGetLogoUrl,
                 ) {
                     ArtworkCallbacks(
                         getImageUrl = rememberedGetImageUrl,
                         getBackdropUrl = rememberedGetBackdropUrl,
                         getChapterImageUrl = rememberedGetChapterImageUrl,
+                        getLogoUrl = rememberedGetLogoUrl,
                     )
                 }
 
@@ -564,6 +581,7 @@ fun MediaDetailScreen(
                         onStartInstantMix = { viewModel.onEvent(DetailUiEvent.StartInstantMix) },
                         onStartRadio = { viewModel.onEvent(DetailUiEvent.StartRadio) },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
+                        onOpenVersionPicker = { showVersionPicker = true },
                     )
                 }
 
@@ -696,6 +714,8 @@ fun MediaDetailScreen(
                     MetadataCallbacks(
                         onRefreshMetadata = { showRefreshMetadataSheet = true },
                         onIdentify = { viewModel.metadataAdmin.openIdentifyScreenItem() },
+                        onOpenMergeVersions = { viewModel.metadataAdmin.openMergeVersions() },
+                        onSplitVersions = { showSplitConfirm = true },
                     )
                 }
 
@@ -867,6 +887,54 @@ fun MediaDetailScreen(
                 onSearch = { viewModel.metadataAdmin.searchIdentify() },
                 onApply = { result, replaceImages -> viewModel.metadataAdmin.applyIdentify(result, replaceImages) },
                 onDismiss = { viewModel.metadataAdmin.dismissIdentify() },
+            )
+        }
+
+        // ── Version picker (chevron beside Play / ⋮ menu → Version). A pure
+        // UI selection: the pick rides the screen-local state until the next
+        // Play dispatch. ──
+        if (showVersionPicker && detail != null) {
+            VersionPickerSheet(
+                detail = detail,
+                selectedSourceId = selectedVersionId,
+                onSelect = { sourceId -> selectedVersionId = sourceId },
+                onDismiss = { showVersionPicker = false },
+            )
+        }
+
+        // ── Merge versions sheet (⋮ menu, admin). State lives in the
+        // metadataAdmin helper like Identify; a successful merge/split bumps
+        // mutationCount → reload the item so the screen reflects the
+        // server-side library mutation. ──
+        val mergeState by viewModel.metadataAdmin.mergeState.collectAsStateWithLifecycle()
+        if (mergeState.candidates != null) {
+            MergeVersionsSheet(
+                candidates = mergeState.candidates.orEmpty(),
+                isLoading = mergeState.isLoading,
+                isMerging = mergeState.isMerging,
+                onMerge = { candidateIds -> viewModel.metadataAdmin.mergeVersions(candidateIds) },
+                onDismiss = { viewModel.metadataAdmin.dismissMergeVersions() },
+            )
+        }
+        LaunchedEffect(viewModel.metadataAdmin.mutationCount.collectAsStateWithLifecycle().value) {
+            if (viewModel.metadataAdmin.mutationCount.value > 0) {
+                viewModel.onEvent(DetailUiEvent.ForceRefresh)
+            }
+        }
+
+        // ── Split versions confirm (⋮ menu, admin). Splitting dissolves the
+        // merged entry server-side — strong-confirm before firing. ──
+        if (showSplitConfirm && detailItem != null) {
+            ConfirmDialog(
+                title = stringResource(Res.string.detail_split_confirm_title),
+                message = stringResource(Res.string.detail_split_confirm_message),
+                confirmText = stringResource(Res.string.detail_option_split_versions),
+                dismissText = stringResource(CoreUiRes.string.core_cancel),
+                onConfirm = {
+                    showSplitConfirm = false
+                    viewModel.metadataAdmin.splitScreenItem()
+                },
+                onDismiss = { showSplitConfirm = false },
             )
         }
 

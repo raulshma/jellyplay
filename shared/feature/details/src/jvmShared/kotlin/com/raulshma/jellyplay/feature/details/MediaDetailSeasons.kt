@@ -59,6 +59,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -67,6 +68,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MissingEpisodeReason
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
@@ -75,6 +77,8 @@ import com.raulshma.jellyplay.core.ui.components.clickModifier
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
+import com.raulshma.jellyplay.core.ui.components.localDateFromIsoTimestamp
+import com.raulshma.jellyplay.core.ui.components.shortMonthDayYear
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
@@ -88,6 +92,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberCardChrome
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_airs_date_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_season_options
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_sort_newest_first
@@ -97,6 +102,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_swit
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_delete_episode_cd
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_mark_season_unwatched
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_mark_season_watched
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_missing_badge
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_season_empty_description
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_season_empty_title
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_season_format
@@ -636,6 +642,10 @@ internal fun EpisodeCard(
             ?: Modifier
     }
 
+    // Virtual (missing/unaired) episodes dim like watched ones: the row is a
+    // placeholder, not playable content, so it recedes behind real episodes.
+    val isDimmed = episode.isDimmedInRow
+
     Column(
         modifier = modifier
             .width(cardWidth)
@@ -679,13 +689,13 @@ internal fun EpisodeCard(
                     size = coil3.size.Size(640, 360),
                     modifier = Modifier
                         .fillMaxSize()
-                        .playedAlpha(episode.isPlayed, PLAYED_THUMBNAIL_ALPHA),
+                        .playedAlpha(isDimmed, PLAYED_THUMBNAIL_ALPHA),
                     contentScale = ContentScale.Crop,
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(episodeScrimColor(episode.isPlayed))
+                        .background(episodeScrimColor(isDimmed))
                 )
             } else {
                 Box(
@@ -701,24 +711,29 @@ internal fun EpisodeCard(
                     )
                 }
             }
-            val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
-            Icon(
-                Tabler.Outline.PlayerPlay,
-                contentDescription = stringResource(Res.string.detail_cd_episode_play),
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .size(48.dp)
-                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), CircleShape)
-                    .then(epPlayFocusState.focusModifier)
-                    .then(Modifier.tvFocusIndicator(epPlayFocusState, CircleShape))
-                    .clickable(
-                        interactionSource = playInteractionSource,
-                        indication = null,
-                        onClick = onPlayClick,
-                    )
-                    .padding(8.dp)
-            )
+            // No play affordance on a virtual episode — there is no file to
+            // play behind it (detail navigation stays available).
+            if (!episode.isVirtual) {
+                EpisodePlayAffordance(
+                    playScale = playScale,
+                    interactionSource = playInteractionSource,
+                    onPlayClick = onPlayClick,
+                    iconSize = 48.dp,
+                    iconPadding = 8.dp,
+                    tvFocusable = true,
+                )
+            }
+
+            // Missing/unaired badge — the virtual episode's own state marker,
+            // top-start so it never collides with the watched tag or progress.
+            if (episode.isVirtual) {
+                VirtualEpisodeBadge(
+                    episode = episode,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp),
+                )
+            }
 
             if (episode.hasWatchProgress) {
                 val progress = episode.progressFraction() ?: 0f
@@ -751,8 +766,9 @@ internal fun EpisodeCard(
             // Per-episode delete affordance — only for a downloaded episode
             // (gated by `isDownloaded`, which the host sets from the downloaded-
             // episode-id set or the local origin). Online episodes never show
-            // this (downloading stays in `SeriesDownloadSheet`).
-            if (isDownloaded) {
+            // this (downloading stays in `SeriesDownloadSheet`), and a virtual
+            // episode has no file on disk to delete either.
+            if (isDownloaded && !episode.isVirtual) {
                 val deleteFocusState = rememberTvFocusState(focusedScale = 1.1f)
                 Box(
                     modifier = Modifier
@@ -783,7 +799,7 @@ internal fun EpisodeCard(
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .playedAlpha(episode.isPlayed, PLAYED_META_ALPHA),
+                .playedAlpha(isDimmed, PLAYED_META_ALPHA),
         ) {
             Text(
                 text = buildString {
@@ -913,6 +929,8 @@ private fun CompactEpisodeRow(
     val episodeImageUrl = remember(episode.id, localImagePath) {
         localImagePath ?: getImageUrl(episode.id)
     }
+    // Virtual (missing/unaired) episodes dim like watched ones — see EpisodeCard.
+    val isDimmed = episode.isDimmedInRow
 
     // Press-and-hold "peek" preview; mirrors EpisodeCard.
     val peek = rememberMediaPeek(
@@ -956,13 +974,13 @@ private fun CompactEpisodeRow(
                     size = coil3.size.Size(256, 144),
                     modifier = Modifier
                         .fillMaxSize()
-                        .playedAlpha(episode.isPlayed, PLAYED_THUMBNAIL_ALPHA),
+                        .playedAlpha(isDimmed, PLAYED_THUMBNAIL_ALPHA),
                     contentScale = ContentScale.Crop,
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(episodeScrimColor(episode.isPlayed))
+                        .background(episodeScrimColor(isDimmed))
                 )
             } else {
                 Box(
@@ -978,21 +996,28 @@ private fun CompactEpisodeRow(
                     )
                 }
             }
-            Icon(
-                Tabler.Outline.PlayerPlay,
-                contentDescription = stringResource(Res.string.detail_cd_episode_play),
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .size(32.dp)
-                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), CircleShape)
-                    .clickable(
-                        interactionSource = playInteractionSource,
-                        indication = null,
-                        onClick = onPlayClick,
-                    )
-                    .padding(6.dp)
-            )
+            // No play affordance on a virtual episode — see EpisodeCard.
+            if (!episode.isVirtual) {
+                EpisodePlayAffordance(
+                    playScale = playScale,
+                    interactionSource = playInteractionSource,
+                    onPlayClick = onPlayClick,
+                    iconSize = 32.dp,
+                    iconPadding = 6.dp,
+                    tvFocusable = false,
+                )
+            }
+
+            // Missing/unaired badge — top-start so it never collides with the
+            // watched tag or progress overlay.
+            if (episode.isVirtual) {
+                VirtualEpisodeBadge(
+                    episode = episode,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp),
+                )
+            }
 
             if (episode.hasWatchProgress) {
                 val progress = episode.progressFraction() ?: 0f
@@ -1027,7 +1052,7 @@ private fun CompactEpisodeRow(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
-                .playedAlpha(episode.isPlayed, PLAYED_META_ALPHA),
+                .playedAlpha(isDimmed, PLAYED_META_ALPHA),
         ) {
             Text(
                 text = buildString {
@@ -1097,8 +1122,8 @@ private fun CompactEpisodeRow(
         // Per-episode delete (downloaded episodes only). Sits at the trailing
         // edge of the row rather than overlaid on the thumbnail (as on the card)
         // — the compact row has room for a dedicated affordance. Mirrors the
-        // offline compact row.
-        if (isDownloaded) {
+        // offline compact row. A virtual episode has no on-disk file to delete.
+        if (isDownloaded && !episode.isVirtual) {
             val deleteFocusState = rememberTvFocusState(focusedScale = 1.1f)
             Box(
                 modifier = Modifier
@@ -1142,6 +1167,132 @@ private fun episodeScrimColor(isPlayed: Boolean): Color =
 /** Applies [alpha] only when [isPlayed], leaving unplayed cards untouched. */
 private fun Modifier.playedAlpha(isPlayed: Boolean, alpha: Float): Modifier =
     if (isPlayed) graphicsLayer { this.alpha = alpha } else this
+// endregion
+
+// region Virtual (missing/unaired) episode badge
+
+/**
+ * What a virtual episode row's badge shows: [Missing] for an episode whose
+ * file is simply absent, [Airs] for an unaired one (carrying the parsed
+ * premiere [Airs.date] for the "Airs \<date\>" label).
+ */
+internal sealed interface MissingEpisodeBadge {
+    data object Missing : MissingEpisodeBadge
+    data class Airs(val date: kotlinx.datetime.LocalDate) : MissingEpisodeBadge
+}
+
+/**
+ * The pure badge decision for a virtual episode row: UNAIRED renders its air
+ * date (when the premiere stamp parses); everything else — absent file,
+ * unknown reason, null/unparseable premiere date — renders "Missing". The
+ * rows only invoke this for `isVirtual` items, but a non-virtual item (null
+ * reason) degrades to [MissingEpisodeBadge.Missing] rather than crashing.
+ */
+internal fun missingEpisodeBadge(
+    reason: MissingEpisodeReason?,
+    premiereDate: String?,
+): MissingEpisodeBadge {
+    if (reason != MissingEpisodeReason.UNAIRED) return MissingEpisodeBadge.Missing
+    val date = premiereDate?.let(::localDateFromIsoTimestamp) ?: return MissingEpisodeBadge.Missing
+    return MissingEpisodeBadge.Airs(date)
+}
+
+/**
+ * The dimmed-state badge for a virtual (missing/unaired) episode row. Dark
+ * scrim chrome (mirrors the delete affordance's) so it reads on top of the
+ * dimmed thumbnail without fighting the watched tag's tonal container.
+ */
+@Composable
+private fun MissingEpisodeTag(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = Color.Black.copy(alpha = 0.55f),
+        contentColor = Color.White.copy(alpha = 0.9f),
+        shape = ShapeCache.smooth12,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.EyeOff,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/**
+ * An episode row renders dimmed when played or virtual (missing/unaired): a
+ * virtual row is a placeholder, not playable content, so it recedes behind
+ * real episodes like a watched one does.
+ */
+private val MediaItem.isDimmedInRow: Boolean
+    get() = isPlayed || isVirtual
+
+/**
+ * The in-thumbnail play affordance shared by both episode-row layouts; they
+ * differ only in geometry and TV focusability.
+ */
+@Composable
+private fun EpisodePlayAffordance(
+    playScale: Float,
+    interactionSource: MutableInteractionSource,
+    onPlayClick: () -> Unit,
+    iconSize: Dp,
+    iconPadding: Dp,
+    tvFocusable: Boolean,
+) {
+    val focusState = if (tvFocusable) rememberTvFocusState(focusedScale = 1.15f) else null
+    Icon(
+        Tabler.Outline.PlayerPlay,
+        contentDescription = stringResource(Res.string.detail_cd_episode_play),
+        tint = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .size(iconSize)
+            .graphicsLayer { scaleX = playScale; scaleY = playScale }
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), CircleShape)
+            .then(focusState?.focusModifier ?: Modifier)
+            .then(
+                if (focusState != null) Modifier.tvFocusIndicator(focusState, CircleShape)
+                else Modifier
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onPlayClick,
+            )
+            .padding(iconPadding)
+    )
+}
+
+/**
+ * The virtual (missing/unaired) episode's own state marker; callers align it
+ * top-start so it never collides with the watched tag or progress overlay.
+ */
+@Composable
+private fun VirtualEpisodeBadge(episode: MediaItem, modifier: Modifier = Modifier) {
+    val badge = remember(episode.id, episode.missingReason, episode.premiereDate) {
+        missingEpisodeBadge(episode.missingReason, episode.premiereDate)
+    }
+    val label = when (badge) {
+        is MissingEpisodeBadge.Airs ->
+            stringResource(Res.string.detail_airs_date_format, shortMonthDayYear(badge.date))
+        MissingEpisodeBadge.Missing -> stringResource(Res.string.detail_missing_badge)
+    }
+    MissingEpisodeTag(label = label, modifier = modifier)
+}
 // endregion
 
 @Immutable

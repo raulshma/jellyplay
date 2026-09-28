@@ -134,6 +134,46 @@ class LibraryFiltersAlgebraTest {
         assertFalse(LibraryFilters(isDownloaded = true).withDownloadedToggled().isDownloaded == true)
     }
 
+    // ── withHasSubtitlesToggled / withHasTrailerToggled ─────────────────────
+
+    @Test
+    fun withHasSubtitlesToggled_nullFlipsToTrue() {
+        val updated = LibraryFilters().withHasSubtitlesToggled()
+
+        assertTrue(updated.hasSubtitles == true)
+    }
+
+    @Test
+    fun withHasSubtitlesToggled_mirrorsTheTriStateFlip() {
+        assertTrue(LibraryFilters(hasSubtitles = false).withHasSubtitlesToggled().hasSubtitles == true)
+        assertFalse(LibraryFilters(hasSubtitles = true).withHasSubtitlesToggled().hasSubtitles == true)
+    }
+
+    @Test
+    fun withHasTrailerToggled_nullFlipsToTrue() {
+        val updated = LibraryFilters().withHasTrailerToggled()
+
+        assertTrue(updated.hasTrailer == true)
+    }
+
+    @Test
+    fun withHasTrailerToggled_mirrorsTheTriStateFlip() {
+        assertTrue(LibraryFilters(hasTrailer = false).withHasTrailerToggled().hasTrailer == true)
+        assertFalse(LibraryFilters(hasTrailer = true).withHasTrailerToggled().hasTrailer == true)
+    }
+
+    @Test
+    fun withPresenceToggled_leavesOtherDimensionsUntouched() {
+        val filters = LibraryFilters(genres = listOf("Drama"), isResumable = true)
+
+        val updated = filters.withHasSubtitlesToggled()
+
+        assertEquals(listOf("Drama"), updated.genres)
+        assertTrue(updated.isResumable == true)
+        assertTrue(updated.hasSubtitles == true)
+        assertTrue(updated.hasTrailer == null)
+    }
+
     // ── cleared ─────────────────────────────────────────────────────────────
 
     @Test
@@ -148,6 +188,8 @@ class LibraryFiltersAlgebraTest {
             minRating = 6f,
             isResumable = true,
             isDownloaded = true,
+            hasSubtitles = true,
+            hasTrailer = true,
         )
 
         assertEquals(LibraryFilters(), populated.cleared())
@@ -231,6 +273,26 @@ class LibraryFiltersAlgebraTest {
     @Test
     fun hasActiveFilters_storedFalseDownloadedIsInactive() {
         assertFalse(LibraryFilters(isDownloaded = false).hasActiveFilters())
+    }
+
+    @Test
+    fun hasActiveFilters_hasSubtitlesOnly() {
+        assertTrue(LibraryFilters(hasSubtitles = true).hasActiveFilters())
+    }
+
+    @Test
+    fun hasActiveFilters_storedFalseHasSubtitlesIsInactive() {
+        assertFalse(LibraryFilters(hasSubtitles = false).hasActiveFilters())
+    }
+
+    @Test
+    fun hasActiveFilters_hasTrailerOnly() {
+        assertTrue(LibraryFilters(hasTrailer = true).hasActiveFilters())
+    }
+
+    @Test
+    fun hasActiveFilters_storedFalseHasTrailerIsInactive() {
+        assertFalse(LibraryFilters(hasTrailer = false).hasActiveFilters())
     }
 
     @Test

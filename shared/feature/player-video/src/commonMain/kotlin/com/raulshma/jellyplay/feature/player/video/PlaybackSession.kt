@@ -224,6 +224,13 @@ internal class PlaybackSession(
     /** Pass-out protection hours; values <= 0 disable the poller. */
     private val passOutHours: Flow<Int>,
     /**
+     * Whether the still-watching mode includes HOURS (feature 1.3): a tripped
+     * pass-out pause then arrives as [SessionEvent.StillWatchingPrompt] (the
+     * confirm overlay) instead of the bare [SessionEvent.PassOutPause] toast.
+     * Synchronous read, the [getPlaybackMode] seam shape.
+     */
+    private val upgradesPassOutToOverlay: () -> Boolean,
+    /**
      * Invoked after a disposed coordinator was re-created: the VM restarts
      * its engine-mirror collectors (play/buffering ui-state writes) against
      * the new [engineEventCoordinator] instance.
@@ -340,7 +347,17 @@ internal class PlaybackSession(
             }
             EngineDecision.PassOutPause -> {
                 playerSessionManager.engine?.pause()
-                engineEventShell.emitEvent(SessionEvent.PassOutPause)
+                // Hours arm of the still-watching mode (feature 1.3): the same
+                // pause arrives as the confirm prompt instead of the silent
+                // toast; the toast survives where the overlay doesn't take
+                // over (mode OFF/EPISODES).
+                if (upgradesPassOutToOverlay()) {
+                    engineEventShell.emitEvent(
+                        SessionEvent.StillWatchingPrompt(StillWatchingReason.HOURS_IDLE)
+                    )
+                } else {
+                    engineEventShell.emitEvent(SessionEvent.PassOutPause)
+                }
             }
             is EngineDecision.InformUser -> engineEventShell.emitEvent(
                 SessionEvent.InformUser(decision.message)
@@ -737,6 +754,23 @@ internal class PlaybackSession(
         scope.launch {
             setPendingStreams(selection)
             playerSessionManager.reloadForStreamChange(selection, positionMs)
+        }
+    }
+
+    /**
+     * Switches the playing version (media source) of the current item at the
+     * current position — the Version sheet's pick. The pending stream-index
+     * hints are CLEARED first: indices of the previous version are
+     * meaningless server-side (and would bake the old audio/sub choice into
+     * the new version's re-POST), so the new version starts on its own
+     * defaults.
+     */
+    fun switchMediaSource(mediaSourceId: String) {
+        if (playerSessionManager.engine == null) return
+        val positionMs = getReportPositionMs()
+        scope.launch {
+            setPendingStreams(null)
+            playerSessionManager.switchMediaSource(mediaSourceId, positionMs)
         }
     }
 
@@ -1371,6 +1405,16 @@ sealed interface SessionEvent {
 
     /** Pass-out protection triggered a pause. */
     data object PassOutPause : SessionEvent
+
+    /**
+     * The "Still watching?" confirm prompt (feature 1.3) — the hours arm:
+     * the pass-out protection tripped while the still-watching mode includes
+     * HOURS, so the silent pause arrives bundled with the confirm overlay
+     * (the engine is already paused; the overlay's Continue resumes).
+     * The episode arm is raised by the ViewModel's end-of-playback gate,
+     * which raises the same overlay directly.
+     */
+    data class StillWatchingPrompt(val reason: StillWatchingReason) : SessionEvent
 }
 
 /**

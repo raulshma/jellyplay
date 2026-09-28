@@ -167,6 +167,24 @@ data class ArrQueueItem(
     val downloadId: String? = null,
     val tmdbId: Int? = null,
     val tvdbId: Int? = null,
+    /**
+     * Radarr's internal movie id (the queue row's `movie.id`) — the key the
+     * interactive release search (`GET /release?movieId=`) and the override
+     * grab arm require. Null on rows fetched before the field landed (older
+     * in-memory snapshots); callers fall back to the tmdbId lookup on demand.
+     */
+    val arrMovieId: Int? = null,
+    /**
+     * Sonarr's internal series id (the queue row's `series.id`) — the Sonarr
+     * override grab's identity field. Same null-on-old-snapshots caveat as
+     * [arrMovieId]; falls back to the tvdbId resolution.
+     */
+    val arrSeriesId: Int? = null,
+    /**
+     * Sonarr's internal episode id (the queue row's `episode.id`) — the key
+     * the interactive release search (`GET /release?episodeId=`) requires.
+     */
+    val arrEpisodeId: Int? = null,
     val title: String,
     val status: ArrDownloadStatus,
     val trackedDownloadStatus: String? = null,
@@ -308,6 +326,76 @@ data class ArrBlocklistItem(
     val serverId: String = "",
     val serverKind: ArrServiceKind = ArrServiceKind.RADARR,
 )
+
+/**
+ * One candidate release from the interactive release search (`GET /release`
+ * on either *arr service), mapped to the shared model. The two services'
+ * row shapes are the same core with per-service extras, so ONE model carries
+ * both: Radarr rows populate [movieTitles] (+ [edition]), Sonarr rows the
+ * season/episode quartet — the other group stays null/empty per row.
+ *
+ * [guid] + [indexerId] are the grab body's required identity; [qualityId] +
+ * [quality] ride along so an override ("grab anyway") can prefill the
+ * release's own quality (the *arr services key the override off the numeric
+ * quality id). [serverId]/[serverKind] are tagged by the repository (same
+ * contract as [ArrQueueItem]).
+ */
+@Immutable
+@Serializable
+data class ArrRelease(
+    val guid: String,
+    val indexerId: Int,
+    val indexer: String? = null,
+    val title: String,
+    /** Display name of the row's quality (e.g. "WEBDL-1080p"). */
+    val quality: String? = null,
+    /** Numeric quality id behind [quality] — the override grab's prefill key. */
+    val qualityId: Int? = null,
+    val languages: List<String> = emptyList(),
+    val size: Long? = null,
+    val ageHours: Double? = null,
+    val seeders: Int? = null,
+    val leechers: Int? = null,
+    val protocol: String? = null,
+    val releaseGroup: String? = null,
+    val customFormats: List<String> = emptyList(),
+    val customFormatScore: Int = 0,
+    /**
+     * True when the release passed the *arr quality-profile checks. False
+     * means the server rejected it ([rejections] carry the reasons) — such
+     * rows need a `shouldOverride` grab ("grab anyway").
+     */
+    val approved: Boolean = false,
+    val temporarilyRejected: Boolean = false,
+    val rejections: List<String> = emptyList(),
+    val publishDate: String? = null,
+    val downloadUrl: String? = null,
+    val magnetUrl: String? = null,
+    val infoUrl: String? = null,
+    val edition: String? = null,
+    // Sonarr-only extras.
+    val fullSeason: Boolean = false,
+    val seasonNumber: Int? = null,
+    val episodeNumbers: List<Int> = emptyList(),
+    val mappedEpisodeInfo: String? = null,
+    // Radarr-only extras.
+    val movieTitles: List<String> = emptyList(),
+    /** Owning server id (see [ArrQueueItem.serverId]). */
+    val serverId: String = "",
+    val serverKind: ArrServiceKind = ArrServiceKind.RADARR,
+)
+
+/**
+ * What the owning *arr server's `/history` says about one release guid — the
+ * client-side "previously grabbed / failed" badge source. FAILED outranks
+ * GRABBED when both events exist (a grabbed-then-failed release should read
+ * as failed).
+ */
+@Immutable
+enum class ArrReleaseHistoryStatus {
+    GRABBED,
+    FAILED,
+}
 
 /**
  * Identifies a command queued/executed against the *arr `/api/v3/command`

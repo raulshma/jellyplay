@@ -282,26 +282,35 @@ val biometricGate = rememberBiometricGate()
                         )
                     }
                     if (SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.AUTO_LOCK_TIMER, securityRowFlags)) {
-                        val lockTimerOptions = listOf(0L, 30_000L, 60_000L, 300_000L, 600_000L)
-                        val lockTimerLabels = listOf(
-                            stringResource(Res.string.settings_lock_immediately),
-                            stringResource(Res.string.settings_lock_30_seconds),
-                            stringResource(Res.string.settings_lock_1_minute),
-                            stringResource(Res.string.settings_lock_5_minutes),
-                            stringResource(Res.string.settings_lock_10_minutes),
+                        // The whole shared ladder (the screensaver dim-after row
+                        // takes the same ladder minus the 10-minute rung), each
+                        // rung zipped to its label so every lookup keys on the
+                        // ms VALUE, never a hand-built index pairing. An
+                        // off-ladder stored value degrades to "Immediately".
+                        val lockImmediatelyLabel = stringResource(Res.string.settings_lock_immediately)
+                        val lockTimerChoices = SETTINGS_TIMER_LADDER_MS.zip(
+                            listOf(
+                                lockImmediatelyLabel,
+                                stringResource(Res.string.settings_lock_30_seconds),
+                                stringResource(Res.string.settings_lock_1_minute),
+                                stringResource(Res.string.settings_lock_5_minutes),
+                                stringResource(Res.string.settings_lock_10_minutes),
+                            ),
                         )
+                        fun lockTimerLabel(ms: Long): String =
+                            lockTimerChoices.firstOrNull { it.first == ms }?.second ?: lockImmediatelyLabel
                         val autoLockTimerTitle = rowTitle(SecuritySettingsIds.AUTO_LOCK_TIMER)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
                             title = rowTitle(SecuritySettingsIds.AUTO_LOCK_TIMER),
                             subtitle = stringResource(Res.string.settings_auto_lock_timer_subtitle),
-                            trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
+                            trailingText = lockTimerLabel(preferences.autoLockTimerMs),
                             highlighted = highlightSettingId == SecuritySettingsIds.AUTO_LOCK_TIMER,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = autoLockTimerTitle,
-                                    items = lockTimerOptions,
-                                    label = { lockTimerLabels[lockTimerOptions.indexOf(it).coerceAtMost(lockTimerOptions.lastIndex)] },
+                                    items = lockTimerChoices.map { it.first },
+                                    label = { lockTimerLabel(it) },
                                     isSelected = { it == preferences.autoLockTimerMs },
                                     onSelect = { ms ->
                                         viewModel.edit { scope -> scope.security.setAutoLockTimerMs(ms) }

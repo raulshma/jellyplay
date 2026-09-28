@@ -80,6 +80,10 @@ data class DetailPreferences(
     val episodesDescending: Boolean = true,
     val compactEpisodeList: Boolean = false,
     val showDetailUpNext: Boolean = true,
+    /** Whether virtual (missing/unaired) episodes appear in season views. */
+    val showMissingEpisodes: Boolean = false,
+    /** Render the server clear-logo as the detail-screen title instead of text. */
+    val preferLogos: Boolean = false,
 )
 
 /** Fields read by `OnboardingViewModel` across the multi-step onboarding flow. */
@@ -135,9 +139,24 @@ data class SettingsScreenPreferences(
     val dreamShowTitle: Boolean = true,
     val dreamKenBurnsEnabled: Boolean = true,
     val dreamTransitionStyle: DreamTransitionStyle = DreamTransitionStyle.CROSSFADE,
+    /** The dream's local maximum parental rating (canonical age); null = no local cap. */
+    val dreamMaxParentalRating: Int? = null,
+    /** Slideshow runtime after which the dream dims; 0 = never dims. */
+    val dreamDimAfterMs: Long = 0L,
+    /** The dim scrim's target opacity in percent (0–95). */
+    val dreamDimPercent: Int = 50,
     /** Desktop idle ambient screen toggle + timeout (minutes; 0 = off). */
     val idleAmbientEnabled: Boolean = true,
     val idleAmbientTimeoutMin: Long = 5L,
+    /** Desktop Discord Rich Presence toggle (feature 4.2). */
+    val discordPresenceEnabled: Boolean = false,
+    /** Desktop playback-event shell hooks (feature 4.3): master + five mpv-shim-named commands. */
+    val hooksEnabled: Boolean = false,
+    val hooksPlayCmd: String = "",
+    val hooksStopCmd: String = "",
+    val hooksEndedCmd: String = "",
+    val hooksIdleCmd: String = "",
+    val hooksIdleEndedCmd: String = "",
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
 )
 
@@ -184,6 +203,8 @@ data class MainPreferences(
     val hideBottomNavOnScroll: Boolean = true,
     val navBarShowLabels: Boolean = true,
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
+    /** Which third-party app the EXTERNAL arm hands off to (chooser when unset). */
+    val preferredExternalPlayer: ExternalPlayerApp = ExternalPlayerApp.SYSTEM_CHOOSER,
     val onboardingCompleted: Boolean = false,
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
     val appLanguage: String? = null,

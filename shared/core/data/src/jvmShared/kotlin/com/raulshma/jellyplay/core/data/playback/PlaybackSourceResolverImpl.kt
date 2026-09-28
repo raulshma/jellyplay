@@ -63,6 +63,7 @@ class PlaybackSourceResolverImpl(
             url = url,
             title = detail.item.name,
             mediaSourceId = source?.id,
+            mediaSource = source,
         )
     }
 

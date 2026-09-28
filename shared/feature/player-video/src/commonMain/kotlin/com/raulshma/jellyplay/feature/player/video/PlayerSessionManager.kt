@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
+import com.raulshma.jellyplay.core.model.preferredMediaSource
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
@@ -114,6 +114,25 @@ class PlayerSessionManager(
      */
     private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
     private val userMessageBus: PlayerVideoMessageBus,
+    /**
+     * Preferred-version memory seam (multi-version items): resolves the
+     * media-source id this item/series should start on when the navigation
+     * arg doesn't pin one, consulted in [loadOnline] before the
+     * `firstOrNull()` fallback. Default null (nothing remembered) so tests
+     * that don't exercise persistence compile unchanged.
+     */
+    private val getPreferredMediaSourceId: suspend (itemId: String, seriesId: String?) -> String? = { _, _ -> null },
+    /**
+     * The app-wide now-playing seam (feature 4.2): every load-ready
+     * transition publishes the item's title/subtitle/duration so shell-level
+     * consumers (desktop Discord Rich Presence, playback-event hooks) see
+     * what is on screen without reaching into this manager. Tests pass a
+     * bare instance (the class is inert without publishers/consumers).
+     * End/stop events stay with the ViewModel — [release] also runs on every
+     * per-item re-initialization (auto-advance), where a Stopped would be
+     * noise.
+     */
+    private val nowPlayingReporter: com.raulshma.jellyplay.core.data.playback.NowPlayingReporter,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -123,6 +142,13 @@ class PlayerSessionManager(
     val engine: MediaEngine? get() = _engine.value
 
     private var lastPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * The position the current load started at (ms) — the now-playing
+     * publication's position snapshot (the shell hooks' `{position_ms}`
+     * input at start). Written by [loadMedia], read by [publishNowPlayingMeta].
+     */
+    private var lastLoadStartPositionMs = 0L
 
     /**
      * Owns the in-flight offline sidecar-subtitle catch-up fetch; cancelled on
@@ -193,6 +219,31 @@ class PlayerSessionManager(
     ): String = episodePlayerSubtitle(seriesName, seasonNumber, episodeNumber)
         ?: (overview?.take(60) ?: "")
 
+    /**
+     * Publishes the current session's item onto the app-wide now-playing
+     * seam (feature 4.2). Called at every load-ready transition
+     * ([bindReclaimedEngine], [loadOffline], [loadOnline]); a same-item
+     * refresh (subtitle re-attach, engine swap) is a silent state update, a
+     * new item emits [com.raulshma.jellyplay.core.data.playback.NowPlayingReporter.NowPlayingEvent.Started].
+     * No-op with no loaded detail.
+     */
+    private fun publishNowPlayingMeta() {
+        val state = _sessionState.value
+        val detail = state.mediaDetail ?: return
+        val durationTicks = state.currentMediaSource?.runTimeTicks?.takeIf { it > 0 }
+            ?: detail.item.runTimeTicks?.takeIf { it > 0 }
+        nowPlayingReporter.publish(
+            com.raulshma.jellyplay.core.data.playback.NowPlayingReporter.NowPlayingMeta(
+                itemId = detail.item.id,
+                title = state.title,
+                subtitle = state.subtitle,
+                kind = com.raulshma.jellyplay.core.data.playback.NowPlayingReporter.Kind.VIDEO,
+                positionMs = lastLoadStartPositionMs,
+                durationMs = durationTicks?.let { it / 10_000 },
+            )
+        )
+    }
+
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
         // Same stale-fetch hazard as loadMedia: a reclaimed engine for the
         // same item must not inherit the previous session's in-flight fetch.
@@ -214,6 +265,7 @@ class PlayerSessionManager(
                 isReady = true
             )
         }
+        publishNowPlayingMeta()
     }
 
     /**
@@ -230,7 +282,9 @@ class PlayerSessionManager(
      * Unified media loader. Dispatches to [loadOffline] or [loadOnline] based
      * on the resolved [PlaybackSource]. The [PlaybackSource.Auto] variant is
      * resolved via [PlaybackSource.Auto.resolve] using the downloads DB,
-     * matching the historical auto-detection behaviour exactly.
+     * the offline-source preference and the live network status: a usable
+     * download wins by default, or serves offline mode; `PREFER_STREAMING`
+     * streams the server copy instead while the device is online.
      *
      * The completed-download predicate is owned by
      * [PlaybackSourceResolver.resolveUsableDownload] (the shared core routine
@@ -246,6 +300,7 @@ class PlayerSessionManager(
         // the fresh session before the resolve path re-arms or clears them.
         transcodeReasonsRefresher.cancel()
         sidecarCatchUpJob?.cancel()
+        lastLoadStartPositionMs = startPositionTicks / 10_000
         _sessionState.update { it.copy(currentItemId = itemId, isReady = false) }
 
         // The download lookup is needed both for Auto resolution and for
@@ -255,7 +310,20 @@ class PlayerSessionManager(
         val download = playbackSourceResolver.resolveUsableDownload(itemId)
 
         val resolved = when (source) {
-            is PlaybackSource.Auto -> source.resolve(download)
+            is PlaybackSource.Auto -> {
+                // The Auto resolution consults the offline-source preference
+                // (prefer the stored download vs stream whenever online) and
+                // the live network status — the same flow the offline gate
+                // below reads, so the two agree on "is the server reachable".
+                // Await the hydrated aggregate (not the .value point read —
+                // see loadOffline) so a cold start reads the persisted pref.
+                val preference = aggregateStore.aggregateRaw.first().playback.offlinePlaybackPreference
+                source.resolve(
+                    download = download,
+                    online = offlineModeManager.networkStatus.value.hasNetwork,
+                    offlinePlaybackPreference = preference,
+                )
+            }
             is PlaybackSource.Offline -> source
             is PlaybackSource.Online -> source
         }
@@ -389,6 +457,7 @@ class PlayerSessionManager(
 
         if (playerType == PlayerType.EXTERNAL) {
             _sessionState.update { it.copy(isReady = true, mediaDetail = detail, isOffline = true) }
+            publishNowPlayingMeta()
             return
         }
 
@@ -433,6 +502,7 @@ class PlayerSessionManager(
             mediaDetail = detail,
             isOffline = true,
         ) }
+        publishNowPlayingMeta()
     }
 
     private suspend fun loadOnline(
@@ -453,7 +523,10 @@ class PlayerSessionManager(
         val source = if (mediaSourceId != null) {
             detail.mediaSources.find { it.id == mediaSourceId }
         } else {
-            detail.mediaSources.firstOrNull()
+            // Preferred-version memory: the item/series row's remembered
+            // source wins before the plain first-sources fallback. A stale
+            // id (version merged away server-side) falls through silently.
+            detail.preferredMediaSource(getPreferredMediaSourceId(itemId, detail.item.seriesId))
         }
         val streams = source?.mediaStreams ?: emptyList()
 
@@ -508,6 +581,7 @@ class PlayerSessionManager(
 
         if (playerType == PlayerType.EXTERNAL) {
             _sessionState.update { it.copy(isReady = true) }
+            publishNowPlayingMeta()
             return
         }
 
@@ -520,6 +594,7 @@ class PlayerSessionManager(
         loadStreamingSubtitles(itemId, streams)
 
         _sessionState.update { it.copy(isReady = true) }
+        publishNowPlayingMeta()
     }
 
     /**
@@ -830,6 +905,38 @@ class PlayerSessionManager(
     }
 
     /**
+     * Swaps the session onto [mediaSourceId] (a different version of the
+     * SAME item) at [currentPositionMs] — the Version sheet's pick. Publishes
+     * the new source + its streams into the session state FIRST so
+     * [reresolveAndSwap] re-resolves against it (it reads the source id from
+     * the current state) and the side-loaded subtitle set rebuilds from the
+     * new version's streams; the mode/quality/max-bitrate inputs are
+     * preserved from the live session, mirroring [reloadForStreamChange].
+     * No-ops (null) when there is no session, the detail is missing, or the
+     * id is unknown / already current.
+     */
+    suspend fun switchMediaSource(
+        mediaSourceId: String,
+        currentPositionMs: Long,
+    ): ResolvedPlayback? {
+        val state = _sessionState.value
+        if (state.currentItemId == null || state.isOffline) return null
+        val target = state.mediaDetail?.mediaSources?.firstOrNull { it.id == mediaSourceId }
+            ?: return null
+        if (state.currentMediaSource?.id == mediaSourceId) return null
+        _sessionState.update {
+            it.copy(currentMediaSource = target, mediaStreams = target.mediaStreams)
+        }
+        return reresolveAndSwap(
+            mode = aggregateStore.aggregate.value.playback.playbackMode,
+            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+            selection = null,
+            startPositionMs = currentPositionMs,
+            markForced = false,
+        )
+    }
+
+    /**
      * The shared re-resolve-and-swap ladder behind [reloadPlayback] and
      * [reloadForStreamChange]: item/source extraction → PlaybackInfo re-POST
      * → stream-URL / play-method fallback → session-state publish →
@@ -1050,13 +1157,14 @@ class PlayerSessionManager(
     /**
      * Builds the side-loaded [SubtitleSource] list for the engine.
      *
-     * Subtitles that already carry a server [MediaStream.deliveryUrl] (the
-     * PlaybackInfo response populates this for externally-delivered subs,
-     * including image subs when the PGS-direct-play profile opts in) use that
-     * URL. Otherwise, only **text** subs ([isSideLoadableEmbeddedSubtitle]) are
-     * considered for side-loading — the Jellyfin subtitle endpoint cannot serve
-     * image formats (PGS/VOBSUB/DVB), so those are skipped (left to burn-in on
-     * transcode, or container demux on direct play).
+     * Every stream resolves through the shared subtitle URL ladder
+     * ([PlaybackRepository.resolveSubtitleStreamUrl]): a server
+     * [MediaStream.deliveryUrl] (the PlaybackInfo response populates this for
+     * externally-delivered subs, including image subs when the PGS-direct-play
+     * profile opts in) rides verbatim; everything else goes through the
+     * text-only subtitle endpoint, whose builder refuses image formats
+     * (PGS/VOBSUB/DVB) — those are skipped (left to burn-in on transcode, or
+     * container demux on direct play).
      *
      * For the text subs that survive the codec gate, side-loading is
      * method-dependent: external subs are always side-loaded; embedded text
@@ -1075,40 +1183,25 @@ class PlayerSessionManager(
     ): List<SubtitleSource> {
         val streams = source?.mediaStreams ?: return emptyList()
         return streams.filter { it.type == StreamType.SUBTITLE }.mapNotNull { stream ->
-            val subUrl = when {
-                // Server-issued delivery URL (e.g. an external PGS sub the
-                // server can serve verbatim when PGS direct play is opted in).
-                !stream.deliveryUrl.isNullOrBlank() ->
-                    playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                // The Jellyfin subtitle endpoint only serves text formats — it
-                // cannot synthesize image subs (PGS/VOBSUB/DVB), so only
-                // side-load text-side-loadable streams. Image subs are left to
-                // the server's burn-in (transcode) or the player's container
-                // demux (direct play on MPV).
-                !isSideLoadableEmbeddedSubtitle(stream.codec) -> {
-                    Log.d("SubtitleUse", "buildExternalSubtitles: skipping non-sideloadable codec=${stream.codec} index=${stream.index}")
-                    return@mapNotNull null
-                }
-                // See the KDoc above for the DIRECT_PLAY rationale: embedded
-                // text subs are side-loaded only when not direct-playing.
-                stream.isExternal ||
-                    playMethod != PlayMethod.DIRECT_PLAY ->
-                    playbackRepository.buildSubtitleDeliveryUrl(
-                        detail.item.id, source.id, stream.index, stream.codec,
-                    )
-                else -> {
-                    Log.d("SubtitleUse", "buildExternalSubtitles: skipping embedded sub on direct play index=${stream.index}")
-                    return@mapNotNull null
-                }
-            }
-            if (subUrl.isBlank()) {
-                Log.d("SubtitleUse", "buildExternalSubtitles: blank url for index=${stream.index}")
+            // The shared ladder (see
+            // PlaybackRepository.resolveSubtitleStreamUrl): delivery URLs
+            // verbatim, everything else through the text-only subtitle
+            // endpoint, embedded tracks only when not direct-playing (the
+            // KDoc above records the direct-play rationale).
+            val subUrl = playbackRepository.resolveSubtitleStreamUrl(
+                stream = stream,
+                itemId = detail.item.id,
+                mediaSourceId = source.id,
+                includeEmbedded = playMethod != PlayMethod.DIRECT_PLAY,
+            )
+            if (subUrl == null) {
+                Log.d("SubtitleUse", "buildExternalSubtitles: skipping stream index=${stream.index} codec=${stream.codec}")
                 return@mapNotNull null
             }
 
             SubtitleSource(
                 url = subUrl,
-                label = stream.displayTitle ?: stream.title ?: stream.language ?: "Unknown",
+                label = stream.displayName,
                 language = stream.language,
                 mimeType = null, // Mapped by the engine using codec or extension.
                 codec = stream.codec,

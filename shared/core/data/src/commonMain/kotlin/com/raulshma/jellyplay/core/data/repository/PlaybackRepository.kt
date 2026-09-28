@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
@@ -154,6 +155,33 @@ interface PlaybackRepository {
         index: Int,
         codec: String?,
     ): String
+
+    /**
+     * The shared subtitle URL ladder both side-load paths resolve through
+     * (the in-app engines' side-loading and the external-player hand-off):
+     * a server-issued `deliveryUrl` resolves verbatim through
+     * [getSubtitleDeliveryUrl] (the one arm image subs can ride); any other
+     * stream goes through [buildSubtitleDeliveryUrl], which refuses image
+     * codecs and hands back "" — the endpoint serves text only. Embedded
+     * (non-external) streams resolve only when [includeEmbedded]: the
+     * external hand-off never embeds (the target player demuxes the
+     * container itself), while the in-app path embeds exactly when not
+     * direct-playing (transcoded HLS does not reliably expose embedded
+     * tracks in-manifest). Null = no URL for this stream — skip it.
+     */
+    fun resolveSubtitleStreamUrl(
+        stream: MediaStream,
+        itemId: String,
+        mediaSourceId: String,
+        includeEmbedded: Boolean,
+    ): String? {
+        stream.deliveryUrl?.takeIf { it.isNotBlank() }?.let { delivery ->
+            return getSubtitleDeliveryUrl(delivery).takeIf { it.isNotBlank() }
+        }
+        if (!stream.isExternal && !includeEmbedded) return null
+        return buildSubtitleDeliveryUrl(itemId, mediaSourceId, stream.index, stream.codec)
+            .takeIf { it.isNotBlank() }
+    }
 
     /**
      * Server-reported reasons the current session is transcoding [itemId]

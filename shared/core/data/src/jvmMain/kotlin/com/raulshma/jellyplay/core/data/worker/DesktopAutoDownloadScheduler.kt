@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -45,6 +46,8 @@ class DesktopAutoDownloadScheduler(
     downloadRepository: DownloadRepository,
     downloadIntake: DownloadIntake,
     episodeCatalogue: EpisodeCatalogue,
+    /** Active-server identity for the check's per-user allow-list gate. */
+    serverIdentityStore: ServerIdentityStore,
     /** The process-wide application scope (DatastoreQualifiers.applicationScope in Koin). */
     private val scope: CoroutineScope,
 ) {
@@ -53,6 +56,7 @@ class DesktopAutoDownloadScheduler(
         downloadRepository = downloadRepository,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        serverIdentityStore = serverIdentityStore,
         // The worker's `isStopped` twin: stop() cancels (and nulls) the loop
         // job, so the pass stops between series/seasons, not just between
         // passes. The check only ever runs inside that job, so reading the

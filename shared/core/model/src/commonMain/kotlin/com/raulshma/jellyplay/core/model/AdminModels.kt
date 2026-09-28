@@ -217,3 +217,32 @@ data class AdminDashboardSummary(
     val recentActivity: List<ActivityLogEntry> = emptyList(),
     val tasks: List<ScheduledTaskInfo> = emptyList(),
 )
+
+/**
+ * The server-side backup archive's manifest (Jellyfin backup service, server
+ * 10.11+): when it was taken, which components it covers, and the archive
+ * path the restore call names. [dateCreated] is the server's raw ISO-8601
+ * string — renderers parse it defensively (DevicesScreen precedent).
+ */
+@Immutable
+@Serializable
+data class ServerBackup(
+    val backupEngineVersion: String = "",
+    val dateCreated: String = "",
+    val options: BackupComponentOptions = BackupComponentOptions(),
+    val path: String = "",
+    val serverVersion: String = "",
+)
+
+/**
+ * The four backup components a create request selects (and a manifest
+ * reports). All default off so the caller decides the exact archive content.
+ */
+@Immutable
+@Serializable
+data class BackupComponentOptions(
+    val metadata: Boolean = false,
+    val trickplay: Boolean = false,
+    val subtitles: Boolean = false,
+    val database: Boolean = false,
+)

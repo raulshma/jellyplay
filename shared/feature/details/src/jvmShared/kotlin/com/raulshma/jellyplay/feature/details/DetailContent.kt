@@ -130,6 +130,18 @@ internal fun DetailContent(
         canRefreshMetadata = state.canManageMetadata && state.capabilities.remoteDiscovery,
         canIdentify = state.canManageMetadata && state.capabilities.remoteDiscovery &&
             (item?.mediaType == MediaType.SERIES || item?.mediaType == MediaType.MOVIE),
+        canPickVersion = !isAudio && !isSeries && (state.detail?.mediaSources?.size ?: 0) > 1,
+        onVersionPicker = callbacks.playback.onOpenVersionPicker,
+        // The Merge/Split endpoints are Movies-only server-side
+        // (/Videos/MergeVersions, /Videos/{id}/AlternateSources) and
+        // admin-gated (RequiresElevation) — the same gate the refresh/identify
+        // entries resolve. Split only applies to an already-merged item.
+        canMergeVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+            item?.mediaType == MediaType.MOVIE,
+        onMergeVersions = callbacks.metadata.onOpenMergeVersions,
+        canSplitVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+            item?.mediaType == MediaType.MOVIE && (state.detail?.mediaSources?.size ?: 0) > 1,
+        onSplitVersions = callbacks.metadata.onSplitVersions,
         canAddToPlaylist = state.capabilities.remoteDiscovery,
         canAddToCollection = state.capabilities.remoteDiscovery,
         canInstantMix = isAudio && state.capabilities.remoteDiscovery,

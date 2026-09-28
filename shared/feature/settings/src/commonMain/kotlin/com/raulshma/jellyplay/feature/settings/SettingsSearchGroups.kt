@@ -85,7 +85,8 @@ internal object SettingsScreenGroups {
      * precedent: a prefix split, no second declaration list).
      */
     val systemCore = SystemSearchItems.filter {
-        !it.id.startsWith(SCREENSAVER_ID_PREFIX) && !it.id.startsWith(IDLE_AMBIENT_ID_PREFIX)
+        !it.id.startsWith(SCREENSAVER_ID_PREFIX) && !it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) &&
+            !it.id.startsWith(DISCORD_PRESENCE_ID_PREFIX) && !it.id.startsWith(HOOKS_ID_PREFIX)
     }.asSearchGroup("system.core")
     val systemScreensaver = SystemSearchItems.filter { it.id.startsWith(SCREENSAVER_ID_PREFIX) }
         .asSearchGroup("system.screensaver")
@@ -97,6 +98,20 @@ internal object SettingsScreenGroups {
      */
     val systemIdleAmbient = SystemSearchItems.filter { it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) }
         .asSearchGroup("system.idleAmbient")
+
+    /**
+     * the desktop Discord Rich Presence toggle (feature 4.2) — its own
+     * capability-gated group beside the idle-ambient one, same shape.
+     */
+    val systemDiscordPresence = SystemSearchItems.filter { it.id.startsWith(DISCORD_PRESENCE_ID_PREFIX) }
+        .asSearchGroup("system.discordPresence")
+
+    /**
+     * the desktop playback-event shell-hook rows (feature 4.3) — the master
+     * toggle plus the five mpv-shim-named commands, one group.
+     */
+    val systemHooks = SystemSearchItems.filter { it.id.startsWith(HOOKS_ID_PREFIX) }
+        .asSearchGroup("system.hooks")
 
     // ── HomeSettingsScreen ─────────────────────────────────────────────
     /**
@@ -126,14 +141,14 @@ internal object SettingsScreenGroups {
     )
 
     /**
-     * One screen group fed by three adjacent engine declaration lists —
+     * One screen group fed by four adjacent engine declaration lists —
      * the screen renders a single "Engine Config" group whose rows depend
      * on the preferred player. The desktop-gated mpv audio-device rows
      * declare their [RowAdmission.Platform] gate here — the same
      * declaration `playbackEngineScreenRowTotal` and the screen's emission
      * `if`s read.
      */
-    val playbackEngine = (MpvEngineSearchItems + VlcEngineSearchItems + ExoPlayerEngineSearchItems)
+    val playbackEngine = (MpvEngineSearchItems + VlcEngineSearchItems + ExoPlayerEngineSearchItems + ExternalEngineSearchItems)
         .asSearchGroup("playback.engine", PlaybackEngineRowAdmissions)
 
     val playbackSyncPlay = SyncPlaySearchItems.asSearchGroup("playback.syncPlay")
@@ -213,6 +228,8 @@ internal object SettingsScreenGroups {
         systemCore,
         systemScreensaver,
         systemIdleAmbient,
+        systemDiscordPresence,
+        systemHooks,
         homeDisplay,
         homeNextUp,
         homeLayout,
@@ -256,6 +273,12 @@ internal object SettingsScreenGroups {
 
     /** Prefix shared by every idle-ambient id in [SystemSearchItems]. */
     internal const val IDLE_AMBIENT_ID_PREFIX = "idle_ambient_"
+
+    /** Prefix shared by every Discord-presence id in [SystemSearchItems]. */
+    internal const val DISCORD_PRESENCE_ID_PREFIX = "discord_"
+
+    /** Prefix shared by every shell-hook id in [SystemSearchItems]. */
+    internal const val HOOKS_ID_PREFIX = "hooks_"
 
     /**
      * The leading trio of [LanguageSettingsSearchItems] (app / audio /

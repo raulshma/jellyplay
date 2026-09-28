@@ -153,6 +153,37 @@ internal class ItemPlaybackPreferenceWriter(
     }
 
     /**
+     * Persists the preferred version (media-source id) under
+     * [ScopePolicy.SERIES_THEN_ITEM] — a series row applies to every episode,
+     * a standalone movie pins its own row. The Version sheet's footer toggle
+     * drives this with the CURRENT source id.
+     */
+    fun setPreferredMediaSource(mediaSourceId: String) {
+        val key = resolveKey(ScopePolicy.SERIES_THEN_ITEM) ?: return
+        scope.launch {
+            repository.setPreferredMediaSource(scope = key.scope, key = key.key, mediaSourceId = mediaSourceId)
+            onPreferencesChanged()
+        }
+    }
+
+    /**
+     * The unambiguous "forget this version": clears the preferred source from
+     * BOTH the series and the item rows (the resolver's precedence means a
+     * leftover row of either scope would otherwise still win). No-ops per row
+     * when the row doesn't exist.
+     */
+    fun clearPreferredMediaSource() {
+        val seriesId = getCurrentSeriesId()
+        val itemId = getCurrentItemId()
+        if (seriesId == null && itemId == null) return
+        scope.launch {
+            seriesId?.let { repository.setPreferredMediaSource(PlaybackPrefScope.SERIES, it, null) }
+            itemId?.let { repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, it, null) }
+            onPreferencesChanged()
+        }
+    }
+
+    /**
      * The unambiguous "Inherit": clears the render override from BOTH the
      * series and the item rows (the resolver's precedence means a leftover
      * row of either scope would otherwise still win). No-ops per row when the

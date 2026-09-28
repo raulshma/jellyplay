@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.admin.backups.AdminBackupsScreen
 import com.raulshma.jellyplay.feature.admin.dashboard.AdminDashboardScreen
 import com.raulshma.jellyplay.feature.admin.devices.DevicesScreen
 import com.raulshma.jellyplay.feature.admin.logs.LogsScreen
@@ -46,6 +47,7 @@ fun EntryProviderScope<NavKey>.adminSection(
                 onWatchedMediaCleanup = { navigator.navigate(Route.WatchedMediaCleanup) },
                 onPlugins = { navigator.navigate(Route.Plugins) },
                 onUsers = { navigator.navigate(Route.Users) },
+                onBackups = { navigator.navigate(Route.AdminBackups) },
             )
         }
     }
@@ -84,6 +86,19 @@ fun EntryProviderScope<NavKey>.adminSection(
             onRefreshAdmin = onRefreshAdmin,
         ) {
             LogsScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
+    }
+
+    entry<Route.AdminBackups> {
+        AdminRouteContainer(
+            onBack = { navigator.goBack() },
+            isAdmin = isAdmin,
+            isRefreshingAdmin = isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ) {
+            AdminBackupsScreen(
                 onBack = { navigator.goBack() },
             )
         }

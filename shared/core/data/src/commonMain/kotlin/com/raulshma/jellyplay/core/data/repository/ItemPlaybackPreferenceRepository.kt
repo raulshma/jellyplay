@@ -94,6 +94,18 @@ interface ItemPlaybackPreferenceRepository {
         overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?,
     )
 
+    /**
+     * Persists the preferred version (media-source id) for [scope]/[key] —
+     * the player's "Version" sheet "remember" toggle. Other fields on the row
+     * are preserved; [mediaSourceId] = null clears the memory, dropping the
+     * row entirely when nothing else is remembered.
+     */
+    suspend fun setPreferredMediaSource(
+        scope: PlaybackPrefScope,
+        key: String,
+        mediaSourceId: String?,
+    )
+
     /** Removes the preference row for [scope]/[key], if any. */
     suspend fun delete(scope: PlaybackPrefScope, key: String)
 }

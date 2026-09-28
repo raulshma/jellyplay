@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.network.library.filterByParentalRating
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
@@ -24,9 +25,17 @@ class DreamImageProvider(
 ) {
     private val imageLoader: ImageLoader by lazy { SingletonImageLoader.get(context) }
 
+    /**
+     * [maxParentalRating] is the dream's LOCAL cap (canonical rating age;
+     * null = no local cap) — a second, stricter client-side pass: the network
+     * tail already filters by the signed-in user's server policy, and the
+     * screensaver must never show above this cap even if the profile allows
+     * more. Unrated items pass (the helper's rule).
+     */
     suspend fun fetchImages(
         categories: Set<DreamImageCategory>,
         count: Int = 50,
+        maxParentalRating: Int? = null,
     ): List<DreamImage> = withContext(Dispatchers.IO) {
         val mediaTypes = categories.flatMap { it.toMediaTypes() }.distinct()
         if (mediaTypes.isEmpty()) return@withContext emptyList()
@@ -41,18 +50,26 @@ class DreamImageProvider(
 
         result.getOrNull()?.items.orEmpty()
             .filter { it.id.isNotBlank() }
+            .filterByParentalRating(maxParentalRating)
             .mapNotNull { item ->
                 val category = when (item.mediaType) {
                     MediaType.MOVIE -> DreamImageCategory.MOVIES
                     MediaType.SERIES -> DreamImageCategory.SERIES
                     MediaType.AUDIO, MediaType.ALBUM, MediaType.ARTIST -> DreamImageCategory.MUSIC
+                    MediaType.PHOTO -> DreamImageCategory.PHOTOS
                     else -> return@mapNotNull null
                 }
-                val backdropUrl = imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920)
-                if (backdropUrl.isBlank()) return@mapNotNull null
+                // Photos surface their Primary image (the photo-album grid's
+                // URL surface); video/music entries use the backdrop.
+                val imageUrl = if (category == DreamImageCategory.PHOTOS) {
+                    imageUrlProvider.getImageUrl(item.id)
+                } else {
+                    imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920)
+                }
+                if (imageUrl.isBlank()) return@mapNotNull null
                 DreamImage(
                     itemId = item.id,
-                    backdropUrl = backdropUrl,
+                    imageUrl = imageUrl,
                     title = item.name,
                     type = category,
                 )
@@ -96,5 +113,8 @@ class DreamImageProvider(
         DreamImageCategory.MOVIES -> listOf(MediaType.MOVIE)
         DreamImageCategory.SERIES -> listOf(MediaType.SERIES)
         DreamImageCategory.MUSIC -> listOf(MediaType.AUDIO, MediaType.ALBUM)
+        // The photo-album grid's query surface: the same getMediaItems call,
+        // constrained to Photo items.
+        DreamImageCategory.PHOTOS -> listOf(MediaType.PHOTO)
     }
 }

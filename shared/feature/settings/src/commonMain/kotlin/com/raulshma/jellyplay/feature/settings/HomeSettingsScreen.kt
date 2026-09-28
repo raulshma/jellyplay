@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merg
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
@@ -114,7 +115,7 @@ internal val homeScreenGroups: List<Set<String>> = listOf(
 /**
  * The display group's `SettingsItemList(total = …)` row count, derived by
  * [rowTotalFor] from the [SettingsScreenGroups.homeDisplay] declaration
- * (seven always-rendered config rows — the declared `unhide_cw` admission is
+ * (eight always-rendered config rows — the declared `unhide_cw` admission is
  * deliberately absent, so the strict derivation excludes it) plus the
  * conditional unhide action row, which renders only while hidden
  * continue-watching items exist — a content-state condition with no
@@ -205,7 +206,7 @@ fun HomeSettingsScreen(
                 ) {
                     // Derived from the declared display group (the derivation
                     // source the row total below reads — one declaration, no
-                    // parallel id list): the seven always-rendered config rows
+                    // parallel id list): the eight always-rendered config rows
                     // in catalog order, plus the unhide row while hidden
                     // continue-watching items exist.
                     val displayItems = remember(preferences.hiddenCwItemIds) {
@@ -295,6 +296,16 @@ fun HomeSettingsScreen(
                                             onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setContinueWatchingClickBehavior(it) } },
                                         )
                                     },
+                                )
+                            }
+                            HomeSettingsIds.NEXT_UP_HIDDEN -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.EyeOff,
+                                    title = rowTitle(HomeSettingsIds.NEXT_UP_HIDDEN),
+                                    subtitle = stringResource(Res.string.settings_next_up_hidden_brief),
+                                    trailingText = if (preferences.nextUpExcludedSeriesIds.isEmpty()) "" else "${preferences.nextUpExcludedSeriesIds.size}",
+                                    highlighted = highlightSettingId == HomeSettingsIds.NEXT_UP_HIDDEN,
+                                    onClick = { navActions.onNavigate(Route.NextUpExcluded) },
                                 )
                             }
                             HomeSettingsIds.UNHIDE_CW -> {

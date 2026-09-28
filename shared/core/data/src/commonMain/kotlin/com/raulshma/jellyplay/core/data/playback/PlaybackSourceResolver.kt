@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 
 /**
@@ -47,12 +48,16 @@ sealed interface ResolvedPlaybackSource {
      * A server stream URL resolved via
      * `PlaybackRepository.getStreamUrl(itemId, mediaSourceId, startTimeTicks)`.
      * [mediaSourceId] is the chosen source (explicit match else first).
+     * [mediaSource] is that chosen source's full model (its stream list feeds
+     * e.g. the external-player subtitle hand-off); `null` when the detail
+     * carried no sources.
      */
     data class Stream(
         override val itemId: String,
         val url: String,
         override val title: String,
         val mediaSourceId: String?,
+        val mediaSource: MediaSource? = null,
     ) : ResolvedPlaybackSource
 }
 

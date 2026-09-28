@@ -223,7 +223,9 @@ class SettingsCatalogScreenContractTest {
         // these groups must move it onto the admission-derived ratchet above.
         val sizeDerivedGroups = mapOf(
             "storage.network" to 11,
-            "appearance.library" to 10,
+            // 10 shipped rows + the "Show Missing Episodes" and
+            // "Prefer Logo Images" library-display toggles.
+            "appearance.library" to 12,
         )
         sizeDerivedGroups.forEach { (groupId, declaredCount) ->
             val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
@@ -315,6 +317,28 @@ class SettingsCatalogScreenContractTest {
         }
         assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.DOWNLOAD_SCHEDULE, RowAdmissionFlags()))
 
+        // …the auto-download retention cluster rides the auto-download toggle
+        // the same way, and the "Clean up now" action additionally rides the
+        // keep-days picker being non-zero (the screen feeds the > 0 state).
+        val autoDownloadOn = RowAdmissionFlags(parentsOn = setOf(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES))
+        listOf(
+            StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD,
+            StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS,
+            StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS,
+            StorageSettingsIds.AUTO_DOWNLOAD_SERVERS,
+        ).forEach {
+            assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted(it, autoDownloadOn), "$it admits on the auto-download toggle")
+            assertFalse(SettingsScreenGroups.storageDownloads.rowAdmitted(it, RowAdmissionFlags()), "$it drops when auto-download is off")
+        }
+        val keepDaysOn = RowAdmissionFlags(
+            parentsOn = setOf(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES, StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS),
+        )
+        assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW, keepDaysOn))
+        assertFalse(
+            SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW, autoDownloadOn),
+            "clean-up-now drops while the keep-days window is off",
+        )
+
         // …while the dialogue-boost strength row rides the advanced toggle
         // AND its parent toggle (All(Advanced, WhenOn) — the structural
         // advanced blocks around both emission sites, playback and audio,
@@ -334,6 +358,20 @@ class SettingsCatalogScreenContractTest {
                 RowAdmissionFlags(parentsOn = setOf(PlaybackSettingsIds.DIALOGUE_BOOST)),
             ),
             "the strength row must drop while advanced mode is off",
+        )
+
+        // …the per-codec passthrough rows ride the master passthrough toggle
+        // the same way (All(Advanced, WhenOn) — no bitstreaming, no
+        // per-codec allow-list to configure).
+        val passthroughOn = RowAdmissionFlags(showAdvanced = true, parentsOn = setOf(PlaybackSettingsIds.AUDIO_PASSTHROUGH))
+        assertTrue(SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.PASSTHROUGH_CODEC_AC3, passthroughOn))
+        assertTrue(SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackSettingsIds.PASSTHROUGH_CODEC_TRUEHD, passthroughOn))
+        assertFalse(
+            SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(
+                PlaybackSettingsIds.PASSTHROUGH_CODEC_AC3,
+                RowAdmissionFlags(showAdvanced = true),
+            ),
+            "the codec rows must drop while the master passthrough toggle is off",
         )
 
         // …and the audio strength rows also ride the advanced toggle
@@ -572,12 +610,28 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.systemScreensaver.itemIds.all { it.startsWith(SettingsScreenGroups.SCREENSAVER_ID_PREFIX) },
             "system.screensaver must hold only screensaver ids",
         )
-        // The idle-ambient (desktop) rows are split into their own group —
-        // the three groups together still partition SystemSearchItems exactly.
-        assertEquals(SystemSearchItems.size, SettingsScreenGroups.systemCore.items.size + SettingsScreenGroups.systemScreensaver.items.size + SettingsScreenGroups.systemIdleAmbient.items.size)
+        // The idle-ambient (desktop), Discord-presence (desktop) and
+        // shell-hooks (desktop) rows are each split into their own group —
+        // the five groups together still partition SystemSearchItems exactly.
+        assertEquals(
+            SystemSearchItems.size,
+            SettingsScreenGroups.systemCore.items.size +
+                SettingsScreenGroups.systemScreensaver.items.size +
+                SettingsScreenGroups.systemIdleAmbient.items.size +
+                SettingsScreenGroups.systemDiscordPresence.items.size +
+                SettingsScreenGroups.systemHooks.items.size,
+        )
         assertTrue(
             SettingsScreenGroups.systemIdleAmbient.itemIds.all { it.startsWith(SettingsScreenGroups.IDLE_AMBIENT_ID_PREFIX) },
             "system.idleAmbient must hold only idle-ambient ids",
+        )
+        assertTrue(
+            SettingsScreenGroups.systemDiscordPresence.itemIds.all { it.startsWith(SettingsScreenGroups.DISCORD_PRESENCE_ID_PREFIX) },
+            "system.discordPresence must hold only discord-presence ids",
+        )
+        assertTrue(
+            SettingsScreenGroups.systemHooks.itemIds.all { it.startsWith(SettingsScreenGroups.HOOKS_ID_PREFIX) },
+            "system.hooks must hold only shell-hook ids",
         )
     }
 
@@ -689,17 +743,19 @@ class SettingsCatalogScreenContractTest {
         assertEquals(11, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
 
         // Downloads: the three download_schedule_* window rows only when
-        // scheduling is on (their declared WhenOn gate); every other record
-        // renders unconditionally (its non-advanced base).
+        // scheduling is on (their declared WhenOn gate); the four auto-download
+        // retention rows only when auto-download is on; clean-up-now only when
+        // the keep-days window is set; every other record renders
+        // unconditionally (its non-advanced base).
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 3,
+            SettingsScreenGroups.storageDownloads.items.size - 8,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to false)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size,
+            SettingsScreenGroups.storageDownloads.items.size - 5,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to true)),
@@ -707,6 +763,30 @@ class SettingsCatalogScreenContractTest {
         )
         assertEquals(7, rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to false))))
         assertEquals(10, rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to true))))
+        // The auto-download retention cluster: the four policy rows ride the
+        // auto-download toggle, and clean-up-now additionally rides the
+        // keep-days picker being non-zero (14 = 10 + the four cluster rows;
+        // 15 adds the clean-up action once keep-days is on).
+        assertEquals(
+            14,
+            rowTotalFor(
+                SettingsScreenGroups.storageDownloads,
+                RowAdmissionFlags(parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to true, StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES to true)),
+            ),
+        )
+        assertEquals(
+            15,
+            rowTotalFor(
+                SettingsScreenGroups.storageDownloads,
+                RowAdmissionFlags(
+                    parentsOn = rowParentsOn(
+                        StorageSettingsIds.DOWNLOAD_SCHEDULE to true,
+                        StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES to true,
+                        StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS to true,
+                    ),
+                ),
+            ),
+        )
     }
 
     @Test
@@ -752,9 +832,11 @@ class SettingsCatalogScreenContractTest {
         )
         // Every non-advanced declaration renders with caps on (isTv off: the
         // two TV rows ride isTv alone — shipped semantics, also without
-        // advanced mode).
+        // advanced mode), EXCEPT the two still-watching rows, which ride the
+        // autoplay toggle (their declared WhenOn gate — the flags here carry
+        // no parentsOn).
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced },
+            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } - 2,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -766,7 +848,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 2, // minus the two TV rows
+            SettingsScreenGroups.playbackPlayer.items.size - 4, // minus the two TV rows and the two WhenOn(autoplay) still-watching rows
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -792,12 +874,19 @@ class SettingsCatalogScreenContractTest {
 
         // Advanced video: the whole group only composes behind the advanced
         // toggle (its declared Advanced base — the flags carry that toggle);
-        // the dialogue-boost strength row additionally rides its parent
-        // toggle (its declared All gate).
-        val boostOn = RowAdmissionFlags(showAdvanced = true, parentsOn = rowParentsOn(PlaybackSettingsIds.DIALOGUE_BOOST to true))
+        // the dialogue-boost strength row AND the five per-codec passthrough
+        // rows additionally ride their parent toggles (their declared All
+        // gates) — with no parents on, those six drop.
         assertEquals(
-            SettingsScreenGroups.playbackAdvancedVideo.items.size - 1,
+            SettingsScreenGroups.playbackAdvancedVideo.items.size - 6,
             rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, RowAdmissionFlags(showAdvanced = true)),
+        )
+        val boostOn = RowAdmissionFlags(
+            showAdvanced = true,
+            parentsOn = rowParentsOn(
+                PlaybackSettingsIds.DIALOGUE_BOOST to true,
+                PlaybackSettingsIds.AUDIO_PASSTHROUGH to true,
+            ),
         )
         assertEquals(
             SettingsScreenGroups.playbackAdvancedVideo.items.size,
@@ -935,13 +1024,13 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `home display row total is the seven declared rows plus the conditional unhide row`() {
-        // The retired oracle double-counted: items.size (8, including the
-        // unhide row) + 1 — while the screen emits 7 rows without hidden CW
-        // items and 8 with. The derivation fixes the count to the emitted
-        // rows: the seven always-declared rows plus the explicit unhide +1.
-        assertEquals(7, homeDisplayScreenRowTotal(hiddenCwItems = 0))
-        assertEquals(8, homeDisplayScreenRowTotal(hiddenCwItems = 1))
+    fun `home display row total is the eight declared rows plus the conditional unhide row`() {
+        // The retired oracle double-counted: items.size (9, including the
+        // unhide row) + 1 — while the screen emits 8 rows without hidden CW
+        // items and 9 with. The derivation fixes the count to the emitted
+        // rows: the eight always-declared rows plus the explicit unhide +1.
+        assertEquals(8, homeDisplayScreenRowTotal(hiddenCwItems = 0))
+        assertEquals(9, homeDisplayScreenRowTotal(hiddenCwItems = 1))
         assertEquals(
             SettingsScreenGroups.homeDisplay.items.size - 1,
             homeDisplayScreenRowTotal(hiddenCwItems = 0),
@@ -961,7 +1050,9 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.appearanceLibrary.items.size + 1,
             appearanceLibraryScreenRowTotal(),
         )
-        assertEquals(11, appearanceLibraryScreenRowTotal())
+        // 12 declared rows (the shipped set + Show Missing Episodes + Prefer
+        // Logo Images) + the screen-local confirm-library-reset action row.
+        assertEquals(13, appearanceLibraryScreenRowTotal())
     }
 
     @Test

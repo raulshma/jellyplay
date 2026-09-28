@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.StoragePreferences
 import kotlinx.coroutines.flow.StateFlow
 
@@ -30,19 +32,46 @@ data class StorageBreakdown(
  * The FS walks and cache clears delegate to the [StorageAreas] platform seam
  * (Android keeps the verbatim Context bodies; desktop walks its own
  * downloads/http-cache roots), the download-mount enumeration to
- * [StorageMountsProvider], and the auto-download scheduler poke to
- * [AutoDownloadSync] —  binds the actuals at the Koin edge.
+ * [StorageMountsProvider], the auto-download scheduler poke to
+ * [AutoDownloadSync], and the keep-days "Clean up now" action to
+ * [AutoDownloadCleanup] — the Koin edge binds the actuals.
+ *
+ * The configured-server list ([servers]) feeds the auto-download allow-list
+ * multi-select — the same [AuthRepository.servers] flow the server-management
+ * screen renders.
  */
 class StorageSettingsViewModel(
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
     advancedSettings: AdvancedSettingsGate,
     editor: PreferencesEditor,
     private val autoDownloadSync: AutoDownloadSync,
+    private val autoDownloadCleanup: AutoDownloadCleanup,
     private val storageAreas: StorageAreas,
     private val storageMountsProvider: StorageMountsProvider,
+    authRepository: AuthRepository,
 ) : SettingsSectionViewModel(advancedSettings, editor) {
 
     val preferences: StateFlow<StoragePreferences> = projections.storagePreferences
+
+    /** Every configured server — the allow-list picker's option source. */
+    var servers by composeState<List<ServerInfo>>(emptyList())
+        private set
+
+    init {
+        launch {
+            authRepository.servers.collect { serverList ->
+                servers = serverList
+            }
+        }
+        refreshStorageMounts()
+    }
+
+    private fun refreshStorageMounts() {
+        launch {
+            val mounts = runCatching { storageMountsProvider.availableMounts() }.getOrDefault(emptyList())
+            storageMounts = mounts
+        }
+    }
 
     /**
      * Storage mounts the user can pick for downloads.
@@ -54,17 +83,6 @@ class StorageSettingsViewModel(
     var storageMounts by composeState<List<StorageMount>>(emptyList())
         private set
 
-    init {
-        refreshStorageMounts()
-    }
-
-    private fun refreshStorageMounts() {
-        launch {
-            val mounts = runCatching { storageMountsProvider.availableMounts() }.getOrDefault(emptyList())
-            storageMounts = mounts
-        }
-    }
-
     var cacheSizeMb by composeState(0L)
         private set
 
@@ -72,6 +90,14 @@ class StorageSettingsViewModel(
         private set
 
     var cacheError by composeState<String?>(null)
+        private set
+
+    /** Summary of the last "Clean up now" pass, rendered beside the row. */
+    var lastCleanupSummary by composeState<AutoDownloadCleanupSummary?>(null)
+        private set
+
+    /** True while the on-demand retention sweep is running (the row shows progress). */
+    var isCleaningUp by composeState(false)
         private set
 
     /**
@@ -135,6 +161,23 @@ class StorageSettingsViewModel(
         editor.edit {
             downloads.setAutoDownloadNewEpisodes(enabled)
             autoDownloadSync.sync()
+        }
+    }
+
+    /**
+     * One on-demand keep-days retention pass (the downloads block's
+     * "Clean up now" action). Runs on the VM scope; the summary is surfaced
+     * beside the row.
+     */
+    fun cleanupDownloadsNow() {
+        if (isCleaningUp) return
+        launch {
+            isCleaningUp = true
+            try {
+                lastCleanupSummary = autoDownloadCleanup.cleanupNow()
+            } finally {
+                isCleaningUp = false
+            }
         }
     }
 }

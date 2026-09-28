@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.PlayedFlagRow
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.model.maxBitrate
@@ -28,6 +29,7 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -580,6 +582,68 @@ class DownloadRepositoryImpl(
         downloadDao.updatePriority(id, priority)
     }
 
+    /**
+     * The keep-days retention sweep (see the interface KDoc). `playback_state`
+     * is the played-state surface [PlayedStateSyncImpl] mirrors on every
+     * watched flip (both the offline and the confirmed-online paths route
+     * through `OfflineRepository.applyPlayedState` → this DAO), so
+     * `isPlayed == true` is the "safe to reclaim" signal; an item with no
+     * playback row (never written — a legacy download) is treated as
+     * unwatched and protected.
+     */
+    override suspend fun sweepExpiredAutoDownloads(): AutoDownloadSweepResult {
+        /**
+         * One sweep step: any failure (except cancellation) logs [step]'s
+         * context and abandons the whole sweep as EMPTY — a partial sweep
+         * must never report or half-delete.
+         */
+        suspend fun <T> step(step: String, block: suspend () -> T): T? =
+            runCatchingRethrowingCancellation { block() }
+                .onFailure { Log.w(TAG, "Retention sweep $step failed", it) }
+                .getOrNull()
+
+        val keepDays = step("keep-days preference read") {
+            downloadsStore.downloads.first().autoDownloadKeepDays
+        } ?: return AutoDownloadSweepResult.EMPTY
+        // 0 = off — the sweep is a no-op unless the user opted into a window.
+        if (keepDays <= 0) return AutoDownloadSweepResult.EMPTY
+
+        val cutoffMs = wallNowMillis() - keepDays.toLong() * MILLIS_PER_DAY
+        val candidates = step("age query") {
+            downloadDao.getCompletedOlderThan(cutoffMs)
+        } ?: return AutoDownloadSweepResult.EMPTY
+        if (candidates.isEmpty()) return AutoDownloadSweepResult.EMPTY
+
+        val deletable = step("played-state lookup") {
+            val playedById = playbackStateDao.getPlayedFlagsFor(candidates.map { it.mediaItemId })
+                .associateBy(PlayedFlagRow::id)
+            candidates.filter { playedById[it.mediaItemId]?.isPlayed == true }
+        } ?: return AutoDownloadSweepResult.EMPTY
+        if (deletable.isEmpty()) return AutoDownloadSweepResult.EMPTY
+
+        // Reclaimed bytes are read before the rows are gone (the deletion
+        // cascade removes them inside its transaction). A failed read is
+        // tolerated — the count still reports, bytes just read zero.
+        val bytesReclaimed = runCatchingRethrowingCancellation {
+            downloadDao.getTotalBytesFor(deletable.map { it.id })
+        }.getOrDefault(0L)
+        step("deletion of ${deletable.size} downloads") {
+            deletionCore.delete(
+                downloads = deletable,
+                deleteMetadataRows = {
+                    deletable.forEach { entity ->
+                        offlineMediaDao.deleteById(entity.mediaItemId)
+                        playbackStateDao.deleteById(entity.mediaItemId)
+                        syncBaselineDao.deleteById(entity.mediaItemId)
+                    }
+                },
+            )
+        } ?: return AutoDownloadSweepResult.EMPTY
+        return AutoDownloadSweepResult(deletable.size, bytesReclaimed).also {
+            Log.i(TAG, "Retention sweep deleted ${it.deletedCount} downloads (${it.bytesReclaimed} bytes)")
+        }
+    }
+
     // The entity ⟷ domain mappers this class used to carry as private members
     // (MediaItem/MediaDetail → OfflineMediaEntity, MediaItem → PlaybackStateEntity,
     // DownloadEntity → DownloadItem, DownloadProgressRow → DownloadProgress) live
@@ -618,6 +682,9 @@ class DownloadRepositoryImpl(
 
     companion object {
         private const val TAG = "DownloadRepository"
+
+        /** Keep-days → cutoff conversion (the retention sweep's day unit). */
+        private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
 
         // Exponential backoff base delay applied to every DownloadWorker
         // request so a flaky server is not hammered by concurrent retries.

@@ -49,12 +49,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost_strength
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downmix_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_drop_late_frames
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_duck_on_phone_call
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_post_padding
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_pre_padding
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_recording_quality
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_browser
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_external_player_app
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_external_player_app_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_frame_drop
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_frame_rate_strategy
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gesture_indicator_side
@@ -68,9 +71,16 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_inte
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_join_behavior
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_keep_screen_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_tv_stream
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_audio_channels
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_caching
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_orientation
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pass_out_protection
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_ac3
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_dts
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_dtshd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_eac3
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_truehd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_on_focus_loss
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_metadata
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine
@@ -91,6 +101,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_loop_filter
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_silence
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_swipe_seek_range
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_tolerance
@@ -133,6 +147,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_sp
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_strength_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_downmix_boost_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_duck_on_transient_focus_loss_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_duck_on_transient_focus_loss_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dvr_post_padding_subtitle
@@ -157,6 +172,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_skip_s
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_skip_silence_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_video_scaling_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_video_scaling_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_external_player_app_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_external_player_app_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_frame_rate_matching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_frame_rate_matching_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gesture_indicator_side_subtitle
@@ -171,6 +188,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_keep_scree
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_keep_screen_on_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_live_stream_option_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_live_stream_option_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_max_audio_channels_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_device_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_device_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_audio_exclusive_subtitle
@@ -208,10 +226,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tscale
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tscale_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_video_output_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_video_output_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offline_playback_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_orientation_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_orientation_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pass_out_protection_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pass_out_protection_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_passthrough_codec_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_on_focus_loss_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_on_focus_loss_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_subtitle
@@ -236,6 +256,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_time_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_segments_on_seek_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_episodes_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_swipe_seek_range_subtitle
@@ -282,6 +306,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_
  */
 internal object PlaybackSettingsIds {
     const val PLAYER_ENGINE = "player_engine"
+    const val EXTERNAL_PLAYER_APP = "external_player_app"
     const val SEEK_DURATION = "seek_duration"
     const val ORIENTATION = "orientation"
     const val GESTURES = "gestures"
@@ -290,6 +315,8 @@ internal object PlaybackSettingsIds {
     const val DEFAULT_ASPECT = "default_aspect"
     const val VIDEO_AUTOPLAY_NEXT = "video_autoplay_next"
     const val AUTOPLAY_COUNTDOWN = "autoplay_countdown"
+    const val STILL_WATCHING_MODE = "still_watching_mode"
+    const val STILL_WATCHING_EPISODES = "still_watching_episodes"
     const val CONTROLS_TIMEOUT = "controls_timeout"
     const val SKIP_BACK_ON_RESUME = "skip_back_on_resume"
     const val SHOW_CLOCK_PLAYER = "show_clock_player"
@@ -318,8 +345,16 @@ internal object PlaybackSettingsIds {
     const val DIALOGUE_BOOST_STRENGTH = "dialogue_boost_strength"
     const val DECODER = "decoder"
     const val AUDIO_PASSTHROUGH = "audio_passthrough"
+    const val PASSTHROUGH_CODEC_AC3 = "passthrough_codec_ac3"
+    const val PASSTHROUGH_CODEC_EAC3 = "passthrough_codec_eac3"
+    const val PASSTHROUGH_CODEC_DTS = "passthrough_codec_dts"
+    const val PASSTHROUGH_CODEC_DTSHD = "passthrough_codec_dtshd"
+    const val PASSTHROUGH_CODEC_TRUEHD = "passthrough_codec_truehd"
+    const val MAX_AUDIO_CHANNELS = "max_audio_channels"
+    const val DOWNMIX_BOOST = "downmix_boost"
     const val FRAME_RATE_MATCHING = "frame_rate_matching"
     const val STREAMING_QUALITY = "streaming_quality"
+    const val OFFLINE_PLAYBACK = "offline_playback"
     const val AUDIO_DELAY = "audio_delay"
     const val LIVE_STREAM_OPTION = "live_stream_option"
     const val MPV_VIDEO_OUTPUT = "mpv_video_output"
@@ -474,6 +509,26 @@ internal val PlaybackSettingsRowRecords = listOf(
         searchTitleRes = Res.string.ss_autoplay_countdown_title,
         searchSubtitleRes = Res.string.ss_autoplay_countdown_subtitle,
         keywords = listOf("countdown", "timer", "autoplay", "next"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Clock
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.STILL_WATCHING_MODE,
+        titleRes = Res.string.settings_still_watching_mode,
+        searchTitleRes = Res.string.ss_still_watching_mode_title,
+        searchSubtitleRes = Res.string.ss_still_watching_mode_subtitle,
+        keywords = listOf("still watching", "confirm", "binge", "unattended", "idle", "pass out", "autoplay"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.EyeCheck
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.STILL_WATCHING_EPISODES,
+        titleRes = Res.string.settings_still_watching_episodes,
+        searchTitleRes = Res.string.ss_still_watching_episodes_title,
+        searchSubtitleRes = Res.string.ss_still_watching_episodes_subtitle,
+        keywords = listOf("still watching", "episodes", "threshold", "count", "binge", "consecutive"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Clock
     )
@@ -775,6 +830,10 @@ internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> =
         PlaybackSettingsIds.ORIENTATION to RowAdmission.Platform(RowAdmissionCapability.ScreenOrientation),
         PlaybackSettingsIds.GESTURES to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
         PlaybackSettingsIds.GESTURE_INDICATOR_SIDE to RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+        // The still-watching pair rides the autoplay toggle — no autoplay, no
+        // confirm prompt to configure.
+        PlaybackSettingsIds.STILL_WATCHING_MODE to RowAdmission.WhenOn(PlaybackSettingsIds.VIDEO_AUTOPLAY_NEXT),
+        PlaybackSettingsIds.STILL_WATCHING_EPISODES to RowAdmission.WhenOn(PlaybackSettingsIds.VIDEO_AUTOPLAY_NEXT),
         PlaybackSettingsIds.ANDROID_TV_WATCH_NEXT to RowAdmission.Tv,
         PlaybackSettingsIds.TV_ZOOM_MODE to RowAdmission.Tv,
         PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE to RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
@@ -832,6 +891,76 @@ internal val PlaybackAdvancedVideoRowRecords = listOf(
     )
 ,
     SettingsRowRecord(
+        id = PlaybackSettingsIds.PASSTHROUGH_CODEC_AC3,
+        titleRes = Res.string.settings_passthrough_codec_ac3,
+        searchSubtitleRes = Res.string.ss_passthrough_codec_subtitle,
+        keywords = listOf("passthrough", "codec", "ac3", "dolby digital", "bitstream", "receiver"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Speakerphone,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.PASSTHROUGH_CODEC_EAC3,
+        titleRes = Res.string.settings_passthrough_codec_eac3,
+        searchSubtitleRes = Res.string.ss_passthrough_codec_subtitle,
+        keywords = listOf("passthrough", "codec", "eac3", "dolby digital plus", "dd+", "bitstream", "receiver"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Speakerphone,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.PASSTHROUGH_CODEC_DTS,
+        titleRes = Res.string.settings_passthrough_codec_dts,
+        searchSubtitleRes = Res.string.ss_passthrough_codec_subtitle,
+        keywords = listOf("passthrough", "codec", "dts", "bitstream", "receiver"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Speakerphone,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.PASSTHROUGH_CODEC_DTSHD,
+        titleRes = Res.string.settings_passthrough_codec_dtshd,
+        searchSubtitleRes = Res.string.ss_passthrough_codec_subtitle,
+        keywords = listOf("passthrough", "codec", "dts-hd", "dtshd", "dts hd", "bitstream", "receiver"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Speakerphone,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.PASSTHROUGH_CODEC_TRUEHD,
+        titleRes = Res.string.settings_passthrough_codec_truehd,
+        searchSubtitleRes = Res.string.ss_passthrough_codec_subtitle,
+        keywords = listOf("passthrough", "codec", "truehd", "dolby atmos", "mlp", "bitstream", "receiver"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Speakerphone,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.MAX_AUDIO_CHANNELS,
+        titleRes = Res.string.settings_max_audio_channels,
+        searchSubtitleRes = Res.string.ss_max_audio_channels_subtitle,
+        keywords = listOf("channels", "speaker", "layout", "5.1", "7.1", "stereo", "surround", "downmix"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.WaveSine,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.DOWNMIX_BOOST,
+        titleRes = Res.string.settings_downmix_boost,
+        searchSubtitleRes = Res.string.ss_downmix_boost_subtitle,
+        keywords = listOf("downmix", "boost", "stereo", "loudness", "volume", "night", "gain", "db"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Volume,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
         id = PlaybackSettingsIds.FRAME_RATE_MATCHING,
         titleRes = Res.string.settings_refresh_rate_match,
         searchTitleRes = Res.string.ss_frame_rate_matching_title,
@@ -839,6 +968,16 @@ internal val PlaybackAdvancedVideoRowRecords = listOf(
         keywords = listOf("refresh rate", "frame rate", "hz", "judder", "tv"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Maximize,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.OFFLINE_PLAYBACK,
+        titleRes = Res.string.settings_offline_playback,
+        searchSubtitleRes = Res.string.ss_offline_playback_subtitle,
+        keywords = listOf("offline", "download", "downloaded", "streaming", "prefer", "direct play", "local", "copy"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Download,
         isAdvanced = true
     )
 ,
@@ -891,6 +1030,13 @@ internal val PlaybackAdvancedVideoSearchItems: List<SettingsSearchItem> = Playba
 internal val PlaybackAdvancedVideoRowAdmissions: Map<String, RowAdmission> =
     PlaybackAdvancedVideoRowRecords.admissionsByAdvancedFlag() + mapOf(
         PlaybackSettingsIds.DIALOGUE_BOOST_STRENGTH to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackSettingsIds.DIALOGUE_BOOST)),
+        // The per-codec passthrough rows ride the master passthrough toggle —
+        // no bitstreaming, no per-codec allow-list to configure.
+        PlaybackSettingsIds.PASSTHROUGH_CODEC_AC3 to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackSettingsIds.AUDIO_PASSTHROUGH)),
+        PlaybackSettingsIds.PASSTHROUGH_CODEC_EAC3 to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackSettingsIds.AUDIO_PASSTHROUGH)),
+        PlaybackSettingsIds.PASSTHROUGH_CODEC_DTS to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackSettingsIds.AUDIO_PASSTHROUGH)),
+        PlaybackSettingsIds.PASSTHROUGH_CODEC_DTSHD to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackSettingsIds.AUDIO_PASSTHROUGH)),
+        PlaybackSettingsIds.PASSTHROUGH_CODEC_TRUEHD to RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackSettingsIds.AUDIO_PASSTHROUGH)),
     )
 
 /**
@@ -1284,19 +1430,39 @@ internal val ExoPlayerEngineRowRecords = listOf(
 /** The catalog projection of `ExoPlayerEngineRowRecords`: the search faces + the shared category. */
 internal val ExoPlayerEngineSearchItems: List<SettingsSearchItem> = ExoPlayerEngineRowRecords.toSearchItems(CoreUiRes.string.ss_cat_playback).androidOnly()
 
+/**
+ * The `playback.engine` group's EXTERNAL branch rows: which third-party app
+ * the external hand-off targets. One row, always admitted (the branch only
+ * composes when the preferred player IS external, so the advanced toggle
+ * would double-gate a single picker).
+ */
+internal val ExternalEngineRowRecords = listOf(
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.EXTERNAL_PLAYER_APP,
+        titleRes = Res.string.settings_external_player_app,
+        searchTitleRes = Res.string.ss_external_player_app_title,
+        searchSubtitleRes = Res.string.ss_external_player_app_subtitle,
+        keywords = listOf("external", "player", "app", "mpv", "mx player", "vlc", "mpvkt", "handoff"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.Devices
+    ))
+
+/** The catalog projection of `ExternalEngineRowRecords`: the search faces + the shared category. */
+internal val ExternalEngineSearchItems: List<SettingsSearchItem> = ExternalEngineRowRecords.toSearchItems(CoreUiRes.string.ss_cat_playback)
+
 
 /**
  * The engine-config group's per-id declared row admissions — full coverage
- * across the three engine lists (every record is advanced; the branches only
+ * across the engine lists (every record is advanced; the branches only
  * compose behind the advanced toggle). The overrides are the desktop-backed
  * mpv rows: [RowAdmission.Platform] hides the three audio-device rows where
  * no enumerator exists and the five render rows where no render-profile
  * plumbing exists — the one declaration `playbackEngineScreenRowTotal` (via
  * `rowTotalFor`) and the screen's emission `if`s read. Declared after all
- * three engine record lists (same-file top-level initialization order).
+ * the engine record lists (same-file top-level initialization order).
  */
 internal val PlaybackEngineRowAdmissions: Map<String, RowAdmission> =
-    (MpvEngineRowRecords + VlcEngineRowRecords + ExoPlayerEngineRowRecords).admissionsByAdvancedFlag() + mapOf(
+    (MpvEngineRowRecords + VlcEngineRowRecords + ExoPlayerEngineRowRecords + ExternalEngineRowRecords).admissionsByAdvancedFlag() + mapOf(
         PlaybackSettingsIds.MPV_AUDIO_DEVICE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
         PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),
         PlaybackSettingsIds.MPV_AUDIO_MODE to RowAdmission.Platform(RowAdmissionCapability.AudioDeviceSelection),

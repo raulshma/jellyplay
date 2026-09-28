@@ -101,9 +101,7 @@ internal class NavRequestController(
                 is HostDecision.ExternalPlayer -> {
                     scope.launch {
                         externalPlayerHost.launch(
-                            itemId = decision.itemId,
-                            mediaSourceId = decision.mediaSourceId,
-                            startPositionTicks = decision.startPositionTicks,
+                            request = decision.request,
                             startChooser = { chooser -> externalPlayerLauncher.launch(chooser) },
                         )
                     }

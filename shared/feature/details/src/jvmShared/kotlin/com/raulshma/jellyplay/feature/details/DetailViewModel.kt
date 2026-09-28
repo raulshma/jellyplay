@@ -1361,6 +1361,10 @@ class DetailViewModel internal constructor(
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
 
+    /** Clear-logo URL for the "prefer logos" detail title. */
+    fun getLogoUrl(itemId: String): String =
+        imageUrlProvider.getLogoUrl(itemId)
+
     /**
      * Available bytes on the volume backing the download destination
      * (`DIRECTORY_MUSIC` for audio, `DIRECTORY_MOVIES` otherwise). Read off the

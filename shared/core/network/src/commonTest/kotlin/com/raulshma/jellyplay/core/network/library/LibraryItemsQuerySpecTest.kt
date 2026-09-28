@@ -46,6 +46,8 @@ class LibraryItemsQuerySpecTest {
         assertEquals(listOf("Season", "Episode"), spec.excludeKinds)
         // No played-status/resumable/rating/term dimension active.
         assertNull(spec.itemFilters)
+        assertNull(spec.hasSubtitles)
+        assertNull(spec.hasTrailer)
         assertNull(spec.minCommunityRating)
         assertNull(spec.searchTerm)
         assertNull(spec.genres)
@@ -91,6 +93,37 @@ class LibraryItemsQuerySpecTest {
             buildMediaItemsQuerySpec("p", filters(PlayedStatus.ALL, resumable = false), null, 0, 10, null, ItemKindFilter())
                 .itemFilters,
         )
+    }
+
+    @Test
+    fun `presence filters map onto the hasSubtitles and hasTrailer params only when true`() {
+        // Standalone /Items params (not ItemFilter tokens): true = only items
+        // with subtitles / a trailer. Either dimension stands alone.
+        val both = buildMediaItemsQuerySpec(
+            "p",
+            LibraryFilters(hasSubtitles = true, hasTrailer = true),
+            null, 0, 10, null, ItemKindFilter(),
+        )
+        assertEquals(true, both.hasSubtitles)
+        assertEquals(true, both.hasTrailer)
+
+        val onlySubtitles = buildMediaItemsQuerySpec(
+            "p",
+            LibraryFilters(hasSubtitles = true),
+            null, 0, 10, null, ItemKindFilter(),
+        )
+        assertEquals(true, onlySubtitles.hasSubtitles)
+        assertNull(onlySubtitles.hasTrailer)
+
+        // A stored `false` is the tri-state "off" — omitted, exactly like null.
+        val off = buildMediaItemsQuerySpec(
+            "p",
+            LibraryFilters(hasSubtitles = false, hasTrailer = false),
+            null, 0, 10, null, ItemKindFilter(),
+        )
+        assertNull(off.hasSubtitles)
+        assertNull(off.hasTrailer)
+        assertNull(buildMediaItemsQuerySpec("p", LibraryFilters(), null, 0, 10, null, ItemKindFilter()).hasSubtitles)
     }
 
     @Test

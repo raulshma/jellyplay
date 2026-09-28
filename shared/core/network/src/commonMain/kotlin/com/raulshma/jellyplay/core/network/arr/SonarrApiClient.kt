@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
@@ -136,6 +137,37 @@ interface SonarrApiClient {
         episodeIds: List<Int>? = null,
         seasonNumber: Int? = null,
     ): Result<ArrCommand>
+
+    /**
+     * `GET /api/v3/release` — the interactive release-search rows, keyed one
+     * of two ways: [episodeId] alone (a single episode's releases — the fast
+     * path) or [seriesId] + [seasonNumber] (a whole season's). Exactly one of
+     * the two forms must be complete; anything else fails before the request.
+     * Fails with [ArrReleaseCacheMiss] when the server has no cached search
+     * results (the search command must run first / the ~30 min decision cache
+     * expired) — the UI offers "Search again" on that failure.
+     */
+    suspend fun searchReleases(
+        server: ArrServerConfig,
+        episodeId: Int? = null,
+        seriesId: Int? = null,
+        seasonNumber: Int? = null,
+    ): Result<List<ArrRelease>>
+
+    /**
+     * `POST /api/v3/release` — grabs [release] (its `guid` + `indexerId` form
+     * the required identity). With [shouldOverride] the grab additionally
+     * carries [seriesId] + [episodeIds] (Sonarr's identity fields for the
+     * override arm) and the release's own quality prefill, so a release
+     * Sonarr rejected can be grabbed anyway.
+     */
+    suspend fun grabRelease(
+        server: ArrServerConfig,
+        release: ArrRelease,
+        seriesId: Int? = null,
+        episodeIds: List<Int> = emptyList(),
+        shouldOverride: Boolean = false,
+    ): Result<Unit>
 
     /**
      * `GET /api/v3/series?tvdbId=...` — resolves the Sonarr internal series id

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.core.model.StillWatchingMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -111,6 +112,44 @@ class VideoPlayerStoreTest {
         assertTrue(store.videoPlayer.first().skipSegmentsOnSeek)
         store.setSkipSegmentsOnSeek(false)
         assertFalse(store.videoPlayer.first().skipSegmentsOnSeek)
+    }
+
+    @Test
+    fun `still watching defaults off with zero threshold`() = runTest {
+        val slice = store.videoPlayer.first()
+        assertEquals(StillWatchingMode.OFF, slice.stillWatchingMode)
+        assertEquals(0, slice.stillWatchingEpisodeThreshold)
+    }
+
+    @Test
+    fun `still watching setters round-trip and coerce`() = runTest {
+        store.setStillWatchingMode(StillWatchingMode.BOTH)
+        store.setStillWatchingEpisodeThreshold(3)
+        val slice = store.videoPlayer.first()
+        assertEquals(StillWatchingMode.BOTH, slice.stillWatchingMode)
+        assertEquals(3, slice.stillWatchingEpisodeThreshold)
+
+        // Negative thresholds coerce to 0 (= off), mirroring the pass-out hours.
+        store.setStillWatchingEpisodeThreshold(-4)
+        assertEquals(0, store.videoPlayer.first().stillWatchingEpisodeThreshold)
+
+        // A corrupt/unknown stored enum name falls back to OFF.
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.stringPreferencesKey("still_watching_mode")] = "BOGUS"
+        }
+        assertEquals(StillWatchingMode.OFF, store.videoPlayer.first().stillWatchingMode)
+    }
+
+    @Test
+    fun `still watching fields survive restore`() = runTest {
+        val slice = VideoPlayerSlice(
+            stillWatchingMode = StillWatchingMode.EPISODES,
+            stillWatchingEpisodeThreshold = 5,
+        )
+        store.restore(slice)
+        val restored = store.videoPlayer.first()
+        assertEquals(StillWatchingMode.EPISODES, restored.stillWatchingMode)
+        assertEquals(5, restored.stillWatchingEpisodeThreshold)
     }
 
     @Test

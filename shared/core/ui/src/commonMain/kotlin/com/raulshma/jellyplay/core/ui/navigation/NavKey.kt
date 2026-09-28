@@ -298,6 +298,14 @@ sealed class Route : NavKey {
     /** Discover row editor; null [rowId] = new row. */
     @Serializable data class DiscoverRowEditor(val rowId: String? = null) : Route()
 
+    /**
+     * "Hidden from Next Up" management screen — the series the user excluded
+     * from the home Next Up row (the home-discovery store's
+     * `NEXT_UP_EXCLUDED_SERIES_IDS` set), with per-series and bulk restore.
+     * Reached from the Home settings hub's "Hidden from Next Up" row.
+     */
+    @Serializable data object NextUpExcluded : Route()
+
     @Serializable data class PlaybackSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
@@ -473,6 +481,11 @@ sealed class Route : NavKey {
     }
 
     @Serializable data object Logs : Route() {
+        override val isModal = true
+    }
+
+    /** Admin dashboard's backup management (list / create / restore). */
+    @Serializable data object AdminBackups : Route() {
         override val isModal = true
     }
 

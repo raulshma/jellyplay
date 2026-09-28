@@ -21,7 +21,9 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaSourceType
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MissingEpisodeReason
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
@@ -37,6 +39,7 @@ import com.raulshma.jellyplay.core.network.library.parseItemSortList as parseIte
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.api.LocationType
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.RecordingStatus
@@ -93,7 +96,26 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     playCount = userData?.playCount ?: 0,
     lastPlayedDate = userData?.lastPlayedDate?.toString(),
     unplayedItemCount = userData?.unplayedItemCount,
+    isVirtual = locationType == LocationType.VIRTUAL,
+    missingReason = deriveMissingEpisodeReason(locationType, premiereDate, DateTime.now()),
 )
+
+/**
+ * Derives [MissingEpisodeReason] from the wire `LocationType` + `PremiereDate`:
+ * null for every non-virtual location; unaired when the premiere date is in
+ * the future relative to [now]; absent file otherwise (including a missing or
+ * unparseable premiere date). Kept pure so the unaired-vs-missing split has a
+ * direct test surface.
+ */
+internal fun deriveMissingEpisodeReason(
+    locationType: LocationType?,
+    premiereDate: DateTime?,
+    now: DateTime,
+): MissingEpisodeReason? = when {
+    locationType != LocationType.VIRTUAL -> null
+    premiereDate != null && premiereDate.isAfter(now) -> MissingEpisodeReason.UNAIRED
+    else -> MissingEpisodeReason.MISSING_FILE
+}
 
 /**
  * Maps a detail-projection [BaseItemDto] onto the domain [MediaDetail] —
@@ -104,6 +126,11 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
  */
 internal fun BaseItemDto.toMediaDetail() = MediaDetail(
     item = toMediaItem(),
+    // Clear-logo tag for the "prefer logos" detail title. Poster/backdrop tags
+    // stay unset here on purpose: the offline-sync baseline persists those from
+    // this same type, and populating them mid-life would flip every downloaded
+    // item to "images changed" on its first diff after this ships.
+    logoImageTag = imageTags?.get(ImageType.LOGO)?.toString(),
     sortName = forcedSortName,
     customRating = customRating,
     criticRating = criticRating?.toFloat(),
@@ -236,6 +263,7 @@ internal fun MediaSourceInfo.toMediaSource(
 ) = MediaSource(
     id = id.toString(),
     name = name ?: "",
+    type = type.toMediaSourceType(),
     container = container,
     size = size,
     bitrate = bitrate?.toLong(),
@@ -278,6 +306,19 @@ internal fun org.jellyfin.sdk.model.api.MediaStream.toMediaStream() = MediaStrea
     realFrameRate = realFrameRate,
     videoDoViTitle = videoDoViTitle,
 )
+
+/**
+ * Maps the wire [org.jellyfin.sdk.model.api.MediaSourceType] onto the domain
+ * [MediaSourceType] so the version pickers can label Grouping/Placeholder
+ * sources. Unknown/absent degrades to DEFAULT (a playable file) — the safe
+ * default the mapper used before the field was carried at all.
+ */
+internal fun org.jellyfin.sdk.model.api.MediaSourceType?.toMediaSourceType(): MediaSourceType =
+    when (this) {
+        org.jellyfin.sdk.model.api.MediaSourceType.GROUPING -> MediaSourceType.GROUPING
+        org.jellyfin.sdk.model.api.MediaSourceType.PLACEHOLDER -> MediaSourceType.PLACEHOLDER
+        else -> MediaSourceType.DEFAULT
+    }
 
 internal fun BaseItemDto.toLiveTvChannel() = LiveTvChannel(
     id = id.toString(),

@@ -118,9 +118,13 @@ data class MediaFilterDraft(
     val minRating: Float = 0f,
     // Resumable mirrors LibraryFilters.isResumable: tri-state surfaced as a
     // single toggle (null/false = off, true = only items with a resume
-    // position). Downloaded mirrors isDownloaded the same way.
+    // position). Downloaded mirrors isDownloaded the same way. The presence
+    // filters (hasSubtitles/hasTrailer) mirror their model tri-states the
+    // same way.
     val isResumable: Boolean = false,
     val isDownloaded: Boolean = false,
+    val hasSubtitles: Boolean = false,
+    val hasTrailer: Boolean = false,
 ) {
     /** Seeds the draft from the caller's persisted filter blob. */
     constructor(filters: LibraryFilters) : this(
@@ -133,6 +137,8 @@ data class MediaFilterDraft(
         minRating = filters.minRating,
         isResumable = filters.isResumable == true,
         isDownloaded = filters.isDownloaded == true,
+        hasSubtitles = filters.hasSubtitles == true,
+        hasTrailer = filters.hasTrailer == true,
     )
 
     fun withMediaTypeToggled(mediaType: MediaType): MediaFilterDraft =
@@ -156,6 +162,10 @@ data class MediaFilterDraft(
 
     fun withDownloadedToggled(): MediaFilterDraft = copy(isDownloaded = !isDownloaded)
 
+    fun withHasSubtitlesToggled(): MediaFilterDraft = copy(hasSubtitles = !hasSubtitles)
+
+    fun withHasTrailerToggled(): MediaFilterDraft = copy(hasTrailer = !hasTrailer)
+
     /**
      * The sheet's Reset chip: every dimension back to its default EXCEPT the
      * downloaded pin. The library sheet's historical reset deliberately kept
@@ -173,6 +183,8 @@ data class MediaFilterDraft(
         tags = emptySet(),
         minRating = 0f,
         isResumable = false,
+        hasSubtitles = false,
+        hasTrailer = false,
     )
 
     /**
@@ -194,6 +206,8 @@ data class MediaFilterDraft(
         minRating = minRating,
         isResumable = if (FilterSection.AVAILABILITY in sections) isResumable.takeIf { it } else current.isResumable,
         isDownloaded = if (FilterSection.AVAILABILITY in sections) isDownloaded.takeIf { it } else current.isDownloaded,
+        hasSubtitles = if (FilterSection.AVAILABILITY in sections) hasSubtitles.takeIf { it } else current.hasSubtitles,
+        hasTrailer = if (FilterSection.AVAILABILITY in sections) hasTrailer.takeIf { it } else current.hasTrailer,
     )
 }
 
@@ -225,6 +239,9 @@ class MediaFilterSheetTexts(
     val status: String = "",
     val resumable: String = "",
     val downloaded: String = "",
+    /** Presence-filter chips (AVAILABILITY section); "" for hosts that don't render them. */
+    val hasSubtitles: String = "",
+    val hasTrailer: String = "",
     /**
      * [TvSafeSheet]'s chrome title — on TV the dialog renders it above the
      * content. The library sheet passes one; search historically passed
@@ -459,6 +476,8 @@ fun MediaFilterSheet(
                                 glassBg = glassBg,
                                 resumableLabel = texts.resumable,
                                 downloadedLabel = texts.downloaded,
+                                hasSubtitlesLabel = texts.hasSubtitles,
+                                hasTrailerLabel = texts.hasTrailer,
                                 onDraftChange = { draft = it },
                             )
                             availabilityRendered = true
@@ -476,6 +495,8 @@ fun MediaFilterSheet(
                                 glassBg = glassBg,
                                 resumableLabel = texts.resumable,
                                 downloadedLabel = texts.downloaded,
+                                hasSubtitlesLabel = texts.hasSubtitles,
+                                hasTrailerLabel = texts.hasTrailer,
                                 onDraftChange = { draft = it },
                             )
                             renderedAnySection = true
@@ -638,6 +659,8 @@ private fun AvailabilityChips(
     glassBg: Color,
     resumableLabel: String,
     downloadedLabel: String,
+    hasSubtitlesLabel: String,
+    hasTrailerLabel: String,
     onDraftChange: (MediaFilterDraft) -> Unit,
 ) {
     FlowRow(
@@ -653,6 +676,16 @@ private fun AvailabilityChips(
             label = downloadedLabel,
             selected = draft.isDownloaded,
             onClick = { onDraftChange(draft.withDownloadedToggled()) },
+        )
+        GlassFilterChip(
+            label = hasSubtitlesLabel,
+            selected = draft.hasSubtitles,
+            onClick = { onDraftChange(draft.withHasSubtitlesToggled()) },
+        )
+        GlassFilterChip(
+            label = hasTrailerLabel,
+            selected = draft.hasTrailer,
+            onClick = { onDraftChange(draft.withHasTrailerToggled()) },
         )
     }
 }

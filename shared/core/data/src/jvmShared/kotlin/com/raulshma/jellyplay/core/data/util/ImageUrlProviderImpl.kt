@@ -71,6 +71,18 @@ class ImageUrlProviderImpl(
         return url
     }
 
+    override fun getLogoUrl(itemId: String): String {
+        // Detail-screen title block: one logo per item, same perf-aware width
+        // clamp + shared LRU as the poster/backdrop variants.
+        val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
+        else ImageUrlProvider.DEFAULT_MAX_WIDTH
+        val key = "l_$itemId|$effectiveWidth"
+        urlCache[key]?.let { return it }
+        val url = playbackRepository.getImageUrl(itemId, imageType = "Logo", maxWidth = effectiveWidth)
+        if (url.isNotEmpty()) urlCache[key] = url
+        return url
+    }
+
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String {
         // Chapter thumbnails are small list-position-keyed images; perf-aware
         // width clamp + shared LRU keep the chapter row cheap to recompose.

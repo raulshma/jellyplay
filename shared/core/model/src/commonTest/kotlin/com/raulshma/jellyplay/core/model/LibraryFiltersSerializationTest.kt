@@ -33,6 +33,8 @@ class LibraryFiltersSerializationTest {
             minRating = 4.5f,
             isResumable = true,
             isDownloaded = true,
+            hasSubtitles = true,
+            hasTrailer = true,
         )
 
         val encoded = json.encodeToString(original)
@@ -71,10 +73,42 @@ class LibraryFiltersSerializationTest {
             ),
             decoded,
         )
-        // Booleans added after the legacy format (isResumable, isDownloaded)
-        // default to "off" when absent from the blob.
+        // Booleans added after the legacy format (isResumable, isDownloaded,
+        // hasSubtitles, hasTrailer) default to "off" when absent from the blob.
         assertEquals(null, decoded.isResumable)
         assertEquals(null, decoded.isDownloaded)
+        assertEquals(null, decoded.hasSubtitles)
+        assertEquals(null, decoded.hasTrailer)
+    }
+
+    @Test
+    fun `decodes a pre-presence-filter blob without the new fields`() {
+        // A saved-filter JSON written before the hasSubtitles/hasTrailer
+        // presence filters existed (e.g. one carrying the isResumable
+        // tri-state): no migration needed — the absent fields decode to the
+        // null defaults and the rest of the blob survives untouched.
+        val prePresence = """
+            {
+              "mediaTypes": ["MOVIE"],
+              "sortBy": "SORT_NAME",
+              "playedStatus": "UNPLAYED",
+              "isResumable": true
+            }
+        """.trimIndent()
+
+        val decoded = json.decodeFromString<LibraryFilters>(prePresence)
+
+        assertEquals(
+            LibraryFilters(
+                mediaTypes = listOf(MediaType.MOVIE),
+                sortBy = SortOption.SORT_NAME,
+                playedStatus = PlayedStatus.UNPLAYED,
+                isResumable = true,
+            ),
+            decoded,
+        )
+        assertEquals(null, decoded.hasSubtitles)
+        assertEquals(null, decoded.hasTrailer)
     }
 
     @Test

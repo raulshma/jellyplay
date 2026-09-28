@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
+import com.raulshma.jellyplay.core.model.arr.ArrReleaseHistoryStatus
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
@@ -272,5 +274,56 @@ interface SonarrSeriesOperations {
 
     /** Queues a `SeriesSearch` — search all monitored missing episodes (`POST /command`). */
     suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit>
+}
+
+/**
+ * The interactive release search & grab family the arrqueue screen's release
+ * sheet consumes — split from [ArrRepository] for the same one-consumer
+ * reason as [SonarrSeriesOperations] (the aggregate's surface ratchet pins
+ * its member count; this family serves exactly one UI while every other
+ * [ArrRepository] consumer never touches it). The JVM actual is the same
+ * [ArrRepositoryImpl] single (dataSeerrArrModule binds this seam over it —
+ * the over-the-impl pattern), so server routing via `findServer`, the
+ * on-demand id fallbacks, and the queue-refresh-after-mutation stay shared
+ * with the aggregate's management actions.
+ *
+ * All members are keyed by the [ArrQueueItem] the sheet was opened from: its
+ * `serverId`/`serverKind` route to the owning server and its arr-internal
+ * ids ([ArrQueueItem.arrMovieId] / [ArrQueueItem.arrSeriesId] /
+ * [ArrQueueItem.arrEpisodeId]) key the search and the grab identities. Rows
+ * fetched before those ids landed (older in-memory snapshots) fall back to
+ * the tmdb/tvdb lookups on demand; a row where no lookup can produce the
+ * required id fails with an actionable message (refresh the queue).
+ */
+interface ArrReleaseOperations {
+
+    /**
+     * Runs the interactive release search for [item] against its owning
+     * server (`GET /release?movieId=` on Radarr, `?episodeId=` on Sonarr —
+     * the queue row always carries the episode id). Fails with
+     * [com.raulshma.jellyplay.core.network.arr.ArrReleaseCacheMiss] when the
+     * server's ~30-minute decision cache has no rows (the search command must
+     * run first) — the UI offers "Search again" on that failure.
+     */
+    suspend fun searchReleases(item: ArrQueueItem): Result<List<ArrRelease>>
+
+    /**
+     * Grabs [release] on [item]'s owning server (`POST /release`). When
+     * [override] is set the grab sends `shouldOverride` + the identity fields
+     * (Radarr movie id, Sonarr series/episode ids — via the same on-demand
+     * fallbacks as [searchReleases]) with the release's own quality prefilled,
+     * so a rejected release can be grabbed anyway. The queue refreshes on
+     * success so the new download row appears in the hot feed.
+     */
+    suspend fun grabRelease(item: ArrQueueItem, release: ArrRelease, override: Boolean): Result<Unit>
+
+    /**
+     * Matches the owning server's recent `/history` rows against release
+     * guids (the grabbed/failed events carry the release guid in their
+     * `data` map) so the sheet can badge rows "previously grabbed / failed"
+     * client-side. Returns guid → status; FAILED outranks GRABBED when both
+     * events exist. Best-effort: callers treat a failure as "no badges".
+     */
+    suspend fun releaseHistoryStatuses(item: ArrQueueItem): Result<Map<String, ArrReleaseHistoryStatus>>
 }
 

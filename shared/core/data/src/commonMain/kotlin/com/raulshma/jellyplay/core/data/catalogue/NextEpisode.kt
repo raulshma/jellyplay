@@ -47,11 +47,18 @@ data class NextEpisode(
          *   2. First unplayed episode — NEXT_UP when something before it was
          *      watched/started, else plain PLAY.
          *   3. All played → REPLAY the first from 0.
+         *
+         * Virtual (missing/unaired) episodes are never candidates — they have
+         * no file behind them, so neither the initial queue item nor the
+         * replay fallback may land on one (findroid's
+         * PlaylistManager.getInitialItem filters `!it.missing` for the same
+         * reason). The list itself keeps them; only this scan skips them.
          */
         fun forSorted(sorted: List<MediaItem>): NextEpisode {
-            if (sorted.isEmpty()) return NONE
+            val playable = sorted.filterNot { it.isVirtual }
+            if (playable.isEmpty()) return NONE
 
-            val resumeEpisode = sorted.firstOrNull { it.hasResumeProgress() }
+            val resumeEpisode = playable.firstOrNull { it.hasResumeProgress() }
             if (resumeEpisode != null) {
                 return NextEpisode(
                     kind = NextUpKind.RESUME,
@@ -60,9 +67,9 @@ data class NextEpisode(
                 )
             }
 
-            val nextEpisode = sorted.firstOrNull { !it.isPlayed }
+            val nextEpisode = playable.firstOrNull { !it.isPlayed }
             if (nextEpisode != null) {
-                val hasWatchedBefore = sorted
+                val hasWatchedBefore = playable
                     .takeWhile { it.id != nextEpisode.id }
                     .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
                 return NextEpisode(
@@ -73,7 +80,7 @@ data class NextEpisode(
             }
 
             // All episodes played — replay the first.
-            val first = sorted.first()
+            val first = playable.first()
             return NextEpisode(
                 kind = NextUpKind.REPLAY,
                 episode = first,
@@ -85,12 +92,14 @@ data class NextEpisode(
          * Per-season adjacency helpers for the player's prev/next controls:
          * returns `(previous, next)` by sorted order around [currentId]. Either
          * side is null at the list boundary or when [currentId] isn't present.
+         * Virtual (missing/unaired) episodes are skipped over — queue
+         * navigation never steps onto an item with no file behind it.
          */
         fun neighbors(sorted: List<MediaItem>, currentId: String): Pair<MediaItem?, MediaItem?> {
             val index = sorted.indexOfFirst { it.id == currentId }
             if (index < 0) return null to null
-            val previous = sorted.getOrNull(index - 1)
-            val next = sorted.getOrNull(index + 1)
+            val previous = sorted.take(index).lastOrNull { !it.isVirtual }
+            val next = sorted.drop(index + 1).firstOrNull { !it.isVirtual }
             return previous to next
         }
 

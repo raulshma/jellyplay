@@ -50,6 +50,15 @@ data class LibraryFilters(
     // offline can apply (media type, year, rating, genres, played status,
     // sort); [tags] has no offline column and is ignored.
     val isDownloaded: Boolean? = null,
+    // Presence filters: when true, restrict the query to items that have
+    // subtitles / a trailer. Standalone /Items query params on the server
+    // (hasSubtitles / hasTrailer), NOT ItemFilter values. Tri-state like
+    // [isResumable] for the same backward-compatibility with the persisted
+    // filter blob (null = "off"; a stored false is an explicit "off" that
+    // queries identically). Neither has an offline column — both are ignored
+    // while the downloaded pin is active, like [tags].
+    val hasSubtitles: Boolean? = null,
+    val hasTrailer: Boolean? = null,
 ) {
 
     /**
@@ -110,6 +119,18 @@ data class LibraryFilters(
     fun withDownloadedToggled(): LibraryFilters =
         copy(isDownloaded = !(isDownloaded == true))
 
+    /**
+     * Copy with the has-subtitles presence toggle flipped. Mirrors the
+     * resumable/downloaded flip (`!(x == true)`), so a stored `false` flips
+     * back to `true` — same algebra as the sheet chip it backs.
+     */
+    fun withHasSubtitlesToggled(): LibraryFilters =
+        copy(hasSubtitles = !(hasSubtitles == true))
+
+    /** Copy with the has-trailer presence toggle flipped (same algebra). */
+    fun withHasTrailerToggled(): LibraryFilters =
+        copy(hasTrailer = !(hasTrailer == true))
+
     /** Copy with every dimension back at its default — the clear-all write. */
     fun cleared(): LibraryFilters = LibraryFilters()
 
@@ -131,7 +152,9 @@ data class LibraryFilters(
             playedStatus != PlayedStatus.ALL ||
             sortBy != SortOption.YEAR_DESC ||
             isResumable == true ||
-            isDownloaded == true
+            isDownloaded == true ||
+            hasSubtitles == true ||
+            hasTrailer == true
 
     /**
      * The read-side counterpart of [hasActiveFilters]: enumerates the active
@@ -188,6 +211,14 @@ data class LibraryFilters(
                 LibraryFilterDimension.IS_DOWNLOADED -> if (isDownloaded == true) {
                     add(ActiveFilterTag(dimension, "true") { copy(isDownloaded = null) })
                 }
+
+                LibraryFilterDimension.HAS_SUBTITLES -> if (hasSubtitles == true) {
+                    add(ActiveFilterTag(dimension, "true") { copy(hasSubtitles = null) })
+                }
+
+                LibraryFilterDimension.HAS_TRAILER -> if (hasTrailer == true) {
+                    add(ActiveFilterTag(dimension, "true") { copy(hasTrailer = null) })
+                }
             }
         }
     }
@@ -208,6 +239,8 @@ enum class LibraryFilterDimension {
     PLAYED_STATUS,
     IS_RESUMABLE,
     IS_DOWNLOADED,
+    HAS_SUBTITLES,
+    HAS_TRAILER,
 }
 
 /**

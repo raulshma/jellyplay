@@ -369,6 +369,8 @@ class LibraryApiClientImpl(
             recursive = spec.recursive,
             searchTerm = spec.searchTerm,
             filters = spec.itemFilters.toItemFilters(),
+            hasSubtitles = spec.hasSubtitles,
+            hasTrailer = spec.hasTrailer,
             minCommunityRating = spec.minCommunityRating,
             fields = spec.fields.toItemFieldsList(),
         ).content
@@ -666,18 +668,20 @@ class LibraryApiClientImpl(
         ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
-    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
+    override suspend fun getEpisodes(seriesId: String, seasonId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
             api.tvShowsApi.getEpisodes(
                 seriesId = seriesId.toUUID(),
                 seasonId = seasonId.toUUID(),
+                isMissing = isMissing,
             ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
-    override suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>> =
+    override suspend fun getAllEpisodes(seriesId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
             api.tvShowsApi.getEpisodes(
                 seriesId = seriesId.toUUID(),
+                isMissing = isMissing,
             ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 

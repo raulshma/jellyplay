@@ -67,6 +67,20 @@ interface MetadataEditorRepository {
     /** Applies a chosen Identify candidate onto the item (metadata + images). */
     suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean = true): Result<Unit>
 
+    /**
+     * Merges the version items [itemIds] into one (jellyfin-web "Merge
+     * versions"); fails when fewer than 2 ids are supplied. Admin-only
+     * server-side (RequiresElevation).
+     */
+    suspend fun mergeVersions(itemIds: List<String>): Result<Unit>
+
+    /**
+     * Splits a version-merged item apart (jellyfin-web "Split versions");
+     * the caller re-fetches the item afterwards. Admin-only server-side
+     * (RequiresElevation).
+     */
+    suspend fun splitVersions(itemId: String): Result<Unit>
+
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit>
 
     /** URL for a specific item image variant (type/index/tag), e.g. editor thumbnails. */

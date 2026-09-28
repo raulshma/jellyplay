@@ -43,13 +43,15 @@ data class EngineConfigDelta(
     /** The `engineSpecific` slice moved as a whole (value-blind equality). */
     val engineSpecificChanged: Boolean,
     /**
-     * The shared mpv pair re-diff group: `engineSpecific`, `audioPassthrough`,
-     * `deinterlace` or `hdrSource` moved. The passthrough/deinterlace/HDR
-     * inputs ride the SHARED [EngineConfig] on both hosts — the spdif list is
-     * composed from passthrough, the session-scoped deinterlace cycle rides
-     * the base config, and an HDR-source change flips the tone-mapping
-     * suppression gate — so any of them must reach the pair diff even when
-     * the engine-specific slice did not move.
+     * The shared mpv pair re-diff group: `engineSpecific`,
+     * `audioPassthrough`, `audioPassthroughCodecs`, `deinterlace` or
+     * `hdrSource` moved. The passthrough/codec-set/deinterlace/HDR inputs
+     * ride the SHARED [EngineConfig] on both hosts — the spdif list is
+     * composed from the master boolean AND the enabled codec set, the
+     * session-scoped deinterlace cycle rides the base config, and an
+     * HDR-source change flips the tone-mapping suppression gate — so any of
+     * them must reach the pair diff even when the engine-specific slice did
+     * not move.
      */
     val sharedPairsChanged: Boolean,
     /**
@@ -58,7 +60,7 @@ data class EngineConfigDelta(
      * Android consumes the three narrower groups below instead.
      */
     val audioEffectsChanged: Boolean,
-    /** `channelMixMode`/`channelMixEnabled` moved — Android's `audio-channels` fx half. */
+    /** `channelMixMode`/`channelMixEnabled`/`maxAudioChannels` moved — Android's `audio-channels` fx half. */
     val channelMixChanged: Boolean,
     /**
      * Normalization (enabled/mode) or dialogue-boost ENABLED moved — Android's
@@ -104,11 +106,13 @@ data class EngineConfigDelta(
                 engineSpecificChanged = engineSpecificChanged,
                 sharedPairsChanged = engineSpecificChanged ||
                     old.audioPassthrough != new.audioPassthrough ||
+                    old.audioPassthroughCodecs != new.audioPassthroughCodecs ||
                     old.deinterlace != new.deinterlace ||
                     old.hdrSource != new.hdrSource,
                 audioEffectsChanged = old.audioEffects != new.audioEffects,
                 channelMixChanged = oldAudioFx.channelMixMode != newAudioFx.channelMixMode ||
-                    oldAudioFx.channelMixEnabled != newAudioFx.channelMixEnabled,
+                    oldAudioFx.channelMixEnabled != newAudioFx.channelMixEnabled ||
+                    oldAudioFx.maxAudioChannels != newAudioFx.maxAudioChannels,
                 audioAfChainChanged = oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled ||
                     oldAudioFx.audioNormalizationMode != newAudioFx.audioNormalizationMode ||
                     oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled,

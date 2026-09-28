@@ -685,6 +685,9 @@ internal fun LibraryScreen(
                                 )
                             }
                         },
+                        onToggleHasSubtitles = {
+                            viewModel.onEvent(LibraryUiEvent.UpdateFilters(filters.withHasSubtitlesToggled()))
+                        },
                         firstChipFocus = firstFilterChipFocus,
                         modifier = Modifier
                             .onDpadKey(

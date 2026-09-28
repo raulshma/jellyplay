@@ -12,6 +12,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 /**
  * Covers the [LibraryApiClientImpl] behavior that needs a real engine: the
@@ -77,6 +78,9 @@ class LibraryApiClientImplTest {
         """.trimIndent(),
     ) : org.jellyfin.sdk.api.client.ApiClient() {
         val requests = mutableListOf<String>()
+
+        /** The raw query-parameter maps each request carried (for the isMissing param mapping). */
+        val queries = mutableListOf<Map<String, Any?>>()
         override val baseUrl = "https://test.example.com"
         override val accessToken = "token-123"
         override val clientInfo = org.jellyfin.sdk.model.ClientInfo(name = "test", version = "1.0.0")
@@ -97,6 +101,7 @@ class LibraryApiClientImplTest {
             requestBody: Any?,
         ): org.jellyfin.sdk.api.client.RawResponse {
             requests += "${method.name} $pathTemplate"
+            queries += queryParameters
             return org.jellyfin.sdk.api.client.RawResponse(responseBody.toByteArray(), 200, emptyMap())
         }
     }
@@ -179,6 +184,38 @@ class LibraryApiClientImplTest {
         assertEquals(emptyList(), items)
     }
 
+    // ── missing-episodes param mapping ───────────────────────────────────
+
+    /** Minimal items envelope so the episode paths decode without error. */
+    private val emptyItemsBody = """{"Items":[],"TotalRecordCount":0,"StartIndex":0}"""
+
+    @Test
+    fun `getEpisodes hide sends isMissing false showing omits it`() = runTest {
+        // jellyfin-web parity: hiding (the default) passes isMissing=false so
+        // the server drops its virtual (missing/unaired) placeholders; showing
+        // omits the filter entirely (null → the SDK drops the param).
+        val api = RecordingApiClient(responseBody = emptyItemsBody)
+        engine.updateApi(api)
+
+        client.getEpisodes(EPISODE_SERIES_ID, EPISODE_SEASON_ID, isMissing = false).getOrThrow()
+        assertEquals(false, api.queries.last()["isMissing"])
+
+        client.getEpisodes(EPISODE_SERIES_ID, EPISODE_SEASON_ID, isMissing = null).getOrThrow()
+        assertNull(api.queries.last()["isMissing"])
+    }
+
+    @Test
+    fun `getAllEpisodes hide sends isMissing false showing omits it`() = runTest {
+        val api = RecordingApiClient(responseBody = emptyItemsBody)
+        engine.updateApi(api)
+
+        client.getAllEpisodes(EPISODE_SERIES_ID, isMissing = false).getOrThrow()
+        assertEquals(false, api.queries.last()["isMissing"])
+
+        client.getAllEpisodes(EPISODE_SERIES_ID, isMissing = null).getOrThrow()
+        assertNull(api.queries.last()["isMissing"])
+    }
+
     private companion object {
         /** Real UUID: the favorite paths pass it through String.toUUID(). */
         const val FAVORITE_ITEM_ID = "2a2a2a2a-1111-4222-8222-333333333333"
@@ -186,5 +223,9 @@ class LibraryApiClientImplTest {
         /** Real UUIDs: the resume mapper reads Id through the same path. */
         const val POISONED_ITEM_ID = "3b3b3b3b-1111-4333-8333-444444444444"
         const val RESUMABLE_ITEM_ID = "4c4c4c4c-1111-4444-8444-555555555555"
+
+        /** Real UUIDs: the episodes paths pass both through String.toUUID(). */
+        const val EPISODE_SERIES_ID = "5d5d5d5d-1111-4555-8555-666666666666"
+        const val EPISODE_SEASON_ID = "6e6e6e6e-1111-4666-8666-777777777777"
     }
 }

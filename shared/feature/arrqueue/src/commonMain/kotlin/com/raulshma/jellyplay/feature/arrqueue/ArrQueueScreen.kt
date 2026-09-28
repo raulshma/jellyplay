@@ -20,6 +20,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -33,7 +35,9 @@ import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -47,9 +51,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.Check
+import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -98,6 +104,7 @@ import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_sele
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_selected_count
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_title
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_unknown_error
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.releaseSearch_title
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -108,9 +115,11 @@ fun ArrQueueScreen(
     onBack: () -> Unit,
     onOpenArrSettings: () -> Unit = {},
     viewModel: ArrQueueViewModel = koinViewModel(),
+    releaseSearchViewModel: ReleaseSearchViewModel = koinViewModel(),
 ) {
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
+    val releaseSearchState by releaseSearchViewModel.state
     val isTv = LocalTvMode.current
 
     // One-shot action feedback (livetv screen-forward pattern): the VM emits
@@ -120,10 +129,21 @@ fun ArrQueueScreen(
     // strings were — and posts through the app-wide UserMessageBus (the
     // drop-by-default local simply discards the message when no host provides
     // a bus). Collector is screen-scoped, so an ack emitted just before a
-    // quick-back is dropped (livetv-documented accepted delta).
+    // quick-back is dropped (livetv-documented accepted delta). Both VMs'
+    // channels feed this one collector (the release sheet's grab ack rides
+    // the same unresolved seal).
     val bus = LocalUserMessageBus.current
     LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
+            when (message) {
+                is ArrQueueMessage.Info -> bus.info(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Error -> bus.error(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Raw -> bus.error(message.text)
+            }
+        }
+    }
+    LaunchedEffect(bus) {
+        releaseSearchViewModel.messages.collect { message ->
             when (message) {
                 is ArrQueueMessage.Info -> bus.info(getString(message.res, *message.args.toTypedArray()))
                 is ArrQueueMessage.Error -> bus.error(getString(message.res, *message.args.toTypedArray()))
@@ -215,6 +235,7 @@ fun ArrQueueScreen(
                                 onDelete = { viewModel.showDeleteDialog(item) },
                                 onGrab = { viewModel.showGrabDialog(item) },
                                 onImport = { viewModel.showImportDialog(item) },
+                                onSearchReleases = { releaseSearchViewModel.open(item) },
                             )
                         }
                     }
@@ -286,6 +307,21 @@ fun ArrQueueScreen(
             )
         }
     }
+
+    // The interactive release-search sheet (the queue row's overflow action).
+    releaseSearchState.item?.let { openItem ->
+        ReleaseSearchSheet(
+            item = openItem,
+            sheet = releaseSearchState.sheet,
+            onDismiss = { releaseSearchViewModel.dismiss() },
+            onSearchAgain = { releaseSearchViewModel.searchAgain() },
+            onSortSelected = { releaseSearchViewModel.selectSort(it) },
+            onToggleInfo = { releaseSearchViewModel.toggleInfo(it) },
+            onRequestGrab = { releaseSearchViewModel.requestGrab(it) },
+            onDismissGrabDialog = { releaseSearchViewModel.dismissGrabDialog() },
+            onConfirmGrab = { releaseSearchViewModel.confirmGrab() },
+        )
+    }
 }
 
 // ── Rows ──────────────────────────────────────────────────────────────────
@@ -302,6 +338,7 @@ private fun QueueRow(
     onDelete: () -> Unit,
     onGrab: () -> Unit,
     onImport: () -> Unit,
+    onSearchReleases: () -> Unit,
 ) {
     val focusState = rememberTvFocusState()
     val isTv = LocalTvMode.current
@@ -347,6 +384,15 @@ private fun QueueRow(
                         Spacer(Modifier.width(8.dp))
                         StatusChip(status = item.status)
                     }
+                }
+                // Row overflow — "Search releases" (the interactive release
+                // search lives behind it, not on the three-button action row,
+                // which stays delete/grab/import).
+                if (!selectionMode) {
+                    QueueRowOverflowMenu(
+                        enabled = !actionInProgress,
+                        onSearchReleases = onSearchReleases,
+                    )
                 }
             }
 
@@ -452,6 +498,37 @@ private fun ServiceBadge(kind: ArrServiceKind) {
             color = color,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** The queue row's overflow menu — currently just the release-search entry. */
+@Composable
+private fun QueueRowOverflowMenu(
+    enabled: Boolean,
+    onSearchReleases: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(onClick = { expanded = true }, enabled = enabled, modifier = Modifier.size(32.dp)) {
+        Icon(
+            Tabler.Outline.DotsVertical,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = { expanded = false },
+    ) {
+        DropdownMenuItem(
+            text = { Text(stringResource(Res.string.releaseSearch_title)) },
+            leadingIcon = {
+                Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            onClick = {
+                expanded = false
+                onSearchReleases()
+            },
         )
     }
 }

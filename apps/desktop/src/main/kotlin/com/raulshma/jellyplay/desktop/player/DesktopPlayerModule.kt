@@ -149,6 +149,7 @@ val desktopPlayerModule: Module = module {
             effectsManager = get(),
             playbackFocus = get(),
             engineFactory = { MpvDesktopEngine(extraOptions = mapOf("vo" to "null")) },
+            nowPlayingReporter = get(),
         )
     }
     single<AudioQueueManager> { get<DesktopAudioQueueManager>() }

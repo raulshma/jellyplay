@@ -4,12 +4,14 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DeinterlaceMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
@@ -135,6 +137,13 @@ data class SubtitleSource(
 data class EngineConfig(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
+    /**
+     * The per-codec passthrough allow-list under [audioPassthrough]: mpv
+     * composes its `audio-spdif` list from the enabled codecs, libVLC its
+     * `--codec` allowlist. Consumed by engines with a passthrough surface —
+     * ExoPlayer (decode-to-PCM only) ignores it.
+     */
+    val audioPassthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
     val audioDelayMs: Long = 0,
     val subtitleDelayMs: Long = 0,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
@@ -209,6 +218,19 @@ data class AudioEffectsConfig(
      * the compressor stage instead; NONE disables both).
      */
     val replayGainEffectiveDb: Float? = null,
+    /**
+     * The speaker-layout cap ([MaxAudioChannelsEnum.AUTO] = uncapped):
+     * mpv folds it into the `audio-channels` write when the effects chain
+     * has no opinion; ExoPlayer clamps the ChannelMixAudioProcessor output
+     * layout; libVLC maps it onto its `--stereo-mode` lever.
+     */
+    val maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
+    /**
+     * Stereo-downmix loudness compensation in dB (0–12; 0 = off), applied
+     * through the loudness-enhancer session effect alongside the volume
+     * boost (the stronger of the two gains wins — one shared effect).
+     */
+    val downmixBoostDb: Float = 0f,
 )
 
 @Immutable

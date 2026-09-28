@@ -78,24 +78,13 @@ internal const val DETAIL_MAX_STAGGER_INDEX = 15
  * bucket from height plus the HDR/SDR/Dolby Vision suffix. Extracted from
  * [MediaInfoSection] so the read-only [LocalStreamBadges] (offline) reuses the
  * exact same formatting. Synchronous and pure → directly unit-testable.
+ *
+ * The formatting lives in core/model ([com.raulshma.jellyplay.core.model.mediaQualityLabel])
+ * so the version pickers derive identical labels from the same code; this
+ * alias keeps the detail-screen call sites unchanged.
  */
-internal fun mediaQualityLabel(video: MediaStream?): String = buildString {
-    val res = video?.height?.let { h ->
-        when {
-            h >= 2160 -> "4K"
-            h >= 1080 -> "HD"
-            h >= 720 -> "HD"
-            else -> "SD"
-        }
-    } ?: "Auto"
-    append(res)
-    append(" ")
-    val range = video?.videoDoViTitle
-        ?: video?.videoRangeType
-        ?: video?.videoRange
-        ?: "SDR"
-    append(range.uppercase())
-}
+internal fun mediaQualityLabel(video: MediaStream?): String =
+    com.raulshma.jellyplay.core.model.mediaQualityLabel(video)
 
 /**
  * Compact audio pill label ("<LANG> - <CHANNELS>") for the selected/default

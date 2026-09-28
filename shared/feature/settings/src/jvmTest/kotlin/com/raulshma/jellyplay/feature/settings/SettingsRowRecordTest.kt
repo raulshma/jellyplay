@@ -59,6 +59,7 @@ class SettingsRowRecordTest {
         MpvEngineRowRecords to MpvEngineSearchItems,
         VlcEngineRowRecords to VlcEngineSearchItems,
         ExoPlayerEngineRowRecords to ExoPlayerEngineSearchItems,
+        ExternalEngineRowRecords to ExternalEngineSearchItems,
         SyncPlayRowRecords to SyncPlaySearchItems,
         CastingRowRecords to CastingSearchItems,
         LiveTvRowRecords to LiveTvSearchItems,

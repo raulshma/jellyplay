@@ -90,6 +90,92 @@ class ChannelMixAudioProcessorTest {
     }
 
     @Test
+    fun `computeOutputChannels channel cap downmixes independently of the mode`() {
+        // The cap applies even with the channel-mix effect off.
+        val (out, active) = processor.computeOutputChannels(6, ChannelMixMode.AUTO, enabled = false, maxChannels = 2)
+        assertEquals(2, out)
+        assertTrue(active)
+    }
+
+    @Test
+    fun `computeOutputChannels channel cap 5_1 folds 7_1 input`() {
+        val (out, active) = processor.computeOutputChannels(8, ChannelMixMode.AUTO, enabled = false, maxChannels = 6)
+        assertEquals(6, out)
+        assertTrue(active)
+    }
+
+    @Test
+    fun `computeOutputChannels channel cap never narrows within the layout`() {
+        val (stereo, activeStereo) = processor.computeOutputChannels(2, ChannelMixMode.AUTO, enabled = false, maxChannels = 2)
+        assertEquals(2, stereo)
+        assertFalse(activeStereo)
+        // 8 (7.1) is already at the widest cap.
+        val (eight, activeEight) = processor.computeOutputChannels(8, ChannelMixMode.AUTO, enabled = false, maxChannels = 8)
+        assertEquals(8, eight)
+        assertFalse(activeEight)
+    }
+
+    @Test
+    fun `computeOutputChannels cap folds a wider mode target`() {
+        // Stereo-downmix wants 2 but the mono cap wins (the narrower target).
+        val (out, active) = processor.computeOutputChannels(6, ChannelMixMode.STEREO_DOWNMIX, enabled = true, maxChannels = 1)
+        assertEquals(1, out)
+        assertTrue(active)
+    }
+
+    @Test
+    fun `computeOutputChannels cap clamps a widening mode target`() {
+        // The surround upmix wants 6, but the stereo cap is evaluated
+        // against that target — output can never exceed the cap.
+        val (out, active) = processor.computeOutputChannels(2, ChannelMixMode.SURROUND_UPMIX, enabled = true, maxChannels = 2)
+        assertEquals(2, out)
+        assertFalse(active)
+    }
+
+    @Test
+    fun `computeOutputChannels mono input upmix clamped to stereo is dual-mono`() {
+        val (out, active) = processor.computeOutputChannels(1, ChannelMixMode.SURROUND_UPMIX, enabled = true, maxChannels = 2)
+        assertEquals(2, out)
+        assertTrue(active)
+        val m = processor.buildMatrix(1, 2, ChannelMixMode.SURROUND_UPMIX)
+        assertEquals(1f, m[0][0])
+        assertEquals(1f, m[1][0])
+    }
+
+    @Test
+    fun `computeOutputChannels cap folds 7_1 even when the mode declines`() {
+        // 7.1 input: the upmix never applies to ≥6-channel input, but the
+        // 5.1 cap still narrows it.
+        val (out, active) = processor.computeOutputChannels(8, ChannelMixMode.SURROUND_UPMIX, enabled = true, maxChannels = 6)
+        assertEquals(6, out)
+        assertTrue(active)
+    }
+
+    @Test
+    fun `configure applies the channel cap`() {
+        processor.setChannelCap(1)
+        val out = processor.configure(SURROUND_FLOAT)
+        assertEquals(1, out.channelCount)
+    }
+
+    @Test
+    fun `7_1 to 5_1 matrix folds the surround pairs and passes the fronts`() {
+        processor.setChannelCap(6)
+        processor.configure(AudioProcessor.AudioFormat(48_000, 8, C.ENCODING_PCM_FLOAT))
+
+        // One 7.1 frame: L=1, R=0.8, C=0.6, LFE=0.4, Bl=0.3, Br=0.2, Sl=0.1, Sr=0.05
+        processor.queueInput(floatFrame(1.0f, 0.8f, 0.6f, 0.4f, 0.3f, 0.2f, 0.1f, 0.05f))
+        val out = processor.output.toFloats()
+        assertEquals(6, out.size)
+        assertEquals(1.0f, out[0], 0.001f)   // L passes
+        assertEquals(0.8f, out[1], 0.001f)   // R passes
+        assertEquals(0.6f, out[2], 0.001f)   // C passes
+        assertEquals(0.4f, out[3], 0.001f)   // LFE passes
+        assertEquals(0.2f, out[4], 0.001f)   // Ls = 0.5·Bl + 0.5·Sl
+        assertEquals(0.125f, out[5], 0.001f) // Rs = 0.5·Br + 0.5·Sr
+    }
+
+    @Test
     fun `configure changes output channel count for mono downmix`() {
         processor.setMode(ChannelMixMode.MONO)
         processor.setEnabled(true)

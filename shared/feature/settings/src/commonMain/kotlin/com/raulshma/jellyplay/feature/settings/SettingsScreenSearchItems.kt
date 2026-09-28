@@ -13,6 +13,16 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_acti
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_dashboard
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_favorites
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_percent
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_max_parental_rating
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_ended_cmd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_idle_cmd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_idle_ended_cmd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_play_cmd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_stop_cmd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ken_burns
@@ -33,6 +43,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_admin_dash
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_admin_dashboard_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_favorites_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_favorites_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_discord_presence_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_ended_cmd_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_idle_cmd_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_idle_ended_cmd_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_play_cmd_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_stop_cmd_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_enabled_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_timeout_subtitle
@@ -43,8 +60,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_requests_s
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_requests_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_categories_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_categories_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_dim_after_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_dim_percent_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_ken_burns_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_ken_burns_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_max_parental_rating_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_show_title_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_show_title_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_slideshow_interval_subtitle
@@ -89,8 +109,18 @@ internal object SettingsScreenIds {
     const val SCREENSAVER_SLIDESHOW_INTERVAL = "screensaver_slideshow_interval"
     const val SCREENSAVER_KEN_BURNS = "screensaver_ken_burns"
     const val SCREENSAVER_TRANSITION_STYLE = "screensaver_transition_style"
+    const val SCREENSAVER_MAX_PARENTAL_RATING = "screensaver_max_parental_rating"
+    const val SCREENSAVER_DIM_AFTER = "screensaver_dim_after"
+    const val SCREENSAVER_DIM_PERCENT = "screensaver_dim_percent"
     const val IDLE_AMBIENT_ENABLED = "idle_ambient_enabled"
     const val IDLE_AMBIENT_TIMEOUT = "idle_ambient_timeout"
+    const val DISCORD_PRESENCE_ENABLED = "discord_presence_enabled"
+    const val HOOKS_ENABLED = "hooks_enabled"
+    const val HOOKS_PLAY_CMD = "hooks_play_cmd"
+    const val HOOKS_STOP_CMD = "hooks_stop_cmd"
+    const val HOOKS_ENDED_CMD = "hooks_ended_cmd"
+    const val HOOKS_IDLE_CMD = "hooks_idle_cmd"
+    const val HOOKS_IDLE_ENDED_CMD = "hooks_idle_ended_cmd"
 }
 
 /**
@@ -266,6 +296,30 @@ internal val SystemRowRecords = listOf(
         icon = Tabler.Outline.ArrowsHorizontal
     ),
     SettingsRowRecord(
+        id = SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING,
+        titleRes = Res.string.settings_dream_max_parental_rating,
+        searchSubtitleRes = Res.string.ss_screensaver_max_parental_rating_subtitle,
+        keywords = listOf("screensaver", "dream", "parental", "rating", "mature", "adult", "kids", "family", "filter"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Shield
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.SCREENSAVER_DIM_AFTER,
+        titleRes = Res.string.settings_dream_dim_after,
+        searchSubtitleRes = Res.string.ss_screensaver_dim_after_subtitle,
+        keywords = listOf("screensaver", "dream", "dim", "fade", "dark", "night", "delay", "timer", "tv"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Hourglass
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.SCREENSAVER_DIM_PERCENT,
+        titleRes = Res.string.settings_dream_dim_percent,
+        searchSubtitleRes = Res.string.ss_screensaver_dim_percent_subtitle,
+        keywords = listOf("screensaver", "dream", "dim", "brightness", "dark", "opacity", "percent", "tv"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Sun
+    ),
+    SettingsRowRecord(
         id = SettingsScreenIds.IDLE_AMBIENT_ENABLED,
         titleRes = Res.string.settings_idle_ambient_enabled,
         searchTitleRes = Res.string.ss_idle_ambient_enabled_title,
@@ -284,6 +338,69 @@ internal val SystemRowRecords = listOf(
         route = Route.Settings,
         icon = Tabler.Outline.Stopwatch,
         platforms = platformsForCapability(settingsCapabilities.supportsIdleAmbientScreen),
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.DISCORD_PRESENCE_ENABLED,
+        titleRes = Res.string.settings_discord_presence_enabled,
+        searchSubtitleRes = Res.string.ss_discord_presence_enabled_subtitle,
+        keywords = listOf("discord", "rich presence", "rpc", "activity", "watching", "listening", "status", "syncplay", "join"),
+        route = Route.Settings,
+        icon = Tabler.Outline.BrandDiscord,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.HOOKS_ENABLED,
+        titleRes = Res.string.settings_hooks_enabled,
+        searchSubtitleRes = Res.string.ss_hooks_enabled_subtitle,
+        keywords = listOf("hooks", "command", "script", "automation", "shell", "mpv", "event", "run"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Terminal2,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.HOOKS_PLAY_CMD,
+        titleRes = Res.string.settings_hooks_play_cmd,
+        searchSubtitleRes = Res.string.ss_hooks_play_cmd_subtitle,
+        keywords = listOf("hooks", "on_play_started", "play", "start", "command", "script"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Terminal2,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.HOOKS_STOP_CMD,
+        titleRes = Res.string.settings_hooks_stop_cmd,
+        searchSubtitleRes = Res.string.ss_hooks_stop_cmd_subtitle,
+        keywords = listOf("hooks", "on_play_stopped", "stop", "quit", "command", "script"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Terminal2,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.HOOKS_ENDED_CMD,
+        titleRes = Res.string.settings_hooks_ended_cmd,
+        searchSubtitleRes = Res.string.ss_hooks_ended_cmd_subtitle,
+        keywords = listOf("hooks", "on_media_ended", "end", "finished", "eof", "command", "script"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Terminal2,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.HOOKS_IDLE_CMD,
+        titleRes = Res.string.settings_hooks_idle_cmd,
+        searchSubtitleRes = Res.string.ss_hooks_idle_cmd_subtitle,
+        keywords = listOf("hooks", "on_idle_enter", "idle", "standby", "command", "script"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Terminal2,
+        platforms = DESKTOP_ONLY_PLATFORMS,
+    ),
+    SettingsRowRecord(
+        id = SettingsScreenIds.HOOKS_IDLE_ENDED_CMD,
+        titleRes = Res.string.settings_hooks_idle_ended_cmd,
+        searchSubtitleRes = Res.string.ss_hooks_idle_ended_cmd_subtitle,
+        keywords = listOf("hooks", "on_idle_exit", "idle", "wake", "resume", "command", "script"),
+        route = Route.Settings,
+        icon = Tabler.Outline.Terminal2,
+        platforms = DESKTOP_ONLY_PLATFORMS,
     ))
 
 /** The catalog projection of `SystemRowRecords`: the search faces + the shared category. */

@@ -48,6 +48,7 @@ class LibraryStoreTest {
         assertEquals(false, slice.skipSpecials)
         assertEquals(false, slice.compactEpisodeList)
         assertEquals(true, slice.showDetailUpNext)
+        assertEquals(false, slice.showMissingEpisodes)
         assertEquals(emptyMap<String, String>(), slice.defaultLibrarySortOrders)
     }
 
@@ -71,6 +72,33 @@ class LibraryStoreTest {
         assertEquals(true, store.library.first().compactEpisodeList)
         store.setCompactEpisodeList(false)
         assertEquals(false, store.library.first().compactEpisodeList)
+    }
+
+    @Test
+    fun `setShowMissingEpisodes round-trips`() = runTest {
+        // Hide (false) is the persisted default; showing must round-trip both ways.
+        assertEquals(false, store.library.first().showMissingEpisodes)
+        store.setShowMissingEpisodes(true)
+        assertEquals(true, store.library.first().showMissingEpisodes)
+        store.setShowMissingEpisodes(false)
+        assertEquals(false, store.library.first().showMissingEpisodes)
+    }
+
+    @Test
+    fun `setPreferLogos round-trips`() = runTest {
+        assertEquals(false, store.library.first().preferLogos)
+        store.setPreferLogos(true)
+        assertEquals(true, store.library.first().preferLogos)
+        store.setPreferLogos(false)
+        assertEquals(false, store.library.first().preferLogos)
+    }
+
+    @Test
+    fun `restore round-trips preferLogos through the slice`() = runTest {
+        store.restore(LibrarySlice(preferLogos = true))
+        assertEquals(true, store.library.first().preferLogos)
+        store.restore(LibrarySlice(preferLogos = false))
+        assertEquals(false, store.library.first().preferLogos)
     }
 
     @Test

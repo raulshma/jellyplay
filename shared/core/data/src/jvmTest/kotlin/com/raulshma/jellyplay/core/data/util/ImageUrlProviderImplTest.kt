@@ -132,6 +132,53 @@ class ImageUrlProviderImplTest {
         verify(exactly = 1) { playbackRepository.getImageUrl(ITEM, "Primary", 400) }
     }
 
+    // ── logo URLs (the "prefer logos" detail title) ───────────────────────
+
+    @Test
+    fun `logo URLs compose the Logo image type and are memoised per item`() {
+        every { playbackRepository.getImageUrl(ITEM, "Logo", 400) } returns "https://s/logo400"
+
+        assertEquals("https://s/logo400", provider.getLogoUrl(ITEM))
+        assertEquals("https://s/logo400", provider.getLogoUrl(ITEM))
+
+        verify(exactly = 1) { playbackRepository.getImageUrl(ITEM, "Logo", 400) }
+    }
+
+    @Test
+    fun `logo URLs clamp to the perf width under performance mode`() {
+        appearance.value = AppearanceSlice(performanceMode = true)
+        every { playbackRepository.getImageUrl(ITEM, "Logo", 300) } returns "https://s/logo300"
+
+        assertEquals("https://s/logo300", provider.getLogoUrl(ITEM))
+
+        verify(exactly = 0) { playbackRepository.getImageUrl(ITEM, "Logo", 400) }
+    }
+
+    @Test
+    fun `logo cache keys never collide with the poster variant`() {
+        every { playbackRepository.getImageUrl(ITEM, "Primary", 400) } returns "https://s/poster"
+        every { playbackRepository.getImageUrl(ITEM, "Logo", 400) } returns "https://s/logo"
+
+        assertEquals("https://s/poster", provider.getImageUrl(ITEM))
+        assertEquals("https://s/logo", provider.getLogoUrl(ITEM))
+    }
+
+    @Test
+    fun `a null logo tag yields the empty string without touching the repository`() {
+        assertEquals("", provider.getLogoUrlOrNull(ITEM, null))
+
+        verify(exactly = 0) { playbackRepository.getImageUrl(any(), any(), any()) }
+    }
+
+    @Test
+    fun `any logo tag delegates to getLogoUrl`() {
+        every { playbackRepository.getImageUrl(ITEM, "Logo", 400) } returns "https://s/logo400"
+
+        assertEquals("https://s/logo400", provider.getLogoUrlOrNull(ITEM, "tag"))
+
+        verify(exactly = 1) { playbackRepository.getImageUrl(ITEM, "Logo", 400) }
+    }
+
     private companion object {
         const val ITEM = "item-1"
     }

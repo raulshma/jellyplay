@@ -391,6 +391,7 @@ class MpvPlayerEngine(
             val configPairs = MpvConfigMapping.configPairs(
                 config = mpvCfg,
                 audioPassthrough = currentConfig.audioPassthrough,
+                passthroughCodecs = currentConfig.audioPassthroughCodecs,
                 lowRamDevice = isLowRamDevice,
                 deinterlace = currentConfig.deinterlace,
             )
@@ -442,6 +443,7 @@ class MpvPlayerEngine(
                     mpvCfg.audioOutputMode,
                     currentConfig.audioEffects.channelMixMode,
                     currentConfig.audioEffects.channelMixEnabled,
+                    currentConfig.audioEffects.maxAudioChannels,
                 ),
             )
 
@@ -742,11 +744,12 @@ class MpvPlayerEngine(
             // (audio-device / audio-exclusive / audio-spdif via the output
             // mode + passthrough reconciliation) and the extra-config lines.
             if (delta.sharedPairsChanged) {
-                // engineSpecific + audioPassthrough + deinterlace + hdrSource
-                // (see EngineConfigDelta.sharedPairsChanged).
+                // engineSpecific + audioPassthrough + audioPassthroughCodecs
+                // + deinterlace + hdrSource (see EngineConfigDelta.sharedPairsChanged).
                 val pairs = MpvConfigMapping.configPairs(
                     config = mpvCfg,
                     audioPassthrough = newConfig.audioPassthrough,
+                    passthroughCodecs = newConfig.audioPassthroughCodecs,
                     lowRamDevice = isLowRamDevice,
                     deinterlace = newConfig.deinterlace,
                 )
@@ -770,13 +773,15 @@ class MpvPlayerEngine(
             if (delta.channelMixChanged || oldMpvCfg?.audioOutputMode != mpvCfg.audioOutputMode) {
                 // The output mode's STEREO forced downmix folds into the same
                 // audio-channels write (the effects chain stays the single
-                // writer of this pipeline-re-initing property).
+                // writer of this pipeline-re-initing property); the channel
+                // cap rides along when the effects chain has no opinion.
                 mpv.setPropertyString(
                     "audio-channels",
                     MpvConfigMapping.effectiveAudioChannels(
                         mpvCfg.audioOutputMode,
                         newConfig.audioEffects.channelMixMode,
                         newConfig.audioEffects.channelMixEnabled,
+                        newConfig.audioEffects.maxAudioChannels,
                     ),
                 )
             }

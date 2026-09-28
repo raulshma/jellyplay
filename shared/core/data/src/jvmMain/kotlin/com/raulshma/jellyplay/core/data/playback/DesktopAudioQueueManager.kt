@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -223,6 +224,14 @@ class DesktopAudioQueueManager(
      * single-player semantics.
      */
     private val playbackFocus: PlaybackFocus = NoopPlaybackFocus,
+    /**
+     * The app-wide now-playing seam (feature 4.2): [start] mirrors the
+     * chassis tracker's flows onto it (video publishes from the other side,
+     * in PlayerSessionManager), and the engine ENDED observer reports the
+     * track's end before the auto-advance. Nullable-with-default so plain
+     * constructions (tests, other hosts) compile and behave unchanged.
+     */
+    private val nowPlayingReporter: NowPlayingReporter? = null,
 ) : AudioQueueManager, AudioPlayerEngine {
 
     private companion object {
@@ -414,6 +423,44 @@ class DesktopAudioQueueManager(
                 playbackSpeed = state._speed,
             )
         }
+        startNowPlayingMirror()
+    }
+
+    /**
+     * The now-playing seam's audio-side mirror (feature 4.2): the chassis
+     * tracker's item/title/artist flows + the play/duration cells folded
+     * onto [nowPlayingReporter] — a Started on a new item id, a clear
+     * (Stopped) when the tracker resets (the stopAndRelease path), and
+     * silent same-item refreshes for play-state changes. Position is
+     * captured per emission (never combined — the 250 ms tick would fire
+     * this constantly). No-op without a reporter.
+     */
+    private fun startNowPlayingMirror() {
+        val reporter = nowPlayingReporter ?: return
+        scope.launch {
+            combine(
+                state.nowPlayingTracker.currentPlayingItemId,
+                state.nowPlayingTracker.title,
+                state.nowPlayingTracker.artist,
+                state.isPlaying,
+                state.duration,
+            ) { itemId, title, artist, _, durationMs ->
+                if (itemId == null || title.isBlank()) {
+                    reporter.clear()
+                } else {
+                    reporter.publish(
+                        NowPlayingReporter.NowPlayingMeta(
+                            itemId = itemId,
+                            title = title,
+                            subtitle = artist,
+                            kind = NowPlayingReporter.Kind.MUSIC,
+                            positionMs = state.currentPosition.value,
+                            durationMs = durationMs.takeIf { it > 0 },
+                        )
+                    )
+                }
+            }.collect { /* the fold above is the work */ }
+        }
     }
 
     // ── Main-thread contract (AudioQueueManager) ───────────────────────────
@@ -454,7 +501,15 @@ class DesktopAudioQueueManager(
                 },
                 scope.launch {
                     created.playbackState.collect { s ->
-                        if (s == EnginePlaybackState.ENDED) state.onEngineEnded()
+                        if (s == EnginePlaybackState.ENDED) {
+                            // The now-playing seam's Ended (feature 4.2):
+                            // reported BEFORE the chassis advance so a
+                            // track-to-track auto-advance reads
+                            // ended(prev) → started(next) to the shell
+                            // consumers.
+                            nowPlayingReporter?.markEnded()
+                            state.onEngineEnded()
+                        }
                     }
                 },
             )

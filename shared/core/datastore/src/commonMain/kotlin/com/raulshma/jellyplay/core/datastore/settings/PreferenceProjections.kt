@@ -243,6 +243,10 @@ class PreferenceProjections constructor(
                 downloadQuality = downloads.downloadQuality,
                 smartDownloadsEnabled = downloads.smartDownloadsEnabled,
                 autoDownloadNewEpisodes = downloads.autoDownloadNewEpisodes,
+                autoDownloadLookahead = downloads.autoDownloadLookahead,
+                autoDownloadMaxPerPass = downloads.autoDownloadMaxPerPass,
+                autoDownloadKeepDays = downloads.autoDownloadKeepDays,
+                autoDownloadServers = downloads.autoDownloadServers,
                 maxDownloadStorageGb = downloads.maxDownloadStorageGb,
                 downloadStorageLocation = downloads.downloadStorageLocation,
                 autoDeleteAfterWatch = downloads.autoDeleteAfterWatch,
@@ -348,6 +352,7 @@ class PreferenceProjections constructor(
                 hideTopHeaderOnScroll = home.hideTopHeaderOnScroll,
                 continueWatchingClickBehavior = home.continueWatchingClickBehavior,
                 hiddenCwItemIds = home.hiddenCwItemIds,
+                nextUpExcludedSeriesIds = home.nextUpExcludedSeriesIds,
                 mergeContinueWatchingAndNextUp = home.mergeContinueWatchingAndNextUp,
                 nextUpMaxDays = home.nextUpMaxDays,
                 nextUpRewatching = home.nextUpRewatching,
@@ -416,6 +421,8 @@ class PreferenceProjections constructor(
             episodesDescending = library.episodesDescending,
             compactEpisodeList = library.compactEpisodeList,
             showDetailUpNext = library.showDetailUpNext,
+            showMissingEpisodes = library.showMissingEpisodes,
+            preferLogos = library.preferLogos,
         )
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())
@@ -500,8 +507,18 @@ class PreferenceProjections constructor(
             dreamShowTitle = g2.screensaver.dreamShowTitle,
             dreamKenBurnsEnabled = g2.screensaver.dreamKenBurnsEnabled,
             dreamTransitionStyle = g2.screensaver.dreamTransitionStyle,
+            dreamMaxParentalRating = g2.screensaver.dreamMaxParentalRating,
+            dreamDimAfterMs = g2.screensaver.dreamDimAfterMs,
+            dreamDimPercent = g2.screensaver.dreamDimPercent,
             idleAmbientEnabled = g2.screensaver.idleAmbientEnabled,
             idleAmbientTimeoutMin = g2.screensaver.idleAmbientTimeoutMin,
+            discordPresenceEnabled = g2.screensaver.discordPresenceEnabled,
+            hooksEnabled = g2.screensaver.hooksEnabled,
+            hooksPlayCmd = g2.screensaver.hooksPlayCmd,
+            hooksStopCmd = g2.screensaver.hooksStopCmd,
+            hooksEndedCmd = g2.screensaver.hooksEndedCmd,
+            hooksIdleCmd = g2.screensaver.hooksIdleCmd,
+            hooksIdleEndedCmd = g2.screensaver.hooksIdleEndedCmd,
             enabledExperimentalFeatures = g2.experimental.enabledExperimentalFeatures,
         )
     }.distinctUntilChanged()

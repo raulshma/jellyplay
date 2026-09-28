@@ -11,6 +11,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
+import com.raulshma.jellyplay.core.model.arr.ArrReleaseHistoryStatus
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep
@@ -74,10 +76,10 @@ import kotlinx.datetime.LocalDate
  * branch from cancelling siblings.
  *
  * Also implements [SonarrSeriesOperations] — the Manage-Series-only Sonarr
- * series-management seam split out of the aggregate interface. The members
- * and their `withResolvedSonarrSeries` guard cluster live unchanged below;
- * dataSeerrArrModule binds that seam over this same single, exactly the
- * `[ArrRepository]`-over-the-impl pattern.
+ * series-management seam split out of the aggregate interface — and
+ * [ArrReleaseOperations], the release sheet's search & grab seam (the same
+ * over-the-impl pattern: the members and their guard clusters live unchanged
+ * below; dataSeerrArrModule binds both seams over this same single).
  */
 class ArrRepositoryImpl(
     private val radarrApiClient: RadarrApiClient,
@@ -86,7 +88,8 @@ class ArrRepositoryImpl(
     private val arrPreferencesStore: ArrPreferencesStore,
     private val cacheScope: CoroutineScope,
 ) : ArrRepository,
-    SonarrSeriesOperations {
+    SonarrSeriesOperations,
+    ArrReleaseOperations {
 
     /** Bounded concurrency for Seerr detail fan-out during server resolution. */
     private val resolveSemaphore = Semaphore(4)
@@ -403,6 +406,143 @@ class ArrRepositoryImpl(
         Result.success(winner)
     }
 
+    // ── Release search & grab (the ArrReleaseOperations seam) ─────────────
+    // The release sheet's exclusive family, keyed by the queue row it was
+    // opened from. Every member routes through the same findServer dispatch
+    // as the management actions above, resolves the *arr-internal ids on
+    // demand when the row predates them, and fails with the shared no-server
+    // / actionable-message 404s rather than throwing.
+
+    override suspend fun searchReleases(item: ArrQueueItem): Result<List<ArrRelease>> =
+        withContext(cacheScope.coroutineContext) {
+            val server = findServer(item.serverId, item.serverKind)
+                ?: return@withContext Result.failure(noServerException())
+            val tagged: Result<List<ArrRelease>> = when (item.serverKind) {
+                ArrServiceKind.RADARR -> {
+                    val movieId = resolveRadarrMovieId(server, item)
+                        ?: return@withContext Result.failure(
+                            ApiException.fromHttp(
+                                404,
+                                "Cannot resolve this movie's Radarr id — refresh the queue and try again.",
+                            ),
+                        )
+                    radarrApiClient.searchReleases(server, movieId)
+                }
+                ArrServiceKind.SONARR -> {
+                    // Sonarr's /release keys off the episode id (the season
+                    // pair needs a season number the queue row does not carry).
+                    // A fresh row always has one (includeEpisode=true); a
+                    // stale one without it can only be fixed by a refresh.
+                    val episodeId = item.arrEpisodeId
+                        ?: return@withContext Result.failure(
+                            ApiException.fromHttp(
+                                404,
+                                "This row predates the internal episode ids — refresh the queue and try again.",
+                            ),
+                        )
+                    sonarrApiClient.searchReleases(server, episodeId = episodeId)
+                }
+            }
+            tagged.map { rows -> rows.map { it.tagged(server.id, server.kind) } }
+        }
+
+    override suspend fun grabRelease(item: ArrQueueItem, release: ArrRelease, override: Boolean): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val server = findServer(item.serverId, item.serverKind)
+                ?: return@withContext Result.failure(noServerException())
+            val result = when (item.serverKind) {
+                ArrServiceKind.RADARR -> {
+                    // The override arm requires Radarr's movie id (its identity
+                    // field); resolve it on demand when the row predates the id.
+                    val movieId = if (override) {
+                        resolveRadarrMovieId(server, item)
+                            ?: return@withContext Result.failure(
+                                ApiException.fromHttp(
+                                    404,
+                                    "Cannot resolve this movie's Radarr id for an override grab — refresh the queue and try again.",
+                                ),
+                            )
+                    } else {
+                        item.arrMovieId
+                    }
+                    radarrApiClient.grabRelease(server, release, movieId = movieId, shouldOverride = override)
+                }
+                ArrServiceKind.SONARR -> {
+                    // The override arm requires Sonarr's series id; resolve it
+                    // on demand via the tvdbId (the resolveSonarrSeriesForSeries
+                    // probe the Manage-Series seam uses).
+                    val seriesId = if (override) {
+                        item.arrSeriesId
+                            ?: item.tvdbId?.let { tvdb -> resolveSonarrSeriesForSeries(tvdb)?.seriesId }
+                            ?: return@withContext Result.failure(
+                                ApiException.fromHttp(
+                                    404,
+                                    "Cannot resolve this series' Sonarr id for an override grab — refresh the queue and try again.",
+                                ),
+                            )
+                    } else {
+                        item.arrSeriesId
+                    }
+                    sonarrApiClient.grabRelease(
+                        server, release,
+                        seriesId = seriesId,
+                        episodeIds = listOfNotNull(item.arrEpisodeId),
+                        shouldOverride = override,
+                    )
+                }
+            }
+            // The grab just mutated the download queue — refresh the hot feed
+            // (the same fetch-then-notify ordering withServer applies to the
+            // single-item management deletes) so the new row appears.
+            if (result.isSuccess) refreshQueue()
+            result
+        }
+
+    /**
+     * Radarr's /release keys off the internal movie id. The row's own id
+     * wins; older snapshots fall back to the tmdbId lookup (same
+     * translate-first rule as searchForTmdb's SearchMovie arm). Null when
+     * neither resolves — the callers fail with their own actionable 404
+     * (the grab arm's message adds the override context).
+     */
+    private suspend fun resolveRadarrMovieId(server: ArrServerConfig, item: ArrQueueItem): Int? =
+        item.arrMovieId
+            ?: item.tmdbId?.let { tmdb -> radarrApiClient.findMovieIdByTmdb(server, tmdb).getOrNull() }
+
+    override suspend fun releaseHistoryStatuses(item: ArrQueueItem): Result<Map<String, ArrReleaseHistoryStatus>> =
+        withContext(cacheScope.coroutineContext) {
+            val server = findServer(item.serverId, item.serverKind)
+                ?: return@withContext Result.failure(noServerException())
+            val history = when (item.serverKind) {
+                ArrServiceKind.RADARR -> radarrApiClient.getHistory(server)
+                ArrServiceKind.SONARR -> sonarrApiClient.getHistory(server)
+            }
+            history.map { rows ->
+                // The grabbed (eventType 1) and download-failed (eventType 3)
+                // rows both carry the release guid in their `data` map — the
+                // wire eventType is a numeric enum, decoded to its string form
+                // by the lenient JSON. FAILED outranks GRABBED regardless of
+                // history order (a grabbed-then-failed release reads failed).
+                val merged = mutableMapOf<String, ArrReleaseHistoryStatus>()
+                rows.forEach { row ->
+                    val guid = row.data["guid"] ?: return@forEach
+                    val status = when (row.eventType.trim()) {
+                        HISTORY_EVENT_GRABBED -> ArrReleaseHistoryStatus.GRABBED
+                        HISTORY_EVENT_FAILED -> ArrReleaseHistoryStatus.FAILED
+                        else -> return@forEach
+                    }
+                    merged[guid] = if (status == ArrReleaseHistoryStatus.FAILED ||
+                        merged[guid] == ArrReleaseHistoryStatus.FAILED
+                    ) {
+                        ArrReleaseHistoryStatus.FAILED
+                    } else {
+                        ArrReleaseHistoryStatus.GRABBED
+                    }
+                }
+                merged
+            }
+        }
+
     // ── Sonarr series management (the SonarrSeriesOperations seam) ───────
     // The Manage-Series screen's exclusive family — split out of
     // ArrRepository as its own consumer seam; the overrides below satisfy
@@ -684,6 +824,10 @@ class ArrRepositoryImpl(
     private fun ArrBlocklistItem.tagged(serverId: String, kind: ArrServiceKind): ArrBlocklistItem =
         copy(serverId = serverId, serverKind = kind)
 
+    /** Tags a release row with its source server. */
+    private fun ArrRelease.tagged(serverId: String, kind: ArrServiceKind): ArrRelease =
+        copy(serverId = serverId, serverKind = kind)
+
     // ── Seerr discovery helpers ────────────────────────────────────────────
 
     /**
@@ -802,6 +946,12 @@ class ArrRepositoryImpl(
 
     companion object {
         private const val SERVERS_KEY = "arr_servers"
+
+        /** *arr `/history` eventType for a release grab (both services' numeric enum). */
+        private const val HISTORY_EVENT_GRABBED = "1"
+
+        /** *arr `/history` eventType for a download failure (both services' numeric enum). */
+        private const val HISTORY_EVENT_FAILED = "3"
 
         /** Lowercases + trims trailing slash for stable de-dup comparison. */
         fun canonicalBaseUrl(url: String): String =

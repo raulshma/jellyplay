@@ -108,6 +108,7 @@ val desktopPlayerVideoModule: Module = module {
             savedStateHandle = params.get(),
             subtitlePreviewRepository = get(),
             userDataMutator = get(),
+            nowPlayingReporter = get(),
         )
     }
 }

@@ -132,6 +132,12 @@
     <string name="player_video_current_time">Current time</string>
     <string name="player_video_previous_episode">Previous episode</string>
     <string name="player_video_next_episode">Next episode</string>
+    <!-- "Still watching?" confirm overlay (feature 1.3): episode + hours arms. -->
+    <string name="player_video_still_watching_title">Still watching?</string>
+    <string name="player_video_still_watching_episodes_subtitle">Auto-play continued through several episodes — confirm to keep going</string>
+    <string name="player_video_still_watching_hours_subtitle">Playback paused after hours without interaction — confirm to keep going</string>
+    <string name="player_video_still_watching_continue">Continue watching</string>
+    <string name="player_video_still_watching_stop">Stop</string>
     <string name="player_video_lock_screen">Lock screen</string>
     <string name="player_video_rotate_screen">Rotate Screen</string>
     <string name="player_video_more_options">More options</string>
@@ -206,6 +212,8 @@
     <string name="player_video_size">Size</string>
     <string name="player_video_bitrate">Bitrate</string>
     <string name="player_video_play_method">Play Method</string>
+    <string name="player_video_downloaded_badge">Downloaded</string>
+    <string name="player_video_source_label">Source</string>
     <string name="player_video_connection">Connection</string>
     <string name="player_video_metered">Metered</string>
     <string name="player_video_unmetered">Unmetered</string>
@@ -338,4 +346,8 @@
     <string name="a11y_volume_decrease">Decrease volume</string>
 
     <string name="player_direct_play_fallback">Direct Play failed — switching to transcode (%1$s)</string>
+
+    <!-- Multi-version selection (1.2) -->
+    <string name="player_video_version">Version</string>
+    <string name="player_video_remember_version">Remember this version</string>
 </resources>

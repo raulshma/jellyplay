@@ -108,6 +108,7 @@ internal fun BoxScope.PlayerStatusOverlayTier(
                 else -> "Playing"
             },
             playMethod = uiState.media.playMethod,
+            isOfflineSource = uiState.media.showDownloadedBadge,
             streamingQuality = uiState.preferredPlayerType.name,
             playerType = uiState.preferredPlayerType.name,
             decoderMode = decoderMode.displayName,

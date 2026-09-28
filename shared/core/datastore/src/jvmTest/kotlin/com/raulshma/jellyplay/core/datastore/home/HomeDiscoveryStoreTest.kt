@@ -120,6 +120,25 @@ class HomeDiscoveryStoreTest {
     // ── section-prefs write commands (the shared toggle/move/override algebra) ──
 
     @Test
+    fun `next up exclusion set and clear round-trips`() = runTest {
+        activate("userA")
+        // Per-series hide/restore through the read-modify-write pair.
+        store.excludeSeriesFromNextUp("seriesA")
+        store.excludeSeriesFromNextUp("seriesB")
+        assertEquals(setOf("seriesA", "seriesB"), slice().nextUpExcludedSeriesIds)
+        store.includeSeriesInNextUp("seriesA")
+        assertEquals(setOf("seriesB"), slice().nextUpExcludedSeriesIds)
+        // Bulk restore (the management screen's "Restore all"): the key is
+        // removed outright, so the read falls back to the empty default.
+        store.clearNextUpExclusions()
+        assertTrue(slice().nextUpExcludedSeriesIds.isEmpty())
+        assertNull(raw()[stringPreferencesKey("u_userA::next_up_excluded_series_ids")])
+        // Clearing an already-empty set is a no-op, not an error.
+        store.clearNextUpExclusions()
+        assertTrue(slice().nextUpExcludedSeriesIds.isEmpty())
+    }
+
+    @Test
     fun `setSectionVisible toggles membership in the persisted set`() = runTest {
         activate("userA")
         store.setSectionVisible(HomeSectionType.NEXT_UP, visible = false)

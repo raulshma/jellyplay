@@ -152,6 +152,54 @@ class EpisodeCatalogueImplTest {
         assertEquals(listOf("e1", "e2"), snapshot.allEpisodeIds)
     }
 
+    // ── show-missing-episodes preference threading ──────────────────────
+
+    /** Registry built the same way [setup] builds it, for the alt-catalogue tests. */
+    private fun testSessionCacheRegistry() = SessionCacheRegistry(
+        homeSession,
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+        ),
+    )
+
+    @Test
+    fun `loadSeriesEpisodes threads the show-missing preference into isMissing`() = runTest {
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(emptyList())
+        coEvery { apiClient.getAllEpisodes("series-1", any()) } returns Result.success(emptyList())
+
+        // Showing omits the filter (null); hiding (the default) sends false.
+        val showCatalogue = EpisodeCatalogueImpl(
+            apiClient, offlineRepository, homeSession, testSessionCacheRegistry(),
+            showMissingEpisodes = { true },
+        )
+        showCatalogue.loadSeriesEpisodes("series-1").getOrThrow()
+        coVerify(exactly = 1) { apiClient.getAllEpisodes("series-1", null) }
+        coVerify(exactly = 0) { apiClient.getAllEpisodes("series-1", false) }
+
+        catalogue.loadSeriesEpisodes("series-1").getOrThrow()
+        coVerify(exactly = 1) { apiClient.getAllEpisodes("series-1", false) }
+        coVerify(exactly = 1) { apiClient.getAllEpisodes("series-1", null) }
+    }
+
+    @Test
+    fun `loadSeasonEpisodes threads the show-missing preference into isMissing`() = runTest {
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(emptyList())
+        coEvery {
+            apiClient.getEpisodes("series-1", "season-1", any())
+        } returns Result.success(emptyList())
+
+        val showCatalogue = EpisodeCatalogueImpl(
+            apiClient, offlineRepository, homeSession, testSessionCacheRegistry(),
+            showMissingEpisodes = { true },
+        )
+        showCatalogue.loadSeasonEpisodes("series-1", "season-1").getOrThrow()
+        coVerify(exactly = 1) { apiClient.getEpisodes("series-1", "season-1", null) }
+        coVerify(exactly = 0) { apiClient.getEpisodes("series-1", "season-1", false) }
+
+        catalogue.loadSeasonEpisodes("series-1", "season-1").getOrThrow()
+        coVerify(exactly = 1) { apiClient.getEpisodes("series-1", "season-1", false) }
+    }
+
     // ── fetchedSeasonIds edge (ported regression) ───────────────────────
 
     @Test

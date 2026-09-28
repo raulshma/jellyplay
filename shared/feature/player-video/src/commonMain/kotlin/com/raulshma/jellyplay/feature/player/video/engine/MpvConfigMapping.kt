@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DeinterlaceMode
+import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.MpvAudioOutputMode
 import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
@@ -54,14 +56,16 @@ object MpvConfigMapping {
     /**
      * The spdif codec list the legacy [com.raulshma.jellyplay.core.model.EngineConfig.audioPassthrough]
      * boolean has always mapped to (Android init + runtime byte-parity —
-     * `dtshd` is mpv's historical alias for dts-hd).
+     * `dtshd` is mpv's historical alias for dts-hd). Now the AUTO-mode
+     * default composition — the enabled-codec subset of
+     * [AUTO_SPDIF_CODECS] with every codec enabled.
      */
     const val SPDIF_LEGACY_PASSTHROUGH = "ac3,eac3,dts,dtshd,truehd"
 
-    /** S/PDIF (optical) carries the classic bitstream codecs only. */
+    /** S/PDIF (optical) carries the classic bitstream codecs only. The OPTICAL-mode default. */
     const val SPDIF_OPTICAL = "ac3,dts"
 
-    /** HDMI carries the full bitstream set (list deduped, dts/dts-hd distinct). */
+    /** HDMI carries the full bitstream set (list deduped, dts/dts-hd distinct). The HDMI-mode default. */
     const val SPDIF_HDMI = "ac3,eac3,dts,dts-hd,truehd"
 
     /**
@@ -72,13 +76,37 @@ object MpvConfigMapping {
      * and `AUTO` defers to it so the existing Android toggle stays the
      * single source until a mode is picked. `null` means "clear" — engines
      * write the empty string, mpv's list default.
+     *
+     * [passthroughCodecs] is the per-codec allow-list under the master
+     * boolean: the composed list contains only ENABLED codecs, in each
+     * mode's fixed default order (the `SPDIF_*` constants above are exactly
+     * the full-list compositions). An empty enabled set composes nothing —
+     * `null` again, i.e. no bitstreaming even with the master on. The
+     * default ([AudioPassthroughCodec.ALL]) reproduces the pre-codec-set
+     * lists byte for byte.
      */
-    fun audioSpdif(mode: MpvAudioOutputMode, passthroughFallback: Boolean): String? = when (mode) {
-        MpvAudioOutputMode.AUTO -> if (passthroughFallback) SPDIF_LEGACY_PASSTHROUGH else null
+    fun audioSpdif(
+        mode: MpvAudioOutputMode,
+        passthroughFallback: Boolean,
+        passthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
+    ): String? = when (mode) {
+        MpvAudioOutputMode.AUTO ->
+            if (passthroughFallback) composeSpdifList(AUTO_SPDIF_CODECS, passthroughCodecs) else null
         MpvAudioOutputMode.STEREO -> null
-        MpvAudioOutputMode.OPTICAL -> SPDIF_OPTICAL
-        MpvAudioOutputMode.HDMI -> SPDIF_HDMI
+        MpvAudioOutputMode.OPTICAL -> composeSpdifList(OPTICAL_SPDIF_CODECS, passthroughCodecs)
+        MpvAudioOutputMode.HDMI -> composeSpdifList(HDMI_SPDIF_CODECS, passthroughCodecs)
     }
+
+    /**
+     * Joins the [order] pairs' mpv tokens for the codecs enabled in
+     * [passthroughCodecs]; `null` when nothing remains (clear the list).
+     */
+    private fun composeSpdifList(
+        order: List<Pair<AudioPassthroughCodec, String>>,
+        passthroughCodecs: Set<AudioPassthroughCodec>,
+    ): String? = order.filter { (codec, _) -> codec in passthroughCodecs }
+        .joinToString(",") { (_, token) -> token }
+        .ifEmpty { null }
 
     /**
      * The forced-downmix half of [MpvAudioOutputMode.STEREO]: `stereo` as the
@@ -103,16 +131,22 @@ object MpvConfigMapping {
 
     /**
      * The effective `audio-channels` value: the effects chain's mapping with
-     * the STEREO mode's forced downmix folded in — the one helper both
-     * engines' audio-channels writers route through so the mode cannot drift
-     * from the effects surface it composes with.
+     * the STEREO mode's forced downmix folded in, and — when NEITHER has an
+     * opinion — the [maxAudioChannels] capability cap (`AUTO` defers back to
+     * mpv's `auto` default). The one helper both engines' audio-channels
+     * writers route through so the mode cannot drift from the effects
+     * surface it composes with.
      */
     fun effectiveAudioChannels(
         mode: MpvAudioOutputMode,
         channelMixMode: ChannelMixMode,
         channelMixEnabled: Boolean,
+        maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
     ): String = stereoDownmixOverride(mode, channelMixMode, channelMixEnabled)
         ?: channelMixModeToAudioChannels(channelMixMode, channelMixEnabled)
+            .takeUnless { it == AUTO_CHANNELS }
+        ?: maxAudioChannels.mpvAudioChannelsKey
+        ?: AUTO_CHANNELS
 
     /**
      * The demuxer byte budgets `(max, back)` for [config]. `AUTO` resolves
@@ -255,8 +289,10 @@ object MpvConfigMapping {
     /**
      * The full ordered pair list for [config]. `audioPassthrough` is the
      * legacy [com.raulshma.jellyplay.core.model.EngineConfig.audioPassthrough]
-     * boolean (both engines read it off the shared config); `lowRamDevice`
-     * picks the AUTO demuxer budget. [deinterlace] is the base-config
+     * boolean (both engines read it off the shared config);
+     * `passthroughCodecs` is the per-codec allow-list composed into the
+     * spdif pair; `lowRamDevice` picks the AUTO demuxer budget.
+     * [deinterlace] is the base-config
      * mode (mpv `deinterlace`); [shaderDir] is the desktop-extracted pack
      * directory (`null` on platforms with no extraction — the `glsl-shaders`
      * pair is then omitted unless the CUSTOM pack names its own absolute
@@ -269,6 +305,7 @@ object MpvConfigMapping {
     fun configPairs(
         config: MpvEngineConfig,
         audioPassthrough: Boolean = false,
+        passthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
         lowRamDevice: Boolean = false,
         deinterlace: DeinterlaceMode = DeinterlaceMode.AUTO,
         shaderDir: String? = null,
@@ -290,7 +327,7 @@ object MpvConfigMapping {
         val (demuxerMax, demuxerBack) = demuxerMaxBytesFor(config, lowRamDevice)
         add(MpvOption("demuxer-max-bytes", demuxerMax.toString()))
         add(MpvOption("demuxer-max-back-bytes", demuxerBack.toString()))
-        add(MpvOption("audio-spdif", audioSpdif(config.audioOutputMode, audioPassthrough).orEmpty()))
+        add(MpvOption("audio-spdif", audioSpdif(config.audioOutputMode, audioPassthrough, passthroughCodecs).orEmpty()))
         add(MpvOption("audio-device", config.audioDevice ?: AUTO_DEVICE))
         add(MpvOption("audio-exclusive", if (config.audioExclusive) "yes" else "no"))
         // ── Render surface ─────────────────────────────────────────────────
@@ -330,12 +367,13 @@ object MpvConfigMapping {
         setter: (String, String) -> Unit,
         config: MpvEngineConfig,
         audioPassthrough: Boolean = false,
+        passthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
         lowRamDevice: Boolean = false,
         deinterlace: DeinterlaceMode = DeinterlaceMode.AUTO,
         shaderDir: String? = null,
         toneMappingSuppressed: Boolean = false,
     ) {
-        configPairs(config, audioPassthrough, lowRamDevice, deinterlace, shaderDir, toneMappingSuppressed)
+        configPairs(config, audioPassthrough, passthroughCodecs, lowRamDevice, deinterlace, shaderDir, toneMappingSuppressed)
             .forEach { (key, value) ->
                 setter(key, value)
             }
@@ -371,6 +409,31 @@ object MpvConfigMapping {
 
     /** mpv's untouched `audio-channels` default (the effects chain's off value). */
     private const val AUTO_CHANNELS = "auto"
+
+    /**
+     * The per-mode spdif compositions as `(codec, mpv token)` pairs in
+     * emission order — the enabled-codec subset of these builds the
+     * `audio-spdif` value (see [audioSpdif]; the `SPDIF_*` constants are the
+     * all-enabled strings of the three lists).
+     */
+    private val AUTO_SPDIF_CODECS = listOf(
+        AudioPassthroughCodec.AC3 to "ac3",
+        AudioPassthroughCodec.EAC3 to "eac3",
+        AudioPassthroughCodec.DTS to "dts",
+        AudioPassthroughCodec.DTS_HD to "dtshd",
+        AudioPassthroughCodec.TRUEHD to "truehd",
+    )
+    private val OPTICAL_SPDIF_CODECS = listOf(
+        AudioPassthroughCodec.AC3 to "ac3",
+        AudioPassthroughCodec.DTS to "dts",
+    )
+    private val HDMI_SPDIF_CODECS = listOf(
+        AudioPassthroughCodec.AC3 to "ac3",
+        AudioPassthroughCodec.EAC3 to "eac3",
+        AudioPassthroughCodec.DTS to "dts",
+        AudioPassthroughCodec.DTS_HD to "dts-hd",
+        AudioPassthroughCodec.TRUEHD to "truehd",
+    )
 
     // Historical Android low-RAM budgets — moved here so both engines and the
     // mapping test read one table (MpvDemuxerMaxBytes.AUTO's resolution).

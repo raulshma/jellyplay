@@ -122,6 +122,7 @@ class PlaybackSessionReportingTest {
 
         session = PlaybackSession(
             scope = sessionScope,
+            upgradesPassOutToOverlay = { false },
             releaseScope = releaseScope,
             clock = { nowMs },
             playerSessionManager = playerSessionManager,

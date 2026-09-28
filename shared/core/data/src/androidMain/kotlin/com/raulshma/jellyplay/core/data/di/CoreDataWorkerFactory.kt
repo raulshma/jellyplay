@@ -41,6 +41,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 downloadRepository = koin().get(),
                 downloadIntake = koin().get(),
                 downloadsStore = koin().get(),
+                serverIdentityStore = koin().get(),
             )
             UserDataSyncWorker::class.simpleName -> UserDataSyncWorker(
                 context, workerParameters,

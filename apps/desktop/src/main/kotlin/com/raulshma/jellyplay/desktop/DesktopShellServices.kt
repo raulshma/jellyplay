@@ -10,6 +10,7 @@ import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
@@ -30,7 +31,9 @@ import com.raulshma.jellyplay.desktop.update.DesktopUpdateCheckController
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
@@ -113,6 +116,14 @@ internal class DesktopShellServices(
     activePlayerRegistry: ActivePlayerController,
     webSocketClient: JellyfinWebSocketClient,
     screensaverStore: ScreensaverStore,
+    /**
+     * The shell hooks' idle arms (feature 4.3): [collectIdleTransitions]
+     * forwards this shell's idle-monitor transitions onto the shared
+     * [NowPlayingReporter] event stream, where [DesktopHookRunner] consumes
+     * them. The shared core:data single, injected like every other Koin
+     * collaborator above.
+     */
+    private val idleReporter: NowPlayingReporter,
 ) {
     /** ADR 0001's shared session-policy wiring — see class KDoc. */
     val sessionController = ShellSessionController(
@@ -212,6 +223,21 @@ internal class DesktopShellServices(
     )
 
     /**
+     * The shell hooks' idle arms (feature 4.3): forwards this shell's
+     * idle-monitor transitions onto the shared [NowPlayingReporter] event
+     * stream. The initial StateFlow value is dropped — only real transitions
+     * may fire hooks. Called from [rememberDesktopShellServices]'s effect
+     * block, beside the remote-nav collector.
+     */
+    fun collectIdleTransitions() {
+        scope.launch {
+            idleAmbientController.isIdle
+                .drop(1)
+                .collect { idle -> idleReporter.reportIdle(idle) }
+        }
+    }
+
+    /**
      * Consumes `RemoteNavigationBridge.targets` until cancellation — the
      * collect half of the remote-nav seam, driven by
      * [rememberDesktopShellServices]'s effect.
@@ -262,6 +288,7 @@ internal fun rememberDesktopShellServices(
     val activePlayerRegistry: ActivePlayerController = koinInject()
     val webSocketClient: JellyfinWebSocketClient = koinInject()
     val screensaverStore: ScreensaverStore = koinInject()
+    val nowPlayingReporter: NowPlayingReporter = koinInject()
 
     val services = remember(
         scope,
@@ -280,6 +307,7 @@ internal fun rememberDesktopShellServices(
         activePlayerRegistry,
         webSocketClient,
         screensaverStore,
+        nowPlayingReporter,
     ) {
         DesktopShellServices(
             scope = scope,
@@ -298,6 +326,7 @@ internal fun rememberDesktopShellServices(
             activePlayerRegistry = activePlayerRegistry,
             webSocketClient = webSocketClient,
             screensaverStore = screensaverStore,
+            idleReporter = nowPlayingReporter,
         )
     }
 
@@ -305,6 +334,12 @@ internal fun rememberDesktopShellServices(
     // replay, buffered 4) until the composition leaves.
     LaunchedEffect(services) {
         services.collectRemoteNavigation()
+    }
+
+    // The shell hooks' idle arms (feature 4.3): the idle monitor's
+    // transitions forward onto the shared now-playing event stream.
+    LaunchedEffect(services) {
+        services.collectIdleTransitions()
     }
 
     // The idle-ambient lifecycle: ticks + the idle-gated session-count

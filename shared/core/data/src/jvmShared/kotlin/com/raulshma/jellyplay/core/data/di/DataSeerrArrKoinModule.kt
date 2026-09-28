@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.repository.ArrReleaseOperations
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SeerrAuthenticator
@@ -65,4 +66,8 @@ internal val dataSeerrArrModule: Module = module {
     // family moved off ArrRepository because this one feature is its only
     // consumer), so the binding follows the exact over-the-impl pattern.
     single<SonarrSeriesOperations> { get<ArrRepositoryImpl>() }
+    // The release sheet's search & grab seam — the same one-consumer
+    // over-the-impl pattern (the arrqueue release sheet is its only consumer,
+    // and the aggregate's surface ratchet pins ArrRepository's member count).
+    single<ArrReleaseOperations> { get<ArrRepositoryImpl>() }
 }

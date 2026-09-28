@@ -65,6 +65,14 @@ internal data class LibraryItemsQuerySpec(
     val searchTerm: String? = null,
     /** ItemFilter serial names ("IsPlayed", "IsUnplayed", "IsResumable", "IsFavorite"). */
     val itemFilters: List<String>? = null,
+    /**
+     * Standalone /Items presence params (NOT ItemFilter values — the resolver
+     * fails fast on unknown tokens): true = only items with subtitles / a
+     * trailer. Tri-state like [LibraryFilters.isResumable]: null and a stored
+     * false are both "off" and omit the parameter.
+     */
+    val hasSubtitles: Boolean? = null,
+    val hasTrailer: Boolean? = null,
     /** Minimum community rating; null = no floor. */
     val minCommunityRating: Double? = null,
     /** ItemFields serial names; null = server default projection. */
@@ -137,6 +145,10 @@ internal fun buildMediaItemsQuerySpec(
         limit = limit,
         searchTerm = searchTerm?.takeIf { it.isNotBlank() },
         itemFilters = itemFilters.takeIf { it.isNotEmpty() },
+        // Presence filters pass only an explicit true: a stored false is the
+        // tri-state "off" (same rule as the IsResumable item filter above).
+        hasSubtitles = filters.hasSubtitles.takeIf { it == true },
+        hasTrailer = filters.hasTrailer.takeIf { it == true },
         minCommunityRating = filters.minRating.takeIf { it > 0f }?.toDouble(),
         fields = LIST_PROJECTION_FIELDS + "Genres",
     )

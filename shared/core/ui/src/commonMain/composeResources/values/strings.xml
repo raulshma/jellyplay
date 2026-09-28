@@ -150,6 +150,8 @@
     <string name="core_filter_played_unplayed">Unplayed</string>
     <string name="core_filter_rating_plus">%1$s+</string>
     <string name="core_filter_in_progress">In Progress</string>
+    <string name="core_filter_has_subtitles">Has subtitles</string>
+    <string name="core_filter_has_trailer">Has trailer</string>
     <string name="core_clear_all">Clear all</string>
 
     <!-- Settings search categories (the item title/subtitle strings live in :feature:settings) -->

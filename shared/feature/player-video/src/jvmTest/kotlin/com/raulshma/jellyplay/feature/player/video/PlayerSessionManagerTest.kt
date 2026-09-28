@@ -12,12 +12,15 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -106,6 +109,9 @@ class PlayerSessionManagerTest {
         // Relaxed mock: isOffline defaults to false (online), matching the
         // historical no-gate behaviour the existing tests were written against.
         offlineModeManager = mockk(relaxed = true)
+        // The Auto resolution reads the same flow the offline gate does —
+        // default it to Online so the historical tests resolve unchanged.
+        every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         messageBus = RecordingMessageBus()
 
         // Default: EXTERNAL player to avoid real engine instantiation in unit tests.
@@ -127,6 +133,7 @@ class PlayerSessionManagerTest {
 
         sessionManager = PlayerSessionManager(
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
+            nowPlayingReporter = NowPlayingReporter(),
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
             playbackIdentity = mockk(relaxed = true),
@@ -174,6 +181,66 @@ class PlayerSessionManagerTest {
         tempFile.deleteOnExit()
         val itemId = "item-movie"
         every { offlineModeManager.isOffline } returns true
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
+            downloadItem(itemId, tempFile.absolutePath)
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
+
+        sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
+
+        val state = sessionManager.sessionState.value
+        assertEquals("Offline", state.playMethodString)
+        assertTrue(state.isReady)
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+    }
+
+    // ── Offline-source preference (prefer downloaded vs streaming) ────
+
+    /**
+     * Re-stubs the hydrated aggregate with [preference] — the read the Auto
+     * resolution consults before dispatching (see
+     * [PlayerSessionManager.loadMedia]).
+     */
+    private fun stubAggregatePreference(preference: OfflinePlaybackPreference) {
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(
+                preferredPlayer = PlayerType.EXTERNAL,
+                offlinePlaybackPreference = preference,
+            ),
+        )
+        every { aggregateStore.aggregate } returns MutableStateFlow(agg)
+        every { aggregateStore.aggregateRaw } returns flowOf(agg)
+    }
+
+    @Test
+    fun loadMedia_preferStreaming_onlinePlaysServerCopyDespiteUsableDownload() = runTest(testDispatcher) {
+        val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
+        tempFile.deleteOnExit()
+        val itemId = "item-movie"
+        stubAggregatePreference(OfflinePlaybackPreference.PREFER_STREAMING)
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
+            downloadItem(itemId, tempFile.absolutePath)
+        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(
+            MediaDetail(item = MediaItem(id = itemId, name = "Test Movie", mediaType = MediaType.MOVIE)),
+        )
+
+        sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
+
+        // The usable download was passed over: the server copy is fetched
+        // and the session never takes the "Offline" play method.
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail(itemId) }
+        assertFalse(sessionManager.sessionState.value.playMethodString == "Offline")
+    }
+
+    @Test
+    fun loadMedia_preferStreaming_offlineNetworkStillPlaysDownload() = runTest(testDispatcher) {
+        val tempFile = Files.createTempFile("test-video", ".mp4").toFile()
+        tempFile.deleteOnExit()
+        val itemId = "item-movie"
+        stubAggregatePreference(OfflinePlaybackPreference.PREFER_STREAMING)
+        // No reachable server — PREFER_STREAMING must not strand the load on
+        // the (gated) online path; the stored file is the only thing that
+        // can play.
+        every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Offline)
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
             downloadItem(itemId, tempFile.absolutePath)
         coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
@@ -307,6 +374,7 @@ class PlayerSessionManagerTest {
 
         return PlayerSessionManager(
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
+            nowPlayingReporter = NowPlayingReporter(),
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
             playbackIdentity = identity,

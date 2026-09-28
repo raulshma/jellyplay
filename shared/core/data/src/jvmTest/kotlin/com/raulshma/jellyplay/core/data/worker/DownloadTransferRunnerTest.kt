@@ -89,7 +89,7 @@ class DownloadTransferRunnerTest {
         val result = runner().transfer(entity(), existingBytes = 0L, notificationId = 1, accessToken = null, probedTotalSize = 1024L)
 
         assertEquals(TransferOutcome.Success, result)
-        coVerify { dao.updateProgressWithSpeed("dl-1", 1024L, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", 1024L, any()) }
         coVerify { dao.resetRetryCount("dl-1") }
         assertTrue(tempFile.exists() && tempFile.length() == 1024L)
     }
@@ -183,7 +183,7 @@ class DownloadTransferRunnerTest {
         assertEquals(TransferOutcome.Success, result)
         // The 416 path resets the row to PENDING/0 before retrying.
         coVerify { dao.updateProgress("dl-1", 0L, DownloadStatus.PENDING.name) }
-        coVerify { dao.updateProgressWithSpeed("dl-1", 512L, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", 512L, any()) }
         // Two requests issued: the first with Range, the recovery without.
         assertEquals(2, client.requests.size)
         assertEquals("bytes=100-", client.requests[0].range)
@@ -239,7 +239,7 @@ class DownloadTransferRunnerTest {
         val result = runner().transfer(entity(), existingBytes = 0L, notificationId = 1, accessToken = null, probedTotalSize = 128L)
 
         assertEquals(TransferOutcome.Success, result)
-        coVerify { dao.updateProgressWithSpeed("dl-1", 128L, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", 128L, any()) }
     }
 
     // ---- mid-transfer IOException → DownloadFailurePolicy -------------------
@@ -302,6 +302,6 @@ class DownloadTransferRunnerTest {
         // 206 resume → request carried a Range header.
         assertEquals("bytes=1024-", client.requests[0].range)
         // Appended: 1024 existing + 3072 streamed = 4096.
-        coVerify { dao.updateProgressWithSpeed("dl-1", 4096L, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", 4096L, any()) }
     }
 }

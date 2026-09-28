@@ -255,6 +255,8 @@ internal data class SheetControls(
     val supportsDeinterlace: Boolean = false,
     val deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
     val onDeinterlaceCycle: () -> Unit = {},
+    /** Opens the Version sheet (multi-version items only — the overflow menu gates on the track fact). */
+    val onVersionClick: () -> Unit = {},
 )
 
 /**
@@ -276,6 +278,8 @@ internal data class TrackControls(
     val isConnectionMetered: Boolean = false,
     val subtitleDelayMs: Long = 0L,
     val showPlaybackMetadata: Boolean = true,
+    /** The playing item exposes more than one version (media source). */
+    val hasMultipleVersions: Boolean = false,
 )
 
 @Composable
@@ -827,6 +831,11 @@ internal fun PlayerControls(
             onPlaybackModeClick = {
                 showOverflow = false
                 sheets.openSheet(PlayerSheet.PlaybackMode)
+            },
+            hasMultipleVersions = tracks.hasMultipleVersions,
+            onVersionClick = {
+                showOverflow = false
+                sheets.onVersionClick()
             },
             onDecoderClick = {
                 showOverflow = false

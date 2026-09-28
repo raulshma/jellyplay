@@ -422,6 +422,9 @@ fun VideoPlayerScreen(
     // Drives the Up Next overlay's in-flight state: play button shows progress
     // and stops accepting clicks until the next-episode load settles (#146).
     val isNextEpisodeLoading by viewModel.isNextEpisodeLoading.collectAsStateWithLifecycle()
+    // The "Still watching?" confirm overlay (feature 1.3) — collected at the
+    // root like the other controller-owned slices and passed into the tier.
+    val stillWatchingPrompt by viewModel.stillWatchingPrompt.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         // The engine maps the enum to its native mode (media3 resize mode / mpv
@@ -953,6 +956,7 @@ fun VideoPlayerScreen(
                 isSheetOpen = currentSheet != PlayerSheet.None,
                 isScreenLocked = isScreenLocked,
                 playbackIntended = playbackIntended,
+                stillWatchingPrompt = stillWatchingPrompt,
             )
 
             if (isScreenLocked && !isInPipMode) {
@@ -1231,6 +1235,7 @@ fun VideoPlayerScreen(
                         null
                     },
                     onDeinterlaceCycle = { viewModel.onEvent(VideoPlayerUiEvent.CycleDeinterlace) },
+                    onVersionClick = { openSheet(PlayerSheet.Version) },
                 ),
                 tracks = TrackControls(
                     streamingQuality = uiState.uiPrefs.streamingQuality,
@@ -1243,6 +1248,7 @@ fun VideoPlayerScreen(
                     isConnectionMetered = uiState.isConnectionMetered,
                     subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                     showPlaybackMetadata = uiState.uiPrefs.showPlaybackMetadata,
+                    hasMultipleVersions = uiState.media.mediaSources.size > 1,
                 ),
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,

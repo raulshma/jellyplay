@@ -7,9 +7,11 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
+import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -123,6 +125,45 @@ class SonarrApiClientImpl(
                 episodeIds = episodeIds,
                 seasonNumber = seasonNumber,
             ),
+        ),
+    )
+
+    override suspend fun searchReleases(
+        server: ArrServerConfig,
+        episodeId: Int?,
+        seriesId: Int?,
+        seasonNumber: Int?,
+    ): Result<List<ArrRelease>> {
+        // Exactly one query form: a single episode's releases, or a whole
+        // season's (seriesId + seasonNumber). Anything else is a caller bug —
+        // fail before the request rather than sending Sonarr a partial query.
+        val params = when {
+            episodeId != null -> listOf("episodeId" to episodeId.toString())
+            seriesId != null && seasonNumber != null -> listOf(
+                "seriesId" to seriesId.toString(),
+                "seasonNumber" to seasonNumber.toString(),
+            )
+            else -> return Result.failure(
+                ApiException.fromHttp(
+                    400,
+                    "Release search requires an episodeId, or a seriesId + seasonNumber pair.",
+                ),
+            )
+        }
+        return engine.getReleases(server, params)
+    }
+
+    override suspend fun grabRelease(
+        server: ArrServerConfig,
+        release: ArrRelease,
+        seriesId: Int?,
+        episodeIds: List<Int>,
+        shouldOverride: Boolean,
+    ): Result<Unit> = engine.postJson(
+        server,
+        "/release",
+        engine.json.encodeToString(
+            releaseGrabBody(release, shouldOverride, seriesId = seriesId, episodeIds = episodeIds),
         ),
     )
 

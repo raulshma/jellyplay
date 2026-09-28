@@ -187,8 +187,10 @@ val settingsModule: Module = module {
             advancedSettings = get(),
             editor = get(),
             autoDownloadSync = get(),
+            autoDownloadCleanup = get(),
             storageAreas = get(),
             storageMountsProvider = get(),
+            authRepository = get(),
         )
     }
     viewModel {

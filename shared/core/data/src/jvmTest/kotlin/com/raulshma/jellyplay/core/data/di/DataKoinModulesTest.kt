@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.ArrReleaseOperations
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
@@ -159,6 +160,12 @@ class DataKoinModulesTest {
             assertTrue(
                 koin.get<SonarrSeriesOperations>() === koin.get<ArrRepository>(),
                 "SonarrSeriesOperations must alias the ArrRepositoryImpl single (one impl, two seams)",
+            )
+            // The release sheet's search & grab seam — same alias contract
+            // (one impl, three seams over the ArrRepositoryImpl single).
+            assertTrue(
+                koin.get<ArrReleaseOperations>() === koin.get<ArrRepository>(),
+                "ArrReleaseOperations must alias the ArrRepositoryImpl single (one impl, three seams)",
             )
             // The family seams of the two widest repository interfaces follow
             // the same alias contract: MediaRepository's music-catalogue and

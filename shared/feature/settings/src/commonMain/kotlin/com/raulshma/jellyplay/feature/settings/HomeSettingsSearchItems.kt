@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_home
@@ -42,6 +43,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_mode_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_merge_continue_next_up_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_merge_continue_next_up_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_hidden_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_hidden_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_max_days_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_max_days_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_rewatching_subtitle
@@ -70,6 +73,7 @@ internal object HomeSettingsIds {
     const val HIDE_TOP_HEADER = "hide_top_header"
     const val SETTINGS_IN_HOME_SEARCH = "settings_in_home_search"
     const val CONTINUE_WATCHING_CLICK = "continue_watching_click"
+    const val NEXT_UP_HIDDEN = "next_up_hidden"
     const val UNHIDE_CW = "unhide_cw"
     const val MERGE_CONTINUE_NEXT_UP = "merge_continue_next_up"
     const val NEXT_UP_MAX_DAYS = "next_up_max_days"
@@ -158,6 +162,16 @@ internal val HomeDisplayRowRecords = listOf(
     )
 ,
     SettingsRowRecord(
+        id = HomeSettingsIds.NEXT_UP_HIDDEN,
+        titleRes = Res.string.settings_next_up_hidden,
+        searchTitleRes = Res.string.ss_next_up_hidden_title,
+        searchSubtitleRes = Res.string.ss_next_up_hidden_subtitle,
+        keywords = listOf("next up", "hidden", "exclude", "restore", "series", "remove"),
+        route = Route.NextUpExcluded,
+        icon = Tabler.Outline.EyeOff,
+    )
+,
+    SettingsRowRecord(
         id = HomeSettingsIds.UNHIDE_CW,
         titleRes = Res.string.settings_unhide_continue_watching,
         searchTitleRes = Res.string.ss_unhide_cw_title,
@@ -174,7 +188,7 @@ internal val HomeDisplaySearchItems: List<SettingsSearchItem> = HomeDisplayRowRe
 /**
  * The display group's per-id declared row admissions — the single gate both
  * `homeDisplayScreenRowTotal` and HomeSettingsScreen's emission list read.
- * The seven config rows always render ([RowAdmission.Always]); `unhide_cw`
+ * The eight config rows always render ([RowAdmission.Always]); `unhide_cw`
  * deliberately declares NO gate: it renders only while hidden continue-
  * watching items exist — a content-state condition with no admission
  * vocabulary — so the strict derivation excludes it and the screen adds the

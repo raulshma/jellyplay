@@ -1098,6 +1098,7 @@ open class MpvDesktopEngine(
         val pairs = MpvConfigMapping.configPairs(
             config = mpvCfg,
             audioPassthrough = config.audioPassthrough,
+            passthroughCodecs = config.audioPassthroughCodecs,
             // No low-RAM axis on desktop: the AUTO demuxer budget takes the
             // normal pair (the mapper's device-dependent branch stays Android's).
             lowRamDevice = false,
@@ -1146,6 +1147,7 @@ open class MpvDesktopEngine(
             mpvCfg.audioOutputMode,
             fx.channelMixMode,
             fx.channelMixEnabled,
+            fx.maxAudioChannels,
         )
         if (channels != lastAppliedAudioChannels) {
             MpvLib.setPropertyString(context, "audio-channels", channels)

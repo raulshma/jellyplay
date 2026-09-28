@@ -9,7 +9,10 @@ package com.raulshma.jellyplay.core.model
  * re-implemented here over the fields an offline row carries.
  *
  * Dimensions with no offline column are ignored: [LibraryFilters.tags] has no
- * offline storage (the chip row hides Tags while the filter is active).
+ * offline storage (the chip row hides Tags while the filter is active), and
+ * the same goes for the presence filters ([LibraryFilters.hasSubtitles] /
+ * [LibraryFilters.hasTrailer] — the subtitles quick chip hides while the
+ * downloaded pin is on).
  *
  * Sort mapping uses download-time fields as the closest offline analogue:
  * DATE_ADDED / DATE_LAST_CONTENT_ADDED sort by the row's download date, and

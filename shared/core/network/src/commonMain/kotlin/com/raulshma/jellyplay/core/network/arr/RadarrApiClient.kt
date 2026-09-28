@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
@@ -137,6 +138,29 @@ interface RadarrApiClient {
         movieIds: List<Int>? = null,
         episodeIds: List<Int>? = null,
     ): Result<ArrCommand>
+
+    /**
+     * `GET /api/v3/release?movieId=...` — the interactive release-search rows
+     * for one movie (Radarr's internal movie id, not the tmdbId). Fails with
+     * [ArrReleaseCacheMiss] when the server has no cached search results (the
+     * search command must run first / the ~30 min decision cache expired) —
+     * the UI offers "Search again" on that failure.
+     */
+    suspend fun searchReleases(server: ArrServerConfig, movieId: Int): Result<List<ArrRelease>>
+
+    /**
+     * `POST /api/v3/release` — grabs [release] (its `guid` + `indexerId` form
+     * the required identity). With [shouldOverride] the grab additionally
+     * carries [movieId] (Radarr's identity field for the override arm) and
+     * the release's own quality prefill, so a release Radarr rejected can be
+     * grabbed anyway.
+     */
+    suspend fun grabRelease(
+        server: ArrServerConfig,
+        release: ArrRelease,
+        movieId: Int? = null,
+        shouldOverride: Boolean = false,
+    ): Result<Unit>
 
     /**
      * `GET /api/v3/movie?tmdbId=...` — resolves the Radarr internal movie id

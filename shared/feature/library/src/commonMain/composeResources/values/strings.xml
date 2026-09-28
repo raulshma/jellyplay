@@ -62,6 +62,11 @@
     <string name="library_sort_in_progress">In Progress</string>
     <string name="library_filter_resumable">In Progress</string>
     <string name="library_filter_downloaded">Downloaded</string>
+    <string name="library_filter_has_subtitles">Has subtitles</string>
+    <string name="library_filter_has_trailer">Has trailer</string>
+    <!-- Quick chip label for the has-subtitles presence filter (pairs with the
+         Downloaded one-tap chip; the full sheet says "Has subtitles"). -->
+    <string name="library_filter_subtitles">Subtitles</string>
     <string name="library_genres">Genres</string>
     <string name="library_year_range">Year Range</string>
     <!-- %1$d = selected start year -->

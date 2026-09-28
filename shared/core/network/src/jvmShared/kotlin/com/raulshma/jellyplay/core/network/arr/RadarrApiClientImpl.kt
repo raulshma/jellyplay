@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import kotlinx.serialization.encodeToString
@@ -110,6 +111,22 @@ class RadarrApiClientImpl(
                 movieIds = movieIds,
                 movieId = movieIds?.firstOrNull(),
             ),
+        ),
+    )
+
+    override suspend fun searchReleases(server: ArrServerConfig, movieId: Int): Result<List<ArrRelease>> =
+        engine.getReleases(server, listOf("movieId" to movieId.toString()))
+
+    override suspend fun grabRelease(
+        server: ArrServerConfig,
+        release: ArrRelease,
+        movieId: Int?,
+        shouldOverride: Boolean,
+    ): Result<Unit> = engine.postJson(
+        server,
+        "/release",
+        engine.json.encodeToString(
+            releaseGrabBody(release, shouldOverride, movieId = movieId),
         ),
     )
 

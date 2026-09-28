@@ -207,9 +207,17 @@ class PlaybackApiClientImpl(
         val deviceProfile = if (flags.useDirectPlayAllProfile) {
             deviceProfileProvider.directPlayAll
         } else {
+            // The audio-capability prefs ride along: the per-codec
+            // passthrough allow-list prunes the direct-play audio set (a
+            // disabled codec is transcoded to an allowed one) and the
+            // channel cap is advertised as an AudioChannels condition.
+            val prefs = playbackStore.playback.value
             deviceProfileProvider.forPlayer(
                 playerType = playerType,
-                pgsDirectPlay = playbackStore.playback.value.pgsSubtitleDirectPlay,
+                pgsDirectPlay = prefs.pgsSubtitleDirectPlay,
+                audioPassthrough = prefs.audioPassthrough,
+                passthroughCodecs = prefs.audioPassthroughCodecs,
+                maxAudioChannels = prefs.maxAudioChannels,
             )
         }
 

@@ -54,6 +54,12 @@ class DeepLinkHandler {
             DeepLinkTarget.Settings -> Route.Settings
             DeepLinkTarget.Downloads -> Route.Downloads
             DeepLinkTarget.Library -> Route.Library
+            // The SyncPlay join payload (feature 4.2) exists for the desktop
+            // Discord Rich Presence Join button — the desktop shell's IPC
+            // join handler consumes it. Android has no join-by-link surface
+            // (SyncPlay groups are joined through the group browser), so the
+            // link parses but routes nowhere here.
+            is DeepLinkTarget.SyncPlayJoin -> null
             null -> null
         }
     }

@@ -41,11 +41,17 @@ internal object SmartPlayResolver {
      *   2. First unplayed episode — "Next up" if something before it was
      *      watched/started, else plain "Play".
      *   3. All played → replay the first episode from 0.
+     *
+     * Virtual (missing/unaired) episodes are never candidates — they have no
+     * file behind them, so "play all" must not land on one (findroid's
+     * PlaylistManager.getInitialItem filters `!it.missing` for the same
+     * reason). The list itself keeps them; only this scan skips them.
      */
     fun resolveSeries(sortedEpisodes: List<MediaItem>): SmartPlayResult? {
-        if (sortedEpisodes.isEmpty()) return null
+        val playable = sortedEpisodes.filterNot { it.isVirtual }
+        if (playable.isEmpty()) return null
 
-        val resumeEpisode = sortedEpisodes.firstOrNull { it.hasResumeProgress() }
+        val resumeEpisode = playable.firstOrNull { it.hasResumeProgress() }
         if (resumeEpisode != null) {
             return SmartPlayResult(
                 episode = resumeEpisode,
@@ -54,9 +60,9 @@ internal object SmartPlayResolver {
             )
         }
 
-        val nextEpisode = sortedEpisodes.firstOrNull { !it.isPlayed }
+        val nextEpisode = playable.firstOrNull { !it.isPlayed }
         if (nextEpisode != null) {
-            val hasWatchedBefore = sortedEpisodes
+            val hasWatchedBefore = playable
                 .takeWhile { it.id != nextEpisode.id }
                 .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
             return SmartPlayResult(
@@ -67,7 +73,7 @@ internal object SmartPlayResolver {
         }
 
         // All episodes played — replay the first.
-        val first = sortedEpisodes.first()
+        val first = playable.first()
         return SmartPlayResult(
             episode = first,
             label = LabelKind.REPLAY_EPISODE,

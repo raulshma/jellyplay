@@ -1,10 +1,14 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.catalogue.sortedByPlaybackOrder
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.flow.firstOrNull
 
 /**
@@ -13,6 +17,24 @@ import kotlinx.coroutines.flow.firstOrNull
  * [DownloadIntake.startSeries] per season, gated on the
  * `autoDownloadNewEpisodes` preference and respecting the WiFi-only /
  * storage-limit constraints enforced inside [DownloadRepository].
+ *
+ * The pass is bounded by the retention policy (the `auto_download_*` prefs on
+ * [DownloadsStore]):
+ *  - **Sweep first** — the keep-days retention sweep
+ *    ([DownloadRepository.sweepExpiredAutoDownloads]) runs at the start of
+ *    every pass so the pipeline stays self-cleaning (watched-only; unwatched
+ *    downloads are never reclaimed).
+ *  - **Lookahead** — instead of every not-yet-downloaded episode of a season,
+ *    the pass enqueues only the [DownloadsSlice.autoDownloadLookahead] episodes
+ *    that follow the season's highest **downloaded or watched** episode in
+ *    playback order (watched = the server played flag the catalogue snapshot's
+ *    episodes carry — the same userData surface `PlayedStateSync` reconciles
+ *    against). `0` restores the legacy take-them-all behavior.
+ *  - **Max-per-pass** — a global enqueue budget across every series in the
+ *    pass ([DownloadsSlice.autoDownloadMaxPerPass], 0 = unlimited); once hit,
+ *    the pass stops and the remaining series are picked up next pass.
+ *  - **Per-server allow-list** — a non-empty `autoDownloadServers` set no-ops
+ *    the whole pass unless [ServerIdentityStore.activeServerId] is in it.
  *
  * Previously this lived twice: verbatim in the legacy Android
  * `core.data.worker.AutoDownloadWorker.doWork`, and ported verbatim in
@@ -40,6 +62,8 @@ class AutoDownloadCheck(
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
     private val episodeCatalogue: EpisodeCatalogue,
+    /** Active-server identity for the per-user allow-list gate. */
+    private val serverIdentityStore: ServerIdentityStore,
     /**
      * Cancellation seam (the ScanWorkerHelper pattern): folds the Android
      * worker's `isStopped` and the desktop loop's `isActive` into one check,
@@ -58,6 +82,27 @@ class AutoDownloadCheck(
         val prefs = downloadsStore.downloads.firstOrNull()
         if (prefs == null || !prefs.autoDownloadNewEpisodes) return Outcome.Complete
 
+        // Per-server allow-list: empty = all servers; a non-empty set that does
+        // not contain the active server no-ops the whole pass (the download
+        // stack itself is server-scoped, so there is nothing to sweep or
+        // enqueue "for another server" here).
+        if (prefs.autoDownloadServers.isNotEmpty()) {
+            val activeServerId = serverIdentityStore.activeServerId.firstOrNull()
+            if (activeServerId == null || activeServerId !in prefs.autoDownloadServers) {
+                Log.i(TAG, "AutoDownload skipped: active server is not allow-listed")
+                return Outcome.Complete
+            }
+        }
+
+        // Retention sweep first — the pass self-cleans before it enqueues.
+        // The sweep is failure-swallowing by contract (a failed pass returns
+        // EMPTY and the next periodic pass retries); it must never block the
+        // enqueue half. runCatchingRethrowingCancellation keeps the caller's
+        // cancellation propagating (a swallowed CancellationException here
+        // would let a stopped worker keep enqueueing past the stop).
+        runCatchingRethrowingCancellation { downloadRepository.sweepExpiredAutoDownloads() }
+            .onFailure { Log.w(TAG, "Retention sweep failed", it) }
+
         val seriesIds = downloadRepository.getDownloadedSeriesIds()
         if (seriesIds.isEmpty()) return Outcome.Complete
 
@@ -67,9 +112,16 @@ class AutoDownloadCheck(
         // rows × 23 columns per iteration; this reads 2 columns, once.
         val downloadedEpisodeIdsBySeries = downloadRepository.getDownloadedEpisodeIdsBySeries()
 
+        val lookahead = prefs.autoDownloadLookahead
+        val maxPerPass = prefs.autoDownloadMaxPerPass
+        var enqueuedInPass = 0
+
         var hadTransientFailure = false
         for (seriesId in seriesIds) {
             if (isStopped()) break
+            // Budget spent: the remaining series (and their seasons) are picked
+            // up by the next pass instead of blowing past the cap mid-pass.
+            if (maxPerPass > 0 && enqueuedInPass >= maxPerPass) break
             val alreadyDownloaded = downloadedEpisodeIdsBySeries[seriesId].orEmpty()
             // One consolidated load per series: seasons + every season's episodes
             // in a single snapshot, replacing the prior getSeasons + per-season
@@ -82,14 +134,25 @@ class AutoDownloadCheck(
             }
             for (season in snapshot.seasons) {
                 if (isStopped()) break
-                val newEpisodeIds = snapshot.seasonEpisodes(season.id)
-                    .filter { it.id !in alreadyDownloaded }
-                    .map { it.id }
+                if (maxPerPass > 0 && enqueuedInPass >= maxPerPass) break
+                val seasonEpisodes = snapshot.seasonEpisodes(season.id)
+                val newEpisodeIds = if (lookahead > 0) {
+                    lookaheadWindow(seasonEpisodes, alreadyDownloaded, lookahead)
+                } else {
+                    // Legacy behavior: every not-yet-downloaded episode.
+                    seasonEpisodes.filter { it.id !in alreadyDownloaded }.map { it.id }
+                }
                 if (newEpisodeIds.isNotEmpty()) {
+                    val budgeted = if (maxPerPass > 0) {
+                        newEpisodeIds.take(maxPerPass - enqueuedInPass)
+                    } else {
+                        newEpisodeIds
+                    }
                     downloadIntake.startSeries(
                         seriesId = seriesId,
-                        episodeIds = mapOf(season.id to newEpisodeIds),
+                        episodeIds = mapOf(season.id to budgeted),
                     )
+                    enqueuedInPass += budgeted.size
                 }
             }
         }
@@ -101,6 +164,26 @@ class AutoDownloadCheck(
             Log.w(TAG, "AutoDownload exhausted $MAX_RETRIES retries")
             Outcome.Exhausted
         }
+    }
+
+    /**
+     * The lookahead window for one season: the [lookahead] episodes that
+     * follow the season's highest downloaded-or-watched episode in playback
+     * order. The anchor is positional (an index in the ordered list, not an
+     * episode-number arithmetic), so gapped numbering and a mid-season start
+     * (an anchor that is not the first episode) both resolve naturally; a
+     * season with no downloaded and no watched episode has no anchor and
+     * enqueues nothing — the user has not engaged with it.
+     */
+    private fun lookaheadWindow(
+        seasonEpisodes: List<MediaItem>,
+        alreadyDownloaded: Set<String>,
+        lookahead: Int,
+    ): List<String> {
+        val ordered = seasonEpisodes.sortedByPlaybackOrder()
+        val anchorIndex = ordered.indexOfLast { it.id in alreadyDownloaded || it.isPlayed }
+        if (anchorIndex < 0) return emptyList()
+        return ordered.drop(anchorIndex + 1).take(lookahead).map { it.id }
     }
 
     /**

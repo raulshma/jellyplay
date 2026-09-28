@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.core.model.StillWatchingMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -70,6 +71,8 @@ class VideoPlayerStore constructor(
         val VIDEO_HOLD_SPEED_MULTIPLIER = floatPreferencesKey("video_hold_speed_multiplier")
         val VIDEO_DEFAULT_SPEED = floatPreferencesKey("video_default_speed")
         val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
+        val STILL_WATCHING_MODE = stringPreferencesKey("still_watching_mode")
+        val STILL_WATCHING_EPISODE_THRESHOLD = intPreferencesKey("still_watching_episode_threshold")
         val TRAILER_AUTOPLAY = booleanPreferencesKey("trailer_autoplay")
         val CINEMA_MODE_ENABLED = booleanPreferencesKey("cinema_mode_enabled")
         val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey("video_swipe_seek_max_ms")
@@ -130,6 +133,8 @@ class VideoPlayerStore constructor(
         videoHoldSpeedMultiplier = PreferenceCodec.readFloat(prefs, Keys.VIDEO_HOLD_SPEED_MULTIPLIER, "video_hold_speed_multiplier", 2.0f),
         videoDefaultSpeed = PreferenceCodec.readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
         videoAutoplayNext = PreferenceCodec.readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", true),
+        stillWatchingMode = readStillWatchingMode(prefs),
+        stillWatchingEpisodeThreshold = PreferenceCodec.readInt(prefs, Keys.STILL_WATCHING_EPISODE_THRESHOLD, "still_watching_episode_threshold", 0),
         trailerAutoplay = PreferenceCodec.readBool(prefs, Keys.TRAILER_AUTOPLAY, "trailer_autoplay", true),
         cinemaModeEnabled = PreferenceCodec.readBool(prefs, Keys.CINEMA_MODE_ENABLED, "cinema_mode_enabled", false),
         videoSwipeSeekMaxMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
@@ -188,6 +193,9 @@ class VideoPlayerStore constructor(
 
     private fun readPreloadBufferSize(prefs: Preferences): PreloadBufferSize =
         prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE].toEnumOrNull() ?: PreloadBufferSize.MEDIUM
+
+    private fun readStillWatchingMode(prefs: Preferences): StillWatchingMode =
+        prefs[Keys.STILL_WATCHING_MODE].toEnumOrNull() ?: StillWatchingMode.OFF
 
     /**
      * Reads the per-`MediaSegmentType` skip behaviour map. When the JSON
@@ -284,6 +292,23 @@ class VideoPlayerStore constructor(
 
     suspend fun setVideoAutoplayNext(enabled: Boolean) {
         dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
+    }
+
+    /**
+     * The "Still watching?" prompt's trigger arms. The hours arm reuses the
+     * `video_pass_out_protection_hours` value — this key picks only WHICH
+     * arms are on.
+     */
+    suspend fun setStillWatchingMode(mode: StillWatchingMode) {
+        dataStore.edit { it[Keys.STILL_WATCHING_MODE] = mode.name }
+    }
+
+    /**
+     * The episode arm's threshold: consecutive auto-played episodes before
+     * the confirm prompt. `0` = off; the picker presets are 2/3/5/8.
+     */
+    suspend fun setStillWatchingEpisodeThreshold(episodes: Int) {
+        dataStore.edit { it[Keys.STILL_WATCHING_EPISODE_THRESHOLD] = episodes.coerceAtLeast(0) }
     }
 
     suspend fun setTrailerAutoplay(enabled: Boolean) {
@@ -430,6 +455,8 @@ class VideoPlayerStore constructor(
             Keys.VIDEO_HOLD_SPEED_MULTIPLIER,
             Keys.VIDEO_DEFAULT_SPEED,
             Keys.VIDEO_AUTOPLAY_NEXT,
+            Keys.STILL_WATCHING_MODE,
+            Keys.STILL_WATCHING_EPISODE_THRESHOLD,
             Keys.TRAILER_AUTOPLAY,
             Keys.CINEMA_MODE_ENABLED,
             Keys.VIDEO_SWIPE_SEEK_MAX_MS,
@@ -478,6 +505,8 @@ class VideoPlayerStore constructor(
             prefs[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = slice.videoHoldSpeedMultiplier
             prefs[Keys.VIDEO_DEFAULT_SPEED] = slice.videoDefaultSpeed
             prefs[Keys.VIDEO_AUTOPLAY_NEXT] = slice.videoAutoplayNext
+            prefs[Keys.STILL_WATCHING_MODE] = slice.stillWatchingMode.name
+            prefs[Keys.STILL_WATCHING_EPISODE_THRESHOLD] = slice.stillWatchingEpisodeThreshold
             prefs[Keys.TRAILER_AUTOPLAY] = slice.trailerAutoplay
             prefs[Keys.CINEMA_MODE_ENABLED] = slice.cinemaModeEnabled
             prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = slice.videoSwipeSeekMaxMs
@@ -526,6 +555,13 @@ data class VideoPlayerSlice(
     val videoHoldSpeedMultiplier: Float = 2.0f,
     val videoDefaultSpeed: Float = 1.0f,
     val videoAutoplayNext: Boolean = true,
+    /**
+     * "Still watching?" trigger arms. Default **off**: the confirm prompt is
+     * a behavior change the user must opt into (see [StillWatchingMode]).
+     */
+    val stillWatchingMode: StillWatchingMode = StillWatchingMode.OFF,
+    /** Episode arm's threshold — consecutive auto-plays before the prompt; 0 = off. */
+    val stillWatchingEpisodeThreshold: Int = 0,
     val trailerAutoplay: Boolean = true,
     val cinemaModeEnabled: Boolean = false,
     val videoSwipeSeekMaxMs: Long = 120_000L,

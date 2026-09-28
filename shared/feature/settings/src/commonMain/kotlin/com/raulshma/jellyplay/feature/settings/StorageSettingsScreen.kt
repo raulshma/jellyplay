@@ -64,8 +64,24 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adap
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_cache
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_all_servers
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_clean_up_now
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_clean_up_now_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_cleaned_up
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_cleaned_up_none
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days_value
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days_year
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_lookahead
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_lookahead_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_max_per_pass
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_max_per_pass_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_new
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_new_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_server_count
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_servers
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_servers_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_offline
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_offline_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_sync
@@ -113,6 +129,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mete
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_offline
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_timeouts
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_timeouts_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_online
@@ -177,7 +194,11 @@ fun StorageSettingsScreen(
     // items (SettingsSearchItemGroup.rowAdmitted).
     val rowFlags = RowAdmissionFlags(
         showAdvanced = showAdvanced,
-        parentsOn = rowParentsOn(StorageSettingsIds.DOWNLOAD_SCHEDULE to preferences.downloadScheduleEnabled),
+        parentsOn = rowParentsOn(
+            StorageSettingsIds.DOWNLOAD_SCHEDULE to preferences.downloadScheduleEnabled,
+            StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES to preferences.autoDownloadNewEpisodes,
+            StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS to (preferences.autoDownloadKeepDays > 0),
+        ),
     )
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -586,6 +607,11 @@ fun StorageSettingsScreen(
                             if (showLiveUpdatesRow) 1 else 0,
                     ) {
 
+                    // Shared picker labels — resolved in the composable body so
+                    // the onClick lambdas below can close over them.
+                    val offLabel = stringResource(Res.string.settings_off)
+                    val unlimitedLabel = stringResource(Res.string.settings_unlimited)
+
                     val downloadQualityTitle = rowTitle(StorageSettingsIds.DOWNLOAD_QUALITY)
                     SettingListItem(
                         icon = Tabler.Outline.Video,
@@ -620,6 +646,146 @@ fun StorageSettingsScreen(
                         checked = preferences.autoDownloadNewEpisodes,
                         highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES,
                         onCheckedChange = { viewModel.setAutoDownloadNewEpisodes(it) }
+                    )
+
+                    // The auto-download retention-policy cluster: every row
+                    // rides the toggle (their declared WhenOn gate, which
+                    // rowFlags carries — the emission `if`s below read it).
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD, rowFlags)) {
+                        val lookaheadTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD)
+                        SettingListItem(
+                            icon = Tabler.Outline.PlayerTrackNext,
+                            title = lookaheadTitle,
+                            subtitle = stringResource(Res.string.settings_auto_download_lookahead_subtitle),
+                            trailingText = preferences.autoDownloadLookahead.takeIf { it > 0 }?.toString()
+                                ?: stringResource(Res.string.settings_off),
+                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD,
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = lookaheadTitle,
+                                    items = (0..10).toList(),
+                                    label = { if (it == 0) offLabel else it.toString() },
+                                    isSelected = { it == preferences.autoDownloadLookahead },
+                                    onSelect = { viewModel.edit { scope -> scope.downloads.setAutoDownloadLookahead(it) } },
+                                )
+                            }
+                        )
+                    }
+
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS, rowFlags)) {
+                        val maxPerPassTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS)
+                        SettingListItem(
+                            icon = Tabler.Outline.ArrowBarToDown,
+                            title = maxPerPassTitle,
+                            subtitle = stringResource(Res.string.settings_auto_download_max_per_pass_subtitle),
+                            trailingText = if (preferences.autoDownloadMaxPerPass == 0) unlimitedLabel else preferences.autoDownloadMaxPerPass.toString(),
+                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS,
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = maxPerPassTitle,
+                                    items = (0..50).toList(),
+                                    label = { if (it == 0) unlimitedLabel else it.toString() },
+                                    isSelected = { it == preferences.autoDownloadMaxPerPass },
+                                    onSelect = { viewModel.edit { scope -> scope.downloads.setAutoDownloadMaxPerPass(it) } },
+                                )
+                            }
+                        )
+                    }
+
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS, rowFlags)) {
+                        val keepDaysTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS)
+                        val keepDaysYearLabel = stringResource(Res.string.settings_auto_download_keep_days_year)
+                        SettingListItem(
+                            icon = Tabler.Outline.Clock,
+                            title = keepDaysTitle,
+                            subtitle = stringResource(Res.string.settings_auto_download_keep_days_subtitle),
+                            trailingText = when (val days = preferences.autoDownloadKeepDays) {
+                                0 -> offLabel
+                                365 -> keepDaysYearLabel
+                                else -> stringResource(Res.string.settings_auto_download_keep_days_value, days)
+                            },
+                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS,
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = keepDaysTitle,
+                                    items = listOf(0, 7, 30, 90, 365),
+                                    label = { if (it == 0) offLabel else if (it == 365) keepDaysYearLabel else "$it" },
+                                    isSelected = { it == preferences.autoDownloadKeepDays },
+                                    onSelect = { viewModel.edit { scope -> scope.downloads.setAutoDownloadKeepDays(it) } },
+                                )
+                            }
+                        )
+                    }
+
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_SERVERS, rowFlags)) {
+                        val serversTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_SERVERS)
+                        val allServersLabel = stringResource(Res.string.settings_auto_download_all_servers)
+                        // Toggle-select semantics: the sheet dismisses after each
+                        // tap (the shared single-select sheet), and the row's
+                        // checkmarks show the current membership — re-open to
+                        // toggle more.
+                        SettingListItem(
+                            icon = Tabler.Outline.Server,
+                            title = serversTitle,
+                            subtitle = stringResource(Res.string.settings_auto_download_servers_subtitle),
+                            trailingText = if (preferences.autoDownloadServers.isEmpty()) {
+                                allServersLabel
+                            } else {
+                                stringResource(
+                                    Res.string.settings_auto_download_server_count,
+                                    preferences.autoDownloadServers.size,
+                                    viewModel.servers.size,
+                                )
+                            },
+                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_SERVERS,
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = serversTitle,
+                                    items = viewModel.servers,
+                                    label = { it.name },
+                                    subtitle = { it.address },
+                                    isSelected = { it.id in preferences.autoDownloadServers },
+                                    onSelect = { server ->
+                                        val current = preferences.autoDownloadServers
+                                        val next = if (server.id in current) current - server.id else current + server.id
+                                        viewModel.edit { scope -> scope.downloads.setAutoDownloadServers(next) }
+                                    },
+                                )
+                            }
+                        )
+                    }
+
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW, rowFlags)) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Trash,
+                            title = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW),
+                            subtitle = viewModel.lastCleanupSummary?.let { summary ->
+                                if (summary.deletedCount > 0) {
+                                    stringResource(
+                                        Res.string.settings_auto_download_cleaned_up,
+                                        summary.deletedCount,
+                                        summary.bytesReclaimed.formatBytes(),
+                                    )
+                                } else {
+                                    stringResource(Res.string.settings_auto_download_cleaned_up_none)
+                                }
+                            } ?: stringResource(Res.string.settings_auto_download_clean_up_now_subtitle),
+                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW,
+                            onClick = { viewModel.cleanupDownloadsNow() },
+                        )
+                    }
+
+                    // Delete-after-watch completes the cluster: it fires
+                    // immediately on a watched flip, while the keep-days sweep
+                    // above never deletes unwatched downloads (the row
+                    // subtitle spells out the interaction).
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Trash,
+                        title = rowTitle(StorageSettingsIds.AUTO_DELETE_AFTER_WATCH),
+                        subtitle = stringResource(Res.string.downloads_auto_delete_after_watch_subtitle),
+                        checked = preferences.autoDeleteAfterWatch,
+                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
+                        onCheckedChange = { viewModel.edit { scope -> scope.downloads.setAutoDeleteAfterWatch(it) } }
                     )
 
                     SettingToggleItem(
@@ -683,7 +849,6 @@ fun StorageSettingsScreen(
                         )
                     }
 
-                    val unlimitedLabel = stringResource(Res.string.settings_unlimited)
                     val maxDownloadStorageTitle = rowTitle(StorageSettingsIds.MAX_DOWNLOAD_STORAGE_LIMIT)
                     SettingListItem(
                         icon = Tabler.Outline.Database,
@@ -749,15 +914,6 @@ fun StorageSettingsScreen(
                                 onSelect = { viewModel.edit { scope -> scope.downloads.setDownloadStorageLocation(it.prefValue) } },
                             )
                         }
-                    )
-
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Trash,
-                        title = rowTitle(StorageSettingsIds.AUTO_DELETE_AFTER_WATCH),
-                        subtitle = stringResource(Res.string.downloads_auto_delete_after_watch_subtitle),
-                        checked = preferences.autoDeleteAfterWatch,
-                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
-                        onCheckedChange = { viewModel.edit { scope -> scope.downloads.setAutoDeleteAfterWatch(it) } }
                     )
 
                     if (liveUpdatesGate != null) {

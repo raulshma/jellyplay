@@ -34,9 +34,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_news
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark
@@ -85,6 +88,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_prefer_logos_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_prefer_logos_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_end_subtitle
@@ -93,6 +98,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_external_ratings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_external_ratings_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_unwatched_badge_subtitle
@@ -146,6 +153,8 @@ internal object AppearanceSettingsIds {
     const val HIDE_EPISODE_THUMBNAILS = "hide_episode_thumbnails"
     const val COMPACT_EPISODE_LIST = "compact_episode_list"
     const val SKIP_SPECIALS = "skip_specials"
+    const val SHOW_MISSING_EPISODES = "show_missing_episodes"
+    const val PREFER_LOGOS = "prefer_logos"
     const val HAPTICS_ENABLED = "haptics_enabled"
     const val SHOW_SHARE_MEDIA = "show_share_media"
     const val SHOW_EXTERNAL_RATINGS = "show_external_ratings"
@@ -459,6 +468,27 @@ internal val AppearanceLibraryRowRecords = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.PlayerSkipForward,
         isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = AppearanceSettingsIds.SHOW_MISSING_EPISODES,
+        titleRes = Res.string.settings_show_missing_episodes,
+        searchTitleRes = Res.string.ss_show_missing_episodes_title,
+        searchSubtitleRes = Res.string.ss_show_missing_episodes_subtitle,
+        keywords = listOf("missing", "episode", "unaired", "virtual", "placeholder", "season", "show"),
+        route = Route.AppearanceSettings(),
+        icon = Tabler.Outline.Eye,
+        isAdvanced = true
+    )
+,
+    SettingsRowRecord(
+        id = AppearanceSettingsIds.PREFER_LOGOS,
+        titleRes = Res.string.settings_prefer_logos,
+        searchTitleRes = Res.string.ss_prefer_logos_title,
+        searchSubtitleRes = Res.string.ss_prefer_logos_subtitle,
+        keywords = listOf("logo", "clear logo", "title", "artwork", "image", "banner", "details", "prefer"),
+        route = Route.AppearanceSettings(),
+        icon = Tabler.Outline.Photo
     )
 ,
     SettingsRowRecord(

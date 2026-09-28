@@ -532,6 +532,44 @@ class EngineEventCoordinatorTest {
         assertTrue(decisions.isEmpty())
     }
 
+    @Test
+    fun userInteraction_emitsTheSharedSignalAlongsideTheClockReset() = runTest {
+        val coordinator = coordinatorWithEngine()
+        val interactions = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            coordinator.userInteractions.collect { interactions += it }
+        }
+        testScheduler.runCurrent()
+
+        // The clock-reset intake (feature 1.3 step 4) also feeds downstream
+        // consumers — the still-watching episode counter — via the signal
+        // stream; each user-initiated play/pause/seek/speed command arrives
+        // as one signal.
+        coordinator.onUserInteraction()
+        coordinator.onUserInteraction()
+        testScheduler.runCurrent()
+        assertEquals(2, interactions.size)
+
+        // No decisions were consumed by the signal path.
+        assertTrue(decisions.isEmpty())
+    }
+
+    @Test
+    fun userInteraction_signalWithoutSubscriber_emitsWithoutSuspending() = runTest {
+        val coordinator = coordinatorWithEngine()
+        // No collector on userInteractions: the tryEmit intake must not drop
+        // the clock reset (pinned by the pass-out suite) nor throw.
+        passOutHours.value = 1
+        fakeEngine.isPlayingState.value = true
+        testScheduler.runCurrent()
+        coordinator.onUserInteraction()
+
+        nowMs += 50L * 60L * 1000L
+        testScheduler.advanceTimeBy(50L * 60L * 1000L)
+        testScheduler.runCurrent()
+        assertTrue(decisions.isEmpty(), "the interaction reset the clock, so no pass-out decision fires")
+    }
+
     // ── Disposal ──────────────────────────────────────────────────────────────
 
     @Test

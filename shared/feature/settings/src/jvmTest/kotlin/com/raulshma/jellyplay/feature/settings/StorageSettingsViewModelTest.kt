@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -88,8 +89,11 @@ class StorageSettingsViewModelTest {
     private lateinit var userPreferencesStore: UserPreferencesStore
     private lateinit var storageAreas: StorageAreas
     private lateinit var storageMountsProvider: StorageMountsProvider
+    private lateinit var authRepository: AuthRepository
+    private lateinit var autoDownloadCleanup: AutoDownloadCleanup
 
     private val autoDownloadSyncs = mutableListOf<Unit>()
+    private val cleanupResults = mutableListOf<AutoDownloadCleanupSummary>()
 
     private val storagePrefs = MutableStateFlow(StoragePreferences())
     private val downloadPrefs = MutableStateFlow(DownloadPreferences())
@@ -121,6 +125,12 @@ class StorageSettingsViewModelTest {
         userPreferencesStore = mockk(relaxed = true)
         storageAreas = mockk(relaxed = true)
         storageMountsProvider = mockk()
+        authRepository = mockk()
+        every { authRepository.servers } returns MutableStateFlow(emptyList())
+        cleanupResults.clear()
+        autoDownloadCleanup = AutoDownloadCleanup {
+            AutoDownloadCleanupSummary(0, 0L).also { cleanupResults.add(it) }
+        }
 
         every { projections.storagePreferences } returns storagePrefs
         every { projections.downloadPreferences } returns downloadPrefs
@@ -169,8 +179,10 @@ class StorageSettingsViewModelTest {
             advancedSettings = AdvancedSettingsGate(appearanceStore, editor),
             editor = editor,
             autoDownloadSync = AutoDownloadSync { autoDownloadSyncs.add(Unit) },
+            autoDownloadCleanup = autoDownloadCleanup,
             storageAreas = storageAreas,
             storageMountsProvider = storageMountsProvider,
+            authRepository = authRepository,
         )
     }
 

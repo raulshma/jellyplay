@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -29,8 +30,11 @@ import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
+import com.raulshma.jellyplay.core.model.ExternalPlayerApp
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
+import com.raulshma.jellyplay.core.model.StillWatchingMode
 import com.raulshma.jellyplay.core.model.MpvAudioDevice
 import com.raulshma.jellyplay.core.model.MpvAudioOutput
 import com.raulshma.jellyplay.core.model.MpvAudioOutputMode
@@ -45,6 +49,7 @@ import com.raulshma.jellyplay.core.model.MpvHwdec
 import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
+import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
@@ -203,6 +208,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_engi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_browser
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_browser_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_browser_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_external_player_app_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_frame_drop
@@ -233,6 +239,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_keep
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_living_room_tv
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_direct
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes_value
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality_auto_adaptive
@@ -251,10 +260,17 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_d
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_fallback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_none
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_desc_downloaded
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_desc_streaming
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_downloaded
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_streaming
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_streaming_caveat
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_orientation
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_orientation_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pass_out_protection
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pass_out_protection_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_on_focus_loss
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_on_focus_loss_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_on_focus_loss_on
@@ -450,7 +466,10 @@ fun PlaybackSettingsScreen(
     val rowFlags = RowAdmissionFlags(
         isTv = isTv,
         showAdvanced = showAdvanced,
-        parentsOn = rowParentsOn(PlaybackSettingsIds.DIALOGUE_BOOST to preferences.dialogueBoostEnabled),
+        parentsOn = rowParentsOn(
+            PlaybackSettingsIds.DIALOGUE_BOOST to preferences.dialogueBoostEnabled,
+            PlaybackSettingsIds.VIDEO_AUTOPLAY_NEXT to preferences.videoAutoplayNext,
+        ),
     )
     // The screen-level picker state: every group composable writes through
     // this holder (activePicker.value = ...) so one SettingsPickerDialog at
@@ -842,6 +861,49 @@ private fun PlaybackPlayerGroup(
                             )
                         },
                     )
+                    // "Still watching?" confirm prompt (feature 1.3): both
+                    // rows ride the autoplay toggle (their declared WhenOn
+                    // admission — no autoplay, no prompt to configure).
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackSettingsIds.STILL_WATCHING_MODE, rowFlags)) {
+                        val stillWatchingModeTitle = rowTitle(PlaybackSettingsIds.STILL_WATCHING_MODE)
+                        SettingListItem(
+                            icon = rowIcon(PlaybackSettingsIds.STILL_WATCHING_MODE),
+                            title = rowTitle(PlaybackSettingsIds.STILL_WATCHING_MODE),
+                            subtitle = stringResource(Res.string.settings_still_watching_mode_subtitle),
+                            trailingText = preferences.stillWatchingMode.displayName,
+                            highlighted = highlightSettingId == PlaybackSettingsIds.STILL_WATCHING_MODE,
+                            onClick = {
+                                activePicker.value = PickerState.List(
+                                    title = stillWatchingModeTitle,
+                                    items = StillWatchingMode.entries,
+                                    label = { it.displayName },
+                                    isSelected = { it == preferences.stillWatchingMode },
+                                    onSelect = { mode -> viewModel.edit { scope -> scope.videoPlayer.setStillWatchingMode(mode) } },
+                                )
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackSettingsIds.STILL_WATCHING_EPISODES, rowFlags)) {
+                        val stillWatchingEpisodesTitle = rowTitle(PlaybackSettingsIds.STILL_WATCHING_EPISODES)
+                        val episodesFormat = stringResource(Res.string.settings_still_watching_episodes_value)
+                        SettingListItem(
+                            icon = rowIcon(PlaybackSettingsIds.STILL_WATCHING_EPISODES),
+                            title = rowTitle(PlaybackSettingsIds.STILL_WATCHING_EPISODES),
+                            subtitle = stringResource(Res.string.settings_still_watching_episodes_subtitle),
+                            trailingText = if (preferences.stillWatchingEpisodeThreshold == 0) offLabel else formatIntPattern(episodesFormat, preferences.stillWatchingEpisodeThreshold),
+                            highlighted = highlightSettingId == PlaybackSettingsIds.STILL_WATCHING_EPISODES,
+                            onClick = {
+                                val thresholds = listOf(0, 2, 3, 5, 8)
+                                activePicker.value = PickerState.List(
+                                    title = stillWatchingEpisodesTitle,
+                                    items = thresholds,
+                                    label = { if (it == 0) offLabel else formatIntPattern(episodesFormat, it) },
+                                    isSelected = { it == preferences.stillWatchingEpisodeThreshold },
+                                    onSelect = { episodes -> viewModel.edit { scope -> scope.videoPlayer.setStillWatchingEpisodeThreshold(episodes) } },
+                                )
+                            },
+                        )
+                    }
                     // per-content-type volume memory — desktop-only
                     // (the app owns mpv's volume scalar there); the declared
                     // Platform admission hides the row wholesale on Android.
@@ -1241,6 +1303,73 @@ private fun PlaybackAdvancedVideoGroup(
                         highlighted = highlightSettingId == PlaybackSettingsIds.AUDIO_PASSTHROUGH,
                         onCheckedChange = { viewModel.edit { scope -> scope.playback.setAudioPassthrough(it) } },
                     )
+                    // The per-codec passthrough allow-list — one toggle per
+                    // codec, each admitted only while the master toggle above
+                    // is on (the dependent-row admission the row total reads).
+                    val codecOnSubtitle = stringResource(Res.string.settings_passthrough_codec_on)
+                    val codecOffSubtitle = stringResource(Res.string.settings_passthrough_codec_off)
+                    listOf(
+                        AudioPassthroughCodec.AC3 to PlaybackSettingsIds.PASSTHROUGH_CODEC_AC3,
+                        AudioPassthroughCodec.EAC3 to PlaybackSettingsIds.PASSTHROUGH_CODEC_EAC3,
+                        AudioPassthroughCodec.DTS to PlaybackSettingsIds.PASSTHROUGH_CODEC_DTS,
+                        AudioPassthroughCodec.DTS_HD to PlaybackSettingsIds.PASSTHROUGH_CODEC_DTSHD,
+                        AudioPassthroughCodec.TRUEHD to PlaybackSettingsIds.PASSTHROUGH_CODEC_TRUEHD,
+                    ).forEach { (codec, id) ->
+                        if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(id, rowFlags)) {
+                            val enabled = codec in preferences.audioPassthroughCodecs
+                            SettingToggleItem(
+                                icon = rowIcon(id),
+                                title = rowTitle(id),
+                                subtitle = if (enabled) codecOnSubtitle else codecOffSubtitle,
+                                checked = enabled,
+                                highlighted = highlightSettingId == id,
+                                onCheckedChange = { on ->
+                                    viewModel.edit { scope ->
+                                        scope.playback.setAudioPassthroughCodecs(
+                                            if (on) preferences.audioPassthroughCodecs + codec else preferences.audioPassthroughCodecs - codec,
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    val maxChannelsTitle = rowTitle(PlaybackSettingsIds.MAX_AUDIO_CHANNELS)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackSettingsIds.MAX_AUDIO_CHANNELS),
+                        title = maxChannelsTitle,
+                        subtitle = preferences.maxAudioChannels.displayName,
+                        trailingText = preferences.maxAudioChannels.displayName,
+                        highlighted = highlightSettingId == PlaybackSettingsIds.MAX_AUDIO_CHANNELS,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = maxChannelsTitle,
+                                items = MaxAudioChannelsEnum.entries,
+                                label = { it.displayName },
+                                isSelected = { it == preferences.maxAudioChannels },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setMaxAudioChannels(it) } },
+                            )
+                        },
+                    )
+                    val downmixBoostTitle = rowTitle(PlaybackSettingsIds.DOWNMIX_BOOST)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackSettingsIds.DOWNMIX_BOOST),
+                        title = downmixBoostTitle,
+                        subtitle = if (preferences.downmixBoostDb > 0f) "${preferences.downmixBoostDb.toInt()} dB" else offLabel2,
+                        trailingText = if (preferences.downmixBoostDb > 0f) "${preferences.downmixBoostDb.toInt()} dB" else offLabel2,
+                        highlighted = highlightSettingId == PlaybackSettingsIds.DOWNMIX_BOOST,
+                        onClick = {
+                            activePicker.value = PickerState.Slider(
+                                title = downmixBoostTitle,
+                                value = preferences.downmixBoostDb,
+                                valueRange = 0f..12f,
+                                steps = 11,
+                                valueLabel = { "${it.toInt()} dB" },
+                                rangeStartLabel = "0 dB",
+                                rangeEndLabel = "12 dB",
+                                onConfirm = { viewModel.edit { scope -> scope.playback.setDownmixBoostDb(it) } },
+                            )
+                        },
+                    )
                     val refreshRateSubtitles = com.raulshma.jellyplay.core.model.RefreshRateMode.entries.associateWith {
                         when (it) {
                             com.raulshma.jellyplay.core.model.RefreshRateMode.OFF -> stringResource(Res.string.settings_refresh_rate_off)
@@ -1272,6 +1401,39 @@ private fun PlaybackAdvancedVideoGroup(
                                 subtitle = { refreshRateDescs[it] ?: it.displayName },
                                 isSelected = { it == preferences.refreshRateMode },
                                 onSelect = { viewModel.edit { scope -> scope.playback.setRefreshRateMode(it) } },
+                            )
+                        },
+                    )
+                    val offlineLabels = OfflinePlaybackPreference.entries.associateWith {
+                        when (it) {
+                            OfflinePlaybackPreference.PREFER_DOWNLOADED -> stringResource(Res.string.settings_offline_playback_prefer_downloaded)
+                            OfflinePlaybackPreference.PREFER_STREAMING -> stringResource(Res.string.settings_offline_playback_prefer_streaming)
+                        }
+                    }
+                    val offlineDescs = OfflinePlaybackPreference.entries.associateWith {
+                        when (it) {
+                            OfflinePlaybackPreference.PREFER_DOWNLOADED -> stringResource(Res.string.settings_offline_playback_desc_downloaded)
+                            OfflinePlaybackPreference.PREFER_STREAMING -> stringResource(Res.string.settings_offline_playback_desc_streaming)
+                        }
+                    }
+                    val offlineCaveat = stringResource(Res.string.settings_offline_playback_streaming_caveat)
+                    val offlinePlaybackTitle = rowTitle(PlaybackSettingsIds.OFFLINE_PLAYBACK)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackSettingsIds.OFFLINE_PLAYBACK),
+                        title = rowTitle(PlaybackSettingsIds.OFFLINE_PLAYBACK),
+                        subtitle = offlineDescs[preferences.offlinePlaybackPreference] +
+                            if (preferences.offlinePlaybackPreference == OfflinePlaybackPreference.PREFER_STREAMING)
+                                " $offlineCaveat" else "",
+                        trailingText = offlineLabels[preferences.offlinePlaybackPreference] ?: preferences.offlinePlaybackPreference.displayName,
+                        highlighted = highlightSettingId == PlaybackSettingsIds.OFFLINE_PLAYBACK,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = offlinePlaybackTitle,
+                                items = OfflinePlaybackPreference.entries,
+                                label = { offlineLabels[it] ?: it.displayName },
+                                subtitle = { offlineDescs[it] ?: it.displayName },
+                                isSelected = { it == preferences.offlinePlaybackPreference },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setOfflinePlaybackPreference(it) } },
                             )
                         },
                     )
@@ -1385,9 +1547,58 @@ private fun PlaybackEngineGroup(
                                 activePicker = activePicker,
                             )
                         }
+                        PlayerType.EXTERNAL -> {
+                            PlaybackExternalEngineRows(
+                                preferences = preferences,
+                                highlightSettingId = highlightSettingId,
+                                viewModel = viewModel,
+                                scope = scope,
+                                activePicker = activePicker,
+                            )
+                        }
                         else -> {}
                     }
                 }
+}
+
+/** The `playback.engine` group's external hand-off branch rows. */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun PlaybackExternalEngineRows(
+    preferences: PlaybackPreferences,
+    highlightSettingId: String?,
+    viewModel: PlaybackSettingsViewModel,
+    scope: CoroutineScope,
+    activePicker: MutableState<PickerState<*>?>
+) {
+                            // The branch's single declared row — there is no
+                            // reset row (no engine-config object to reset) and
+                            // nothing platform-gated, so the total is the
+                            // declared admission over this one id.
+                            SettingsItemList(
+                                total = rowTotalFor(
+                                    SettingsScreenGroups.playbackEngine,
+                                    RowAdmissionFlags(showAdvanced = true),
+                                ) { it.id == PlaybackSettingsIds.EXTERNAL_PLAYER_APP },
+                            ) {
+                            val externalAppTitle = rowTitle(PlaybackSettingsIds.EXTERNAL_PLAYER_APP)
+                            SettingListItem(
+                                icon = rowIcon(PlaybackSettingsIds.EXTERNAL_PLAYER_APP),
+                                title = rowTitle(PlaybackSettingsIds.EXTERNAL_PLAYER_APP),
+                                subtitle = stringResource(Res.string.settings_external_player_app_subtitle),
+                                trailingText = preferences.preferredExternalPlayer.displayName,
+                                highlighted = highlightSettingId == PlaybackSettingsIds.EXTERNAL_PLAYER_APP,
+                                onClick = {
+                                    activePicker.value = PickerState.List(
+                                        title = externalAppTitle,
+                                        items = ExternalPlayerApp.entries,
+                                        label = { it.displayName },
+                                        isSelected = { it == preferences.preferredExternalPlayer },
+                                        onSelect = { viewModel.edit { app -> app.playback.setPreferredExternalPlayer(it) } },
+                                    )
+                                },
+                            )
+                            }
 }
 
 /** The `playback.engine` group's MPV branch rows. */

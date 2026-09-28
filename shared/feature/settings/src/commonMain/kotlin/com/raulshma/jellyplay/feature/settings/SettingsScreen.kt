@@ -106,6 +106,8 @@ import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.network.library.PARENTAL_RATING_PICKER_LADDER
+import com.raulshma.jellyplay.core.network.library.parentalRatingAge
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -162,6 +164,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_movies
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_music
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_photos
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_tv
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_recents
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_search_cd
@@ -171,6 +174,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_media_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downloads_storage
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_1_minute
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_30_seconds
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_5_minutes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_percent_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_max_parental_rating_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_rating_none
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_token
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_early_access_features
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_experimental
@@ -219,6 +230,16 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screensaver
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_cmd_not_set
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_placeholder_hint
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled_subtitle
@@ -1531,6 +1552,35 @@ fun SettingsScreen(
                             }
                         }
 
+                        // the desktop Discord Rich Presence toggle (feature
+                        // 4.2) — capability-gated like the idle-ambient block
+                        // beside it (the IPC client lives in the desktop
+                        // shell only), rendered as its own group so neither
+                        // row total entangles.
+                        if (settingsCapabilities.supportsDiscordPresence) {
+                            settingsSection("group_discord_presence", isTv) {
+                                SettingsDiscordPresenceSection(
+                                    preferences = preferences,
+                                    viewModel = viewModel,
+                                    lastClickedSettingId = lastClickedSettingId,
+                                )
+                            }
+                        }
+
+                        // the desktop playback-event shell hooks (feature
+                        // 4.3) — same capability-gated shape; the command
+                        // rows open the shared free-form text editor.
+                        if (settingsCapabilities.supportsShellHooks) {
+                            settingsSection("group_shell_hooks", isTv) {
+                                SettingsShellHooksSection(
+                                    preferences = preferences,
+                                    viewModel = viewModel,
+                                    lastClickedSettingId = lastClickedSettingId,
+                                    activeDialog = activeDialogState,
+                                )
+                            }
+                        }
+
                         settingsSection("item_experimental", isTv) {
                             SettingListItem(
                                 icon = Tabler.Outline.Flask,
@@ -2308,7 +2358,7 @@ private fun SettingsScreensaverSection(
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
                                 ) {
                                     // Row count derived from the screensaver group
-                                    // declaration — the five declared dream rows are
+                                    // declaration — the eight declared dream rows are
                                     // exactly the rows rendered here.
                                     val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
                                     val slideshowIntervalTitle = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL)
@@ -2328,16 +2378,18 @@ private fun SettingsScreensaverSection(
                                     val categoryMovies = stringResource(Res.string.settings_category_movies)
                                     val categoryTv = stringResource(Res.string.settings_category_tv)
                                     val categoryMusic = stringResource(Res.string.settings_category_music)
+                                    val categoryPhotos = stringResource(Res.string.settings_category_photos)
                                     SettingListItem(
                                         icon = rowIcon(SettingsScreenIds.SCREENSAVER_CATEGORIES),
                                         title = rowTitle(SettingsScreenIds.SCREENSAVER_CATEGORIES),
                                         subtitle = stringResource(Res.string.settings_categories_subtitle),
-                                        trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
+                                        trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic, categoryPhotos) {
                                             preferences.dreamImageCategories.joinToString(", ") {
                                                 when (it) {
                                                     DreamImageCategory.MOVIES -> categoryMovies
                                                     DreamImageCategory.SERIES -> categoryTv
                                                     DreamImageCategory.MUSIC -> categoryMusic
+                                                    DreamImageCategory.PHOTOS -> categoryPhotos
                                                 }
                                             }
                                         },
@@ -2401,6 +2453,96 @@ private fun SettingsScreensaverSection(
                                                 label = { labels[it] ?: it.name },
                                                 isSelected = { it == preferences.dreamTransitionStyle },
                                                 onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamTransitionStyle(it) } },
+                                            )
+                                        },
+                                    )
+                                    // The (label, canonical age) picker rows; null age =
+                                    // no local cap ("None"). Both the row vocabulary and
+                                    // the age resolution come from the canonical rating
+                                    // table (core:network's LibraryWirePolicy).
+                                    val maxRatingTitle = rowTitle(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING)
+                                    val maxRatingNoneLabel = stringResource(Res.string.settings_dream_rating_none)
+                                    val maxRatingItems = remember(maxRatingNoneLabel) {
+                                        buildList {
+                                            add(null to maxRatingNoneLabel)
+                                            for (rating in PARENTAL_RATING_PICKER_LADDER) {
+                                                parentalRatingAge(rating)?.let { add(it to rating) }
+                                            }
+                                        }
+                                    }
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING),
+                                        subtitle = stringResource(Res.string.settings_dream_max_parental_rating_subtitle),
+                                        trailingText = maxRatingItems
+                                            .firstOrNull { it.first == preferences.dreamMaxParentalRating }
+                                            ?.second ?: maxRatingNoneLabel,
+                                        index = 5, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING,
+                                        onClick = {
+                                            activeDialog.value = PickerState.List(
+                                                title = maxRatingTitle,
+                                                items = maxRatingItems,
+                                                label = { it.second },
+                                                isSelected = { it.first == preferences.dreamMaxParentalRating },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamMaxParentalRating(it.first) } },
+                                            )
+                                        },
+                                    )
+                                    val dimAfterTitle = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_AFTER)
+                                    val dimAfterOffLabel = stringResource(Res.string.settings_dream_dim_after_off)
+                                    // The auto-lock ladder minus the 10-minute rung
+                                    // (the shared SETTINGS_TIMER_LADDER_MS —
+                                    // SecuritySettingsScreen takes the whole ladder),
+                                    // each rung zipped to its label so every lookup
+                                    // keys on the ms VALUE, never a hand-built
+                                    // index pairing. An off-ladder stored value
+                                    // falls back to the Off label.
+                                    val dimAfterChoices = SETTINGS_TIMER_LADDER_MS.dropLast(1).zip(
+                                        listOf(
+                                            dimAfterOffLabel,
+                                            stringResource(Res.string.settings_dream_dim_after_30_seconds),
+                                            stringResource(Res.string.settings_dream_dim_after_1_minute),
+                                            stringResource(Res.string.settings_dream_dim_after_5_minutes),
+                                        ),
+                                    )
+                                    fun dimAfterLabel(ms: Long): String =
+                                        dimAfterChoices.firstOrNull { it.first == ms }?.second ?: dimAfterOffLabel
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_DIM_AFTER),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_AFTER),
+                                        subtitle = stringResource(Res.string.settings_dream_dim_after_subtitle),
+                                        trailingText = dimAfterLabel(preferences.dreamDimAfterMs),
+                                        index = 6, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_DIM_AFTER,
+                                        onClick = {
+                                            activeDialog.value = PickerState.List(
+                                                title = dimAfterTitle,
+                                                items = dimAfterChoices.map { it.first },
+                                                label = { dimAfterLabel(it) },
+                                                isSelected = { it == preferences.dreamDimAfterMs },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamDimAfterMs(it) } },
+                                            )
+                                        },
+                                    )
+                                    val dimPercentTitle = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_PERCENT)
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_DIM_PERCENT),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_PERCENT),
+                                        subtitle = stringResource(Res.string.settings_dream_dim_percent_subtitle),
+                                        trailingText = "${preferences.dreamDimPercent}%",
+                                        index = 7, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_DIM_PERCENT,
+                                        onClick = {
+                                            activeDialog.value = PickerState.Slider(
+                                                title = dimPercentTitle,
+                                                value = preferences.dreamDimPercent.toFloat(),
+                                                valueRange = 0f..95f,
+                                                steps = 18,
+                                                valueLabel = { "${it.toInt()}%" },
+                                                rangeStartLabel = "0%",
+                                                rangeEndLabel = "95%",
+                                                onConfirm = { viewModel.edit { scope -> scope.screensaver.setDreamDimPercent(it.toInt()) } },
                                             )
                                         },
                                     )
@@ -2469,4 +2611,155 @@ private fun SettingsIdleAmbientSection(
                                         },
                                     )
                                 }
+}
+
+/** The `group_discord_presence` section: the Discord Rich Presence toggle (SystemRowRecords discord_ rows). */
+@Composable
+private fun SettingsDiscordPresenceSection(
+    preferences: SettingsScreenPreferences,
+    viewModel: SettingsViewModel,
+    lastClickedSettingId: String?,
+) {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.BrandDiscord,
+                                    title = stringResource(Res.string.settings_discord_presence),
+                                    summary = {
+                                        if (preferences.discordPresenceEnabled) {
+                                            stringResource(Res.string.settings_discord_presence_on)
+                                        } else {
+                                            stringResource(Res.string.settings_discord_presence_off)
+                                        }
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemDiscordPresence.itemIdSet,
+                                ) {
+                                    val discordTotal = SettingsScreenGroups.systemDiscordPresence.itemIds.size
+                                    SettingToggleItem(
+                                        icon = rowIcon(SettingsScreenIds.DISCORD_PRESENCE_ENABLED),
+                                        title = rowTitle(SettingsScreenIds.DISCORD_PRESENCE_ENABLED),
+                                        subtitle = stringResource(Res.string.settings_discord_presence_enabled_subtitle),
+                                        checked = preferences.discordPresenceEnabled,
+                                        index = 0, count = discordTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.DISCORD_PRESENCE_ENABLED,
+                                        onCheckedChange = { enabled ->
+                                            viewModel.edit { scope -> scope.screensaver.setDiscordPresenceEnabled(enabled) }
+                                        },
+                                    )
+                                }
+}
+
+/**
+ * The `group_shell_hooks` section: the playback-event shell hooks (feature
+ * 4.3) — the master toggle (whose subtitle carries the safety copy) plus the
+ * five mpv-shim-named command rows, each opened in the shared free-form text
+ * editor with the placeholder hint as its helper text.
+ */
+@Composable
+private fun SettingsShellHooksSection(
+    preferences: SettingsScreenPreferences,
+    viewModel: SettingsViewModel,
+    lastClickedSettingId: String?,
+    activeDialog: MutableState<PickerState<*>?>,
+) {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.Terminal2,
+                                    title = stringResource(Res.string.settings_hooks),
+                                    summary = {
+                                        if (preferences.hooksEnabled) {
+                                            stringResource(Res.string.settings_hooks_on)
+                                        } else {
+                                            stringResource(Res.string.settings_hooks_off)
+                                        }
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemHooks.itemIdSet,
+                                ) {
+                                    val hooksTotal = SettingsScreenGroups.systemHooks.itemIds.size
+                                    val placeholderHint = stringResource(Res.string.settings_hooks_placeholder_hint)
+                                    SettingToggleItem(
+                                        icon = rowIcon(SettingsScreenIds.HOOKS_ENABLED),
+                                        title = rowTitle(SettingsScreenIds.HOOKS_ENABLED),
+                                        subtitle = stringResource(Res.string.settings_hooks_enabled_subtitle),
+                                        checked = preferences.hooksEnabled,
+                                        index = 0, count = hooksTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.HOOKS_ENABLED,
+                                        onCheckedChange = { enabled ->
+                                            viewModel.edit { scope -> scope.screensaver.setHooksEnabled(enabled) }
+                                        },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_PLAY_CMD,
+                                        command = preferences.hooksPlayCmd,
+                                        index = 1, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksPlayCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_STOP_CMD,
+                                        command = preferences.hooksStopCmd,
+                                        index = 2, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksStopCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_ENDED_CMD,
+                                        command = preferences.hooksEndedCmd,
+                                        index = 3, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksEndedCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_IDLE_CMD,
+                                        command = preferences.hooksIdleCmd,
+                                        index = 4, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksIdleCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_IDLE_ENDED_CMD,
+                                        command = preferences.hooksIdleEndedCmd,
+                                        index = 5, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksIdleEndedCmd(it) } },
+                                    )
+                                }
+}
+
+/** One shell-hook command row: shows the configured command, opens the text editor. */
+@Composable
+private fun hooksCommandRow(
+    id: String,
+    command: String,
+    index: Int,
+    count: Int,
+    lastClickedSettingId: String?,
+    placeholderHint: String,
+    activeDialog: MutableState<PickerState<*>?>,
+    onSave: (String) -> Unit,
+) {
+    val title = rowTitle(id)
+    val notSet = stringResource(Res.string.settings_hooks_cmd_not_set)
+    SettingListItem(
+        icon = rowIcon(id),
+        title = title,
+        subtitle = command.ifBlank { notSet },
+        index = index, count = count,
+        highlighted = lastClickedSettingId == id,
+        onClick = {
+            activeDialog.value = PickerState.Text(
+                title = title,
+                initialText = command,
+                helperText = placeholderHint,
+                onSave = onSave,
+            )
+        },
+    )
 }

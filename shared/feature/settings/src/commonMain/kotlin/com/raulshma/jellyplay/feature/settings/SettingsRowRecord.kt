@@ -126,6 +126,7 @@ internal object SettingsRowRecords {
         MpvEngineRowRecords,
         VlcEngineRowRecords,
         ExoPlayerEngineRowRecords,
+        ExternalEngineRowRecords,
         SyncPlayRowRecords,
         CastingRowRecords,
         LiveTvRowRecords,

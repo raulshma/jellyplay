@@ -108,6 +108,7 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
             downloadRepository = get(),
             downloadIntake = get(),
             episodeCatalogue = get(),
+            serverIdentityStore = get(),
             scope = get(DatastoreQualifiers.applicationScope),
         )
     }

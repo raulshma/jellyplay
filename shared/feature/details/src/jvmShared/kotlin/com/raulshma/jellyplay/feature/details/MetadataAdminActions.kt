@@ -3,17 +3,23 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.IdentifyItemType
 import com.raulshma.jellyplay.core.model.IdentifyQuery
 import com.raulshma.jellyplay.core.model.IdentifyResult
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MetadataRefreshOption
 import com.raulshma.jellyplay.core.model.toRefreshParams
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_identify_applied
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_identify_failed
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_merge_failed
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_merge_started
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_refresh_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_refresh_started
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_split_failed
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_split_started
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -46,15 +52,18 @@ internal class MetadataAdminActions(
     private val messages: MutableSharedFlow<DetailMessage>,
     private val strings: DetailStrings,
     private val editorRepository: MetadataEditorRepository,
+    /** Same-name library search for the merge sheet's candidate rows. */
+    private val mediaRepository: MediaRepository,
     authRepository: AuthRepository,
 ) {
     /**
      * Bundles this helper's exclusive collaborators (the metadata-editor
-     * repository + the auth stream) so they never appear in the
-     * [DetailViewModel] constructor.
+     * repository, the library search and the auth stream) so they never
+     * appear in the [DetailViewModel] constructor.
      */
     class Factory constructor(
         private val editorRepository: MetadataEditorRepository,
+        private val mediaRepository: MediaRepository,
         private val authRepository: AuthRepository,
     ) {
         fun create(
@@ -68,6 +77,7 @@ internal class MetadataAdminActions(
             messages = messages,
             strings = strings,
             editorRepository = editorRepository,
+            mediaRepository = mediaRepository,
             authRepository = authRepository,
         )
     }
@@ -189,6 +199,96 @@ internal class MetadataAdminActions(
                 }
         }
     }
+
+    // ── Version group/split (jellyfin-web "Merge versions"/"Split versions") ──
+    // Merge is driven from the CURRENT movie: the sheet lists the library's
+    // other same-named movies (the split-apart versions) and every pick is
+    // folded into the current item. Split tears the current merged item back
+    // apart. Both mutate the library grid server-side, so each success bumps
+    // [mutationCount] — the screen's reload trigger (the appliedCount
+    // pattern) — alongside the one-shot confirmation message.
+
+    private val _mergeState = MutableStateFlow(MergeVersionsUiState())
+
+    /** Sheet-visible merge state. `candidates == null && !isLoading` means closed. */
+    val mergeState: StateFlow<MergeVersionsUiState> = _mergeState.asStateFlow()
+
+    /** Monotonic counter of successful merge/split mutations; the screen reloads the item on each bump. */
+    private val _mutationCount = MutableStateFlow(0)
+    val mutationCount: StateFlow<Int> = _mutationCount.asStateFlow()
+
+    /**
+     * Opens the merge sheet: searches the library for other MOVIES whose
+     * name matches the current item (case/whitespace-insensitive — the shape
+     * of split-apart versions) and hands them to the sheet as candidates.
+     * The current item is the implicit merge target and is never listed.
+     */
+    fun openMergeVersions() {
+        val detail = session.value?.detail ?: return
+        val item = detail.item
+        if (item.mediaType != MediaType.MOVIE) return
+        _mergeState.value = MergeVersionsUiState(isLoading = true)
+        scope.launch {
+            val result = mediaRepository.search(
+                query = item.name,
+                filters = LibraryFilters(mediaTypes = listOf(MediaType.MOVIE)),
+                limit = 30,
+            )
+            val currentName = item.name.trim()
+            val candidates = result.getOrNull()?.items
+                .orEmpty()
+                .filter { it.id != item.id && it.name.trim().equals(currentName, ignoreCase = true) }
+            _mergeState.value = MergeVersionsUiState(candidates = candidates)
+        }
+    }
+
+    /** Closes the merge sheet and drops its candidates/ephemera. */
+    fun dismissMergeVersions() {
+        _mergeState.value = MergeVersionsUiState()
+    }
+
+    /**
+     * Merges [candidateIds] (plus the current item, the target) into one.
+     * Fire-and-forget: the sheet closes immediately, the outcome flows back
+     * as a message + the [mutationCount] reload bump.
+     */
+    fun mergeVersions(candidateIds: Set<String>) {
+        val detail = session.value?.detail ?: return
+        if (candidateIds.isEmpty()) return
+        val ids = listOf(detail.item.id) + candidateIds
+        _mergeState.update { it.copy(isMerging = true) }
+        scope.launch {
+            editorRepository.mergeVersions(ids)
+                .onSuccess {
+                    messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_merge_started)))
+                    dismissMergeVersions()
+                    _mutationCount.value += 1
+                }
+                .onFailure {
+                    _mergeState.update { it.copy(isMerging = false) }
+                    messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_merge_failed)))
+                }
+        }
+    }
+
+    /**
+     * Splits the current version-merged item apart. Fire-and-forget like
+     * [mergeVersions]; the item id changes server-side per former source, so
+     * the reload lands the user back on the (new) primary entry.
+     */
+    fun splitScreenItem() {
+        val itemId = session.value?.detail?.item?.id ?: return
+        scope.launch {
+            editorRepository.splitVersions(itemId)
+                .onSuccess {
+                    messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_split_started)))
+                    _mutationCount.value += 1
+                }
+                .onFailure {
+                    messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_split_failed)))
+                }
+        }
+    }
 }
 
 /** Identify-sheet visible state. `query == null` means the sheet is closed. */
@@ -201,4 +301,16 @@ internal data class IdentifyUiState(
     val isApplying: Boolean = false,
     /** Monotonic counter of successful applies; the screen reloads on each bump. */
     val appliedCount: Int = 0,
+)
+
+/**
+ * Merge-versions sheet visible state. `candidates == null` means the sheet is
+ * closed (never loaded); an empty list after loading renders the "no
+ * candidates" empty state.
+ */
+@Immutable
+internal data class MergeVersionsUiState(
+    val isLoading: Boolean = false,
+    val candidates: List<com.raulshma.jellyplay.core.model.MediaItem>? = null,
+    val isMerging: Boolean = false,
 )

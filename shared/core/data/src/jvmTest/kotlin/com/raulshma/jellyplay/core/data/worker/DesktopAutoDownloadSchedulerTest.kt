@@ -3,11 +3,14 @@ package com.raulshma.jellyplay.core.data.worker
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -39,10 +42,16 @@ class DesktopAutoDownloadSchedulerTest {
     private val downloadRepository: DownloadRepository = mockk()
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
+    private val serverIdentityStore: ServerIdentityStore = mockk()
 
     @BeforeTest
     fun setup() {
-        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = true))
+        // Legacy-behavior slice (lookahead 0 = take every missing episode); the
+        // lookahead-enabled desktop-parity case below overrides the slice.
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
+        )
+        coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
         coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1")
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
@@ -64,11 +73,22 @@ class DesktopAutoDownloadSchedulerTest {
         epoch = 0L,
     )
 
+    private fun numberedEpisode(id: String, seasonId: String, number: Int) = MediaItem(
+        id = id,
+        name = "Episode $number",
+        mediaType = MediaType.EPISODE,
+        seriesId = "s1",
+        seasonId = seasonId,
+        seasonNumber = 1,
+        episodeNumber = number,
+    )
+
     private fun TestScope.buildScheduler(): DesktopAutoDownloadScheduler = DesktopAutoDownloadScheduler(
         downloadsStore = downloadsStore,
         downloadRepository = downloadRepository,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        serverIdentityStore = serverIdentityStore,
         scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
     )
 
@@ -104,6 +124,47 @@ class DesktopAutoDownloadSchedulerTest {
             downloadIntake.startSeries("s1", episodeIds = mapOf("season-2" to listOf("ep-new-2")))
         }
         coVerify(exactly = 2) { downloadIntake.startSeries(any(), any()) }
+    }
+
+    // ── Desktop parity: the retention policy rides the shared check ───
+
+    @Test
+    fun `lookahead policy flows through the desktop shell`() = runTest {
+        // The desktop loop constructs the same AutoDownloadCheck, so a
+        // non-zero lookahead bounds the pass here exactly as on Android —
+        // one episode past the downloaded anchor (ep-1) instead of every
+        // missing one. Episodes carry explicit numbers because the playback
+        // order falls back to name comparison when they are unset.
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 1),
+        )
+        coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-1"))
+        coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(
+            EpisodeCatalogueSnapshot(
+                seriesId = "s1",
+                seasons = listOf(season("season-1")),
+                episodesBySeason = mapOf(
+                    "season-1" to listOf(
+                        numberedEpisode("ep-1", "season-1", 1),
+                        numberedEpisode("ep-2", "season-1", 2),
+                        numberedEpisode("ep-3", "season-1", 3),
+                    ),
+                ),
+                fetchedSeasonIds = setOf("season-1"),
+                sortedEpisodes = emptyList(),
+                epoch = 0L,
+            ),
+        )
+        val scheduler = buildScheduler()
+
+        scheduler.start()
+        testScheduler.runCurrent()
+        scheduler.stop()
+
+        coVerify(exactly = 1) {
+            downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-2")))
+        }
+        coVerify(exactly = 1) { downloadIntake.startSeries(any(), any()) }
     }
 
     // ── In-process retry ladder ───────────────────────────────────────

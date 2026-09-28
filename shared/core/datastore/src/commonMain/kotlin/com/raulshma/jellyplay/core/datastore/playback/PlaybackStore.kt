@@ -5,14 +5,21 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
+import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
+import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.ExternalPlayerApp
+import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.LiveStreamOption
+import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
@@ -20,6 +27,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -40,6 +48,9 @@ import kotlinx.coroutines.flow.StateFlow
  *    (legacy bool) and `REFRESH_RATE_MODE` (enum) in sync in a single edit.
  *  - [readPlaybackMode] migrates the legacy `force_direct_play` boolean to the
  *    `PlaybackMode` enum when the typed key is absent.
+ *  - [readAudioPassthroughCodecs] migrates the legacy single-boolean
+ *    passthrough surface: an absent `audio_passthrough_codecs` key reads the
+ *    full historical codec list (the old boolean's meaning).
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file; the key strings
  * match the legacy `UserPreferencesStore.Keys` names so existing data is read
@@ -51,17 +62,35 @@ class PlaybackStore constructor(
 ) {
     private val scope = externalScope
 
+    private val json get() = PreferenceCodec.json
+
+    /**
+     * Memoised decode of the JSON-encoded passthrough codec set, keyed on the
+     * raw string so the decode is skipped when the key has not changed on a
+     * given `dataStore.data` emission. [CachedJsonNullPolicy.NoMemoOnNull]:
+     * the null-raw value is the legacy-boolean migration (it depends on the
+     * `audio_passthrough` master key, not on this raw), so it is re-derived
+     * every read — see [readAudioPassthroughCodecs].
+     */
+    private var cachedAudioPassthroughCodecs: ParsedCache<Set<AudioPassthroughCodec>> =
+        ParsedCache(null, DEFAULT_AUDIO_PASSTHROUGH_CODECS)
+
     internal object Keys {
         val PREFERRED_PLAYER = stringPreferencesKey("preferred_player")
+        val PREFERRED_EXTERNAL_PLAYER = stringPreferencesKey("preferred_external_player")
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val CELLULAR_STREAMING_QUALITY = stringPreferencesKey("cellular_streaming_quality")
         val FORCE_DIRECT_PLAY = booleanPreferencesKey("force_direct_play")
         val PLAYBACK_MODE = stringPreferencesKey("playback_mode")
         val DECODER_MODE = stringPreferencesKey("decoder_mode")
         val AUDIO_PASSTHROUGH = booleanPreferencesKey("audio_passthrough")
+        val AUDIO_PASSTHROUGH_CODECS = stringPreferencesKey("audio_passthrough_codecs")
+        val MAX_AUDIO_CHANNELS = stringPreferencesKey("max_audio_channels")
+        val DOWNMIX_BOOST_DB = floatPreferencesKey("downmix_boost_db")
         val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
         val REFRESH_RATE_MODE = stringPreferencesKey("refresh_rate_mode")
         val LIVE_STREAM_OPTION = stringPreferencesKey("live_stream_option")
+        val OFFLINE_PLAYBACK_PREFERENCE = stringPreferencesKey("offline_playback_preference")
         val KEEP_SCREEN_ON_DURING_VIDEO = booleanPreferencesKey("keep_screen_on_during_video")
         val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey("pause_on_audio_focus_loss")
         val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey("duck_on_transient_focus_loss")
@@ -87,12 +116,18 @@ class PlaybackStore constructor(
      */
     internal fun read(prefs: Preferences): PlaybackSlice = PlaybackSlice(
         preferredPlayer = readPreferredPlayer(prefs),
+        preferredExternalPlayer = readPreferredExternalPlayer(prefs),
         streamingQuality = readStreamingQuality(prefs),
         cellularStreamingQuality = readCellularStreamingQuality(prefs),
         playbackMode = readPlaybackMode(prefs),
         liveStreamOption = readLiveStreamOption(prefs),
+        offlinePlaybackPreference = readOfflinePlaybackPreference(prefs),
         decoderMode = readDecoderMode(prefs),
         audioPassthrough = PreferenceCodec.readBool(prefs, Keys.AUDIO_PASSTHROUGH, "audio_passthrough", false),
+        audioPassthroughCodecs = readAudioPassthroughCodecs(prefs),
+        maxAudioChannels = readMaxAudioChannels(prefs),
+        downmixBoostDb = PreferenceCodec.readFloat(prefs, Keys.DOWNMIX_BOOST_DB, "downmix_boost_db", DEFAULT_DOWNMIX_BOOST_DB)
+            .coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB),
         frameRateMatching = PreferenceCodec.readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false),
         refreshRateMode = readRefreshRateMode(prefs),
         keepScreenOnDuringVideo = PreferenceCodec.readBool(prefs, Keys.KEEP_SCREEN_ON_DURING_VIDEO, "keep_screen_on_during_video", true),
@@ -108,6 +143,9 @@ class PlaybackStore constructor(
     private fun readPreferredPlayer(prefs: Preferences): PlayerType =
         normalizePreferredPlayer(prefs[Keys.PREFERRED_PLAYER])
 
+    private fun readPreferredExternalPlayer(prefs: Preferences): ExternalPlayerApp =
+        prefs[Keys.PREFERRED_EXTERNAL_PLAYER].toEnumOrNull() ?: ExternalPlayerApp.SYSTEM_CHOOSER
+
     private fun readStreamingQuality(prefs: Preferences): StreamingQuality =
         prefs[Keys.STREAMING_QUALITY].toEnumOrNull() ?: StreamingQuality.AUTO
 
@@ -117,8 +155,35 @@ class PlaybackStore constructor(
     private fun readLiveStreamOption(prefs: Preferences): LiveStreamOption =
         prefs[Keys.LIVE_STREAM_OPTION].toEnumOrNull() ?: LiveStreamOption.AUTO
 
+    private fun readOfflinePlaybackPreference(prefs: Preferences): OfflinePlaybackPreference =
+        prefs[Keys.OFFLINE_PLAYBACK_PREFERENCE].toEnumOrNull() ?: OfflinePlaybackPreference.PREFER_DOWNLOADED
+
     private fun readDecoderMode(prefs: Preferences): DecoderMode =
         prefs[Keys.DECODER_MODE].toEnumOrNull() ?: DecoderMode.HW_PREFERRED
+
+    private fun readMaxAudioChannels(prefs: Preferences): MaxAudioChannelsEnum =
+        prefs[Keys.MAX_AUDIO_CHANNELS].toEnumOrNull() ?: MaxAudioChannelsEnum.AUTO
+
+    /**
+     * Reads [PlaybackSlice.audioPassthroughCodecs]. **Legacy migration:** the
+     * pre-codec-set surface was the single `audio_passthrough` boolean whose
+     * "on" always bitstreamed the full historical codec list, so an ABSENT
+     * codec key (an install that has never touched the per-codec rows) reads
+     * all codecs enabled — flipping the master toggle on later keeps the
+     * pre-feature behaviour. A PRESENT key (even the empty set — the user
+     * explicitly unchecked everything) wins verbatim, mirroring
+     * [readPlaybackMode]'s absent-key-migrates rule.
+     */
+    private fun readAudioPassthroughCodecs(prefs: Preferences): Set<AudioPassthroughCodec> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.AUDIO_PASSTHROUGH_CODECS],
+            cache = cachedAudioPassthroughCodecs,
+            default = DEFAULT_AUDIO_PASSTHROUGH_CODECS,
+            parse = { json.decodeFromString<Set<AudioPassthroughCodec>>(it) },
+            cacheRef = { cachedAudioPassthroughCodecs = it },
+            nullPolicy = CachedJsonNullPolicy.NoMemoOnNull,
+            onNull = { DEFAULT_AUDIO_PASSTHROUGH_CODECS },
+        )
 
     /**
      * Reads [PlaybackSlice.playbackMode]. Migrates the legacy boolean
@@ -159,6 +224,10 @@ class PlaybackStore constructor(
         dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
     }
 
+    suspend fun setPreferredExternalPlayer(app: ExternalPlayerApp) {
+        dataStore.edit { it[Keys.PREFERRED_EXTERNAL_PLAYER] = app.name }
+    }
+
     suspend fun setStreamingQuality(quality: StreamingQuality) {
         dataStore.edit { it[Keys.STREAMING_QUALITY] = quality.name }
     }
@@ -175,12 +244,35 @@ class PlaybackStore constructor(
         dataStore.edit { it[Keys.LIVE_STREAM_OPTION] = option.name }
     }
 
+    suspend fun setOfflinePlaybackPreference(preference: OfflinePlaybackPreference) {
+        dataStore.edit { it[Keys.OFFLINE_PLAYBACK_PREFERENCE] = preference.name }
+    }
+
     suspend fun setDecoderMode(mode: DecoderMode) {
         dataStore.edit { it[Keys.DECODER_MODE] = mode.name }
     }
 
     suspend fun setAudioPassthrough(enabled: Boolean) {
         dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled }
+    }
+
+    /**
+     * The per-codec passthrough allow-list, stored as a JSON set of enum
+     * names. Writing it (even empty) marks the surface as touched — the
+     * legacy-boolean migration in [readAudioPassthroughCodecs] stops
+     * applying.
+     */
+    suspend fun setAudioPassthroughCodecs(codecs: Set<AudioPassthroughCodec>) {
+        dataStore.edit { it[Keys.AUDIO_PASSTHROUGH_CODECS] = json.encodeToString(codecs) }
+    }
+
+    suspend fun setMaxAudioChannels(mode: MaxAudioChannelsEnum) {
+        dataStore.edit { it[Keys.MAX_AUDIO_CHANNELS] = mode.name }
+    }
+
+    /** The stereo-downmix loudness compensation in dB; clamped to 0–12. */
+    suspend fun setDownmixBoostDb(db: Float) {
+        dataStore.edit { it[Keys.DOWNMIX_BOOST_DB] = db.coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB) }
     }
 
     /**
@@ -259,12 +351,17 @@ class PlaybackStore constructor(
     internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
         PreferenceResetCategory.PLAYBACK -> listOf(
             Keys.PREFERRED_PLAYER,
+            Keys.PREFERRED_EXTERNAL_PLAYER,
             Keys.STREAMING_QUALITY,
             Keys.CELLULAR_STREAMING_QUALITY,
             Keys.FORCE_DIRECT_PLAY,
             Keys.PLAYBACK_MODE,
             Keys.DECODER_MODE,
+            Keys.OFFLINE_PLAYBACK_PREFERENCE,
             Keys.AUDIO_PASSTHROUGH,
+            Keys.AUDIO_PASSTHROUGH_CODECS,
+            Keys.MAX_AUDIO_CHANNELS,
+            Keys.DOWNMIX_BOOST_DB,
             Keys.FRAME_RATE_MATCHING,
             Keys.REFRESH_RATE_MODE,
             Keys.KEEP_SCREEN_ON_DURING_VIDEO,
@@ -290,12 +387,17 @@ class PlaybackStore constructor(
     suspend fun restore(slice: PlaybackSlice) {
         dataStore.edit { it ->
             it[Keys.PREFERRED_PLAYER] = slice.preferredPlayer.name
+            it[Keys.PREFERRED_EXTERNAL_PLAYER] = slice.preferredExternalPlayer.name
             it[Keys.STREAMING_QUALITY] = slice.streamingQuality.name
             it[Keys.CELLULAR_STREAMING_QUALITY] = slice.cellularStreamingQuality.name
             it[Keys.PLAYBACK_MODE] = slice.playbackMode.name
             it[Keys.LIVE_STREAM_OPTION] = slice.liveStreamOption.name
+            it[Keys.OFFLINE_PLAYBACK_PREFERENCE] = slice.offlinePlaybackPreference.name
             it[Keys.DECODER_MODE] = slice.decoderMode.name
             it[Keys.AUDIO_PASSTHROUGH] = slice.audioPassthrough
+            it[Keys.AUDIO_PASSTHROUGH_CODECS] = json.encodeToString(slice.audioPassthroughCodecs)
+            it[Keys.MAX_AUDIO_CHANNELS] = slice.maxAudioChannels.name
+            it[Keys.DOWNMIX_BOOST_DB] = slice.downmixBoostDb
             it[Keys.FRAME_RATE_MATCHING] = slice.frameRateMatching
             it[Keys.REFRESH_RATE_MODE] = slice.refreshRateMode.name
             it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = slice.keepScreenOnDuringVideo
@@ -310,6 +412,13 @@ class PlaybackStore constructor(
     }
 }
 
+/** The passthrough codec set the legacy single-boolean surface always bitstreamed. */
+private val DEFAULT_AUDIO_PASSTHROUGH_CODECS: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL
+
+private const val MIN_DOWNMIX_BOOST_DB = 0f
+private const val MAX_DOWNMIX_BOOST_DB = 12f
+private const val DEFAULT_DOWNMIX_BOOST_DB = 0f
+
 /**
  * The media-delivery preference slice. Plain data class (Compose-free) so the
  * datastore module stays framework-light. Defaults mirror the projection
@@ -319,12 +428,17 @@ class PlaybackStore constructor(
 @Serializable
 data class PlaybackSlice(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
+    val preferredExternalPlayer: ExternalPlayerApp = ExternalPlayerApp.SYSTEM_CHOOSER,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val cellularStreamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
+    val offlinePlaybackPreference: OfflinePlaybackPreference = OfflinePlaybackPreference.PREFER_DOWNLOADED,
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
+    val audioPassthroughCodecs: Set<AudioPassthroughCodec> = DEFAULT_AUDIO_PASSTHROUGH_CODECS,
+    val maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
+    val downmixBoostDb: Float = DEFAULT_DOWNMIX_BOOST_DB,
     val frameRateMatching: Boolean = false,
     val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
     val keepScreenOnDuringVideo: Boolean = true,

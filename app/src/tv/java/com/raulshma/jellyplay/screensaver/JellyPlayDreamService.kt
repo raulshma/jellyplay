@@ -89,6 +89,8 @@ class JellyPlayDreamService : DreamService() {
                     kenBurnsEnabled = prefs.dreamKenBurnsEnabled,
                     transitionStyle = prefs.dreamTransitionStyle,
                     showTitle = prefs.dreamShowTitle,
+                    dimAfterMs = prefs.dreamDimAfterMs,
+                    dimPercent = prefs.dreamDimPercent,
                 )
             }
         }
@@ -124,10 +126,11 @@ class JellyPlayDreamService : DreamService() {
                 val fetched = imageProvider.fetchImages(
                     categories = prefs.dreamImageCategories,
                     count = 25,
+                    maxParentalRating = prefs.dreamMaxParentalRating,
                 )
                 images = fetched
                 if (fetched.size > 3) {
-                    imageProvider.prefetchImages(fetched.take(3).map { it.backdropUrl })
+                    imageProvider.prefetchImages(fetched.take(3).map { it.imageUrl })
                 }
             } catch (_: Exception) {
                 images = emptyList()

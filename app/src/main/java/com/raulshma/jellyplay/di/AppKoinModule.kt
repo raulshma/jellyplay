@@ -218,6 +218,7 @@ val androidAppViewModelsModule: Module = module {
             deepLinkHandler = get(),
             playbackRepository = get(),
             downloadRepository = get(),
+            mediaRepository = get(),
             playbackSourceResolver = get(),
             offlineModeManager = get(),
             userMessageBus = get(),

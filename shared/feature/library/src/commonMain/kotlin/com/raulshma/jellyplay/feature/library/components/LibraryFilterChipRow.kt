@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.core.model.filterableMediaTypes
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_all_filters
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_downloaded
+import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_subtitles
 import com.raulshma.jellyplay.feature.library.generated.resources.library_any
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_resumable
 import com.raulshma.jellyplay.feature.library.generated.resources.library_genres
@@ -74,6 +75,7 @@ fun LibraryFilterChipRow(
     availableTags: List<String>,
     onOpenSheet: (FilterSheetKind) -> Unit,
     onToggleDownloaded: () -> Unit,
+    onToggleHasSubtitles: () -> Unit,
     modifier: Modifier = Modifier,
     /** TV: leaf anchor on the first chip — target of the screen-level vertical
      *  navigation that hops between the header rows. */
@@ -134,6 +136,20 @@ fun LibraryFilterChipRow(
                 selected = filters.isDownloaded == true,
                 onClick = onToggleDownloaded,
             )
+        }
+        // Subtitles quick chip — one tap on the "Has subtitles" presence
+        // filter (the hasSubtitles /Items param), the same shortcut shape as
+        // the Downloaded chip. Hidden while the Downloaded pin is on: the
+        // offline store has no subtitles column, so the filter couldn't apply
+        // (same rule as the Tags chip below).
+        if (filters.isDownloaded != true) {
+            item(key = "hasSubtitles") {
+                GlassFilterChip(
+                    label = stringResource(Res.string.library_filter_subtitles),
+                    selected = filters.hasSubtitles == true,
+                    onClick = onToggleHasSubtitles,
+                )
+            }
         }
         if (genres.isNotEmpty()) {
             item(key = "genres") {

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.Heart
 import com.composables.icons.tabler.outline.Book
+import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
@@ -46,8 +47,10 @@ import com.composables.icons.tabler.outline.PlayerTrackNext
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
+import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.preferredMediaSource
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -73,6 +76,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_read
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_both
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_credits
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_intro
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_version_select
 import org.jetbrains.compose.resources.stringResource
 
 import kotlin.math.roundToInt
@@ -195,7 +199,7 @@ internal fun DetailActionButtons(
 
     // Shared click handler — identical for vertical and horizontal so the two
     // branches can never diverge in play-resolution logic.
-    val onPlay = remember(canPlayPrimary, isBook, isAlbum, isAudio, target, item, detail, callbacks, state.albumTracks) {
+    val onPlay = remember(canPlayPrimary, isBook, isAlbum, isAudio, target, item, detail, state.selectedVersionId, callbacks, state.albumTracks) {
         {
             if (!canPlayPrimary) return@remember
             if (isBook) {
@@ -208,14 +212,25 @@ internal fun DetailActionButtons(
             } else if (isAudio) {
                 callbacks.playback.onAudioClick()
             } else if (target != null) {
-                callbacks.playback.onPlayClick(target.episode.id, null, target.startPositionTicks)
+                // On an episode detail the target is the item itself, so the
+                // pending version pick applies; a series target plays a
+                // different item than the one the picker listed, so the server
+                // default (null) stands.
+                val sourceId = if (target.episode.id == item.id) {
+                    detail.preferredMediaSource(state.selectedVersionId)?.id
+                } else null
+                callbacks.playback.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
             } else {
-                val sourceId = detail.mediaSources.firstOrNull()?.id
+                val sourceId = detail.preferredMediaSource(state.selectedVersionId)?.id
                 val startPos = item.playbackPositionTicks ?: 0L
                 callbacks.playback.onPlayClick(item.id, sourceId, startPos)
             }
         }
     }
+    // The version chevron sits beside Play only when the item actually has
+    // more than one version (media source) to choose between — video items
+    // only (audio/albums resolve playback elsewhere; books have no sources).
+    val canPickVersion = !isBook && !isFolder && !isAudio && detail.mediaSources.size > 1
 
     if (vertical) {
         Column(
@@ -224,17 +239,29 @@ internal fun DetailActionButtons(
         ) {
             FadingItem {
                 if (!isFolder && (isReadableBook || isFormatUnknownBook || !isBook)) {
-                    PlayButton(
-                        style = PlayButtonStyle.Vertical,
-                        label = playLabel,
-                        icon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
-                        canPlayPrimary = canPlayPrimary,
-                        progress = progress,
-                        playScale = playScale,
-                        interactionSource = playInteractionSource,
-                        contentFocusRequester = contentFocusRequester,
-                        onClick = onPlay,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PlayButton(
+                            style = PlayButtonStyle.Vertical,
+                            label = playLabel,
+                            icon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
+                            canPlayPrimary = canPlayPrimary,
+                            progress = progress,
+                            playScale = playScale,
+                            interactionSource = playInteractionSource,
+                            contentFocusRequester = contentFocusRequester,
+                            onClick = onPlay,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (canPickVersion) {
+                            VersionPickerButton(
+                                style = PlayButtonStyle.Vertical,
+                                onClick = callbacks.playback.onOpenVersionPicker,
+                            )
+                        }
+                    }
                 } else if (isBook) {
                     // Readable-format gate kept the Read button hidden — state
                     // the limitation instead of leaving an unexplained gap.
@@ -300,6 +327,15 @@ internal fun DetailActionButtons(
                 }
             }
 
+            if (canPickVersion) {
+                FadingItem {
+                    VersionPickerButton(
+                        style = PlayButtonStyle.Horizontal,
+                        onClick = callbacks.playback.onOpenVersionPicker,
+                    )
+                }
+            }
+
             FadingItem {
                 MarkWatchedButton(
                     style = IconButtonStyle.Horizontal,
@@ -328,6 +364,46 @@ internal fun DetailActionButtons(
 
 /** Distinguishes the vertical (full-width, 52dp) from horizontal (fixed 200×56dp) play button. */
 private enum class PlayButtonStyle { Vertical, Horizontal }
+
+/**
+ * The small chevron button beside Play that opens the version picker
+ * ([VersionPickerSheet]) — rendered only when the item carries more than one
+ * version. Sized to the Play button's height so the pair reads as one control
+ * (play this version / pick another).
+ */
+@Composable
+private fun VersionPickerButton(
+    style: PlayButtonStyle,
+    onClick: () -> Unit,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.08f)
+    val shape = if (style == PlayButtonStyle.Vertical) ShapeCache.smooth14 else ShapeCache.smooth16
+    val baseModifier = if (style == PlayButtonStyle.Vertical) {
+        Modifier.height(52.dp).width(52.dp)
+    } else {
+        Modifier.height(56.dp).width(52.dp)
+    }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = baseModifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+            .then(focusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(focusState, shape))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
+        Icon(
+            Tabler.Outline.ChevronDown,
+            contentDescription = stringResource(Res.string.detail_version_select),
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
 
 /**
  * Non-clickable informational pill occupying the Read button's slot when a
@@ -381,6 +457,7 @@ private fun PlayButton(
     interactionSource: MutableInteractionSource,
     contentFocusRequester: FocusRequester?,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
     val playFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -395,7 +472,7 @@ private fun PlayButton(
     }
 
     Box(
-        modifier = baseModifier
+        modifier = modifier.then(baseModifier)
             .clip(shape)
             .background(
                 if (isTv && playFocusState.isFocused) MaterialTheme.colorScheme.onPrimary

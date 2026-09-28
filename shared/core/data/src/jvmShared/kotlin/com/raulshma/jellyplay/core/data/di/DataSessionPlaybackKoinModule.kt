@@ -20,6 +20,8 @@ import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -68,11 +70,16 @@ internal val dataSessionPlaybackModule: Module = module {
     }
 
     single {
+        // The show-missing-episodes preference read feeds the catalogue's
+        // online `isMissing` episodes filter (hide is the default; offline
+        // snapshots never consult it).
+        val libraryStore: LibraryStore = get()
         EpisodeCatalogueImpl(
             libraryApiClient = get(),
             offlineRepository = get(),
             homeSession = get(),
             sessionCacheRegistry = get(),
+            showMissingEpisodes = { libraryStore.library.first().showMissingEpisodes },
         )
     }
     single<EpisodeCatalogue> { get<EpisodeCatalogueImpl>() }

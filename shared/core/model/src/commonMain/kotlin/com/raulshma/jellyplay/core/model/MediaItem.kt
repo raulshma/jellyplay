@@ -105,7 +105,25 @@ data class MediaItem(
     val playCount: Int = 0,
     val lastPlayedDate: String? = null,
     val unplayedItemCount: Int? = null,
+    /**
+     * True when the item is a server-side placeholder with no file behind it
+     * (Jellyfin `LocationType = Virtual`) — a missing or unaired episode.
+     * Rendered as a dimmed row with a badge; never a play/download target.
+     */
+    val isVirtual: Boolean = false,
+    /** Why the item is virtual; non-null exactly when [isVirtual] is true. */
+    val missingReason: MissingEpisodeReason? = null,
 )
+
+/**
+ * Why a virtual ([MediaItem.isVirtual]) episode has no playable file: it
+ * hasn't aired yet ([UNAIRED], premiere date in the future), or the file is
+ * simply absent from the library ([MISSING_FILE]). Derived at map time from
+ * the wire `LocationType` + `PremiereDate`.
+ */
+@Immutable
+@Serializable
+enum class MissingEpisodeReason { UNAIRED, MISSING_FILE }
 
 /**
  * True when the user has a non-zero playback position saved. Use for surfacing

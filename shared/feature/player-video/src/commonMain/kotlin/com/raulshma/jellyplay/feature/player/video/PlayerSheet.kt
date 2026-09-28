@@ -35,6 +35,14 @@ sealed class PlayerSheet {
      * per-series override row ("Save for this series").
      */
     data object Render : PlayerSheet() { override val key = "Render" }
+
+    /**
+     * The multi-version picker: one row per `mediaDetail.mediaSources` entry
+     * (1080p + 4K, HDR variants, alternate cuts). Picking another version
+     * re-resolves playback at the current position (SelectMediaSource →
+     * `PlayerSessionManager.switchMediaSource`).
+     */
+    data object Version : PlayerSheet() { override val key = "Version" }
 }
 
 /**
@@ -67,4 +75,5 @@ private val ALL_SHEETS: List<PlayerSheet> = listOf(
     PlayerSheet.SleepTimer,
     PlayerSheet.VideoFilter,
     PlayerSheet.Render,
+    PlayerSheet.Version,
 )

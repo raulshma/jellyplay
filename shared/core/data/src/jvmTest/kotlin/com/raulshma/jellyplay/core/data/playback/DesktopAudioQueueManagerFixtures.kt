@@ -61,6 +61,7 @@ internal class FakeImages : ImageUrlProvider {
         "img://$itemId"
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String = ""
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String = ""
+    override fun getLogoUrl(itemId: String): String = ""
 }
 
 internal data class StartRecord(

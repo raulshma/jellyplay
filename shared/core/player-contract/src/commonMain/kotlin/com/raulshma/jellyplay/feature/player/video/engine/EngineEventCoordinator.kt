@@ -262,6 +262,20 @@ class EngineEventCoordinator(
      */
     val decisions: SharedFlow<EngineDecision> = _decisions.asSharedFlow()
 
+    private val _userInteractions = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
+    /**
+     * One-shot "a user interaction occurred" signal, emitted alongside every
+     * [onUserInteraction] clock reset. The pass-out poller reads the clock
+     * directly; this stream lets the owner feed the SAME signal to additional
+     * consumers (the still-watching episode counter) without a second intake
+     * path. `tryEmit`-only, conflated (DROP_OLDEST on a 1-slot buffer): the
+     * signal carries no payload, so a burst of interactions collapses.
+     */
+    val userInteractions: SharedFlow<Unit> = _userInteractions.asSharedFlow()
+
     // ── Fallback policy state: one-shot latch (FORCE_DIRECT_PLAY_ONE_SHOT) ──
 
     /**
@@ -517,9 +531,18 @@ class EngineEventCoordinator(
         )
     }
 
-    /** Resets the pass-out interaction clock (a user interaction occurred). */
+    /**
+     * Resets the pass-out interaction clock (a user interaction occurred) and
+     * emits the [userInteractions] one-shot signal. The owner invokes this
+     * from every user-initiated command path — play/pause/seek/speed — in
+     * addition to the automatic play-resume transition reset below, so a long
+     * attended session never trips pass-out (and any downstream consumer of
+     * the signal, e.g. the still-watching episode counter, sees the same
+     * event).
+     */
     fun onUserInteraction() {
         lastInteractionElapsedMs = clock()
+        _userInteractions.tryEmit(Unit)
     }
 
     /** True after [dispose] — the coordinator must be re-created to run again. */

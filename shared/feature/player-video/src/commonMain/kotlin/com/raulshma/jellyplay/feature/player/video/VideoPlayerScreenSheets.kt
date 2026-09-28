@@ -37,6 +37,8 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_au
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitle_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitles_off
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_version
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_version
 
 // ── Section host: modal-sheet router ─────────────────────────────────────
 // Owns [PlayerSheetRouter] — every PlayerSheet branch (speed, audio tracks,
@@ -255,6 +257,7 @@ internal fun PlayerSheetRouter(
                     mediaSource = uiState.media.currentMediaSource,
                     mediaStreams = uiState.media.mediaStreams,
                     playMethod = uiState.media.playMethod,
+                    isOfflineSource = uiState.media.showDownloadedBadge,
                     isConnectionMetered = uiState.isConnectionMetered,
                     hdrType = uiState.hdrType,
                     playerType = uiState.preferredPlayerType.name,
@@ -344,6 +347,35 @@ internal fun PlayerSheetRouter(
                  onDismiss = dismissSheet,
              )
          }
+        is PlayerSheet.Version -> {
+            // Version rows mirror the session state (collected via the media
+            // slice): one row per media source, the current one marked.
+            val trackState by viewModel.trackState.collectAsStateWithLifecycle()
+            TrackPickerSheet(
+                title = stringResource(Res.string.player_video_version),
+                tracks = buildVersionTrackOptions(
+                    mediaSources = uiState.media.mediaSources,
+                    currentSourceId = uiState.media.currentMediaSource?.id,
+                ),
+                onSelect = { option ->
+                    option.id?.let { viewModel.onEvent(VideoPlayerUiEvent.SelectMediaSource(it)) }
+                },
+                onDismiss = dismissSheet,
+                footer = {
+                    // Per-item/series version memory (the audio sheet's
+                    // "remember language" pattern): on = the CURRENT version
+                    // is pinned for this item (movie) or series (episode);
+                    // off = forget both scopes.
+                    RememberPreferenceToggle(
+                        label = stringResource(Res.string.player_video_remember_version),
+                        checked = trackState.hasPreferredMediaSource,
+                        onToggle = { remember ->
+                            viewModel.onEvent(VideoPlayerUiEvent.SetPreferredMediaVersion(remember))
+                        },
+                    )
+                },
+            )
+        }
         is PlayerSheet.Quality -> {
             QualityPickerSheet(
                 currentQuality = uiState.uiPrefs.streamingQuality,

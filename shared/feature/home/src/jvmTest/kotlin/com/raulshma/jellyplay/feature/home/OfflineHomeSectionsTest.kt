@@ -410,6 +410,49 @@ class OfflineHomeSectionsTest {
     }
 
     @Test
+    fun `restored series rejoins next up once the exclusion set no longer holds it`() {
+        // Plan §3.3 regression: hiding a series must be reversible — the
+        // assembler's filter reads the live exclusion set, so once the store's
+        // restore commands (`includeSeriesInNextUp` per row /
+        // `clearNextUpExclusions` for Restore all) drop the id out of it, the
+        // series' Next Up entry comes back. Same fixtures as the skip test.
+        val episodes = listOf(
+            episode("e0", seriesId = "s1", episodeNumber = 1, isPlayed = true, lastPlayedDate = "2026-01-01"),
+            episode("e1", seriesId = "s1", episodeNumber = 2),
+            episode("f0", seriesId = "s2", episodeNumber = 1, isPlayed = true, lastPlayedDate = "2026-01-02"),
+            episode("f1", seriesId = "s2", episodeNumber = 2),
+        )
+
+        // Both hidden: neither series reaches Next Up.
+        val bothHidden = buildOfflineHomeSections(
+            library = emptyList(),
+            episodes = episodes,
+            titles = titles,
+            prefs = defaultPrefs.copy(nextUpExcludedSeriesIds = setOf("s1", "s2")),
+        )
+        assertTrue(bothHidden.none { it.id == "offline_next_up" })
+
+        // includeSeriesInNextUp("s1"): s1 is back, s2 still hidden.
+        val singlyRestored = buildOfflineHomeSections(
+            library = emptyList(),
+            episodes = episodes,
+            titles = titles,
+            prefs = defaultPrefs.copy(nextUpExcludedSeriesIds = setOf("s1", "s2") - "s1"),
+        )
+        assertEquals(listOf("e1"), singlyRestored.first { it.id == "offline_next_up" }.items.map { it.id })
+
+        // clearNextUpExclusions(): both are back; row order still follows the
+        // anchors' watch dates (s2's Jan 2 anchor outranks s1's Jan 1).
+        val allRestored = buildOfflineHomeSections(
+            library = emptyList(),
+            episodes = episodes,
+            titles = titles,
+            prefs = defaultPrefs.copy(nextUpExcludedSeriesIds = emptySet()),
+        )
+        assertEquals(listOf("f1", "e1"), allRestored.first { it.id == "offline_next_up" }.items.map { it.id })
+    }
+
+    @Test
     fun `next up date cutoff drops stale series`() {
         // Activity in January 2026; maxDays=1 → cutoff ~today → both series
         // too old for Next Up. maxDays=0 (no cutoff) keeps them.

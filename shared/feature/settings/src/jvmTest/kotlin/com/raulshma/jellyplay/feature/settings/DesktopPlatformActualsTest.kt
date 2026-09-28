@@ -204,6 +204,31 @@ class DesktopPlatformActualsTest {
     }
 
     @Test
+    fun `desktop is the one platform backing the Discord presence rows`() {
+        // The Discord Rich Presence toggle is DESKTOP-backed — the
+        // hand-rolled Discord IPC client + presence service live in
+        // apps/desktop (the named-pipe / Unix-socket transport has no
+        // Android counterpart). Mirror half: apps/desktop's
+        // DiscordPresenceService + its Koin wiring.
+        assertTrue(
+            settingsCapabilities.supportsDiscordPresence,
+            "the desktop shell owns the Discord IPC presence service",
+        )
+    }
+
+    @Test
+    fun `desktop is the one platform backing the shell hook rows`() {
+        // The playback-event shell hooks are DESKTOP-backed —
+        // DesktopHookRunner executes the configured commands via
+        // ProcessBuilder, which has no Android counterpart. Mirror half:
+        // apps/desktop's DesktopHookRunner + its Koin wiring.
+        assertTrue(
+            settingsCapabilities.supportsShellHooks,
+            "the desktop shell owns the ProcessBuilder hook runner",
+        )
+    }
+
+    @Test
     fun `capability flags stay equal to their behavior seams`() {
         // The visibility flag must never outlive the seam's null-ness / query —
         // the pairs are pinned together here so one platform's truth has one

@@ -4,6 +4,21 @@ import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * What one retention sweep pass reclaimed — the storage-settings "Clean up
+ * now" summary and the auto-download check's sweep step log line.
+ */
+data class AutoDownloadSweepResult(
+    /** Completed downloads deleted this pass. */
+    val deletedCount: Int,
+    /** Their persisted [DownloadItem.totalSizeBytes] sum, taken before deletion. */
+    val bytesReclaimed: Long,
+) {
+    companion object {
+        val EMPTY = AutoDownloadSweepResult(deletedCount = 0, bytesReclaimed = 0L)
+    }
+}
+
 // `DownloadProgress` (the feature-facing per-row transfer projection) lives in
 // commonMain now (repository/DownloadProgress.kt) — promoted verbatim with the
 // DownloadQueue interface, whose surface names it.
@@ -168,4 +183,18 @@ interface DownloadRepository : OfflineDownloadWriter {
     suspend fun resumeInterruptedDownloads()
 
     suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit>
+
+    /**
+     * One keep-days retention sweep pass: deletes every completed download
+     * whose `completedAt` is older than the `auto_download_keep_days` window
+     * **unless the item is unwatched** (the local played-state mirror protects
+     * in-progress content — a row with no offline metadata, or an unplayed
+     * one, is never deleted), reusing the shared offline-deletion
+     * choreography. `auto_download_keep_days = 0` is off: a no-op returning
+     * [AutoDownloadSweepResult.EMPTY].
+     *
+     * Runs as the first step of the auto-download check pass and is callable
+     * on demand from the storage settings screen's "Clean up now" action.
+     */
+    suspend fun sweepExpiredAutoDownloads(): AutoDownloadSweepResult
 }

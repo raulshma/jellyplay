@@ -31,6 +31,7 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Archive
 import com.composables.icons.tabler.outline.DeviceDesktop
 import com.composables.icons.tabler.outline.FileText
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -41,6 +42,7 @@ import com.composables.icons.tabler.outline.Tool
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
+import com.raulshma.jellyplay.feature.admin.generated.resources.admin_backups_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_devices_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_logs_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_plugins_title
@@ -61,6 +63,7 @@ fun QuickActionsSection(
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
+    onBackups: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -149,6 +152,14 @@ fun QuickActionsSection(
                 iconBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
                 iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
                 onClick = onPlugins,
+                modifier = Modifier.weight(1f),
+            )
+            QuickActionButton(
+                icon = Tabler.Outline.Archive,
+                label = stringResource(Res.string.admin_backups_title),
+                iconBackgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
+                iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
+                onClick = onBackups,
                 modifier = Modifier.weight(1f),
             )
         }

@@ -368,6 +368,8 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_hide_episode_thumbnails_title, { it.library.hideEpisodeThumbnails }, Boolean::onOff),
     DiffField(Res.string.diff_episodes_descending, { it.library.episodesDescending }, Boolean::onOff),
     DiffField(Res.string.ss_skip_specials_title, { it.library.skipSpecials }, Boolean::onOff),
+    DiffField(Res.string.ss_show_missing_episodes_title, { it.library.showMissingEpisodes }, Boolean::onOff),
+    DiffField(Res.string.ss_prefer_logos_title, { it.library.preferLogos }, Boolean::onOff),
     DiffField(Res.string.ss_clock_home_title, { it.homeDiscovery.showClockOnHome }, Boolean::onOff),
     DiffField(Res.string.ss_settings_in_home_search_title, { it.homeDiscovery.showSettingsInHomeSearch }, Boolean::onOff),
 )

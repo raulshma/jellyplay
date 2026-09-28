@@ -52,4 +52,21 @@ interface MetadataApiClient {
      * server also triggers a metadata refresh of the item on apply.
      */
     suspend fun applyIdentifyResult(itemId: String, result: IdentifyResult, replaceAllImages: Boolean = true): Result<Unit>
+
+    /**
+     * Merges the version items [itemIds] into one (jellyfin-web "Merge
+     * versions"): every listed item becomes a MediaSource of the first.
+     * `POST /Videos/MergeVersions?ids=a,b,c` (RequiresElevation — the server
+     * 403s non-admins; the caller gates the entry). Fails fast when fewer
+     * than 2 ids are supplied (the server rejects those with 400).
+     */
+    suspend fun mergeVersions(itemIds: List<String>): Result<Unit>
+
+    /**
+     * Splits a version-merged item apart (jellyfin-web "Split versions"):
+     * `DELETE /Videos/{itemId}/AlternateSources` (RequiresElevation) restores
+     * each merged MediaSource to its own item. The caller must re-fetch the
+     * item afterwards — the merged entry is gone server-side.
+     */
+    suspend fun splitVersions(itemId: String): Result<Unit>
 }

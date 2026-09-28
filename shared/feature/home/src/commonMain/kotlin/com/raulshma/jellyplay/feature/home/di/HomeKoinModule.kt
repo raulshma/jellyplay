@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home.di
 import com.raulshma.jellyplay.feature.home.HomeStores
 import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
+import com.raulshma.jellyplay.feature.home.NextUpExcludedViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -78,6 +79,14 @@ val homeModule: Module = module {
             settingsSearchProvider = get(),
             homeRefresherFactory = get(),
             syncStatusStateHolderFactory = get(),
+        )
+    }
+    viewModel {
+        NextUpExcludedViewModel(
+            homeDiscoveryStore = get(),
+            editor = get(),
+            mediaRepository = get(),
+            imageUrlProvider = get(),
         )
     }
 }

@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ReverbPreset
+import kotlin.math.roundToInt
 
 /**
  * Orchestrates the audio-effect stack for [ExoPlayerEngine].
@@ -115,6 +116,11 @@ internal class AudioEffectChain(
 
         channelMixProcessor.setMode(config.channelMixMode)
         channelMixProcessor.setEnabled(config.channelMixEnabled)
+        // The speaker-layout cap rides the same processor: it clamps the
+        // configured output layout independently of the channel-mix effect
+        // (null for AUTO). ExoPlayerEngine re-runs the pipeline when either
+        // moves (requiresAudioPipelineReconfiguration).
+        channelMixProcessor.setChannelCap(config.maxAudioChannels.channelCount)
 
         bassBoostHelper.setStrength(config.bassBoostStrength)
         bassBoostHelper.setEnabled(config.bassBoostEnabled)
@@ -122,8 +128,13 @@ internal class AudioEffectChain(
         virtualizerHelper.setStrength(config.virtualizerStrength)
         virtualizerHelper.setEnabled(config.virtualizerEnabled)
 
-        loudnessEnhancerHelper.setGain(config.volumeBoostGain)
-        loudnessEnhancerHelper.setEnabled(config.volumeBoostEnabled)
+        // The loudness enhancer is ONE session effect shared by the volume
+        // boost and the stereo-downmix boost: the stronger of the two gains
+        // wins, and it is enabled while either is on (a 0-gain enable is the
+        // historical volume-boost-on-with-0-gain shape, preserved).
+        val downmixGainMb = (config.downmixBoostDb * 100).roundToInt()
+        loudnessEnhancerHelper.setGain(maxOf(config.volumeBoostGain, downmixGainMb))
+        loudnessEnhancerHelper.setEnabled(config.volumeBoostEnabled || downmixGainMb > 0)
 
         if (config.reverbPreset != ReverbPreset.NONE) {
             if (lastAppliedReverbPreset != config.reverbPreset) {
@@ -166,6 +177,7 @@ internal fun requiresAudioPipelineReconfiguration(
 ): Boolean =
     old.channelMixMode != new.channelMixMode ||
         old.channelMixEnabled != new.channelMixEnabled ||
+        old.maxAudioChannels != new.maxAudioChannels ||
         old.audioNormalizationMode != new.audioNormalizationMode ||
         old.audioNormalizationEnabled != new.audioNormalizationEnabled ||
         old.dialogueBoostEnabled != new.dialogueBoostEnabled

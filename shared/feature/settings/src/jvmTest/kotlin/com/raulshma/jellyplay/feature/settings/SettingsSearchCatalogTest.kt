@@ -73,8 +73,31 @@ class SettingsSearchCatalogTest {
         // The home config hub moved its rows off Appearance into the three
         // home groups (same ids) and indexed the previously-unsearchable
         // Discover Rows row (+1): 276.
+        // Added the home display group's "Hidden from Next Up" drill-in
+        // row (the Route.NextUpExcluded management screen): 277.
+        // Added the appearance library group's "Show Missing Episodes"
+        // toggle (season-view missing/unaired placeholders): 278.
+        // Added the advanced-video group's "Offline Playback" picker
+        // (prefer the downloaded copy vs stream while online) and the
+        // playback group's external-player row: 280.
+        // Added the appearance library group's "Prefer Logo Images" toggle
+        // (clear-logo detail title): 281.
+        // Added the screensaver group's policy trio: max parental rating
+        // picker + dim-after picker + dim-percent slider: 284.
+        // Added the playback player group's "Still Watching" pair — mode
+        // picker + episode-threshold picker (both ride the autoplay toggle): 286.
+        // Added the advanced-video group's audio-capability rows: five
+        // per-codec passthrough toggles (riding the master toggle) + the
+        // max-audio-channels picker + the downmix-boost slider: 293.
+        // Added the storage downloads group's auto-download retention
+        // cluster: lookahead / max-per-pass / keep-days / server allow-list
+        // pickers (riding the auto-download toggle) + the "Clean up now"
+        // action (riding the keep-days picker): 298.
+        // Added the desktop-gated Discord Rich Presence toggle (feature 4.2)
+        // and the shell-hook rows: master toggle + five mpv-shim-named
+        // commands (feature 4.3): 305.
         // Bump this count when you deliberately add items.
-        assertEquals(276, items.size)
+        assertEquals(305, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).
@@ -90,8 +113,9 @@ class SettingsSearchCatalogTest {
                 AppearanceNewsletterSearchItems.size +
                 PlaybackSettingsSearchItems.size + PlaybackAdvancedVideoSearchItems.size +
                 MpvEngineSearchItems.size + VlcEngineSearchItems.size +
-                ExoPlayerEngineSearchItems.size + SyncPlaySearchItems.size +
-                CastingSearchItems.size + LiveTvSearchItems.size +
+                ExoPlayerEngineSearchItems.size + ExternalEngineSearchItems.size +
+                SyncPlaySearchItems.size + CastingSearchItems.size +
+                LiveTvSearchItems.size +
                 AudioSettingsSearchItems.size + AudioCacheSearchItems.size +
                 LanguageSettingsSearchItems.size + TrackSelectionSearchItems.size +
                 NotificationSettingsSearchItems.size +

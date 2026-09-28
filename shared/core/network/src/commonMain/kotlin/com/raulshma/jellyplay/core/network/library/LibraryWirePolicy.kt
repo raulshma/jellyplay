@@ -48,7 +48,13 @@ internal fun MediaType.toWireItemKind(): String? = when (this) {
  * (jvmShared: the SDK-typed `toFilteredMediaItems` mapper tail over
  * [filterByParentalRating]).
  */
-internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
+/**
+ * Public (not the module-internal default of this file's other tables) so the
+ * module-external consumers — the TV dream's local rating cap and the settings
+ * screensaver rating picker — resolve ages from this same canonical table
+ * instead of a value-twin copy.
+ */
+public fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
     "G", "TV-Y", "TV-G" -> 0
     "PG", "TV-Y7", "TV-PG" -> 7
     "PG-13", "TV-14" -> 13
@@ -58,10 +64,20 @@ internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase())
 }
 
 /**
+ * The MPAA rating ladder the local rating-cap pickers offer (the settings
+ * screensaver's max-parental-rating rows), ordered strictest-last. Public
+ * beside [parentalRatingAge] for the same reason: the row vocabulary and the
+ * age resolution live together, so a new rating lands in both or neither.
+ */
+public val PARENTAL_RATING_PICKER_LADDER: List<String> =
+    listOf("G", "PG", "PG-13", "R", "NC-17")
+
+/**
  * The client-side parental-rating filter, verbatim semantics: no max rating →
  * unfiltered; an unrated/unknown-rating item passes (`!= false` keeps it).
  */
-internal fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {
+/** Public twin seam of [parentalRatingAge] — see that KDoc for why. */
+public fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {
     val max = maxParentalRating ?: return this
     return mapNotNull { item ->
         if (item.officialRating?.let { rating ->

@@ -54,6 +54,8 @@ class LibraryFiltersActiveTagsTest {
             LibraryFilters(playedStatus = PlayedStatus.PLAYED),
             LibraryFilters(isResumable = true),
             LibraryFilters(isDownloaded = true),
+            LibraryFilters(hasSubtitles = true),
+            LibraryFilters(hasTrailer = true),
         )
 
         cases.forEach { filters ->
@@ -86,6 +88,8 @@ class LibraryFiltersActiveTagsTest {
             playedStatus = PlayedStatus.ALL,
             isResumable = false, // stored "off" — tri-state, not active
             isDownloaded = false,
+            hasSubtitles = false,
+            hasTrailer = false,
         )
 
         assertTrue(quiet.activeTags().isEmpty())
@@ -186,6 +190,8 @@ class LibraryFiltersActiveTagsTest {
             playedStatus = PlayedStatus.UNPLAYED,
             isResumable = true,
             isDownloaded = true,
+            hasSubtitles = true,
+            hasTrailer = true,
         )
 
         assertTrue(populated.hasActiveFilters())

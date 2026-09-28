@@ -13,6 +13,8 @@ import com.raulshma.jellyplay.feature.library.generated.resources.library_apply_
 import com.raulshma.jellyplay.feature.library.generated.resources.library_collapse
 import com.raulshma.jellyplay.feature.library.generated.resources.library_expand
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_downloaded
+import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_has_subtitles
+import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_has_trailer
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filter_resumable
 import com.raulshma.jellyplay.feature.library.generated.resources.library_filters
 import com.raulshma.jellyplay.feature.library.generated.resources.library_genres
@@ -57,6 +59,8 @@ fun LibraryFilterSheet(
             status = stringResource(Res.string.library_status),
             resumable = stringResource(Res.string.library_filter_resumable),
             downloaded = stringResource(Res.string.library_filter_downloaded),
+            hasSubtitles = stringResource(Res.string.library_filter_has_subtitles),
+            hasTrailer = stringResource(Res.string.library_filter_has_trailer),
             genres = stringResource(Res.string.library_genres),
             years = stringResource(Res.string.library_year_range),
             tags = stringResource(Res.string.library_tags),

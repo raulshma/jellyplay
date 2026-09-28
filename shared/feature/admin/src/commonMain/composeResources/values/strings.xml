@@ -404,4 +404,24 @@
     <string name="admin_plugin_config_unavailable">Plugin configuration is not available on this platform.</string>
 
     <string name="admin_no_delete_permission">Your account does not have permission to delete content. Contact your server administrator.</string>
+
+    <!-- Backups (AdminBackupsScreen) -->
+    <string name="admin_backups_title">Backups</string>
+    <string name="admin_backups_create">Create backup</string>
+    <string name="admin_backups_create_title">Create backup</string>
+    <string name="admin_backups_empty">No backups yet</string>
+    <string name="admin_backups_empty_hint">Run a backup to snapshot this server's configuration and data.</string>
+    <string name="admin_backups_unsupported_title">Backups unavailable</string>
+    <string name="admin_backups_unsupported_body">This Jellyfin server does not support backups. A server running Jellyfin 10.11 or newer is required.</string>
+    <string name="admin_backups_component_metadata">Metadata</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">Subtitles</string>
+    <string name="admin_backups_component_database">Database</string>
+    <string name="admin_backups_restore">Restore</string>
+    <string name="admin_backups_restore_confirm_title">Restore backup?</string>
+    <string name="admin_backups_restore_confirm_body">The server restarts immediately and all current data is replaced with the contents of "%1$s". This cannot be undone.</string>
+    <string name="admin_backups_restoring">Restoring — the server is restarting</string>
+    <string name="admin_backups_reconnecting">Server is back — reconnecting…</string>
+    <string name="admin_backups_restore_complete">Restore complete — reconnected to the server.</string>
+    <string name="admin_backups_restore_server_unreachable">The server did not come back after the restore. Verify it is running, then sign in again.</string>
 </resources>

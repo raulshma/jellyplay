@@ -99,12 +99,24 @@
     <string name="settings_category_movies">Movies</string>
     <string name="settings_category_tv">TV</string>
     <string name="settings_category_music">Music</string>
+    <string name="settings_category_photos">Photos</string>
     <string name="settings_slideshow_interval">Slideshow Interval</string>
     <string name="settings_slideshow_interval_subtitle">Time between image changes</string>
     <string name="settings_ken_burns">Ken Burns Effect</string>
     <string name="settings_ken_burns_on">Pan and zoom animation</string>
     <string name="settings_ken_burns_off">Static display</string>
     <string name="settings_transition_style">Transition Style</string>
+    <string name="settings_dream_max_parental_rating">Maximum Parental Rating</string>
+    <string name="settings_dream_max_parental_rating_subtitle">Keep titles above this rating off the screensaver</string>
+    <string name="settings_dream_rating_none">None</string>
+    <string name="settings_dream_dim_after">Dim After</string>
+    <string name="settings_dream_dim_after_subtitle">Fade the screensaver darker after this long</string>
+    <string name="settings_dream_dim_after_off">Off</string>
+    <string name="settings_dream_dim_after_30_seconds">30 seconds</string>
+    <string name="settings_dream_dim_after_1_minute">1 minute</string>
+    <string name="settings_dream_dim_after_5_minutes">5 minutes</string>
+    <string name="settings_dream_dim_percent">Dim Brightness</string>
+    <string name="settings_dream_dim_percent_subtitle">How dark the dimmed screensaver gets</string>
     <string name="settings_experimental">Experimental</string>
     <string name="settings_about">About</string>
     <string name="settings_about_subtitle">App version and licenses</string>
@@ -420,6 +432,8 @@
     <string name="settings_video_player">Video Player</string>
     <string name="settings_player_engine">Player Engine</string>
     <string name="settings_player_engine_subtitle">Choose media playback engine</string>
+    <string name="settings_external_player_app">Preferred External App</string>
+    <string name="settings_external_player_app_subtitle">External player to hand playback to</string>
     <string name="settings_seek_duration">Seek Duration</string>
     <string name="settings_seek_duration_subtitle">Double-tap to seek</string>
     <string name="settings_orientation">Orientation</string>
@@ -439,6 +453,12 @@
     <string name="settings_auto_play_next_off">Manual episode selection</string>
     <string name="settings_auto_play_countdown">Auto-Play Countdown</string>
     <string name="settings_auto_play_countdown_subtitle">Countdown duration before auto-playing next episode</string>
+    <!-- "Still watching?" prompt (feature 1.3): mode + episode threshold, behind the autoplay toggle. -->
+    <string name="settings_still_watching_mode">Still Watching Prompt</string>
+    <string name="settings_still_watching_mode_subtitle">Ask before auto-playing on</string>
+    <string name="settings_still_watching_episodes">Episodes Before Prompt</string>
+    <string name="settings_still_watching_episodes_subtitle">Consecutive auto-played episodes before the confirmation appears</string>
+    <string name="settings_still_watching_episodes_value">%1$d episodes</string>
     <string name="settings_controls_timeout">Controls Timeout</string>
     <string name="settings_controls_timeout_subtitle">Auto-hide player controls</string>
     <string name="settings_streaming_quality_auto_adaptive">Auto (adaptive)</string>
@@ -845,6 +865,28 @@
     <string name="settings_idle_ambient_timeout_subtitle">How long to wait before the idle screen appears</string>
     <string name="settings_idle_ambient_timeout_off">Off</string>
     <string name="settings_idle_ambient_timeout_minutes">%1$d min</string>
+    <string name="settings_discord_presence">Discord Rich Presence</string>
+    <string name="settings_discord_presence_on">Your Discord activity shows what you play</string>
+    <string name="settings_discord_presence_off">Your Discord activity is not updated</string>
+    <string name="settings_discord_presence_enabled">Show Playing Activity</string>
+    <string name="settings_discord_presence_enabled_subtitle">Publish the playing title to Discord as a Watching or Listening activity, with a join button while in a SyncPlay group</string>
+    <string name="settings_hooks">Playback Event Hooks</string>
+    <string name="settings_hooks_on">Custom commands run on playback events</string>
+    <string name="settings_hooks_off">No commands run on playback events</string>
+    <string name="settings_hooks_enabled">Enable Hooks</string>
+    <string name="settings_hooks_enabled_subtitle">Hooks run arbitrary commands you configure on this machine — check each command before saving. Commands run locally only and never round-trip through any server.</string>
+    <string name="settings_hooks_play_cmd">On Play Started</string>
+    <string name="settings_hooks_play_cmd_subtitle">Command for on_play_started</string>
+    <string name="settings_hooks_stop_cmd">On Play Stopped</string>
+    <string name="settings_hooks_stop_cmd_subtitle">Command for on_play_stopped</string>
+    <string name="settings_hooks_ended_cmd">On Media Ended</string>
+    <string name="settings_hooks_ended_cmd_subtitle">Command for on_media_ended</string>
+    <string name="settings_hooks_idle_cmd">On Idle Enter</string>
+    <string name="settings_hooks_idle_cmd_subtitle">Command for on_idle_enter</string>
+    <string name="settings_hooks_idle_ended_cmd">On Idle Exit</string>
+    <string name="settings_hooks_idle_ended_cmd_subtitle">Command for on_idle_exit</string>
+    <string name="settings_hooks_cmd_not_set">Empty = disabled</string>
+    <string name="settings_hooks_placeholder_hint">Placeholders: {title}, {itemId}, {position_ms}. Quoted arguments are kept together. Empty = disabled.</string>
 
     <!-- Brand-only tokens (translatable="false") -->
     <string name="settings_radarr" translatable="false">Radarr</string>
@@ -924,6 +966,22 @@
     <string name="settings_smart_downloads_subtitle">Auto-delete watched episodes (&gt;= 95%)</string>
     <string name="settings_auto_download_new">Auto-Download New Episodes</string>
     <string name="settings_auto_download_new_subtitle">Automatically download next episode of active series</string>
+    <string name="settings_auto_download_lookahead">Download Lookahead</string>
+    <string name="settings_auto_download_lookahead_subtitle">Episodes kept ahead of the newest watched or downloaded one</string>
+    <string name="settings_auto_download_max_per_pass">Max Downloads Per Check</string>
+    <string name="settings_auto_download_max_per_pass_subtitle">Cap on new downloads each pass; 0 is unlimited</string>
+    <string name="settings_auto_download_keep_days">Keep Downloads For</string>
+    <string name="settings_auto_download_keep_days_subtitle">Delete watched downloads older than this; unwatched are never deleted</string>
+    <string name="settings_auto_download_keep_days_value">%1$d days</string>
+    <string name="settings_auto_download_keep_days_year">1 year</string>
+    <string name="settings_auto_download_servers">Allowed Servers</string>
+    <string name="settings_auto_download_servers_subtitle">Auto-download only from these servers; none selected means all</string>
+    <string name="settings_auto_download_all_servers">All servers</string>
+    <string name="settings_auto_download_server_count">%1$d of %2$d servers</string>
+    <string name="settings_auto_download_clean_up_now">Clean Up Downloads Now</string>
+    <string name="settings_auto_download_clean_up_now_subtitle">Run the keep-downloads-for sweep immediately</string>
+    <string name="settings_auto_download_cleaned_up">%1$d downloads removed (%2$s freed)</string>
+    <string name="settings_auto_download_cleaned_up_none">Nothing to clean up</string>
     <string name="settings_download_schedule">Download Schedule</string>
     <string name="settings_download_schedule_subtitle">Only download during specific hours (e.g., overnight)</string>
     <string name="settings_schedule_start">Schedule Start</string>
@@ -941,7 +999,7 @@
 
     <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
     <string name="downloads_auto_delete_after_watch">Auto-delete after watching</string>
-    <string name="downloads_auto_delete_after_watch_subtitle">Remove downloads once fully watched</string>
+    <string name="downloads_auto_delete_after_watch_subtitle">Remove downloads once fully watched (fires immediately on watch; Keep Downloads For never deletes unwatched)</string>
 
     <!-- StorageSettingsScreen.kt: real storage mounts -->
     <string name="storage_internal">Internal storage</string>
@@ -982,6 +1040,8 @@
     <string name="settings_continue_watching_tap_subtitle">What happens when you tap a Continue Watching tile</string>
     <string name="settings_unhide_continue_watching">Unhide All from Continue Watching</string>
     <string name="settings_unhide_continue_watching_subtitle">%1$d hidden item(s)</string>
+    <string name="settings_next_up_hidden">Hidden from Next Up</string>
+    <string name="settings_next_up_hidden_brief">View and restore series removed from the Next Up row</string>
     <string name="settings_merge_continue_next_up">Merge Continue &amp; Next Up</string>
     <string name="settings_merge_continue_next_up_on">Show Next Up inside Continue Watching</string>
     <string name="settings_merge_continue_next_up_off">Separate Continue Watching and Next Up rows</string>
@@ -1031,6 +1091,10 @@
     <string name="settings_confirm_library_reset_subtitle">Show a confirmation dialog before resetting the library to defaults</string>
     <string name="settings_skip_special_episodes">Skip Special Episodes</string>
     <string name="settings_skip_special_episodes_subtitle">Exclude specials/bonus episodes from episode lists</string>
+    <string name="settings_show_missing_episodes">Show Missing Episodes</string>
+    <string name="settings_show_missing_episodes_subtitle">Include missing/unaired episode placeholders in season lists</string>
+    <string name="settings_prefer_logos">Prefer Logo Images</string>
+    <string name="settings_prefer_logos_subtitle">Show the clear-logo artwork as the title on details pages when available</string>
     <string name="settings_haptic_feedback">Haptic Feedback</string>
     <string name="settings_haptic_feedback_subtitle">Enable vibration feedback for UI interactions</string>
     <string name="settings_show_share_media">Show Share Media Option</string>
@@ -1162,6 +1226,15 @@
     <string name="settings_audio_passthrough">Audio Passthrough</string>
     <string name="settings_audio_passthrough_on">Direct audio to receiver</string>
     <string name="settings_audio_passthrough_off">Software audio processing</string>
+    <string name="settings_passthrough_codec_ac3">Dolby Digital (AC3)</string>
+    <string name="settings_passthrough_codec_eac3">Dolby Digital Plus (EAC3)</string>
+    <string name="settings_passthrough_codec_dts">DTS</string>
+    <string name="settings_passthrough_codec_dtshd">DTS-HD</string>
+    <string name="settings_passthrough_codec_truehd">Dolby TrueHD</string>
+    <string name="settings_passthrough_codec_on">Bitstreamed to the receiver</string>
+    <string name="settings_passthrough_codec_off">Software-decoded</string>
+    <string name="settings_max_audio_channels">Max Audio Channels</string>
+    <string name="settings_downmix_boost">Stereo Downmix Boost</string>
     <string name="settings_refresh_rate_match">Refresh Rate Match</string>
     <string name="settings_refresh_rate_matching">Refresh Rate Matching</string>
     <string name="settings_refresh_rate_off">Off</string>
@@ -1171,6 +1244,12 @@
     <string name="settings_refresh_rate_desc_rate">Match frame rate at current resolution</string>
     <string name="settings_refresh_rate_desc_res">Match frame rate and switch resolution</string>
     <string name="settings_streaming_quality">Streaming Quality</string>
+    <string name="settings_offline_playback">Offline Playback</string>
+    <string name="settings_offline_playback_prefer_downloaded">Prefer downloaded</string>
+    <string name="settings_offline_playback_prefer_streaming">Prefer streaming</string>
+    <string name="settings_offline_playback_desc_downloaded">Downloads play offline even when the server is reachable</string>
+    <string name="settings_offline_playback_desc_streaming">Always stream the server copy when online</string>
+    <string name="settings_offline_playback_streaming_caveat">Server quality settings apply only when streaming — a download always direct-plays the stored file</string>
     <string name="settings_live_tv_stream">Live TV Stream</string>
     <string name="settings_live_auto">Auto (server decides)</string>
     <string name="settings_live_direct">Direct Stream (best quality)</string>
@@ -1398,6 +1477,8 @@
     <string name="ss_continue_watching_click_subtitle">Resume playback or open details when tapping a Continue Watching tile</string>
     <string name="ss_unhide_cw_title">Unhide All from Continue Watching</string>
     <string name="ss_unhide_cw_subtitle">Show all hidden items in the Continue Watching row</string>
+    <string name="ss_next_up_hidden_title">Hidden from Next Up</string>
+    <string name="ss_next_up_hidden_subtitle">View and restore series excluded from the Next Up row</string>
     <string name="ss_merge_continue_next_up_title">Merge Continue &amp; Next Up</string>
     <string name="ss_merge_continue_next_up_subtitle">Combine Next Up items into the Continue Watching row</string>
     <string name="ss_next_up_max_days_title">Next Up Time Window</string>
@@ -1418,6 +1499,10 @@
     <string name="ss_hide_episode_thumbnails_subtitle">Hide episode preview images to avoid spoilers</string>
     <string name="ss_skip_specials_title">Skip Special Episodes</string>
     <string name="ss_skip_specials_subtitle">Exclude specials/bonus episodes from episode lists</string>
+    <string name="ss_show_missing_episodes_title">Show Missing Episodes</string>
+    <string name="ss_show_missing_episodes_subtitle">Include missing/unaired episode placeholders in season lists</string>
+    <string name="ss_prefer_logos_title">Prefer Logo Images</string>
+    <string name="ss_prefer_logos_subtitle">Use the clear-logo artwork as the details-page title when the server has one</string>
     <string name="ss_haptics_enabled_title">Haptic Feedback</string>
     <string name="ss_haptics_enabled_subtitle">Enable vibration feedback for UI interactions</string>
     <string name="ss_show_share_media_title">Show Share Media</string>
@@ -1444,6 +1529,8 @@
     <string name="ss_newsletter_delivery_day_subtitle">Day of the week to receive the newsletter</string>
     <string name="ss_player_engine_title">Player Engine</string>
     <string name="ss_player_engine_subtitle">Select default media playback engine: MPV, ExoPlayer, LibVLC</string>
+    <string name="ss_external_player_app_title">Preferred External App</string>
+    <string name="ss_external_player_app_subtitle">Pick which external player app opens playback</string>
     <string name="ss_seek_duration_title">Seek Duration</string>
     <string name="ss_seek_duration_subtitle">Double-tap seek step duration in player</string>
     <string name="ss_orientation_title">Screen Orientation</string>
@@ -1460,6 +1547,10 @@
     <string name="ss_video_autoplay_next_subtitle">Automatically start next episode in sequence</string>
     <string name="ss_autoplay_countdown_title">Auto-Play Countdown</string>
     <string name="ss_autoplay_countdown_subtitle">Countdown duration before auto-playing next episode</string>
+    <string name="ss_still_watching_mode_title">Still Watching Prompt</string>
+    <string name="ss_still_watching_mode_subtitle">Confirm before continuing after several episodes or hours</string>
+    <string name="ss_still_watching_episodes_title">Episodes Before Prompt</string>
+    <string name="ss_still_watching_episodes_subtitle">Consecutive auto-played episodes before the Still Watching prompt appears</string>
     <string name="ss_controls_timeout_title">Controls Timeout</string>
     <string name="ss_controls_timeout_subtitle">Auto-hide on-screen player controls after delay</string>
     <string name="ss_skip_back_on_resume_title">Skip Back on Resume</string>
@@ -1502,10 +1593,14 @@
     <string name="ss_decoder_subtitle">Choose hardware, software, or copy-back decoding</string>
     <string name="ss_audio_passthrough_title">Audio Passthrough</string>
     <string name="ss_audio_passthrough_subtitle">Directly route raw audio format streams to receiver</string>
+    <string name="ss_passthrough_codec_subtitle">Choose which audio codecs may be bitstreamed raw to the receiver (rides the master toggle)</string>
+    <string name="ss_max_audio_channels_subtitle">Cap the output speaker layout — wider sources are downmixed or transcoded</string>
+    <string name="ss_downmix_boost_subtitle">Loudness compensation applied when surround audio is downmixed to stereo (0–12 dB)</string>
     <string name="ss_frame_rate_matching_title">Frame Rate Match</string>
     <string name="ss_frame_rate_matching_subtitle">Synchronize display refresh rate to video frames (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Streaming Quality</string>
     <string name="ss_streaming_quality_subtitle">Set default video quality for streaming: 1080p, 4K, SD, Auto</string>
+    <string name="ss_offline_playback_subtitle">Choose the downloaded copy or the server stream when both are available</string>
     <string name="ss_audio_delay_title">Audio Sync Delay</string>
     <string name="ss_audio_delay_subtitle">Adjust audio sync latency offset (ms)</string>
     <string name="ss_live_stream_option_title">Live TV Stream</string>
@@ -1779,6 +1874,11 @@
     <string name="ss_cellular_streaming_quality_subtitle">Preferred video quality profile when on cellular network</string>
     <string name="ss_auto_download_new_episodes_title">Auto-Download New Episodes</string>
     <string name="ss_auto_download_new_episodes_subtitle">Automatically download next episode of active series</string>
+    <string name="ss_auto_download_lookahead_subtitle">How many unseen episodes to keep ahead of the newest watched or downloaded one</string>
+    <string name="ss_auto_download_max_per_pass_subtitle">Cap on new downloads per check pass; 0 is unlimited</string>
+    <string name="ss_auto_download_keep_days_subtitle">Delete watched downloads older than the window; unwatched are protected</string>
+    <string name="ss_auto_download_servers_subtitle">Restrict auto-download to selected servers</string>
+    <string name="ss_auto_download_clean_up_now_subtitle">Run the keep-downloads-for retention sweep immediately</string>
     <string name="ss_download_schedule_title">Download Schedule</string>
     <string name="ss_download_schedule_subtitle">Only download during specific hours</string>
     <string name="ss_download_schedule_start_title">Download Schedule Start</string>
@@ -1831,10 +1931,20 @@
     <string name="ss_screensaver_ken_burns_subtitle">Pan and zoom animation</string>
     <string name="ss_screensaver_transition_style_title">Transition Style</string>
     <string name="ss_screensaver_transition_style_subtitle">How the screensaver switches between images</string>
+    <string name="ss_screensaver_max_parental_rating_subtitle">Keep titles above this rating off the screensaver</string>
+    <string name="ss_screensaver_dim_after_subtitle">Fade the screensaver darker after this long</string>
+    <string name="ss_screensaver_dim_percent_subtitle">How dark the dimmed screensaver gets</string>
     <string name="ss_idle_ambient_enabled_title">Show When Idle</string>
     <string name="ss_idle_ambient_enabled_subtitle">Display the ambient "Ready to play" screen after a period of inactivity</string>
     <string name="ss_idle_ambient_timeout_title">Idle Timeout</string>
     <string name="ss_idle_ambient_timeout_subtitle">How long to wait before the idle screen appears</string>
+    <string name="ss_discord_presence_enabled_subtitle">Show the playing title as your Discord activity, with a SyncPlay join button</string>
+    <string name="ss_hooks_enabled_subtitle">Run a shell command on playback events (hooks run commands you configure locally)</string>
+    <string name="ss_hooks_play_cmd_subtitle">Command to run when playback starts</string>
+    <string name="ss_hooks_stop_cmd_subtitle">Command to run when playback stops</string>
+    <string name="ss_hooks_ended_cmd_subtitle">Command to run when media finishes playing</string>
+    <string name="ss_hooks_idle_cmd_subtitle">Command to run when the app becomes idle</string>
+    <string name="ss_hooks_idle_ended_cmd_subtitle">Command to run when the app leaves idle</string>
     <string name="ss_home_backdrop_title">Home Backdrop</string>
     <string name="ss_home_backdrop_subtitle">Blur the hero artwork as an ambient background</string>
     <string name="ss_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>

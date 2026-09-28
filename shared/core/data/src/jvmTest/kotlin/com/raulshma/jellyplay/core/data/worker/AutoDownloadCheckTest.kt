@@ -4,9 +4,11 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadCheck.Outcome
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -23,6 +25,8 @@ import kotlin.test.assertEquals
  * Android worker suite maps [Outcome] onto WorkManager results, the desktop
  * suite pins the in-process ladder). The gate-off / happy-path /
  * per-season-intake choreography is double-covered through those adapters.
+ * The retention-policy suites (lookahead window, max-per-pass, allow-list
+ * gating, the leading sweep step) live in [AutoDownloadPolicyTest].
  */
 class AutoDownloadCheckTest {
 
@@ -30,10 +34,16 @@ class AutoDownloadCheckTest {
     private val downloadRepository: DownloadRepository = mockk()
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
+    private val serverIdentityStore: ServerIdentityStore = mockk()
 
     @BeforeTest
     fun setup() {
-        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = true))
+        // The legacy-behavior slice (lookahead 0 = take every missing episode)
+        // — the retention-policy bounds have their own suites.
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
+        )
+        coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
         coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1")
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
@@ -57,6 +67,7 @@ class AutoDownloadCheckTest {
         downloadRepository = downloadRepository,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        serverIdentityStore = serverIdentityStore,
         isStopped = isStopped,
     )
 

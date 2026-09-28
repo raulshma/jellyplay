@@ -40,7 +40,8 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             dialogueBoostStrength == null &&
             rememberedAudioLabel == null &&
             rememberedSubtitleLabel == null &&
-            renderProfile == null
+            renderProfile == null &&
+            preferredMediaSourceId == null
 
     override suspend fun get(scope: PlaybackPrefScope, key: String): ItemPlaybackPreference? =
         dao.getByKey(scope.name, key)?.toDomain()
@@ -276,6 +277,39 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
         )
     }
 
+    override suspend fun setPreferredMediaSource(
+        scope: PlaybackPrefScope,
+        key: String,
+        mediaSourceId: String?,
+    ) {
+        val existing = dao.getByKey(scope.name, key)
+        if (mediaSourceId == null) {
+            // "Forget": clear the version memory; drop the row when nothing
+            // else is remembered on it.
+            val row = existing ?: return
+            val cleared = row.copy(preferredMediaSourceId = null, updatedAt = timeSource.nowEpochMillis())
+            if (cleared.hasNoPreferences()) {
+                dao.deleteByKey(scope.name, key)
+            } else {
+                dao.upsert(cleared)
+            }
+            return
+        }
+        val base = existing ?: ItemPlaybackPreferenceEntity(
+            scope = scope.name,
+            key = key,
+            audioLanguage = null,
+            subtitleLanguage = null,
+            updatedAt = timeSource.nowEpochMillis(),
+        )
+        dao.upsert(
+            base.copy(
+                preferredMediaSourceId = mediaSourceId,
+                updatedAt = timeSource.nowEpochMillis(),
+            )
+        )
+    }
+
     // Parse the persisted enum columns through the repo-wide seam: a corrupt
     // stored value degrades to the documented default instead of throwing out
     // of every read (scope → ITEM, the per-item default; an unknown strength
@@ -307,6 +341,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
                 )
             },
             renderProfile = decodeRenderProfile(renderProfile),
+            preferredMediaSourceId = preferredMediaSourceId,
             updatedAt = updatedAt,
         )
 

@@ -54,6 +54,12 @@ class ItemPlaybackPreferenceWriterTest {
             val key: String,
             val overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?,
         ) : RepoCall
+
+        data class SetPreferredMediaSource(
+            val scope: PlaybackPrefScope,
+            val key: String,
+            val mediaSourceId: String?,
+        ) : RepoCall
     }
 
     private class FakeRepository : ItemPlaybackPreferenceRepository {
@@ -104,6 +110,14 @@ class ItemPlaybackPreferenceWriterTest {
             overrides: com.raulshma.jellyplay.core.model.MpvRenderOverrides?,
         ) {
             calls += RepoCall.SetRenderProfile(scope, key, overrides)
+        }
+
+        override suspend fun setPreferredMediaSource(
+            scope: PlaybackPrefScope,
+            key: String,
+            mediaSourceId: String?,
+        ) {
+            calls += RepoCall.SetPreferredMediaSource(scope, key, mediaSourceId)
         }
 
         override suspend fun delete(scope: PlaybackPrefScope, key: String) = Unit
@@ -352,6 +366,61 @@ class ItemPlaybackPreferenceWriterTest {
     fun setRenderProfile_noKeysAtAll_noops() = testScope.runTest {
         writer.setRenderProfile(com.raulshma.jellyplay.core.model.MpvRenderOverrides())
         writer.clearRenderProfile()
+
+        assertTrue(repository.calls.isEmpty())
+        assertEquals(0, refreshCount)
+    }
+
+    // ─── Preferred version: SERIES-then-ITEM persistence ─────────────
+
+    @Test
+    fun setPreferredMediaSource_savesSeriesScopeWhenSeriesExists() = testScope.runTest {
+        seriesId = "series1"
+        itemId = "item1"
+
+        writer.setPreferredMediaSource("source-4k")
+
+        assertEquals(
+            listOf<RepoCall>(RepoCall.SetPreferredMediaSource(PlaybackPrefScope.SERIES, "series1", "source-4k")),
+            repository.calls,
+        )
+        assertEquals(1, refreshCount)
+    }
+
+    @Test
+    fun setPreferredMediaSource_fallsBackToItemScopeWhenNoSeries() = testScope.runTest {
+        itemId = "item1"
+
+        writer.setPreferredMediaSource("source-4k")
+
+        assertEquals(
+            listOf<RepoCall>(RepoCall.SetPreferredMediaSource(PlaybackPrefScope.ITEM, "item1", "source-4k")),
+            repository.calls,
+        )
+        assertEquals(1, refreshCount)
+    }
+
+    @Test
+    fun clearPreferredMediaSource_clearsBothScopes() = testScope.runTest {
+        seriesId = "series1"
+        itemId = "item1"
+
+        writer.clearPreferredMediaSource()
+
+        assertEquals(
+            listOf<RepoCall>(
+                RepoCall.SetPreferredMediaSource(PlaybackPrefScope.SERIES, "series1", null),
+                RepoCall.SetPreferredMediaSource(PlaybackPrefScope.ITEM, "item1", null),
+            ),
+            repository.calls,
+        )
+        assertEquals(1, refreshCount)
+    }
+
+    @Test
+    fun setPreferredMediaSource_noKeysAtAll_noops() = testScope.runTest {
+        writer.setPreferredMediaSource("source-4k")
+        writer.clearPreferredMediaSource()
 
         assertTrue(repository.calls.isEmpty())
         assertEquals(0, refreshCount)

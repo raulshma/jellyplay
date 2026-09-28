@@ -179,8 +179,24 @@ data class AppearancePreferences(
 @Serializable
 data class PlaybackPreferences(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
+    /** Which third-party app the EXTERNAL arm hands off to (chooser when unset). */
+    val preferredExternalPlayer: ExternalPlayerApp = ExternalPlayerApp.SYSTEM_CHOOSER,
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
+    /**
+     * The per-codec passthrough allow-list under the master
+     * [audioPassthrough] toggle — a codec left out is neither bitstreamed
+     * nor advertised for direct play (the server transcodes it to an
+     * allowed codec instead).
+     */
+    val audioPassthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
+    /** The speaker-layout cap applied by every engine (`AUTO` = uncapped). */
+    val maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
+    /**
+     * Stereo-downmix loudness compensation in dB (0–12); 0 = off. Feeds the
+     * loudness-enhancer gain on engines that expose one.
+     */
+    val downmixBoostDb: Float = 0f,
     val frameRateMatching: Boolean = false,
     /**
      * Granular refresh-rate / resolution switching mode. Supersedes
@@ -199,6 +215,13 @@ data class PlaybackPreferences(
     val videoAutoplayNext: Boolean = true,
     val trailerAutoplay: Boolean = true,
     val cinemaModeEnabled: Boolean = false,
+    /**
+     * "Still watching?" confirm prompt: which trigger arms are on
+     * (see [StillWatchingMode]). The rows ride the autoplay toggle.
+     */
+    val stillWatchingMode: StillWatchingMode = StillWatchingMode.OFF,
+    /** The episode arm's threshold — consecutive auto-played episodes; 0 = off. */
+    val stillWatchingEpisodeThreshold: Int = 0,
     val videoSwipeSeekMaxMs: Long = 120_000L,
     val videoRememberBrightness: Boolean = true,
     val videoBrightnessLevel: Float = 0.5f,
@@ -228,6 +251,8 @@ data class PlaybackPreferences(
     val tvZoomModePercent: Float = 0f,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
+    /** Which copy plays when a download and a reachable server both exist. */
+    val offlinePlaybackPreference: OfflinePlaybackPreference = OfflinePlaybackPreference.PREFER_DOWNLOADED,
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
     val exoPlayerConfig: ExoPlayerEngineConfig = ExoPlayerEngineConfig(),
@@ -305,6 +330,10 @@ data class StoragePreferences(
     val downloadQuality: DownloadQuality = DownloadQuality.ORIGINAL,
     val smartDownloadsEnabled: Boolean = false,
     val autoDownloadNewEpisodes: Boolean = false,
+    val autoDownloadLookahead: Int = 3,
+    val autoDownloadMaxPerPass: Int = 0,
+    val autoDownloadKeepDays: Int = 0,
+    val autoDownloadServers: Set<String> = emptySet(),
     val maxDownloadStorageGb: Int = 0,
     val downloadStorageLocation: String = "INTERNAL",
     val autoDeleteAfterWatch: Boolean = false,
@@ -420,6 +449,10 @@ data class AppearanceScreenPreferences(
     val hideEpisodeThumbnails: Boolean = false,
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
+    /** Whether virtual (missing/unaired) episodes appear in season views. */
+    val showMissingEpisodes: Boolean = false,
+    /** Render the server clear-logo as the detail-screen title instead of text. */
+    val preferLogos: Boolean = false,
     /** Whether the library "Reset" pill shows a confirmation dialog before clearing. */
     val confirmLibraryReset: Boolean = true,
     val showExternalRatings: Boolean = true,
@@ -467,6 +500,8 @@ data class HomeScreenPreferences(
     val hideTopHeaderOnScroll: Boolean = false,
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
     val hiddenCwItemIds: Set<String> = emptySet(),
+    /** The series excluded from the home Next Up row (the hidden-list management screen's count). */
+    val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,

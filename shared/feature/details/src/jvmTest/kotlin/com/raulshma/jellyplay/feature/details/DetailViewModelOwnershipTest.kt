@@ -33,6 +33,15 @@ import kotlin.test.assertTrue
  * carried: the net surface across VM + snapshot did not grow, it moved to
  * the layer that owns it. This is a member RELOCATION, not accretion; the
  * ceiling stays 24 unless another relocation removes it.
+ * 2026-09-28, ceiling 24 → 25 (documented, one-time): the "prefer logos"
+ * display mode added one read-side query, `getLogoUrl(itemId)` — the
+ * clear-logo URL getter for the detail title block, the exact query shape of
+ * its [DetailViewModel.getImageUrl]/getBackdropUrl/getChapterImageUrl
+ * siblings (a one-line delegate to the ImageUrlProvider seam; the screen
+ * remembers it into `ArtworkCallbacks` and the body consumes it). Not an
+ * intent and not behaviour: a read-side URL getter cannot fold into
+ * [DetailUiEvent]. This admits exactly one member; never raise it again
+ * without a relocation or deletion to offset it.
  * Before the fold
  * the VM exposed ~48 members: the same read/helper/funnel surfaces minus
  * onEvent, plus 27 public command funs (loadItem, forceRefresh,
@@ -53,7 +62,7 @@ import kotlin.test.assertTrue
 class DetailViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 24
+    private val maxPublicInternalMembers = 25
 
     /**
      * A class-body declaration line at the ViewModel's single level of

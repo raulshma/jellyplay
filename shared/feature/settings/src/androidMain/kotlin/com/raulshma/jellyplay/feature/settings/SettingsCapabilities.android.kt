@@ -16,4 +16,6 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsMpvRenderProfiles = false,
     supportsVolumeMemory = false,
     supportsIdleAmbientScreen = false,
+    supportsDiscordPresence = false,
+    supportsShellHooks = false,
 )

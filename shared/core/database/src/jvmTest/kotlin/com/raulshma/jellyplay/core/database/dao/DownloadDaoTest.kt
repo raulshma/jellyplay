@@ -154,6 +154,46 @@ class DownloadDaoTest {
         assertEquals(800L, total)
     }
 
+    // ── Keep-days retention queries (completedAt) ─────────────────────
+
+    @Test
+    fun `getCompletedOlderThan returns only completed rows completed before the cutoff`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "old", status = "COMPLETED", createdAt = 1_000L).copy(completedAt = 1_500L))
+        downloadDao.insertDownload(createDownload(id = "recent", status = "COMPLETED", createdAt = 2_000L).copy(completedAt = 2_500L))
+        // In-flight rows never age: not COMPLETED, or completedAt unset (0).
+        downloadDao.insertDownload(createDownload(id = "in-flight", status = "DOWNLOADING", createdAt = 100L).copy(completedAt = 0L))
+        downloadDao.insertDownload(createDownload(id = "no-stamp", status = "COMPLETED", createdAt = 50L).copy(completedAt = 0L))
+
+        val older = downloadDao.getCompletedOlderThan(cutoffMs = 2_000L)
+
+        assertEquals(listOf("old"), older.map { it.id })
+    }
+
+    @Test
+    fun `getTotalBytesFor sums totalSizeBytes over exactly the given ids`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", totalSizeBytes = 1_000L))
+        downloadDao.insertDownload(createDownload(id = "dl-2", totalSizeBytes = 2_000L))
+        downloadDao.insertDownload(createDownload(id = "dl-3", totalSizeBytes = 4_000L))
+
+        assertEquals(3_000L, downloadDao.getTotalBytesFor(listOf("dl-1", "dl-2")))
+        // An id outside the table contributes nothing.
+        assertEquals(0L, downloadDao.getTotalBytesFor(listOf("missing")))
+    }
+
+    @Test
+    fun `markCompleted writes status bytes and completedAt in one statement`() = runTest {
+        downloadDao.insertDownload(createDownload(id = "dl-1", status = "DOWNLOADING", downloadedBytes = 100L, totalSizeBytes = 900L))
+
+        downloadDao.markCompleted(id = "dl-1", bytes = 900L, completedAt = 1_234_567_890L)
+
+        val row = downloadDao.getDownloadById("dl-1")
+        assertNotNull(row)
+        assertEquals("COMPLETED", row!!.status)
+        assertEquals(900L, row.downloadedBytes)
+        assertEquals(1_234_567_890L, row.completedAt)
+        assertEquals(0L, row.speedBytesPerSec)
+    }
+
     @Test
     fun `getDownloadsForSeries returns series downloads`() = runTest {
         downloadDao.insertDownload(createDownload(id = "dl-1", seriesId = "series-1"))

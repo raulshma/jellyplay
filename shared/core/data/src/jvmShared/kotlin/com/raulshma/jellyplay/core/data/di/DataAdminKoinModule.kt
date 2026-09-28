@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.repository.AdminBackupRepository
+import com.raulshma.jellyplay.core.data.repository.AdminBackupRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsLabelProvider
@@ -45,6 +47,15 @@ internal val dataAdminModule: Module = module {
         )
     }
     single<AdminRepository> { get<AdminRepositoryImpl>() }
+    // Admin facade split (the [PluginAdminRepository] pattern): the backups
+    // screen's narrow collaborator over AdminApiClient's raw-path backup
+    // calls — the AdminRepository surface ratchet forbids growing the union.
+    single {
+        AdminBackupRepositoryImpl(
+            adminApiClient = get(),
+        )
+    }
+    single<AdminBackupRepository> { get<AdminBackupRepositoryImpl>() }
     // Admin facade split (the LiveTvRepositoryImpl pattern): the plugin
     // family's own single over the PluginApiClient family client, with the
     // WebView bridge session read through narrow seams — the engine's

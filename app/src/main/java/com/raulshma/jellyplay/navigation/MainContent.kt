@@ -65,6 +65,8 @@ import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerHost
+import com.raulshma.jellyplay.navigation.playbackhost.resolveExternalPlayerComponent
+import com.raulshma.jellyplay.navigation.playbackhost.toExtrasMap
 import com.raulshma.jellyplay.shell.ShellInfra
 
 @Composable
@@ -116,9 +118,13 @@ internal fun MainContent(
     // bus rides a rememberUpdatedState wrapper so the remembered host always
     // posts to the composition's current bus.
     val currentMessageBus by rememberUpdatedState(userMessageBus)
+    // The preferred-app targeting resolution: the production packageManager
+    // probe (null when the chosen app is uninstalled → chooser fallback).
+    // Context is the composition's activity — stable for the host's lifetime.
     val externalPlayerHost = remember {
         ExternalPlayerHost(
             buildLaunch = model::buildExternalPlayerLaunch,
+            resolveComponent = { app -> resolveExternalPlayerComponent(context.packageManager, app) },
             reportStart = model::reportExternalPlaybackStart,
             reportStopped = model::reportExternalPlaybackStopped,
             notifyNoPlayerFound = {
@@ -134,8 +140,7 @@ internal fun MainContent(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result: ActivityResult ->
         externalPlayerHost.onResult(
-            position = result.data?.extras?.get("position"),
-            positionMs = result.data?.extras?.get("positionMs"),
+            extras = result.data?.extras?.toExtrasMap() ?: emptyMap(),
         )
     }
 

@@ -40,6 +40,24 @@ internal fun arrApiKeyHeaders(apiKey: String): List<Pair<String, String>> =
     listOf("X-Api-Key" to apiKey)
 
 /**
+ * The `GET /release` cache miss: the *arr services cache their interactive
+ * search decisions for ~30 minutes, and when a release lookup arrives with
+ * nothing cached (the server restarted, the TTL expired, or the item's
+ * search command never ran) the endpoint answers 404 "cached release results
+ * are not available — try searching again". Surfaced as THIS type — not the
+ * raw HTTP failure — so the release sheet can offer a "Search again" action
+ * instead of a dead end.
+ */
+class ArrReleaseCacheMiss(
+    /** The service that answered ("Radarr" / "Sonarr"), for UI copy. */
+    val serviceName: String,
+    cause: Throwable,
+) : Exception(
+    "The cached release results on $serviceName expired. Search again to refresh them.",
+    cause,
+)
+
+/**
  * The `withDeleteOptions` query pairs both *arr impls attach to
  * `DELETE /queue/{id}` and `DELETE /queue/bulk`
  * (`removeFromClient` / `blocklist` / `skipRedownload`, in that order,

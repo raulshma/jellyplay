@@ -23,7 +23,11 @@ import kotlin.test.assertTrue
  * the SettingsProjector / PlayerPrefsFanout / MediaContentProjector seam
  * shape — with the VM left a thin caller that owns the uiState writes.
  *
- * Baseline: 35 members (104 before the VideoPlayerUiEvent intent fold: the
+ * Baseline: 36 members — 35 after the VideoPlayerUiEvent intent fold, +1 for
+ * `stillWatchingPrompt` (the "Still watching?" overlay's state surface, the
+ * one state flow feature 1.3 adds; the prompt's logic itself lives in
+ * StillWatchingGate / StillWatchingPromptState / the session event). 104
+ * before the VideoPlayerUiEvent intent fold: the
  * same flows/getters/slices plus ~60 per-action command funs the funnel
  * replaced and 13 dead ones deleted outright — `loadActiveSubtitleCues` /
  * `setPreviewSheetVisible` / `clearActiveSubtitleCues` / `subtitlePreviewState`
@@ -40,7 +44,7 @@ import kotlin.test.assertTrue
 class VideoPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 35
+    private val maxPublicInternalMembers = 36
 
     /**
      * A class-body declaration line at the ViewModel's single level of

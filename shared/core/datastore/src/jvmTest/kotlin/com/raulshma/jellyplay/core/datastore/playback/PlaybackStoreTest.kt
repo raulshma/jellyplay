@@ -8,8 +8,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.LiveStreamOption
+import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
+import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
@@ -83,6 +86,7 @@ class PlaybackStoreTest {
         assertFalse(slice.frameRateMatching)
         assertFalse(slice.audioPassthrough)
         assertTrue(slice.keepScreenOnDuringVideo)
+        assertEquals(OfflinePlaybackPreference.PREFER_DOWNLOADED, slice.offlinePlaybackPreference)
     }
 
     @Test
@@ -149,16 +153,72 @@ class PlaybackStoreTest {
     }
 
     @Test
+    fun `setOfflinePlaybackPreference round-trips`() = runTest {
+        store.setOfflinePlaybackPreference(OfflinePlaybackPreference.PREFER_STREAMING)
+        assertEquals(OfflinePlaybackPreference.PREFER_STREAMING, settledSlice().offlinePlaybackPreference)
+    }
+
+    @Test
+    fun `legacy passthrough boolean with no codec key reads all codecs enabled`() = runTest {
+        // The pre-codec-set surface: `audio_passthrough = true` bitstreamed the
+        // full historical codec list, so the absent codec key migrates to all
+        // codecs on — flipping the master toggle keeps the old behaviour.
+        dataStore.edit { it[booleanPreferencesKey("audio_passthrough")] = true }
+        val slice = settledSlice()
+        assertTrue(slice.audioPassthrough)
+        assertEquals(AudioPassthroughCodec.ALL, slice.audioPassthroughCodecs)
+    }
+
+    @Test
+    fun `a written codec set wins over the legacy all-codecs migration`() = runTest {
+        dataStore.edit { it[booleanPreferencesKey("audio_passthrough")] = true }
+        store.setAudioPassthroughCodecs(setOf(AudioPassthroughCodec.AC3))
+        assertEquals(setOf(AudioPassthroughCodec.AC3), settledSlice().audioPassthroughCodecs)
+    }
+
+    @Test
+    fun `setAudioPassthroughCodecs round-trips including the explicit empty set`() = runTest {
+        store.setAudioPassthroughCodecs(emptySet())
+        assertEquals(emptySet(), settledSlice().audioPassthroughCodecs)
+        store.setAudioPassthroughCodecs(setOf(AudioPassthroughCodec.TRUEHD, AudioPassthroughCodec.DTS_HD))
+        assertEquals(
+            setOf(AudioPassthroughCodec.TRUEHD, AudioPassthroughCodec.DTS_HD),
+            settledSlice().audioPassthroughCodecs,
+        )
+    }
+
+    @Test
+    fun `corrupt codec json falls back to all codecs`() = runTest {
+        dataStore.edit { it[stringPreferencesKey("audio_passthrough_codecs")] = "nonsense" }
+        assertEquals(AudioPassthroughCodec.ALL, settledSlice().audioPassthroughCodecs)
+    }
+
+    @Test
+    fun `setMaxAudioChannels and setDownmixBoostDb round-trip with clamping`() = runTest {
+        store.setMaxAudioChannels(MaxAudioChannelsEnum.FIVE_POINT_ONE)
+        store.setDownmixBoostDb(6f)
+        val slice = settledSlice()
+        assertEquals(MaxAudioChannelsEnum.FIVE_POINT_ONE, slice.maxAudioChannels)
+        assertEquals(6f, slice.downmixBoostDb)
+        store.setDownmixBoostDb(99f)
+        assertEquals(12f, settledSlice().downmixBoostDb)
+        store.setDownmixBoostDb(-3f)
+        assertEquals(0f, settledSlice().downmixBoostDb)
+    }
+
+    @Test
     fun `corrupt enum values fall back to defaults, siblings keep real values`() = runTest {
         store.setKeepScreenOnDuringVideo(false)
         dataStore.edit {
             it[stringPreferencesKey("streaming_quality")] = "nonsense"
             // Legacy lowercase casing matches no enum name either.
             it[stringPreferencesKey("decoder_mode")] = "hw_preferred"
+            it[stringPreferencesKey("offline_playback_preference")] = "nonsense"
         }
         val slice = settledSlice()
         assertEquals(StreamingQuality.AUTO, slice.streamingQuality)
         assertEquals(DecoderMode.HW_PREFERRED, slice.decoderMode)
+        assertEquals(OfflinePlaybackPreference.PREFER_DOWNLOADED, slice.offlinePlaybackPreference)
         assertEquals(false, slice.keepScreenOnDuringVideo)
     }
 
@@ -181,8 +241,12 @@ class PlaybackStoreTest {
             cellularStreamingQuality = StreamingQuality.LOW_360P,
             playbackMode = PlaybackMode.FORCE_DIRECT_PLAY,
             liveStreamOption = LiveStreamOption.TRANSCODE,
+            offlinePlaybackPreference = OfflinePlaybackPreference.PREFER_STREAMING,
             decoderMode = DecoderMode.SW_ONLY,
             audioPassthrough = true,
+            audioPassthroughCodecs = setOf(AudioPassthroughCodec.AC3, AudioPassthroughCodec.DTS),
+            maxAudioChannels = MaxAudioChannelsEnum.SEVEN_POINT_ONE,
+            downmixBoostDb = 7.5f,
             frameRateMatching = true,
             refreshRateMode = RefreshRateMode.FRAME_RATE_AND_RESOLUTION,
             keepScreenOnDuringVideo = false,

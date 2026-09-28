@@ -45,6 +45,13 @@ internal data class DetailContentState(
     val persistedSeasonId: String? = null,
     val selectedSubtitleIndex: Int?,
     val selectedAudioIndex: Int?,
+    /**
+     * The version (media-source id) the user picked in the detail screen's
+     * version picker for this item; null = the server's default (first)
+     * source. Pure UI selection — the Play dispatch carries it through
+     * `onPlayClick`'s existing id argument, nothing is persisted here.
+     */
+    val selectedVersionId: String? = null,
     val isDownloading: Boolean,
     val isDownloadingSeries: Boolean,
     val activeDownload: DownloadItem?,
@@ -121,6 +128,8 @@ internal data class ArtworkCallbacks(
     val getBackdropUrl: (String) -> String = { "" },
     /** Resolves a chapter thumbnail URL (imageType = Chapter) by list index + tag. */
     val getChapterImageUrl: (itemId: String, imageIndex: Int, tag: String?) -> String = { _, _, _ -> "" },
+    /** Resolves the clear-logo URL (imageType = Logo) for the "prefer logos" title. */
+    val getLogoUrl: (String) -> String = { "" },
 )
 
 /**
@@ -162,6 +171,8 @@ internal data class PlaybackCallbacks(
      * (fire-and-forget VM action; success navigates via DetailMessage).
      */
     val onStartWatchParty: () -> Unit = {},
+    /** Open the version picker sheet (multi-version items only). */
+    val onOpenVersionPicker: () -> Unit = {},
 )
 
 /**
@@ -288,6 +299,10 @@ internal data class MetadataCallbacks(
     val onRefreshMetadata: () -> Unit = {},
     /** Open the "Identify" provider re-match sheet for the current item. */
     val onIdentify: () -> Unit = {},
+    /** Open the "Merge versions…" multi-select sheet (admin, movies). */
+    val onOpenMergeVersions: () -> Unit = {},
+    /** Split the current item's merged versions apart (admin, movies). */
+    val onSplitVersions: () -> Unit = {},
 )
 
 /**

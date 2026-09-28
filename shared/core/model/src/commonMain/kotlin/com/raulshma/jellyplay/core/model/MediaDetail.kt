@@ -87,11 +87,28 @@ data class PersonInfo(
     fun hasPortrait(): Boolean = !primaryImageTag.isNullOrBlank()
 }
 
+/**
+ * The server's media-source classification (wire `MediaSourceType`).
+ * [DEFAULT] is a playable file; [GROUPING] is the synthetic wrapper Jellyfin
+ * puts on version-merged items; [PLACEHOLDER] is a not-yet-probed stub. Used
+ * by the version pickers so a grouping entry can be labeled instead of
+ * silently blending in with real files.
+ */
+@Immutable
+@Serializable
+enum class MediaSourceType {
+    DEFAULT,
+    GROUPING,
+    PLACEHOLDER,
+}
+
 @Immutable
 @Serializable
 data class MediaSource(
     val id: String,
     val name: String,
+    /** Server classification of this source (Default/Grouping/Placeholder). */
+    val type: MediaSourceType = MediaSourceType.DEFAULT,
     val container: String? = null,
     val size: Long? = null,
     val bitrate: Long? = null,
@@ -110,7 +127,42 @@ data class MediaSource(
     val path: String? = null,
     val mediaStreams: List<MediaStream> = emptyList(),
     val trickplayInfo: TrickplayInfo? = null,
-)
+) {
+    /** First video stream of this source, or null when it has none. */
+    val videoStream: MediaStream?
+        get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
+
+    /**
+     * Compact quality label ("4K HDR10" / "HD SDR" / "SDR"-style) for this
+     * source's video stream, or null when the source has no video stream.
+     * Single owner of the 4K/HD/SD bucket + range formatting shared by the
+     * detail-screen badges (`mediaQualityLabel` in feature/details delegates
+     * here) and the version pickers.
+     */
+    fun qualityLabel(): String? = videoStream?.let { mediaQualityLabel(it) }
+
+    /**
+     * Display label for a version picker row: the server-assigned version
+     * name when present, else the derived quality label, else the container,
+     * else the source id (stable last resort). Pure → directly unit-testable.
+     */
+    fun versionLabel(): String =
+        name.takeIf { it.isNotBlank() }
+            ?: qualityLabel()
+            ?: container?.takeIf { it.isNotBlank() }
+            ?: id
+}
+
+/**
+ * The preferred version's source when [preferredId] still exists among the
+ * detail's sources, else the server's default (first) source, else null —
+ * the single owner of the "preferred id validated, else first" fold the
+ * detail screen's play button and the player's preferred-version memory
+ * each inlined.
+ */
+fun MediaDetail.preferredMediaSource(preferredId: String?): MediaSource? =
+    preferredId?.let { id -> mediaSources.firstOrNull { it.id == id } }
+        ?: mediaSources.firstOrNull()
 
 @Immutable
 @Serializable
@@ -149,6 +201,15 @@ data class MediaStream(
      */
     val isBundleableSubtitle: Boolean
         get() = type == StreamType.SUBTITLE && (isExternal || !deliveryUrl.isNullOrBlank())
+
+    /**
+     * Fallback display name for handing a stream to a player: server display
+     * title, else stream title, else language, else "Unknown". The single
+     * owner of the fold the external-player hand-off (app MainViewModel) and
+     * the in-app side-load builder (PlayerSessionManager) each inlined.
+     */
+    val displayName: String
+        get() = displayTitle ?: title ?: language ?: "Unknown"
 }
 
 @Immutable
@@ -158,6 +219,32 @@ enum class StreamType {
     AUDIO,
     SUBTITLE,
     EMBEDDED_IMAGE,
+}
+
+/**
+ * Compact quality label ("<bucket> <RANGE>") for a video stream — the
+ * 4K/HD/SD bucket from height plus the HDR/SDR/Dolby Vision suffix
+ * ("4K HDR10", "HD SDR", "Auto SDR" when the stream carries no height).
+ * Pure → directly unit-testable. The single owner of this formatting:
+ * [MediaSource.qualityLabel] derives from it and the detail-screen badge
+ * helper (feature/details `mediaQualityLabel`) delegates to it, so the
+ * badges and the version pickers can never drift apart.
+ */
+fun mediaQualityLabel(video: MediaStream?): String = buildString {
+    val bucket = video?.height?.let { h ->
+        when {
+            h >= 2160 -> "4K"
+            h >= 720 -> "HD"
+            else -> "SD"
+        }
+    } ?: "Auto"
+    append(bucket)
+    append(" ")
+    val range = video?.videoDoViTitle
+        ?: video?.videoRangeType
+        ?: video?.videoRange
+        ?: "SDR"
+    append(range.uppercase())
 }
 
 @Immutable

@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -80,5 +81,37 @@ class ScreensaverStoreTest {
     fun `setDreamShowTitle round-trips`() = runTest {
         store.setDreamShowTitle(false)
         assertFalse(store.screensaver.first().dreamShowTitle)
+    }
+
+    @Test
+    fun `policy keys default to no cap and no dim`() = runTest {
+        val slice = store.screensaver.first()
+        assertNull(slice.dreamMaxParentalRating)
+        assertEquals(0L, slice.dreamDimAfterMs)
+        assertEquals(50, slice.dreamDimPercent)
+    }
+
+    @Test
+    fun `setDreamMaxParentalRating round-trips and keeps the G cap distinct from off`() = runTest {
+        store.setDreamMaxParentalRating(13)
+        assertEquals(13, store.screensaver.first().dreamMaxParentalRating)
+        // G's canonical age is 0 — the stored +1 encoding must read it back
+        // as a real cap, not fold it into the off sentinel.
+        store.setDreamMaxParentalRating(0)
+        assertEquals(0, store.screensaver.first().dreamMaxParentalRating)
+        store.setDreamMaxParentalRating(null)
+        assertNull(store.screensaver.first().dreamMaxParentalRating)
+    }
+
+    @Test
+    fun `setDreamDimAfterMs and setDreamDimPercent round-trip with coercion`() = runTest {
+        store.setDreamDimAfterMs(300_000L)
+        assertEquals(300_000L, store.screensaver.first().dreamDimAfterMs)
+        store.setDreamDimAfterMs(-5L)
+        assertEquals(0L, store.screensaver.first().dreamDimAfterMs)
+        store.setDreamDimPercent(95)
+        assertEquals(95, store.screensaver.first().dreamDimPercent)
+        store.setDreamDimPercent(120)
+        assertEquals(95, store.screensaver.first().dreamDimPercent)
     }
 }

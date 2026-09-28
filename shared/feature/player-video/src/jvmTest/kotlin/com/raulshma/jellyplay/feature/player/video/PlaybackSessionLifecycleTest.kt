@@ -147,6 +147,7 @@ class PlaybackSessionLifecycleTest {
 
         session = PlaybackSession(
             scope = sessionScope,
+            upgradesPassOutToOverlay = { false },
             releaseScope = releaseScope,
             playerSessionManager = playerSessionManager,
             progressReporter = progressReporter,

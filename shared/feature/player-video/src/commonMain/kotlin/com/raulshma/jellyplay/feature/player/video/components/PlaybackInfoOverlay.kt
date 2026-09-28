@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_container
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_decoder_mode
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_dialogue_boost_label
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_downloaded_badge
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_frame_rate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_media_source
@@ -71,6 +72,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_range
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_resolution
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_size
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_source_label
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_speed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitle_delay
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_track_n
@@ -121,6 +123,9 @@ fun PlaybackInfoOverlay(
     mediaSource: MediaSource?,
     mediaStreams: List<MediaStream>,
     playMethod: String,
+    /** True when the session plays a stored download — pins the
+     *  "Source: Downloaded" row beside the play-method row. */
+    isOfflineSource: Boolean = false,
     isConnectionMetered: Boolean = false,
     hdrType: String? = null,
     playerType: String = "Unknown",
@@ -172,6 +177,9 @@ fun PlaybackInfoOverlay(
                     InfoRow(stringResource(Res.string.player_video_size), source.size?.let { formatFileSize(it) } ?: stringResource(Res.string.player_video_unknown))
                     InfoRow(stringResource(Res.string.player_video_bitrate), source.bitrate?.let { "${it / 1000} kbps" } ?: stringResource(Res.string.player_video_unknown))
                     InfoRow(stringResource(Res.string.player_video_play_method), playMethod)
+                    if (isOfflineSource) {
+                        InfoRow(stringResource(Res.string.player_video_source_label), stringResource(Res.string.player_video_downloaded_badge))
+                    }
                     InfoRow(
                         stringResource(Res.string.player_video_connection),
                         if (isConnectionMetered) stringResource(Res.string.player_video_metered) else stringResource(Res.string.player_video_unmetered),

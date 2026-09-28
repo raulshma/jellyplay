@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
+import com.raulshma.jellyplay.desktop.discord.DiscordPresenceService
+import com.raulshma.jellyplay.desktop.hooks.DesktopHookRunner
 import com.raulshma.jellyplay.desktop.player.Anime4KShaderInstaller
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +90,18 @@ internal fun launchDesktopStartup(
             // shader-dir provider resolves null and packs are simply absent.
             runCatchingRethrowingCancellation {
                 koinApp.koin.get<Anime4KShaderInstaller>().ensureInstalled()
+            }
+
+            // Desktop shell integrations (features 4.2 + 4.3): the Discord
+            // Rich Presence stack and the playback-event shell hooks.
+            // Idempotent start()s on the app scope; each stays inert while
+            // its settings toggle is off, and a missing Discord client is
+            // just a backed-off retry loop — never fatal.
+            runCatchingRethrowingCancellation {
+                koinApp.koin.get<DiscordPresenceService>().start()
+            }
+            runCatchingRethrowingCancellation {
+                koinApp.koin.get<DesktopHookRunner>().start()
             }
         }
 

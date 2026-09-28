@@ -55,6 +55,8 @@ import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Star
+import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
@@ -204,6 +206,74 @@ private fun TagChip(
     }
 }
 
+/**
+ * The "prefer logos" detail title: the item's server clear-logo rendered at the
+ * cinematic 2.39:1 ratio with the text title kept as the accessibility label
+ * AND as the automatic fallback — the text shows while the logo loads and
+ * permanently on a Coil error, so a missing/broken logo never blanks the title
+ * block. The text title is never rendered alongside a successfully loaded logo.
+ */
+@Composable
+private fun DetailLogoTitle(
+    title: String,
+    logoUrl: String,
+    modifier: Modifier = Modifier,
+) {
+    var logoLoaded by remember(logoUrl) { mutableStateOf(false) }
+    var logoFailed by remember(logoUrl) { mutableStateOf(false) }
+    Box(
+        modifier = modifier
+            .fillMaxWidth(LOGO_TITLE_WIDTH_FRACTION)
+            .aspectRatio(LOGO_TITLE_ASPECT_RATIO)
+            .semantics { heading() },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (!logoLoaded) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        if (!logoFailed) {
+            AsyncImage(
+                model = logoUrl,
+                // The text title is the logo's accessibility label; suppressed
+                // while the text is on screen so it is never announced twice.
+                contentDescription = if (logoLoaded) title else null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+                onState = { state ->
+                    when (state) {
+                        is AsyncImagePainter.State.Success -> logoLoaded = true
+                        is AsyncImagePainter.State.Error -> logoFailed = true
+                        else -> Unit
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** Width of the logo title as a fraction of the detail body width. */
+private const val LOGO_TITLE_WIDTH_FRACTION = 0.5f
+
+/** Cinematic clear-logo aspect (the ratio Jellyfin documents for Logo art). */
+private const val LOGO_TITLE_ASPECT_RATIO = 2.39f
+
+/**
+ * The pure decision behind the detail title block: the logo renders only when
+ * the user opted into "prefer logos" AND the server carries a clear-logo
+ * (non-null tag) AND a URL resolved for it. Every miss — and specifically a
+ * missing logo tag — returns false, so the plain text-title path is byte-for-
+ * byte the one that existed before the feature. Pure → directly unit-testable
+ * (the [MissingEpisodeBadge] pattern).
+ */
+internal fun preferLogoTitleEnabled(preferLogos: Boolean, logoTag: String?, logoUrl: String): Boolean =
+    preferLogos && logoTag != null && logoUrl.isNotBlank()
+
 @Composable
 internal fun DetailContentBody(
     state: DetailContentState,
@@ -332,14 +402,25 @@ internal fun DetailContentBody(
                 }
 
                 FadingItem {
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.semantics { heading() },
-                    )
+                    val logoTag = detail.logoImageTag
+                    val logoUrl = remember(item.id, logoTag) {
+                        if (logoTag != null) callbacks.artwork.getLogoUrl(item.id) else ""
+                    }
+                    if (preferLogoTitleEnabled(state.preferences.preferLogos, logoTag, logoUrl)) {
+                        DetailLogoTitle(
+                            title = item.name,
+                            logoUrl = logoUrl,
+                        )
+                    } else {
+                        Text(
+                            text = item.name,
+                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    }
                 }
 
                 item.originalTitle

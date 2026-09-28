@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
+import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
@@ -208,20 +209,21 @@ class HomeDiscoveryStore constructor(
     }
 
     // ------------------------------------------------------------------
-    // Per-user key namespacing: u_<userId>::<canonical>
+    // Per-user key namespacing: u_<userId>::<canonical>. The grammar itself
+    // (name build + recognition) is [UserNamespacedKeys]' — the one shared
+    // implementation (DownloadsStore's allow-list key namespaces through it
+    // too); these are just this store's local spellings for its many call
+    // sites.
     // ------------------------------------------------------------------
 
-    /** Namespaced key name for [userId]: `u_<userId>::<canonical>`. */
-    private fun namespaced(userId: String, canonical: String): String = "u_$userId::$canonical"
-
     private fun userStringKey(userId: String, canonical: Preferences.Key<String>): Preferences.Key<String> =
-        stringPreferencesKey(namespaced(userId, canonical.name))
+        UserNamespacedKeys.stringKey(userId, canonical)
 
     private fun userBooleanKey(userId: String, canonical: Preferences.Key<Boolean>): Preferences.Key<Boolean> =
-        booleanPreferencesKey(namespaced(userId, canonical.name))
+        UserNamespacedKeys.booleanKey(userId, canonical)
 
     private fun userIntKey(userId: String, canonical: Preferences.Key<Int>): Preferences.Key<Int> =
-        intPreferencesKey(namespaced(userId, canonical.name))
+        UserNamespacedKeys.intKey(userId, canonical)
 
     // Canonical keys by declared type. The migration copies each list with its
     // typed reader so a legacy STRING slot (pre-typed-migration install — the
@@ -333,7 +335,7 @@ class HomeDiscoveryStore constructor(
         keyFactory: (String) -> Preferences.Key<T>,
         fromString: (String) -> T?,
     ) {
-        val target = namespaced(userId, canonical.name)
+        val target = UserNamespacedKeys.name(userId, canonical.name)
         if (prefs.asMap().keys.any { it.name == target }) return
         val typed = try { prefs[canonical] as T? } catch (_: ClassCastException) { null }
         val value = typed ?: prefs[stringPreferencesKey(canonical.name)]?.let(fromString) ?: return
@@ -878,6 +880,11 @@ class HomeDiscoveryStore constructor(
         prefs[key] = json.encodeToString(current - seriesId)
     }
 
+    /** Bulk restore — every Next Up exclusion dropped at once (the "Restore all" action). */
+    suspend fun clearNextUpExclusions() = editForUser { prefs, userId ->
+        prefs.remove(userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS))
+    }
+
     /**
      * Pins the last-viewed season for [seriesId] so the series detail screen
      * reopens on that season tab. Read-modify-write: copies the existing
@@ -953,31 +960,17 @@ class HomeDiscoveryStore constructor(
      * set per user that has ever signed in), so the reset machinery calls this
      * inside its edit: it strips every namespaced home key — for ANY user —
      * plus the global migration marker, alongside the static legacy/canonical
-     * keys removed via [resetKeysFor]. Canonical-suffix matching keeps this
-     * precise: an unrelated key that merely starts with `u_` is never touched.
+     * keys removed via [resetKeysFor]. Canonical-suffix matching
+     * ([UserNamespacedKeys.isNamespaced]) keeps this precise: an unrelated key
+     * that merely starts with `u_` is never touched.
      */
     internal fun removeDynamicResetKeys(category: PreferenceResetCategory, prefs: MutablePreferences) {
         if (category != PreferenceResetCategory.HOME_DISCOVERY) return
         val canonicalNames = legacyKeys.mapTo(mutableSetOf()) { it.name }
         prefs.asMap().keys
-            .filter { key -> key.name.isNamespacedHomeKey(canonicalNames) }
+            .filter { key -> UserNamespacedKeys.isNamespaced(key.name, canonicalNames) }
             .forEach { prefs.remove(it) }
         prefs.remove(Keys.HOME_NS_MIGRATED)
-    }
-
-    /**
-     * `u_<userId>::<canonical>` with a canonical suffix this store owns. Splits
-     * on the LAST `::`: no canonical name contains `::`, but a user id might
-     * (`setActiveUser` input is unvalidated) — splitting on the first separator
-     * would mis-parse `u_a::b::home_mode` as canonical `b::home_mode` and never
-     * strip that user's keys on factory reset. lastIndexOf matches the
-     * construction side for every id, `::`-containing or not.
-     */
-    private fun String.isNamespacedHomeKey(canonicalNames: Set<String>): Boolean {
-        if (!startsWith("u_")) return false
-        val separator = lastIndexOf("::")
-        if (separator <= 2) return false // "u_" alone is not a user id
-        return substring(separator + 2) in canonicalNames
     }
 
     /**

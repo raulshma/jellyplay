@@ -11,6 +11,11 @@ package com.raulshma.jellyplay.feature.settings
  * rows (Anime4K extraction + the HWND-embed `vo=gpu-next` HDR
  * path) and the per-content-type volume-memory toggle (the app owns
  * mpv's volume scalar only on this platform).
+ *
+ * `supportsIdleAmbientScreen`, `supportsDiscordPresence` and
+ * `supportsShellHooks` are the desktop-shell-backed TRUEs: the idle monitor
+ * + overlay, the Discord IPC presence service and the ProcessBuilder hook
+ * runner all live in apps/desktop.
  */
 internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabilities(
     supportsDynamicColor = false,
@@ -26,4 +31,6 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsMpvRenderProfiles = true,
     supportsVolumeMemory = true,
     supportsIdleAmbientScreen = true,
+    supportsDiscordPresence = true,
+    supportsShellHooks = true,
 )

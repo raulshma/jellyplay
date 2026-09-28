@@ -194,16 +194,28 @@ interface LibraryApiClient {
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
-    suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>>
+
+    /**
+     * Episodes of one season. [isMissing] is Jellyfin's `isMissing` filter,
+     * mapped jellyfin-web style: `false` hides the server's virtual (missing /
+     * unaired) episode placeholders; null omits the filter so they come back
+     * and render as placeholders. Hide is the sensible default.
+     */
+    suspend fun getEpisodes(
+        seriesId: String,
+        seasonId: String,
+        isMissing: Boolean? = false,
+    ): Result<List<MediaItem>>
 
     /**
      * Fetches every episode for a series in a single round-trip. The Jellyfin
      * `/Shows/{seriesId}/Episodes` endpoint returns the full set when
      * `seasonId` is omitted, which collapses an N-season fan-out (one request
      * per season) into a single call. Callers that need per-season grouping
-     * can `groupBy { it.seasonId }` the result locally.
+     * can `groupBy { it.seasonId }` the result locally. [isMissing] behaves
+     * exactly as on [getEpisodes].
      */
-    suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>>
+    suspend fun getAllEpisodes(seriesId: String, isMissing: Boolean? = false): Result<List<MediaItem>>
 
     suspend fun getCollectionItems(
         collectionId: String,

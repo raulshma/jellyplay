@@ -621,6 +621,9 @@ class UserPreferencesStore constructor(
             // store strips every user's entries (plus its migration marker)
             // itself; it no-ops for every other category.
             homeDiscoveryStore.removeDynamicResetKeys(category, prefs)
+            // Same shape for the downloads store's one namespaced key (the
+            // auto-download server allow-list); no-ops for every other category.
+            downloadsStore.removeDynamicResetKeys(category, prefs)
         }
     }
 

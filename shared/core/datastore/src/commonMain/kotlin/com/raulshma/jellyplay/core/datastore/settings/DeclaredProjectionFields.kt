@@ -371,6 +371,8 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         hideEpisodeThumbnails = library.hideEpisodeThumbnails,
         skipSpecials = library.skipSpecials,
         compactEpisodeList = library.compactEpisodeList,
+        showMissingEpisodes = library.showMissingEpisodes,
+        preferLogos = library.preferLogos,
         confirmLibraryReset = library.confirmLibraryReset,
         showExternalRatings = home.showExternalRatings,
         showShareMediaOption = experimental.showShareMediaOption,
@@ -432,6 +434,7 @@ internal fun mainScreenPreferences(
         hideBottomNavOnScroll = navigation.hideBottomNavOnScroll,
         navBarShowLabels = navigation.navBarShowLabels,
         preferredPlayer = playback.preferredPlayer,
+        preferredExternalPlayer = playback.preferredExternalPlayer,
         enabledExperimentalFeatures = experimental.enabledExperimentalFeatures,
         appLanguage = experimental.appLanguage,
     )

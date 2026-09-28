@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
+import com.raulshma.jellyplay.desktop.integration.desktopIntegrationModule
 import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
 import com.raulshma.jellyplay.desktop.update.DesktopInstalledVersion
 import com.raulshma.jellyplay.desktop.update.desktopAppUpdateModule
@@ -103,6 +104,15 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // silent install. List position is inert (definitions are keyed); it
     // sits here with the rest of this shell's own sections.
     desktopAppUpdateModule(paths.dataDirNio),
+
+    // ── Desktop shell integrations (features 4.2 + 4.3) ─────────────
+    // The Discord Rich Presence stack (hand-rolled DiscordIpcClient +
+    // DiscordPresenceService over the shared NowPlayingReporter spine) and
+    // the playback-event shell hooks (DesktopHookRunner). Both start from
+    // launchDesktopStartup (idempotent; the settings toggles gate the
+    // behavior) and live here because every collaborator is a desktop-shell
+    // or shared-graph type. List position is inert (definitions are keyed).
+    desktopIntegrationModule(),
 
     // …subtitle-tester, the FINAL conveyor feature, deliberately has NO
     // registration here: the entire feature (ViewModel, screen, preview

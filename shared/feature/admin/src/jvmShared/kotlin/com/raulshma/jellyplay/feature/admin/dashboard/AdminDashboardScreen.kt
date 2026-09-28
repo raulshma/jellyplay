@@ -82,6 +82,7 @@ fun AdminDashboardScreen(
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
+    onBackups: () -> Unit = {},
     viewModel: AdminDashboardViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -198,6 +199,7 @@ fun AdminDashboardScreen(
                     onWatchedMediaCleanup = onWatchedMediaCleanup,
                     onPlugins = onPlugins,
                     onUsers = onUsers,
+                    onBackups = onBackups,
                     onStopSession = { viewModel.showStopSessionDialog(it) },
                     contentFocusRequester = contentFocusRequester,
                     modifier = Modifier.fillMaxSize(),
@@ -224,6 +226,7 @@ private fun DashboardContent(
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
+    onBackups: () -> Unit = {},
     onStopSession: (SessionInfo) -> Unit = {},
     contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
@@ -330,6 +333,7 @@ private fun DashboardContent(
                 onWatchedMediaCleanup = onWatchedMediaCleanup,
                 onPlugins = onPlugins,
                 onUsers = onUsers,
+                onBackups = onBackups,
             )
         }
     }

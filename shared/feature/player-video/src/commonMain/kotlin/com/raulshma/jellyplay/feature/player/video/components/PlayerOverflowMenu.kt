@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitles
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_version
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_video_filters
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_video_filters_on
 
@@ -169,6 +170,9 @@ internal fun BoxScope.PlayerOverflowMenu(
     onAVSyncClick: () -> Unit,
     playbackMode: PlaybackMode = PlaybackMode.AUTO,
     onPlaybackModeClick: () -> Unit = {},
+    // The Version sheet entry — multi-version items only (gated by the caller).
+    hasMultipleVersions: Boolean = false,
+    onVersionClick: () -> Unit = {},
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
     onVideoStatsClick: () -> Unit = {},
@@ -511,6 +515,15 @@ internal fun BoxScope.PlayerOverflowMenu(
                 label = stringResource(Res.string.player_video_decoder),
                 onClick = onDecoderClick,
             )
+            // Multi-version items only (1080p + 4K, HDR variants, alternate
+            // cuts): opens the Version sheet for a position-preserving swap.
+            if (hasMultipleVersions) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.Stack2,
+                    label = stringResource(Res.string.player_video_version),
+                    onClick = onVersionClick,
+                )
+            }
             if (supportsRenderPanel) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Wand,

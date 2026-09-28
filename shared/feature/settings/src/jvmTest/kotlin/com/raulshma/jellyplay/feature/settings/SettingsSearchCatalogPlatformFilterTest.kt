@@ -127,5 +127,14 @@ class SettingsSearchCatalogPlatformFilterTest {
         PlaybackSettingsIds.MPV_HDR_PASSTHROUGH,
         PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE,
         PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
+        // The desktop-shell integration rows (features 4.2 + 4.3): the
+        // Discord presence toggle and the hooks master + five commands.
+        SettingsScreenIds.DISCORD_PRESENCE_ENABLED,
+        SettingsScreenIds.HOOKS_ENABLED,
+        SettingsScreenIds.HOOKS_PLAY_CMD,
+        SettingsScreenIds.HOOKS_STOP_CMD,
+        SettingsScreenIds.HOOKS_ENDED_CMD,
+        SettingsScreenIds.HOOKS_IDLE_CMD,
+        SettingsScreenIds.HOOKS_IDLE_ENDED_CMD,
     )
 }

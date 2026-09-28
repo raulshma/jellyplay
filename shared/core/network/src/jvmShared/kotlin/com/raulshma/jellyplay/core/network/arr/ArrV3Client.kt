@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommand
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
@@ -330,6 +331,44 @@ internal class ArrV3Client(
         element: KSerializer<T>,
     ): Result<List<T>> =
         support.parseRequest(getRequest(server, path, params), ListSerializer(element))
+
+    /**
+     * `GET /release` — the interactive release-search rows: a bare JSON array
+     * (no `{records}` envelope), decoded with the shared [ArrReleaseResource]
+     * row. The adapters pass their identity params (Radarr `movieId`; Sonarr
+     * `episodeId` / `seriesId` + `seasonNumber`). The services cache the
+     * search decisions ~30 min and answer 404 when nothing is cached — that
+     * one status remaps to [ArrReleaseCacheMiss] so the UI can offer
+     * "Search again"; every other failure passes through unchanged.
+     */
+    suspend fun getReleases(
+        server: ArrServerConfig,
+        params: List<Pair<String, String>>,
+    ): Result<List<ArrRelease>> =
+        support.parseRequest(
+            getRequest(server, "/release", params),
+            ListSerializer(ArrReleaseResource.serializer()),
+        )
+            .map { list -> list.map { it.toArrRelease() } }
+            .recoverCatching { e ->
+                if ((e as? ApiException)?.httpCode == 404) {
+                    throw ArrReleaseCacheMiss(service.serviceName, e)
+                }
+                throw e
+            }
+
+    /**
+     * `POST {path}` with a JSON body — the release grab (`/release`), the
+     * POST twin of [putJson] (which serves the monitor toggles).
+     */
+    suspend fun postJson(server: ArrServerConfig, path: String, bodyJson: String): Result<Unit> {
+        val request = Request.Builder()
+            .url(support.buildUrl(server.baseUrl, path))
+            .withApiKey(server.apiKey)
+            .post(bodyJson.toRequestBody("application/json".toMediaType()))
+            .build()
+        return support.parseUnit(request)
+    }
 
     // ── assembly helpers ────────────────────────────────────────────────────
 

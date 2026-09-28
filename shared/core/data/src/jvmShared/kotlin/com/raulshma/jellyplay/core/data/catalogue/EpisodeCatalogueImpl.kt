@@ -89,6 +89,15 @@ class EpisodeCatalogueImpl(
      * after it.
      */
     private val sessionCacheRegistry: SessionCacheRegistry,
+    /**
+     * The `show_missing_episodes` preference read (the LibraryStore slice),
+     * taken as a suspend seam so tests construct the catalogue without a
+     * DataStore. Consulted only on ONLINE fetches — offline snapshots read the
+     * local DB, which holds only real (downloaded) files. Default hide (the
+     * `isMissing = false` query param, jellyfin-web parity); showing omits
+     * the filter so virtual (missing/unaired) episodes come back.
+     */
+    private val showMissingEpisodes: suspend () -> Boolean = { false },
 ) : EpisodeCatalogue {
 
     private val cache = TtlCache<EpisodeCatalogueSnapshot>(
@@ -160,7 +169,7 @@ class EpisodeCatalogueImpl(
             }
         } else {
             val epochAtStart = epoch.get()
-            libraryApiClient.getEpisodes(seriesId, seasonId).mapCatching { episodes ->
+            libraryApiClient.getEpisodes(seriesId, seasonId, isMissing = missingEpisodesFilter()).mapCatching { episodes ->
                 mergeSeasonIntoSnapshot(identity, cacheKey, seriesId, seasonId, episodes, epochAtStart)
                 episodes
             }
@@ -227,6 +236,15 @@ class EpisodeCatalogueImpl(
 
     // ── online assemble ─────────────────────────────────────────────────
 
+    /**
+     * The jellyfin-web parity mapping for the episodes query's `isMissing`
+     * parameter: hiding (the default) sends `false` so the server drops
+     * virtual (missing/unaired) episodes; showing omits the param (null) so
+     * whatever the server returns is fetched and rendered as placeholders.
+     */
+    private suspend fun missingEpisodesFilter(): Boolean? =
+        if (showMissingEpisodes()) null else false
+
     private suspend fun loadOnline(
         seriesId: String,
         epochAtStart: Long,
@@ -235,7 +253,8 @@ class EpisodeCatalogueImpl(
         // Single round-trip for the full episode set, grouped by season id —
         // exact groupBy semantics of MediaRepositoryImpl.getAllEpisodesGrouped.
         val grouped = async {
-            libraryApiClient.getAllEpisodes(seriesId).map { all -> all.groupBy { it.seasonId ?: "" } }
+            libraryApiClient.getAllEpisodes(seriesId, isMissing = missingEpisodesFilter())
+                .map { all -> all.groupBy { it.seasonId ?: "" } }
         }.await().getOrElse {
             // Fall back to per-season fan-out (older server that rejected the
             // unfiltered query). Caps concurrency at MAX_PARALLEL_SEASON_FETCHES.
@@ -262,7 +281,7 @@ class EpisodeCatalogueImpl(
         epochAtStart: Long,
     ): EpisodeCatalogueSnapshot {
         val grouped = seasonSemaphore.mapConcurrent(seasons) { season ->
-            val episodesResult = libraryApiClient.getEpisodes(seriesId, season.id)
+            val episodesResult = libraryApiClient.getEpisodes(seriesId, season.id, isMissing = missingEpisodesFilter())
             if (epoch.get() == epochAtStart) {
                 episodesResult.getOrNull()?.let { season.id to it }
             } else {

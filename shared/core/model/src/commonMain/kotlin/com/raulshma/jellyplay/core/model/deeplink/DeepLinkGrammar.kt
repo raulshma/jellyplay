@@ -13,6 +13,10 @@ package com.raulshma.jellyplay.core.model.deeplink
  *                                             ?type= or default to movie at
  *                                             parse time)
  *   jellyplay://search|settings|downloads|library   (argument-less)
+ *   jellyplay://syncplay/{groupId}   (the SyncPlay join payload — the join
+ *                                     secret of a desktop Discord Rich
+ *                                     Presence activity; joiners call
+ *                                     syncPlayManager.joinGroup(groupId))
  *   https://{HOST_WEB}/{PATH_PREFIX}/{...}   (https mirror of the same paths)
  *
  * Builders and parsers round-trip; the emitted strings are byte-identical to
@@ -37,11 +41,22 @@ object DeepLinkGrammar {
     const val HOST_DOWNLOADS = "downloads"
     const val HOST_LIBRARY = "library"
 
+    /**
+     * The SyncPlay join payload (feature 4.2): `jellyplay://syncplay/{groupId}`.
+     * Carried as the Discord Rich Presence activity's Join secret; the shell's
+     * join handler decodes it back to the group id and calls
+     * `syncPlayManager.joinGroup(groupId)`. Custom-scheme only — the https
+     * mirror does not carry it (a watch-party invite only means something
+     * inside the app's SyncPlay context).
+     */
+    const val HOST_SYNCPLAY = "syncplay"
+
     val supportedHosts: Set<String> = setOf(
         HOST_MEDIA, HOST_NEWSLETTER, HOST_SEERR,
         // Top-level destinations reachable via deep link, so
         // widgets/notifications/launcher shortcuts can jump anywhere.
         HOST_SEARCH, HOST_SETTINGS, HOST_DOWNLOADS, HOST_LIBRARY,
+        HOST_SYNCPLAY,
     )
 
     const val NEWSLETTER_SECTION_CONTINUE_WATCHING = "CONTINUE_WATCHING"
@@ -75,6 +90,9 @@ object DeepLinkGrammar {
     fun downloadsLink(): String = "$SCHEME_CUSTOM://$HOST_DOWNLOADS"
     fun libraryLink(): String = "$SCHEME_CUSTOM://$HOST_LIBRARY"
 
+    /** jellyplay://syncplay/{groupId} — the Discord Rich Presence Join secret payload. */
+    fun syncPlayJoinLink(groupId: String): String = "$SCHEME_CUSTOM://$HOST_SYNCPLAY/$groupId"
+
     // --- parsing ---
 
     /**
@@ -104,6 +122,9 @@ object DeepLinkGrammar {
             HOST_SETTINGS -> DeepLinkTarget.Settings
             HOST_DOWNLOADS -> DeepLinkTarget.Downloads
             HOST_LIBRARY -> DeepLinkTarget.Library
+            HOST_SYNCPLAY -> pathSegments.firstOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?.let(DeepLinkTarget::SyncPlayJoin)
             else -> null
         }
     }
@@ -144,4 +165,7 @@ sealed class DeepLinkTarget {
     data object Settings : DeepLinkTarget()
     data object Downloads : DeepLinkTarget()
     data object Library : DeepLinkTarget()
+
+    /** jellyplay://syncplay/{groupId} — join the SyncPlay group with this id. */
+    data class SyncPlayJoin(val groupId: String) : DeepLinkTarget()
 }

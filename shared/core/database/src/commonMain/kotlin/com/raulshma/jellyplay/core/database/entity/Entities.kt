@@ -61,6 +61,9 @@ data class UserEntity(
         // Serves getCompletedAudioDownloads (filter on status + mediaType,
         // order by createdAt) — the music-library DOWNLOADS browse page query.
         Index(value = ["status", "mediaType", "createdAt"]),
+        // Serves the keep-days retention sweep's age query
+        // (getCompletedOlderThan: filter on status + completedAt).
+        Index(value = ["status", "completedAt"]),
     ],
 )
 data class DownloadEntity(
@@ -86,6 +89,17 @@ data class DownloadEntity(
     val seasonNumber: Int? = null,
     @ColumnInfo(defaultValue = "0")
     val createdAt: Long = wallNowMillis(),
+    /**
+     * Epoch millis when the row reached `COMPLETED` (`0` = not completed yet —
+     * in-flight/paused/failed rows carry the column default). Drives the
+     * auto-download keep-days retention sweep's age query
+     * ([com.raulshma.jellyplay.core.database.dao.DownloadDao.getCompletedOlderThan]).
+     * Written by [com.raulshma.jellyplay.core.database.dao.DownloadDao.markCompleted]
+     * at the two transfer strategies' completion points; rows completed before
+     * the column existed were backfilled from `createdAt` by the v59 migration.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val completedAt: Long = 0L,
     val errorMessage: String? = null,
     @ColumnInfo(defaultValue = "0")
     val priority: Int = 0,

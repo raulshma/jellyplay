@@ -1,15 +1,18 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
+import com.raulshma.jellyplay.core.model.BackupComponentOptions
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.ServerBackup
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 import com.raulshma.jellyplay.core.model.TtlCache
+import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.model.api.DayOfWeek
 import org.jellyfin.sdk.model.api.TaskTriggerInfoType
 import org.jellyfin.sdk.model.serializer.toUUID
@@ -156,6 +159,53 @@ class AdminApiClientImpl(
             .request(pathTemplate = "/System/Logs/Log", queryParameters = mapOf("name" to fileName))
             .body
             .decodeToString()
+    }
+
+    // ── Backups (Jellyfin backup service, server 10.11+) ──
+    // The SDK has no backup API; the three members ride the same raw-path
+    // escape hatch as getLogFileContent, with the wire DTOs from
+    // BackupWireDto.kt. Servers without the service answer GET /Backup with
+    // 404 → InvalidStatusException → ApiException(httpCode = 404), which the
+    // repository layer folds into its `supportsBackups = false` snapshot.
+
+    override suspend fun listBackups(): Result<List<ServerBackup>> = engine.withApi { api ->
+        val body = api.request(pathTemplate = "/Backup").body.decodeToString()
+        if (body.isBlank()) {
+            emptyList()
+        } else {
+            JellyfinApiEngine.sharedJson
+                .decodeFromString<List<BackupManifestDto>>(body)
+                .map { it.toServerBackup() }
+        }
+    }
+
+    override suspend fun createBackup(options: BackupComponentOptions): Result<ServerBackup> = engine.withApi { api ->
+        // The create runs synchronously: the response IS the new archive's
+        // manifest (no progress endpoint, no scheduled-task row).
+        val body = api.request(
+            method = HttpMethod.POST,
+            pathTemplate = "/Backup/Create",
+            requestBody = BackupOptionsDto(
+                metadata = options.metadata,
+                trickplay = options.trickplay,
+                subtitles = options.subtitles,
+                database = options.database,
+            ),
+        ).body.decodeToString()
+        JellyfinApiEngine.sharedJson
+            .decodeFromString<BackupManifestDto>(body)
+            .toServerBackup()
+    }
+
+    override suspend fun restoreBackup(archiveFileName: String): Result<Unit> = engine.withApi { api ->
+        // Fire-and-forget: 204, then the server restarts immediately. The
+        // restart/recovery choreography is the caller's (the backups screen's
+        // poll-and-reconnect ladder).
+        api.request(
+            method = HttpMethod.POST,
+            pathTemplate = "/Backup/Restore",
+            requestBody = BackupRestoreRequestDto(archiveFileName = archiveFileName),
+        )
     }
 
     override suspend fun getActivityLogEntries(startIndex: Int?, limit: Int?, minDate: String?, hasUserId: Boolean?): Result<List<ActivityLogEntry>> = engine.withApi { api ->

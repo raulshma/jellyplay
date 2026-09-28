@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.remote.DisplayMessagePayload
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -17,11 +18,15 @@ import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.ExternalPlayerApp
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MainPreferences
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
@@ -29,7 +34,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
 import com.raulshma.jellyplay.deeplink.IncomingIntentRequest
+import com.raulshma.jellyplay.navigation.ExternalPlaybackOutcome
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerRequest
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
@@ -86,9 +93,11 @@ import org.robolectric.annotation.Config
  *  - the external-player launch builder maps the resolved source (local
  *    download or stream) onto an ACTION_VIEW intent with the `video` mime
  *    type advertising `return_result`, carrying the start position in ms
- *    only when positive, and null resolution yields null; start/stop
- *    reports round-trip the session id, with a non-positive final position
- *    falling back to the start position.
+ *    only when positive, side-loads the external subtitle streams of the
+ *    chosen source (external, non-image codecs only), and null resolution
+ *    yields null; stop reports map the parsed outcome — stopped-at credits
+ *    its ticks, cancellation credits the start position, completion marks
+ *    the item played and reports the completion position.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -107,6 +116,7 @@ class MainViewModelTest {
     private val deepLinkHandler = DeepLinkHandler()
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackSourceResolver: PlaybackSourceResolver = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk(relaxed = true)
     private val userMessageBus: UserMessageBus = mockk(relaxed = true)
@@ -162,6 +172,7 @@ class MainViewModelTest {
         deepLinkHandler = deepLinkHandler,
         playbackRepository = playbackRepository,
         downloadRepository = downloadRepository,
+        mediaRepository = mediaRepository,
         playbackSourceResolver = playbackSourceResolver,
         offlineModeManager = offlineModeManager,
         userMessageBus = userMessageBus,
@@ -569,7 +580,7 @@ class MainViewModelTest {
                 mediaSourceId = null,
             )
 
-        val launch = vm.buildExternalPlayerLaunch("item-1", null, startPositionTicks = 900_000_000L)
+        val launch = vm.buildExternalPlayerLaunch(ExternalPlayerRequest("item-1", startPositionTicks = 900_000_000L))
 
         assertNotNull(launch)
         assertEquals("item-1", launch!!.itemId)
@@ -599,13 +610,16 @@ class MainViewModelTest {
                 download = downloadItem(),
             )
 
-        val launch = vm.buildExternalPlayerLaunch("item-2", "ms-1", startPositionTicks = 0L)
+        val launch = vm.buildExternalPlayerLaunch(ExternalPlayerRequest("item-2", "ms-1"))
 
         assertNotNull(launch)
         assertEquals("file:///data/files/movie.mp4", launch!!.intent.data.toString())
         assertEquals("Downloaded Movie", launch.intent.getStringExtra("title"))
         // No position extra when the start position is zero.
         assertEquals(-1L, launch.intent.getLongExtra("position", -1L))
+        // Local downloads carry no subtitle hand-off payload.
+        assertTrue(launch.subtitles.isEmpty())
+        assertFalse(launch.intent.hasExtra("subs"))
     }
 
     @Test
@@ -613,7 +627,7 @@ class MainViewModelTest {
         val vm = createVm()
         coEvery { playbackSourceResolver.resolvePlaybackSource(any(), any(), any()) } returns null
 
-        assertNull(vm.buildExternalPlayerLaunch("item-3", null, 0L))
+        assertNull(vm.buildExternalPlayerLaunch(ExternalPlayerRequest("item-3")))
     }
 
     @Test
@@ -622,11 +636,70 @@ class MainViewModelTest {
         coEvery { playbackSourceResolver.resolvePlaybackSource(any(), any(), any()) } returns
             ResolvedPlaybackSource.Stream("item-1", "https://server/v", "T", null)
 
-        val first = vm.buildExternalPlayerLaunch("item-1", null, 0L)!!
-        val second = vm.buildExternalPlayerLaunch("item-1", null, 0L)!!
+        val first = vm.buildExternalPlayerLaunch(ExternalPlayerRequest("item-1"))!!
+        val second = vm.buildExternalPlayerLaunch(ExternalPlayerRequest("item-1"))!!
 
         assertTrue(first.playSessionId.isNotBlank())
         assertTrue(first.playSessionId != second.playSessionId)
+    }
+
+    @Test
+    fun `stream resolution with a media source side-loads the external subtitle streams`() = runTest(dispatcher) {
+        val vm = createVm()
+        val source = MediaSource(
+            id = "source-1",
+            name = "1080p",
+            mediaStreams = listOf(
+                mediaStream(index = 2, isExternal = true, codec = "subrip", language = "eng", displayTitle = "English"),
+                // Embedded text sub: the target player demuxes the container.
+                mediaStream(index = 3, isExternal = false, codec = "subrip", language = "ger", displayTitle = "Deutsch"),
+                // External image sub without a delivery URL: the subtitle
+                // builder refuses image codecs ("" URL) → dropped.
+                mediaStream(index = 4, isExternal = true, codec = "pgs", language = "jpn", displayTitle = "PGS"),
+            ),
+        )
+        coEvery { playbackSourceResolver.resolvePlaybackSource(any(), any(), any()) } returns
+            ResolvedPlaybackSource.Stream(
+                itemId = "item-1",
+                url = "https://server/videos/1/stream",
+                title = "Movie",
+                mediaSourceId = "source-1",
+                mediaSource = source,
+            )
+        // The subtitle URL ladder lives behind resolveSubtitleStreamUrl — a
+        // default interface method the relaxed mock would intercept and
+        // answer "" — so the test stubs the ladder's outcomes directly: an
+        // external text sub resolves, the embedded track resolves to null
+        // (the target player demuxes the container), and the image codec
+        // resolves to null (the ladder refuses it).
+        every {
+            playbackRepository.resolveSubtitleStreamUrl(any(), any(), any(), any())
+        } answers {
+            val stream = firstArg<MediaStream>()
+            when {
+                !stream.deliveryUrl.isNullOrBlank() -> "https://server/delivery"
+                !stream.isExternal -> null
+                stream.codec == "pgs" -> null
+                else -> "https://server/sub/${stream.index}"
+            }
+        }
+
+        val launch = vm.buildExternalPlayerLaunch(ExternalPlayerRequest("item-1", "source-1", subtitleStreamIndex = 2))
+
+        assertNotNull(launch)
+        // Only the side-loadable external sub survives (the embedded track is
+        // the target player's demux job; the image codec is refused).
+        assertEquals(listOf("https://server/sub/2"), launch!!.subtitles.map { it.url })
+        assertEquals(listOf("English"), launch.subtitles.map { it.name })
+        assertEquals(listOf("eng"), launch.subtitles.map { it.filename })
+        assertEquals(listOf(true), launch.subtitles.map { it.isSelected })
+        // The intent carries the array extras + the selected track's enable URL.
+        val subs = launch.intent.getParcelableArrayListExtra<Uri>("subs")!!
+        assertEquals(listOf("https://server/sub/2"), subs.map { it.toString() })
+        assertEquals("https://server/sub/2", launch.intent.getParcelableExtra<Uri>("subs.enable")!!.toString())
+        // Default preference (SYSTEM_CHOOSER): no targeting recorded yet.
+        assertNull(launch.resolvedApp)
+        assertEquals(ExternalPlayerApp.SYSTEM_CHOOSER, launch.preferredApp)
     }
 
     // ── external playback progress reporting ───────────────────────────────
@@ -665,33 +738,68 @@ class MainViewModelTest {
             playSessionId = "session-1",
         )
 
-        vm.reportExternalPlaybackStopped(launch, finalPositionTicks = 300_000_000L)
+        vm.reportExternalPlaybackStopped(launch, ExternalPlaybackOutcome.StoppedAt(300_000_000L))
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "session-1", 300_000_000L)
         }
+        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
     }
 
     @Test
-    fun `external playback stop with a non-positive final position falls back to the start position`() = runTest(dispatcher) {
+    fun `external playback completion marks the item played and reports the completion position`() = runTest(dispatcher) {
         val vm = createVm()
-        val launch = ExternalPlayerLaunch(
-            intent = Intent(Intent.ACTION_VIEW),
-            itemId = "item-1",
-            startPositionTicks = 120_000_000L,
-            playSessionId = "session-1",
-        )
+        val launch = reportLaunchOf()
 
-        vm.reportExternalPlaybackStopped(launch, finalPositionTicks = 0L)
+        vm.reportExternalPlaybackStopped(launch, ExternalPlaybackOutcome.Completed(9_000_000_000L))
         advanceUntilIdle()
 
+        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "session-1", 9_000_000_000L)
+        }
+    }
+
+    @Test
+    fun `external playback completion without a position still marks played and falls back to the start ticks`() = runTest(dispatcher) {
+        val vm = createVm()
+        val launch = reportLaunchOf()
+
+        // The MPV/mpvKt contract reports completion without a position.
+        vm.reportExternalPlaybackStopped(launch, ExternalPlaybackOutcome.Completed(0L))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "session-1", 120_000_000L)
         }
     }
 
+    @Test
+    fun `external playback cancellation credits the start position`() = runTest(dispatcher) {
+        val vm = createVm()
+        val launch = reportLaunchOf()
+
+        vm.reportExternalPlaybackStopped(launch, ExternalPlaybackOutcome.Cancelled(120_000_000L))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "session-1", 120_000_000L)
+        }
+        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
+
+    /** The report-pair tests' one launch shape: item-1, 120 s start, session-1. */
+    private fun reportLaunchOf(startPositionTicks: Long = 120_000_000L): ExternalPlayerLaunch =
+        ExternalPlayerLaunch(
+            intent = Intent(Intent.ACTION_VIEW),
+            itemId = "item-1",
+            startPositionTicks = startPositionTicks,
+            playSessionId = "session-1",
+        )
 
     /**
      * Classifies a shortcut intent exactly the way MainActivity's dispatch
@@ -719,5 +827,21 @@ class MainViewModelTest {
         totalSizeBytes = 100L,
         downloadedBytes = 100L,
         status = DownloadStatus.COMPLETED,
+    )
+
+    /** Subtitle stream for the external hand-off payload tests. */
+    private fun mediaStream(
+        index: Int,
+        isExternal: Boolean,
+        codec: String?,
+        language: String?,
+        displayTitle: String?,
+    ) = MediaStream(
+        index = index,
+        type = StreamType.SUBTITLE,
+        codec = codec,
+        language = language,
+        displayTitle = displayTitle,
+        isExternal = isExternal,
     )
 }

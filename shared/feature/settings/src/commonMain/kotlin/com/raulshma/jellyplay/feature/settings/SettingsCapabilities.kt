@@ -88,6 +88,21 @@ internal data class SettingsCapabilities(
      * `DesktopPlatformActualsTest`.
      */
     val supportsIdleAmbientScreen: Boolean,
+    /**
+     * The Discord Rich Presence integration exists (feature 4.2) —
+     * desktop-backed: the hand-rolled Discord IPC client + presence service
+     * live in the desktop shell only (the named-pipe / Unix-socket transport
+     * has no Android counterpart). Hides the presence toggle row on
+     * Android; pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsDiscordPresence: Boolean,
+    /**
+     * The playback-event shell hooks exist (feature 4.3) — desktop-backed:
+     * `DesktopHookRunner` executes the configured commands via
+     * `ProcessBuilder`, which has no Android counterpart. Hides the hook
+     * rows on Android; pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsShellHooks: Boolean,
 )
 
 /**

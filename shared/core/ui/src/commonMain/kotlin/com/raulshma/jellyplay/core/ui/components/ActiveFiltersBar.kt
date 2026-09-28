@@ -29,6 +29,8 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.core_clear_all
+import com.raulshma.jellyplay.core.ui.generated.resources.core_filter_has_subtitles
+import com.raulshma.jellyplay.core.ui.generated.resources.core_filter_has_trailer
 import com.raulshma.jellyplay.core.ui.generated.resources.core_filter_in_progress
 import com.raulshma.jellyplay.core.ui.generated.resources.core_filter_played_all
 import com.raulshma.jellyplay.core.ui.generated.resources.core_filter_played_played
@@ -115,6 +117,8 @@ fun ActiveFilterTag.filterTagLabel(): String = when (dimension) {
     LibraryFilterDimension.PLAYED_STATUS -> PlayedStatus.valueOf(value).filterStatusLabel()
     LibraryFilterDimension.IS_RESUMABLE -> stringResource(Res.string.core_filter_in_progress)
     LibraryFilterDimension.IS_DOWNLOADED -> stringResource(Res.string.core_ui_downloaded)
+    LibraryFilterDimension.HAS_SUBTITLES -> stringResource(Res.string.core_filter_has_subtitles)
+    LibraryFilterDimension.HAS_TRAILER -> stringResource(Res.string.core_filter_has_trailer)
 }
 
 /** Localized played-status label for the shared bar (only non-ALL is emitted). */
