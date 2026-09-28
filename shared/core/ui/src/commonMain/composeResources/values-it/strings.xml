@@ -279,4 +279,6 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">Sovrascrive i metadati attuali con quelli del provider. Per una serie vengono aggiornati anche gli episodi.</string>
     <string name="core_refresh_metadata_mode_replace_images">Sostituisci tutte le immagini</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">Riscarica tutte le immagini dal provider, lasciando i metadati.</string>
+    <string name="core_filter_has_subtitles">Con sottotitoli</string>
+    <string name="core_filter_has_trailer">Con trailer</string>
 </resources>

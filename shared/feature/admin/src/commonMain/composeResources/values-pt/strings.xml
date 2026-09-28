@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">A configuração do plug-in não está disponível nesta plataforma.</string>
 
     <string name="admin_no_delete_permission">A sua conta não tem permissão para eliminar conteúdo. Contacte o administrador do servidor.</string>
+    <string name="admin_backups_title">Backups</string>
+    <string name="admin_backups_create">Criar backup</string>
+    <string name="admin_backups_create_title">Criar backup</string>
+    <string name="admin_backups_empty">Ainda não há backups</string>
+    <string name="admin_backups_empty_hint">Execute um backup para capturar a configuração e os dados deste servidor.</string>
+    <string name="admin_backups_unsupported_title">Backups indisponíveis</string>
+    <string name="admin_backups_unsupported_body">Este servidor Jellyfin não oferece suporte a backups. É necessário um servidor com Jellyfin 10.11 ou mais recente.</string>
+    <string name="admin_backups_component_metadata">Metadados</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">Legendas</string>
+    <string name="admin_backups_component_database">Banco de dados</string>
+    <string name="admin_backups_restore">Restaurar</string>
+    <string name="admin_backups_restore_confirm_title">Restaurar backup?</string>
+    <string name="admin_backups_restore_confirm_body">O servidor reinicia imediatamente e todos os dados atuais são substituídos pelo conteúdo de "%1$s". Isso não pode ser desfeito.</string>
+    <string name="admin_backups_restoring">Restaurando — o servidor está reiniciando</string>
+    <string name="admin_backups_reconnecting">O servidor voltou — reconectando…</string>
+    <string name="admin_backups_restore_complete">Restauração concluída — reconectado ao servidor.</string>
+    <string name="admin_backups_restore_server_unreachable">O servidor não voltou após a restauração. Verifique se ele está em execução e entre novamente.</string>
 </resources>

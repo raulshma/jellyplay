@@ -454,4 +454,23 @@
     <string name="detail_option_start_radio">开始电台</string>
     <string name="detail_radio_empty">没有可用于从此项目开始电台的曲目</string>
     <string name="detail_radio_failed">无法开始电台</string>
+    <string name="detail_missing_badge">缺失</string>
+    <string name="detail_airs_date_format">播出 %1$s</string>
+    <string name="detail_option_version">版本</string>
+    <string name="detail_version_select">选择版本</string>
+    <string name="detail_version_grouping_badge">分组</string>
+    <string name="detail_version_placeholder_badge">占位</string>
+    <string name="detail_option_merge_versions">合并版本…</string>
+    <string name="detail_option_split_versions">拆分版本</string>
+    <string name="detail_merge_versions_title">合并版本</string>
+    <string name="detail_merge_versions_subtitle">选择要合并到此条目的重复项。每一项都会成为一个可播放的版本。</string>
+    <string name="detail_merge_confirm">合并</string>
+    <string name="detail_merge_searching">正在搜索媒体库…</string>
+    <string name="detail_merge_no_candidates">媒体库中未找到其他同名电影</string>
+    <string name="detail_split_confirm_title">拆分版本？</string>
+    <string name="detail_split_confirm_message">每个版本都会成为独立的媒体库条目。此操作无法撤销。</string>
+    <string name="detail_msg_merge_started">正在合并版本…</string>
+    <string name="detail_msg_merge_failed">无法合并版本</string>
+    <string name="detail_msg_split_started">正在拆分版本…</string>
+    <string name="detail_msg_split_failed">无法拆分版本</string>
 </resources>

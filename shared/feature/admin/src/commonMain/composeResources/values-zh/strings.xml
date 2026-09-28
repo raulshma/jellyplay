@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">此平台不支持插件配置。</string>
 
     <string name="admin_no_delete_permission">您的账户没有删除内容的权限。请联系服务器管理员。</string>
+    <string name="admin_backups_title">备份</string>
+    <string name="admin_backups_create">创建备份</string>
+    <string name="admin_backups_create_title">创建备份</string>
+    <string name="admin_backups_empty">暂无备份</string>
+    <string name="admin_backups_empty_hint">运行备份以快照保存此服务器的配置和数据。</string>
+    <string name="admin_backups_unsupported_title">备份不可用</string>
+    <string name="admin_backups_unsupported_body">此 Jellyfin 服务器不支持备份。需要运行 Jellyfin 10.11 或更高版本的服务器。</string>
+    <string name="admin_backups_component_metadata">元数据</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">字幕</string>
+    <string name="admin_backups_component_database">数据库</string>
+    <string name="admin_backups_restore">恢复</string>
+    <string name="admin_backups_restore_confirm_title">恢复备份？</string>
+    <string name="admin_backups_restore_confirm_body">服务器将立即重启，所有当前数据都会被替换为“%1$s”的内容。此操作无法撤销。</string>
+    <string name="admin_backups_restoring">正在恢复——服务器正在重启</string>
+    <string name="admin_backups_reconnecting">服务器已恢复——正在重新连接…</string>
+    <string name="admin_backups_restore_complete">恢复完成——已重新连接到服务器。</string>
+    <string name="admin_backups_restore_server_unreachable">恢复后服务器未恢复运行。请确认其正在运行，然后重新登录。</string>
 </resources>

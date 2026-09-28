@@ -100,4 +100,13 @@
     <string name="home_download_start_failed">Impossible de lancer le téléchargement</string>
     <string name="home_series_download_queued">Épisodes mis en file d'attente pour le téléchargement</string>
     <string name="home_see_all">Tout voir</string>
+    <string name="next_up_hidden_title">Masqué de À suivre</string>
+    <string name="next_up_hidden_empty">Rien de masqué</string>
+    <string name="next_up_hidden_empty_subtitle">Les séries que vous retirez de la rangée À suivre apparaissent ici pour être restaurées.</string>
+    <string name="next_up_hidden_restore_all">Tout restaurer</string>
+    <string name="next_up_hidden_restore_all_cd">Restaurer toutes les séries masquées dans À suivre</string>
+    <string name="next_up_hidden_restore_all_title">Tout restaurer dans À suivre ?</string>
+    <string name="next_up_hidden_restore_all_message">Les %1$d séries masquées réapparaîtront dans la rangée À suivre.</string>
+    <string name="next_up_hidden_restore_cd">Restaurer %1$s dans À suivre</string>
+    <string name="next_up_hidden_unknown">Série inconnue</string>
 </resources>

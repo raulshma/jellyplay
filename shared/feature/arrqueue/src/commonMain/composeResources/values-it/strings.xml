@@ -54,4 +54,24 @@
     <string name="arrqueue_remove_only">Solo rimuovi</string>
     <string name="arrqueue_remove_search">Rimuovi e cerca di nuovo</string>
     <string name="arrqueue_blocklist_search">Blocklist e ricerca</string>
+    <string name="releaseSearch_title">Cerca release</string>
+    <string name="releaseSearch_loading">Ricerca negli indicizzatori in corso — può richiedere fino a un minuto.</string>
+    <string name="releaseSearch_empty">Nessuna release trovata</string>
+    <string name="releaseSearch_cache_miss_body">I risultati di ricerca in cache del server sono scaduti. Esegui di nuovo la ricerca.</string>
+    <string name="releaseSearch_search_again">Cerca di nuovo</string>
+    <string name="releaseSearch_retry">Riprova</string>
+    <string name="releaseSearch_sort_score">Punteggio</string>
+    <string name="releaseSearch_sort_seeders">Seeder</string>
+    <string name="releaseSearch_sort_age">Età</string>
+    <string name="releaseSearch_approved">Approvato</string>
+    <string name="releaseSearch_rejected">Rifiutato</string>
+    <string name="releaseSearch_grab_anyway">Preleva comunque</string>
+    <string name="releaseSearch_grab_title">Prelevare la release?</string>
+    <string name="releaseSearch_grab_message">Inviare "%1$s" al client di download?</string>
+    <string name="releaseSearch_grab_rejected_message">"%1$s" è stato rifiutato: %2$s. Prelevare comunque?</string>
+    <string name="releaseSearch_grab_sent">Prelievo inviato per "%1$s"</string>
+    <string name="releaseSearch_history_grabbed">Prelevato in precedenza</string>
+    <string name="releaseSearch_history_failed">Fallito in precedenza</string>
+    <string name="releaseSearch_full_season">Stagione completa</string>
+    <string name="releaseSearch_seeders_leechers">%1$d seeder · %2$d leecher</string>
 </resources>

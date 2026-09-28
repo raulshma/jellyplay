@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">Die Plugin-Konfiguration ist auf dieser Plattform nicht verfügbar.</string>
 
     <string name="admin_no_delete_permission">Ihr Konto hat keine Berechtigung, Inhalte zu löschen. Wenden Sie sich an Ihren Serveradministrator.</string>
+    <string name="admin_backups_title">Sicherungen</string>
+    <string name="admin_backups_create">Sicherung erstellen</string>
+    <string name="admin_backups_create_title">Sicherung erstellen</string>
+    <string name="admin_backups_empty">Noch keine Sicherungen</string>
+    <string name="admin_backups_empty_hint">Führe eine Sicherung aus, um Konfiguration und Daten dieses Servers zu erfassen.</string>
+    <string name="admin_backups_unsupported_title">Sicherungen nicht verfügbar</string>
+    <string name="admin_backups_unsupported_body">Dieser Jellyfin-Server unterstützt keine Sicherungen. Ein Server mit Jellyfin 10.11 oder neuer ist erforderlich.</string>
+    <string name="admin_backups_component_metadata">Metadaten</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">Untertitel</string>
+    <string name="admin_backups_component_database">Datenbank</string>
+    <string name="admin_backups_restore">Wiederherstellen</string>
+    <string name="admin_backups_restore_confirm_title">Sicherung wiederherstellen?</string>
+    <string name="admin_backups_restore_confirm_body">Der Server startet sofort neu und alle aktuellen Daten werden durch den Inhalt von "%1$s" ersetzt. Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="admin_backups_restoring">Wiederherstellung läuft — der Server startet neu</string>
+    <string name="admin_backups_reconnecting">Server ist zurück — Verbindung wird wiederhergestellt…</string>
+    <string name="admin_backups_restore_complete">Wiederherstellung abgeschlossen — wieder mit dem Server verbunden.</string>
+    <string name="admin_backups_restore_server_unreachable">Der Server ist nach der Wiederherstellung nicht zurückgekehrt. Prüfe, ob er läuft, und melde dich dann erneut an.</string>
 </resources>

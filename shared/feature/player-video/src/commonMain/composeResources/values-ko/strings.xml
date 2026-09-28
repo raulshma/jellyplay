@@ -333,4 +333,13 @@
     <string name="a11y_volume_increase">볼륨 높이기</string>
     <string name="a11y_volume_decrease">볼륨 낮추기</string>
     <string name="player_direct_play_fallback">다이렉트 재생 실패 — 트랜스코딩으로 전환합니다 (%1$s)</string>
+    <string name="player_video_still_watching_title">계속 시청할까요?</string>
+    <string name="player_video_still_watching_episodes_subtitle">자동 재생으로 여러 에피소드가 이어서 재생되었습니다 — 계속하려면 확인하세요</string>
+    <string name="player_video_still_watching_hours_subtitle">장시간 상호작용이 없어 재생이 일시정지되었습니다 — 계속하려면 확인하세요</string>
+    <string name="player_video_still_watching_continue">시청 계속</string>
+    <string name="player_video_still_watching_stop">중지</string>
+    <string name="player_video_downloaded_badge">다운로드됨</string>
+    <string name="player_video_source_label">소스</string>
+    <string name="player_video_version">버전</string>
+    <string name="player_video_remember_version">이 버전 기억</string>
 </resources>

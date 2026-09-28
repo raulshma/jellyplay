@@ -279,4 +279,6 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">Écrase les métadonnées actuelles avec celles du fournisseur. Pour une série, les épisodes sont aussi actualisés.</string>
     <string name="core_refresh_metadata_mode_replace_images">Remplacer toutes les images</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">Retélécharge toutes les images du fournisseur, métadonnées inchangées.</string>
+    <string name="core_filter_has_subtitles">Avec sous-titres</string>
+    <string name="core_filter_has_trailer">Avec bande-annonce</string>
 </resources>

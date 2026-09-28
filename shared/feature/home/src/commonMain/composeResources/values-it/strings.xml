@@ -100,4 +100,13 @@
     <string name="home_download_start_failed">Impossibile avviare il download</string>
     <string name="home_series_download_queued">Episodi in coda per il download</string>
     <string name="home_see_all">Vedi tutto</string>
+    <string name="next_up_hidden_title">Nascosto da Prossimi contenuti</string>
+    <string name="next_up_hidden_empty">Niente di nascosto</string>
+    <string name="next_up_hidden_empty_subtitle">Le serie che rimuovi dalla riga Prossimi contenuti compaiono qui per essere ripristinate.</string>
+    <string name="next_up_hidden_restore_all">Ripristina tutto</string>
+    <string name="next_up_hidden_restore_all_cd">Ripristina tutte le serie nascoste in Prossimi contenuti</string>
+    <string name="next_up_hidden_restore_all_title">Ripristinare tutto in Prossimi contenuti?</string>
+    <string name="next_up_hidden_restore_all_message">Tutte le %1$d serie nascoste ricompariranno nella riga Prossimi contenuti.</string>
+    <string name="next_up_hidden_restore_cd">Ripristina %1$s in Prossimi contenuti</string>
+    <string name="next_up_hidden_unknown">Serie sconosciuta</string>
 </resources>

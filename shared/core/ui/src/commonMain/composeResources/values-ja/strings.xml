@@ -278,4 +278,6 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">現在のメタデータをプロバイダーのデータで上書きします。シリーズの場合はエピソードも更新されます。</string>
     <string name="core_refresh_metadata_mode_replace_images">全画像を置き換え</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">プロバイダーから全画像を再取得します。メタデータは変更されません。</string>
+    <string name="core_filter_has_subtitles">字幕あり</string>
+    <string name="core_filter_has_trailer">予告編あり</string>
 </resources>

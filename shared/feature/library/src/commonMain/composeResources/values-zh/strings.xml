@@ -81,4 +81,7 @@
     <string name="library_year_to">到 %1$d</string>
     <string name="data_download_started">下载已开始</string>
     <string name="data_download_start_failed">无法开始下载</string>
+    <string name="library_filter_has_subtitles">含字幕</string>
+    <string name="library_filter_has_trailer">含预告片</string>
+    <string name="library_filter_subtitles">字幕</string>
 </resources>

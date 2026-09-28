@@ -465,4 +465,23 @@
     <string name="detail_option_start_radio">Iniciar radio</string>
     <string name="detail_radio_empty">No hay pistas para iniciar una radio desde este elemento</string>
     <string name="detail_radio_failed">No se pudo iniciar la radio</string>
+    <string name="detail_missing_badge">Falta</string>
+    <string name="detail_airs_date_format">Se emite %1$s</string>
+    <string name="detail_option_version">Versión</string>
+    <string name="detail_version_select">Seleccionar versión</string>
+    <string name="detail_version_grouping_badge">Agrupación</string>
+    <string name="detail_version_placeholder_badge">Marcador</string>
+    <string name="detail_option_merge_versions">Combinar versiones…</string>
+    <string name="detail_option_split_versions">Separar versiones</string>
+    <string name="detail_merge_versions_title">Combinar versiones</string>
+    <string name="detail_merge_versions_subtitle">Selecciona los elementos duplicados que combinar con este. Cada uno se convierte en una versión reproducible.</string>
+    <string name="detail_merge_confirm">Combinar</string>
+    <string name="detail_merge_searching">Buscando en la biblioteca…</string>
+    <string name="detail_merge_no_candidates">No se encontraron otras películas con el mismo nombre en la biblioteca</string>
+    <string name="detail_split_confirm_title">¿Separar versiones?</string>
+    <string name="detail_split_confirm_message">Cada versión se convierte en su propio elemento de biblioteca. Esto no se puede deshacer.</string>
+    <string name="detail_msg_merge_started">Combinando versiones…</string>
+    <string name="detail_msg_merge_failed">No se pudieron combinar las versiones</string>
+    <string name="detail_msg_split_started">Separando versiones…</string>
+    <string name="detail_msg_split_failed">No se pudieron separar las versiones</string>
 </resources>

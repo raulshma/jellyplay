@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">La configuration du plugin n’est pas disponible sur cette plateforme.</string>
 
     <string name="admin_no_delete_permission">Votre compte n'est pas autorisé à supprimer du contenu. Contactez l'administrateur de votre serveur.</string>
+    <string name="admin_backups_title">Sauvegardes</string>
+    <string name="admin_backups_create">Créer une sauvegarde</string>
+    <string name="admin_backups_create_title">Créer une sauvegarde</string>
+    <string name="admin_backups_empty">Aucune sauvegarde pour le moment</string>
+    <string name="admin_backups_empty_hint">Lancez une sauvegarde pour capturer la configuration et les données de ce serveur.</string>
+    <string name="admin_backups_unsupported_title">Sauvegardes indisponibles</string>
+    <string name="admin_backups_unsupported_body">Ce serveur Jellyfin ne prend pas en charge les sauvegardes. Un serveur sous Jellyfin 10.11 ou plus récent est requis.</string>
+    <string name="admin_backups_component_metadata">Métadonnées</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">Sous-titres</string>
+    <string name="admin_backups_component_database">Base de données</string>
+    <string name="admin_backups_restore">Restaurer</string>
+    <string name="admin_backups_restore_confirm_title">Restaurer la sauvegarde ?</string>
+    <string name="admin_backups_restore_confirm_body">Le serveur redémarre immédiatement et toutes les données actuelles sont remplacées par le contenu de « %1$s ». Cette action est irréversible.</string>
+    <string name="admin_backups_restoring">Restauration en cours — le serveur redémarre</string>
+    <string name="admin_backups_reconnecting">Le serveur est de retour — reconnexion…</string>
+    <string name="admin_backups_restore_complete">Restauration terminée — reconnecté au serveur.</string>
+    <string name="admin_backups_restore_server_unreachable">Le serveur n'est pas revenu après la restauration. Vérifiez qu'il fonctionne, puis reconnectez-vous.</string>
 </resources>

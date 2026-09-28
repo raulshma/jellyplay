@@ -464,4 +464,23 @@
     <string name="detail_option_start_radio">Avvia radio</string>
     <string name="detail_radio_empty">Nessuna traccia per avviare una radio da questo elemento</string>
     <string name="detail_radio_failed">Impossibile avviare la radio</string>
+    <string name="detail_missing_badge">Mancante</string>
+    <string name="detail_airs_date_format">In onda %1$s</string>
+    <string name="detail_option_version">Versione</string>
+    <string name="detail_version_select">Seleziona versione</string>
+    <string name="detail_version_grouping_badge">Raggruppamento</string>
+    <string name="detail_version_placeholder_badge">Segnaposto</string>
+    <string name="detail_option_merge_versions">Unisci versioni…</string>
+    <string name="detail_option_split_versions">Separa versioni</string>
+    <string name="detail_merge_versions_title">Unisci versioni</string>
+    <string name="detail_merge_versions_subtitle">Seleziona gli elementi duplicati da unire a questo. Ognuno diventa una versione riproducibile.</string>
+    <string name="detail_merge_confirm">Unisci</string>
+    <string name="detail_merge_searching">Ricerca nella libreria…</string>
+    <string name="detail_merge_no_candidates">Nessun altro film con lo stesso nome trovato nella libreria</string>
+    <string name="detail_split_confirm_title">Separare le versioni?</string>
+    <string name="detail_split_confirm_message">Ogni versione diventa un elemento della libreria a sé. Questa azione non può essere annullata.</string>
+    <string name="detail_msg_merge_started">Unione delle versioni…</string>
+    <string name="detail_msg_merge_failed">Impossibile unire le versioni</string>
+    <string name="detail_msg_split_started">Separazione delle versioni…</string>
+    <string name="detail_msg_split_failed">Impossibile separare le versioni</string>
 </resources>

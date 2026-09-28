@@ -334,4 +334,13 @@
     <string name="a11y_volume_increase">Aumentar volume</string>
     <string name="a11y_volume_decrease">Diminuir volume</string>
     <string name="player_direct_play_fallback">A reprodução direta falhou — mudando para transcodificação (%1$s)</string>
+    <string name="player_video_still_watching_title">Ainda está assistindo?</string>
+    <string name="player_video_still_watching_episodes_subtitle">A reprodução automática avançou por vários episódios — confirme para continuar</string>
+    <string name="player_video_still_watching_hours_subtitle">Reprodução pausada após horas sem interação — confirme para continuar</string>
+    <string name="player_video_still_watching_continue">Continuar assistindo</string>
+    <string name="player_video_still_watching_stop">Parar</string>
+    <string name="player_video_downloaded_badge">Baixado</string>
+    <string name="player_video_source_label">Fonte</string>
+    <string name="player_video_version">Versão</string>
+    <string name="player_video_remember_version">Memorizar esta versão</string>
 </resources>

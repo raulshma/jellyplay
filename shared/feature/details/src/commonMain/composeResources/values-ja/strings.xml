@@ -454,4 +454,23 @@
     <string name="detail_option_start_radio">ラジオを開始</string>
     <string name="detail_radio_empty">このアイテムからラジオを開始できる曲がありません</string>
     <string name="detail_radio_failed">ラジオを開始できませんでした</string>
+    <string name="detail_missing_badge">欠落</string>
+    <string name="detail_airs_date_format">放送 %1$s</string>
+    <string name="detail_option_version">バージョン</string>
+    <string name="detail_version_select">バージョンを選択</string>
+    <string name="detail_version_grouping_badge">グループ化</string>
+    <string name="detail_version_placeholder_badge">プレースホルダー</string>
+    <string name="detail_option_merge_versions">バージョンを結合…</string>
+    <string name="detail_option_split_versions">バージョンを分割</string>
+    <string name="detail_merge_versions_title">バージョンの結合</string>
+    <string name="detail_merge_versions_subtitle">このアイテムに結合する重複アイテムを選択してください。それぞれが再生可能なバージョンになります。</string>
+    <string name="detail_merge_confirm">結合</string>
+    <string name="detail_merge_searching">ライブラリを検索中…</string>
+    <string name="detail_merge_no_candidates">ライブラリに同じ名前の他の映画は見つかりませんでした</string>
+    <string name="detail_split_confirm_title">バージョンを分割しますか？</string>
+    <string name="detail_split_confirm_message">各バージョンは独自のライブラリアイテムになります。この操作は元に戻せません。</string>
+    <string name="detail_msg_merge_started">バージョンを結合しています…</string>
+    <string name="detail_msg_merge_failed">バージョンを結合できませんでした</string>
+    <string name="detail_msg_split_started">バージョンを分割しています…</string>
+    <string name="detail_msg_split_failed">バージョンを分割できませんでした</string>
 </resources>
