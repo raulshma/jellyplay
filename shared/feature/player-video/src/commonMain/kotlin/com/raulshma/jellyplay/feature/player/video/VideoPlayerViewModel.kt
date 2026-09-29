@@ -2440,11 +2440,27 @@ class VideoPlayerViewModel(
         getEngine = { playerSessionManager.engine },
     )
 
+    // Construction-completion gate for the updateConfig* forwarders below.
+    // The init-block collectors (playbackPreferenceResolver.resolved among
+    // them) emit SYNCHRONOUSLY during <init> — Main.immediate dispatch plus
+    // StateFlow's initial emission — before any property declared beneath
+    // the init block has run, and they call updateConfigWithUiState(), which
+    // dereferenced the not-yet-initialized engineConfigSync (device-verified
+    // NPE crashing every player open). This var's JVM default (false) is
+    // observable until its initializer runs here — the LAST property
+    // declaration in the class — so the forwarders no-op while the VM is
+    // under construction. Semantically a no-op is exactly right for those
+    // early emissions: no engine exists yet (getEngine() null ⇒ the rebuild
+    // would dispatch nothing).
+    private var configSyncReady: Boolean = true
+
     // Explicit Unit returns: bare expression bodies would pull the
     // later-declared engineConfigSync into an inference cycle with `effects`.
-    private fun updateConfigWithUiState(): Unit = engineConfigSync.markDirty()
+    private fun updateConfigWithUiState(): Unit =
+        if (configSyncReady) engineConfigSync.markDirty() else Unit
 
-    private fun updateConfigWithUiStateDebounced(): Unit = engineConfigSync.markDirtyDebounced()
+    private fun updateConfigWithUiStateDebounced(): Unit =
+        if (configSyncReady) engineConfigSync.markDirtyDebounced() else Unit
 
     // cancelAutoplay (the Up Next overlay's countdown dismissal) moved into
     // EpisodeContinuationController; the CancelAutoplay arm above routes to it.
