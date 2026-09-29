@@ -950,6 +950,9 @@
     <string name="settings_trickplay_on_gestures_off">Sem miniaturas ao procurar</string>
     <string name="settings_background_audio">Áudio em segundo plano</string>
     <string name="settings_background_audio_subtitle">Continuar o áudio ao trocar de app durante o vídeo</string>
+    <string name="settings_auto_pip">Picture-in-picture automático</string>
+    <string name="settings_auto_pip_on">O vídeo minimiza para picture-in-picture ao sair do app</string>
+    <string name="settings_auto_pip_off">O app vai para o segundo plano em vez do picture-in-picture</string>
     <string name="settings_keep_screen_on">Manter ecrã ligado</string>
     <string name="settings_keep_screen_on_subtitle">Impedir o desligar do ecrã durante o vídeo</string>
     <string name="settings_incognito_mode">Modo incógnito</string>
@@ -1325,6 +1328,8 @@
     <string name="ss_preload_buffer_subtitle">Limite de tamanho do buffer à frente da faixa de vídeo atual</string>
     <string name="ss_background_audio_title">Áudio de Vídeo em Segundo Plano</string>
     <string name="ss_background_audio_subtitle">Manter o áudio do vídeo a reproduzir quando a aplicação passa para segundo plano</string>
+    <string name="ss_auto_pip_title">Picture-in-picture automático</string>
+    <string name="ss_auto_pip_subtitle">Minimizar o vídeo para uma janela flutuante ao sair do app durante a reprodução</string>
     <string name="ss_keep_screen_on_title">Manter Ecrã Ligado</string>
     <string name="ss_keep_screen_on_subtitle">Impedir que o ecrã do dispositivo se desligue durante a reprodução de vídeo</string>
     <string name="ss_incognito_mode_title">Modo Anónimo</string>

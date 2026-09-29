@@ -948,6 +948,9 @@
     <string name="settings_trickplay_on_gestures_off">탐색 중 썸네일 없음</string>
     <string name="settings_background_audio">백그라운드 오디오</string>
     <string name="settings_background_audio_subtitle">비디오 재생 중 앱 전환 시 오디오 계속 재생</string>
+    <string name="settings_auto_pip">자동 PIP</string>
+    <string name="settings_auto_pip_on">앱을 벗어나면 동영상이 PIP로 최소화됩니다</string>
+    <string name="settings_auto_pip_off">PIP 대신 백그라운드로 전환됩니다</string>
     <string name="settings_keep_screen_on">화면 켜짐 유지</string>
     <string name="settings_keep_screen_on_subtitle">비디오 재생 중 화면이 꺼지지 않도록 방지</string>
     <string name="settings_incognito_mode">시크릿 모드</string>
@@ -1323,6 +1326,8 @@
     <string name="ss_preload_buffer_subtitle">현재 비디오 트랙 이전의 버퍼 크기 제한입니다</string>
     <string name="ss_background_audio_title">백그라운드 비디오 오디오</string>
     <string name="ss_background_audio_subtitle">앱이 백그라운드로 전환되어도 비디오 오디오를 계속 재생합니다</string>
+    <string name="ss_auto_pip_title">자동 PIP</string>
+    <string name="ss_auto_pip_subtitle">재생 중 앱을 벗어날 때 동영상을 플로팅 창으로 최소화</string>
     <string name="ss_keep_screen_on_title">화면 켜짐 유지</string>
     <string name="ss_keep_screen_on_subtitle">비디오 재생 중 기기 화면이 꺼지지 않도록 합니다</string>
     <string name="ss_incognito_mode_title">시크릿 모드</string>

@@ -103,6 +103,14 @@ internal data class SettingsCapabilities(
      * rows on Android; pinned in `DesktopPlatformActualsTest`.
      */
     val supportsShellHooks: Boolean,
+    /**
+     * System picture-in-picture exists — Android-backed: the dedicated
+     * `PlayerActivity` owns auto-enter on Home/recents plus manual PiP entry
+     * (issue #167's toggle rides on it). Desktop binds `NoOpPipController`
+     * (windowing covers it), so the auto-PiP row is structurally absent
+     * there. Pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsPip: Boolean,
 )
 
 /**

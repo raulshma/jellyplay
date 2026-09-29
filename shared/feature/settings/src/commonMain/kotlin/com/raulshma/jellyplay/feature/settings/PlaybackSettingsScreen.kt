@@ -104,6 +104,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_next
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_next_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_next_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_pip_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_pip_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_autoplay_trailers
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_autoplay_trailers_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_autoplay_trailers_on
@@ -1112,6 +1114,21 @@ private fun PlaybackPlayerAdvancedRows(
                             highlighted = highlightSettingId == PlaybackSettingsIds.BACKGROUND_AUDIO,
                             onCheckedChange = { viewModel.edit { scope -> scope.playback.setBackgroundVideoAudioEnabled(it) } },
                         )
+                        // Auto-PiP on Home/recents (issue #167) — Android-only;
+                        // the declared Platform(Pip) admission hides the row on
+                        // desktop. Off makes leaving the app background it
+                        // normally instead of entering picture-in-picture; the
+                        // manual PiP button in the controls is unaffected.
+                        if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackSettingsIds.AUTO_ENTER_PIP, rowFlags)) {
+                            SettingToggleItem(
+                                icon = rowIcon(PlaybackSettingsIds.AUTO_ENTER_PIP),
+                                title = rowTitle(PlaybackSettingsIds.AUTO_ENTER_PIP),
+                                subtitle = if (preferences.autoEnterPip) stringResource(Res.string.settings_auto_pip_on) else stringResource(Res.string.settings_auto_pip_off),
+                                checked = preferences.autoEnterPip,
+                                highlighted = highlightSettingId == PlaybackSettingsIds.AUTO_ENTER_PIP,
+                                onCheckedChange = { viewModel.edit { scope -> scope.playback.setAutoEnterPip(it) } },
+                            )
+                        }
                         SettingToggleItem(
                             icon = rowIcon(PlaybackSettingsIds.KEEP_SCREEN_ON),
                             title = rowTitle(PlaybackSettingsIds.KEEP_SCREEN_ON),

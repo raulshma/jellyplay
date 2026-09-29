@@ -950,6 +950,9 @@
     <string name="settings_trickplay_on_gestures_off">跳转时无缩略图</string>
     <string name="settings_background_audio">后台音频</string>
     <string name="settings_background_audio_subtitle">视频播放期间切换应用时保持音频播放</string>
+    <string name="settings_auto_pip">自动画中画</string>
+    <string name="settings_auto_pip_on">离开应用时视频最小化为画中画</string>
+    <string name="settings_auto_pip_off">应用转入后台而非画中画</string>
     <string name="settings_keep_screen_on">保持屏幕开启</string>
     <string name="settings_keep_screen_on_subtitle">防止视频播放期间屏幕关闭</string>
     <string name="settings_incognito_mode">无痕模式</string>
@@ -1325,6 +1328,8 @@
     <string name="ss_preload_buffer_subtitle">当前视频轨之前的缓冲大小限制</string>
     <string name="ss_background_audio_title">后台视频音频</string>
     <string name="ss_background_audio_subtitle">应用置于后台时保持视频音频播放</string>
+    <string name="ss_auto_pip_title">自动画中画</string>
+    <string name="ss_auto_pip_subtitle">播放期间离开应用时将视频最小化为悬浮窗</string>
     <string name="ss_keep_screen_on_title">保持屏幕常亮</string>
     <string name="ss_keep_screen_on_subtitle">在视频播放期间阻止设备屏幕关闭</string>
     <string name="ss_incognito_mode_title">无痕模式</string>

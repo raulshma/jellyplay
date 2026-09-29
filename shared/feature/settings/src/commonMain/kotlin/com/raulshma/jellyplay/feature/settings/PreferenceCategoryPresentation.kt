@@ -252,6 +252,7 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_episode_browser_title, { it.videoPlayer.videoEpisodeBrowserEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_playback_metadata_title, { it.videoPlayer.videoShowPlaybackMetadata }, Boolean::onOff),
     DiffField(Res.string.ss_background_audio_title, { it.playback.backgroundVideoAudioEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_auto_pip_title, { it.playback.autoEnterPip }, Boolean::onOff),
     DiffField(Res.string.ss_autoplay_countdown_title, { it.playback.autoPlayCountdownSec }, Int::toString),
     DiffField(Res.string.ss_keep_screen_on_title, { it.playback.keepScreenOnDuringVideo }, Boolean::onOff),
     DiffField(Res.string.ss_incognito_mode_title, { it.videoPlayer.incognitoModeEnabled }, Boolean::onOff),

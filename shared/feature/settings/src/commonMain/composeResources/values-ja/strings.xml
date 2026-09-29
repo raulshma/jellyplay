@@ -948,6 +948,9 @@
     <string name="settings_trickplay_on_gestures_off">シーク中にサムネイルなし</string>
     <string name="settings_background_audio">バックグラウンド音声</string>
     <string name="settings_background_audio_subtitle">動画再生中のアプリ切替時も音声を継続</string>
+    <string name="settings_auto_pip">自動ピクチャーインピクチャー</string>
+    <string name="settings_auto_pip_on">アプリを離れると動画をピクチャーインピクチャーに最小化</string>
+    <string name="settings_auto_pip_off">ピクチャーインピクチャーではなくバックグラウンドに移行</string>
     <string name="settings_keep_screen_on">画面をオンのまま</string>
     <string name="settings_keep_screen_on_subtitle">動画再生中に画面がオフになるのを防ぐ</string>
     <string name="settings_incognito_mode">シークレットモード</string>
@@ -1323,6 +1326,8 @@
     <string name="ss_preload_buffer_subtitle">現在の動画トラックより先のバッファーサイズ上限</string>
     <string name="ss_background_audio_title">バックグラウンド動画オーディオ</string>
     <string name="ss_background_audio_subtitle">アプリをバックグラウンドに移動しても動画のオーディオを再生し続けます</string>
+    <string name="ss_auto_pip_title">自動ピクチャーインピクチャー</string>
+    <string name="ss_auto_pip_subtitle">再生中にアプリを離れると動画をフローティングウィンドウに最小化</string>
     <string name="ss_keep_screen_on_title">画面をオンのまま保持</string>
     <string name="ss_keep_screen_on_subtitle">動画再生中にデバイスの画面がオフになるのを防ぎます</string>
     <string name="ss_incognito_mode_title">シークレットモード</string>

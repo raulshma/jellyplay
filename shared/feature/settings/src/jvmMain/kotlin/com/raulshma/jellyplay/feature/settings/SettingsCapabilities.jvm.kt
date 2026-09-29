@@ -33,4 +33,5 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsIdleAmbientScreen = true,
     supportsDiscordPresence = true,
     supportsShellHooks = true,
+    supportsPip = false,
 )

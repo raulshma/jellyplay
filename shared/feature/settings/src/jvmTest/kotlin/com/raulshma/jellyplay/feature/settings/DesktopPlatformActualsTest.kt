@@ -142,6 +142,7 @@ class DesktopPlatformActualsTest {
         assertFalse(caps.supportsBiometric, "rememberBiometricGate returns null (DesktopBiometricGate)")
         assertFalse(caps.supportsSystemNotificationSettings)
         assertFalse(caps.supportsLogSharing)
+        assertFalse(caps.supportsPip, "desktop binds NoOpPipController — the auto-PiP row stays hidden")
     }
 
     @Test

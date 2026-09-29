@@ -47,6 +47,7 @@ internal sealed interface RowAdmission {
             RowAdmissionCapability.VolumeMemory -> flags.supportsVolumeMemory
             RowAdmissionCapability.IdleAmbientScreen -> flags.supportsIdleAmbientScreen
             RowAdmissionCapability.AppLocaleOverride -> flags.supportsAppLocaleOverride
+            RowAdmissionCapability.Pip -> flags.supportsPip
         }
     }
 
@@ -81,7 +82,7 @@ internal sealed interface RowAdmission {
 }
 
 /** The [RowAdmission.Platform] capability vocabulary — one entry per gating flag. */
-internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures, SystemNotificationSettings, Biometric, AudioDeviceSelection, MpvRenderProfiles, VolumeMemory, IdleAmbientScreen, AppLocaleOverride }
+internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures, SystemNotificationSettings, Biometric, AudioDeviceSelection, MpvRenderProfiles, VolumeMemory, IdleAmbientScreen, AppLocaleOverride, Pip }
 
 /**
  * The inputs a [RowAdmission] evaluates against. The capability flags default
@@ -107,6 +108,8 @@ internal data class RowAdmissionFlags(
     val supportsIdleAmbientScreen: Boolean = settingsCapabilities.supportsIdleAmbientScreen,
     /** The per-app display-language row's capability flag (the `AppLocaleSetter` seam). */
     val supportsAppLocaleOverride: Boolean = settingsCapabilities.supportsAppLocaleOverride,
+    /** The auto-PiP toggle's capability flag (Android's PlayerActivity PiP stack). */
+    val supportsPip: Boolean = settingsCapabilities.supportsPip,
     /** Parent row ids whose toggle is currently on — [RowAdmission.WhenOn] resolution. */
     val parentsOn: Set<String> = emptySet(),
 )

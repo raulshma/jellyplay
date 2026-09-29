@@ -950,6 +950,9 @@
     <string name="settings_trickplay_on_gestures_off">Pas de vignettes pendant la navigation</string>
     <string name="settings_background_audio">Audio en arrière-plan</string>
     <string name="settings_background_audio_subtitle">Continuer l'audio en changeant d'app pendant la vidéo</string>
+    <string name="settings_auto_pip">Image dans l'image automatique</string>
+    <string name="settings_auto_pip_on">La vidéo se réduit en image dans l'image quand vous quittez l'appli</string>
+    <string name="settings_auto_pip_off">L'appli passe en arrière-plan au lieu de l'image dans l'image</string>
     <string name="settings_keep_screen_on">Garder l'écran allumé</string>
     <string name="settings_keep_screen_on_subtitle">Empêcher l'extinction de l'écran pendant la vidéo</string>
     <string name="settings_incognito_mode">Mode incognito</string>
@@ -1325,6 +1328,8 @@
     <string name="ss_preload_buffer_subtitle">Limite de taille de tampon en avance de la piste vidéo actuelle</string>
     <string name="ss_background_audio_title">Audio vidéo en arrière-plan</string>
     <string name="ss_background_audio_subtitle">Continuer l'audio de la vidéo quand l'application passe en arrière-plan</string>
+    <string name="ss_auto_pip_title">Image dans l'image automatique</string>
+    <string name="ss_auto_pip_subtitle">Réduire la vidéo en fenêtre flottante quand vous quittez l'appli pendant la lecture</string>
     <string name="ss_keep_screen_on_title">Maintenir l'écran allumé</string>
     <string name="ss_keep_screen_on_subtitle">Empêcher l'extinction de l'écran pendant la lecture vidéo</string>
     <string name="ss_incognito_mode_title">Mode navigation privée</string>

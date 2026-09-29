@@ -87,6 +87,16 @@ class PlaybackStoreTest {
         assertFalse(slice.audioPassthrough)
         assertTrue(slice.keepScreenOnDuringVideo)
         assertEquals(OfflinePlaybackPreference.PREFER_DOWNLOADED, slice.offlinePlaybackPreference)
+        // Issue #167's toggle defaults ON — the historical auto-PiP behaviour.
+        assertTrue(slice.autoEnterPip)
+    }
+
+    @Test
+    fun `setAutoEnterPip round-trips`() = runTest {
+        store.setAutoEnterPip(false)
+        assertFalse(settledSlice().autoEnterPip)
+        store.setAutoEnterPip(true)
+        assertTrue(settledSlice().autoEnterPip)
     }
 
     @Test
@@ -254,6 +264,7 @@ class PlaybackStoreTest {
             duckOnTransientFocusLoss = true,
             autoPlayCountdownSec = 30,
             backgroundVideoAudioEnabled = true,
+            autoEnterPip = false,
             pgsSubtitleDirectPlay = true,
             userDataSyncEnabled = false,
             androidTvWatchNextEnabled = false,

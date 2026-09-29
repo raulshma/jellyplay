@@ -245,6 +245,13 @@ data class PlaybackPreferences(
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val audioDelayMs: Long = 0L,
     val backgroundVideoAudioEnabled: Boolean = false,
+    /**
+     * Whether leaving the player during playback auto-enters picture-in-picture
+     * (issue #167). Default `true` keeps the historical behaviour; off makes
+     * Home/recents background the app normally. Manual PiP entry via the
+     * controls button is unaffected. Android-only surface (no desktop PiP).
+     */
+    val autoEnterPip: Boolean = true,
     val autoPlayCountdownSec: Int = 10,
     val incognitoModeEnabled: Boolean = false,
     val showClockInPlayer: Boolean = false,

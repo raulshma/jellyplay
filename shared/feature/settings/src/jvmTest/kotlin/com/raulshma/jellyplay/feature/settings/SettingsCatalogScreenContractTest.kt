@@ -848,7 +848,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 4, // minus the two TV rows and the two WhenOn(autoplay) still-watching rows
+            SettingsScreenGroups.playbackPlayer.items.size - 5, // minus the two TV rows, the two WhenOn(autoplay) still-watching rows, and the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(

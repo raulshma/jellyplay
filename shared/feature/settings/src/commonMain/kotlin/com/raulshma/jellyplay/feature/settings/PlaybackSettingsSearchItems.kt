@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_passthrough
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_time_stretch
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_accept_invites
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_pip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_countdown
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_next
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_autoplay_trailers
@@ -122,6 +123,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_dela
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_delay_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_passthrough_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_passthrough_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_pip_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_pip_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_countdown_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_countdown_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_trailers_subtitle
@@ -332,6 +335,7 @@ internal object PlaybackSettingsIds {
     const val PRELOAD_BUFFER = "preload_buffer"
     const val VIDEO_CACHE_SIZE = "video_cache_size"
     const val BACKGROUND_AUDIO = "background_audio"
+    const val AUTO_ENTER_PIP = "auto_enter_pip"
     const val KEEP_SCREEN_ON = "keep_screen_on"
     const val INCOGNITO_MODE = "incognito_mode"
     const val HOLD_SPEED_MULTIPLIER = "hold_speed_multiplier"
@@ -697,6 +701,21 @@ internal val PlaybackSettingsRowRecords = listOf(
         isAdvanced = true
     )
 ,
+    // ── Auto-PiP on Home/recents (issue #167): Android-only — the declared
+    // All(Advanced, Platform(Pip)) admission hides the row wholesale on
+    // desktop, where NoOpPipController binds and windowing covers it.
+    SettingsRowRecord(
+        id = PlaybackSettingsIds.AUTO_ENTER_PIP,
+        titleRes = Res.string.settings_auto_pip,
+        searchTitleRes = Res.string.ss_auto_pip_title,
+        searchSubtitleRes = Res.string.ss_auto_pip_subtitle,
+        keywords = listOf("pip", "picture in picture", "home", "minimize", "background", "floating window"),
+        route = Route.PlaybackSettings(),
+        icon = Tabler.Outline.PictureInPicture,
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
+    )
+,
     SettingsRowRecord(
         id = PlaybackSettingsIds.KEEP_SCREEN_ON,
         titleRes = Res.string.settings_keep_screen_on,
@@ -837,6 +856,12 @@ internal val PlaybackPlayerRowAdmissions: Map<String, RowAdmission> =
         PlaybackSettingsIds.ANDROID_TV_WATCH_NEXT to RowAdmission.Tv,
         PlaybackSettingsIds.TV_ZOOM_MODE to RowAdmission.Tv,
         PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE to RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
+        // The auto-PiP toggle rides the advanced toggle AND the platform PiP
+        // capability (Android's PlayerActivity stack) — both gates must hold.
+        PlaybackSettingsIds.AUTO_ENTER_PIP to RowAdmission.All(
+            RowAdmission.Advanced,
+            RowAdmission.Platform(RowAdmissionCapability.Pip),
+        ),
     )
 
 /**

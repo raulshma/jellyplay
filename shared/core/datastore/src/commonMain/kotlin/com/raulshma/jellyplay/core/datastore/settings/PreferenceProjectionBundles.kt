@@ -87,6 +87,7 @@ internal data class PlaybackCoreBundle(
         dialogueBoostStrength = effects.dialogueBoostStrength,
         audioDelayMs = audio.audioDelayMs,
         backgroundVideoAudioEnabled = playback.backgroundVideoAudioEnabled,
+        autoEnterPip = playback.autoEnterPip,
         autoPlayCountdownSec = playback.autoPlayCountdownSec,
         incognitoModeEnabled = video.incognitoModeEnabled,
         showClockInPlayer = video.showClockInPlayer,

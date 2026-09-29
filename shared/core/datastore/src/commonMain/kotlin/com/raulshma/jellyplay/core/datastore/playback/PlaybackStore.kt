@@ -96,6 +96,7 @@ class PlaybackStore constructor(
         val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey("duck_on_transient_focus_loss")
         val AUTO_PLAY_COUNTDOWN_SEC = intPreferencesKey("auto_play_countdown_sec")
         val BACKGROUND_VIDEO_AUDIO_ENABLED = booleanPreferencesKey("background_video_audio_enabled")
+        val AUTO_ENTER_PIP = booleanPreferencesKey("auto_enter_pip")
         val PGS_SUBTITLE_DIRECT_PLAY = booleanPreferencesKey("pgs_subtitle_direct_play")
         val USER_DATA_SYNC_ENABLED = booleanPreferencesKey("user_data_sync_enabled")
         val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey("android_tv_watch_next_enabled")
@@ -135,6 +136,7 @@ class PlaybackStore constructor(
         duckOnTransientFocusLoss = PreferenceCodec.readBool(prefs, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS, "duck_on_transient_focus_loss", false),
         autoPlayCountdownSec = PreferenceCodec.readInt(prefs, Keys.AUTO_PLAY_COUNTDOWN_SEC, "auto_play_countdown_sec", 10),
         backgroundVideoAudioEnabled = PreferenceCodec.readBool(prefs, Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, "background_video_audio_enabled", false),
+        autoEnterPip = PreferenceCodec.readBool(prefs, Keys.AUTO_ENTER_PIP, "auto_enter_pip", true),
         pgsSubtitleDirectPlay = PreferenceCodec.readBool(prefs, Keys.PGS_SUBTITLE_DIRECT_PLAY, "pgs_subtitle_direct_play", false),
         userDataSyncEnabled = PreferenceCodec.readBool(prefs, Keys.USER_DATA_SYNC_ENABLED, "user_data_sync_enabled", true),
         androidTvWatchNextEnabled = PreferenceCodec.readBool(prefs, Keys.ANDROID_TV_WATCH_NEXT_ENABLED, "android_tv_watch_next_enabled", true),
@@ -319,6 +321,16 @@ class PlaybackStore constructor(
         dataStore.edit { it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = enabled }
     }
 
+    /**
+     * Whether leaving the player during playback auto-enters
+     * picture-in-picture. Default `true` preserves the historical behaviour;
+     * turning it off makes Home/recents background the app normally instead
+     * (issue #167). The manual PiP button in the controls is unaffected.
+     */
+    suspend fun setAutoEnterPip(enabled: Boolean) {
+        dataStore.edit { it[Keys.AUTO_ENTER_PIP] = enabled }
+    }
+
     suspend fun setPgsSubtitleDirectPlay(enabled: Boolean) {
         dataStore.edit { it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = enabled }
     }
@@ -369,6 +381,7 @@ class PlaybackStore constructor(
             Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
             Keys.AUTO_PLAY_COUNTDOWN_SEC,
             Keys.BACKGROUND_VIDEO_AUDIO_ENABLED,
+            Keys.AUTO_ENTER_PIP,
         )
         PreferenceResetCategory.SUBTITLES_LANGUAGE -> listOf(Keys.PGS_SUBTITLE_DIRECT_PLAY)
         PreferenceResetCategory.SYNCPLAY_CASTING -> listOf(Keys.LIVE_STREAM_OPTION)
@@ -405,6 +418,7 @@ class PlaybackStore constructor(
             it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = slice.duckOnTransientFocusLoss
             it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = slice.autoPlayCountdownSec
             it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = slice.backgroundVideoAudioEnabled
+            it[Keys.AUTO_ENTER_PIP] = slice.autoEnterPip
             it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = slice.pgsSubtitleDirectPlay
             it[Keys.USER_DATA_SYNC_ENABLED] = slice.userDataSyncEnabled
             it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = slice.androidTvWatchNextEnabled
@@ -446,6 +460,7 @@ data class PlaybackSlice(
     val duckOnTransientFocusLoss: Boolean = false,
     val autoPlayCountdownSec: Int = 10,
     val backgroundVideoAudioEnabled: Boolean = false,
+    val autoEnterPip: Boolean = true,
     val pgsSubtitleDirectPlay: Boolean = false,
     val userDataSyncEnabled: Boolean = true,
     val androidTvWatchNextEnabled: Boolean = true,

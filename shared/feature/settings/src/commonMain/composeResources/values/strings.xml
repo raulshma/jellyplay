@@ -1206,6 +1206,9 @@
     <string name="settings_trickplay_on_gestures_off">No thumbnails during seek</string>
     <string name="settings_background_audio">Background Audio</string>
     <string name="settings_background_audio_subtitle">Keep audio playing when switching apps during video playback</string>
+    <string name="settings_auto_pip">Auto Picture-in-Picture</string>
+    <string name="settings_auto_pip_on">Video minimizes into picture-in-picture when you leave the app</string>
+    <string name="settings_auto_pip_off">App goes to background instead of picture-in-picture</string>
     <string name="settings_keep_screen_on">Keep Screen On</string>
     <string name="settings_keep_screen_on_subtitle">Prevent screen from turning off during video playback</string>
     <string name="settings_incognito_mode">Incognito Mode</string>
@@ -1588,6 +1591,8 @@
     <string name="ss_preload_buffer_subtitle">Buffer size limit ahead of current video track</string>
     <string name="ss_background_audio_title">Background Video Audio</string>
     <string name="ss_background_audio_subtitle">Keep video audio playing when app is put to background</string>
+    <string name="ss_auto_pip_title">Auto Picture-in-Picture</string>
+    <string name="ss_auto_pip_subtitle">Minimize video into a floating window when leaving the app during playback</string>
     <string name="ss_keep_screen_on_title">Keep Screen On</string>
     <string name="ss_keep_screen_on_subtitle">Prevent device screen from turning off during video playback</string>
     <string name="ss_incognito_mode_title">Incognito Mode</string>

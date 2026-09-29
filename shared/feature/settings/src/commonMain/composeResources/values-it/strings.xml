@@ -950,6 +950,9 @@
     <string name="settings_trickplay_on_gestures_off">Nessuna miniatura durante la ricerca</string>
     <string name="settings_background_audio">Audio in background</string>
     <string name="settings_background_audio_subtitle">Continua l'audio cambiando app durante il video</string>
+    <string name="settings_auto_pip">Picture-in-picture automatico</string>
+    <string name="settings_auto_pip_on">Il video si riduce in picture-in-picture quando esci dall'app</string>
+    <string name="settings_auto_pip_off">L'app passa in background invece del picture-in-picture</string>
     <string name="settings_keep_screen_on">Mantieni schermo acceso</string>
     <string name="settings_keep_screen_on_subtitle">Impedisci lo spegnimento dello schermo durante il video</string>
     <string name="settings_incognito_mode">Modalità incognito</string>
@@ -1327,6 +1330,8 @@
     <string name="ss_preload_buffer_subtitle">Limite della dimensione del buffer davanti alla traccia video attuale</string>
     <string name="ss_background_audio_title">Audio video in background</string>
     <string name="ss_background_audio_subtitle">Mantieni l'audio del video in riproduzione quando l'app passa in background</string>
+    <string name="ss_auto_pip_title">Picture-in-picture automatico</string>
+    <string name="ss_auto_pip_subtitle">Ridurre il video in una finestra mobile quando esci dall'app durante la riproduzione</string>
     <string name="ss_keep_screen_on_title">Mantieni schermo acceso</string>
     <string name="ss_keep_screen_on_subtitle">Impedisci lo spegnimento dello schermo durante la riproduzione video</string>
     <string name="ss_incognito_mode_title">Modalità incognito</string>

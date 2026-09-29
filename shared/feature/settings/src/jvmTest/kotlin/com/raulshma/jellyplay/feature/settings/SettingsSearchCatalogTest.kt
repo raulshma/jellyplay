@@ -98,8 +98,10 @@ class SettingsSearchCatalogTest {
         // commands (feature 4.3): 305.
         // Added the appearance theme group's "Layout" override picker
         // (manual phone/tablet layout, issue #166): 306.
+        // Added the playback player group's Android-only "Auto
+        // Picture-in-Picture" toggle (issue #167): 307.
         // Bump this count when you deliberately add items.
-        assertEquals(306, items.size)
+        assertEquals(307, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

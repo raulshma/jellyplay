@@ -82,6 +82,7 @@ internal fun PlaybackSlice.mergeWith(
         duckOnTransientFocusLoss = if (importPlayback) incoming.duckOnTransientFocusLoss else duckOnTransientFocusLoss,
         autoPlayCountdownSec = if (importPlayback) incoming.autoPlayCountdownSec else autoPlayCountdownSec,
         backgroundVideoAudioEnabled = if (importPlayback) incoming.backgroundVideoAudioEnabled else backgroundVideoAudioEnabled,
+        autoEnterPip = if (importPlayback) incoming.autoEnterPip else autoEnterPip,
         pgsSubtitleDirectPlay = if (importSubtitles) incoming.pgsSubtitleDirectPlay else pgsSubtitleDirectPlay,
         liveStreamOption = if (importSync) incoming.liveStreamOption else liveStreamOption,
         userDataSyncEnabled = if (importMisc) incoming.userDataSyncEnabled else userDataSyncEnabled,

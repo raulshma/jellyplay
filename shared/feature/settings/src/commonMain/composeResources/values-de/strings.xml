@@ -950,6 +950,9 @@
     <string name="settings_trickplay_on_gestures_off">Keine Vorschaubilder beim Spulen</string>
     <string name="settings_background_audio">Hintergrund-Audio</string>
     <string name="settings_background_audio_subtitle">Audio weiter abspielen, wenn beim Videowiedergeben Apps gewechselt werden</string>
+    <string name="settings_auto_pip">Automatisches Bild-in-Bild</string>
+    <string name="settings_auto_pip_on">Video wird beim Verlassen der App als Bild-in-Bild minimiert</string>
+    <string name="settings_auto_pip_off">App wechselt in den Hintergrund statt in Bild-in-Bild</string>
     <string name="settings_keep_screen_on">Bildschirm eingeschaltet lassen</string>
     <string name="settings_keep_screen_on_subtitle">Bildschirm während der Videowiedergabe nicht ausschalten</string>
     <string name="settings_incognito_mode">Inkognito-Modus</string>
@@ -1323,6 +1326,8 @@
     <string name="ss_preload_buffer_subtitle">Puffergrößen-Limit vor dem aktuellen Videotrack</string>
     <string name="ss_background_audio_title">Video-Audio im Hintergrund</string>
     <string name="ss_background_audio_subtitle">Video-Audio weiter abspielen, wenn die App in den Hintergrund wechselt</string>
+    <string name="ss_auto_pip_title">Automatisches Bild-in-Bild</string>
+    <string name="ss_auto_pip_subtitle">Video beim Verlassen der App in ein schwebendes Fenster minimieren</string>
     <string name="ss_keep_screen_on_title">Bildschirm eingeschaltet lassen</string>
     <string name="ss_keep_screen_on_subtitle">Bildschirm während der Videowiedergabe nicht ausschalten</string>
     <string name="ss_incognito_mode_title">Inkognito-Modus</string>

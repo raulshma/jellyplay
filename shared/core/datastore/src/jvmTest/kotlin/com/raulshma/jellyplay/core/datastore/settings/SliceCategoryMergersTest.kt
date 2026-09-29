@@ -110,6 +110,7 @@ class SliceCategoryMergersTest {
         duckOnTransientFocusLoss = true,
         autoPlayCountdownSec = 42,
         backgroundVideoAudioEnabled = true,
+        autoEnterPip = false,
         pgsSubtitleDirectPlay = true,
         liveStreamOption = LiveStreamOption.TRANSCODE,
         userDataSyncEnabled = false,
