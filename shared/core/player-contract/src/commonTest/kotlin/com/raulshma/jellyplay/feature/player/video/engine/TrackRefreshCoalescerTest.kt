@@ -12,9 +12,10 @@ import kotlin.test.Test
 /**
  * Tests for [TrackRefreshCoalescer]. The coalescer collapses a burst of rapid
  * [request] calls into a single [onRefresh] invocation after the debounce
- * window — the contract that previously lived inline in MpvPlayerEngine and
- * caused the MPV playback ANR when each request in the select + sid/aid/
- * track-list observer cascade did its own main-thread getPropertyNode read.
+ * window — the contract that previously lived inline in the Android
+ * MpvPlayerEngine and caused the MPV playback ANR when each request in the
+ * select + sid/aid/track-list observer cascade did its own main-thread
+ * track-list read (the desktop engine now rides the same coalescer).
  *
  * Each test builds its own [TestScope] on an isolated virtual-clock scheduler
  * (mirroring [EnginePositionTickerTest]) so a leaked coroutine in one test

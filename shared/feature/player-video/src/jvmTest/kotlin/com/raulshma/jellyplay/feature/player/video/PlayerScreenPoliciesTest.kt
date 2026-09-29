@@ -4,7 +4,6 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.SegmentBehavior
-import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,126 +12,13 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the PRODUCTION player-screen policies ([PlayerScreenPolicies.kt]) —
- * the seek-clamp math, orientation fold, aspect-ratio ladder, skip-button
- * precedence, auto-hide gate, and font gate that used to live inline in
- * [VideoPlayerScreen] composition where no test could reach them.
+ * the orientation fold, aspect-ratio ladder, skip-button precedence, and font
+ * gate that used to live inline in [VideoPlayerScreen] composition where no
+ * test could reach them. The step-seek family and the auto-hide gate are now
+ * shared with the live player's screen and live in the player-contract
+ * (`PlayerChromePolicies`) — their pins moved with them to
+ * `PlayerChromePoliciesTest` at that home.
  */
-class StepSeekTargetTest {
-
-    @Test
-    fun seekBack_subtractsStep() {
-        assertEquals(40_000L, seekBackTargetMs(currentPositionMs = 50_000L, stepMs = 10_000L))
-    }
-
-    @Test
-    fun seekBack_floorsAtZero_neverNegative() {
-        assertEquals(0L, seekBackTargetMs(currentPositionMs = 5_000L, stepMs = 10_000L))
-        assertEquals(0L, seekBackTargetMs(currentPositionMs = 0L, stepMs = 10_000L))
-    }
-
-    @Test
-    fun seekBack_hasNoUpperClamp() {
-        // Position beyond duration (pathological engine report) is passed through
-        // — the back path never clamps to duration.
-        val pos = 120_000L
-        assertEquals(pos - 10_000L, seekBackTargetMs(currentPositionMs = pos, stepMs = 10_000L))
-    }
-
-    @Test
-    fun seekForward_vod_capsAtDuration() {
-        assertEquals(
-            60_000L,
-            seekForwardTargetMs(currentPositionMs = 55_000L, stepMs = 10_000L, durationMs = 60_000L),
-        )
-        assertEquals(
-            20_000L,
-            seekForwardTargetMs(currentPositionMs = 10_000L, stepMs = 10_000L, durationMs = 100_000L),
-        )
-    }
-
-    @Test
-    fun seekForward_live_noDuration_neverPinsToZero() {
-        // dur == 0 used to pin every forward seek to 0 via the upper clamp.
-        assertEquals(
-            40_000L,
-            seekForwardTargetMs(currentPositionMs = 30_000L, stepMs = 10_000L, durationMs = 0L),
-        )
-        assertEquals(
-            10_000L,
-            seekForwardTargetMs(currentPositionMs = 0L, stepMs = 10_000L, durationMs = 0L),
-        )
-    }
-
-    @Test
-    fun seekForward_negativeDuration_treatedAsLive() {
-        assertEquals(
-            35_000L,
-            seekForwardTargetMs(currentPositionMs = 30_000L, stepMs = 5_000L, durationMs = -1L),
-        )
-    }
-
-    // ── Funnel (C3) ──────────────────────────────────────────────────────────
-    // stepSeekTargetMs is the reduction VideoPlayerViewModel.seekByStep makes
-    // over the engine's live reads; the FakeMediaEngine drives those reads the
-    // same way the funnel does (advanceTo / durationValue).
-
-    @Test
-    fun funnel_negativeDirection_stepsBackAndFloorsAtZero() {
-        val engine = FakeMediaEngine()
-        engine.advanceTo(50_000L)
-        assertEquals(
-            40_000L,
-            stepSeekTargetMs(
-                direction = -1,
-                currentPositionMs = engine.currentPositionMs,
-                stepMs = 10_000L,
-                durationMs = engine.durationMs,
-            ),
-        )
-        engine.advanceTo(3_000L)
-        assertEquals(
-            0L,
-            stepSeekTargetMs(
-                direction = -1,
-                currentPositionMs = engine.currentPositionMs,
-                stepMs = 10_000L,
-                durationMs = engine.durationMs,
-            ),
-        )
-    }
-
-    @Test
-    fun funnel_forwardDirection_capsAtEngineDuration() {
-        val engine = FakeMediaEngine()
-        engine.advanceTo(55_000L)
-        engine.durationValue = 60_000L
-        assertEquals(
-            60_000L,
-            stepSeekTargetMs(
-                direction = +1,
-                currentPositionMs = engine.currentPositionMs,
-                stepMs = 10_000L,
-                durationMs = engine.durationMs,
-            ),
-        )
-    }
-
-    @Test
-    fun funnel_forwardWithoutResolvedDuration_neverPinsToZero() {
-        val engine = FakeMediaEngine()
-        engine.advanceTo(30_000L)
-        assertEquals(
-            40_000L,
-            stepSeekTargetMs(
-                direction = +1,
-                currentPositionMs = engine.currentPositionMs,
-                stepMs = 10_000L,
-                durationMs = engine.durationMs,
-            ),
-        )
-    }
-}
-
 class ResumeSkipTargetTest {
 
     @Test
@@ -337,77 +223,10 @@ class SkipSegmentButtonVisibilityTest {
     }
 }
 
-class ControlsAutoHidePolicyTest {
-
-    @Test
-    fun visibleIdleControls_scheduleAutoHide() {
-        assertTrue(
-            shouldScheduleControlsAutoHide(
-                showControls = true,
-                isSeeking = false,
-                isSheetOpen = false,
-                isOverflowMenuOpen = false,
-                isTv = false,
-                controlsHasFocus = false,
-            ),
-        )
-    }
-
-    @Test
-    fun hiddenControls_seeking_sheet_and_overflow_suppressTheTimer() {
-        fun gate(
-            showControls: Boolean = true,
-            isSeeking: Boolean = false,
-            isSheetOpen: Boolean = false,
-            isOverflowMenuOpen: Boolean = false,
-        ) = shouldScheduleControlsAutoHide(
-            showControls = showControls,
-            isSeeking = isSeeking,
-            isSheetOpen = isSheetOpen,
-            isOverflowMenuOpen = isOverflowMenuOpen,
-            isTv = false,
-            controlsHasFocus = false,
-        )
-
-        assertTrue(gate()) // idle gate itself is true
-        assertFalse(gate(showControls = false))
-        assertFalse(gate(isSeeking = true))
-        assertFalse(gate(isSheetOpen = true))
-        assertFalse(gate(isOverflowMenuOpen = true))
-    }
-
-    @Test
-    fun nonTv_controlsFocus_suppressesTheTimer() {
-        assertFalse(
-            shouldScheduleControlsAutoHide(
-                showControls = true,
-                isSeeking = false,
-                isSheetOpen = false,
-                isOverflowMenuOpen = false,
-                isTv = false,
-                controlsHasFocus = true,
-            ),
-        )
-    }
-
-    @Test
-    fun tv_ignoresControlsFocus() {
-        assertTrue(
-            shouldScheduleControlsAutoHide(
-                showControls = true,
-                isSeeking = false,
-                isSheetOpen = false,
-                isOverflowMenuOpen = false,
-                isTv = true,
-                controlsHasFocus = true,
-            ),
-        )
-    }
-
-    // The `timeout_tvIsDoubleTheBase` pin moved with the fold itself to
-    // player-contract's PlayerChromePoliciesTest — the TV-doubling policy is
-    // now shared with the live player's screen and pinned at its new home.
-}
+// The auto-hide gate's pins (`ControlsAutoHidePolicyTest`) moved with the
+// predicate itself to player-contract's PlayerChromePoliciesTest — the gate is
+// now shared with the live player's screen and pinned at its new home (the
+// `timeout_tvIsDoubleTheBase` pin moved there earlier with the fold).
 
 class UserFontGateTest {
 

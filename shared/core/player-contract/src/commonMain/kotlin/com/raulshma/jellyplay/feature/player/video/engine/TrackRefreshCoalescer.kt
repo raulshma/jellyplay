@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
  * within that window), short enough that the track picker UI updates without
  * perceptible lag.
  */
-internal const val TRACK_REFRESH_DEBOUNCE_MS = 80L
+public const val TRACK_REFRESH_DEBOUNCE_MS: Long = 80L
 
 /**
  * Coalesces a rapid burst of track-refresh requests into a single deferred
@@ -21,9 +21,15 @@ internal const val TRACK_REFRESH_DEBOUNCE_MS = 80L
  * mpv emits a cascade of property changes whenever a track is selected: the
  * caller's own `select-*` refresh plus the `sid`/`aid`/`track-list` observers,
  * all within ~50 ms. Previously each request performed its own synchronous
- * `getPropertyNode("track-list")` JNI read on the main looper, and that burst
- * was a primary driver of the MPV playback ANR (main-thread death spiral →
- * skipped frames → input-dispatch timeout).
+ * `getPropertyNode("track-list")` read on the Android main looper, and that
+ * burst was a primary driver of the MPV playback ANR (main-thread death spiral
+ * → skipped frames → input-dispatch timeout).
+ *
+ * Both mpv hosts ride it — Android `MpvPlayerEngine` (the original ANR fix;
+ * delayed refreshes keep their own `postDelayed` slot so a late-arriving
+ * enumeration is not cancelled by an intervening immediate refresh) and
+ * desktop `MpvDesktopEngine` (adopted for parity — its FILE_LOADED/sid/aid/
+ * track-list refresh burst now collapses the same way).
  *
  * Each [request] cancels any pending refresh and (re)launches a coroutine that
  * waits [debounceMs] before invoking [onRefresh]. So N rapid requests collapse
@@ -32,8 +38,8 @@ internal const val TRACK_REFRESH_DEBOUNCE_MS = 80L
  * appropriate dispatcher — this helper only owns the coalescing/delay.
  *
  * Extracted as a standalone class (mirroring [EnginePositionTicker]) so the
- * coalescing contract is unit-testable with a virtual-clock [TestScope]
- * without standing up a full [MpvPlayerEngine].
+ * coalescing contract is unit-testable with a virtual-clock [kotlinx.coroutines.test.TestScope]
+ * without standing up a full engine.
  *
  * @param scopeProvider returns the coroutine scope the debounced refresh runs
  *                  on. Provided as a lookup (not a captured value) so an engine
@@ -44,7 +50,7 @@ internal const val TRACK_REFRESH_DEBOUNCE_MS = 80L
  *                  scope's dispatcher unless it switches internally.
  * @param debounceMs coalesce window; see [TRACK_REFRESH_DEBOUNCE_MS].
  */
-internal class TrackRefreshCoalescer(
+public class TrackRefreshCoalescer(
     private val scopeProvider: () -> CoroutineScope,
     private val onRefresh: () -> Unit,
     private val debounceMs: Long = TRACK_REFRESH_DEBOUNCE_MS,
@@ -55,7 +61,7 @@ internal class TrackRefreshCoalescer(
      * Request a refresh. Cancels any not-yet-fired refresh and (re)starts the
      * debounce timer, so only the most recent request in a burst takes effect.
      */
-    fun request() {
+    public fun request() {
         pending?.cancel()
         pending = scopeProvider().launch {
             delay(debounceMs)
@@ -64,7 +70,7 @@ internal class TrackRefreshCoalescer(
     }
 
     /** Cancel any pending refresh without firing it. */
-    fun cancel() {
+    public fun cancel() {
         pending?.cancel()
         pending = null
     }

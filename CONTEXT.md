@@ -98,7 +98,20 @@ are relative to the repo root.
  forwards; sinks are idempotent mirrors, so swallowing plain-Flow repeats
  is by design). It is the file's one lifecycle-attached member (it
  launches the collector into the receiver scope and returns its `Job`;
- every other declaration is a pure function).
+ every other declaration is a pure function). The seek-step family joined
+ (moved from player-video `PlayerScreenPolicies` so the live
+ screen cites the same ONE policy): `seekBackTargetMs`/`seekForwardTargetMs`/
+ `stepSeekTargetMs` and the `shouldScheduleControlsAutoHide` gate — the live
+ screen's former inline `overlayVisible && activeSheet == null` gate is the
+ shared predicate with constant-false for the chrome concepts live lacks
+ (pinned by a live-shape case), and live's ±10 s D-pad/seek-button math rides
+ the same 0-floor + duration cap (the cap is a live FIX for the screen's
+ inline seek paths, which had none — the seek bar's own D-pad nudges already
+ carried both). `shouldRestoreHostWindowOnDispose(currentlyInPip)` is the
+ shared PiP-dispose gate BOTH screens run: the live screen previously lacked
+ the guard entirely and re-showed system bars over a deliberate PiP entry;
+ VOD's `PlayerWindowSession` inline fold runs the same decision (its
+ background-cast split noted as deferred dedup).
 - **`BasePlayerEngine`** (`shared/feature/player-video/src/androidMain/kotlin/com/raulshma/jellyplay/feature/player/video/engine/BasePlayerEngine.kt`)
  is the shared boilerplate base for the three reloadable adapters. It hoists
  the byte-identical 8 `StateFlow`/`SharedFlow` backing fields, the
@@ -206,6 +219,39 @@ are relative to the repo root.
  mirror is deleted — the desktop keeps only its `sub-start` read
  divergence at the call site. Single-pinned by `CueAccumulatorTest` for
  both platforms.
+- **`MpvFoldApplier` + the mpv twin-body unification** (player-contract
+ commonMain `engine/`) is the one fold-APPLICATION body both
+ mpv engines ride: `MpvEventFold` shared the decisions, the applier shares
+ the choreography that applies a fold result to the chassis (latch resets,
+ END_FILE error-emission-before-apply ordering) over two narrow sinks
+ (`refreshTracks(reason)`, `onLiveSubtitleLine`); the Android
+ `refreshReason` passthrough is the applier's second apply parameter, not a
+ copy. The applier also standardized the live-subtitle order to Android's
+ accumulate-then-mirror (the desktop formerly mirrored first — the two
+ ops are independent, so the unification is declared here rather than
+ preserved). Riding the same pass: `MpvSubtitleSideLoadPlan.applyBatch` (the
+ plan → registry store-back → per-add loop both engines carried twice;
+ transport spellings stay per-host), `MpvTrackCatalog.trackEntry(raw)` (the
+ ONE track-list normalization over the plain map both transports produce —
+ Android's residue is a 4-line `MPVNode.asPlainValue` flattener; this class
+ of drift bit offline-restore ids before) and
+ `MpvTrackCatalog.existingSubtitleLabels` (raw-title extraction — fixes
+ Android's dead label-dedupe, which compared against display labels that
+ append language/codec). `TrackRefreshCoalescer` moved player-video →
+ contract and went public; the desktop ADOPTS coalescing (intended behavior
+ change — ~80 ms debounce before the catalog lands). Engine file deltas:
+ Android 1754→1732, desktop 1445→1506 (the desktop GREW ~60 lines — it
+ absorbed the applier choreography, the arm-set selectTrack and the
+ late-init construction-race fix; the twin deletion paid for the parity
+ additions). The remaining known twin is EVENT
+ INTAKE (Android `MPV.EventObserver` block vs desktop
+ `registerObservers`/`handleEvent`, ~340/~300 lines — documented in the
+ applier's KDoc); a wide `MpvBinding` interface was considered and REJECTED
+ for now — the narrow-surface pattern (`MpvPropertySurface`,
+ `MpvStatsReads`, the applier sinks) is the repo's seam idiom, and an
+ interface without a merged event-intake body would be a hypothetical seam.
+ Pinned by `MpvFoldApplierTest`, the `applyBatch`/`trackEntry`/labels cases
+ in the catalog suites, and the parity suite.
 - **The desktop mpv engine rides the same commonMain policies** (both
  precedents set by `mergeAccumulatedCues`): `MpvStyleMapping` is now a
  PUBLIC object (and has since moved to player-contract commonMain
@@ -222,7 +268,25 @@ are relative to the repo root.
  unmute plan now writes the restore into the mpv `volume` property
  (desktop has no system music stream, so the property IS the audible
  surface; Android's mpv adapter instead pairs `LEAVE_UNCHANGED` with
- the system-stream sync).
+ the system-stream sync). The desktop now runs the FULL shared mpv plan
+ surface (parity fixes — four shipped drifts closed):
+ `AspectRatioMapping.mpvPlan` and `EngineDurationFallback` went PUBLIC
+ (desktop is a separate Gradle module — `internal` visibility was exactly
+ why the desktop kept its drifted body): the aspect plan writes the
+ 4-property set including the `sub-use-margins`/`sub-ass-force-margins`
+ pair the desktop's hand-rolled body dropped (captions rode the cropped
+ canvas), `resolveDurationMs` replaces the desktop's inline 2-stage ladder
+ (desktop `stop()` also resets `serverDurationMs` now, like Android), and
+ `selectTrack` carries Android's arm set: the negative-index arm
+(`aid`→"auto",
+ `sid`→"no", `sub-visibility` re-enable — the desktop's raw `"-1"` write
+was rejected by mpv, leaving selection stuck) and the positive-path
+int-then-string write discipline (Android's `setPropertyInt`-first
+spelling, string fallback) — both pinned by the parity suite. Each fix pinned by
+ `MpvDesktopEngineAndroidParityTest` (real-libmpv headless). The same slice
+ fixed a latent desktop construction race: observer registration + event
+ thread start moved to a late `init` block so mpv's queued observation
+ backlog cannot fold over still-null member state.
 - **The media3 narrowing is a typed capability, not a cast**:
  `RemotePlayableEngine.underlyingPlayer: Any?` is RETIRED (the
  player-contract interface keeps only control members).
@@ -297,6 +361,52 @@ outcomes surface as `SessionEvent`s (`ShowError`, `InformUser`,
 `SharedFlow`. The ViewModel is the single forwarder: one init collector maps
 each event into its existing sinks (error fields, message bus,
 `_closePlayer`, `_passOutEvents`); autoplay/close policy stays VM-side.
+
+**`VideoSessionHost`** (player-video commonMain) is the VM's
+session-facing prologue as ONE class: the former 16-member `sessionHost`
+object literal AND the 17-lambda `SessionLoadHooks` bundle (exposed as
+`val loadHooks`, consumed by `SessionLoadPipeline`) plus the moved hook
+bodies (`shouldAttemptCinemaMode`, `fetchMediaSegments`,
+`resolveOfflineResumeTicks`). Delegate members (trickplay, syncPlay,
+mini-player, segments, tracking starts, media detail) call real
+collaborators; the VM-domain halves (uiState mirrors, prefs projection,
+`routeToRemotePlaySession`, and `releaseInternalsVmPart` — deliberately
+still the VM's, it owns the `keepAcrossItems` rebuild) arrive as 21 narrow
+command lambdas, so the file stays free of the `VideoPlayerUiState` type
+(ratchet-listed; the ONE declared exception is the prefs-projection
+forward — the transparent `PrefsProjection` alias beside
+`SessionLoadOutputs`, documented as the ratchet's single sanctioned
+state-transformer exception in `ControllerOwnershipTest`'s KDoc: the
+projection is the pipeline's load-stage vocabulary, not state the host
+reads or owns). It is declared BEFORE `playbackSession` (whose `hooks`
+parameters take it — typed `SessionHost`/`SessionLoadHooks`) while its
+lambdas read `playbackSession` lazily — the
+established explicit-type/lazy-collaborator idiom. Pinned by
+`VideoSessionHostTest` (25 cases: the `resetForNewItem` order, the
+report-start incognito gate, restore-muted mirror-then-engine order). A
+full PlaybackStack wrap (one module owning session + pipeline + hooks
+behind a smaller interface) was evaluated and REJECTED the same day: both
+`PlaybackSession` suites already construct the session WITHOUT the VM via
+the deliberate half-interface split (KDoc at the interface), so a wrap
+either changes no test cost (pipeline injectable) or raises it (pipeline
+internally built) — `VideoSessionHost` absorbs the wiring without touching
+the interfaces. `PlaybackSession` itself keeping its 25-arg constructor
+instead of the live `LivePlaybackSession` zero-lambda shape is a deferred
+decision: real, but it rewrites both pinned session suites.
+
+**`EngineAttachController`** (player-video commonMain, beside the other
+controllers) owns the engine-attach choreography the VM's ~100-line
+engineFlow collector ran inline: bind → style seed (BEFORE anything below
+can rebuild an engine config, no suspension between — the ordering comments
+moved with the code) → capabilities mirror → effects seed → cast strategy
+→ delay notice → PiP hasNext → `onEngineRecreated` (before the tracks
+collector) → the three child collectors (availableTracks →
+`updateTracksFromEngine`, currentCues → subtitle preview, playbackState →
+SyncPlay + PiP auto-exit). ONE public `attach(engine)`; re-attach cancels
+the previous collectors; the job dies with the VM scope. Narrow lambdas
+plus the one uiState command (`onEngineCapabilities`); zero uiState-type
+references. Pinned by `EngineAttachControllerTest` (9 cases incl. the
+exact-order call log and old-engine-silenced-after-reattach).
 `SessionLifecycleHooks` is the VM's synchronous prologue (transport re-arm,
 new-item resets, routing gates, the VM teardown half, trickplay clear,
 SyncPlay reattach). `sessionState` / `engineFlow` are direct aliases of
@@ -316,7 +426,7 @@ session seam in `PlaybackSessionReportingTest`).
 **`PlayerStores`** (`shared/feature/player-video/src/commonMain/kotlin/.../PlayerStores.kt`)
 is the player's construction-time store bundle — the home `HomeStores` move
 applied to `VideoPlayerViewModel`'s constructor (44 → 33 parameters at the
-move): the TWELVE datastore stores the player reads and writes (`aggregate`
+move): the THIRTEEN datastore stores the player reads and writes (`aggregate`
 `VideoPlayerAggregateStore`, `engine` `PlayerEngineStore`, `subtitleLanguage`
 `SubtitleLanguageStore`, `playback` `PlaybackStore`, `audio` `AudioStore`,
 `audioEffects` `AudioEffectsStore`, `videoPlayer` `VideoPlayerStore`,
@@ -402,8 +512,9 @@ ratchet test strips comments before counting, so KDoc prose is exempt —
 `EpisodeNavigator`'s doc mentions the type).
 
 **`PlayerScreenPolicies`** (beside `VideoPlayerScreen`) is the player screen's
-Compose-free decision half, the `homeQuickActionEffect` precedent: the seek
-STEP targets (`seekBackTargetMs`/`seekForwardTargetMs` — direction-asymmetric
+Compose-free decision half, the `homeQuickActionEffect` precedent: the STEP targets (now `PlayerChromePolicies` members — moved 2026-09-29 with
+`stepSeekTargetMs`/`shouldScheduleControlsAutoHide` so the live screen
+cites them; still direction-asymmetric
 clamp, deliberately a different policy from `GestureSeekMath`'s capped gesture
 deltas; the KDoc cross-references why they stay separate), the orientation-lock
 fold (`Immediate`/`SettleFirst`; the 400 ms race stays in the effect shell),
@@ -419,6 +530,10 @@ pure `segmentSkipTarget(...)` returning a sealed `SegmentSkipTarget`
 (`SeekToPosition` in ms / `SkipToNextEpisode` / `AdvanceCinemaIntro` / `None`);
 the VM's three funs are a snapshot → policy → one-line effect dispatch, and
 `segmentEndSeekTarget` is the shared ticks guard + truncating ticks→ms fold.
+(The former `SegmentDispatchController` dispatch shell folded back into
+these VM funs, 2026-09-29 — wiring ≈ logic, deletion-test verdict a wash;
+`SegmentDispatchFacts` now lives in `SegmentSkipPolicy.kt` and the VM's
+funs remain the one facts-builder site.)
 Pinned by `SegmentSkipPolicyTest`, which replaced `PlaybackLogicTest`'s
 `SkipIntroCreditsTest` placebo (its assertions only re-derived
 `introEndTicks / 10_000` integer division and never executed a skip).
@@ -756,6 +871,32 @@ virtual time — rewriting would churn pins for no gain).
 > reclaim-site downcast — the feature vouches for its own deposit
 > (`{ engine }`, identity by construction); a capability miss returns
 > null WITHOUT consuming the deposit.
+>
+> The slice ratcheted the campaign the OTHER direction — thin
+> controllers FOLDED: `SegmentDispatchController` into the VM (facts
+> pairing beside the policy), `SubtitleFontController` into
+> `SubtitleStyleController` (same domain; the style controller gained
+> `installUserFont`/`applySubtitleStyle` + fontProvider), and
+> `BackgroundCastController` into VM funs (the state always lived on
+> `castManager.isBackgroundCasting`). `PlayerPrefsFanout` was evaluated
+> for the same fold into `SettingsProjector` and DROPPED: the
+> change-time projector / load-time seed / fanout-entry vocabularies are
+> deliberately separate (the dual-home warning below), and the deletion
+> test is a wash — complexity moves, does not concentrate. The session
+> side gained `VideoSessionHost` + `EngineAttachController` (see the
+> Playback session section). VM 3,011 → 2,865 wc-lines; ceilings lowered
+> twice (3,016 → 3,002 → 2,870 by the ratchet's lineSequence count,
+> never raised; ownership-test member ceiling 36 → 35); the
+> migrated-controllers list 20 → 19 entries; god-count unchanged at 3.
+> The live screen joined the shared chassis the same day: it cites the
+> moved seek-step family + auto-hide gate, routes its window effects
+> through the now-public `PlayerWindowOps` seam (new
+> player-live→player-video androidMain edge, acyclic;
+> `PlayerOrientationLock.USER_LANDSCAPE` added so the seam swap stayed
+> 1:1), and its dispose runs the shared
+> `shouldRestoreHostWindowOnDispose` PiP gate — closing the missing
+> focus-flip guard (live enters PiP; VOD's `PlayerWindowSession`
+> documents the race).
 
 `VideoPlayerUiState` (`shared/feature/player-video/src/commonMain/kotlin/.../VideoPlayerUiState.kt`)
 is seven stored slices — `gestures` (`GesturePrefsState`), `segmentState`

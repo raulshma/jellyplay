@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.MpvEventEndFile
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.MpvEventProperty
 import com.raulshma.jellyplay.feature.player.video.DesktopFrameCaptureEngine
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatioMapping
 import com.raulshma.jellyplay.feature.player.video.engine.BufferedRanges
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilityMatrix
@@ -34,10 +35,8 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineStateChassis
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
-import com.raulshma.jellyplay.feature.player.video.engine.MpvEventFold
-import com.raulshma.jellyplay.feature.player.video.engine.MpvEventFoldResult
+import com.raulshma.jellyplay.feature.player.video.engine.MpvFoldApplier
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlaybackEvent
-import com.raulshma.jellyplay.feature.player.video.engine.MpvPlaybackLatches
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPropertySurface
 import com.raulshma.jellyplay.feature.player.video.engine.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.MpvStatsReads
@@ -50,10 +49,12 @@ import com.raulshma.jellyplay.feature.player.video.engine.MpvUserSubtitleKeys
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackVolumePolicy
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
+import com.raulshma.jellyplay.feature.player.video.engine.TrackRefreshCoalescer
 import com.raulshma.jellyplay.feature.player.video.engine.TimedCue
 import com.raulshma.jellyplay.feature.player.video.engine.VolumeCommandTemplates
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.engine.mergeAccumulatedCues
+import com.raulshma.jellyplay.feature.player.video.engine.resolveDurationMs
 import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import java.awt.image.BufferedImage
@@ -205,7 +206,16 @@ open class MpvDesktopEngine(
     /** Server-reported runtime fallback while the demuxer hasn't resolved one. */
     @Volatile private var serverDurationMs: Long = 0L
     override val currentPositionMs: Long get() = positionMs
-    override val durationMs: Long get() = if (durationValue > 0) durationValue else serverDurationMs
+
+    /**
+     * The shared engine→server fallback ladder ([resolveDurationMs], fed from
+     * [PlaybackRequest.serverDurationMs] at [load] — Android mpv parity): the
+     * demuxer's duration whenever it resolved positive, else the server's
+     * runTimeTicks (the only accurate total for HLS/transcoded streams).
+     * Replaces the desktop's former private two-line re-implementation.
+     */
+    override val durationMs: Long
+        get() = resolveDurationMs(durationValue, serverDurationMs)
 
     @Volatile private var speedValue: Float = 1f
     override val playbackSpeed: Float get() = speedValue
@@ -259,8 +269,15 @@ open class MpvDesktopEngine(
     }
 
     init {
-        ctx?.let(::registerObservers)
-        if (ctx != null) eventThread.start()
+        // Observer registration + the event-thread start live in the LATE init
+        // block at the bottom of this class (before the companion): Kotlin
+        // executes property initializers and init blocks in DECLARATION
+        // ORDER, and mpv queues a backlog the moment observers register (one
+        // initial event per observed property, plus CoreIdle from `idle=yes`)
+        // — starting the loop any earlier folded events over this class's
+        // still-uninitialized state (observed live: a fold over the not-yet-
+        // initialized latch state intrinsic-checked, killed the event thread,
+        // and the engine stayed deaf for its whole life — READY never fired).
 
         // HDR passthrough — mpv switches an HDR-capable display to its
         // HDR transfer on the first HDR frame when the hint is set. Runtime
@@ -350,12 +367,25 @@ open class MpvDesktopEngine(
     // ── Event dispatch ──────────────────────────────────────────────────────
 
     /**
-     * The latched playback state the shared [MpvEventFold] folds events over
-     * (fileLoaded/eofReached/paused/pausedForCache). All fold applications run
-     * on the single mpv event thread, so read-modify-write is race-free. The
-     * former standalone `fileLoaded` field was its `fileLoaded` latch.
+     * The shared fold-application body ([MpvFoldApplier], player-contract):
+     * folds each event through [MpvEventFold] and applies the declared
+     * decisions to the chassis flows plus this engine's two genuine sinks —
+     * the coalesced [refreshTracks] (the reason label is accepted for
+     * fold-parity and ignored; Android's publish log is its declared use) and
+     * the live-`sub-start` cue accumulator. The engine keeps no local latch
+     * twin; the applier owns [MpvFoldApplier.latches]. All fold applications
+     * run on the single mpv event thread, so read-modify-write is race-free;
+     * reset per item in [load] and in [stop]. The former standalone
+     * `fileLoaded` field was the applier's `fileLoaded` latch.
      */
-    @Volatile private var mpvLatches = MpvPlaybackLatches()
+    private val foldApplier = MpvFoldApplier(
+        isPlaying = _isPlaying,
+        playbackState = _playbackState,
+        currentCues = _currentCues,
+        liveSubtitleCue = _liveSubtitleCue,
+        refreshTracks = { _ -> refreshTracks() },
+        onLiveSubtitleLine = ::accumulateCue,
+    )
     @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
     /** Last observed `audio-params/channel-count`; null until mpv reports one. */
     @Volatile private var observedChannelCount: Int? = null
@@ -472,7 +502,7 @@ open class MpvDesktopEngine(
 
     private fun handleEvent(event: MpvEvent) {
         when (event.event_id) {
-            EVENT_START_FILE -> applyFold(MpvPlaybackEvent.StartFile)
+            EVENT_START_FILE -> foldApplier.apply(MpvPlaybackEvent.StartFile)
             EVENT_FILE_LOADED -> {
                 positionMs = 0L
                 // New file → the display-target probe starts over (the target
@@ -488,7 +518,7 @@ open class MpvDesktopEngine(
                 // Fold seeds READY + isPlaying from the LIVE core pause state:
                 // when the core auto-plays (default), `pause` never *changes*,
                 // so the property-change handler below alone would never fire.
-                applyFold(
+                foldApplier.apply(
                     MpvPlaybackEvent.FileLoaded(
                         pausedNow = ctx?.let { propFlag(it, "pause") } ?: true,
                     ),
@@ -496,41 +526,18 @@ open class MpvDesktopEngine(
             }
             EVENT_END_FILE -> {
                 val payload = event.data?.let { MpvEventEndFile(it).also { it.read() } }
-                val result = MpvEventFold.fold(
-                    mpvLatches,
+                val result = foldApplier.fold(
                     MpvPlaybackEvent.EndFile(payload?.reason?.let(MpvPlaybackEvent.EndFileReason::fromCode)),
                 )
                 if (result.emitEndFileError) {
                     _errorFlow.tryEmit(mapMpvError(payload?.error ?: 0))
                 }
-                applyFoldResult(result)
+                foldApplier.applyResult(result)
             }
-            EVENT_IDLE -> applyFold(MpvPlaybackEvent.CoreIdle)
+            EVENT_IDLE -> foldApplier.apply(MpvPlaybackEvent.CoreIdle)
             EVENT_PROPERTY_CHANGE -> handlePropertyChange(event)
             EVENT_SHUTDOWN -> running = false
             else -> Unit
-        }
-    }
-
-    /**
-     * Folds one mpv event through the shared [MpvEventFold] and applies the
-     * declared decisions/side-effects to the published flows — the desktop
-     * engine is a thin adapter over the same state machine as Android's.
-     */
-    private fun applyFold(event: MpvPlaybackEvent) {
-        applyFoldResult(MpvEventFold.fold(mpvLatches, event))
-    }
-
-    private fun applyFoldResult(result: MpvEventFoldResult) {
-        mpvLatches = result.latches
-        result.isPlaying?.let { _isPlaying.value = it }
-        result.playbackState?.let { _playbackState.value = it }
-        if (result.clearCueHistory) _currentCues.value = emptyList()
-        if (result.clearLiveCue) _liveSubtitleCue.value = null
-        if (result.refreshTracks) refreshTracks()
-        result.liveSubtitleText?.let { text ->
-            _liveSubtitleCue.value = text
-            accumulateCue(text)
         }
     }
 
@@ -539,11 +546,11 @@ open class MpvDesktopEngine(
         val name = prop.name?.getString(0) ?: return
         val data = prop.data
         when (name) {
-            "pause" -> applyFold(MpvPlaybackEvent.PauseChanged(paused = data != null && data.getInt(0) != 0))
-            "paused-for-cache" -> applyFold(
+            "pause" -> foldApplier.apply(MpvPlaybackEvent.PauseChanged(paused = data != null && data.getInt(0) != 0))
+            "paused-for-cache" -> foldApplier.apply(
                 MpvPlaybackEvent.PausedForCacheChanged(buffering = data != null && data.getInt(0) != 0),
             )
-            "eof-reached" -> applyFold(
+            "eof-reached" -> foldApplier.apply(
                 MpvPlaybackEvent.EofReachedChanged(
                     eof = data != null && data.getInt(0) != 0,
                     // eof flipped false (replay seek-back): the fold re-derives
@@ -553,8 +560,8 @@ open class MpvDesktopEngine(
                     pausedNow = aliveCtx()?.let { propFlag(it, "pause") } ?: true,
                 ),
             )
-            "sid" -> applyFold(MpvPlaybackEvent.TrackSwitch(MpvPlaybackEvent.TrackKind.SUBTITLE))
-            "aid" -> applyFold(MpvPlaybackEvent.TrackSwitch(MpvPlaybackEvent.TrackKind.AUDIO))
+            "sid" -> foldApplier.apply(MpvPlaybackEvent.TrackSwitch(MpvPlaybackEvent.TrackKind.SUBTITLE))
+            "aid" -> foldApplier.apply(MpvPlaybackEvent.TrackSwitch(MpvPlaybackEvent.TrackKind.AUDIO))
             "time-pos" -> data?.let {
                 positionMs = ((it.getDouble(0) * 1000).toLong()).coerceAtLeast(0L)
             }
@@ -567,7 +574,7 @@ open class MpvDesktopEngine(
             // FORMAT_STRING event data is a char** (client.h hands the value
             // behind one pointer) — reading the bytes AT data yielded pointer
             // garbage; dereference first.
-            "sub-text" -> applyFold(MpvPlaybackEvent.SubTextChanged(data?.getPointer(0)?.getString(0).orEmpty()))
+            "sub-text" -> foldApplier.apply(MpvPlaybackEvent.SubTextChanged(data?.getPointer(0)?.getString(0).orEmpty()))
             "speed" -> data?.let { speedValue = it.getDouble(0).toFloat() }
             "track-list" -> refreshTracks()
             "audio-params/channel-count" -> {
@@ -625,7 +632,7 @@ open class MpvDesktopEngine(
         // label → SubtitleSource.id) when the pending batch executes at
         // FILE_LOADED — the offline-restore contract the desktop previously
         // lacked (see [sideLoadedSubtitleIds]).
-        mpvLatches = MpvPlaybackLatches()
+        foldApplier.resetLatches()
         sideLoadedSubtitleIds = emptyMap()
         // Reset per-item derived state: the previous item's duration/buffer
         // must not leak into this item's BUFFERING window (Android resets both
@@ -699,17 +706,22 @@ open class MpvDesktopEngine(
         val pending = pendingSubtitles
         pendingSubtitles = emptyList()
         if (pending.isEmpty()) return
-        // The shared plan dedupes against the live track-list, uniquifies
-        // same-titled sources, force-selects isDefault sidecars (the desktop's
-        // former unconditional "auto" let mpv's slang heuristic drop a
-        // source-flagged default with no language match) and registers the id
-        // registry — see [MpvSubtitleSideLoadPlan.planBatch].
-        val plan = MpvSubtitleSideLoadPlan.planBatch(pending, existingSubLabels(), sideLoadedSubtitleIds)
-        sideLoadedSubtitleIds = plan.registry
-        plan.adds.forEach { add ->
+        // The shared application loop — planBatch (dedupe against the live
+        // track-list, same-title uniquify, isDefault force-select), the
+        // registry store-back BEFORE any add executes, then each planned add
+        // through this engine's `sub-add` seam — see
+        // [MpvSubtitleSideLoadPlan.applyBatch].
+        MpvSubtitleSideLoadPlan.applyBatch(
+            pending = pending,
+            existingLabels = existingSubLabels(),
+            registry = sideLoadedSubtitleIds,
+            onRegistry = { sideLoadedSubtitleIds = it },
+        ) { add ->
             // sub-add <url> [flags [title [lang]]] — title doubles as the
             // stable label the track-list echoes back, matching how the
-            // Android engine keys side-loaded tracks.
+            // Android engine keys side-loaded tracks. Desktop transport
+            // spelling: raw URL, empty-string lang when the source has none
+            // (Android omits the arg instead).
             MpvLib.command(context, "sub-add", add.source.url, add.flags, add.label, add.source.language ?: "")
         }
     }
@@ -801,9 +813,15 @@ open class MpvDesktopEngine(
     override fun stop() {
         val context = aliveCtx() ?: return
         MpvLib.command(context, "stop")
-        mpvLatches = MpvPlaybackLatches()
+        foldApplier.resetLatches()
         positionMs = 0L
         durationValue = 0L
+        // The server rung of the duration ladder dies with the item — the
+        // parity FIX: the former body reset `durationValue` but left
+        // `serverDurationMs` serving the stopped file's runtime forever after
+        // (Android mpv resets its twin in load/release; the desktop's stop is
+        // its per-item teardown, so the fallback dies here).
+        serverDurationMs = 0L
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
         _availableTracks.value = emptyList()
@@ -936,11 +954,38 @@ open class MpvDesktopEngine(
 
     // ── MediaEngine: tracks & subtitles ─────────────────────────────────────
 
+    /**
+     * Android mpv parity (MpvPlayerEngine.selectTrack's decision logic, over
+     * this engine's JNA transport): a NEGATIVE index deselects — `aid` back to
+     * mpv's "auto" heuristic, `sid` to "no" (mpv has no numeric deselect id) —
+     * while a positive id writes as INT first (the typed FORMAT_INT64 write)
+     * with the string form as the fallback (the transport-dependent spelling
+     * of Android's int-then-string catch), and a subtitle selection
+     * re-enables `sub-visibility` — the app may have hidden native subs for
+     * the zoom-safe overlay ([setNativeSubtitlesVisible]), and an explicit
+     * user pick means they want them seen. The former desktop body wrote the
+     * raw index string for both arms, so `selectTrack(AUDIO, -1)` selected
+     * track "-1" (silently ignored by mpv, never the auto heuristic) and
+     * `selectTrack(SUBTITLE, -1)` failed to deselect.
+     */
     override fun selectTrack(type: TrackType, index: Int) {
         val context = aliveCtx() ?: return
         when (type) {
-            TrackType.AUDIO -> MpvLib.setPropertyString(context, "aid", index.toString())
-            TrackType.SUBTITLE -> MpvLib.setPropertyString(context, "sid", index.toString())
+            TrackType.AUDIO ->
+                if (index < 0) {
+                    MpvLib.setPropertyString(context, "aid", "auto")
+                } else if (!MpvLib.setPropertyInt(context, "aid", index)) {
+                    MpvLib.setPropertyString(context, "aid", index.toString())
+                }
+            TrackType.SUBTITLE ->
+                if (index < 0) {
+                    MpvLib.setPropertyString(context, "sid", "no")
+                } else {
+                    if (!MpvLib.setPropertyInt(context, "sid", index)) {
+                        MpvLib.setPropertyString(context, "sid", index.toString())
+                    }
+                    MpvLib.setPropertyFlag(context, "sub-visibility", true)
+                }
         }
     }
 
@@ -955,7 +1000,7 @@ open class MpvDesktopEngine(
 
     override fun addExternalSubtitle(source: SubtitleSource) {
         val context = aliveCtx() ?: return
-        if (!mpvLatches.fileLoaded) {
+        if (!foldApplier.latches.fileLoaded) {
             pendingSubtitles = pendingSubtitles + source
             return
         }
@@ -1015,27 +1060,30 @@ open class MpvDesktopEngine(
 
     // ── MediaEngine: aspect ratio ───────────────────────────────────────────
 
+    /**
+     * Applies the shared [AspectRatioMapping.mpvPlan] — the exact enum→mpv
+     * decision (and property-application order) Android's mpv engine runs:
+     * `video-aspect-override` first (the reduced `w:h` fraction, or "-1" to
+     * clear), then `panscan` and the subtitle-margin pair `sub-use-margins` /
+     * `sub-ass-force-margins` so CROP's captions ride the visible frame
+     * instead of the cropped-away canvas. The margin keys are app-owned
+     * ([MpvUserSubtitleKeys]' APP_OWNED_ALWAYS) on both platforms, so no
+     * user-config gating applies here.
+     *
+     * Parity FIX over the desktop's former hand-rolled body, which knew only
+     * the override+panscan pair: CROP pushed captions off-frame (no margin
+     * writes), FILL was mis-applied as a second CROP (`panscan=1` — the shared
+     * plan resolves FILL to the cleared override + zero panscan, the
+     * native-frame stretch), and numeric ratios were written as a raw DOUBLE
+     * instead of the plan's fraction string ("177:100" for 16:9).
+     */
     override fun setAspectRatio(ratio: AspectRatio) {
         val context = aliveCtx() ?: return
-        when (ratio) {
-            AspectRatio.AUTO, AspectRatio.FIT -> {
-                MpvLib.setPropertyString(context, "video-aspect-override", "-1")
-                MpvLib.setPropertyDouble(context, "panscan", 0.0)
-            }
-            // FILL/CROP both stretch to the window: crop via panscan (cut
-            // overflow), fill via aspect-override to the window's own ratio —
-            // panscan alone keeps the source aspect, so both use the window
-            // ratio through aspect-override=-1 + panscan=1 for CROP and defer
-            // true FILL to the Swing surface resizing at V3.
-            AspectRatio.CROP, AspectRatio.FILL -> {
-                MpvLib.setPropertyString(context, "video-aspect-override", "-1")
-                MpvLib.setPropertyDouble(context, "panscan", 1.0)
-            }
-            else -> ratio.ratio?.let {
-                MpvLib.setPropertyDouble(context, "video-aspect-override", it.toDouble())
-                MpvLib.setPropertyDouble(context, "panscan", 0.0)
-            }
-        }
+        val plan = AspectRatioMapping.mpvPlan(ratio)
+        MpvLib.setPropertyString(context, "video-aspect-override", plan.aspectOverride)
+        MpvLib.setPropertyDouble(context, "panscan", plan.panscan)
+        MpvLib.setPropertyString(context, "sub-use-margins", plan.subUseMargins)
+        MpvLib.setPropertyString(context, "sub-ass-force-margins", plan.subAssForceMargins)
     }
 
     // ── MediaEngine: config ─────────────────────────────────────────────────
@@ -1266,7 +1314,7 @@ open class MpvDesktopEngine(
      */
     override fun captureVideoFrame(): BufferedImage? {
         val context = aliveCtx() ?: return null
-        if (!mpvLatches.fileLoaded) return null
+        if (!foldApplier.latches.fileLoaded) return null
         return try {
             val temp = File.createTempFile(TEMP_SHOT_PREFIX, ".png")
             try {
@@ -1289,58 +1337,53 @@ open class MpvDesktopEngine(
     // ── Tracks ──────────────────────────────────────────────────────────────
 
     /**
-     * Labels of every subtitle currently in mpv's track-list — the dedupe key
-     * the side-load plan matches on (it is the exact `title` arg passed to
-     * `sub-add`). Best-effort: empty on any read failure so the caller
-     * proceeds to add.
+     * The desktop twin of Android's coalesced track refresh ([TrackRefreshCoalescer],
+     * player-contract): the FILE_LOADED + sid/aid/track-list-observer refresh
+     * burst collapses into one `track-list` read ~80 ms after the burst
+     * settles, instead of one JNA node read per event. Launches on
+     * [engineScope] (Dispatchers.Default — desktop property reads are
+     * thread-agnostic; the release path joins the scope's children before
+     * mpv_terminate_destroy, so an in-flight read can never race the destroy).
+     * Pending refreshes die with the scope on release.
      */
-    private fun existingSubLabels(): Set<String> =
-        readTrackEntries()
-            .filter { it.type == "sub" }
-            .mapNotNull { it.title }
-            .toSet()
+    private val trackRefresh = TrackRefreshCoalescer(
+        scopeProvider = { engineScope },
+        onRefresh = ::performCoalescedRefresh,
+    )
 
-    private fun readTrackEntries(): List<MpvTrackCatalog.MpvTrackEntry> =
-        aliveCtx()
-            ?.let { (MpvLib.readNode(it, "track-list") as? List<*>)?.mapNotNull(::toTrackEntry) }
-            ?: emptyList()
+    private fun refreshTracks() {
+        trackRefresh.request()
+    }
 
-    private fun toTrackEntry(entry: Any?): MpvTrackCatalog.MpvTrackEntry? {
-        val map = entry as? Map<*, *> ?: return null
-        val type = map["type"] as? String ?: return null
-        val id = (map["id"] as? Long)?.toInt() ?: return null
-        return MpvTrackCatalog.MpvTrackEntry(
-            type = type,
-            id = id,
-            title = map["title"] as? String,
-            lang = map["lang"] as? String,
-            codec = map["codec"] as? String,
-            selected = map["selected"] as? Boolean == true,
-            external = map["external"] as? Boolean == true,
-            ffIndex = (map["ff-index"] as? Long)?.toInt(),
-            forced = map["forced"] as? Boolean == true,
-            default = map["default"] as? Boolean == true,
-            hearingImpaired = map["hearing-impaired"] as? Boolean == true,
+    /** The coalesced refresh body: one shared-parse read + catalog build. */
+    private fun performCoalescedRefresh() {
+        val context = aliveCtx() ?: return
+        val raw = MpvLib.readNode(context, "track-list") as? List<*>
+        _availableTracks.value = MpvTrackCatalog.mediaTracks(
+            entries = raw?.mapNotNull(MpvTrackCatalog::trackEntry) ?: emptyList(),
+            sideLoadedSubtitleIds = sideLoadedSubtitleIds,
         )
     }
 
     /**
-     * Thin adapter over the shared [MpvTrackCatalog] (the desktop's former
-     * hand-rolled parse stamped synthetic `"mpv_$id"` ids on every track and
-     * never resolved the side-loaded id registry — offline-restore selection
-     * could not resolve here; see [sideLoadedSubtitleIds]).
+     * Raw mpv `title`s of every subtitle track currently in the track-list —
+     * the shared [MpvTrackCatalog.existingSubtitleLabels] extraction over the
+     * same [readTrackEntries] rows the catalog consumes. Best-effort: empty on
+     * any read failure so the caller proceeds to add.
      */
-    private fun refreshTracks() {
-        val context = aliveCtx() ?: return
-        val raw = MpvLib.readNode(context, "track-list") as? List<*> ?: run {
-            _availableTracks.value = emptyList()
-            return
-        }
-        _availableTracks.value = MpvTrackCatalog.mediaTracks(
-            entries = raw.mapNotNull(::toTrackEntry),
-            sideLoadedSubtitleIds = sideLoadedSubtitleIds,
-        )
-    }
+    private fun existingSubLabels(): Set<String> =
+        MpvTrackCatalog.existingSubtitleLabels(readTrackEntries())
+
+    /**
+     * This binding's parsed `track-list` rows (the plain Kotlin tree
+     * [MpvLib.readNode] produces) through the shared
+     * [MpvTrackCatalog.trackEntry] parse — the ONE normalization both mpv
+     * hosts run (the former per-engine `toTrackEntry` extraction is gone).
+     */
+    private fun readTrackEntries(): List<MpvTrackCatalog.MpvTrackEntry> =
+        aliveCtx()
+            ?.let { (MpvLib.readNode(it, "track-list") as? List<*>)?.mapNotNull(MpvTrackCatalog::trackEntry) }
+            ?: emptyList()
 
     // ── Stats projection ────────────────────────────────────────────────────
 
@@ -1423,6 +1466,24 @@ open class MpvDesktopEngine(
      */
     private fun mapMpvError(errorCode: Int): EngineError =
         MpvErrorTaxonomy.fromCode(errorCode, unknownDetail = MpvLib.mpv.mpv_error_string(errorCode))
+
+    /**
+     * The event pump's start gate — deliberately the LAST init block in the
+     * class. Kotlin runs property initializers and init blocks in declaration
+     * order, so by the time this runs every field the event thread reads
+     * ([foldApplier], [sideLoadedSubtitleIds], the last-applied caches, the
+     * ownership set, the HDR state) is initialized, and the observation
+     * backlog queued by [registerObservers] (one initial event per observed
+     * property, plus CoreIdle from `idle=yes`) dispatches against fully built
+     * state. The former start sat in the top-of-class init block, BEFORE the
+     * former `mpvLatches` initializer further down — a queued event could fold
+     * over the still-null latches and kill the thread (see the early init
+     * block's comment).
+     */
+    init {
+        ctx?.let(::registerObservers)
+        if (ctx != null) eventThread.start()
+    }
 
     private companion object {
         // DEFAULT_POLLING_INTERVAL_MS lives on the state chassis (protected).

@@ -142,4 +142,57 @@ class MpvSubtitleSideLoadPlanTest {
         assertEquals("Fresh", add.add.label)
         assertEquals(MpvSubtitleSideLoadPlan.FLAG_SELECT, add.add.flags)
     }
+
+    // ─── applyBatch (the application loop both mpv hosts run) ─────────────────
+
+    @Test
+    fun applyBatch_emptyPending_isANoOp() {
+        val registrySinkCalls = mutableListOf<Map<String, String>>()
+        val executed = mutableListOf<MpvSubtitleSideLoadPlan.SubAdd>()
+        MpvSubtitleSideLoadPlan.applyBatch(
+            pending = emptyList(),
+            existingLabels = emptySet(),
+            registry = mapOf("kept" to "offline:0"),
+            onRegistry = { registrySinkCalls += it },
+            executeSubAdd = { executed += it },
+        )
+        assertTrue(registrySinkCalls.isEmpty(), "an empty batch must not touch the registry")
+        assertTrue(executed.isEmpty())
+    }
+
+    @Test
+    fun applyBatch_storesTheRegistryBeforeAnyAddExecutes() {
+        // The pre-seed contract: the raw-label seed must be in place the
+        // moment the first sub-add'd track can appear.
+        val order = mutableListOf<String>()
+        MpvSubtitleSideLoadPlan.applyBatch(
+            pending = listOf(source("A", id = "offline:0")),
+            existingLabels = emptySet(),
+            registry = emptyMap(),
+            onRegistry = { order += "registry:${it.keys.sorted()}" },
+            executeSubAdd = { order += "add:${it.label}" },
+        )
+        assertEquals(listOf("registry:[A]", "add:A"), order)
+    }
+
+    @Test
+    fun applyBatch_executesEveryPlannedAdd_withThePlannedRow() {
+        val executed = mutableListOf<MpvSubtitleSideLoadPlan.SubAdd>()
+        var stored: Map<String, String> = emptyMap()
+        MpvSubtitleSideLoadPlan.applyBatch(
+            pending = listOf(source("Def", id = "offline:0", isDefault = true), source("Plain")),
+            existingLabels = emptySet(),
+            registry = emptyMap(),
+            onRegistry = { stored = it },
+            executeSubAdd = { executed += it },
+        )
+        assertEquals(2, executed.size)
+        assertEquals("Def", executed[0].label)
+        assertEquals(MpvSubtitleSideLoadPlan.FLAG_SELECT, executed[0].flags)
+        assertEquals("Plain", executed[1].label)
+        assertEquals(MpvSubtitleSideLoadPlan.FLAG_AUTO, executed[1].flags)
+        // The stored registry carries both the raw-label pre-seed and the
+        // id-carrying registration.
+        assertEquals("offline:0", stored["Def"])
+    }
 }

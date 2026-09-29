@@ -33,7 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 private object DesktopPlayerWindowOps : PlayerWindowOps
 
 @Composable
-internal actual fun rememberPlayerWindowOps(): PlayerWindowOps =
+actual fun rememberPlayerWindowOps(): PlayerWindowOps =
     remember { DesktopPlayerWindowOps }
 
 /** No system volume stream on desktop — hardware volume keys are the OS's. */

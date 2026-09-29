@@ -87,6 +87,15 @@ kotlin {
             implementation(libs.media3.datasource)
             implementation(libs.media3.datasource.okhttp)
             implementation(libs.okhttp)
+            // PlayerWindowOps / PlayerOrientationLock / rememberPlayerWindowOps
+            // — the host-window seam (system bars, keep-screen-on, orientation
+            // lock) LivePlayerScreen's window effects cite instead of their
+            // former byte-identical WindowCompat/FLAG_ inline code. The edge
+            // lives in androidMain because the live screen is androidMain-only
+            // (the jvm target never sees the player). Feature-to-feature edge
+            // like livetv above; player-video only depends on the core modules
+            // + player-contract, so the graph stays acyclic.
+            implementation(project(":shared:feature:player-video"))
         }
     }
 }

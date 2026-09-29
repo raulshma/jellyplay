@@ -25,6 +25,84 @@ fun controlsAutoHideTimeoutMs(baseTimeoutMs: Long, isTv: Boolean): Long =
     if (isTv) baseTimeoutMs * 2 else baseTimeoutMs
 
 /**
+ * Backward step-seek target (button / keyboard / D-pad commit path): floor at
+ * zero, no upper clamp.
+ */
+fun seekBackTargetMs(currentPositionMs: Long, stepMs: Long): Long =
+    (currentPositionMs - stepMs).coerceAtLeast(0L)
+
+/**
+ * Forward step-seek target. Live streams report no duration (`0`) until
+ * resolved, which would pin every forward seek to 0 via the upper clamp, so
+ * the clamp is skipped when there is no known duration — the engine clamps on
+ * its own at seek time. Semantically a sibling of the gesture path's
+ * [com.raulshma.jellyplay.feature.player.video.state.GestureSeekMath.seekTarget],
+ * but a separate policy: gestures cap the per-gesture delta for live streams,
+ * the step path has no cap and clamps direction-asymmetrically.
+ */
+fun seekForwardTargetMs(currentPositionMs: Long, stepMs: Long, durationMs: Long): Long =
+    if (durationMs <= 0L) {
+        (currentPositionMs + stepMs).coerceAtLeast(0L)
+    } else {
+        (currentPositionMs + stepMs).coerceAtMost(durationMs)
+    }
+
+/**
+ * Direction-folded step target behind the ViewModel's `seekByStep` funnel —
+ * the single owner of the discrete skip-step path shared by the screen's
+ * skip buttons / keyboard / D-pad commits and the PiP transport's SKIP
+ * actions. [direction] < 0 steps back ([seekBackTargetMs]); anything else
+ * steps forward ([seekForwardTargetMs]). The gesture/hold paths do NOT go
+ * through here.
+ */
+fun stepSeekTargetMs(
+    direction: Int,
+    currentPositionMs: Long,
+    stepMs: Long,
+    durationMs: Long,
+): Long =
+    if (direction < 0) seekBackTargetMs(currentPositionMs, stepMs)
+    else seekForwardTargetMs(currentPositionMs, stepMs, durationMs)
+
+/**
+ * Whether the auto-hide timer may be scheduled at all: controls must be
+ * visible with no seek gesture, open sheet, or overflow menu in progress, and
+ * on non-TV a controls layer holding focus (the user is actively using the
+ * controls) suppresses the hide entirely.
+ */
+fun shouldScheduleControlsAutoHide(
+    showControls: Boolean,
+    isSeeking: Boolean,
+    isSheetOpen: Boolean,
+    isOverflowMenuOpen: Boolean,
+    isTv: Boolean,
+    controlsHasFocus: Boolean,
+): Boolean =
+    showControls && !isSeeking && !isSheetOpen && !isOverflowMenuOpen &&
+        (isTv || !controlsHasFocus)
+
+/**
+ * The PiP-transition teardown gate: a player screen disposed while the host
+ * is in (or mid-transition into) PiP must NOT mutate the host window.
+ * PlayerActivity SHOWS the system bars on PiP entry on purpose (forcing the
+ * relayout that anchors the gesture-nav handle at the bottom) — the VOD
+ * session's focus guard skips the immersive re-hide for exactly that reason
+ * (PlayerWindowSessionEffects's `snapshotFlow(isWindowFocused)` block) — so a
+ * teardown firing behind the PiP window would clobber that state, re-showing
+ * bars and resetting orientation under a floating PiP window.
+ *
+ * Reads the host's SYNCHRONOUSLY-CURRENT PiP flag
+ * (`PlayerWindowOps.isInPipMode` on Android) — a collected uiState lags a
+ * frame and reads stale mid-transition. The engine handoff pairs with the
+ * same gate (VOD defers the engine release in its dispose effect's
+ * `else if (!currentlyInPip)` arms; live's PiP-dismiss collector owns the
+ * exit). The VOD dispose still folds the gate inline (its arms also split the
+ * background-cast handoff); adopting the shared fold there is deferred — the
+ * live screen cites this ONE implementation today.
+ */
+fun shouldRestoreHostWindowOnDispose(currentlyInPip: Boolean): Boolean = !currentlyInPip
+
+/**
  * Cadence of the live DVR-window refresh poll (the live screen's
  * `viewModel.refreshPosition()` tick).
  *
@@ -41,6 +119,17 @@ fun controlsAutoHideTimeoutMs(baseTimeoutMs: Long, isTv: Boolean): Long =
  * cadence come from.
  */
 const val LIVE_WINDOW_REFRESH_TICK_MS = 500L
+
+/**
+ * The live player's single seek-step constant: both seek entry points (the
+ * bottom-bar seek buttons and the D-pad stepping inside the seek bar) route
+ * `position ± step` through [seekBackTargetMs]/[seekForwardTargetMs], and the
+ * step they feed those policies is this ONE value — the live player has no
+ * step preference (the VOD player sources its step from playback prefs), so
+ * the constant lives beside the policies it parameterizes instead of being
+ * re-declared per call site.
+ */
+const val LIVE_SEEK_STEP_MS = 10_000L
 
 /**
  * The live player's DVR-window refresh loop: call [onTick] every [tickMs]

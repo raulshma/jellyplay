@@ -121,6 +121,39 @@ object MpvSubtitleSideLoadPlan {
     }
 
     /**
+     * The application half of the pending batch — the loop both mpv hosts run
+     * at their START/FILE_LOADED flush (Android `addPendingSubtitles`, desktop
+     * `applyPendingSubtitles`): plan the batch against the live track-list,
+     * store the registry back BEFORE any add executes (the pre-seed contract —
+     * [planBatch]'s raw-label seed must be in place the moment a sub-add'd
+     * track appears), then execute each planned [SubAdd] through the host's
+     * one-method `sub-add` seam.
+     *
+     * Both engines ride it; the transport stays per-host in [executeSubAdd]:
+     * Android normalizes the URL ([`mpvOpenableUrl`]) and omits the `lang` arg
+     * for blank languages, desktop passes the raw URL and an empty-string
+     * lang. Per-add failure containment is also host-owned (inside the
+     * executor: Android logs-and-continues; JNA's Boolean-returning command
+     * cannot throw) so one bad row never aborts the rest of the batch — the
+     * shared loop stays exception-free.
+     *
+     * Empty [pending] is a no-op (the registry is untouched) — the hosts'
+     * former early return.
+     */
+    fun applyBatch(
+        pending: List<SubtitleSource>,
+        existingLabels: Set<String>,
+        registry: Map<String, String>,
+        onRegistry: (Map<String, String>) -> Unit,
+        executeSubAdd: (SubAdd) -> Unit,
+    ) {
+        if (pending.isEmpty()) return
+        val plan = planBatch(pending, existingLabels, registry)
+        onRegistry(plan.registry)
+        plan.adds.forEach(executeSubAdd)
+    }
+
+    /**
      * Same-label-but-different-source subs are NOT skipped: their label is
      * uniquified ("Label (2)", …) — skipping them made the second sidecar of
      * a same-titled pair permanently unselectable (it never entered the

@@ -48,8 +48,9 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * NOT owned here: the background-cast detach/reattach pair — those rebuild
  * the system [MediaSession] around the cast / local player through the
- * media-session controller; they live in [BackgroundCastController] now
- * (extracted from the VM, which routes its Detach/Reattach events to it).
+ * media-session controller; they live on the [VideoPlayerViewModel] itself
+ * (folded back from the deleted BackgroundCastController — the VM routes its
+ * Detach/Reattach events to the two private funs directly).
  *
  * (renamed from `PlayerCastController` — the commonMain
  * [PlayerCastController] seam interface took the old name; this class is its

@@ -27,6 +27,24 @@ internal enum class SegmentSkipKind(val segmentType: MediaSegmentType) {
 }
 
 /**
+ * The position-aware facts one skip-button dispatch consults, snapshotted by
+ * the VM from a SINGLE position-aware ui-state read: the cinema/outro/next
+ * gates the ladder branches on, plus the pre-resolved [SegmentSnapshot].
+ *
+ * One snapshot type instead of per-fact lambdas is load-bearing: the active
+ * segment and its end ticks MUST come from the same read — a fresh ui-state
+ * read per fact could pair one read's segment with another read's end ticks.
+ * The VM builds this in one place ([VideoPlayerViewModel]'s position-aware
+ * snapshot fold); the dispatch halves consume it.
+ */
+internal data class SegmentDispatchFacts(
+    val cinemaIntroActive: Boolean,
+    val isOutroNearEnd: Boolean,
+    val canSkipToNext: Boolean,
+    val segments: SegmentSnapshot,
+)
+
+/**
  * What a skip press resolves to, as data: a seek position in the unit the
  * engine seeks in (milliseconds — the ticks→ms conversion happens in
  * [segmentEndSeekTarget]) or one of the two non-seek escapes.

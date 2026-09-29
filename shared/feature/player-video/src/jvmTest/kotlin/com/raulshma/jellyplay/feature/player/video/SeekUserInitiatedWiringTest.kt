@@ -11,9 +11,10 @@ import java.io.File
  * [ControllerOwnershipTest] precedent — this pins the wiring at the source.
  * The seek funnel and its internal callers live in [VideoPlayerViewModel];
  * the segment-skip dispatch arms (skipSegment / autoSkipSegment /
- * executeSegmentSkip) live in [SegmentDispatchController] since the
- * extraction (the facts snapshot + the VM wiring stay VM-side), so the two
- * sources are pinned together:
+ * dispatchSegmentSkip / executeSegmentSkip) were extracted into
+ * SegmentDispatchController and have since been folded back into the same VM
+ * (the pure decision halves stay in SegmentSkipPolicy.kt), so everything is
+ * pinned in one source:
  *
  *  1. `seekTo` carries the `userInitiated: Boolean = true` parameter and only
  *     the user-initiated branch consults the clamp
@@ -22,10 +23,10 @@ import java.io.File
  *     auto-skip execution, the SyncPlay group position sync and the
  *     resume-skip (A-B repeat seeks the engine directly and can never route
  *     through the funnel);
- *  3. the auto-skip arm (`SegmentDispatchController.autoSkipSegment`) raises
- *     the "Skipped …" notice (through the VM-wired `showSkippedNotice` seam)
- *     and seeks non-user-initiated, while the overlay-button arm
- *     (`SegmentDispatchController.skipSegment`) stays user-initiated.
+ *  3. the auto-skip arm (`VideoPlayerViewModel.autoSkipSegment`, the
+ *     position-tick path) raises the "Skipped …" notice and seeks
+ *     non-user-initiated, while the overlay-button arm
+ *     (`VideoPlayerViewModel.skipSegment`) stays user-initiated.
  *
  * If a reformat trips a regex here, the assertion message names the contract
  * to restore — never delete an assertion to make a reformat pass.
@@ -46,10 +47,6 @@ class SeekUserInitiatedWiringTest {
 
     private val vmSource: String by lazy {
         moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/VideoPlayerViewModel.kt")
-    }
-
-    private val dispatchSource: String by lazy {
-        moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/SegmentDispatchController.kt")
     }
 
     private fun assertMatchesIn(source: String, regex: Regex, what: String) {
@@ -85,7 +82,7 @@ class SeekUserInitiatedWiringTest {
     @Test
     fun `auto-skip execution passes userInitiated = false`() {
         assertMatchesIn(
-            dispatchSource,
+            vmSource,
             Regex("""fun autoSkipSegment\(segment: MediaSegment\) \{\s*executeSegmentSkip\(.*?, userInitiated = false\)"""),
             "the position-tick auto-skip is app-driven — its seek must not be clamped",
         )
@@ -111,24 +108,19 @@ class SeekUserInitiatedWiringTest {
 
     @Test
     fun `segment-skip dispatch threads the flag through to seekTo`() {
-        // The controller's seekTo is the VM-wired constructor lambda; the
-        // flag must survive that hop, and the VM wiring must pass it through.
-        assertMatchesIn(
-            dispatchSource,
-            Regex("""is SegmentSkipTarget\.SeekToPosition -> seekTo\(target\.positionMs, userInitiated\)"""),
-            "executeSegmentSkip must forward its userInitiated flag to the seekTo seam",
-        )
+        // executeSegmentSkip is the shared executor of the folded dispatch
+        // arms; the flag must survive the hop into the seek funnel unchanged.
         assertMatchesIn(
             vmSource,
-            Regex("""seekTo = \{ positionMs, userInitiated -> seekTo\(positionMs, userInitiated\) \}"""),
-            "the VM's seekTo wiring must thread the controller's userInitiated flag into the funnel unchanged",
+            Regex("""is SegmentSkipTarget\.SeekToPosition -> seekTo\(target\.positionMs, userInitiated\)"""),
+            "executeSegmentSkip must forward its userInitiated flag to the seekTo funnel",
         )
     }
 
     @Test
     fun `overlay-button skip stays user-initiated`() {
         assertMatchesIn(
-            dispatchSource,
+            vmSource,
             Regex("""fun skipSegment\(segment: MediaSegment\) \{\s*executeSegmentSkip\(.*?, userInitiated = true\)"""),
             "the overlay button press is a user action",
         )
@@ -138,19 +130,14 @@ class SeekUserInitiatedWiringTest {
     fun `the progress reporter routes auto-skips through the notice-raising arm`() {
         assertMatchesIn(
             vmSource,
-            Regex("""onAutoSkip = \{ segment -> segmentDispatch\.autoSkipSegment\(segment\) \}"""),
-            "PlaybackProgressReporter's onAutoSkip must route to the dispatch controller's autoSkipSegment " +
+            Regex("""onAutoSkip = \{ segment -> autoSkipSegment\(segment\) \}"""),
+            "PlaybackProgressReporter's onAutoSkip must route to the VM's autoSkipSegment arm " +
                 "(notice + non-user seek), not the button arm",
         )
         assertMatchesIn(
-            dispatchSource,
-            Regex("""fun autoSkipSegment[\s\S]*?showSkippedNotice\(segment\.type\)"""),
-            "the auto-skip arm must raise the Skipped-segment notice through its seam",
-        )
-        assertMatchesIn(
             vmSource,
-            Regex("""showSkippedNotice = \{ segmentType -> showSkippedSegmentNotice\(segmentType\) \}"""),
-            "the VM wiring must back the controller's notice seam with the real Skipped-segment notice",
+            Regex("""fun autoSkipSegment[\s\S]*?showSkippedSegmentNotice\(segment\.type\)"""),
+            "the auto-skip arm must raise the Skipped-segment notice",
         )
     }
 

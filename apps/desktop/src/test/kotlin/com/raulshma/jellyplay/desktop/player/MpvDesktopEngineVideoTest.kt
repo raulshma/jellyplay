@@ -215,7 +215,10 @@ class MpvDesktopEngineVideoTest {
 
             // sub-add "auto" selects nothing — pick the sidecar explicitly
             // (also regression-covers the NODE_ARRAY readNode fix:
-            // this was empty before it).
+            // this was empty before it). The catalog is now coalesced
+            // (shared TrackRefreshCoalescer, Android parity) — it lands one
+            // debounce window after the FILE_LOADED burst.
+            waitUntil(5_000) { engine.availableTracks.value.any { it.type == TrackType.SUBTITLE } }
             val subTrack = engine.availableTracks.value.firstOrNull { it.type == TrackType.SUBTITLE }
             assertNotNull(subTrack, "sidecar subtitle track listed")
             engine.selectTrack(TrackType.SUBTITLE, subTrack.index)

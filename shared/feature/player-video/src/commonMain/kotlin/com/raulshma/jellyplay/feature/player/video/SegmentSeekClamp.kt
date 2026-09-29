@@ -66,7 +66,8 @@ private fun MediaSegment.absorbsForwardSeek(
     if (targetMs <= startMs || targetMs >= endMs) return false
     // Near-duration guard: without a known duration the guard cannot fire, so
     // no clamp happens at all (live streams / unresolved containers are left
-    // alone — the same conservatism as seekForwardTargetMs's duration clamp).
+    // alone — the same conservatism as the shared step-seek policy's duration
+    // clamp, PlayerChromePolicies.seekForwardTargetMs).
     if (durationMs <= 0L) return false
     val remainingMs = durationMs - endMs
     if (remainingMs * SEGMENT_SEEK_CLAMP_TAIL_WINDOW_DENOMINATOR < durationMs) return false

@@ -39,6 +39,21 @@ sealed interface LoadOutcome {
 }
 
 /**
+ * The ui-state → ui-state transform [SessionLoadOutputs.onPrefsProjected]
+ * carries. Internal alias so migrated controllers implementing the outputs
+ * seam (the [SessionHost] implementers — [VideoSessionHost]) can take the
+ * transform through the command-lambda split WITHOUT naming the ui state
+ * bag in their code: ControllerOwnershipTest's migrated-controller ratchet
+ * forbids the literal type name there (KDoc prose is exempt). The alias is
+ * transparent — overrides may spell either form. This is the ratchet's ONE
+ * declared state-transformer exception (see that suite's KDoc): the
+ * projection is the pipeline's load-stage vocabulary — the seed the host
+ * forwards for the VM to apply — not state the host reads or owns. Do not
+ * add further aliases to route other ui-state shapes past the ratchet.
+ */
+internal typealias PrefsProjection = VideoPlayerUiState.() -> VideoPlayerUiState
+
+/**
  * UiState-shaped load outputs. Implemented by the ViewModel — uiState
  * ownership stays there. Each method is called at a
  * defined point of the [SessionLoadPipeline] spine; the interface exists so

@@ -61,6 +61,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalo
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
 import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeoutMs
+import com.raulshma.jellyplay.feature.player.video.engine.shouldScheduleControlsAutoHide
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
@@ -513,10 +514,12 @@ fun VideoPlayerScreen(
         }
     }
     // Skip steps route through the VM's single funnel (C3): the clamp math
-    // lives in PlayerScreenPolicies.stepSeekTargetMs and the SyncPlay/cast/
-    // local routing in VideoPlayerViewModel.seekByStep — this screen and the
-    // PiP transport's SKIP actions can no longer diverge. The funnel reads
-    // the live gesture step, so no step-duration remember keys are needed.
+    // lives in the shared player-contract's stepSeekTargetMs
+    // (PlayerChromePolicies — the live player's screen cites the same policy)
+    // and the SyncPlay/cast/local routing in VideoPlayerViewModel.seekByStep —
+    // this screen and the PiP transport's SKIP actions can no longer diverge.
+    // The funnel reads the live gesture step, so no step-duration remember
+    // keys are needed.
     val doSeekBack: () -> Unit = remember {
         { viewModel.onEvent(VideoPlayerUiEvent.SeekByStep(-1)) }
     }

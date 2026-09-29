@@ -33,8 +33,9 @@ import com.raulshma.jellyplay.core.ui.tv.input.handleDPadKeyEvents
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_badge
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_go_to_live
-
-private const val DPAD_SEEK_STEP_MS = 10_000L
+import com.raulshma.jellyplay.feature.player.video.engine.LIVE_SEEK_STEP_MS
+import com.raulshma.jellyplay.feature.player.video.engine.seekBackTargetMs
+import com.raulshma.jellyplay.feature.player.video.engine.seekForwardTargetMs
 
 /**
  * Live-aware seek bar for DVR-window timeshift.
@@ -92,13 +93,17 @@ fun LiveSeekBar(
                 .height(24.dp)
                 .then(if (isTv) Modifier.focusable() else Modifier)
                 .then(
+                    // D-pad nudges ride the shared step-seek policies (the
+                    // VOD screen's math): floor at zero on the back path, cap
+                    // at duration on the forward one. The bar only composes
+                    // with a resolved duration (> 0), so the cap arm is the
+                    // live one — identical to the former inline ±10 s math.
                     if (isTv) Modifier.handleDPadKeyEvents(
                         onLeft = {
-                            onSeek((sliderValue.toLong() - DPAD_SEEK_STEP_MS).coerceAtLeast(0L))
+                            onSeek(seekBackTargetMs(sliderValue.toLong(), LIVE_SEEK_STEP_MS))
                         },
                         onRight = {
-                            onSeek((sliderValue.toLong() + DPAD_SEEK_STEP_MS)
-                                .coerceAtMost(durationMs))
+                            onSeek(seekForwardTargetMs(sliderValue.toLong(), LIVE_SEEK_STEP_MS, durationMs))
                         },
                     ) else Modifier,
                 )

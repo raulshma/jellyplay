@@ -15,29 +15,6 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  */
 
 /**
- * Backward step-seek target (button / keyboard / D-pad commit path): floor at
- * zero, no upper clamp.
- */
-internal fun seekBackTargetMs(currentPositionMs: Long, stepMs: Long): Long =
-    (currentPositionMs - stepMs).coerceAtLeast(0L)
-
-/**
- * Forward step-seek target. Live streams report no duration (`0`) until
- * resolved, which would pin every forward seek to 0 via the upper clamp, so
- * the clamp is skipped when there is no known duration — the engine clamps on
- * its own at seek time. Semantically a sibling of the gesture path's
- * [com.raulshma.jellyplay.feature.player.video.state.GestureSeekMath.seekTarget],
- * but a separate policy: gestures cap the per-gesture delta for live streams,
- * the step path has no cap and clamps direction-asymmetrically.
- */
-internal fun seekForwardTargetMs(currentPositionMs: Long, stepMs: Long, durationMs: Long): Long =
-    if (durationMs <= 0L) {
-        (currentPositionMs + stepMs).coerceAtLeast(0L)
-    } else {
-        (currentPositionMs + stepMs).coerceAtMost(durationMs)
-    }
-
-/**
  * Resume-skip target behind the ViewModel's `applyResumeSkip` funnel — the
  * `videoSkipBackOnResumeMs` rewind shared by the audio-focus regain path and
  * `resumePlayback`. A non-positive [skipMs] means the preference is disabled
@@ -52,22 +29,6 @@ internal fun resumeSkipTargetMs(currentPositionMs: Long, skipMs: Long): Long =
         (currentPositionMs - skipMs).coerceAtLeast(0L)
     }
 
-/**
- * Direction-folded step target behind the ViewModel's `seekByStep` funnel —
- * the single owner of the discrete skip-step path shared by the screen's
- * skip buttons / keyboard / D-pad commits and the PiP transport's SKIP
- * actions. [direction] < 0 steps back ([seekBackTargetMs]); anything else
- * steps forward ([seekForwardTargetMs]). The gesture/hold paths do NOT go
- * through here.
- */
-internal fun stepSeekTargetMs(
-    direction: Int,
-    currentPositionMs: Long,
-    stepMs: Long,
-    durationMs: Long,
-): Long =
-    if (direction < 0) seekBackTargetMs(currentPositionMs, stepMs)
-    else seekForwardTargetMs(currentPositionMs, stepMs, durationMs)
 
 /**
  * What the player's entry orientation lock MEANS, as data: TV and cast paths
@@ -132,28 +93,15 @@ internal fun isSkipSegmentButtonVisible(
         !isCinemaIntroVisible &&
         !(activeSegment.type == MediaSegmentType.OUTRO && shouldShowUpNext)
 
-/**
- * Whether the auto-hide timer may be scheduled at all: controls must be
- * visible with no seek gesture, open sheet, or overflow menu in progress, and
- * on non-TV a controls layer holding focus (the user is actively using the
- * controls) suppresses the hide entirely.
- */
-internal fun shouldScheduleControlsAutoHide(
-    showControls: Boolean,
-    isSeeking: Boolean,
-    isSheetOpen: Boolean,
-    isOverflowMenuOpen: Boolean,
-    isTv: Boolean,
-    controlsHasFocus: Boolean,
-): Boolean =
-    showControls && !isSeeking && !isSheetOpen && !isOverflowMenuOpen &&
-        (isTv || !controlsHasFocus)
-
-// The TV-doubling fold (`controlsAutoHideTimeoutMs`) moved to the shared
-// player-contract home
+// The player-chrome policies shared with the live player's screen moved to
+// the shared player-contract home
 // (com.raulshma.jellyplay.feature.player.video.engine.PlayerChromePolicies)
-// so the live player's screen cites the same ONE policy instead of a
-// byte-identical copy.
+// so both screens cite the same ONE policy instead of byte-identical copies:
+// `controlsAutoHideTimeoutMs` (first to move), then the step-seek family
+// (`seekBackTargetMs` / `seekForwardTargetMs` / `stepSeekTargetMs`), the
+// auto-hide gate (`shouldScheduleControlsAutoHide`) and the PiP-transition
+// teardown gate (`shouldRestoreHostWindowOnDispose`). `resumeSkipTargetMs`
+// stays here — it is VOD resume policy.
 
 /**
  * User-supplied font gate: the picked file must be TrueType or OpenType

@@ -149,6 +149,7 @@ private class AndroidPlayerWindowOps(private val activity: Activity?) : PlayerWi
         PlayerOrientationLock.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         PlayerOrientationLock.TV_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         PlayerOrientationLock.USER -> ActivityInfo.SCREEN_ORIENTATION_USER
+        PlayerOrientationLock.USER_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
         PlayerOrientationLock.UNSPECIFIED -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
@@ -213,7 +214,7 @@ private class AndroidPlayerWindowOps(private val activity: Activity?) : PlayerWi
 }
 
 @Composable
-internal actual fun rememberPlayerWindowOps(): PlayerWindowOps {
+actual fun rememberPlayerWindowOps(): PlayerWindowOps {
     val activity = LocalContext.current.findActivity()
     return remember(activity) { AndroidPlayerWindowOps(activity) }
 }

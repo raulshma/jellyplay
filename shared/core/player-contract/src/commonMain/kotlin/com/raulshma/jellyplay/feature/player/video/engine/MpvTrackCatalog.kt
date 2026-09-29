@@ -14,12 +14,73 @@ import com.raulshma.jellyplay.core.model.TrackType
  * `offline:{index}` [SubtitleSource.id]) never resolved on desktop. Both now
  * funnel through this one mapping.
  *
- * Input is the binding-agnostic [MpvTrackEntry] row: each host translates its
- * own parsed `track-list` node tree (Android `MPVNode` maps, desktop
- * `MpvLib.readNode` Kotlin trees) into entries and delegates the
- * [MediaTrack] construction here.
+ * Input is the binding-agnostic [MpvTrackEntry] row: each host hands its raw
+ * parsed `track-list` rows to [trackEntry] — the ONE normalization both
+ * engines run (the class of drift that bit offline-restore ids before) — and
+ * delegates the [MediaTrack] construction to [mediaTracks]. The raw row shape
+ * is the plain-Kotlin tree both transports already produce (or trivially
+ * adapt to): `Map` with `String`/`Boolean`/`Long`/`Double`/`List`/`Any?`
+ * values — desktop `MpvLib.readNode`'s output verbatim, Android's `MPVNode`
+ * through its engine-side plain-value adapter.
  */
 object MpvTrackCatalog {
+
+    /**
+     * Normalizes one raw mpv `track-list` row into an [MpvTrackEntry] — the
+     * shared parse the two mpv hosts funnel every track through (formerly two
+     * per-engine field extractions that could — and did — drift). Keys are
+     * mpv's wire names (`type`/`id`/`title`/`lang`/`codec`/`selected`/
+     * `external`/`ff-index`/`forced`/`default`/`hearing-impaired`); values
+     * are plain Kotlin (numbers coerce through [Number] so either transport's
+     * Long/Double lands; the string form of an id still parses, the defensive
+     * fallback both former parsers carried). Returns null for non-map rows
+     * and rows without a `type`/`id` — exactly the rows both former parsers
+     * dropped.
+     */
+    fun trackEntry(raw: Any?): MpvTrackEntry? {
+        val map = raw as? Map<*, *> ?: return null
+        val type = map["type"] as? String ?: return null
+        val id = (map["id"] as? Number)?.toInt()
+            ?: (map["id"] as? String)?.toIntOrNull()
+            ?: return null
+        return MpvTrackEntry(
+            type = type,
+            id = id,
+            title = map["title"] as? String,
+            lang = map["lang"] as? String,
+            codec = map["codec"] as? String,
+            selected = map["selected"] as? Boolean ?: false,
+            // `external` is true for sub-add'd (side-loaded) tracks and absent/
+            // false for container-demuxed tracks. Gates the side-loaded id
+            // lookup in [mediaTracks] so a demuxed track that happens to share
+            // a label with a sidecar never inherits the sidecar's stable id.
+            external = map["external"] as? Boolean ?: false,
+            // ff-index is the demuxer/container stream index — present for
+            // container-demuxed tracks (== the server's MediaStream.index), null
+            // for side-loaded (sub-add) tracks. Used as the robust resolution key
+            // in TrackSelectionHelper instead of fragile label matching.
+            ffIndex = (map["ff-index"] as? Number)?.toInt()
+                ?: (map["ff-index"] as? String)?.toIntOrNull(),
+            forced = map["forced"] as? Boolean ?: false,
+            default = map["default"] as? Boolean ?: false,
+            hearingImpaired = map["hearing-impaired"] as? Boolean ?: false,
+        )
+    }
+
+    /**
+     * Labels of the subtitle rows in a parsed track-list — the raw mpv
+     * `title`s, i.e. the EXACT `title` arg previously passed to `sub-add` and
+     * echoed back verbatim. Both hosts' `existingSubLabels` dedupe key for
+     * [MpvSubtitleSideLoadPlan] (the plan matches a pending source's label
+     * against these to skip true re-adds). Note this is deliberately NOT the
+     * [TrackLabelFormatter] display label: that appends language/codec and
+     * strips indexes, so it no longer equals the `sub-add` title — Android's
+     * former formatted-label set made its label-based duplicate skip dead
+     * code; both engines now dedupe on the raw titles.
+     */
+    fun existingSubtitleLabels(entries: List<MpvTrackEntry>): Set<String> =
+        entries.filter { it.type == "sub" }.mapNotNull { it.title }.toSet()
+
 
     /**
      * One parsed mpv `track-list` entry. [type] is mpv's raw discriminator

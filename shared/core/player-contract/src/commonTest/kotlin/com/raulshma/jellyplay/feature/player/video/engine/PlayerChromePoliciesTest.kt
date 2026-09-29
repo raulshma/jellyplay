@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.asFlow
@@ -126,5 +127,231 @@ class PlayerChromePoliciesTest {
         testScheduler.runCurrent()
         assertFalse(job.isActive)
         assertEquals(listOf(true), sink)
+    }
+}
+
+/**
+ * The step-seek family's pins, moved verbatim from player-video's
+ * `PlayerScreenPoliciesTest` with the policies themselves (the live player's
+ * screen now cites the same math). The funnel cases inline the engine reads
+ * the old pins drove through `FakeMediaEngine` — the fixture lives in
+ * player-video's test-fixtures and the contract's tests pull no feature-module
+ * edge — so the same position/duration values feed the fold directly.
+ */
+class StepSeekTargetTest {
+
+    @Test
+    fun seekBack_subtractsStep() {
+        assertEquals(40_000L, seekBackTargetMs(currentPositionMs = 50_000L, stepMs = 10_000L))
+    }
+
+    @Test
+    fun seekBack_floorsAtZero_neverNegative() {
+        assertEquals(0L, seekBackTargetMs(currentPositionMs = 5_000L, stepMs = 10_000L))
+        assertEquals(0L, seekBackTargetMs(currentPositionMs = 0L, stepMs = 10_000L))
+    }
+
+    @Test
+    fun seekBack_hasNoUpperClamp() {
+        // Position beyond duration (pathological engine report) is passed through
+        // — the back path never clamps to duration.
+        val pos = 120_000L
+        assertEquals(pos - 10_000L, seekBackTargetMs(currentPositionMs = pos, stepMs = 10_000L))
+    }
+
+    @Test
+    fun seekForward_vod_capsAtDuration() {
+        assertEquals(
+            60_000L,
+            seekForwardTargetMs(currentPositionMs = 55_000L, stepMs = 10_000L, durationMs = 60_000L),
+        )
+        assertEquals(
+            20_000L,
+            seekForwardTargetMs(currentPositionMs = 10_000L, stepMs = 10_000L, durationMs = 100_000L),
+        )
+    }
+
+    @Test
+    fun seekForward_live_noDuration_neverPinsToZero() {
+        // dur == 0 used to pin every forward seek to 0 via the upper clamp.
+        assertEquals(
+            40_000L,
+            seekForwardTargetMs(currentPositionMs = 30_000L, stepMs = 10_000L, durationMs = 0L),
+        )
+        assertEquals(
+            10_000L,
+            seekForwardTargetMs(currentPositionMs = 0L, stepMs = 10_000L, durationMs = 0L),
+        )
+    }
+
+    @Test
+    fun seekForward_negativeDuration_treatedAsLive() {
+        assertEquals(
+            35_000L,
+            seekForwardTargetMs(currentPositionMs = 30_000L, stepMs = 5_000L, durationMs = -1L),
+        )
+    }
+
+    // ── Funnel (C3) ──────────────────────────────────────────────────────────
+    // stepSeekTargetMs is the reduction VideoPlayerViewModel.seekByStep makes
+    // over the engine's live reads; the pins feed the same position/duration
+    // values the old FakeMediaEngine-driven reads produced (advanceTo /
+    // durationValue), inlined now that the fold lives in the contract.
+
+    @Test
+    fun funnel_negativeDirection_stepsBackAndFloorsAtZero() {
+        // Engine reads: advanceTo(50_000), duration unresolved (0)...
+        assertEquals(
+            40_000L,
+            stepSeekTargetMs(
+                direction = -1,
+                currentPositionMs = 50_000L,
+                stepMs = 10_000L,
+                durationMs = 0L,
+            ),
+        )
+        // ...and advanceTo(3_000).
+        assertEquals(
+            0L,
+            stepSeekTargetMs(
+                direction = -1,
+                currentPositionMs = 3_000L,
+                stepMs = 10_000L,
+                durationMs = 0L,
+            ),
+        )
+    }
+
+    @Test
+    fun funnel_forwardDirection_capsAtEngineDuration() {
+        // Engine reads: advanceTo(55_000), durationValue = 60_000.
+        assertEquals(
+            60_000L,
+            stepSeekTargetMs(
+                direction = +1,
+                currentPositionMs = 55_000L,
+                stepMs = 10_000L,
+                durationMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun funnel_forwardWithoutResolvedDuration_neverPinsToZero() {
+        // Engine reads: advanceTo(30_000), duration unresolved (0).
+        assertEquals(
+            40_000L,
+            stepSeekTargetMs(
+                direction = +1,
+                currentPositionMs = 30_000L,
+                stepMs = 10_000L,
+                durationMs = 0L,
+            ),
+        )
+    }
+}
+
+/**
+ * The auto-hide gate's pins, moved verbatim from player-video's
+ * `PlayerScreenPoliciesTest` with the predicate (both screens' auto-hide
+ * effects now cite the same gate).
+ */
+class ControlsAutoHidePolicyTest {
+
+    @Test
+    fun visibleIdleControls_scheduleAutoHide() {
+        assertTrue(
+            shouldScheduleControlsAutoHide(
+                showControls = true,
+                isSeeking = false,
+                isSheetOpen = false,
+                isOverflowMenuOpen = false,
+                isTv = false,
+                controlsHasFocus = false,
+            ),
+        )
+    }
+
+    @Test
+    fun hiddenControls_seeking_sheet_and_overflow_suppressTheTimer() {
+        fun gate(
+            showControls: Boolean = true,
+            isSeeking: Boolean = false,
+            isSheetOpen: Boolean = false,
+            isOverflowMenuOpen: Boolean = false,
+        ) = shouldScheduleControlsAutoHide(
+            showControls = showControls,
+            isSeeking = isSeeking,
+            isSheetOpen = isSheetOpen,
+            isOverflowMenuOpen = isOverflowMenuOpen,
+            isTv = false,
+            controlsHasFocus = false,
+        )
+
+        assertTrue(gate()) // idle gate itself is true
+        assertFalse(gate(showControls = false))
+        assertFalse(gate(isSeeking = true))
+        assertFalse(gate(isSheetOpen = true))
+        assertFalse(gate(isOverflowMenuOpen = true))
+    }
+
+    @Test
+    fun nonTv_controlsFocus_suppressesTheTimer() {
+        assertFalse(
+            shouldScheduleControlsAutoHide(
+                showControls = true,
+                isSeeking = false,
+                isSheetOpen = false,
+                isOverflowMenuOpen = false,
+                isTv = false,
+                controlsHasFocus = true,
+            ),
+        )
+    }
+
+    @Test
+    fun tv_ignoresControlsFocus() {
+        assertTrue(
+            shouldScheduleControlsAutoHide(
+                showControls = true,
+                isSeeking = false,
+                isSheetOpen = false,
+                isOverflowMenuOpen = false,
+                isTv = true,
+                controlsHasFocus = true,
+            ),
+        )
+    }
+
+    @Test
+    fun liveScreen_shape_overlayVisibleWithNoSheet_schedulesHide_evenWithFocusedControls() {
+        // The live screen's gate maps onto the shared predicate with NO new
+        // parameter: `overlayVisible` as showControls, `activeSheet != null`
+        // as isSheetOpen, and constant false for the concepts the live chrome
+        // lacks (seek-gesture suppression, overflow menu) — including
+        // controlsHasFocus: a focused live control never suppresses the hide,
+        // TV included (the pre-adoption inline `overlayVisible && activeSheet
+        // == null` gate, pinned here so a predicate change cannot silently
+        // alter the live behavior).
+        assertTrue(
+            shouldScheduleControlsAutoHide(
+                showControls = true,
+                isSeeking = false,
+                isSheetOpen = false,
+                isOverflowMenuOpen = false,
+                isTv = true,
+                controlsHasFocus = false,
+            ),
+        )
+        assertFalse(
+            shouldScheduleControlsAutoHide(
+                showControls = true,
+                isSeeking = false,
+                isSheetOpen = true,
+                isOverflowMenuOpen = false,
+                isTv = true,
+                controlsHasFocus = false,
+            ),
+        )
     }
 }

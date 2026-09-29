@@ -107,4 +107,90 @@ class MpvTrackCatalogTest {
         assertNull(tracks[0].language)
         assertNull(tracks[0].streamIndex)
     }
+
+    // ─── trackEntry (the ONE raw-row normalization both mpv hosts run) ────────
+
+    @Test
+    fun trackEntry_parsesThePlainMapRow() {
+        // The desktop MpvLib.readNode shape verbatim: String/Boolean/Long values.
+        val entry = MpvTrackCatalog.trackEntry(
+            mapOf(
+                "type" to "sub",
+                "id" to 3L,
+                "title" to "My Sidecar",
+                "lang" to "eng",
+                "codec" to "subrip",
+                "selected" to true,
+                "external" to true,
+                "ff-index" to 4L,
+                "forced" to true,
+                "default" to true,
+                "hearing-impaired" to true,
+            ),
+        )
+        assertEquals(
+            MpvTrackCatalog.MpvTrackEntry(
+                type = "sub", id = 3, title = "My Sidecar", lang = "eng", codec = "subrip",
+                selected = true, external = true, ffIndex = 4,
+                forced = true, default = true, hearingImpaired = true,
+            ),
+            entry,
+        )
+    }
+
+    @Test
+    fun trackEntry_absentBooleansDefaultToFalse_numbersCoerceThroughNumber() {
+        val entry = MpvTrackCatalog.trackEntry(
+            mapOf(
+                "type" to "audio",
+                "id" to 7, // Int form (an adapter that narrowed the node value)
+            ),
+        )
+        assertEquals(7, entry?.id)
+        assertNull(entry?.ffIndex)
+        assertEquals(false, entry?.selected)
+        assertEquals(false, entry?.external)
+        assertEquals(false, entry?.forced)
+        assertEquals(false, entry?.default)
+        assertEquals(false, entry?.hearingImpaired)
+    }
+
+    @Test
+    fun trackEntry_stringIdFallback_stillParses() {
+        // The defensive fallback both former per-engine parsers carried.
+        val entry = MpvTrackCatalog.trackEntry(mapOf("type" to "sub", "id" to "5"))
+        assertEquals(5, entry?.id)
+        val ff = MpvTrackCatalog.trackEntry(mapOf("type" to "sub", "id" to 1L, "ff-index" to "9"))
+        assertEquals(9, ff?.ffIndex)
+    }
+
+    @Test
+    fun trackEntry_nonMapRows_andRowsWithoutTypeOrId_areDropped() {
+        assertNull(MpvTrackCatalog.trackEntry(null))
+        assertNull(MpvTrackCatalog.trackEntry("not a map"))
+        assertNull(MpvTrackCatalog.trackEntry(mapOf<String, Any?>()))
+        assertNull(MpvTrackCatalog.trackEntry(mapOf("id" to 1L)), "missing type")
+        assertNull(MpvTrackCatalog.trackEntry(mapOf("type" to "sub")), "missing id")
+        assertNull(MpvTrackCatalog.trackEntry(mapOf("type" to "sub", "id" to "not-a-number")), "unparsable id")
+    }
+
+    // ─── existingSubtitleLabels (the raw-title dedupe key) ────────────────────
+
+    @Test
+    fun existingSubtitleLabels_returnsRawSubTitlesOnly() {
+        val labels = MpvTrackCatalog.existingSubtitleLabels(
+            listOf(
+                MpvTrackCatalog.MpvTrackEntry(type = "audio", id = 1, title = "English 5.1"),
+                MpvTrackCatalog.MpvTrackEntry(type = "sub", id = 2, title = "Full English"),
+                MpvTrackCatalog.MpvTrackEntry(type = "sub", id = 3, title = null),
+                MpvTrackCatalog.MpvTrackEntry(type = "video", id = 0, title = "Video"),
+            ),
+        )
+        assertEquals(setOf("Full English"), labels)
+    }
+
+    @Test
+    fun existingSubtitleLabels_emptyListYieldsEmptySet() {
+        assertTrue(MpvTrackCatalog.existingSubtitleLabels(emptyList()).isEmpty())
+    }
 }
