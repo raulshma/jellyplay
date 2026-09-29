@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.smartplaylist
 
 import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -55,7 +56,8 @@ class SmartPlaylistsViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+        private val mediaRepository: MediaRepository = mockk()
+    private val mediaCollectionReads: MediaCollectionReads = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
     private val smartPlaylistRepository: SmartPlaylistRepository = mockk()
@@ -70,6 +72,7 @@ class SmartPlaylistsViewModelTest {
         every { smartPlaylistRepository.observeSmartPlaylists() } returns customFlow
         viewModel = SmartPlaylistsViewModel(
             mediaRepository = mediaRepository,
+            mediaCollectionReads = mediaCollectionReads,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
             smartPlaylistRepository = smartPlaylistRepository,
@@ -126,7 +129,7 @@ class SmartPlaylistsViewModelTest {
         val favorites = SmartPlaylistsViewModel.defaultPlaylists.first { it.id == "favorites" }
         val high = track("high", rating = 5f)
         val low = track("low", rating = 3f)
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.AUDIO), limit = 50) } returns
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.AUDIO), limit = 50) } returns
             Result.success(SearchResult(listOf(low, high), 2, 0))
 
         viewModel.generatePlaylist(favorites)
@@ -148,7 +151,7 @@ class SmartPlaylistsViewModelTest {
         val b = track("g1", name = "B", genres = listOf("Rock"))
         val a = track("g2", name = "A", genres = listOf("ROCK")) // case-insensitive match
         val pop = track("g3", name = "C", genres = listOf("Pop"))
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(b, a, pop), 3, 0))
 
         viewModel.generatePlaylist(playlist)
@@ -156,7 +159,7 @@ class SmartPlaylistsViewModelTest {
 
         assertEquals(listOf(a, b), viewModel.generatedItems)
         coVerify(exactly = 1) {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 null,
                 LibraryFilters(
                     mediaTypes = listOf(MediaType.AUDIO),
@@ -176,7 +179,7 @@ class SmartPlaylistsViewModelTest {
         val unplayed = SmartPlaylistsViewModel.defaultPlaylists.first { it.id == "unplayed" }
         val played = track("p1", played = true, genres = listOf("x"))
         val fresh = track("p2", played = false, genres = listOf("x"))
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(played, fresh), 2, 0))
 
         viewModel.generatePlaylist(unplayed)
@@ -188,7 +191,7 @@ class SmartPlaylistsViewModelTest {
     @Test
     fun generatePlaylist_failure_setsErrorAndStopsLoading() = runTest(mainDispatcher) {
         val playlist = SmartPlaylist(id = "rock", name = "Rock", criteria = emptyList())
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("boom"))
 
         viewModel.generatePlaylist(playlist)
@@ -207,7 +210,7 @@ class SmartPlaylistsViewModelTest {
             sortBy = SmartPlaylistSort.TITLE,
         )
         val a = track("g1", name = "A", genres = listOf("Rock"))
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(a), 1, 0))
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
             MusicQueueOutcome.Started(emptyList(), 0)
@@ -231,7 +234,7 @@ class SmartPlaylistsViewModelTest {
             sortBy = SmartPlaylistSort.TITLE,
         )
         val a = track("g1", name = "A", genres = listOf("Rock"))
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(a), 1, 0))
         viewModel.generatePlaylist(playlist)
         awaitGenerated { viewModel.generatedItems.isNotEmpty() }

@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.ReverbPreset
+import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
@@ -38,8 +39,48 @@ import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
  */
 internal object EngineConfigBuilder {
 
+    /**
+     * The state-bag entry: projects the [VideoPlayerUiState] slices the
+     * builder reads and delegates to [buildFromSlices]. Kept as the
+     * adapter for tests pinning the original mapping; the RUNTIME path
+     * enters through [buildFromSlices] directly — the EngineConfigSync
+     * controller takes the slices as narrow constructor lambdas, so the
+     * state bag never crosses the controller boundary (the ownership
+     * ratchet).
+     */
     fun build(
         state: VideoPlayerUiState,
+        effects: AudioEffectsState,
+        equalizerEnabled: Boolean,
+        agg: VideoPlayerAggregate,
+        engineSpecific: EngineSpecificConfig? = null,
+        deinterlace: com.raulshma.jellyplay.core.model.DeinterlaceMode =
+            com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
+    ): EngineConfig = buildFromSlices(
+        subtitleStyle = state.subtitleStyle,
+        videoEffects = state.videoFx.videoEffects,
+        dialogueBoostEnabled = state.dialogueBoostEnabled,
+        dialogueBoostStrength = state.dialogueBoostStrength,
+        mediaStreams = state.media.mediaStreams,
+        effects = effects,
+        equalizerEnabled = equalizerEnabled,
+        agg = agg,
+        engineSpecific = engineSpecific,
+        deinterlace = deinterlace,
+    )
+
+    /**
+     * The slice entry (the fields the runtime builder actually reads, one
+     * mapping shared with [build] so the two entries cannot drift): the
+     * audio-effects / decoder / subtitle-delay → [EngineConfig] translation
+     * over the individual state slices instead of the state bag.
+     */
+    fun buildFromSlices(
+        subtitleStyle: SubtitleStyle,
+        videoEffects: VideoEffectsConfig,
+        dialogueBoostEnabled: Boolean,
+        dialogueBoostStrength: EffectStrength,
+        mediaStreams: List<MediaStream>,
         effects: AudioEffectsState,
         equalizerEnabled: Boolean,
         agg: VideoPlayerAggregate,
@@ -51,12 +92,12 @@ internal object EngineConfigBuilder {
         audioPassthrough = effects.audioPassthrough,
         audioPassthroughCodecs = agg.playback.audioPassthroughCodecs,
         audioDelayMs = effects.audioDelayMs,
-        subtitleDelayMs = state.subtitleStyle.offsetMs,
-        subtitleStyle = state.subtitleStyle,
-        videoEffects = state.videoFx.videoEffects,
+        subtitleDelayMs = subtitleStyle.offsetMs,
+        subtitleStyle = subtitleStyle,
+        videoEffects = videoEffects,
         audioEffects = audioEffects(
-            dialogueBoostEnabled = state.dialogueBoostEnabled,
-            dialogueBoostStrength = state.dialogueBoostStrength,
+            dialogueBoostEnabled = dialogueBoostEnabled,
+            dialogueBoostStrength = dialogueBoostStrength,
             nightModeEnabled = effects.nightModeEnabled,
             nightModeStrength = effects.nightModeStrength,
             equalizerEnabled = equalizerEnabled,
@@ -79,7 +120,7 @@ internal object EngineConfigBuilder {
         // the session-scoped deinterlace override + the per-item HDR
         // gate ride every runtime build (the UI-state path has the streams).
         deinterlace = deinterlace,
-        hdrSource = isHdrFromStreams(state.media.mediaStreams),
+        hdrSource = isHdrFromStreams(mediaStreams),
     )
 
     /**

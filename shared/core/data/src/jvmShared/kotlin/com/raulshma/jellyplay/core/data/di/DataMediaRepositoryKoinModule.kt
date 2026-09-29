@@ -8,11 +8,15 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
+import com.raulshma.jellyplay.core.data.repository.MediaUncachedReadsImpl
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepositoryImpl
@@ -113,6 +117,7 @@ internal val dataMediaRepositoryModule: Module = module {
     single {
         MediaRepositoryImpl(
             libraryApiClient = get(),
+            homeSectionsCachePort = get(),
             syncPlayApiClient = get(),
             homeSnapshotStore = get(),
             playedStateSync = get(),
@@ -122,6 +127,9 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             internals = get(),
+            // The deepened createSyncPlayGroup routes through the manager
+            // (create→join MY group lives there once — see its KDoc).
+            syncPlayManager = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
@@ -129,10 +137,25 @@ internal val dataMediaRepositoryModule: Module = module {
     // over-the-impl pattern in dataSeerrArrModule): the music-catalogue reads
     // and the user-data writes, so single-family consumers inject the seam
     // instead of the union. UserDataMutatorImpl already does (the user-data
-    // family's clean sole consumer); the music playback stack still resolves
-    // MediaRepository and migrates consumer-by-consumer.
+    // family's clean sole consumer); the music playback stack + feature:music
+    // ViewModels migrated too — they inject MusicCatalogue for the catalogue
+    // reads and keep MediaRepository only as mixed consumers (detail reads,
+    // the user-data feed). getAlbumTracks is the one member still dual-declared:
+    // the detail provider's session resolves detail + album tracks together.
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
+    // Family-repository split, second wave: the nine uncached browse-read
+    // members left the union for their own narrow seams over the
+    // [LibraryApiClient] single ([MediaUncachedReadsImpl] — one impl, three
+    // seams, the same one-impl-many-seams idiom as the two binds above; the
+    // LiveTvRepositoryImpl shape: pure forwards, no cache state). Consumers
+    // inject only the seam they read — MediaExtrasReads (intros/extras),
+    // MediaBrowseReads (people/tags), MediaCollectionReads (items/favorites/
+    // suggestions queries).
+    single { MediaUncachedReadsImpl(libraryApiClient = get()) }
+    single<MediaExtrasReads> { get<MediaUncachedReadsImpl>() }
+    single<MediaBrowseReads> { get<MediaUncachedReadsImpl>() }
+    single<MediaCollectionReads> { get<MediaUncachedReadsImpl>() }
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }

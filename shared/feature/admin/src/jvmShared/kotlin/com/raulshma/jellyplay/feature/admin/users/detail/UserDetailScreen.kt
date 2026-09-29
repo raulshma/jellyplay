@@ -83,7 +83,7 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_tab_parent
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_tab_profile
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_unknown_error
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_user_fallback
-import com.raulshma.jellyplay.feature.admin.users.detail.asText
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccessTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccountTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.ParentalControlTab

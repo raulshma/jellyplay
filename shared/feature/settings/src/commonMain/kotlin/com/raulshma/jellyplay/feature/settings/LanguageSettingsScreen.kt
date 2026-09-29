@@ -7,17 +7,14 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -37,22 +34,12 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.TrackSelectionPreset
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
@@ -177,8 +164,6 @@ fun LanguageSettingsScreen(
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
     // The declared row admissions the emission `if`s read — one gate per id,
     // declared beside the group items
     // (SettingsScreenGroups.languageSubtitles.rowAdmitted). The always rows
@@ -190,48 +175,21 @@ fun LanguageSettingsScreen(
         parentsOn = rowParentsOn(LanguageSettingsIds.HDR_SUBTITLE_STYLE to preferences.hdrSubtitleStyleEnabled),
     )
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }
-    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
-
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "language_init",
-    )
 
     val langs = languages
 
-    val scrollState = rememberLazyListState()
-    val scrollIndex = rememberHighlightScrollIndex(highlightSettingId, languageScreenGroups)
-
-    HighlightScrollEffect(scrollState, scrollIndex)
-
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_language_subs_title),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-        actions = {
-            AdvancedSettingsToggleButton(
-                showAdvanced = showAdvanced,
-                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-            )
-        },
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
+        focusTag = "language_init",
+        highlightSettingId = highlightSettingId,
+        highlightGroups = languageScreenGroups,
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        pickerHost = true,
+    ) { activePicker ->
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Language,
@@ -272,7 +230,7 @@ fun LanguageSettingsScreen(
                             trailingText = appLangLabel,
                             highlighted = highlightSettingId == LanguageSettingsIds.APP_LANGUAGE,
                             onClick = {
-                                activePicker = PickerState.List(
+                                activePicker.value = PickerState.List(
                                     title = displayLanguageTitle,
                                     items = appLanguages.map { it.first },
                                     label = { code -> appLanguageNameByCode[code] ?: code ?: appLangFallback },
@@ -289,7 +247,7 @@ fun LanguageSettingsScreen(
                         trailingText = preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == LanguageSettingsIds.AUDIO_LANGUAGE,
                         onClick = {
-                            activePicker = PickerState.List(
+                            activePicker.value = PickerState.List(
                                 title = audioLangTitle,
                                 items = langs.map { it.first },
                                 label = { code -> languageNameByCode[code] ?: code ?: langDefaultFallback },
@@ -307,7 +265,7 @@ fun LanguageSettingsScreen(
                         trailingText = preferences.preferredSubtitleLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_LANGUAGE,
                         onClick = {
-                            activePicker = PickerState.List(
+                            activePicker.value = PickerState.List(
                                 title = subtitleLangTitle,
                                 items = langs.map { it.first },
                                 label = { code -> languageNameByCode[code] ?: code ?: langDefaultFallback },
@@ -358,7 +316,7 @@ fun LanguageSettingsScreen(
                             trailingText = rules.preset.displayName,
                             highlighted = highlightSettingId == TrackSelectionIds.TRACK_SELECTION_PRESET,
                             onClick = {
-                                activePicker = PickerState.List(
+                                activePicker.value = PickerState.List(
                                     title = presetTitle,
                                     items = TrackSelectionPreset.entries,
                                     label = { it.displayName },
@@ -483,7 +441,7 @@ fun LanguageSettingsScreen(
                         highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_FONT_SIZE,
                         onClick = {
                             val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
-                            activePicker = pickerChip(
+                            activePicker.value = pickerChip(
                                 title = fontSizeTitle,
                                 values = sizes,
                                 current = preferences.subtitleStyle.fontSize,
@@ -563,7 +521,7 @@ fun LanguageSettingsScreen(
                             trailingText = preferences.subtitleStyle.fontColor.name,
                             highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_COLOR,
                             onClick = {
-                                activePicker = PickerState.List(
+                                activePicker.value = PickerState.List(
                                     title = textColorTitle,
                                     items = SubtitleColor.entries,
                                     label = { it.name },
@@ -593,7 +551,7 @@ fun LanguageSettingsScreen(
                             trailingText = preferences.subtitleStyle.edgeType.name,
                             highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_EDGE_STYLE,
                             onClick = {
-                                activePicker = PickerState.List(
+                                activePicker.value = PickerState.List(
                                     title = edgeStyleTitle,
                                     items = SubtitleEdgeType.entries,
                                     label = { it.name },
@@ -615,7 +573,7 @@ fun LanguageSettingsScreen(
                             trailingText = "${preferences.subtitleStyle.offsetMs}ms",
                             highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_SYNC_OFFSET,
                             onClick = {
-                                activePicker = PickerState.Slider(
+                                activePicker.value = PickerState.Slider(
                                     title = syncOffsetTitle,
                                     value = preferences.subtitleStyle.offsetMs.toFloat(),
                                     valueRange = -5000f..5000f,
@@ -641,7 +599,7 @@ fun LanguageSettingsScreen(
                             trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
                             highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_VERTICAL_POSITION,
                             onClick = {
-                                activePicker = PickerState.Slider(
+                                activePicker.value = PickerState.Slider(
                                     title = verticalPositionTitle,
                                     value = preferences.subtitleStyle.verticalPosition,
                                     valueRange = 0f..0.4f,
@@ -671,8 +629,6 @@ fun LanguageSettingsScreen(
                     )
                 }
             }
-        }
-        }
     }
 
     if (activeDialog is LanguageSettingsDialog.SubtitleBgColorPicker) {
@@ -746,9 +702,4 @@ fun LanguageSettingsScreen(
             }
         }
     }
-
-    SettingsPickerDialog(
-        state = activePicker,
-        onDismiss = { activePicker = null },
-    )
 }

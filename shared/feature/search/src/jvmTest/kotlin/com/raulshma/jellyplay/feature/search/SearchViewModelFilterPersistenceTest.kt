@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -65,6 +67,8 @@ class SearchViewModelFilterPersistenceTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaBrowseReads: MediaBrowseReads
+    private lateinit var mediaCollectionReads: MediaCollectionReads
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var seerrRepository: SeerrRepository
@@ -83,6 +87,10 @@ class SearchViewModelFilterPersistenceTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
+
+        mediaBrowseReads = mockk(relaxed = true)
+
+        mediaCollectionReads = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
@@ -98,8 +106,8 @@ class SearchViewModelFilterPersistenceTest {
         every { quickDownloadActions.downloadedIds } returns downloadedIds
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
-        coEvery { mediaRepository.getTags(any(), any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaRepository.getSearchSuggestions(any()) } returns Result.success(
+        coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
         )
 
@@ -113,6 +121,8 @@ class SearchViewModelFilterPersistenceTest {
 
     private fun createViewModel() = SearchViewModel(
         mediaRepository,
+        mediaBrowseReads,
+        mediaCollectionReads,
         userDataMutator,
         imageUrlProvider,
         seerrRepository,

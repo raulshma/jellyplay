@@ -29,7 +29,7 @@ import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition

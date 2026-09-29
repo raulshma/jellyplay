@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.artistdetail
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
@@ -15,6 +16,7 @@ import com.raulshma.jellyplay.feature.music.toInstantMixOutcome
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.StateFlow
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /** The artist screen's all-or-nothing content aggregate (the artist name + albums row). */
 private data class ArtistContent(
@@ -23,7 +25,12 @@ private data class ArtistContent(
 )
 
 class ArtistDetailViewModel(
+    /**
+     * The detail read + user-data feed only — the artist's album row rides
+     * [musicCatalogue], the repository's narrow music family seam.
+     */
     private val mediaRepository: MediaRepository,
+    private val musicCatalogue: MusicCatalogue,
     private val imageUrlProvider: ImageUrlProvider,
     private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
@@ -89,7 +96,7 @@ class ArtistDetailViewModel(
                 _artistName.value = st.value?.name ?: ""
                 _albums.value = st.value?.albums ?: emptyList()
                 _isLoading.value = st.isLoading
-                _loadError.value = st.error?.let { MixErrorMessage.Raw(it.message ?: "Failed to load artist") }
+                _loadError.value = st.error?.let { UiMessage.Raw(it.message ?: "Failed to load artist") }
             }
         }
         launch {
@@ -133,7 +140,7 @@ class ArtistDetailViewModel(
     private suspend fun fetchArtistData(artistId: String, force: Boolean): ArtistContent {
         return coroutineScope {
             val detailDeferred = async { mediaRepository.getMediaDetail(artistId, force = force) }
-            val albumsDeferred = async { mediaRepository.getArtistAlbums(artistId) }
+            val albumsDeferred = async { musicCatalogue.getArtistAlbums(artistId, limit = 50) }
             val detailResult = detailDeferred.await()
             val albumsResult = albumsDeferred.await()
 

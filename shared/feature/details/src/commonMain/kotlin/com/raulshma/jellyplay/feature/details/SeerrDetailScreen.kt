@@ -89,10 +89,10 @@ import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
-import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
-import com.raulshma.jellyplay.core.ui.components.seerrCardClickHandler
+import com.raulshma.jellyplay.core.ui.components.seerr.seerrCardClickHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
@@ -174,7 +174,7 @@ fun SeerrDetailScreen(
     ) {
         // One root-level bundle of the Seerr card-loading state + prefetch
         // callback; descendant rows read them via the composition locals.
-        com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+        com.raulshma.jellyplay.core.ui.components.seerr.ProvideSeerrCardPrefetching(
             prefetchDetail = { tmdbId, mediaType, onDone ->
                 viewModel.prefetchRelatedDetails(tmdbId, mediaType, onDone)
             }
@@ -1017,8 +1017,8 @@ private fun SeerrHorizontalSection(
     items: List<SeerrSearchItem>,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
 ) {
-    val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
-    val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
+    val loadingState = com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrCardLoadingState.current
+    val prefetch = com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrPrefetch.current
     val uniqueItems = remember(items) { items.distinctBy { it.id } }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(

@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
-import com.raulshma.jellyplay.core.ui.di.androidCoreUiModule
 import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
 import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
 import com.raulshma.jellyplay.feature.auth.di.androidAuthModule
@@ -50,10 +49,9 @@ fun androidKoinModules(app: Application): List<Module> = listOf(
     androidDataModule(app),
     // Legacy core:data remainder (Hilt-extinct — media3
     // audio stack, cast, schedulers, remote control, workers) +
-    // core:notification and core:ui's UserMessageBus.
+    // core:notification.
     androidCoreDataModule(app),
     androidNotificationModule(app),
-    androidCoreUiModule,
     // V3 downloads conveyor: Android actuals of the portable
     // download engine's seams (WorkManager enqueue/coordinator,
     // Context/StatFs storage layout, notification summary, Coil

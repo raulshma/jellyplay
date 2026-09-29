@@ -14,8 +14,10 @@ kotlin {
         // copy until a touch migrates its 14 consumers),
         // FakeUserDataMutator (details + home) and FakeMediaEngine (the one
         // MediaEngine double for the session + audio-queue jvmTest suites;
-        // apps/desktop's app-side copy is the remaining per-touch
-        // candidate). AGP 9 has no KMP testFixtures support, so this is a
+        // apps/desktop's app-side copy was adopted in the fake-twin merge —
+        // its suites construct AUTO_PLAY instances of this class, and its
+        // wall-clock pollUntil helper lives beside it in PollUntil.kt).
+        // AGP 9 has no KMP testFixtures support, so this is a
         // plain library module declared inside consumers' test source-set
         // blocks ONLY.
         //

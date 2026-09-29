@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -40,6 +41,7 @@ class LibraryLayoutViewModelTest {
     private lateinit var homeDiscoveryStore: HomeDiscoveryStore
     private lateinit var editor: PreferencesEditor
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaCollectionReads: MediaCollectionReads
     private lateinit var playlistRepository: PlaylistRepository
 
     @BeforeTest
@@ -48,6 +50,7 @@ class LibraryLayoutViewModelTest {
         homeDiscoveryStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
+        mediaCollectionReads = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
         coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
@@ -66,7 +69,7 @@ class LibraryLayoutViewModelTest {
                 LibraryFolder(id = "music", name = "Music", collectionType = "music"),
             )
         )
-        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, playlistRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, mediaCollectionReads, playlistRepository)
         advanceUntilIdle()
 
         val loaded = viewModel.libraryFolders.value
@@ -76,7 +79,7 @@ class LibraryLayoutViewModelTest {
 
     @Test
     fun `setLibrarySectionEnabled routes to the store section-prefs command`() = runTest {
-        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, playlistRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, mediaCollectionReads, playlistRepository)
 
         viewModel.setLibrarySectionEnabled("movies", HomeSectionType.LATEST_MEDIA, enabled = false)
         advanceUntilIdle()
@@ -94,7 +97,7 @@ class LibraryLayoutViewModelTest {
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(
             HomeDiscoverySlice(libraryHomeSectionOverrides = mapOf("x" to setOf(HomeSectionType.RECENTLY_ADDED)))
         )
-        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, playlistRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, mediaCollectionReads, playlistRepository)
 
         val json = viewModel.exportCurrentLayoutJson()
 

@@ -66,6 +66,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
+            mediaExtrasReads = get(),
             userDataMutator = get(),
             mediaDetailProvider = get(),
             playbackRepository = get(),
@@ -96,6 +97,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     viewModel {
         PersonDetailViewModel(
             mediaRepository = get(),
+            mediaBrowseReads = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             mediaDownloadActions = get(),

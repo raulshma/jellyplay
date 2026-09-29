@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -843,28 +844,9 @@ class PlaybackSessionLifecycleTest {
         }
     }
 
-    private data class PersistCall(
-        val itemId: String,
-        val positionMs: Long,
-        val playSessionId: String,
-        val nowMs: Long,
-    )
-
-    /** Recording [SessionPositionStore]: captures persists, serves saved values. */
-    private class FakePositionStore : SessionPositionStore {
-        val persists = mutableListOf<PersistCall>()
-        var savedItemIdValue: String? = null
-        var savedPositionMsValue: Long? = null
-        var savedPersistedAtValue: Long? = null
-        var savedPlaySessionIdValue: String? = null
-
-        override fun persist(itemId: String, positionMs: Long, playSessionId: String, nowMs: Long) {
-            persists += PersistCall(itemId, positionMs, playSessionId, nowMs)
-        }
-
-        override fun savedItemId(): String? = savedItemIdValue
-        override fun savedPositionMs(): Long? = savedPositionMsValue
-        override fun savedPersistedAtMs(): Long? = savedPersistedAtValue
-        override fun savedPlaySessionId(): String? = savedPlaySessionIdValue
-    }
+    // [FakePositionStore] is the shared recording double
+    // (com.raulshma.jellyplay.core.testfixtures.FakePositionStore) since the
+    // fixtures hoist — this file's former private variant (records persists,
+    // serves settable saved values) IS its behavior; the tests below set only
+    // the saved*Value fields the resume path reads.
 }

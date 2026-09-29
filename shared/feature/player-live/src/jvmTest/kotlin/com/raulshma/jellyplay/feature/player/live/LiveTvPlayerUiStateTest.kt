@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Pins the default/initial shape of [LiveTvPlayerUiState] and its derived
@@ -110,11 +111,11 @@ class LiveTvPlayerUiStateTest {
     fun `error message and detail travel independently of loading flags`() {
         val failed = LiveTvPlayerUiState().copy(
             isLoadingChannels = false,
-            errorMessage = LivePlayerMessage.Raw("tuner offline"),
+            errorMessage = UiMessage.Raw("tuner offline"),
             errorDetail = "HttpException 502 at /LiveChannels",
         )
-        assertTrue(failed.errorMessage is LivePlayerMessage.Raw)
-        assertEquals("tuner offline", (failed.errorMessage as LivePlayerMessage.Raw).text)
+        assertTrue(failed.errorMessage is UiMessage.Raw)
+        assertEquals("tuner offline", (failed.errorMessage as UiMessage.Raw).text)
         assertEquals("HttpException 502 at /LiveChannels", failed.errorDetail)
         assertFalse(failed.isLoadingChannels)
         assertEquals(LiveEngineState.IDLE, failed.engineState, "copying an error must not touch the engine field")

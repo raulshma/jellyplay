@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -32,12 +32,12 @@ import kotlin.test.BeforeTest
  *
  * The entry-type → API-call mapping itself is exercised in
  * `PlaybackRepositoryImplTest` (the repository owns it); these tests stub
- * [PlaybackRepository.replayOutboxEntry] and assert the drain-loop behaviour.
+ * [PlaybackOutboxReplay.replayOutboxEntry] and assert the drain-loop behaviour.
  */
 class PlaybackOutboxDrainerTest {
 
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
-    private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val outboxReplay: PlaybackOutboxReplay = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
@@ -50,7 +50,7 @@ class PlaybackOutboxDrainerTest {
         // Defaults mirroring the legacy worker-suite setup; tests override per
         // entry/item to model failure.
         every { offlineModeManager.isOffline } returns false
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns true
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns true
         coEvery { outbox.drain() } returns emptyList()
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
         // Derived watched flips route through the repository (cache
@@ -66,7 +66,7 @@ class PlaybackOutboxDrainerTest {
     private fun drainer(): PlaybackOutboxDrainer =
         PlaybackOutboxDrainerImpl(
             outbox = outbox,
-            playbackRepository = playbackRepository,
+            outboxReplay = outboxReplay,
             offlineModeManager = offlineModeManager,
             playedStateSync = playedStateSync,
             offlineRepository = offlineRepository,
@@ -85,7 +85,7 @@ class PlaybackOutboxDrainerTest {
 
         assertFalse(result.retriesPending)
         assertEquals(0, result.pendingCount)
-        coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 0) { outboxReplay.replayOutboxEntry(any()) }
         verify(exactly = 0) { userDataSyncTrigger.enqueueNow() }
     }
 
@@ -98,7 +98,7 @@ class PlaybackOutboxDrainerTest {
 
         assertFalse(result.retriesPending)
         coVerify(exactly = 0) { outbox.drain() }
-        coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 0) { outboxReplay.replayOutboxEntry(any()) }
     }
 
     // ── Downloaded-item reconcile (Gap A: empty outbox still reconciles) ──
@@ -183,7 +183,7 @@ class PlaybackOutboxDrainerTest {
         val result = drain()
 
         assertFalse(result.retriesPending)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
     }
 
@@ -211,7 +211,7 @@ class PlaybackOutboxDrainerTest {
 
         assertFalse(result.retriesPending)
         assertEquals(listOf("item-1"), result.reconciledItemIds)
-        coVerify(exactly = 3) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 3) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 3) { outbox.delete(any()) }
         verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
     }
@@ -232,7 +232,7 @@ class PlaybackOutboxDrainerTest {
         val result = drain()
 
         assertFalse(result.retriesPending)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
     }
 
@@ -243,14 +243,14 @@ class PlaybackOutboxDrainerTest {
         val result = drain()
 
         assertFalse(result.retriesPending)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
     }
 
     @Test
     fun `replay failure retains the entry for retry`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         val result = drain()
 
@@ -263,7 +263,7 @@ class PlaybackOutboxDrainerTest {
     @Test
     fun `early attempt on a failed entry reports retries-pending and retains the entry`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         val result = drain()
 
@@ -274,7 +274,7 @@ class PlaybackOutboxDrainerTest {
     @Test
     fun `exhausted retries dead-letter a failing telemetry entry and converge`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         // attempt >= MAX_RETRIES (3) triggers the dead-letter path.
         val result = drain(attempt = 3)
@@ -298,7 +298,7 @@ class PlaybackOutboxDrainerTest {
     @Test
     fun `failed PLAYED intent is not dead-lettered at the telemetry budget`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         // Past MAX_RETRIES (3) — a telemetry entry would dead-letter here.
         val result = drain(attempt = 3)
@@ -310,7 +310,7 @@ class PlaybackOutboxDrainerTest {
     @Test
     fun `failed PLAYED intent dead-letters only past its own larger budget`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         val result = drain(attempt = 10)
 
@@ -323,7 +323,7 @@ class PlaybackOutboxDrainerTest {
         // Favorites are user intents like PLAYED/UNPLAYED: dead-lettering at
         // the telemetry budget would silently lose an offline favorite flip.
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.FAVORITE))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         val earlyResult = drain(attempt = 3)
 
@@ -339,7 +339,7 @@ class PlaybackOutboxDrainerTest {
     @Test
     fun `failed UNFAVORITE intent shares the larger user-intent budget`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNFAVORITE))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         val result = drain(attempt = 3)
 
@@ -365,8 +365,8 @@ class PlaybackOutboxDrainerTest {
         assertFalse(result.retriesPending)
         // Only the PLAYED flip reaches the API; the trailing telemetry would
         // otherwise re-write a near-end position over the played state.
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PLAYED }) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PLAYED }) }
         coVerify(exactly = 3) { outbox.delete(any()) }
     }
 
@@ -383,7 +383,7 @@ class PlaybackOutboxDrainerTest {
         val result = drain()
 
         assertFalse(result.retriesPending)
-        coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 0) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 2) { outbox.delete(any()) }
     }
 
@@ -396,7 +396,7 @@ class PlaybackOutboxDrainerTest {
 
         drain()
 
-        coVerify(exactly = 2) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 2) { outboxReplay.replayOutboxEntry(any()) }
     }
 
     @Test
@@ -471,7 +471,7 @@ class PlaybackOutboxDrainerTest {
         // Dead-lettered telemetry (never pushed), no downloads to reconcile:
         // the server state did not move, so no invalidation or notify fires.
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         val result = drain(attempt = 10)
 
@@ -497,8 +497,8 @@ class PlaybackOutboxDrainerTest {
             entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
             entry("e2", "item-2", PlaybackOutboxEventType.PROGRESS),
         )
-        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-1" }) } returns true
-        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(match { it.itemId == "item-1" }) } returns true
+        coEvery { outboxReplay.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
         // Success-side reconciliation early-returns (no offline row).
 
         val result = drain(attempt = 3)
@@ -518,8 +518,8 @@ class PlaybackOutboxDrainerTest {
             entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
             entry("e2", "item-2", PlaybackOutboxEventType.PROGRESS),
         )
-        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-1" }) } returns true
-        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(match { it.itemId == "item-1" }) } returns true
+        coEvery { outboxReplay.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
 
         val result = drain()
 

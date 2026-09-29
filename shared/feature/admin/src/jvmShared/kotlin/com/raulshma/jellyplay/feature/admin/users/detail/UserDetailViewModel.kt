@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_could_not_reload
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 @Immutable
 data class UserDetailState(
@@ -146,7 +147,7 @@ class UserDetailViewModel(
                 if (r.isFailure) {
                     val e = r.exceptionOrNull()
                     Log.e("UserDetail", "rename failed", e)
-                    _uiState.update { it.copy(isSaving = false, saveError = e?.message?.let(AdminUserMessage::Raw)) }
+                    _uiState.update { it.copy(isSaving = false, saveError = e?.message?.let(UiMessage::Raw)) }
                     return@launch
                 }
                 _uiState.update { it.copy(editedName = null) }
@@ -158,7 +159,7 @@ class UserDetailViewModel(
                     val e = r.exceptionOrNull()
                     Log.e("UserDetail", "policy update failed", e)
                     // keep editedPolicy so user can retry; editedName already cleared
-                    _uiState.update { it.copy(isSaving = false, saveError = e?.message?.let(AdminUserMessage::Raw)) }
+                    _uiState.update { it.copy(isSaving = false, saveError = e?.message?.let(UiMessage::Raw)) }
                     return@launch
                 }
                 _uiState.update { it.copy(editedPolicy = null) }
@@ -167,7 +168,7 @@ class UserDetailViewModel(
             adminRepository.getManagedUser(id).onSuccess { fresh ->
                 _uiState.update { it.copy(isSaving = false, user = fresh) }
             }.onFailure {
-                _uiState.update { it.copy(isSaving = false, saveError = AdminUserMessage.Resource(Res.string.admin_could_not_reload)) }
+                _uiState.update { it.copy(isSaving = false, saveError = UiMessage.Resource(Res.string.admin_could_not_reload)) }
             }
         }
     }
@@ -179,7 +180,7 @@ class UserDetailViewModel(
             _uiState.update {
                 it.copy(
                     showPasswordDialog = false,
-                    saveError = if (r.isFailure) r.exceptionOrNull()?.message?.let(AdminUserMessage::Raw) else null,
+                    saveError = if (r.isFailure) r.exceptionOrNull()?.message?.let(UiMessage::Raw) else null,
                 )
             }
         }
@@ -205,7 +206,7 @@ class UserDetailViewModel(
                     // Stay on the detail screen so the user sees the failure
                     // (the list reload would otherwise still show the user).
                     _uiState.update {
-                        it.copy(showDeleteDialog = false, saveError = e.message?.let(AdminUserMessage::Raw))
+                        it.copy(showDeleteDialog = false, saveError = e.message?.let(UiMessage::Raw))
                     }
                 }
         }

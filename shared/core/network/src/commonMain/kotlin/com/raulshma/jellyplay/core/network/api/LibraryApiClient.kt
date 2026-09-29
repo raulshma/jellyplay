@@ -31,15 +31,12 @@ interface LibraryApiClient {
         force: Boolean = false,
     ): Result<HomeSectionsResult>
 
-    /**
-     * Drops the home hot-path sub-call caches (per-folder latest media,
-     * per-seed similar items) so the next [getHomeSections] fetch re-hits the
-     * server for those rows. Their entries carry per-item UserData, so a
-     * watched/favorite/progress write calling this purges the pre-write rows
-     * instead of letting them serve stale badges for the sub-call TTL. Best-
-     * effort and synchronous — a no-op before any home fetch has memoised.
-     */
-    fun invalidateHomeSubcallCaches()
+    // The home hot-path cache-maintenance verbs (invalidateHomeSubcallCaches /
+    // invalidateDiscoverRowCache / seedDiscoverRowCache) left this interface:
+    // cache-management vocabulary does not belong on a network API surface, and
+    // their one consumer (the data layer's write/roll paths) reaches them
+    // through the narrow [com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort]
+    // instead.
 
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
@@ -91,23 +88,6 @@ interface LibraryApiClient {
      * periodic refresh is consulted only by the home-sections path.
      */
     suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
-
-    /**
-     * Drops the home fetcher's memoised items for one discover row (the dice
-     * affordance): the next home fetch re-rolls a RANDOM row instead of
-     * replaying the cached set for the sub-call TTL. Best-effort and
-     * synchronous — a no-op when the row has not been memoised.
-     */
-    fun invalidateDiscoverRowCache(rowId: String)
-
-    /**
-     * Memoises one discover row's freshly fetched items in the home fetcher's
-     * per-row sub-call cache (the dice roll's commit step): the next home
-     * fetch serves the rolled items instead of re-querying the server, so a
-     * roll survives the periodic refresh. No-op on an empty list; the key
-     * derivation matches the fetch path's.
-     */
-    fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>)
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
 

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -35,6 +36,8 @@ class LibraryLayoutViewModel(
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
+    /** The SearchResult-shaped reads (the layout preview's items query — off the union). */
+    private val mediaCollectionReads: MediaCollectionReads,
     private val playlistRepository: PlaylistRepository,
 ) : JellyPlayViewModel() {
 
@@ -140,7 +143,7 @@ class LibraryLayoutViewModel(
             val result = runCatching {
                 when (type) {
                     PinnedSectionType.COLLECTION ->
-                        mediaRepository.getMediaItems(
+                        mediaCollectionReads.getMediaItems(
                             filters = com.raulshma.jellyplay.core.model.LibraryFilters(
                                 mediaTypes = listOf(MediaType.COLLECTION),
                             ),

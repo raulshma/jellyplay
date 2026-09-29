@@ -16,9 +16,10 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_watch_p
  * through the shared [messages] channel so the helper owns no message channel
  * of its own.
  *
- * Unlike the fire-and-forget helpers, this bootstrap is a four-step
- * client/server sequence (create group → recover its id → join → push the
- * queue) whose outcome the caller needs to know before opening the player, so
+ * Unlike the fire-and-forget helpers, this bootstrap is a two-step
+ * client/server sequence (create + join the group — one
+ * [SyncPlayManager.createGroup] call — then push the queue) whose outcome the
+ * caller needs to know before opening the player, so
  * [start] is a suspending function returning [Result] rather than a
  * launch-internal non-suspend entry. The no-arg [startScreenItem] resolves the
  * current item into the bootstrap params (id / group title with localized
@@ -85,17 +86,14 @@ internal class WatchPartyActions(
 
     /**
      * Bootstraps a SyncPlay watch party for [itemId] and pushes it into the
-     * shared queue. The group is created from [title], recovered from the
-     * server's group list by name (create returns no id), joined (which also
-     * connects the WebSocket), and finally seeded with the item via
-     * [SyncPlayRepository.syncPlaySetNewQueue] at [startPositionTicks] = 0 (a
-     * fresh group start).
-     *
-     * Group recovery disambiguates by id: the existing group ids are snapshotted
-     * (best-effort) before creation, and the recover step prefers a name match
-     * that is NOT in that snapshot — so a pre-existing same-named group can't
-     * shadow the freshly-created one (which would otherwise be orphaned and
-     * leave the user joined to the wrong party).
+     * shared queue. The group is created AND joined by
+     * [SyncPlayManager.createGroup] — the one owner of the create→join-MY-group
+     * choreography (the wire `New` command returns no id; the manager recovers
+     * the fresh group with a bounded, snapshot-disambiguated poll, so a
+     * pre-existing same-named group can't shadow it and the bootstrap no
+     * longer carries its own snapshot/recover/join steps) — and finally the
+     * item is seeded via [SyncPlayRepository.syncPlaySetNewQueue] at
+     * [startPositionTicks] = 0 (a fresh group start).
      *
      * Any step failure aborts the remainder and emits a failure message; on
      * overall success [DetailMessage.WatchPartyStarted] is emitted so the
@@ -109,35 +107,11 @@ internal class WatchPartyActions(
         title: String,
         mediaSourceId: String?,
     ): Result<Unit> {
-        // Snapshot existing group ids (best-effort) before creating, so step 2
-        // can pick the freshly-created group even if a same-named group already
-        // exists — create returns no id, so a name collision would otherwise
-        // join a stale group and orphan the new one.
-        val priorGroupIds = syncPlayRepository.getSyncPlayGroups().getOrNull().orEmpty()
-            .map { it.groupId }
-            .toSet()
-
-        // 1. Create the group (no id is returned).
-        syncPlayRepository.createSyncPlayGroup(title)
+        // 1. Create the group and join it (also connects the WebSocket).
+        syncPlayManager.createGroup(title)
             .onFailure { return fail(it) }
 
-        // 2. Recover the new group by name, preferring one not in the prior
-        //    snapshot; fall back to the first name match (mirrors
-        //    SyncPlayViewModel.createGroup when the snapshot is unavailable).
-        val groupId = syncPlayRepository.getSyncPlayGroups()
-            .getOrElse { return fail(it) }
-            .let { groups ->
-                groups.firstOrNull { it.groupName == title && it.groupId !in priorGroupIds }
-                    ?: groups.firstOrNull { it.groupName == title }
-            }
-            ?.groupId
-            ?: return fail(IllegalStateException("SyncPlay group not found after creation: $title"))
-
-        // 3. Join the group + connect the WebSocket.
-        syncPlayManager.joinGroup(groupId)
-            .onFailure { return fail(it) }
-
-        // 4. Push the item into the shared queue at position 0 (fresh start).
+        // 2. Push the item into the shared queue at position 0 (fresh start).
         syncPlayRepository.syncPlaySetNewQueue(
             itemIds = listOf(itemId),
             playingItemId = itemId,
@@ -152,7 +126,7 @@ internal class WatchPartyActions(
     /**
      * Single failure sink: emits the localized "couldn't start watch party"
      * message and returns a [Result.failure] wrapping [cause]. Collapses the
-     * per-step error handling so the four bootstrap calls stay readable.
+     * per-step error handling so the two bootstrap calls stay readable.
      */
     private suspend fun fail(cause: Throwable): Result<Unit> {
         messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_watch_party_failed)))

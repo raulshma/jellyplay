@@ -1,13 +1,11 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,10 +35,8 @@ import com.raulshma.jellyplay.core.model.hasMeaningfulRuntime
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.episodeCode
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
-import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_continue_watching
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_next_up
@@ -99,26 +94,16 @@ private fun ContinueWatchingCard(
         }
     } else null
 
-    Column(
+    NewsletterCardScaffold(
+        aspectRatio = 16f / 9f,
+        shape = ShapeCache.smooth12,
+        focusShape = ShapeCache.smooth16,
+        onClick = onClick,
+        imageUrl = imageUrl,
+        contentDescription = item.name,
+        blurHash = item.blurHashes.primary,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(ShapeCache.smooth12)
-                .focusIndicator(ShapeCache.smooth16)
-                .clickable(onClick = onClick),
-        ) {
-            MediaImage(
-                url = imageUrl,
-                contentDescription = item.name,
-                blurHash = item.blurHashes.primary,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-
+        overlay = {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -157,12 +142,8 @@ private fun ContinueWatchingCard(
                     )
                 }
             }
-        }
-
-        Column(
-            modifier = Modifier.padding(horizontal = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        },
+        caption = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -253,8 +234,8 @@ private fun ContinueWatchingCard(
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
-        }
-    }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -297,26 +278,16 @@ private fun NextUpCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    NewsletterCardScaffold(
+        aspectRatio = 2f / 3f,
+        shape = ShapeCache.smooth12,
+        focusShape = ShapeCache.smooth16,
+        onClick = onClick,
+        imageUrl = imageUrl,
+        contentDescription = item.name,
+        blurHash = item.blurHashes.primary,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(ShapeCache.smooth12)
-                .focusIndicator(ShapeCache.smooth16)
-                .clickable(onClick = onClick),
-        ) {
-            MediaImage(
-                url = imageUrl,
-                contentDescription = item.name,
-                blurHash = item.blurHashes.primary,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-
+        overlay = {
             if (item.communityRating != null) {
                 Box(
                     modifier = Modifier
@@ -357,12 +328,8 @@ private fun NextUpCard(
                     )
                 }
             }
-        }
-
-        Column(
-            modifier = Modifier.padding(horizontal = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        },
+        caption = {
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
@@ -432,8 +399,8 @@ private fun NextUpCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-    }
+        },
+    )
 }
 
 /**

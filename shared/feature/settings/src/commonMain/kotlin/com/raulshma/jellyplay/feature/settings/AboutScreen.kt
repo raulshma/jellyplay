@@ -111,6 +111,8 @@ fun AboutScreen(
         tag = "about_init",
     )
 
+    // Not on PreferenceScreenScaffold: bespoke Column+verticalScroll layout (no LazyColumn
+    // to host the highlight-scroll or the picker dialog).
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_about),
         onBack = onBack,

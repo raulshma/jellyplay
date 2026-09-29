@@ -16,8 +16,9 @@ import androidx.compose.runtime.Immutable
  * Promoted to core/model (from feature/player/video's `SubtitleDefaults`, which
  * only held two size constants) so [ResolvedSubtitleStyle] and the Compose
  * `toCompose()` mapping in core/ui can live without depending on the feature
- * module. The feature module's `SubtitleDefaults` remains the source of the
- * mpv-specific [MPV_LIBASS_REFERENCE_FONT_SIZE] (a libass canvas concern).
+ * module. The mpv-specific MPV_LIBASS_REFERENCE_FONT_SIZE (a libass canvas
+ * concern) lives in player-contract's `MpvStyleMapping`, which
+ * `MpvSubtitleStyleApplier` applies to both mpv engines.
  */
 @Immutable
 data class SubtitleRenderDefaults(

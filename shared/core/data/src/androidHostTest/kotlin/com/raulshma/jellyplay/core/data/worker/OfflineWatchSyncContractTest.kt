@@ -145,7 +145,7 @@ class OfflineWatchSyncContractTest {
                     createDrainer = { notifier ->
                         PlaybackOutboxDrainerImpl(
                             outbox = outbox,
-                            playbackRepository = playbackRepository,
+                            outboxReplay = playbackRepository,
                             offlineModeManager = offlineModeManager,
                             playedStateSync = playedStateSync,
                             offlineRepository = offlineRepository,

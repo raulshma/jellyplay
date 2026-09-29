@@ -25,8 +25,7 @@ import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectListener
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
-import com.raulshma.jellyplay.core.ui.feedback.UiText
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
@@ -129,9 +128,10 @@ fun androidAppModule(context: Context): Module = module {
     // Startup initializers (formerly field-injected into the Application and
     // driven off the @ApplicationScope coroutine scope).
     single {
+        // The recovery policy lives in core:data (DownloadRecoveryPort,
+        // dataDownloadsConveyorModule); this shell only fires it at startup.
         DownloadRecoveryInitializer(
-            downloadDao = get(),
-            downloadEnqueuer = get(),
+            recovery = get(),
         )
     }
     single {
@@ -260,10 +260,17 @@ fun androidAppInteropAdaptersModule(application: Application): Module = module {
     single<DetailThemeMusic> { AppDetailThemeMusic(player = get()) }
     single<AudioPlayerCast> { AppAudioPlayerCast(castManager = get(), application = application) }
     // Dev v0.10.7 quick-action flow: core/data's download-outcome seam
-    // (MediaDownloadActions.downloadAndReport) bridged to the UserMessageBus
-    // single — the app graph is the only one that sees both (shared:core:data
-    // cannot depend on core/ui; desktop ships its own def in desktopDataModule).
-    single<DownloadOutcomeMessenger> { AppDownloadOutcomeMessenger(userMessageBus = get()) }
+    // (MediaDownloadActions.downloadAndReport) bridged to the shared
+    // core:ui UserMessageBus single — the app graph is the only one that
+    // sees both (shared:core:data cannot depend on core/ui; desktop ships
+    // its own def in desktopDataModule). The two legacy androidMain res
+    // strings have no compose-resources entries (string files stay
+    // untouched), so the adapter resolves them through the application
+    // context at POST time instead of the bus resolving a UiText.Resource
+    // at render time — the same one-shot cadence either way.
+    single<DownloadOutcomeMessenger> {
+        AppDownloadOutcomeMessenger(userMessageBus = get(), application = application)
+    }
 }
 
 /** Bridges the shared music module's [MusicMessageBus] seam to the core bus. */
@@ -276,13 +283,14 @@ private class AppMusicMessageBus(
 /** core/data download-outcome seam: exact info/error toasts over the core bus. */
 private class AppDownloadOutcomeMessenger(
     private val userMessageBus: UserMessageBus,
+    private val application: Application,
 ) : DownloadOutcomeMessenger {
     override fun downloadStarted() {
-        userMessageBus.info(UiText.Resource(R.string.data_download_started))
+        userMessageBus.info(application.getString(R.string.data_download_started))
     }
 
     override fun downloadStartFailed() {
-        userMessageBus.error(UiText.Resource(R.string.data_download_start_failed))
+        userMessageBus.error(application.getString(R.string.data_download_start_failed))
     }
 }
 

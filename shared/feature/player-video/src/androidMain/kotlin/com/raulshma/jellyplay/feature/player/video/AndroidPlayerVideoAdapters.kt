@@ -5,7 +5,9 @@ import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
-import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.msg_smart_download_deleted
+import com.raulshma.jellyplay.core.ui.message.uiTextOf
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
 import kotlinx.coroutines.flow.StateFlow
@@ -86,13 +88,13 @@ internal class AndroidMediaSessionFactory(
 
 /**
  * Android adapter bridging the module-local [PlayerVideoMessageBus] seam onto
- * the Hilt-owned legacy `core:ui` UserMessageBus (seam; MusicMessageBus
+ * the shared commonMain `core:ui` UserMessageBus (seam; MusicMessageBus
  * precedent): strings post as UiText.Raw, the [PlayerVideoMessage.SmartDownloadDeleted]
- * seal resolves the legacy string entry the ViewModel used to build inline —
- * the resource stays in the legacy table (no string files touched).
+ * seal resolves its compose-resources string entry (same-name entry in the
+ * shared table — no string files touched).
  */
 internal class AndroidUserMessageBridge(
-    private val delegate: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus,
+    private val delegate: com.raulshma.jellyplay.core.ui.message.UserMessageBus,
 ) : PlayerVideoMessageBus {
 
     override fun info(message: String) = delegate.info(message)
@@ -102,7 +104,7 @@ internal class AndroidUserMessageBridge(
     override fun info(message: PlayerVideoMessage) {
         when (message) {
             PlayerVideoMessage.SmartDownloadDeleted -> delegate.info(
-                uiTextOf(com.raulshma.jellyplay.shared.core.ui.R.string.msg_smart_download_deleted),
+                uiTextOf(Res.string.msg_smart_download_deleted),
             )
         }
     }

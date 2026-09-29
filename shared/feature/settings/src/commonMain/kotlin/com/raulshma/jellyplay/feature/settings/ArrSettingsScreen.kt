@@ -119,6 +119,8 @@ fun ArrSettingsScreen(
 
     val backgroundColorState = rememberScreenBackgroundColorState()
 
+    // Not on PreferenceScreenScaffold: input-form chrome (fillMaxWidth + imePadding + fixed
+    // padding + spacedBy), not the LazyColumn chassis the scaffold owns.
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_integrations_arr),
         onBack = onBack,

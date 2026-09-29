@@ -4,10 +4,10 @@ import androidx.compose.runtime.Composable
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.LibraryFilters
-import com.raulshma.jellyplay.core.ui.components.FilterSection
-import com.raulshma.jellyplay.core.ui.components.LibraryFilterSheetSections
-import com.raulshma.jellyplay.core.ui.components.MediaFilterSheet
-import com.raulshma.jellyplay.core.ui.components.MediaFilterSheetTexts
+import com.raulshma.jellyplay.core.ui.components.filter.FilterSection
+import com.raulshma.jellyplay.core.ui.components.filter.LibraryFilterSheetSections
+import com.raulshma.jellyplay.core.ui.components.filter.MediaFilterSheet
+import com.raulshma.jellyplay.core.ui.components.filter.MediaFilterSheetTexts
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_apply_filters
 import com.raulshma.jellyplay.feature.library.generated.resources.library_collapse

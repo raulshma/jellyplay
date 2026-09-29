@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
@@ -36,7 +36,7 @@ import org.junit.Test
  * constraints that used to live unwritten inside `initializeInternal`'s inlined
  * ~15-stage coroutine. A fake [SessionLoadOutputs] + recording [SessionLoadHooks]
  * capture the invocation order; the collaborators ([PlayerSessionManager],
- * [MediaRepository], stores) are stubbed.
+ * [MediaExtrasReads], stores) are stubbed.
  *
  * Constraints pinned:
  *  - `loadMedia` runs BEFORE per-item hydration, and the hydration reads a
@@ -143,8 +143,8 @@ class SessionLoadPipelineTest {
             }
         }
 
-        val mediaRepository = mockk<MediaRepository>(relaxed = true)
-        coEvery { mediaRepository.getIntros(any()) } returns Result.success(intros)
+        val mediaExtrasReads = mockk<MediaExtrasReads>(relaxed = true)
+        coEvery { mediaExtrasReads.getIntros(any()) } returns Result.success(intros)
 
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         every { aggregateStore.aggregate } returns MutableStateFlow(VideoPlayerAggregate())
@@ -157,7 +157,7 @@ class SessionLoadPipelineTest {
 
         return SessionLoadPipeline(
             sessionManager = sessionManager,
-            mediaRepository = mediaRepository,
+            mediaExtrasReads = mediaExtrasReads,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
             outputs = RecordingOutputs(stages),
@@ -317,8 +317,8 @@ class SessionLoadPipelineTest {
         coEvery { sessionManager.loadMedia(any(), any(), any()) } throws
             RuntimeException("playback info failed")
 
-        val mediaRepository = mockk<MediaRepository>(relaxed = true)
-        coEvery { mediaRepository.getIntros(any()) } returns Result.success(emptyList())
+        val mediaExtrasReads = mockk<MediaExtrasReads>(relaxed = true)
+        coEvery { mediaExtrasReads.getIntros(any()) } returns Result.success(emptyList())
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         every { aggregateStore.aggregate } returns MutableStateFlow(VideoPlayerAggregate())
         every { aggregateStore.aggregateRaw } returns flowOf(VideoPlayerAggregate())
@@ -329,7 +329,7 @@ class SessionLoadPipelineTest {
 
         val pipeline = SessionLoadPipeline(
             sessionManager = sessionManager,
-            mediaRepository = mediaRepository,
+            mediaExtrasReads = mediaExtrasReads,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
             outputs = RecordingOutputs(stages),

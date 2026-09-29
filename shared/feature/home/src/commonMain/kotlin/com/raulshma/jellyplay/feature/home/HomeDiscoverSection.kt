@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.Dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
-import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrCardLoadingState
 
 /** Item counts per discover row on compact (phone) layouts. */
 internal val COMPACT_DISCOVER_PATTERN = listOf(3, 2, 3)

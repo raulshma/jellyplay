@@ -38,12 +38,7 @@ import androidx.compose.ui.awt.ComposeWindow
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
-import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
-import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
-import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
@@ -57,7 +52,6 @@ import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.navKey
@@ -69,12 +63,12 @@ import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
-import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
+import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import org.koin.compose.koinInject
 
 /**
  * The nav scaffold: rail on the left, NavDisplay on the right, snackbar for
@@ -88,7 +82,11 @@ import org.koin.compose.koinInject
  * registry, the user-message source list, the remote-nav collector and the
  * idle-ambient controller; this composable reads them through the holder's
  * properties and keeps only the chrome: rail, NavDisplay, snackbar surface,
- * key handling, the idle overlay's rendering.
+ * key handling, the idle overlay's rendering. ALL of this composition's
+ * Koin reads ride the holder too — this composition carries no Koin read of
+ * its own
+ * (only DesktopAppRoot's pre-scaffold window does, per the
+ * composition-order contract on [rememberDesktopShellServices]).
  *
  * The scaffold's DECISIONS live in extracted, test-pinned top-level
  * declarations (the DesktopUpdateCheckController idiom):
@@ -163,14 +161,10 @@ internal fun DesktopNavScaffold(
         true
     }
 
-    // App-level composition locals the shared screens read. Network status is
-    // LIVE: the flow comes from :core:data's DesktopNetworkMonitor
-    // (desktopDataModule single — NetworkInterface probing with a 15 s
-    // re-probe and a synchronous construction-time seed), so offline banners
-    // now reflect real connectivity. Server health stays a static Unknown —
-    // deliberate: the desktop shell performs no server health polling, and
-    // only StudioDetailScreen reads LocalServerHealth today.
-    val networkMonitor: NetworkMonitor = koinInject()
+    // App-level composition locals the shared screens read. Server health
+    // stays a static Unknown — deliberate: the desktop shell performs no
+    // server health polling, and only StudioDetailScreen reads
+    // LocalServerHealth today.
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
 
     // ── the shell services (DesktopShellServices) ───────────────────
@@ -192,12 +186,17 @@ internal fun DesktopNavScaffold(
     val guardedNavigator = services.guardedNavigator
     val idleAmbientController = services.idleAmbientController
     val homeMode by sessionController.homeMode.collectAsState()
-    val isAdmin by sessionController.isAdmin.collectAsState()
-    val isRefreshingAdmin by sessionController.isRefreshingAdmin.collectAsState()
     // Bottom-nav customization (#152): the same NavigationStore the phone
     // settings write through drives which items this rail shows and in what
     // order (see the rail composition below).
-    val navigationStore: NavigationStore = koinInject()
+    val navigationStore = services.navigationStore
+
+    // Network status is LIVE: the flow comes from :core:data's
+    // DesktopNetworkMonitor (desktopDataModule single — NetworkInterface
+    // probing with a 15 s re-probe and a synchronous construction-time seed),
+    // so offline banners now reflect real connectivity. Read through the
+    // holder like every other Koin collaborator of this composition.
+    val networkMonitor = services.networkMonitor
 
     // Live desktop audio core — the Home music pane's Now Playing / Ambient
     // cards read the current item + metadata from it (same source the tray
@@ -217,7 +216,7 @@ internal fun DesktopNavScaffold(
     // seeing the wizard at every boot. Completion flows back through the
     // shared OnboardingViewModel — same pref on both platforms — so the gate
     // never re-fires for a completer.
-    val appRuntimeStateStore: AppRuntimeStateStore = koinInject()
+    val appRuntimeStateStore = services.appRuntimeStateStore
     LaunchedEffect(appRuntimeStateStore) {
         runDesktopOnboardingGateOnce(
             readOnboardingCompleted = appRuntimeStateStore::isOnboardingCompleted,
@@ -234,7 +233,7 @@ internal fun DesktopNavScaffold(
     // withDismissAction, matching the Android collector this seam replaced —
     // is this shell's share; the severity→duration policy stays in the shared
     // module.
-    val sharedUserMessageBus: UserMessageBus = koinInject()
+    val sharedUserMessageBus = services.sharedUserMessageBus
     rememberShellUserMessages(
         { text, duration ->
             snackbarHostState.showSnackbar(
@@ -263,9 +262,10 @@ internal fun DesktopNavScaffold(
 
     // The overlay's identity lines: current server + user (the two-key
     // server match folds in resolveIdleOverlayIdentity, pinned by its test).
-    val authRepository: AuthRepository = koinInject()
-    val currentUser by authRepository.currentUser.collectAsState(initial = null)
-    val servers by authRepository.servers.collectAsState(initial = emptyList())
+    // ONE owner: the holder's authRepository (the same instance the session
+    // controller wraps) — no Koin read of its own in the scaffold.
+    val currentUser by services.authRepository.currentUser.collectAsState(initial = null)
+    val servers by services.authRepository.servers.collectAsState(initial = emptyList())
     val idleOverlayIdentity = remember(currentUser, servers) {
         resolveIdleOverlayIdentity(currentUser, servers)
     }
@@ -276,41 +276,75 @@ internal fun DesktopNavScaffold(
     // sets this flow.
     val pendingSearchQuery = remember { MutableStateFlow<String?>(null) }
 
-    // Shell-supplied surface behind the shared section graph (ShellHostHooks):
-    // the now-playing/ambient lambdas read the desktop audio core
-    // (DesktopAudioQueueManager) at click time, and the session seams wrap the
-    // shared ShellSessionController the holder constructed — the same values,
-    // same lazy reads the old inline entryProvider captured. Remembered on the
-    // values the hooks capture, so the graph rebuilds only when they change.
-    val onCheckForUpdates: () -> Unit = services.updateCheckController::checkForUpdate
-    val shellHost = remember(guardedNavigator, homeMode) {
-        ShellHostHooks(
-            homeMode = homeMode,
-            onHomeModeChange = sessionController::setHomeMode,
-            onNowPlayingClick = {
-                audioQueueManager.currentPlayingItemId.value?.let { itemId ->
-                    guardedNavigator.navigate(Route.AudioPlayer(itemId))
-                }
-            },
-            onAmbientClick = {
-                guardedNavigator.navigate(
-                    Route.Ambient(
-                        imageUrl = audioQueueManager.albumArtUrl.value.ifEmpty { null },
-                        title = audioQueueManager.title.value,
-                        artist = audioQueueManager.artist.value,
-                    ),
-                )
-            },
-            onLogout = sessionController::logout,
-            onCheckForUpdates = onCheckForUpdates,
-            // Lazy reads — admin refreshes don't rebuild the graph.
-            isAdmin = { isAdmin },
-            isRefreshingAdmin = { isRefreshingAdmin },
-            onRefreshAdmin = sessionController::refreshAdminStatusNow,
-            pendingSearchQuery = pendingSearchQuery,
-            onConsumeSearchQuery = { pendingSearchQuery.value = null },
-        )
+    // Shell-supplied surface behind the shared section graph (ShellHostHooks),
+    // built through the shared rememberShellHost factory — the ONE
+    // construction site for the hooks (Android's MainContent feeds the same
+    // thirteen fields; the field-by-field wiring lives there). Every factory
+    // parameter is a remember key, so each value below is remembered on its
+    // only captures (the discipline the factory's KDoc states): the
+    // now-playing/ambient lambdas read the desktop audio core
+    // (DesktopAudioQueueManager) at click time, and the session seams wrap
+    // the shared ShellSessionController the holder constructed — the same
+    // values, same lazy reads the old inline entryProvider captured. The
+    // graph below rebuilds only when these identities change (the guarded
+    // navigator, homeMode, a DesktopShellServices rebuild re-issuing them).
+    val onNowPlayingClick: () -> Unit = remember(guardedNavigator, audioQueueManager) {
+        {
+            audioQueueManager.currentPlayingItemId.value?.let { itemId ->
+                guardedNavigator.navigate(Route.AudioPlayer(itemId))
+            }
+        }
     }
+    val onAmbientClick: () -> Unit = remember(guardedNavigator, audioQueueManager) {
+        {
+            guardedNavigator.navigate(
+                Route.Ambient(
+                    imageUrl = audioQueueManager.albumArtUrl.value.ifEmpty { null },
+                    title = audioQueueManager.title.value,
+                    artist = audioQueueManager.artist.value,
+                ),
+            )
+        }
+    }
+    val onCheckForUpdates: () -> Unit = remember(services) {
+        services.updateCheckController::checkForUpdate
+    }
+    // The admin reads stay LAZY on purpose — "Lazy reads — admin refreshes
+    // don't rebuild the graph": the read lambdas capture the collected State
+    // (and are remembered on it), so admin refreshes re-compose entries
+    // without rebuilding the hooks or the section graph.
+    val isAdminState = sessionController.isAdmin.collectAsState()
+    val isRefreshingAdminState = sessionController.isRefreshingAdmin.collectAsState()
+    val isAdmin: () -> Boolean = remember(isAdminState) { { isAdminState.value } }
+    val isRefreshingAdmin: () -> Boolean =
+        remember(isRefreshingAdminState) { { isRefreshingAdminState.value } }
+    val onHomeModeChange = remember(sessionController) { sessionController::setHomeMode }
+    val onLogout: (Boolean) -> Unit = remember(sessionController) { sessionController::logout }
+    val onRefreshAdmin: () -> Unit = remember(sessionController) {
+        sessionController::refreshAdminStatusNow
+    }
+    val onConsumeSearchQuery: () -> Unit = remember(pendingSearchQuery) {
+        { pendingSearchQuery.value = null }
+    }
+    val shellHost = rememberShellHost(
+        navigator = guardedNavigator,
+        homeMode = homeMode,
+        onHomeModeChange = onHomeModeChange,
+        onNowPlayingClick = onNowPlayingClick,
+        onAmbientClick = onAmbientClick,
+        onLogout = onLogout,
+        onCheckForUpdates = onCheckForUpdates,
+        isAdmin = isAdmin,
+        isRefreshingAdmin = isRefreshingAdmin,
+        onRefreshAdmin = onRefreshAdmin,
+        // Android-only slots: no cast strategy and no shortcut-armed
+        // "Surprise Me" flow on desktop; emptyFlow() is an identity-stable
+        // singleton so the factory's remember keys never churn.
+        playOnRedirect = null,
+        surpriseRequests = emptyFlow(),
+        pendingSearchQuery = pendingSearchQuery,
+        onConsumeSearchQuery = onConsumeSearchQuery,
+    )
 
     // Remember the entry provider graph so the ~20 shared section builders
     // aren't re-invoked (allocating fresh lambdas + entry objects) on every
@@ -484,7 +518,7 @@ internal fun DesktopNavScaffold(
         // window frame) plus the stored layout override, and derive the same
         // DeviceClass/InputMode tokens Android's shell does. isTv=false — the
         // TV branch never runs on this shell.
-        val appearanceStore: AppearanceStore = koinInject()
+        val appearanceStore = services.appearanceStore
         val layoutMode by appearanceStore.layoutMode.collectAsState()
         val desktopAdaptiveInfo = layoutMode.applyOverride(rememberAdaptiveInfo())
         val desktopUiEnvironment = rememberJellyPlayUiEnvironment(

@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 private const val TAG = "LivePlaybackSession"
 
@@ -346,7 +347,7 @@ internal class LivePlaybackSession(
         ) ?: run {
             emit(
                 LivePlaybackEvent.TuneFailed(
-                    LivePlayerMessage.Resource(Res.string.live_error_resolve_failed, listOf(channel.name))
+                    UiMessage.Resource(Res.string.live_error_resolve_failed, listOf(channel.name))
                 )
             )
             return
@@ -442,8 +443,7 @@ internal class LivePlaybackSession(
             // localizedMessage on the PlaybackException) falls back to
             // the generic playback-error string, resolved at render time.
             val errorMessage = if (s == LiveEngineState.ERROR) {
-                eng.errorMessage.value?.let(LivePlayerMessage::Raw)
-                    ?: LivePlayerMessage.Resource(Res.string.live_error_playback_fallback)
+                UiMessage.of(eng.errorMessage.value, Res.string.live_error_playback_fallback)
             } else {
                 null
             }
@@ -599,7 +599,7 @@ internal class LivePlaybackSession(
                 // "why did this tune fail" (the client forced the fallback).
                 emit(
                     LivePlaybackEvent.TranscodeFallbackFailed(
-                        message = LivePlayerMessage.Resource(
+                        message = UiMessage.Resource(
                             Res.string.live_error_transcode_fallback, listOf(channel.name)
                         ),
                         engineErrorDetail = engine?.errorDetail?.value,

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.ReverbPreset
+import com.raulshma.jellyplay.core.testfixtures.pollUntil
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
 import com.sun.jna.Pointer
 import java.io.File

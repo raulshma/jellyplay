@@ -137,12 +137,14 @@ class AudioPlaybackManagerQueueSemanticsTest {
 
         val manager: AudioPlaybackManager = AudioPlaybackManager(
             context = ApplicationProvider.getApplicationContext(),
+            mediaCollectionReads = mockk(relaxed = true),
             mediaRepository = mockk(relaxed = true) {
                 // Real Result values (value classes cannot be proxied): the
                 // resolve ladder fails and buildPlayableMediaItem falls to
                 // the local-source arm stubbed below.
                 coEvery { getMediaDetail(any()) } returns Result.failure(RuntimeException("test"))
             },
+            musicCatalogue = mockk(relaxed = true),
             playlistRepository = mockk(relaxed = true),
             playbackRepository = mockk(relaxed = true),
             imageUrlProvider = mockk(relaxed = true),

@@ -91,6 +91,38 @@ class NavDestinationRegistryTest {
     }
 
     @Test
+    fun topLevelGroupFlags_pinPerSurfaceMembershipAndOrder() {
+        // VIDEO_TOP_LEVEL_ROUTES / MUSIC_TOP_LEVEL_ROUTES are DERIVED from the
+        // rows' topLevelGroups flags now, so the flags — not the published
+        // tables — are the source of truth: pin them row by row (RouteClassificationTest
+        // separately pins that the derivation lands on the published order),
+        // and pin the per-surface positions dense so a future row can't leave
+        // a silent gap or collide on the same position.
+        val expectedFlags = mapOf(
+            Route.Home to mapOf(TopLevelGroup.Video to 0, TopLevelGroup.Music to 0),
+            Route.Library to mapOf(TopLevelGroup.Video to 1),
+            Route.Search to mapOf(TopLevelGroup.Video to 2, TopLevelGroup.Music to 2),
+            Route.LiveTv to mapOf(TopLevelGroup.Video to 3),
+            Route.MusicBrowse to mapOf(TopLevelGroup.Music to 1),
+        )
+        NAV_DESTINATIONS.forEach { row ->
+            assertEquals(
+                expectedFlags[row.route] ?: emptyMap(),
+                row.topLevelGroups,
+                "${row.route::class.simpleName} carries unexpected topLevelGroups flags",
+            )
+        }
+        TopLevelGroup.entries.forEach { group ->
+            val positions = NAV_DESTINATIONS.mapNotNull { it.topLevelGroups[group] }.sorted()
+            assertEquals(
+                List(positions.size) { it },
+                positions,
+                "$group positions must be dense 0..n-1 — a gap or duplicate breaks the derived order",
+            )
+        }
+    }
+
+    @Test
     fun everyLabelOverrideTargetsARegisteredRoute() {
         // (b): an override whose key has no registry row would be dead at
         // best and a silent re-label of a route the registry doesn't know at

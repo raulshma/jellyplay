@@ -59,7 +59,7 @@ internal val desktopHomeConveyorModule: Module = module {
     single<PlaybackOutboxDrainer> {
         PlaybackOutboxDrainerImpl(
             outbox = get(),
-            playbackRepository = get(),
+            outboxReplay = get(),
             offlineModeManager = get(),
             playedStateSync = get(),
             offlineRepository = get(),

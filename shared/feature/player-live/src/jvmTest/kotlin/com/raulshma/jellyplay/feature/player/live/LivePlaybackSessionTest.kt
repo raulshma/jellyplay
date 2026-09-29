@@ -35,6 +35,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * The new-seam suite for [LivePlaybackSession] — the assertions for the
@@ -185,7 +186,7 @@ class LivePlaybackSessionTest {
         session.initialize("ch-0", null, null)
 
         val failed = received.filterIsInstance<LivePlaybackEvent.TuneFailed>().single()
-        val message = failed.message as LivePlayerMessage.Resource
+        val message = failed.message as UiMessage.Resource
         assertEquals(Res.string.live_error_resolve_failed, message.res)
         assertEquals(listOf("Channel 0"), message.args)
         assertTrue(capturedRequests.isEmpty(), "no load without a resolved URL")
@@ -320,7 +321,7 @@ class LivePlaybackSessionTest {
         onTranscodeFallback!!.invoke()
 
         val failed = received.filterIsInstance<LivePlaybackEvent.TranscodeFallbackFailed>().single()
-        val message = failed.message as LivePlayerMessage.Resource
+        val message = failed.message as UiMessage.Resource
         assertEquals(Res.string.live_error_transcode_fallback, message.res)
         assertEquals(listOf("Channel 0"), message.args)
         assertEquals("boom", failed.engineErrorDetail)

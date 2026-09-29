@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.live
 
 import android.content.pm.ActivityInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
+import com.raulshma.jellyplay.core.ui.message.asText
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -43,7 +44,7 @@ import com.raulshma.jellyplay.core.ui.player.playerTopControlsEnter
 import com.raulshma.jellyplay.core.ui.player.playerTopControlsExit
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
-import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.live.components.ChannelZapToast
 import com.raulshma.jellyplay.feature.player.live.components.LiveChannelListSheet
@@ -57,6 +58,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeou
 import com.raulshma.jellyplay.feature.player.video.engine.liveWindowRefreshLoop
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.getString
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 private const val ZAP_TOAST_MS = 3_000L
 
@@ -97,9 +99,9 @@ fun LivePlayerScreen(
             when (event) {
                 is LivePlayerEvent.Message ->
                     when (val message = event.message) {
-                        is LivePlayerMessage.Resource ->
+                        is UiMessage.Resource ->
                             messageBus.info(getString(message.res, *message.args.toTypedArray()))
-                        is LivePlayerMessage.Raw -> messageBus.error(message.text)
+                        is UiMessage.Raw -> messageBus.error(message.text)
                     }
                 LivePlayerEvent.ClosePlayer -> onBack()
             }

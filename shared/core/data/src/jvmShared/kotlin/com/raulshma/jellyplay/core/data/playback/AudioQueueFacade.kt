@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
@@ -184,10 +184,13 @@ interface AudioQueueFacade {
 /**
  * Stateless adapter over the narrow [AudioQueueManager] queue interface (never
  * the 1642-line concrete manager), plus the mix fetch and image-URL provider.
+ * The mix fetch rides the [MusicCatalogue] family seam (the repository's
+ * getInstantMix read — the only repository member this facade touches), not
+ * the 30-plus-member union.
  */
 class DefaultAudioQueueFacade(
     private val queueManager: AudioQueueManager,
-    private val mediaRepository: MediaRepository,
+    private val musicCatalogue: MusicCatalogue,
     private val imageUrlProvider: ImageUrlProvider,
     /** Application-lifetime scope backing the radio observer (singleton scope). */
     private val radioScope: CoroutineScope,
@@ -206,7 +209,7 @@ class DefaultAudioQueueFacade(
             scope = radioScope,
             queueFlow = queueManager.queue,
             currentIndexFlow = queueManager.currentIndex,
-            fetchMix = { seed -> withContext(Dispatchers.IO) { mediaRepository.getInstantMix(seed) } },
+            fetchMix = { seed -> withContext(Dispatchers.IO) { musicCatalogue.getInstantMix(seed, limit = 100) } },
             enqueue = { tracks -> enqueueTracks(tracks) },
         )
     }
@@ -295,7 +298,7 @@ class DefaultAudioQueueFacade(
         albumFallback: String?,
         guard: () -> Boolean,
     ): AudioQueueOutcome {
-        val mix = withContext(Dispatchers.IO) { mediaRepository.getInstantMix(seedItemId) }
+        val mix = withContext(Dispatchers.IO) { musicCatalogue.getInstantMix(seedItemId, limit = 100) }
         return mix.fold(
             onSuccess = { tracks ->
                 when {

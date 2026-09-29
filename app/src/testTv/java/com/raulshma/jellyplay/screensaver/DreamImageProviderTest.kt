@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.screensaver
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImageCategory
@@ -39,14 +40,16 @@ class DreamImageProviderTest {
         override fun getLogoUrl(itemId: String) = ""
     }
 
-    private val provider = DreamImageProvider(mediaRepository, imageUrlProvider, context)
+    private val mediaCollectionReads: MediaCollectionReads = mockk()
+
+    private val provider = DreamImageProvider(mediaRepository, mediaCollectionReads, imageUrlProvider, context)
 
     private fun item(id: String, name: String, type: MediaType) =
         MediaItem(id = id, name = name, mediaType = type)
 
     @Test
     fun `fetchImages maps items to dream images with categories`() = runTest {
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
             SearchResult(
                 items = listOf(
                     item("movie-1", "A Movie", MediaType.MOVIE),
@@ -70,7 +73,7 @@ class DreamImageProviderTest {
 
     @Test
     fun `fetchImages drops items without a backdrop and unknown media types`() = runTest {
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
             SearchResult(
                 items = listOf(
                     item("movie-1", "Has Backdrop", MediaType.MOVIE),
@@ -102,7 +105,7 @@ class DreamImageProviderTest {
             item("movie-r", "R Film", MediaType.MOVIE).copy(officialRating = "R"),
             item("movie-unrated", "Unrated Film", MediaType.MOVIE),
         )
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
             SearchResult(items = items, totalRecordCount = items.size, startIndex = 0),
         )
 
@@ -126,14 +129,14 @@ class DreamImageProviderTest {
     @Test
     fun `fetchImages queries photos and maps the primary image url`() = runTest {
         primaryImages["photo-1"] = "https://server/photo1-primary.jpg"
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
             SearchResult(items = listOf(item("photo-1", "A Photo", MediaType.PHOTO)), totalRecordCount = 1, startIndex = 0),
         )
 
         val images = provider.fetchImages(setOf(DreamImageCategory.PHOTOS))
 
         coVerify {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 filters = match<LibraryFilters> {
                     it.mediaTypes == listOf(MediaType.PHOTO) && it.sortBy == SortOption.RANDOM
                 },
@@ -148,14 +151,14 @@ class DreamImageProviderTest {
 
     @Test
     fun `fetchImages unions photo media types with the other categories`() = runTest {
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
 
         provider.fetchImages(setOf(DreamImageCategory.MOVIES, DreamImageCategory.PHOTOS))
 
         coVerify {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 filters = match<LibraryFilters> {
                     it.mediaTypes.toSet() == setOf(MediaType.MOVIE, MediaType.PHOTO) &&
                         it.sortBy == SortOption.RANDOM
@@ -167,14 +170,14 @@ class DreamImageProviderTest {
 
     @Test
     fun `fetchImages queries random sort with union of category media types`() = runTest {
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
 
         provider.fetchImages(setOf(DreamImageCategory.MOVIES, DreamImageCategory.MUSIC))
 
         coVerify {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 filters = match<LibraryFilters> {
                     it.mediaTypes.toSet() == setOf(MediaType.MOVIE, MediaType.AUDIO, MediaType.ALBUM) &&
                         it.sortBy == SortOption.RANDOM
@@ -186,7 +189,7 @@ class DreamImageProviderTest {
 
     @Test
     fun `fetchImages returns empty when fetch fails`() = runTest {
-        coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.failure(Exception("offline"))
 
         val images = provider.fetchImages(setOf(DreamImageCategory.MOVIES))

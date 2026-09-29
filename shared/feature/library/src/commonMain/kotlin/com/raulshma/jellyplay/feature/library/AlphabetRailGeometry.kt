@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.ui.components.FisheyeRailMath
 
 /**
@@ -47,3 +48,42 @@ internal class AlphabetRailGeometry(
     fun fisheyeScaleAt(index: Int, touchIndex: Float?): Float =
         FisheyeRailMath.fisheyeScaleAt(index, touchIndex)
 }
+
+/**
+ * Which scroll state backs the alphabet rail for a view mode. Pure fold over
+ * [LibraryViewMode] extracted from the rail's inline `when`s so the screen's
+ * per-mode wiring (first-visible highlight + jump target) is testable:
+ *
+ *  - the active-letter highlight reads the LIST state in LIST mode and the
+ *    GRID state for every other mode — including MASONRY, whose own staggered
+ *    state is deliberately NOT read here (preserving the shipped behavior);
+ *  - a jump scrolls the LIST state in LIST mode, the STAGGERED state in
+ *    MASONRY mode, and the GRID state otherwise.
+ *
+ * Both maps are intentionally asymmetric (highlight ≠ scroll target for
+ * MASONRY) — that asymmetry is the load-bearing behavior this type pins.
+ */
+internal enum class LibraryRailScrollTarget { LIST, GRID, STAGGERED }
+
+/** The scroll state the rail should scroll for [viewMode] (see [LibraryRailScrollTarget]). */
+internal fun libraryRailScrollTarget(viewMode: LibraryViewMode): LibraryRailScrollTarget =
+    when (viewMode) {
+        LibraryViewMode.LIST -> LibraryRailScrollTarget.LIST
+        LibraryViewMode.MASONRY -> LibraryRailScrollTarget.STAGGERED
+        else -> LibraryRailScrollTarget.GRID
+    }
+
+/**
+ * The first-visible index the rail's active-letter highlight reads for
+ * [viewMode]: LIST mode reads the list's index, every other mode reads the
+ * grid's — MASONRY included (the staggered index is not consulted).
+ */
+internal fun libraryRailFirstVisibleItemIndex(
+    viewMode: LibraryViewMode,
+    listFirstVisibleItemIndex: Int,
+    gridFirstVisibleItemIndex: Int,
+): Int =
+    when (viewMode) {
+        LibraryViewMode.LIST -> listFirstVisibleItemIndex
+        else -> gridFirstVisibleItemIndex
+    }

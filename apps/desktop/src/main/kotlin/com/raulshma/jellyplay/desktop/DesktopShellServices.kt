@@ -9,6 +9,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
@@ -16,7 +17,10 @@ import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.ui.message.UserMessage
@@ -79,7 +83,14 @@ import org.koin.compose.koinInject
  *    started/stopped by the factory's DisposableEffect;
  *  - the live desktop audio core: [audioQueueManager], exposed because the
  *    scaffold's ShellHostHooks now-playing/ambient lambdas read it at click
- *    time (flows read lazily, never collected here).
+ *    time (flows read lazily, never collected here);
+ *  - the scaffold's remaining Koin reads: [networkMonitor],
+ *    [navigationStore], [appRuntimeStateStore] and [appearanceStore]
+ *    (beside the [authRepository] / [sharedUserMessageBus] collaborators
+ *    exposed below) — the scaffold composition itself carries no
+ *    koinInject of its own; only DesktopAppRoot's pre-scaffold window
+ *    does, per the composition-order contract on
+ *    [rememberDesktopShellServices].
  *
  * A plain class on constructor-injected collaborators (the
  * DesktopUpdateCheckController idiom, no Koin awareness of its own), so the
@@ -105,10 +116,27 @@ internal class DesktopShellServices(
     showMessage: suspend (String) -> Unit,
     focusManager: FocusManager,
     windowRef: AtomicReference<ComposeWindow?>?,
-    authRepository: AuthRepository,
+
+    /**
+     * ONE owner for the scaffold's auth reads: the session controller's
+     * wiring here, the idle overlay's server/user identity lines in the
+     * scaffold (resolved through [authRepository]). Exposed as a property
+     * so the scaffold reads it through the holder instead of its own
+     * koinInject — the pre-scaffold DesktopAppRoot window keeps its own
+     * reads (the composition-order contract on
+     * [rememberDesktopShellServices]).
+     */
+    val authRepository: AuthRepository,
     homeDiscoveryStore: HomeDiscoveryStore,
     appUpdateRepository: AppUpdateRepository,
-    sharedUserMessageBus: UserMessageBus,
+
+    /**
+     * The shared (commonMain) message bus the scaffold provides as
+     * LocalUserMessageBus — the SAME instance [userMessageSources] collects
+     * below, so messages posted through the composition local reach this
+     * shell's snackbar.
+     */
+    val sharedUserMessageBus: UserMessageBus,
     musicMessageBus: MusicMessageBus,
     remoteControlReceiver: RemoteControlReceiver,
     private val remoteNavigationBridge: RemoteNavigationBridge,
@@ -124,6 +152,25 @@ internal class DesktopShellServices(
      * collaborator above.
      */
     private val idleReporter: NowPlayingReporter,
+
+    /**
+     * The scaffold's remaining Koin reads, pulled behind this holder so the
+     * scaffold composition carries no koinInject of its own (only
+     * DesktopAppRoot's pre-scaffold window does — the composition-order
+     * contract on [rememberDesktopShellServices]):
+     *  - [networkMonitor] — the rail's offline hide-set source and the
+     *    LocalNetworkStatus flow (LIVE desktop connectivity);
+     *  - [navigationStore] — bottom-nav customization (#152), the same
+     *    store the phone settings write through;
+     *  - [appRuntimeStateStore] — the first-run onboarding gate's one-shot
+     *    `onboarding_completed` read;
+     *  - [appearanceStore] — the stored manual layout override behind the
+     *    adaptive shell wiring (#166).
+     */
+    val networkMonitor: NetworkMonitor,
+    val navigationStore: NavigationStore,
+    val appRuntimeStateStore: AppRuntimeStateStore,
+    val appearanceStore: AppearanceStore,
 ) {
     /** ADR 0001's shared session-policy wiring — see class KDoc. */
     val sessionController = ShellSessionController(
@@ -289,6 +336,10 @@ internal fun rememberDesktopShellServices(
     val webSocketClient: JellyfinWebSocketClient = koinInject()
     val screensaverStore: ScreensaverStore = koinInject()
     val nowPlayingReporter: NowPlayingReporter = koinInject()
+    val networkMonitor: NetworkMonitor = koinInject()
+    val navigationStore: NavigationStore = koinInject()
+    val appRuntimeStateStore: AppRuntimeStateStore = koinInject()
+    val appearanceStore: AppearanceStore = koinInject()
 
     val services = remember(
         scope,
@@ -308,6 +359,10 @@ internal fun rememberDesktopShellServices(
         webSocketClient,
         screensaverStore,
         nowPlayingReporter,
+        networkMonitor,
+        navigationStore,
+        appRuntimeStateStore,
+        appearanceStore,
     ) {
         DesktopShellServices(
             scope = scope,
@@ -327,6 +382,10 @@ internal fun rememberDesktopShellServices(
             webSocketClient = webSocketClient,
             screensaverStore = screensaverStore,
             idleReporter = nowPlayingReporter,
+            networkMonitor = networkMonitor,
+            navigationStore = navigationStore,
+            appRuntimeStateStore = appRuntimeStateStore,
+            appearanceStore = appearanceStore,
         )
     }
 

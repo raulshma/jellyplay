@@ -217,7 +217,7 @@ internal class HomeSectionsFetcher(
      * latest/similar rows. The rows carry per-item UserData (played badge,
      * favorite heart, resume bar), so a watched/favorite/progress write must
      * not let this TTL layer serve the pre-write rows — reached from the data
-     * layer through [com.raulshma.jellyplay.core.network.api.LibraryApiClient.invalidateHomeSubcallCaches].
+     * layer through [HomeSectionsCachePort.invalidateSubcallCaches].
      */
     fun invalidateCaches() {
         homeLatestMediaCache.clear()

@@ -15,6 +15,10 @@ import com.raulshma.jellyplay.core.data.playback.focus.FocusUsage
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+// The shared MediaEngine double (fixtures merge): the desktop twin was
+// deleted — its hardcoded AUTO_PLAY personality is this class's
+// LoadBehavior.AUTO_PLAY, passed at every construction below.
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -81,7 +85,7 @@ class DesktopAudioQueueManagerFocusTest {
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()).also { it.initialize(scope) },
             sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
-            engineFactory = { FakeMediaEngine().also { engines += it } },
+            engineFactory = { FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY).also { engines += it } },
             mainThreadGuard = false,
             playbackFocus = focusFor(this),
         )

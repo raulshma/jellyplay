@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -113,6 +114,7 @@ class DetailViewModelTest {
     // relaxed mocks — no VM test exercises those helpers directly; their own
     // suites do).
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaExtrasReads: MediaExtrasReads
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var playbackRepository: PlaybackRepository
@@ -134,6 +136,8 @@ class DetailViewModelTest {
     @BeforeTest
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+
+        mediaExtrasReads = mockk(relaxed = true)
         mediaDetailProvider = mockk(relaxed = false)
         playbackRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
@@ -155,7 +159,7 @@ class DetailViewModelTest {
         // Default stub for the special-features fetch so its REMOTE side-effect
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
-        coEvery { mediaRepository.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        coEvery { mediaExtrasReads.getSpecialFeatures(any()) } returns Result.success(emptyList())
         // Default stub for the media-segments pre-warm fetch so its REMOTE
         // side-effect launch doesn't crash casting the relaxed-mock Result default.
         // Individual tests override this to drive the availability booleans.
@@ -228,6 +232,7 @@ class DetailViewModelTest {
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
+            mediaExtrasReads = mediaExtrasReads,
             userDataMutator = userDataMutator,
             mediaDetailProvider = mediaDetailProvider,
             playbackRepository = playbackRepository,
@@ -1117,6 +1122,60 @@ class DetailViewModelTest {
             assertEquals(listOf(review), viewModel.uiState.value.tmdbReviews)
         }
 
+    // ── Staleness guard (DetailLoadGuard) ─────────────────────────────────
+    // The VM is shared across detail navigations. A Seerr fetch that resolves
+    // after the user navigated on must drop its write at the post-suspension
+    // epoch re-check instead of painting the previous item's videos onto the
+    // new screen.
+
+    @Test
+    fun loadSeerrData_inFlightFetchLandingAfterNavigation_isDiscarded() =
+        runTest(mainDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+
+            stubProvider(
+                "m1",
+                remoteSnapshot(
+                    MediaDetail(
+                        item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+                        providerIds = mapOf("tmdb" to "123"),
+                    ),
+                ),
+            )
+            // Park m1's TMDB videos fetch so it stays in flight across the
+            // navigation below; it eventually resolves with data that belongs
+            // to the PREVIOUS item's screen.
+            val gate = CompletableDeferred<Unit>()
+            val staleVideo = com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo(key = "stale")
+            coEvery { seerrRepository.getTmdbVideos(123, MediaType.MOVIE) } coAnswers {
+                gate.await()
+                Result.success(listOf(staleVideo))
+            }
+
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
+            advanceUntilIdle()
+
+            // Navigate to a second movie. No tmdb provider id, so its own
+            // Seerr load exits at the tmdbId gate and cannot overwrite the
+            // assertion below with a fresh fetch of its own.
+            stubProvider(
+                "m2",
+                remoteSnapshot(
+                    MediaDetail(item = MediaItem(id = "m2", name = "Other", mediaType = MediaType.MOVIE)),
+                ),
+            )
+            viewModel.onEvent(DetailUiEvent.LoadItem("m2"))
+            advanceUntilIdle()
+            assertEquals("m2", viewModel.uiState.value.detail?.item?.id)
+
+            // The stale fetch resolves now — the epoch it captured is no
+            // longer current, so its write must be discarded.
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.relatedVideos.isEmpty())
+        }
+
     // ── Live refresh on server UserDataChanged pushes ─────────────────────
     // The init-block collector debounces bursts but must accumulate item ids
     // across the window — the server emits one change per item, so keeping
@@ -1474,7 +1533,7 @@ class DetailViewModelTest {
         }
 
     // ── Special features / extras ───────────────────────────────────────────
-    // A REMOTE load fires mediaRepository.getSpecialFeatures (sourced from
+    // A REMOTE load fires mediaExtrasReads.getSpecialFeatures (sourced from
     // Jellyfin's /Items/{id}/SpecialFeatures) and projects the result onto
     // uiState.specialFeatures so the "Special Features" row can render.
 
@@ -1490,13 +1549,13 @@ class DetailViewModelTest {
                 MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE),
                 MediaItem(id = "extra-2", name = "Deleted Scenes", mediaType = MediaType.MOVIE),
             )
-            coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
 
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             // The fetch fired exactly once for the resolved item.
-            coVerify(exactly = 1) { mediaRepository.getSpecialFeatures("m1") }
+            coVerify(exactly = 1) { mediaExtrasReads.getSpecialFeatures("m1") }
             // The extras landed on uiState for the detail row.
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
         }
@@ -1511,7 +1570,7 @@ class DetailViewModelTest {
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
             val extras = listOf(MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE))
-            coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
@@ -1536,7 +1595,7 @@ class DetailViewModelTest {
 
             assertTrue(viewModel.uiState.value.specialFeatures.isEmpty())
             // A LOCAL origin short-circuits remote discovery — no extras fetch.
-            coVerify(exactly = 0) { mediaRepository.getSpecialFeatures("s1") }
+            coVerify(exactly = 0) { mediaExtrasReads.getSpecialFeatures("s1") }
         }
 
     // ── Instant Mix ───────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
-import com.raulshma.jellyplay.feature.music.asText
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.feature.music.generated.resources.music_albums
 import com.raulshma.jellyplay.feature.music.generated.resources.music_creating_mix
 import com.raulshma.jellyplay.feature.music.generated.resources.music_instant_mix

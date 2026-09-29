@@ -133,6 +133,9 @@ internal fun DesktopAppRoot(
     // and is silently dropped when the current screen has no refresh action.
     menuRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
+    // Direct Koin reads — NOT the DesktopShellServices holder: this pre-scaffold window (splash /
+    // sign-in) composes BEFORE that holder can exist — the composition-order contract on
+    // rememberDesktopShellServices.
     val authRepository: AuthRepository = koinInject()
     val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
 
@@ -185,6 +188,9 @@ internal fun DesktopAppRoot(
     // name and this `create` call. The restore above may leave this
     // composition already authenticated, and the controller's auth collector
     // picks that up off the StateFlow's current value on its first pass.
+    // Same pre-scaffold rule as the authRepository read above — direct Koin
+    // reads per the composition-order contract on rememberDesktopShellServices
+    // (this arm must also survive the sign-in → scaffold swap).
     val realtimeConnection: RealtimeConnection = koinInject()
     val serverIdentityStore: ServerIdentityStore = koinInject()
     val remoteControlReceiver: RemoteControlReceiver = koinInject()

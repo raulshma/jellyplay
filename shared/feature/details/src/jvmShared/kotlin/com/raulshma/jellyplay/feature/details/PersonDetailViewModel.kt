@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -29,6 +30,8 @@ private data class PersonDetailContent(
 
 class PersonDetailViewModel constructor(
     private val mediaRepository: MediaRepository,
+    /** The browse-facet seam (the person detail's filmography query). */
+    private val mediaBrowseReads: MediaBrowseReads,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
@@ -97,7 +100,7 @@ class PersonDetailViewModel constructor(
             // No feature-level retry: the repository paths already retry
             // (and coordinate retry with address failover) in the engine.
             val detailDeferred = async { mediaRepository.getMediaDetail(personId, force = force) }
-            val itemsDeferred = async { mediaRepository.getItemsByPerson(personId) }
+            val itemsDeferred = async { mediaBrowseReads.getItemsByPerson(personId) }
 
             val detailResult = detailDeferred.await()
             val itemsResult = itemsDeferred.await()

@@ -2,6 +2,7 @@
 
 package com.raulshma.jellyplay.feature.photos
 
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -38,6 +39,7 @@ class PhotoViewerViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaCollectionReads: MediaCollectionReads
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoExport: PhotoExport
 
@@ -49,6 +51,8 @@ class PhotoViewerViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
+
+        mediaCollectionReads = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         photoExport = mockk(relaxed = true)
 
@@ -67,6 +71,7 @@ class PhotoViewerViewModelTest {
 
     private fun createViewModel(): PhotoViewerViewModel = PhotoViewerViewModel(
         mediaRepository = mediaRepository,
+        mediaCollectionReads = mediaCollectionReads,
         imageUrlProvider = imageUrlProvider,
         photoExport = photoExport,
     )
@@ -74,7 +79,7 @@ class PhotoViewerViewModelTest {
     /** Three-photo album the viewer can page through via parentId siblings. */
     private fun stubAlbumSiblings(parentId: String = "album-1") {
         coEvery {
-            mediaRepository.getMediaItems(parentId = parentId, filters = any(), limit = 200)
+            mediaCollectionReads.getMediaItems(parentId = parentId, filters = any(), limit = 200)
         } returns Result.success(
             SearchResult(items = listOf(photo1, photo2, photo3), totalRecordCount = 3, startIndex = 0)
         )
@@ -114,7 +119,7 @@ class PhotoViewerViewModelTest {
         loadViewerInAlbum(vm)
 
         coVerify(exactly = 1) {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = "album-1",
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.PHOTO)),
                 limit = 200,

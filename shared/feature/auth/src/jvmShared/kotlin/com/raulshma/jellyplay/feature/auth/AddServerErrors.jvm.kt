@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_connec
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_local_network_denied
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_resolve_address
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_ssl
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * JVM/android actuals of the add-server failure classification (moved
@@ -42,19 +43,20 @@ internal actual fun getConnectionErrorMessage(
             root is java.net.ConnectException ||
             root is java.net.SocketTimeoutException)
     ) {
-        return AuthMessage.Resource(Res.string.auth_error_local_network_denied)
+        return UiMessage.Resource(Res.string.auth_error_local_network_denied)
     }
     return when {
-        root is java.net.UnknownHostException -> AuthMessage.Resource(Res.string.auth_error_resolve_address)
-        root is java.net.ConnectException -> AuthMessage.Resource(Res.string.auth_error_could_not_connect)
-        root is java.net.SocketTimeoutException -> AuthMessage.Resource(Res.string.auth_error_connection_timeout)
-        root is javax.net.ssl.SSLException -> AuthMessage.Resource(Res.string.auth_error_ssl)
+        root is java.net.UnknownHostException -> UiMessage.Resource(Res.string.auth_error_resolve_address)
+        root is java.net.ConnectException -> UiMessage.Resource(Res.string.auth_error_could_not_connect)
+        root is java.net.SocketTimeoutException -> UiMessage.Resource(Res.string.auth_error_connection_timeout)
+        root is javax.net.ssl.SSLException -> UiMessage.Resource(Res.string.auth_error_ssl)
         root.message?.contains("cleartext", ignoreCase = true) == true ->
-            AuthMessage.Resource(Res.string.auth_error_cleartext)
+            UiMessage.Resource(Res.string.auth_error_cleartext)
         root.message?.contains("ssl", ignoreCase = true) == true ->
-            AuthMessage.Resource(Res.string.auth_error_ssl)
-        else -> root.message?.takeIf {
-            it.isNotBlank() && !it.startsWith("org.") && it.length < 100
-        }?.let { AuthMessage.Raw(it) } ?: AuthMessage.Resource(Res.string.auth_error_connection_failed)
+            UiMessage.Resource(Res.string.auth_error_ssl)
+        else -> UiMessage.of(
+            root.message?.takeIf { it.isNotBlank() && !it.startsWith("org.") && it.length < 100 },
+            Res.string.auth_error_connection_failed,
+        )
     }
 }

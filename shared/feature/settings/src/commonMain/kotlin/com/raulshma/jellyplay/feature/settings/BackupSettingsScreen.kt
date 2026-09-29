@@ -1,31 +1,16 @@
 package com.raulshma.jellyplay.feature.settings
 
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.stringResource
@@ -48,8 +33,6 @@ fun BackupSettingsScreen(
     highlightSettingId: String? = null,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
     val bus = LocalUserMessageBus.current
 
     // SAF/native pickers behind the platform seam: Android returns the SAF
@@ -58,14 +41,6 @@ fun BackupSettingsScreen(
     val backupPicker = rememberBackupFilePicker(
         onExportUriSelected = { viewModel.exportSettings(it) },
         onImportUriSelected = { viewModel.importSettings(it) },
-    )
-
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "backup_init",
     )
 
     // When a backup is picked, navigate to the full-screen diff. The ViewModel
@@ -95,24 +70,11 @@ fun BackupSettingsScreen(
         }
     }
 
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_backup_restore),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
+        focusTag = "backup_init",
+    ) { _ ->
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.DatabaseExport,
@@ -159,7 +121,5 @@ fun BackupSettingsScreen(
                     }
                 }
             }
-        }
-        }
     }
 }

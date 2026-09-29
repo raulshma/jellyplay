@@ -126,22 +126,6 @@ interface MediaRepository {
         limit: Int = 16,
     ): Result<List<MediaItem>>
 
-    suspend fun getMediaItems(
-        parentId: String? = null,
-        /**
-         * Bundles the filter/sort dimensions that always travel together
-         * (mediaTypes, genres, years, tags, sortBy, playedStatus, minRating,
-         * isResumable). Replaces a long primitive parameter list so adding a
-         * dimension is a single field on [LibraryFilters] instead of a signature
-         * edit across repository → paging source → network client.
-         */
-        filters: LibraryFilters = LibraryFilters(),
-        studioIds: List<String>? = null,
-        startIndex: Int = 0,
-        limit: Int = 50,
-        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
-    ): Result<SearchResult>
-
     /**
      * Fetches the detail for [itemId]. Pass [force] to bypass the in-memory
      * detail cache for this read (the sanctioned freshness lever for
@@ -151,34 +135,12 @@ interface MediaRepository {
      */
     suspend fun getMediaDetail(itemId: String, force: Boolean = false): Result<MediaDetail>
 
-    /**
-     * Cinema Mode intros. Returns the list of trailers/intros configured on the
-     * server for the given item (via Jellyfin's built-in intros endpoint).
-     * Returns an empty list when no intros are available.
-     */
-    suspend fun getIntros(itemId: String): Result<List<MediaItem>>
-
-    /**
-     * Special features / extras (featurettes, deleted scenes, interviews, etc.)
-     * attached to the given item via Jellyfin's `/Items/{id}/SpecialFeatures`
-     * endpoint. Returns an empty list when the item has no extras. Remote-only.
-     */
-    suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>>
-
     suspend fun search(
         query: String,
         filters: LibraryFilters = LibraryFilters(),
         limit: Int = 50,
         startIndex: Int = 0,
     ): Result<SearchResult>
-
-    /**
-     * Discovery suggestions for the empty search state — favorited/liked movies,
-     * shows and artists surfaced in random order (matches the official
-     * jellyfin-web behavior). Clicking a suggestion should navigate to the
-     * item's detail page.
-     */
-    suspend fun getSearchSuggestions(limit: Int = 20): Result<SearchResult>
 
     /**
      * Resolves a library item id by provider (external) id such as `tmdb`, `tvdb`,
@@ -205,37 +167,19 @@ interface MediaRepository {
     suspend fun getStudios(parentId: String? = null): Result<List<Studio>>
 
     /**
-     * Cast/crew person lookup for the discover-row editor's People picker,
-     * narrowed server-side by [searchTerm]. Deliberately returns the bare
-     * id+name pair: persons have no playable detail surface in the app, so a
-     * MediaItem projection would be dead weight.
-     */
-    suspend fun getPeople(searchTerm: String? = null, limit: Int = 50): Result<List<PersonRef>>
-
-    suspend fun getItemsByStudio(
-        studioId: String,
-        mediaTypes: List<MediaType>? = null,
-        startIndex: Int = 0,
-        limit: Int = 50,
-    ): Result<SearchResult>
-
-    suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
-
-    /**
      * [force] drops the cached track list first (the freshness lever the
      * album detail's deferred silent refresh needs: a track user-data flip
      * evicts `tracks_<trackId>`, never `tracks_<albumId>`, so the album's
      * cached list can only be superseded by an explicit force).
+     *
+     * The one music-catalogue read left on the union: the detail provider's
+     * session is a mixed consumer (detail + catalogue in one resolve), so its
+     * catalogue read rides [MediaRepository] — the family's clean consumers
+     * inject [MusicCatalogue].
      */
     suspend fun getAlbumTracks(albumId: String, force: Boolean = false): Result<List<MediaItem>>
 
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
-
-    suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
-
-    suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
-
-    suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
 
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
 
@@ -285,18 +229,6 @@ interface MediaRepository {
      */
     suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
 
-    suspend fun getTags(
-        parentId: String? = null,
-        startIndex: Int = 0,
-        limit: Int = 100,
-    ): Result<List<String>>
-
-    suspend fun getFavorites(
-        mediaTypes: List<MediaType>? = null,
-        limit: Int = 50,
-        startIndex: Int = 0,
-    ): Result<SearchResult>
-
     fun getFavoritesPaged(
         mediaTypes: List<MediaType>? = null,
     ): Flow<PagingData<MediaItem>>
@@ -340,21 +272,22 @@ interface MediaRepository {
  * over-the-impl pattern), so a consumer narrows without a second repository
  * instance or a family supertype creeping back onto the union.
  *
- * Consumers today reach these members through BOTH shapes: the audio
- * playback stack (AudioLibraryBrowser / AudioQueueFacade / ThemeMusicPlayer)
- * still injects [MediaRepository], and feature:music's artist/album/home
- * ViewModels pair catalogue reads with wide browse members
- * ([MediaRepository.getMediaDetail] / [MediaRepository.getMediaItems] /
- * [MediaRepository.getFavorites]) — so the four still-called members stay on
- * the wide interface too and the impl satisfies both declarations.
- * [getMusicVideos] retired from the union outright: it had zero callers.
+ * Consumers: the migration is complete on this family's original caller
+ * census — the audio playback stack (AudioLibraryBrowser / AudioQueueFacade /
+ * ThemeMusicPlayer) and feature:music's artist/album/home ViewModels all
+ * inject THIS seam for the catalogue reads now, keeping [MediaRepository]
+ * only where they are mixed consumers (detail reads, the user-data change
+ * feed). [getAlbumTracks] is the one member that stays dual-declared: the
+ * detail provider's session (UnifiedMediaDetailProviderImpl) resolves detail +
+ * album tracks together and is a mixed consumer, so its read rides the union.
+ * [getMusicVideos] retired from the seam outright: zero callers anywhere.
  */
 interface MusicCatalogue {
 
-    // No default arguments on the members that also sit on
-    // [MediaRepository]: Kotlin forbids an override whose two
-    // superinterfaces both declare them, so the defaults live on the wide
-    // interface only and seam-typed callers pass explicit values.
+    // getAlbumTracks also sits on [MediaRepository]: Kotlin forbids an
+    // override whose two superinterfaces both declare default arguments,
+    // so no member here carries one — seam-typed callers pass explicit
+    // values.
 
     suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>>
 
@@ -365,8 +298,6 @@ interface MusicCatalogue {
      * cached list can only be superseded by an explicit force).
      */
     suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>>
-
-    suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>>
 
     suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>>
 
@@ -408,4 +339,106 @@ interface UserDataWriteOperations {
 
     /** Unplayed mirror of [markSeasonPlayed]. */
     suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit>
+}
+
+/**
+ * The item-attached EXTRAS family seam of [MediaRepository]: the reads that
+ * return media attached to one item rather than a browsable slice of the
+ * library — Cinema Mode intros (the player session's pre-roll lookup) and the
+ * special features / extras (the detail screen's featurettes row). Both are
+ * uncached remote-only forwards (an intro/extras row must reflect the server's
+ * current plugin configuration, not a TTL snapshot), which is exactly why they
+ * left the union: nothing in the repository's cache cluster ever touched them.
+ * [MediaRepositoryImpl]'s family impl ([MediaUncachedReadsImpl]) satisfies this
+ * seam over [com.raulshma.jellyplay.core.network.api.LibraryApiClient] — the
+ * LiveTvRepositoryImpl shape (one client, pure forwards, no cache state).
+ */
+interface MediaExtrasReads {
+
+    /**
+     * Cinema Mode intros. Returns the list of trailers/intros configured on the
+     * server for the given item (via Jellyfin's built-in intros endpoint).
+     * Returns an empty list when no intros are available.
+     */
+    suspend fun getIntros(itemId: String): Result<List<MediaItem>>
+
+    /**
+     * Special features / extras (featurettes, deleted scenes, interviews, etc.)
+     * attached to the given item via Jellyfin's `/Items/{id}/SpecialFeatures`
+     * endpoint. Returns an empty list when the item has no extras. Remote-only.
+     */
+    suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>>
+}
+
+/**
+ * The browse-FACET family seam of [MediaRepository]: the uncached metadata
+ * reads that drive pickers and filter rows — the cast/crew People lookup (the
+ * discover-row editor's picker, a live search-as-you-type surface where a TTL
+ * would only serve stale keystrokes), a person's filmography (the person
+ * detail's item grid) and the library's tag facet names. None of these ever
+ * grew a cache in [MediaRepositoryImpl] (no TtlCache, no detail-epoch
+ * coupling), so they compose into one narrow seam instead of riding the union.
+ */
+interface MediaBrowseReads {
+
+    /**
+     * Cast/crew person lookup for the discover-row editor's People picker,
+     * narrowed server-side by [searchTerm]. Deliberately returns the bare
+     * id+name pair: persons have no playable detail surface in the app, so a
+     * MediaItem projection would be dead weight.
+     */
+    suspend fun getPeople(searchTerm: String? = null, limit: Int = 50): Result<List<PersonRef>>
+
+    suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
+
+    suspend fun getTags(
+        parentId: String? = null,
+        startIndex: Int = 0,
+        limit: Int = 100,
+    ): Result<List<String>>
+}
+
+/**
+ * The SearchResult-shaped collection-read family seam of [MediaRepository]:
+ * the three members that run an items query and hand back a page-shaped
+ * [SearchResult] — the generic browse workhorse ([getMediaItems]), its
+ * favorites preset ([getFavorites], the same query with IsFavorite=true) and
+ * the empty-search discovery suggestions. All three are uncached forwards (the
+ * paged wrappers own their own store; the favorites/suggestions surfaces
+ * refetch per open), so the family left the union without leaving any cache
+ * choreography behind. The repository's paged projections
+ * ([MediaRepository.getMediaItemsPaged] / [MediaRepository.getFavoritesPaged])
+ * stay on the union and reach the same client internally.
+ */
+interface MediaCollectionReads {
+
+    suspend fun getMediaItems(
+        parentId: String? = null,
+        /**
+         * Bundles the filter/sort dimensions that always travel together
+         * (mediaTypes, genres, years, tags, sortBy, playedStatus, minRating,
+         * isResumable). Replaces a long primitive parameter list so adding a
+         * dimension is a single field on [LibraryFilters] instead of a signature
+         * edit across repository → paging source → network client.
+         */
+        filters: LibraryFilters = LibraryFilters(),
+        studioIds: List<String>? = null,
+        startIndex: Int = 0,
+        limit: Int = 50,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
+    ): Result<SearchResult>
+
+    suspend fun getFavorites(
+        mediaTypes: List<MediaType>? = null,
+        limit: Int = 50,
+        startIndex: Int = 0,
+    ): Result<SearchResult>
+
+    /**
+     * Discovery suggestions for the empty search state — favorited/liked movies,
+     * shows and artists surfaced in random order (matches the official
+     * jellyfin-web behavior). Clicking a suggestion should navigate to the
+     * item's detail page.
+     */
+    suspend fun getSearchSuggestions(limit: Int = 20): Result<SearchResult>
 }

@@ -4,15 +4,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,23 +26,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -116,6 +103,27 @@ sealed class SecuritySettingsDialog {
     object QuickConnectAuthorize : SecuritySettingsDialog()
 }
 
+/**
+ * The declared security screen groups in LazyColumn order — the derivation
+ * source the deep-link scroll resolver consumes (see HighlightScroll.kt).
+ * Hoisted from the former inline list at the [rememberHighlightScrollIndex]
+ * call site (same declaration, one name) so the chassis reads it as a
+ * parameter like every sibling screen's group list.
+ */
+private val securityScreenGroups: List<Set<String>> = listOf(
+    setOf(
+        SecuritySettingsIds.PIN_LOCK,
+        SecuritySettingsIds.BIOMETRIC_LOCK,
+        SecuritySettingsIds.PIN_FOR_PLAYER_LOCK,
+        SecuritySettingsIds.AUTO_LOCK_TIMER,
+    ),
+    setOf(SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE),
+    setOf(
+        SecuritySettingsIds.REMOTE_CONTROL_ENABLED,
+        SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED,
+    ),
+)
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SecuritySettingsScreen(
@@ -125,8 +133,6 @@ fun SecuritySettingsScreen(
 ) {
     val preferences by viewModel.securityPreferences.collectAsStateWithLifecycle()
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<SecuritySettingsDialog>(SecuritySettingsDialog.None) }
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     var pinInput by remember { mutableStateOf("") }
@@ -152,65 +158,24 @@ val biometricGate = rememberBiometricGate()
     // stays hand-gated: it carries NO declared admission (the shipped count
     // quirk — it renders behind the pin toggle but is never counted).
     val securityRowFlags = RowAdmissionFlags(showAdvanced = showAdvanced, supportsBiometric = canShowBiometric)
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
-
     val pinMustBe4Digits = stringResource(Res.string.settings_pin_must_be_4_digits)
     val pinsDoNotMatch = stringResource(Res.string.settings_pins_do_not_match)
     val incorrectPin = stringResource(Res.string.settings_incorrect_pin)
     val authorizationFailed = stringResource(Res.string.settings_authorization_failed)
     val biometricTitle = stringResource(Res.string.settings_enable_biometric_title)
     val biometricSubtitle = stringResource(Res.string.settings_enable_biometric_subtitle)
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "security_init",
-    )
-
-    val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val scrollIndex = rememberHighlightScrollIndex(
-        highlightSettingId = highlightSettingId,
-        groupSettingIds = listOf(
-            setOf(
-                SecuritySettingsIds.PIN_LOCK,
-                SecuritySettingsIds.BIOMETRIC_LOCK,
-                SecuritySettingsIds.PIN_FOR_PLAYER_LOCK,
-                SecuritySettingsIds.AUTO_LOCK_TIMER,
-            ),
-            setOf(SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE),
-            setOf(
-                SecuritySettingsIds.REMOTE_CONTROL_ENABLED,
-                SecuritySettingsIds.REMOTE_DISPLAY_CONTENT_ENABLED,
-            ),
-        ),
-    )
-    HighlightScrollEffect(scrollState, scrollIndex)
-
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_security),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-        actions = {
-            AdvancedSettingsToggleButton(
-                showAdvanced = showAdvanced,
-                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-            )
-        },
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
+        focusTag = "security_init",
+        highlightSettingId = highlightSettingId,
+        highlightGroups = securityScreenGroups,
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        pickerHost = true,
+    ) { activePicker ->
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Lock,
@@ -307,7 +272,7 @@ val biometricGate = rememberBiometricGate()
                             trailingText = lockTimerLabel(preferences.autoLockTimerMs),
                             highlighted = highlightSettingId == SecuritySettingsIds.AUTO_LOCK_TIMER,
                             onClick = {
-                                activePicker = PickerState.List(
+                                activePicker.value = PickerState.List(
                                     title = autoLockTimerTitle,
                                     items = lockTimerChoices.map { it.first },
                                     label = { lockTimerLabel(it) },
@@ -395,8 +360,6 @@ val biometricGate = rememberBiometricGate()
                     )
                 }
             }
-        }
-        }
     }
 
     if (activeDialog is SecuritySettingsDialog.PinDialog) {
@@ -654,8 +617,4 @@ val biometricGate = rememberBiometricGate()
         )
     }
 
-    SettingsPickerDialog(
-        state = activePicker,
-        onDismiss = { activePicker = null },
-    )
 }

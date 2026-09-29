@@ -69,6 +69,9 @@ class MediaRepositoryCacheInvalidationTest {
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
             apiClient,
+            // The home cache-maintenance port (inert here — this suite pins
+            // the detail/series cache choreography).
+            mockk(relaxed = true),
             apiClient,
             // Snapshot-store extraction: the persisted home pipeline moved
             // into the store single the Koin graph wires (inert here — this
@@ -83,6 +86,8 @@ class MediaRepositoryCacheInvalidationTest {
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
             MediaRepositoryInternals(apiClient, homeSession),
+            // The deepened createSyncPlayGroup's engine (inert here).
+            mockk(relaxed = true),
         )
     }
 

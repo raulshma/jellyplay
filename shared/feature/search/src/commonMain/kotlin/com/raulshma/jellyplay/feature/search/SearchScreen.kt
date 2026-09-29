@@ -105,9 +105,9 @@ import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
-import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
-import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
-import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.seerr.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.navigation.Route

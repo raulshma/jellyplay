@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.smartplaylist
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -24,6 +25,8 @@ import kotlinx.coroutines.launch
 
 class SmartPlaylistsViewModel(
     private val mediaRepository: MediaRepository,
+    /** The SearchResult-shaped reads (favorites + browse queries — off the union). */
+    private val mediaCollectionReads: MediaCollectionReads,
     private val imageUrlProvider: ImageUrlProvider,
     audioQueueFacade: MusicQueuePlayer,
     private val smartPlaylistRepository: SmartPlaylistRepository,
@@ -112,14 +115,14 @@ class SmartPlaylistsViewModel(
             playlist = playlist,
             fetch = {
                 if (favoriteOnly) {
-                    mediaRepository.getFavorites(
+                    mediaCollectionReads.getFavorites(
                         mediaTypes = listOf(MediaType.AUDIO),
                         limit = playlist.maxItems,
                     )
                 } else {
                     val genreFilters = nonPlayCountCriteria.filter { it.type == CriterionType.GENRE }
                         .mapNotNull { it.value }
-                    mediaRepository.getMediaItems(
+                    mediaCollectionReads.getMediaItems(
                         filters = LibraryFilters(
                             mediaTypes = listOf(MediaType.AUDIO),
                             genres = genreFilters.takeIf { it.isNotEmpty() }.orEmpty(),

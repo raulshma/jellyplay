@@ -1,11 +1,8 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -31,25 +28,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -135,44 +122,20 @@ fun NotificationSettingsScreen(
             NotificationSettingsIds.QUIET_HOURS to preferences.quietHoursEnabled,
         ),
     )
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }
-    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "notifications_init",
-    )
 
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_notifications),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-        actions = {
-            AdvancedSettingsToggleButton(
-                showAdvanced = showAdvanced,
-                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-            )
-        },
-    ) { innerPadding ->
+        focusTag = "notifications_init",
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        pickerHost = true,
+    ) { activePicker ->
         val notifPrefs = preferences
 
-        CenteredBringIntoView {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Bell,
@@ -211,7 +174,7 @@ fun NotificationSettingsScreen(
                             trailingText = notifPrefs.checkFrequency.displayName,
                             highlighted = highlightSettingId == NotificationSettingsIds.NOTIFICATION_CHECK_FREQUENCY,
                             onClick = {
-                                activePicker = PickerState.List(
+                                activePicker.value = PickerState.List(
                                     title = frequencyTitle,
                                     items = CheckFrequency.entries,
                                     label = { it.displayName },
@@ -320,7 +283,7 @@ fun NotificationSettingsScreen(
                                 highlighted = highlightSettingId == NotificationSettingsIds.MAX_PER_CHECK,
                                 onClick = {
                                     val options = listOf(5, 10, 15, 20, 30, 50, 100)
-                                    activePicker = PickerState.List(
+                                    activePicker.value = PickerState.List(
                                         title = maxPerCheckTitle,
                                         items = options,
                                         label = { countFormat },
@@ -356,8 +319,6 @@ fun NotificationSettingsScreen(
                     )
                 }
             }
-        }
-        }
     }
 
     if (activeDialog is NotificationSettingsDialog.QuietStartPicker) {
@@ -445,10 +406,6 @@ fun NotificationSettingsScreen(
         }
     }
 
-    SettingsPickerDialog(
-        state = activePicker,
-        onDismiss = { activePicker = null },
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

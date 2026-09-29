@@ -1,10 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
-import org.jetbrains.compose.resources.StringResource
-import org.jetbrains.compose.resources.stringResource
-import com.raulshma.jellyplay.feature.auth.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Screen-forward message seal for auth flows — the commonMain-safe
@@ -18,22 +14,15 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.Res
  * args-free (the two format-bearing strings, `auth_remove_server_message` /
  * `auth_remove_user_message`, are pre-resolved in composition at their
  * render sites — newsletter args-free seal shape).
+ *
+ * M3 conveyor unification: the seal was exactly the shared two-variant
+ * [UiMessage] shape (args-free by the note above — [UiMessage.Resource]'s
+ * optional args default to empty), so it is now a typealias. Kotlin forbids
+ * reaching a nested classifier or companion through a typealias (KEEP-40),
+ * so construction and `when` branches name the canonical container directly
+ * — `UiMessage.Resource` / `UiMessage.Raw` / `UiMessage.of`, the same
+ * container-qualified convention core.ui.message's `UiText.Resource` uses —
+ * while every TYPE position (state fields, flow element types) keeps the
+ * feature alias. Screens collapse with `asText` (core.ui.message).
  */
-@Immutable
-sealed interface AuthMessage {
-
-    /** Localized message resolved from a compose-resources string. */
-    @Immutable
-    data class Resource(val res: StringResource) : AuthMessage
-
-    /** Raw failure text (exception message — already final). */
-    @Immutable
-    data class Raw(val text: String) : AuthMessage
-}
-
-/** Collapse to display text inside composition (locale resolves here). */
-@Composable
-fun AuthMessage.asText(): String = when (this) {
-    is AuthMessage.Resource -> stringResource(res)
-    is AuthMessage.Raw -> text
-}
+typealias AuthMessage = UiMessage

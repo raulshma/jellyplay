@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.isAvailable
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.withPendingRequest
-import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialogHolder
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl

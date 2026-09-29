@@ -17,7 +17,10 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
@@ -181,6 +184,17 @@ class DataKoinModulesTest {
                 koin.get<UserDataWriteOperations>() === koin.get<MediaRepository>(),
                 "UserDataWriteOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
+            // The uncached browse-read families are their OWN impl single
+            // (MediaUncachedReadsImpl over LibraryApiClient — not a view of the
+            // media single), with the three seams aliasing it.
+            assertResolves<MediaExtrasReads>(koin)
+            assertResolves<MediaBrowseReads>(koin)
+            assertResolves<MediaCollectionReads>(koin)
+            assertTrue(
+                koin.get<MediaExtrasReads>() === koin.get<MediaBrowseReads>() &&
+                    koin.get<MediaBrowseReads>() === koin.get<MediaCollectionReads>(),
+                "the three uncached-read seams must alias the MediaUncachedReadsImpl single (one impl, three seams)",
+            )
             assertTrue(
                 koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),
                 "SeerrServiceDirectory must alias the SeerrRepositoryImpl single (one impl, two seams)",
@@ -192,6 +206,15 @@ class DataKoinModulesTest {
             assertTrue(
                 koin.get<SeerrAuthenticator>() === koin.get<SeerrRepository>(),
                 "SeerrAuthenticator must alias the SeerrRepositoryImpl single (one impl, two seams)",
+            )
+            // The home cache-maintenance port aliases the LibraryApiClientImpl
+            // single (the client is the port's adapter onto the fetcher) — the
+            // write/roll paths' verb seam, resolved from the network module.
+            assertResolves<com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort>(koin)
+            assertTrue(
+                koin.get<com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort>() ===
+                    koin.get<com.raulshma.jellyplay.core.network.api.LibraryApiClient>(),
+                "HomeSectionsCachePort must alias the LibraryApiClientImpl single (one impl, two seams)",
             )
             assertResolves<StoragePolicy>(koin)
             assertResolves<TimeSource>(koin)

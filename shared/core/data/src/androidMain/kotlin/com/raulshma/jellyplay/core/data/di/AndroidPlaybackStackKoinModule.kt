@@ -32,6 +32,8 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             context = context,
             playbackFocus = get(),
             mediaRepository = get(),
+            musicCatalogue = get(),
+            mediaCollectionReads = get(),
             playlistRepository = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),
@@ -85,7 +87,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single {
         ThemeMusicPlayer(
             context = context,
-            mediaRepository = get(),
+            musicCatalogue = get(),
             playbackRepository = get(),
             appearanceStore = get(),
         )
@@ -101,7 +103,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single<AudioQueueFacade> {
         DefaultAudioQueueFacade(
             queueManager = get(),
-            mediaRepository = get(),
+            musicCatalogue = get(),
             imageUrlProvider = get(),
             radioScope = get(DatastoreQualifiers.applicationScope),
         )

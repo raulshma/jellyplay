@@ -29,7 +29,6 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -81,8 +80,9 @@ class MpvPlayerEngine(
     // Distinct from the accumulated [currentCues] history: this is the single
     // live line, cleared on blank/track-switch/stop. Driven by mpv's `sub-text`
     // property (ASS override tags already stripped by mpv).
-    private val _liveSubtitleCue = MutableStateFlow<CharSequence?>(null)
-    override val liveSubtitleCue: StateFlow<CharSequence?> = _liveSubtitleCue.asStateFlow()
+    // Backing flow: the state chassis's `_liveSubtitleCue` (this engine's
+    // former class-local twin + `liveSubtitleCue` override were folded into
+    // EngineStateChassis; the writes below hit the chassis field directly).
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
@@ -343,7 +343,7 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-font-provider", "none")
             // Default the requested family to the bundled fallback's own family
             // so libass matches it exactly under the none provider. Overridden
-            // per-style in applySubtitleStyleProperties when the user picks a
+            // per-style by the shared MpvSubtitleStyleApplier when the user picks a
             // font, and ASS tracks ignore sub-font unless sub-ass-override=force.
             // Yields to a user-owned sub-font like every other styling key —
             // this is an init option, so an ungated write would beat mpv.conf.
@@ -380,7 +380,18 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-visibility", "yes")
             mpv.safeSetOptionUnlessUserOwned("sub-ass-override", "scale")
             mpv.setOptionString("keep-open", "yes")
-            applySubtitleStyleOptions(mpv, currentConfig.subtitleStyle)
+            // The init-time half of the shared subtitle-style choreography:
+            // option-string writes (the handle takes no runtime properties
+            // yet), ownership-gated, reference-pinned font size —
+            // [MpvSubtitleStyleApplier] owns the full table.
+            MpvSubtitleStyleApplier.apply(
+                surface = MpvSurface(mpv),
+                style = currentConfig.subtitleStyle,
+                phase = MpvSubtitleStylePhase.INIT,
+                ownedKeys = userOwnedSubtitleKeys,
+                fallbackFontFamily = fontProvider.bundledFallbackFamilyName(),
+                subtitleDelayMs = currentConfig.subtitleDelayMs,
+            )
             mpv.setOptionString("panscan", "0.0")
             mpv.setOptionString("sub-use-margins", "no")
             mpv.setOptionString("sub-ass-force-margins", "no")
@@ -1078,7 +1089,17 @@ class MpvPlayerEngine(
     private fun applySubtitleStyleInternal(style: SubtitleStyle) {
         try {
             val m = mpvView?.mpv ?: return
-            applySubtitleStyleProperties(m, style)
+            // Runtime half of the shared choreography: typed property writes
+            // ([MpvSubtitleStyleApplier]); sub-reload + the debug render-state
+            // log stay engine-owned (Android extras).
+            MpvSubtitleStyleApplier.apply(
+                surface = MpvSurface(m),
+                style = style,
+                phase = MpvSubtitleStylePhase.RUNTIME,
+                ownedKeys = userOwnedSubtitleKeys,
+                fallbackFontFamily = fontProvider.bundledFallbackFamilyName(),
+                subtitleDelayMs = currentConfig.subtitleDelayMs,
+            )
             runCatching { m.command("sub-reload") }
             logSubtitleRenderState("style")
         } catch (e: Exception) {
@@ -1203,25 +1224,12 @@ class MpvPlayerEngine(
     private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
-            val videoBitrateBps = try {
-                m.getPropertyDouble("video-bitrate")?.let { br ->
-                    if (br > 0) br.toInt() else null
-                }
-            } catch (_: Exception) { null }
-            val audioBitrateBps = try {
-                m.getPropertyDouble("audio-bitrate")?.let { br ->
-                    if (br > 0) br.toInt() else null
-                }
-            } catch (_: Exception) { null }
-            val combinedBitrate = (videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)
-            val bufferHealthMs = (_bufferedPositionMs.value - posMs).coerceAtLeast(0L)
-            val bufferSizeBytes = if (combinedBitrate > 0) combinedBitrate * bufferHealthMs / 8000 else 0L
-            val droppedFrames = try {
-                m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
-            } catch (_: Exception) { 0L }
-            val totalVideoFrames = try {
-                m.getPropertyInt("displayed-frame-count")?.toLong() ?: 0L
-            } catch (_: Exception) { 0L }
+            // The shared property-name table + sanitize fold lives in
+            // [MpvStatsProjection] (player-contract, desktop parity); this
+            // adapter owns only the reads seam, the change-guard and its
+            // FULL_STATS_REREAD cadence.
+            val reads = MpvStatsReadSource(m)
+            val scalars = MpvStatsProjection.readGuardScalars(reads)
             val bufferedPositionMs = _bufferedPositionMs.value
 
             // Cheap-scalar change guard first (mirrors the Exo adapter): the
@@ -1233,76 +1241,45 @@ class MpvPlayerEngine(
             // switches, avsync, vo-delayed, track changes).
             val nowMs = android.os.SystemClock.elapsedRealtime()
             val last = lastVideoStats
-            if (last != null && last.videoBitrate == videoBitrateBps &&
-                last.audioBitrate == audioBitrateBps &&
+            if (last != null && last.videoBitrate == scalars.videoBitrateBps &&
+                last.audioBitrate == scalars.audioBitrateBps &&
                 last.bufferedPositionMs == bufferedPositionMs &&
-                last.droppedFrames == droppedFrames &&
-                last.totalVideoFrames == totalVideoFrames &&
+                last.droppedFrames == scalars.droppedFrames &&
+                last.totalVideoFrames == scalars.totalVideoFrames &&
                 nowMs - lastFullStatsReadMs < FULL_STATS_REREAD_MS
             ) {
                 return
             }
             lastFullStatsReadMs = nowMs
 
-            val newStats = EngineVideoStats(
-                videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
-                videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
-                videoResolution = buildString {
-                    val w = try { m.getPropertyInt("width") } catch (_: Exception) { null }
-                    val h = try { m.getPropertyInt("height") } catch (_: Exception) { null }
-                    if (w != null && h != null && w > 0 && h > 0) append("${w}x${h}")
-                }.ifEmpty { null },
-                videoFrameRate = try {
-                    m.getPropertyDouble("container-fps")?.let { fps ->
-                        if (fps > 0f) fps.toFloat() else null
-                    }
-                } catch (_: Exception) { null },
-                videoBitrate = videoBitrateBps,
-                audioCodec = try { m.getPropertyString("audio-codec") } catch (_: Exception) { null },
-                audioSampleRate = try {
-                    m.getPropertyInt("audio-params/samplerate")?.let { sr ->
-                        if (sr > 0) sr else null
-                    }
-                } catch (_: Exception) { null },
-                audioChannels = try {
-                    m.getPropertyInt("audio-params/channel-count")?.let { ch ->
-                        if (ch > 0) ch else null
-                    }
-                } catch (_: Exception) { null },
-                audioBitrate = audioBitrateBps,
-                estimatedBandwidthBps = combinedBitrate.toLong(),
-                droppedFrames = droppedFrames,
-                totalVideoFrames = totalVideoFrames,
-                bufferedPositionMs = bufferedPositionMs,
-                bufferSizeBytes = bufferSizeBytes,
-                avsyncMs = m.propDoubleOrNull("total-avsync")?.let { if (it != 0f) it else null },
-                displayFps = m.propDoubleOrNull("display-fps")?.let { fps -> if (fps > 0f) fps else null },
-                voDelayedMs = m.propDoubleOrNull("vo-delayed")?.let { if (it != 0f) it else null },
-                voFrameDropCount = m.propIntOrNull("frame-drop-count")?.toLong(),
+            publishStatsIfChanged(
+                MpvStatsProjection.project(
+                    reads = reads,
+                    scalars = scalars,
+                    positionMs = posMs,
+                    bufferedPositionMs = bufferedPositionMs,
+                ),
             )
-            publishStatsIfChanged(newStats)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to read MPV video stats", e)
         }
     }
 
     /**
-     * Read an mpv double property, returning null if the property is unset or
-     * the read throws (mpv raises on unknown/unavailable properties). Collapses
-     * the repeated `try { m.getPropertyDouble(...) } catch { null }` shape that
-     * the four G10 stats each carried inline.
+     * The Android [MpvStatsReads] over the mpv wrapper: each read absorbs the
+     * wrapper's throw-on-unavailable contract (the former inline
+     * try/getProperty/catch-null shape and the propDoubleOrNull helpers,
+     * folded into the seam).
      */
-    private fun MPV.propDoubleOrNull(name: String): Float? = try {
-        getPropertyDouble(name)?.toFloat()
-    } catch (_: Exception) {
-        null
-    }
+    private class MpvStatsReadSource(private val mpv: MPV) : MpvStatsReads {
+        override fun readString(name: String): String? =
+            try { mpv.getPropertyString(name) } catch (_: Exception) { null }
 
-    /** [propDoubleOrNull] for integer properties. */
-    private fun MPV.propIntOrNull(name: String): Int? = try {
-        getPropertyInt(name)
-    } catch (_: Exception) {
-        null
+        override fun readDouble(name: String): Double? =
+            try { mpv.getPropertyDouble(name) } catch (_: Exception) { null }
+
+        override fun readLong(name: String): Long? =
+            try { mpv.getPropertyInt(name)?.toLong() } catch (_: Exception) { null }
     }
 
     /**
@@ -1481,7 +1458,17 @@ class MpvPlayerEngine(
         }
 
         try {
-            applySubtitleStyleProperties(view.mpv, currentConfig.subtitleStyle)
+            // Runtime choreography via the shared applier (no sub-reload /
+            // render-state log here — those extras belong to the explicit
+            // style-apply funnel [applySubtitleStyleInternal]).
+            MpvSubtitleStyleApplier.apply(
+                surface = MpvSurface(view.mpv),
+                style = currentConfig.subtitleStyle,
+                phase = MpvSubtitleStylePhase.RUNTIME,
+                ownedKeys = userOwnedSubtitleKeys,
+                fallbackFontFamily = fontProvider.bundledFallbackFamilyName(),
+                subtitleDelayMs = currentConfig.subtitleDelayMs,
+            )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply subtitle style inside configureMpvForRequest", e)
         }
@@ -1641,85 +1628,37 @@ class MpvPlayerEngine(
             if (subtitles.size > 8) ", ..." else ""
     }
 
-    private fun applySubtitleStyleOptions(mpv: MPV, style: SubtitleStyle) {
-        val values = subtitleStyleValues(style)
-        // User-owned sub-* keys (mpv.conf / extra config) are skipped on every
-        // write below so the user's value survives init + runtime re-applies;
-        // sub-delay stays app-owned (in-app subtitle sync drives it).
-        val owned = userOwnedSubtitleKeys
-        if (style.applyCustomStyle) {
-            MpvUserSubtitleKeys.filterOwned(customSubtitleStyleEntries(style, values), owned).forEach { (k, v) -> mpv.safeSetOption(k, v) }
-            mpv.safeSetOptionUnlessUserOwned("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetOptionUnlessUserOwned("sub-scale", (style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE).toString())
-        } else {
-            // Reset to mpv native defaults — the subset mpv needs at init time
-            // (ass-override, typeface toggles, font, scale). All reset strings
-            // and the scale magnitude come from the tested MpvStyleMapping
-            // (sourced from its single DEFAULTS table via defaultInitEntries),
-            // so this branch cannot drift from DEFAULTS and is unit-covered.
-            MpvUserSubtitleKeys.filterOwned(MpvStyleMapping.defaultInitEntries(), owned).forEach { (k, v) -> mpv.safeSetOption(k, v) }
-            mpv.safeSetOptionUnlessUserOwned("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetOptionUnlessUserOwned("sub-scale", MpvStyleMapping.defaultScale.toString())
-        }
-
-        mpv.safeSetOptionUnlessUserOwned("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toString())
-        mpv.safeSetOptionUnlessUserOwned("sub-pos", MpvStyleMapping.subPosPercent(style).toString())
-        mpv.safeSetOptionUnlessUserOwned("sub-margin-y", values.marginY.toString())
-        mpv.safeSetOption("sub-delay", (currentConfig.subtitleDelayMs / 1000.0).toString())
-    }
-
-    private fun applySubtitleStyleProperties(mpv: MPV, style: SubtitleStyle) {
-        val values = subtitleStyleValues(style)
-        // Ownership gate as in applySubtitleStyleOptions — sub-visibility and
-        // sub-delay stay unconditional (in-app toggle + sync own them).
-        val owned = userOwnedSubtitleKeys
-        mpv.safeSetPropertyBoolean("sub-visibility", true)
-        if (style.applyCustomStyle) {
-            MpvUserSubtitleKeys.filterOwned(customSubtitleStyleEntries(style, values), owned).forEach { (k, v) -> mpv.safeSetPropertyString(k, v) }
-            // Numeric properties are typed (Double) for the runtime path.
-            // sub-border-* are the canonical mpv/libass names; sub-outline-* are
-            // deprecated aliases that silently no-op on some libass versions.
-            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-border-size", values.outlineSize)
-            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-shadow-offset", values.shadowOffset)
-            mpv.safeSetPropertyStringUnlessUserOwned("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-scale", style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE)
-        } else {
-            // Reset to mpv native defaults — string pairs and numeric magnitudes
-            // both come from the tested MpvStyleMapping (sourced from its single
-            // DEFAULTS table), so this branch is unit-covered. sub-ass-justify is
-            // boolean-typed on mpv; the mapping emits it as a "no" string pair,
-            // applied here via the boolean setter.
-            MpvUserSubtitleKeys.filterOwned(MpvStyleMapping.defaultEntries(), owned).forEach { (k, v) ->
-                if (k == "sub-ass-justify") mpv.safeSetPropertyBoolean(k, false)
-                else mpv.safeSetPropertyString(k, v)
-            }
-            mpv.safeSetPropertyStringUnlessUserOwned("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-border-size", MpvStyleMapping.defaultBorderSize)
-            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
-            mpv.safeSetPropertyDoubleUnlessUserOwned("sub-scale", MpvStyleMapping.defaultScale)
-        }
-
-        mpv.safeSetPropertyDoubleUnlessUserOwned("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toDouble())
-        mpv.safeSetPropertyIntUnlessUserOwned("sub-pos", MpvStyleMapping.subPosPercent(style))
-        mpv.safeSetPropertyIntUnlessUserOwned("sub-margin-y", values.marginY)
-        mpv.safeSetPropertyDouble("sub-delay", currentConfig.subtitleDelayMs / 1000.0)
-    }
-
     /**
-     * The string-typed subtitle-style key/value pairs shared by both
-     * [applySubtitleStyleOptions] (init-time, setOptionString) and
-     * [applySubtitleStyleProperties] (runtime, setPropertyString). Delegates to
-     * [MpvStyleMapping.customStyleEntries] so the mapping is
-     * unit-testable without a live mpv handle. Callers apply each pair through
-     * their own setter.
+     * The Android [MpvPropertySurface] over the `is.xyz.mpv` wrapper: absorbs
+     * the wrapper's throw-on-failure contract (log + no rethrow) exactly the
+     * way the former private safe-setter family did, so the shared
+     * [MpvSubtitleStyleApplier] choreography is exception-free. Ownership
+     * gating lives in the applier, not here.
      */
-    private fun customSubtitleStyleEntries(
-        style: SubtitleStyle,
-        @Suppress("UNUSED_PARAMETER") values: MpvStyleMapping.MpvStyleValues,
-    ): List<Pair<String, String>> = MpvStyleMapping.customStyleEntries(style)
+    private inner class MpvSurface(private val mpv: MPV) : MpvPropertySurface {
+        private inline fun safely(what: String, block: () -> Unit) {
+            try {
+                block()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set $what", e)
+            }
+        }
 
-    private fun subtitleStyleValues(style: SubtitleStyle): MpvStyleMapping.MpvStyleValues =
-        MpvStyleMapping.computeValues(style)
+        override fun setOptionString(name: String, value: String) =
+            safely("option $name to $value") { mpv.setOptionString(name, value) }
+
+        override fun setPropertyString(name: String, value: String) =
+            safely("property $name to $value") { mpv.setPropertyString(name, value) }
+
+        override fun setPropertyDouble(name: String, value: Double) =
+            safely("property $name to $value") { mpv.setPropertyDouble(name, value) }
+
+        override fun setPropertyInt(name: String, value: Int) =
+            safely("property $name to $value") { mpv.setPropertyInt(name, value) }
+
+        override fun setPropertyBoolean(name: String, value: Boolean) =
+            safely("property $name to $value") { mpv.setPropertyBoolean(name, value) }
+    }
 
     private fun MPVNode?.asTrackId(): Int? =
         this?.asInt()?.toInt() ?: this?.asString()?.toIntOrNull()
@@ -1783,6 +1722,13 @@ class MpvPlayerEngine(
     // test-pinned; this alias keeps the engine's call sites unchanged.
     private fun redactSensitive(value: String): String = MpvLogRedaction.redact(value)
 
+    // The former safe-setter family died with the shared choreography: every
+    // subtitle-style write now runs through [MpvSurface] /
+    // [MpvSubtitleStyleApplier] (player-contract), which owns the typed writes
+    // AND the issue-#165 ownership gating. These two option-string helpers
+    // remain for initOptions' static sub-* options (sub-font seed,
+    // sub-scale-with-window, sub-auto, sub-ass-override), which predate the
+    // applier's style-shaped choreography.
     private fun MPV.safeSetOption(name: String, value: String) {
         try {
             setOptionString(name, value)
@@ -1791,61 +1737,14 @@ class MpvPlayerEngine(
         }
     }
 
-    private fun MPV.safeSetPropertyString(name: String, value: String) {
-        try {
-            setPropertyString(name, value)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set property $name to $value", e)
-        }
-    }
-
-    private fun MPV.safeSetPropertyDouble(name: String, value: Double) {
-        try {
-            setPropertyDouble(name, value)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set property $name to $value", e)
-        }
-    }
-
-    private fun MPV.safeSetPropertyInt(name: String, value: Int) {
-        try {
-            setPropertyInt(name, value)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set property $name to $value", e)
-        }
-    }
-
-    private fun MPV.safeSetPropertyBoolean(name: String, value: Boolean) {
-        try {
-            setPropertyBoolean(name, value)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set property $name to $value", e)
-        }
-    }
-
-    // Ownership-gated variants of the safe setters (issue #165): a no-op when
-    // the key is user-owned via mpv.conf / extra config, so no scalar write
-    // site can forget the check the pair lists get from
-    // MpvUserSubtitleKeys.filterOwned. Keys the app functionally drives at
-    // runtime (sub-visibility, sub-delay) never route through these.
+    // Ownership-gated variant (issue #165): a no-op when the key is user-owned
+    // via mpv.conf / extra config, so no scalar write site can forget the
+    // check the pair lists get from MpvUserSubtitleKeys.filterOwned. Keys the
+    // app functionally drives at runtime (sub-visibility, sub-delay) never
+    // route through this.
     private fun MPV.safeSetOptionUnlessUserOwned(name: String, value: String) {
         if (name in userOwnedSubtitleKeys) return
         safeSetOption(name, value)
-    }
-
-    private fun MPV.safeSetPropertyStringUnlessUserOwned(name: String, value: String) {
-        if (name in userOwnedSubtitleKeys) return
-        safeSetPropertyString(name, value)
-    }
-
-    private fun MPV.safeSetPropertyDoubleUnlessUserOwned(name: String, value: Double) {
-        if (name in userOwnedSubtitleKeys) return
-        safeSetPropertyDouble(name, value)
-    }
-
-    private fun MPV.safeSetPropertyIntUnlessUserOwned(name: String, value: Int) {
-        if (name in userOwnedSubtitleKeys) return
-        safeSetPropertyInt(name, value)
     }
 }
 

@@ -35,12 +35,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * NEW suite (downloads/syncplay conveyor precedent — the legacy module had no
  * AddServerViewModel tests): pins the connection-failure classifier 1:1 to
- * HEAD's branch table (message identity via [AuthMessage.Resource] /
- * [AuthMessage.Raw]), the blank-address guard, and the SSDP discovery flow's
+ * HEAD's branch table (message identity via [UiMessage.Resource] /
+ * [UiMessage.Raw]), the blank-address guard, and the SSDP discovery flow's
  * dedupe/complete/failure behavior. The [LocalNetworkStatus] seam is faked
  * inline (hand-rolled lambda over the fun interface).
  *
@@ -89,7 +90,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_server_address_required),
+            UiMessage.Resource(Res.string.auth_error_server_address_required),
             viewModel.uiState.value.connectError,
         )
         // HEAD guard shape: the blank address returns BEFORE launching, so
@@ -107,7 +108,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_resolve_address),
+            UiMessage.Resource(Res.string.auth_error_resolve_address),
             viewModel.uiState.value.connectError,
         )
     }
@@ -123,7 +124,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_ssl),
+            UiMessage.Resource(Res.string.auth_error_ssl),
             viewModel.uiState.value.connectError,
         )
     }
@@ -139,7 +140,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_cleartext),
+            UiMessage.Resource(Res.string.auth_error_cleartext),
             viewModel.uiState.value.connectError,
         )
     }
@@ -154,7 +155,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_local_network_denied),
+            UiMessage.Resource(Res.string.auth_error_local_network_denied),
             viewModel.uiState.value.connectError,
         )
     }
@@ -171,7 +172,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_ssl),
+            UiMessage.Resource(Res.string.auth_error_ssl),
             viewModel.uiState.value.connectError,
         )
     }
@@ -185,7 +186,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Raw("boom"),
+            UiMessage.Raw("boom"),
             viewModel.uiState.value.connectError,
         )
     }
@@ -201,7 +202,7 @@ class AddServerViewModelTest {
 
         advanceUntilIdle()
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_connection_failed),
+            UiMessage.Resource(Res.string.auth_error_connection_failed),
             viewModel.uiState.value.connectError,
         )
     }
@@ -250,7 +251,7 @@ class AddServerViewModelTest {
         )
         // The SSL error message is still surfaced alongside the dialog.
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_ssl),
+            UiMessage.Resource(Res.string.auth_error_ssl),
             viewModel.uiState.value.connectError,
         )
     }

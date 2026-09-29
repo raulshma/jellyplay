@@ -100,7 +100,7 @@ kotlin.sourceSets.configureEach {
             implementation(libs.junit)
             implementation(libs.robolectric)
             implementation(libs.androidx.test.core)
-            // UserMessageBusTest pins the one-shot Channel semantics.
+            // Coroutines for the LocaleApplier suites (runBlocking/flow).
             implementation(libs.coroutines.test)
             // Compose UI tests under Robolectric (focus-behavior + sheet/scrim
             // regression suites, incl. the two former androidTest files which

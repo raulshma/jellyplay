@@ -71,6 +71,7 @@ fun androidDetailsModule(context: Context): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
+            mediaExtrasReads = get(),
             userDataMutator = get(),
             mediaDetailProvider = get(),
             playbackRepository = get(),
@@ -101,6 +102,7 @@ fun androidDetailsModule(context: Context): Module = module {
     viewModel {
         PersonDetailViewModel(
             mediaRepository = get(),
+            mediaBrowseReads = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             mediaDownloadActions = get(),

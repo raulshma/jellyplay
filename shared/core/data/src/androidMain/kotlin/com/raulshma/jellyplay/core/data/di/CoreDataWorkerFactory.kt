@@ -78,7 +78,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 createDrainer = { notifier ->
                     PlaybackOutboxDrainerImpl(
                         outbox = koin().get(),
-                        playbackRepository = koin().get(),
+                        outboxReplay = koin().get<com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay>(),
                         offlineModeManager = koin().get(),
                         playedStateSync = koin().get(),
                         offlineRepository = koin().get(),

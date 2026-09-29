@@ -24,12 +24,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Port of the legacy :feature:auth AuthViewModelTest (junit4 + mockk, kept on
  * the jvmTest source set — the conveyor test home). The two assertions that
  * checked user-facing copy via stubbed `context.getString` now assert exact
- * [AuthMessage.Resource] identity against the generated accessors (admin
+ * [UiMessage.Resource] identity against the generated accessors (admin
  * UserDetailViewModel test precedent): the seal carries the resource
  * unresolved, so the test compares `Res.string` objects instead of resolved
  * text — stronger than the legacy contains-check ("not enabled" / "timed
@@ -67,7 +68,7 @@ class AuthViewModelTest {
         val state = viewModel.quickConnectState.value
         assertTrue("expected Error, was $state", state is QuickConnectUiState.Error)
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_qc_error_not_enabled),
+            UiMessage.Resource(Res.string.auth_qc_error_not_enabled),
             (state as QuickConnectUiState.Error).message,
         )
     }
@@ -84,7 +85,7 @@ class AuthViewModelTest {
         // HEAD fallback semantics: a present exception message wins over the
         // localized resource (legacy `?:` — the string was only a fallback).
         assertEquals(
-            AuthMessage.Raw("boom"),
+            UiMessage.Raw("boom"),
             (state as QuickConnectUiState.Error).message,
         )
     }
@@ -99,7 +100,7 @@ class AuthViewModelTest {
         val state = viewModel.quickConnectState.value
         assertTrue(state is QuickConnectUiState.Error)
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_qc_error_check_availability),
+            UiMessage.Resource(Res.string.auth_qc_error_check_availability),
             (state as QuickConnectUiState.Error).message,
         )
     }
@@ -153,7 +154,7 @@ class AuthViewModelTest {
         val state = viewModel.quickConnectState.value
         assertTrue("expected Error, was $state", state is QuickConnectUiState.Error)
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_qc_error_timeout),
+            UiMessage.Resource(Res.string.auth_qc_error_timeout),
             (state as QuickConnectUiState.Error).message,
         )
     }

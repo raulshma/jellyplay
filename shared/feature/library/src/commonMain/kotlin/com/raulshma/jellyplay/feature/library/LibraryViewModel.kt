@@ -8,9 +8,11 @@ import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -39,6 +41,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import com.raulshma.jellyplay.core.data.util.FilterCodec
 import com.raulshma.jellyplay.core.data.util.loadListWithRetry
@@ -64,6 +67,8 @@ private data class PagedQueryKey(
 
 internal class LibraryViewModel(
     private val mediaRepository: MediaRepository,
+    /** The browse-facet seam (the filter row's tag list — off the union). */
+    private val mediaBrowseReads: MediaBrowseReads,
     private val offlineRepository: OfflineRepository,
     private val quickDownloadActions: QuickDownloadActions,
     private val offlineModeManager: OfflineModeManager,
@@ -92,11 +97,15 @@ internal class LibraryViewModel(
     private val _error = stateFlow<String?>(null)
     val error = _error.flow
 
-    private val _genres = stateFlow<List<Genre>>(emptyList())
-    val genres = _genres.flow
-
-    private val _tags = stateFlow<List<String>>(emptyList())
-    val tags = _tags.flow
+    // Genre/tag filter dimensions live on the shared core:data holder (the
+    // library/search/editor triple); the public exposure shape is unchanged.
+    private val filterDimensions = FilterDimensionsHolder(
+        scope = scope,
+        getGenres = { force -> mediaRepository.getGenres(force = force) },
+        getTags = { mediaBrowseReads.getTags() },
+    )
+    val genres: StateFlow<List<Genre>> = filterDimensions.genres
+    val tags: StateFlow<List<String>> = filterDimensions.tags
 
     private val _showFilters = stateFlow(false)
     val showFilters = _showFilters.flow
@@ -319,8 +328,7 @@ internal class LibraryViewModel(
 
     init {
         loadFolders()
-        loadGenres()
-        loadTags()
+        filterDimensions.load()
         loadViewMode()
         loadLayoutPrefs()
         loadResetConfirmPref()
@@ -446,20 +454,6 @@ internal class LibraryViewModel(
         }
     }
 
-    private fun loadGenres(force: Boolean = false) {
-        launch {
-            // Retry once after a short delay so a transient network blip doesn't
-            // leave the filter sheet permanently missing its Genres section.
-            loadListWithRetry({ mediaRepository.getGenres(force = force) }) { _genres.set(it) }
-        }
-    }
-
-    private fun loadTags() {
-        launch {
-            loadListWithRetry(mediaRepository::getTags) { _tags.set(it) }
-        }
-    }
-
     private fun selectFolder(folder: LibraryFolder?) {
         userTouchedViewMode = false
         val prefs = libraryStore.library.value
@@ -574,8 +568,7 @@ internal class LibraryViewModel(
             // Manual refresh bypasses the caches for the queries this screen
             // shows (folders + genres); tags are an uncached passthrough.
             loadFolders(force = true)
-            loadGenres(force = true)
-            loadTags()
+            filterDimensions.load(force = true)
             // Increment the trigger to force flatMapLatest to create a new Pager,
             // which avoids the duplicate-key crash that occurs when pagedItems.refresh()
             // is called concurrently on a cachedIn flow.

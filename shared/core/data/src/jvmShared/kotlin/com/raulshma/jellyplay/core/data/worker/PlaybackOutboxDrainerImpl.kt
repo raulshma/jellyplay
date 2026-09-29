@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.isWatchedOffline
 import kotlinx.coroutines.sync.Semaphore
 
@@ -27,7 +26,7 @@ import kotlinx.coroutines.sync.Semaphore
  */
 class PlaybackOutboxDrainerImpl(
     private val outbox: PlaybackOutboxRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val outboxReplay: PlaybackOutboxReplay,
     private val offlineModeManager: OfflineModeManager,
     private val playedStateSync: PlayedStateSync,
     private val offlineRepository: OfflineRepository,
@@ -259,7 +258,7 @@ class PlaybackOutboxDrainerImpl(
                 remaining--
                 continue
             }
-            val ok = runCatchingRethrowingCancellation { playbackRepository.replayOutboxEntry(entry) }.getOrElse { false }
+            val ok = runCatchingRethrowingCancellation { outboxReplay.replayOutboxEntry(entry) }.getOrElse { false }
             if (ok) {
                 outbox.delete(entry.id)
                 reconciledItems.add(entry.itemId)

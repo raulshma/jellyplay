@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberInlineConfirm
-import com.raulshma.jellyplay.core.ui.components.QueueDeleteConfirmActions
+import com.raulshma.jellyplay.core.ui.components.downloads.QueueDeleteConfirmActions
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res

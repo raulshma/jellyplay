@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_no_config_
 import com.raulshma.jellyplay.feature.admin.users.detail.AdminUserMessage
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 data class PluginConfigState(
     val isLoading: Boolean = true,
@@ -55,12 +56,12 @@ class PluginConfigViewModel(
                     if (page != null) {
                         _state.value = _state.value.copy(configPageName = page.name, configPageHtml = page.html)
                     } else {
-                        _state.value = _state.value.copy(error = AdminUserMessage.Resource(Res.string.admin_no_config_page))
+                        _state.value = _state.value.copy(error = UiMessage.Resource(Res.string.admin_no_config_page))
                     }
                 },
                 onFailure = { e ->
                     Log.e("PluginConfig", "Failed to load config page", e)
-                    _state.value = _state.value.copy(error = e.message?.let(AdminUserMessage::Raw))
+                    _state.value = _state.value.copy(error = e.message?.let(UiMessage::Raw))
                 },
             )
             // Final-update settle, the VM's legacy shape: the arms never touch

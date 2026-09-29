@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
@@ -147,7 +147,12 @@ class SessionLoadHooks(
  */
 class SessionLoadPipeline(
     private val sessionManager: PlayerSessionManager,
-    private val mediaRepository: MediaRepository,
+    /**
+     * The item-attached extras seam — the pipeline's one repository read is the
+     * Cinema Mode intros lookup, which left the wide union for
+     * [MediaExtrasReads] (uncached forward, no cache state).
+     */
+    private val mediaExtrasReads: MediaExtrasReads,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val networkOfflineStore: NetworkOfflineStore,
     private val outputs: SessionLoadOutputs,
@@ -196,7 +201,7 @@ class SessionLoadPipeline(
         if (request.allowCinemaMode &&
             hooks.shouldAttemptCinemaMode(agg, request.itemId, request.startPositionTicks)
         ) {
-            val intros = mediaRepository.getIntros(request.itemId).getOrDefault(emptyList())
+            val intros = mediaExtrasReads.getIntros(request.itemId).getOrDefault(emptyList())
             if (intros.isNotEmpty()) {
                 hooks.beginCinemaMode(intros, request)
                 hooks.onOutcome(LoadOutcome.CinemaIntro(intros.first().id))

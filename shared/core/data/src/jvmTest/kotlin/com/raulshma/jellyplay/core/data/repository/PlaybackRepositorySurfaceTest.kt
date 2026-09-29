@@ -13,8 +13,12 @@ import kotlin.test.assertTrue
  * matching the impl's override count), and pins that count so it can only
  * move DOWN.
  *
- * Baseline 25 is the count right after the session-credential readers
- * (`getServerUrl` / `getAccessToken`) were retired from the interface into the
+ * Baseline 25 is the count after the outbox-replay reader (`replayOutboxEntry`)
+ * was retired into the narrow [com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay]
+ * port (its only production consumer, the drain loop, injects that instead) —
+ * restoring the cap the versions/still-watching wave had pushed one over. That
+ * retirement followed the session-credential readers (`getServerUrl` /
+ * `getAccessToken`) retiring into the
  * narrow [com.raulshma.jellyplay.core.data.playback.PlaybackIdentity] module
  * (their four readers inject that instead), which itself followed the dead
  * intro/credit timestamp readers (`getIntroTimestamps` / `getCreditTimestamps`)
@@ -40,6 +44,7 @@ class PlaybackRepositorySurfaceTest {
         "getCreditTimestamps",
         "getServerUrl",
         "getAccessToken",
+        "replayOutboxEntry",
     )
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */

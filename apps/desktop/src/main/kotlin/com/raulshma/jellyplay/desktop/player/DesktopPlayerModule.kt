@@ -162,7 +162,7 @@ val desktopPlayerModule: Module = module {
     single<AudioQueueFacade> {
         DefaultAudioQueueFacade(
             queueManager = get(),
-            mediaRepository = get(),
+            musicCatalogue = get(),
             imageUrlProvider = get(),
             radioScope = get(DatastoreQualifiers.applicationScope),
         )

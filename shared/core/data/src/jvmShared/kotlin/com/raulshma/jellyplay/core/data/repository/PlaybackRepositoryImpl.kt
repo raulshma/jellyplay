@@ -60,7 +60,8 @@ class PlaybackRepositoryImpl(
      * without a WS echo. Lazy keeps the construction graph acyclic.
      */
     private val mediaRepository: Lazy<MediaRepository>,
-) : PlaybackRepository {
+) : PlaybackRepository,
+    com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay {
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
         maxSize = MAX_CACHE_ENTRIES,

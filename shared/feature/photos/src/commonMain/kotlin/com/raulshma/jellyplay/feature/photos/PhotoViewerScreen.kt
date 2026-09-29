@@ -44,10 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableFloatState
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -175,9 +172,10 @@ fun PhotoViewerScreen(
         viewModel.load(itemId, parentId)
     }
 
-    val scale = remember { mutableFloatStateOf(1f) }
-    val offsetX = remember { mutableFloatStateOf(0f) }
-    val offsetY = remember { mutableFloatStateOf(0f) }
+    // The pinch/pan transform lives in PhotoTransformState (the PageZoomState
+    // idiom): the screen holds no parallel MutableFloatState mirrors, and the
+    // gesture thresholds/decisions live in PhotoGesturePolicy beside it.
+    val transform = remember { PhotoTransformState() }
     var showControls by remember { mutableStateOf(true) }
     var showInfo by remember { mutableStateOf(false) }
     var showFilmstrip by remember { mutableStateOf(false) }
@@ -185,7 +183,7 @@ fun PhotoViewerScreen(
     val rootFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(currentIndex) {
-        resetPhotoTransform(scale, offsetX, offsetY)
+        transform.reset()
     }
 
     LaunchedEffect(showFilmstrip) {
@@ -311,17 +309,15 @@ fun PhotoViewerScreen(
                     photo = photo!!,
                     viewModel = viewModel,
                     currentIndex = currentIndex,
-                    scale = scale,
-                    offsetX = offsetX,
-                    offsetY = offsetY,
-                    onScaleChange = { scale.value = it },
-                    onOffsetChange = { x, y -> offsetX.value = x; offsetY.value = y },
+                    transform = transform,
                     onTap = { if (!isTv) showControls = !showControls },
                     onDoubleTap = { currentScale ->
-                        if (currentScale > 1f) {
-                            resetPhotoTransform(scale, offsetX, offsetY)
+                        // Same gate as the pan admission: zoomed in → collapse
+                        // to the fitted identity, at fit → jump to the target.
+                        if (PhotoGesturePolicy.acceptsPan(currentScale)) {
+                            transform.reset()
                         } else {
-                            scale.value = 2.5f
+                            transform.zoomTo(PHOTO_DOUBLE_TAP_ZOOM)
                         }
                     },
                     colorFilter = photoColorFilter,
@@ -608,27 +604,12 @@ fun PhotoViewerScreen(
     }
 }
 
-/** Resets the pinch/pan transform to its identity — photo switch and double-tap zoom-out share it. */
-private fun resetPhotoTransform(
-    scale: MutableFloatState,
-    offsetX: MutableFloatState,
-    offsetY: MutableFloatState,
-) {
-    scale.value = 1f
-    offsetX.value = 0f
-    offsetY.value = 0f
-}
-
 @Composable
 private fun PhotoImage(
     photo: com.raulshma.jellyplay.core.model.MediaItem,
     viewModel: PhotoViewerViewModel,
     currentIndex: Int,
-    scale: State<Float>,
-    offsetX: State<Float>,
-    offsetY: State<Float>,
-    onScaleChange: (Float) -> Unit,
-    onOffsetChange: (x: Float, y: Float) -> Unit,
+    transform: PhotoTransformState,
     onTap: () -> Unit,
     onDoubleTap: (currentScale: Float) -> Unit,
     colorFilter: androidx.compose.ui.graphics.ColorFilter? = null,
@@ -641,14 +622,14 @@ private fun PhotoImage(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            // A thin adapter: the gesture machine's decisions (zoom band, pan
+            // admission, tap discrimination, swipe direction) live in
+            // PhotoGesturePolicy / PhotoTransformState — this loop only
+            // translates pointer events into those calls.
             .pointerInput(photo.id) {
                 awaitEachGesture {
                     val firstDown = awaitFirstDown()
                     firstDown.consume()
-
-                    var gestureScale = scale.value
-                    var gestureOffsetX = offsetX.value
-                    var gestureOffsetY = offsetY.value
 
                     val downPosition = firstDown.position
                     var isMultiTouch = false
@@ -674,16 +655,13 @@ private fun PhotoImage(
                                 if (previousDistance > 0f) {
                                     val zoom = distance / previousDistance
                                     val pan = centroid - previousCentroid
-                                    gestureScale = (gestureScale * zoom).coerceIn(0.5f, 5f)
-                                    onScaleChange(gestureScale)
-                                    if (gestureScale > 1f) {
-                                        gestureOffsetX += pan.x
-                                        gestureOffsetY += pan.y
-                                        onOffsetChange(gestureOffsetX, gestureOffsetY)
+                                    val newScale = transform.applyPinch(zoom)
+                                    if (PhotoGesturePolicy.acceptsPan(newScale)) {
+                                        transform.addPan(pan.x, pan.y)
                                     } else {
-                                        gestureOffsetX = 0f
-                                        gestureOffsetY = 0f
-                                        onOffsetChange(0f, 0f)
+                                        // A pinch that collapses back into the
+                                        // fitted scale re-centers the photo.
+                                        transform.resetPan()
                                     }
                                 }
 
@@ -701,11 +679,9 @@ private fun PhotoImage(
                                     pastSlop = true
                                 }
 
-                                if (pastSlop && gestureScale > 1f) {
+                                if (pastSlop && PhotoGesturePolicy.acceptsPan(transform.scale)) {
                                     val posChange = change.positionChange()
-                                    gestureOffsetX += posChange.x
-                                    gestureOffsetY += posChange.y
-                                    onOffsetChange(gestureOffsetX, gestureOffsetY)
+                                    transform.addPan(posChange.x, posChange.y)
                                 }
                             }
                         }
@@ -717,27 +693,24 @@ private fun PhotoImage(
                         // Clock.System epoch-millis read — the double-tap
                         // window math is unchanged.
                         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                        if (now - lastTapTime < 300) {
-                            onDoubleTap(gestureScale)
+                        if (PhotoGesturePolicy.isDoubleTap(now, lastTapTime)) {
+                            onDoubleTap(transform.scale)
                             lastTapTime = 0L
                         } else {
                             onTap()
                             lastTapTime = now
                         }
-                    } else if (!isMultiTouch && pastSlop && gestureScale <= 1f) {
-                        val swipeThreshold = 150f // pixels
-                        if (kotlin.math.abs(dragDeltaX) > swipeThreshold && kotlin.math.abs(dragDeltaX) > kotlin.math.abs(dragDeltaY)) {
-                            if (dragDeltaX > 0) {
-                                // Swipe right -> previous photo
+                    } else if (!isMultiTouch && pastSlop && PhotoGesturePolicy.acceptsSwipe(transform.scale)) {
+                        when (PhotoGesturePolicy.swipeDecision(dragDeltaX, dragDeltaY)) {
+                            SwipeDecision.PREVIOUS ->
                                 if (viewModel.hasPrevious()) {
                                     viewModel.navigateTo(currentIndex - 1)
                                 }
-                            } else {
-                                // Swipe left -> next photo
+                            SwipeDecision.NEXT ->
                                 if (viewModel.hasNext()) {
                                     viewModel.navigateTo(currentIndex + 1)
                                 }
-                            }
+                            SwipeDecision.NONE -> {}
                         }
                     }
                 }
@@ -755,10 +728,10 @@ private fun PhotoImage(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    scaleX = scale.value
-                    scaleY = scale.value
-                    translationX = offsetX.value
-                    translationY = offsetY.value
+                    scaleX = transform.scale
+                    scaleY = transform.scale
+                    translationX = transform.offsetX
+                    translationY = transform.offsetY
                 },
             contentScale = ContentScale.Fit,
             size = coil3.size.Size.ORIGINAL,

@@ -5,16 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -24,12 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,19 +35,10 @@ import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.message.asString
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -87,77 +71,49 @@ fun DiscoverRowsScreen(
     viewModel: DiscoverRowsViewModel = koinViewModel(),
 ) {
     val rows by viewModel.discoverRowsFlow.collectAsStateWithLifecycle()
-    val isTv = LocalTvMode.current
-    val backgroundColorState = rememberScreenBackgroundColorState()
-    val adaptiveInfo = LocalAdaptiveInfo.current
 
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "discover_rows_init",
-    )
-
-    val scrollState = rememberLazyListState()
-
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_discover_rows),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-    ) { innerPadding ->
-        CenteredBringIntoView {
-            LazyColumn(
-                state = scrollState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .tvFocusRestorer()
-                    .focusRequester(focusRequester),
-                contentPadding = PaddingValues(
-                    start = adaptiveInfo.contentPadding(isTv),
-                    end = adaptiveInfo.contentPadding(isTv),
-                    bottom = adaptiveInfo.bottomPadding(isTv),
-                ),
-            ) {
-                item {
-                    SettingsGroup(
-                        icon = Tabler.Outline.Compass,
-                        title = stringResource(Res.string.settings_discover_rows_title),
-                        summary = { stringResource(Res.string.settings_discover_rows_helper) },
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        initiallyExpanded = true,
-                    ) {
-                        if (rows.isEmpty()) {
-                            DiscoverRowTemplatesPresentation(
-                                onUseTemplate = { viewModel.addFromTemplate(it) },
-                            )
-                        } else {
-                            val totalCount = rows.size
-                            rows.forEachIndexed { index, row ->
-                                DiscoverRowListEntry(
-                                    row = row,
-                                    position = index + 1,
-                                    index = index,
-                                    count = totalCount,
-                                    onEdit = { onEditRow(row.id) },
-                                    onToggle = { viewModel.setDiscoverRowEnabled(row.id, it) },
-                                    onMoveUp = { viewModel.moveDiscoverRow(row.id, up = true) },
-                                    onMoveDown = { viewModel.moveDiscoverRow(row.id, up = false) },
-                                    onRemove = { viewModel.removeDiscoverRow(row.id) },
-                                )
-                            }
-                        }
-
-                        AddDiscoverRowRow(
-                            index = rows.size,
-                            count = rows.size + 1,
-                            highlighted = highlightSettingId == "discover_add",
-                            onClick = onAddRow,
+        focusTag = "discover_rows_init",
+    ) { _ ->
+            item {
+                SettingsGroup(
+                    icon = Tabler.Outline.Compass,
+                    title = stringResource(Res.string.settings_discover_rows_title),
+                    summary = { stringResource(Res.string.settings_discover_rows_helper) },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = true,
+                ) {
+                    if (rows.isEmpty()) {
+                        DiscoverRowTemplatesPresentation(
+                            onUseTemplate = { viewModel.addFromTemplate(it) },
                         )
+                    } else {
+                        val totalCount = rows.size
+                        rows.forEachIndexed { index, row ->
+                            DiscoverRowListEntry(
+                                row = row,
+                                position = index + 1,
+                                index = index,
+                                count = totalCount,
+                                onEdit = { onEditRow(row.id) },
+                                onToggle = { viewModel.setDiscoverRowEnabled(row.id, it) },
+                                onMoveUp = { viewModel.moveDiscoverRow(row.id, up = true) },
+                                onMoveDown = { viewModel.moveDiscoverRow(row.id, up = false) },
+                                onRemove = { viewModel.removeDiscoverRow(row.id) },
+                            )
+                        }
                     }
+
+                    AddDiscoverRowRow(
+                        index = rows.size,
+                        count = rows.size + 1,
+                        highlighted = highlightSettingId == "discover_add",
+                        onClick = onAddRow,
+                    )
                 }
             }
-        }
     }
 }
 

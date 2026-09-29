@@ -1,24 +1,13 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -27,26 +16,15 @@ import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import com.raulshma.jellyplay.core.ui.components.homeSectionIcon
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_next_up
@@ -76,7 +54,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections_brief
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_home_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_home_title
@@ -96,7 +73,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
-import androidx.compose.foundation.shape.CircleShape
 
 /**
  * The declared Home settings screen groups in LazyColumn order — the
@@ -134,55 +110,21 @@ fun HomeSettingsScreen(
     viewModel: HomeSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "home_settings_init",
-    )
-
-    val scrollState = rememberLazyListState()
-    val scrollIndex = rememberHighlightScrollIndex(highlightSettingId, homeScreenGroups)
-    HighlightScrollEffect(scrollState, scrollIndex)
-
-    var showResetDialog by remember { mutableStateOf(false) }
-    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
-
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_home_title),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-        actions = {
-            IconButton(
-                onClick = { showResetDialog = true },
-                modifier = Modifier.focusIndicator(CircleShape),
-            ) {
-                Icon(
-                    Tabler.Outline.Refresh,
-                    contentDescription = stringResource(Res.string.settings_reset_defaults_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
+        focusTag = "home_settings_init",
+        highlightSettingId = highlightSettingId,
+        highlightGroups = homeScreenGroups,
+        reset = PreferenceResetAction(
+            iconContentDescription = stringResource(Res.string.settings_reset_defaults_cd),
+            dialogTitle = stringResource(Res.string.settings_reset_home_title),
+            dialogMessage = stringResource(Res.string.settings_reset_home_message),
+            onReset = { viewModel.resetCategory(PreferenceResetCategory.HOME_DISCOVERY) },
+        ),
+        pickerHost = true,
+    ) { activePicker ->
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Home,
@@ -288,7 +230,7 @@ fun HomeSettingsScreen(
                                     trailingText = preferences.continueWatchingClickBehavior.displayName,
                                     highlighted = highlightSettingId == HomeSettingsIds.CONTINUE_WATCHING_CLICK,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = cwTitle,
                                             items = ContinueWatchingClickBehavior.entries,
                                             label = { it.displayName },
@@ -367,7 +309,7 @@ fun HomeSettingsScreen(
                         highlighted = highlightSettingId == HomeSettingsIds.NEXT_UP_MAX_DAYS,
                         index = 1, count = nextUpTotal,
                         onClick = {
-                            activePicker = PickerState.List(
+                            activePicker.value = PickerState.List(
                                 title = nextUpTitle,
                                 items = listOf(0, 7, 14, 30, 60, 90),
                                 label = { dayLabels[it] ?: formatIntPattern(xDaysFormat, it) },
@@ -465,26 +407,5 @@ fun HomeSettingsScreen(
                     }
                 }
             }
-        }
-        }
     }
-
-    if (showResetDialog) {
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_reset_home_title),
-            message = stringResource(Res.string.settings_reset_home_message),
-            confirmText = stringResource(Res.string.settings_reset),
-            onConfirm = {
-                viewModel.resetCategory(PreferenceResetCategory.HOME_DISCOVERY)
-                showResetDialog = false
-            },
-            onDismiss = { showResetDialog = false },
-            dismissText = stringResource(Res.string.settings_cancel),
-        )
-    }
-
-    SettingsPickerDialog(
-        state = activePicker,
-        onDismiss = { activePicker = null },
-    )
 }

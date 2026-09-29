@@ -15,7 +15,9 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
@@ -44,7 +46,20 @@ private const val DOWNLOAD_ID_PREFIX = "DOWNLOAD_|"
 
 class AudioLibraryBrowser(
     private val scope: CoroutineScope,
+    /**
+     * The detail read only ([getMediaDetail], the playable-node resolver) —
+     * the browser is a mixed consumer. Its catalogue reads (artist albums,
+     * album tracks) ride [musicCatalogue], the repository's narrow music
+     * family seam.
+     */
     private val mediaRepository: MediaRepository,
+    private val musicCatalogue: MusicCatalogue,
+    /**
+     * The SearchResult-shaped collection reads (the union's getMediaItems /
+     * getFavorites retired to this seam). The browser is otherwise a mixed
+     * consumer — catalogue + detail reads still ride [mediaRepository].
+     */
+    private val mediaCollectionReads: MediaCollectionReads,
     private val playlistRepository: PlaylistRepository,
     private val downloadRepository: DownloadRepository,
     private val playbackRepository: PlaybackRepository,
@@ -123,7 +138,7 @@ class AudioLibraryBrowser(
                         // The two arms differ only in the requested media type
                         // and the folder-node mapper — one paged fetch serves both.
                         val isArtists = parentId == "ARTISTS"
-                        val result = mediaRepository.getMediaItems(
+                        val result = mediaCollectionReads.getMediaItems(
                             filters = LibraryFilters(
                                 mediaTypes = listOf(if (isArtists) MediaType.ARTIST else MediaType.ALBUM),
                             ),
@@ -141,7 +156,7 @@ class AudioLibraryBrowser(
                         }
                     }
                     parentId == "FAVORITES" -> {
-                        val result = mediaRepository.getFavorites(
+                        val result = mediaCollectionReads.getFavorites(
                             mediaTypes = listOf(MediaType.MUSIC, MediaType.AUDIO),
                             startIndex = page * pageSize,
                             limit = pageSize
@@ -165,14 +180,14 @@ class AudioLibraryBrowser(
                     }
                     parentId.startsWith(ARTIST_ID_PREFIX) -> {
                         val artistId = parentId.removePrefix(ARTIST_ID_PREFIX)
-                        val albums = mediaRepository.getArtistAlbums(artistId, limit = pageSize).getOrNull() ?: emptyList()
+                        val albums = musicCatalogue.getArtistAlbums(artistId, limit = pageSize).getOrNull() ?: emptyList()
                         albums.forEach { album ->
                             list.add(mapAlbumToMediaItem(album))
                         }
                     }
                     parentId.startsWith(ALBUM_ID_PREFIX) -> {
                         val albumId = parentId.removePrefix(ALBUM_ID_PREFIX)
-                        val tracks = mediaRepository.getAlbumTracks(albumId).getOrNull() ?: emptyList()
+                        val tracks = musicCatalogue.getAlbumTracks(albumId, force = false).getOrNull() ?: emptyList()
                         tracks.forEach { track ->
                             list.add(mapTrackToPlayableMediaItem(track))
                         }
@@ -246,9 +261,9 @@ class AudioLibraryBrowser(
                     when {
                         mediaId.startsWith(ARTIST_ID_PREFIX) -> {
                             val artistId = mediaId.removePrefix(ARTIST_ID_PREFIX)
-                            val albums = mediaRepository.getArtistAlbums(artistId).getOrNull() ?: emptyList()
+                            val albums = musicCatalogue.getArtistAlbums(artistId, limit = 50).getOrNull() ?: emptyList()
                             val tracks = mapConcurrently(albums) { album ->
-                                mediaRepository.getAlbumTracks(album.id).getOrNull() ?: emptyList()
+                                musicCatalogue.getAlbumTracks(album.id, force = false).getOrNull() ?: emptyList()
                             }.flatten()
                             resolvedList.addAll(mapConcurrently(tracks) { track ->
                                 buildPlayableMediaItem(track.id)
@@ -256,7 +271,7 @@ class AudioLibraryBrowser(
                         }
                         mediaId.startsWith(ALBUM_ID_PREFIX) -> {
                             val albumId = mediaId.removePrefix(ALBUM_ID_PREFIX)
-                            val tracks = mediaRepository.getAlbumTracks(albumId).getOrNull() ?: emptyList()
+                            val tracks = musicCatalogue.getAlbumTracks(albumId, force = false).getOrNull() ?: emptyList()
                             resolvedList.addAll(mapConcurrently(tracks) { track ->
                                 buildPlayableMediaItem(track.id)
                             })

@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
 import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
@@ -113,7 +114,7 @@ class LibraryApiClientImpl(
      * layer). Default null = this wiring fetches no Seerr rows (unit fakes).
      */
     private val seerrHomeSectionSources: SeerrHomeSectionSources? = null,
-) : LibraryApiClient, HomeSectionSources {
+) : LibraryApiClient, HomeSectionSources, HomeSectionsCachePort {
 
     /**
      * Parent ids of libraries already known to return nothing from both the
@@ -191,15 +192,19 @@ class LibraryApiClientImpl(
         homeSectionsFetcher.fetch(query, force)
     }
 
-    override fun invalidateHomeSubcallCaches() {
+    // The home cache-maintenance verbs are NOT on [LibraryApiClient] anymore:
+    // the data layer's write/roll paths reach them through
+    // [HomeSectionsCachePort], which this impl satisfies with the same
+    // one-line forwards to the fetcher it has always delegated to.
+    override fun invalidateSubcallCaches() {
         homeSectionsFetcher.invalidateCaches()
     }
 
-    override fun invalidateDiscoverRowCache(rowId: String) {
+    override fun invalidateDiscoverRow(rowId: String) {
         homeSectionsFetcher.invalidateDiscoverRow(rowId)
     }
 
-    override fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
+    override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
         homeSectionsFetcher.seedDiscoverRow(row, items)
     }
 

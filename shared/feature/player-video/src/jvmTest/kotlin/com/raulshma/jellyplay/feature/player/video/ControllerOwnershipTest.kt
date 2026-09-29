@@ -9,14 +9,15 @@ import java.io.File
 /**
  * Ratchet against reintroducing the god-state wiring pattern.
  *
- * 1. The seventeen migrated controllers (`SleepTimerController`,
+ * 1. The twenty migrated controllers (`SleepTimerController`,
  *    `TrackSelectionHelper`, `SubtitleManager`, `VideoEffectsController`,
  *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`,
  *    `EpisodeNavigator`, `SubtitlePreviewController`,
  *    `SubtitleStyleController`, `MediaContentProjector`, `RenderControls`,
  *    `EpisodeContinuationController`, `PipTransportController`,
  *    `SubtitleFontController`, `BackgroundCastController`,
- *    `SegmentDispatchController`)
+ *    `SegmentDispatchController`, `StillWatchingController`,
+ *    `MediaDetailProjection`, `EngineConfigSync`)
  *    must not reference [VideoPlayerUiState] at all — their interface is
  *    their state class plus commands, never the state bag or a state
  *    transformer.
@@ -24,6 +25,8 @@ import java.io.File
  *    `uiState = _uiState`) in the module's src/main must never increase.
  *    Baseline: [SettingsProjector] (a deferred, prefs-mirror
  *    writer — 2 wirings) and [PlaybackProgressReporter] (raw handle, 1 wiring).
+ * 3. [VideoPlayerViewModel.kt]'s total line count must never exceed the
+ *    post-extraction ceiling (see [videoPlayerViewModel_totalLineCeiling]).
  *
  * Lower the baseline when another slice migrates; never raise it.
  */
@@ -47,6 +50,9 @@ class ControllerOwnershipTest {
         "SubtitleFontController.kt",
         "BackgroundCastController.kt",
         "SegmentDispatchController.kt",
+        "StillWatchingController.kt",
+        "MediaDetailProjection.kt",
+        "EngineConfigSync.kt",
     )
 
     /** The maximum allowed god-state wirings in src/main (see class KDoc). */
@@ -149,6 +155,31 @@ class ControllerOwnershipTest {
             "expected exactly the deferred god-state wirings: SettingsProjector's " +
                 "getUiState/updateUiState pair (in its VM wiring + constructor) and " +
                 "PlaybackProgressReporter's raw handle. Found: $wirings",
+        )
+    }
+
+    @Test
+    fun videoPlayerViewModel_totalLineCeiling() {
+        // The size ratchet companion to the member-count ceiling in
+        // VideoPlayerViewModelOwnershipTest: the VM shrinks only by moving
+        // clusters into extracted modules (constructor-lambda controllers),
+        // so its TOTAL line count is a one-way ratchet too. Baseline: 3_012
+        // by this suite's lineSequence count (3_011 wc-lines + the trailing
+        // newline's empty line) after the EngineConfigSync extraction (3_016
+        // by the same count after StillWatchingController +
+        // MediaDetailProjection, 3_089 before those), pinned EXACTLY like
+        // every other ratchet in this suite. Lower the ceiling when a slice
+        // moves out; never raise it to admit growth.
+        val maxVideoPlayerViewModelLines = 3_012
+        val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
+        val lines = vm.sourceText().lineSequence().count()
+        assertTrue(
+            lines <= maxVideoPlayerViewModelLines,
+            "VideoPlayerViewModel.kt grew to $lines lines (ceiling " +
+                "$maxVideoPlayerViewModelLines) — new behaviour belongs in an " +
+                "extracted module built from constructor lambdas, with the VM a " +
+                "thin caller. Lower the ceiling when a slice moves out; never " +
+                "raise it.",
         )
     }
 

@@ -28,13 +28,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Message-seam and guard gaps in [SyncPlayViewModel] NOT pinned by
  * [SyncPlayViewModelTest] / [SyncPlayViewModelLoadGroupsBoundaryTest]:
  *
  * 1. [SyncPlayViewModel.createGroup] and [SyncPlayViewModel.leaveGroup]
- *    failures WITH an exception message map to [SyncPlayMessage.Raw] (the two
+ *    failures WITH an exception message map to [UiMessage.Raw] (the two
  *    suites only pin the null-message → localized-resource fallbacks).
  * 2. [SyncPlayViewModel.joinGroup] success while
  *    [SyncPlaySession.activeGroupId] is still null: `isInGroup` flips true but
@@ -96,7 +97,7 @@ class SyncPlayViewModelMessageFallbacksTest {
         viewModel.createGroup("Party")
         advanceUntilIdle()
 
-        assertEquals("name taken", (viewModel.uiState.value.error as SyncPlayMessage.Raw).text)
+        assertEquals("name taken", (viewModel.uiState.value.error as UiMessage.Raw).text)
         assertFalse(viewModel.uiState.value.isLoading)
         assertFalse(viewModel.uiState.value.isInGroup)
     }
@@ -119,7 +120,7 @@ class SyncPlayViewModelMessageFallbacksTest {
         viewModel.leaveGroup()
         advanceUntilIdle()
 
-        assertEquals("server busy", (viewModel.uiState.value.error as SyncPlayMessage.Raw).text)
+        assertEquals("server busy", (viewModel.uiState.value.error as UiMessage.Raw).text)
         // The failed leave leaves the session untouched — the user is still in
         // the group with its header intact.
         assertTrue(viewModel.uiState.value.isInGroup)
@@ -178,7 +179,7 @@ class SyncPlayViewModelMessageFallbacksTest {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.failure(RuntimeException("offline"))
         val viewModel = newViewModel()
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.error is SyncPlayMessage.Raw)
+        assertTrue(viewModel.uiState.value.error is UiMessage.Raw)
 
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group("g1")))
         viewModel.loadGroups()

@@ -71,6 +71,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
@@ -122,6 +123,7 @@ import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_play
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_retry
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_stop
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_title
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -179,8 +181,8 @@ fun SyncPlayScreen(
         viewModel.notifications.collect { message ->
             snackbarHostState.showSnackbar(
                 message = when (message) {
-                    is SyncPlayMessage.Resource -> getString(message.res)
-                    is SyncPlayMessage.Raw -> message.text
+                    is UiMessage.Resource -> getString(message.res)
+                    is UiMessage.Raw -> message.text
                 },
                 duration = SnackbarDuration.Short,
             )

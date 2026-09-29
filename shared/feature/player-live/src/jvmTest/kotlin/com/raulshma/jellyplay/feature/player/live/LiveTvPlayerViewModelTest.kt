@@ -51,6 +51,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvPlayerViewModelTest {
@@ -205,8 +206,8 @@ class LiveTvPlayerViewModelTest {
         // The commonMain VM keeps the message unresolved until render time:
         // the resolve-failure resource carries the channel name as its arg.
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
-        assertEquals(Res.string.live_error_resolve_failed, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_resolve_failed, (error as UiMessage.Resource).res)
         assertEquals(listOf("Channel 0"), error.args)
     }
 
@@ -395,8 +396,8 @@ class LiveTvPlayerViewModelTest {
         // "No channels available" text via a Context mock; the commonMain VM
         // now carries the resource itself).
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
-        assertEquals(Res.string.live_error_no_channels, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_no_channels, (error as UiMessage.Resource).res)
         assertNull(vm.state.value.currentChannel)
     }
 
@@ -492,8 +493,8 @@ class LiveTvPlayerViewModelTest {
         // Failure path keeps the old behavior: no-channels error, no crash,
         // and no tune attempted (the zap must not retry the load).
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
-        assertEquals(Res.string.live_error_no_channels, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_no_channels, (error as UiMessage.Resource).res)
         assertNull(vm.state.value.currentChannel)
         assertTrue(capturedRequests.isEmpty())
 

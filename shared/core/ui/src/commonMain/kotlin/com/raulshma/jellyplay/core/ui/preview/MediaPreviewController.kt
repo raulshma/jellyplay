@@ -53,8 +53,8 @@ data class MediaPreview(
  * Ephemeral host for the press-and-hold media preview. Holds the currently
  * previewed [MediaPreview] (or `null` when none is showing) as a [StateFlow].
  *
- * Unlike [com.raulshma.jellyplay.core.ui.feedback.UserMessageBus] (a Hilt
- * `@Singleton` for one-shot messages that must outlive the UI), the preview is
+ * Unlike [com.raulshma.jellyplay.core.ui.message.UserMessageBus] (a Koin
+ * single for one-shot messages that must outlive the UI), the preview is
  * purely transient UI state, so it is `remember`-ed once at the app root and
  * provided via [LocalMediaPreviewController] — no DI graph changes required.
  */

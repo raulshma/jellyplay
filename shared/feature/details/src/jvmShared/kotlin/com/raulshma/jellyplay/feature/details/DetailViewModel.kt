@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.book.BookTocProber
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -40,7 +41,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seriesIdForDetail
-import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialogHolder
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -109,6 +110,8 @@ class DetailViewModel internal constructor(
     private val storageProbe: DetailStorageProbe,
     private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
+    /** The item-attached extras seam (the detail screen's special-features row). */
+    private val mediaExtrasReads: MediaExtrasReads,
     /**
      * The single seam for user-data mutations (watched / favorite). The VM
      * supplies only the container adapter below (which projections of an item
@@ -436,10 +439,24 @@ class DetailViewModel internal constructor(
     private var loadJob: Job? = null
     /** The BOOK item whose extras (TOC cache + marks counts) are being observed. */
     private var bookExtrasJob: Job? = null
-    private var currentItemId: String? = null
+    /**
+     * The staleness guard owning what used to be `currentItemId` +
+     * `seerrDataGeneration`: navigation publishes the item identity and bumps
+     * one epoch ([DetailLoadGuard.enter]); every suspension-point write below
+     * re-checks [DetailLoadGuard.isCurrent] instead of hand-copying
+     * `if (currentItemId != itemId) return`. See its KDoc for why one epoch
+     * covers both lifecycles.
+     */
+    private val loadGuard = DetailLoadGuard()
+    /**
+     * The series whose provider catalogue the current screen consumes — the
+     * [loadItemInternal] invalidation target and the [loadEpisodesForSeason]
+     * identity. Kept as a plain field (not folded into [loadGuard]) because it
+     * is an identity READ, not a staleness epoch.
+     */
     private var currentSeriesId: String? = null
+    /** Idempotency latch: one Seerr-data load per navigation (see [loadSeerrDataIfNeeded]). */
     private var seerrDataLoaded = false
-    private var seerrDataGeneration = 0L
     /**
      * The [MediaDetailSnapshot.contentGeneration] of the last snapshot whose
      * *content* sections (detail, seasons, episodes, album tracks, subtitles,
@@ -536,7 +553,7 @@ class DetailViewModel internal constructor(
                 .collect {
                     val changedIds = burstIds.toList()
                     burstIds.clear()
-                    val itemId = currentItemId ?: return@collect
+                    val itemId = loadGuard.itemId ?: return@collect
                     if (_uiState.value.detail?.item?.id != itemId) return@collect
                     if (itemId in changedIds) {
                         loadItemInternal(itemId, refresh = true)
@@ -563,11 +580,14 @@ class DetailViewModel internal constructor(
     }
 
     private fun loadItemInternal(itemId: String, refresh: Boolean) {
-        // Record the item we're loading synchronously so that a stale
+        // Record the item we're loading synchronously — and bump the load
+        // epoch in the same atomic step — so that a stale
         // loadSeerrDataIfNeeded() call (from a freshly-composed screen still
         // observing the previous item's detail via the shared ViewModel) can be
-        // rejected before it loads the wrong item's trailers/videos.
-        currentItemId = itemId
+        // rejected before it loads the wrong item's trailers/videos, and any
+        // in-flight Seerr fetch from the previous item cannot write its stale
+        // results onto this item's screen.
+        loadGuard.enter(itemId)
         // Same for the helpers' session: a bare id-only session is visible to
         // command-time reads immediately (the content sections fill in
         // reduceLoaded once the provider resolves).
@@ -589,10 +609,6 @@ class DetailViewModel internal constructor(
             currentSeriesId?.let { mediaDetailProvider.invalidate(it) }
             currentSeriesId = null
             seerrDataLoaded = false
-            // Bump the seerr generation so any in-flight trailer/video/recommendation
-            // fetch from the *previous* item is invalidated and cannot write its stale
-            // results onto this item's screen (the VM is shared across detail navigations).
-            seerrDataGeneration++
             // Reset the content-generation guard so the first Loaded emission of this
             // screen entry is treated as a fresh resolution (fires remote side effects,
             // adopts content sections). The provider never emits a generation of -1.
@@ -610,7 +626,7 @@ class DetailViewModel internal constructor(
             mediaDetailProvider.observe(itemId).collect { state ->
                 // Stale-write guard: a collector from a previous itemId is cancelled
                 // by loadJob?.cancel() on the next loadItem, but defend in depth.
-                if (currentItemId != itemId) return@collect
+                if (!loadGuard.isCurrent(itemId)) return@collect
                 applyLoadState(itemId, state)
             }
         }
@@ -803,7 +819,7 @@ class DetailViewModel internal constructor(
         val format = BookFormat.fromPath(itemPath) ?: return
         bookExtrasJob = launch {
             fun publish(toc: List<BookTocEntry>, pageCount: Int) {
-                if (currentItemId != itemId) return
+                if (!loadGuard.isCurrent(itemId)) return
                 _uiState.update {
                     it.copy(
                         book = (it.book ?: DetailUiState.BookDetailState(format = format)).copy(
@@ -819,7 +835,7 @@ class DetailViewModel internal constructor(
 
             if (cached == null) {
                 val probe = runCatching { bookTocProber?.probe(downloadPath, format) }.getOrNull()
-                if (probe != null && currentItemId == itemId) {
+                if (probe != null && loadGuard.isCurrent(itemId)) {
                     // Write-through: the next detail visit reads the cache.
                     runCatching {
                         bookTocCacheRepository.putToc(itemId, probe.format, probe.pageCount, probe.entries)
@@ -837,7 +853,7 @@ class DetailViewModel internal constructor(
                 marks.observeAnnotations(itemId),
             ) { bookmarks, annotations -> bookmarks.size to annotations.size }
                 .collect { (bookmarkCount, highlightCount) ->
-                    if (currentItemId != itemId) return@collect
+                    if (!loadGuard.isCurrent(itemId)) return@collect
                     _uiState.update {
                         it.copy(
                             book = (it.book ?: DetailUiState.BookDetailState(format = format)).copy(
@@ -853,7 +869,7 @@ class DetailViewModel internal constructor(
     /**
      * Fires the remote-only subordinate work for a freshly-resolved REMOTE
      * snapshot. Each launch captures [itemId] and bails if navigation moved on,
-     * mirroring the seerrDataGeneration guard. All branches are additionally
+     * through the [DetailLoadGuard] identity check. All branches are additionally
      * gated on [DetailCapabilities.remoteDiscovery] so the capability flip is
      * the single authority for whether discovery may run.
      */
@@ -874,7 +890,7 @@ class DetailViewModel internal constructor(
         launch {
             mediaRepository.getSimilarItems(itemId, limit = 12)
                 .onSuccess { items ->
-                    if (currentItemId != itemId) return@onSuccess
+                    if (!loadGuard.isCurrent(itemId)) return@onSuccess
                     _uiState.update {
                         it.copy(relatedItems = items.filter { related -> related.id != itemId })
                     }
@@ -884,9 +900,9 @@ class DetailViewModel internal constructor(
         // concurrently so the core detail renders immediately; the result lands
         // in specialFeatures and renders as its own horizontal row.
         launch {
-            mediaRepository.getSpecialFeatures(itemId)
+            mediaExtrasReads.getSpecialFeatures(itemId)
                 .onSuccess { extras ->
-                    if (currentItemId != itemId) return@onSuccess
+                    if (!loadGuard.isCurrent(itemId)) return@onSuccess
                     _uiState.update { it.copy(specialFeatures = extras) }
                 }
         }
@@ -896,7 +912,7 @@ class DetailViewModel internal constructor(
         // uiState so the chip can render before the player attaches.
         launch {
             playbackRepository.getMediaSegments(itemId).onSuccess { segments ->
-                if (currentItemId != itemId) return@onSuccess
+                if (!loadGuard.isCurrent(itemId)) return@onSuccess
                 val availability = segments.toAvailability()
                 _uiState.update {
                     it.copy(
@@ -911,7 +927,7 @@ class DetailViewModel internal constructor(
         // GPU work); seerrDataLoaded keeps it idempotent across re-entries.
         launch {
             kotlinx.coroutines.delay(350)
-            if (currentItemId != itemId) return@launch
+            if (!loadGuard.isCurrent(itemId)) return@launch
             loadSeerrDataIfNeeded(detail)
         }
     }
@@ -935,7 +951,7 @@ class DetailViewModel internal constructor(
                 studios = studios,
                 limit = 12,
             )
-            if (currentItemId != itemId) return@launch
+            if (!loadGuard.isCurrent(itemId)) return@launch
             _uiState.update {
                 it.copy(localRelatedItems = related.filter { r -> r.id != itemId })
             }
@@ -957,7 +973,7 @@ class DetailViewModel internal constructor(
             val summary = remoteDiscovery.arrRepository.resolveServers()
                 .getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
             // Guard: don't write sonarr resolution onto a different item's state.
-            if (currentItemId != itemId) return@launch
+            if (!loadGuard.isCurrent(itemId)) return@launch
             _uiState.update { it.copy(sonarrServersResolved = summary.sonarrServers.isNotEmpty()) }
         }
     }
@@ -972,7 +988,7 @@ class DetailViewModel internal constructor(
      */
     private fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
         if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
-        val itemId = currentItemId ?: return
+        val itemId = loadGuard.itemId ?: return
         launch {
             if (currentSeriesId != seriesId) return@launch
             // expandSeason fetches the season via the catalogue (serving from
@@ -987,7 +1003,7 @@ class DetailViewModel internal constructor(
         launch {
             mediaRepository.getCollectionItems(collectionId, limit = 100)
                 .onSuccess { result ->
-                    if (currentItemId != collectionId) return@onSuccess
+                    if (!loadGuard.isCurrent(collectionId)) return@onSuccess
                     _uiState.update { it.copy(collectionItems = result.items) }
                 }
         }
@@ -1019,7 +1035,7 @@ class DetailViewModel internal constructor(
             audioQueueFacade.startInstantMix(
                 seedItemId,
                 albumFallback = fallbackName,
-                guard = { currentItemId == seedItemId },
+                guard = { loadGuard.isCurrent(seedItemId) },
             ).toInstantMixOutcome()
         },
     )
@@ -1073,7 +1089,7 @@ class DetailViewModel internal constructor(
             when (val outcome = audioQueueFacade.startRadio(
                 item.id,
                 albumFallback = item.album ?: item.name,
-                guard = { currentItemId == item.id },
+                guard = { loadGuard.isCurrent(item.id) },
             )) {
                 AudioQueueOutcome.Empty ->
                     _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_radio_empty)))
@@ -1379,7 +1395,7 @@ class DetailViewModel internal constructor(
 
     private fun loadSeerrData(detail: MediaDetail, generation: Long) {
         launch {
-            if (generation != seerrDataGeneration) return@launch
+            if (!loadGuard.isCurrent(generation)) return@launch
             _uiState.update {
                 it.copy(
                     seerrRecommendations = emptyList(),
@@ -1403,7 +1419,7 @@ class DetailViewModel internal constructor(
             launch {
                 val reviews = remoteDiscovery.seerrRepository.getTmdbReviews(tmdbId, mediaType)
                     .getOrElse { emptyList() }
-                if (generation == seerrDataGeneration) {
+                if (loadGuard.isCurrent(generation)) {
                     _uiState.update { it.copy(tmdbReviews = reviews.take(5)) }
                 }
             }
@@ -1417,7 +1433,7 @@ class DetailViewModel internal constructor(
             // is a snapshot read with no subscription/probe overhead.
             val connected = uiState.value.isSeerrConnected
 
-            if (generation != seerrDataGeneration) return@launch
+            if (!loadGuard.isCurrent(generation)) return@launch
             coroutineScope {
                 // 1. Fetch related videos (trailers)
                 val videosDeferred = async {
@@ -1434,7 +1450,7 @@ class DetailViewModel internal constructor(
 
                 // 2. Fetch recommendations and similar if enabled
                 val enabled = uiState.value.isSeerrRecommendationsEnabled
-                val loadRecs = connected && enabled && generation == seerrDataGeneration
+                val loadRecs = connected && enabled && loadGuard.isCurrent(generation)
                 val recsDeferred = if (loadRecs) {
                     async {
                         remoteDiscovery.seerrRepository.getRecommendations(tmdbId, mediaType)
@@ -1453,14 +1469,14 @@ class DetailViewModel internal constructor(
                 }
 
                 val videosResult = videosDeferred.await()
-                if (generation == seerrDataGeneration) {
+                if (loadGuard.isCurrent(generation)) {
                     val videos = videosResult.getOrElse { emptyList() }
                     _uiState.update { it.copy(relatedVideos = videos) }
                 }
                 if (recsDeferred != null && similarDeferred != null) {
                     val recs = recsDeferred.await()
                     val similar = similarDeferred.await()
-                    if (generation == seerrDataGeneration) {
+                    if (loadGuard.isCurrent(generation)) {
                         _uiState.update {
                             it.copy(
                                 seerrRecommendations = recs.results.take(20),
@@ -1479,10 +1495,10 @@ class DetailViewModel internal constructor(
         // freshly-composed screen briefly observes the *previous* item's detail
         // and may invoke this with a stale MediaDetail — which would load (and
         // cache) the wrong item's trailers/videos and block the real item's load.
-        if (detail.item.id != currentItemId) return
+        if (!loadGuard.isCurrent(detail.item.id)) return
         if (seerrDataLoaded) return
         seerrDataLoaded = true
-        val generation = ++seerrDataGeneration
+        val generation = loadGuard.bump()
         loadSeerrData(detail, generation)
     }
 
@@ -1509,7 +1525,7 @@ class DetailViewModel internal constructor(
     private fun refreshAfterOfflineMutation() {
         val seriesId = currentSeriesId ?: return
         mediaDetailProvider.invalidate(seriesId)
-        val itemId = currentItemId ?: return
+        val itemId = loadGuard.itemId ?: return
         if (_uiState.value.origin?.isLocal == true) {
             launch { mediaDetailProvider.refresh(itemId) }
         }

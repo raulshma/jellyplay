@@ -42,6 +42,9 @@ internal val dataPlaybackFamilyModule: Module = module {
         )
     }
     single<PlaybackRepository> { get<PlaybackRepositoryImpl>() }
+    // The retired replayOutboxEntry member's narrow port (see worker.PlaybackOutboxReplay) —
+    // same impl single; only the drain loop consumes it.
+    single<com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay> { get<PlaybackRepositoryImpl>() }
 
     // The playback session-identity reads (token + base URL) — the narrow
     // module the former PlaybackRepository.getServerUrl/getAccessToken members

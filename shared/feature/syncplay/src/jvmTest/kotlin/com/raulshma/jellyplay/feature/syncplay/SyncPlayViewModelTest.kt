@@ -28,6 +28,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -38,6 +39,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * SyncPlay ViewModel coverage (downloads conveyor test style): group loading
@@ -151,7 +153,7 @@ class SyncPlayViewModelTest {
 
         assertSame(
             Res.string.syncplay_error_load_groups,
-            (viewModel.uiState.value.error as SyncPlayMessage.Resource).res,
+            (viewModel.uiState.value.error as UiMessage.Resource).res,
         )
         assertFalse(viewModel.uiState.value.isLoading)
     }
@@ -163,7 +165,7 @@ class SyncPlayViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        assertEquals("boom", (viewModel.uiState.value.error as SyncPlayMessage.Raw).text)
+        assertEquals("boom", (viewModel.uiState.value.error as UiMessage.Raw).text)
     }
 
     // ── join behaviour preference fan-out ────────────────────────────────
@@ -233,7 +235,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf<SyncPlayMessage>(SyncPlayMessage.Resource(Res.string.syncplay_join_disabled)),
+            listOf<SyncPlayMessage>(UiMessage.Resource(Res.string.syncplay_join_disabled)),
             received,
         )
         coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
@@ -296,13 +298,13 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertSame(
             Res.string.syncplay_error_join_group,
-            (viewModel.uiState.value.error as SyncPlayMessage.Resource).res,
+            (viewModel.uiState.value.error as UiMessage.Resource).res,
         )
         assertFalse(viewModel.uiState.value.isInGroup)
 
         viewModel.joinGroup("g2")
         advanceUntilIdle()
-        assertEquals("nope", (viewModel.uiState.value.error as SyncPlayMessage.Raw).text)
+        assertEquals("nope", (viewModel.uiState.value.error as UiMessage.Raw).text)
     }
 
     @Test
@@ -336,17 +338,19 @@ class SyncPlayViewModelTest {
 
         assertSame(
             Res.string.syncplay_error_leave_group,
-            (viewModel.uiState.value.error as SyncPlayMessage.Resource).res,
+            (viewModel.uiState.value.error as UiMessage.Resource).res,
         )
     }
 
     // ── create flow ───────────────────────────────────────────────────────
+    // The deepened seam: ONE repository call owns create→join-MY-group (the
+    // old delay(500) + name-match is gone), and the VM only writes state.
 
     @Test
-    fun createGroup_success_joins_newly_named_group() = runTest(mainDispatcher) {
+    fun createGroup_success_applies_membership_state_on_the_deepened_call() = runTest(mainDispatcher) {
         joinActive("g9", groupName = "Party")
-        coEvery { mediaRepository.createSyncPlayGroup("Party") } returns Result.success(Unit)
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group("g9", "Party")))
+        coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
+            Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -357,21 +361,28 @@ class SyncPlayViewModelTest {
         assertFalse(state.showCreateDialog)
         assertTrue(state.isInGroup)
         assertEquals("g9", state.currentGroup?.groupId)
+        // The join happened inside the deepened call — the VM never re-joins.
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
     }
 
     @Test
-    fun createGroup_success_without_matching_group_skips_join() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.createSyncPlayGroup("Party") } returns Result.success(Unit)
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
+    fun createGroup_success_needs_no_artificial_wait_before_the_state_lands() = runTest(mainDispatcher) {
+        joinActive("g9", groupName = "Party")
+        coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
+            Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
         val viewModel = newViewModel()
         advanceUntilIdle()
 
+        // Virtual-time pin: only the current dispatch runs — no advanceTimeBy.
+        // The legacy flow was still inside its delay(500) here; the deepened
+        // call resolves and the state writes land immediately.
         viewModel.createGroup("Party")
-        advanceUntilIdle()
+        testScheduler.runCurrent()
 
-        assertFalse(viewModel.uiState.value.showCreateDialog)
-        assertFalse(viewModel.uiState.value.isInGroup)
-        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
+        val state = viewModel.uiState.value
+        assertFalse(state.showCreateDialog)
+        assertTrue(state.isInGroup)
+        assertFalse(state.isLoading)
     }
 
     @Test
@@ -386,9 +397,10 @@ class SyncPlayViewModelTest {
 
         assertSame(
             Res.string.syncplay_error_create_group,
-            (viewModel.uiState.value.error as SyncPlayMessage.Resource).res,
+            (viewModel.uiState.value.error as UiMessage.Resource).res,
         )
         assertFalse(viewModel.uiState.value.isLoading)
+        assertFalse(viewModel.uiState.value.isInGroup)
     }
 
     // ── WebSocket event projection ────────────────────────────────────────
@@ -492,7 +504,7 @@ class SyncPlayViewModelTest {
         eventsFlow.tryEmit(SyncPlaySessionEvent.Notification(message = "server says hi"))
         advanceUntilIdle()
 
-        assertEquals(listOf<SyncPlayMessage>(SyncPlayMessage.Raw("server says hi")), received)
+        assertEquals(listOf<SyncPlayMessage>(UiMessage.Raw("server says hi")), received)
     }
 
     // ── transport delegation ──────────────────────────────────────────────

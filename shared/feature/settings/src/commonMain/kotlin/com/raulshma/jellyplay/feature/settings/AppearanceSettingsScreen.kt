@@ -5,19 +5,15 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,20 +42,10 @@ import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.ConsumeSettingsItemIndex
@@ -78,7 +64,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_strength_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_summary
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_comfort_eye_care
@@ -157,7 +142,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_perf
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_appearance_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_appearance_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
@@ -254,65 +238,29 @@ fun AppearanceSettingsScreen(
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
-    val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "appearance_init",
-    )
-
-    val scrollState = rememberLazyListState()
-    val scrollIndex = rememberHighlightScrollIndex(
-        highlightSettingId,
-        appearanceScreenGroups,
-        appearanceAdjustForAdvanced(showAdvanced),
-    )
-
-    HighlightScrollEffect(scrollState, scrollIndex)
-
-    var showResetDialog by remember { mutableStateOf(false) }
     var showBlueLightStrengthSheet by remember { mutableStateOf(false) }
-    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
 
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_appearance_title),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-        actions = {
-            AdvancedSettingsToggleButton(
-                showAdvanced = showAdvanced,
-                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-            )
-            IconButton(
-                onClick = { showResetDialog = true },
-                modifier = Modifier.focusIndicator(CircleShape),
-            ) {
-                Icon(
-                    Tabler.Outline.Refresh,
-                    contentDescription = stringResource(Res.string.settings_reset_defaults_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
+        focusTag = "appearance_init",
+        highlightSettingId = highlightSettingId,
+        highlightGroups = appearanceScreenGroups,
+        adjustForAdvanced = appearanceAdjustForAdvanced(showAdvanced),
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        reset = PreferenceResetAction(
+            iconContentDescription = stringResource(Res.string.settings_reset_defaults_cd),
+            dialogTitle = stringResource(Res.string.settings_reset_appearance_title),
+            dialogMessage = stringResource(Res.string.settings_reset_appearance_message),
+            onReset = { viewModel.resetCategory(PreferenceResetCategory.APPEARANCE) },
+        ),
+        pickerHost = true,
+    ) { activePicker ->
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Palette,
@@ -441,7 +389,7 @@ fun AppearanceSettingsScreen(
                                                 ThemeMode.DARK to themeAlwaysDark,
                                                 ThemeMode.SCHEDULED to "Scheduled",
                                             )
-                                            activePicker = PickerState.List(
+                                            activePicker.value = PickerState.List(
                                                 title = themeTitle,
                                                 items = ThemeMode.entries,
                                                 label = { themeLabels[it] ?: it.name },
@@ -462,7 +410,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = ThemeVariant.fromId(preferences.themeVariant).displayName,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.THEME_STYLE,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = styleTitle,
                                             items = ThemeVariant.entries,
                                             label = { it.displayName },
@@ -565,7 +513,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.layoutMode.displayName,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.LAYOUT_MODE,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = layoutTitle,
                                             items = LayoutMode.entries,
                                             label = { it.displayName },
@@ -604,7 +552,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.dateFormatPreference.displayName,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.DATE_FORMAT,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = dateFormatTitle,
                                             items = DateFormatPreference.entries,
                                             label = { it.displayName },
@@ -623,7 +571,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.appFontScale.displayName,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.FONT_SCALE,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = fontSizeTitle,
                                             items = AppFontScale.entries,
                                             label = { it.displayName },
@@ -642,7 +590,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = "${preferences.scheduledThemeStartHour}:00",
                                     highlighted = highlightSettingId == AppearanceSettingsIds.SCHEDULED_START,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = nightStartsTitle,
                                             items = (0..23).toList(),
                                             label = { "$it:00" },
@@ -661,7 +609,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = "${preferences.scheduledThemeEndHour}:00",
                                     highlighted = highlightSettingId == AppearanceSettingsIds.SCHEDULED_END,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = morningStartsTitle,
                                             items = (0..23).toList(),
                                             label = { "$it:00" },
@@ -680,7 +628,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.colorBlindMode.displayName,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.COLOR_BLIND_MODE,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = colorBlindTitle,
                                             items = com.raulshma.jellyplay.core.model.ColorBlindMode.entries,
                                             label = { it.displayName },
@@ -699,7 +647,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.handMode.displayName,
                                     highlighted = highlightSettingId == AppearanceSettingsIds.HAND_MODE,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = handednessTitle,
                                             items = com.raulshma.jellyplay.core.model.HandMode.entries,
                                             label = { it.displayName },
@@ -1081,8 +1029,6 @@ fun AppearanceSettingsScreen(
                     )
                 }
             }
-        }
-        }
     }
 
     if (showBlueLightStrengthSheet) {
@@ -1102,26 +1048,7 @@ fun AppearanceSettingsScreen(
         )
     }
 
-    if (showResetDialog) {
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_reset_appearance_title),
-            message = stringResource(Res.string.settings_reset_appearance_message),
-            confirmText = stringResource(Res.string.settings_reset),
-            onConfirm = {
-                viewModel.resetCategory(PreferenceResetCategory.APPEARANCE)
-                showResetDialog = false
-            },
-            onDismiss = { showResetDialog = false },
-            dismissText = stringResource(Res.string.settings_cancel),
-        )
-    }
-
-    SettingsPickerDialog(
-        state = activePicker,
-        onDismiss = { activePicker = null },
-    )
 }
-
 // Legacy java.util.Calendar day-of-week numbers (the persisted
 // `newsletterDayOfWeek` vocabulary): SUNDAY=1, MONDAY=2 … SATURDAY=7.
 private const val CALENDAR_SUNDAY = 1

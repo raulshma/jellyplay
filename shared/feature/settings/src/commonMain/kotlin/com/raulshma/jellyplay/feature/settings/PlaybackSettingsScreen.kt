@@ -1,22 +1,15 @@
 package com.raulshma.jellyplay.feature.settings
 
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
@@ -61,25 +54,14 @@ import com.raulshma.jellyplay.core.model.VlcVideoOutput
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.platformEngineSupport
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.model.localizedDescription
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.StringResource
@@ -140,7 +122,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_b_fr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_b_frames_none_no_skip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_b_frames_non_ref
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_buffer_size
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_casting_ask
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_casting_dlna
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_casting_prefer_cast
@@ -315,7 +296,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reme
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_exoplayer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_libvlc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_mpv
@@ -460,7 +440,6 @@ fun PlaybackSettingsScreen(
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
-    val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     // The declared row admissions both the SettingsItemList totals and the
     // emission `if`s below read — one gate per id, declared beside the group
@@ -473,68 +452,29 @@ fun PlaybackSettingsScreen(
             PlaybackSettingsIds.VIDEO_AUTOPLAY_NEXT to preferences.videoAutoplayNext,
         ),
     )
-    // The screen-level picker state: every group composable writes through
-    // this holder (activePicker.value = ...) so one SettingsPickerDialog at
-    // the screen root still owns dismissal and rendering.
-    val activePickerState = remember { mutableStateOf<PickerState<*>?>(null) }
-    var activePicker by activePickerState
     // Picker payloads built off suspend work (the desktop audio-device
     // enumeration) launch here.
     val scope = rememberCoroutineScope()
-    var showResetDialog by remember { mutableStateOf(false) }
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "playback_init",
-    )
-
-    val scrollState = rememberLazyListState()
-    val scrollIndex = rememberHighlightScrollIndex(
-        highlightSettingId,
-        playbackScreenGroups,
-        playbackAdjustForAdvanced(showAdvanced),
-    )
-
-    HighlightScrollEffect(scrollState, scrollIndex)
-
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_playback_title),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-        actions = {
-            AdvancedSettingsToggleButton(
-                showAdvanced = showAdvanced,
-                onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-            )
-            IconButton(
-                onClick = { showResetDialog = true },
-                modifier = Modifier.focusIndicator(CircleShape),
-            ) {
-                Icon(
-                    Tabler.Outline.Refresh,
-                    contentDescription = stringResource(Res.string.settings_reset_playback_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
+        focusTag = "playback_init",
+        highlightSettingId = highlightSettingId,
+        highlightGroups = playbackScreenGroups,
+        adjustForAdvanced = playbackAdjustForAdvanced(showAdvanced),
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        reset = PreferenceResetAction(
+            iconContentDescription = stringResource(Res.string.settings_reset_playback_cd),
+            dialogTitle = stringResource(Res.string.settings_reset_playback_title),
+            dialogMessage = stringResource(Res.string.settings_reset_playback_message),
+            onReset = { viewModel.resetPlaybackSettings() },
+        ),
+        pickerHost = true,
+    ) { activePickerState ->
             item {
                 PlaybackPlayerGroup(
                     preferences = preferences,
@@ -628,28 +568,7 @@ fun PlaybackSettingsScreen(
                     )
                 }
             }
-        }
-        }
     }
-
-    if (showResetDialog) {
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_reset_playback_title),
-            message = stringResource(Res.string.settings_reset_playback_message),
-            confirmText = stringResource(Res.string.settings_reset),
-            onConfirm = {
-                viewModel.resetPlaybackSettings()
-                showResetDialog = false
-            },
-            onDismiss = { showResetDialog = false },
-            dismissText = stringResource(Res.string.settings_cancel),
-        )
-    }
-
-    SettingsPickerDialog(
-        state = activePicker,
-        onDismiss = { activePicker = null },
-    )
 }
 
 /** The `playback.player` group: player defaults (engine picker, transport, autoplay, player UX). */

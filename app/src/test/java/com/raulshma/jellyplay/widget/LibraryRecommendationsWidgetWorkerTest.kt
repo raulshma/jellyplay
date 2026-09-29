@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.ListenableWorker.Result as WorkResult
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
@@ -52,6 +53,7 @@ class LibraryRecommendationsWidgetWorkerTest {
     private val workerParameters: WorkerParameters = mockk(relaxed = true)
     private val widgetDataStore: WidgetDataStore = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val mediaCollectionReads: MediaCollectionReads = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
 
@@ -74,6 +76,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         params = workerParameters,
         widgetDataStore = widgetDataStore,
         mediaRepository = mediaRepository,
+        mediaCollectionReads = mediaCollectionReads,
         playbackRepository = playbackRepository,
         authRepository = authRepository,
     )
@@ -117,7 +120,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         val favorites = (1..11).map { mediaItem("fav-$it", isFavorite = true) }
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.success(
             SearchResult(items = favorites, totalRecordCount = favorites.size, startIndex = 0),
         )
@@ -137,7 +140,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.success(
             SearchResult(
                 items = listOf(
@@ -165,7 +168,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.success(SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0))
 
         val result = createWorker().doWork()
@@ -195,7 +198,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } throws RuntimeException("connection reset")
 
         val result = createWorker().doWork()
@@ -208,7 +211,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } throws RuntimeException("HTTP 401 Unauthorized")
 
         val result = createWorker().doWork()
@@ -222,7 +225,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery { authRepository.restoreSession() } returns Result.failure(RuntimeException("db locked"))
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.failure(RuntimeException("db locked"))
 
         val result = createWorker().doWork()

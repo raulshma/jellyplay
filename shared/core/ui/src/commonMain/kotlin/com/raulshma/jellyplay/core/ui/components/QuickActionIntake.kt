@@ -11,6 +11,8 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.quickActions
+import com.raulshma.jellyplay.core.ui.components.downloads.RemoveDownloadConfirmHost
+import com.raulshma.jellyplay.core.ui.components.downloads.RemoveDownloadState
 
 /**
  * What executing a quick action MEANS, as data: the routing table for every

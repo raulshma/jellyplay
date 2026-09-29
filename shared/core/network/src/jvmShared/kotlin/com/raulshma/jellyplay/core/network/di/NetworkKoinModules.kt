@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.network.failover.ServerFailoverInterceptor
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
 import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import com.raulshma.jellyplay.core.network.interceptor.RandomSortCacheBusterInterceptor
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
@@ -132,6 +133,12 @@ val networkJvmModule: Module = module {
     // datastore-layer session stores).
     single { LibraryApiClientImpl(get(), get(), get(), SeerrHomeSectionSourcesImpl(get(), get(), get())) }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
+    // The home cache-maintenance verbs ride their own port (beside the fetcher
+    // that owns the caches): the data layer's write/roll paths drop/seed the
+    // home hot-path sub-call caches through this seam instead of the wide
+    // LibraryApiClient, so a new sub-call cache is a network-module-only
+    // change. Same underlying single — the client impl is the port's adapter.
+    single<HomeSectionsCachePort> { get<LibraryApiClientImpl>() }
     single { PlaybackApiClientImpl(get(), get(), get()) }
     single<PlaybackApiClient> { get<PlaybackApiClientImpl>() }
     single { SyncPlayApiClientImpl(get()) }

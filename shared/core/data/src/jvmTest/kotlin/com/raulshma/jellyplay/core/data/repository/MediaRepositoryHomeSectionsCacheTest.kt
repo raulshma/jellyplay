@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -60,6 +61,12 @@ class MediaRepositoryHomeSectionsCacheTest {
     // observer used to combine.
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    /**
+     * The home cache-maintenance port (the dice roll's per-row drop/seed and
+     * the sub-call cache drop) — the network verbs moved off LibraryApiClient
+     * onto this seam, so the reroll pins verify against it.
+     */
+    private val homeSectionsCachePort: HomeSectionsCachePort = mockk(relaxed = true)
     private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
         coEvery { get(any(), any(), any()) } returns null
     }
@@ -104,6 +111,9 @@ class MediaRepositoryHomeSectionsCacheTest {
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
             apiClient,
+            // The home cache-maintenance port (the write/roll paths' verbs —
+            // verified directly in the reroll pins below).
+            homeSectionsCachePort,
             apiClient,
             homeSnapshotStore,
             playedStateSync,
@@ -115,6 +125,8 @@ class MediaRepositoryHomeSectionsCacheTest {
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
             MediaRepositoryInternals(apiClient, homeSession),
+            // The deepened createSyncPlayGroup's engine (inert here).
+            mockk(relaxed = true),
         )
     }
 
@@ -198,9 +210,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertEquals(rolledItems, result.getOrNull())
-        coVerify(exactly = 1) { apiClient.invalidateDiscoverRowCache(row.id) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
         coVerify(exactly = 1) { apiClient.getDiscoverRowItems(row) }
-        coVerify(exactly = 1) { apiClient.seedDiscoverRowCache(row, rolledItems) }
+        coVerify(exactly = 1) { homeSectionsCachePort.seedDiscoverRow(row, rolledItems) }
     }
 
     @Test
@@ -266,8 +278,8 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 1) { apiClient.invalidateDiscoverRowCache(row.id) }
-        coVerify(exactly = 0) { apiClient.seedDiscoverRowCache(any(), any()) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
+        coVerify(exactly = 0) { homeSectionsCachePort.seedDiscoverRow(any(), any()) }
     }
 
     @Test

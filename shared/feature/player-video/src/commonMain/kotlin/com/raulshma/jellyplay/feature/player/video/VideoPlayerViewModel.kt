@@ -28,16 +28,11 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlaybackMode
-import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.TrackType
-import com.raulshma.jellyplay.core.model.currentPlatform
-import com.raulshma.jellyplay.core.model.isAudioType
-import com.raulshma.jellyplay.core.model.isMusicTrack
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
-import com.raulshma.jellyplay.core.model.volumeBucketFor
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import org.jetbrains.compose.resources.getString
@@ -74,10 +69,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -103,8 +96,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 // resolveResumeTicks resolver) moved into PlaybackSession.kt behind the
 // SessionPositionStore seam at B3.
 
-/** Debounce window for engine config syncs driven by slider drags. */
-private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
+// The debounced engine config-sync (CONFIG_SYNC_DEBOUNCE_MS + the
+// configChangeIntent debounce collector) moved into EngineConfigSync.kt.
 
 /** How long the "Skipped …" segment-skip confirmation caption stays up. */
 private const val SKIPPED_SEGMENT_NOTICE_MS = 2_500L
@@ -146,6 +139,8 @@ class VideoPlayerViewModel(
      */
     private val platform: VideoPlayerPlatform,
     private val mediaRepository: MediaRepository,
+    /** The item-attached extras seam (Cinema Mode intros for the session-load pipeline). */
+    private val mediaExtrasReads: com.raulshma.jellyplay.core.data.repository.MediaExtrasReads,
     private val lyricsRepository: LyricsRepository,
     private val playbackRepository: PlaybackRepository,
     private val playbackIdentity: PlaybackIdentity,
@@ -397,7 +392,8 @@ class VideoPlayerViewModel(
     /** Fan-out collectors for the coordinator's mirrors + decisions. */
     private var engineEventOutputsJob: Job? = null
 
-    // @Volatile: written from launched coroutines (applyMediaDetail) and read
+    // @Volatile: written from launched coroutines (the media-detail
+    // projection's setDetail seam) and read
     // cross-coroutine (the episode-continuation controller's next-episode
     // advance through the getDetail seam); without it readers can see stale null.
     @Volatile
@@ -458,7 +454,7 @@ class VideoPlayerViewModel(
         getMediaStreams = { _uiState.value.media.mediaStreams },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         getCurrentSourceId = { playerSessionManager.sessionState.value.currentMediaSource?.id },
-        onMediaDetailRefreshed = { refresh -> applyMediaDetailAndSourceState(refresh) },
+        onMediaDetailRefreshed = { refresh -> mediaDetailProjection.applyRefreshedDetail(refresh) },
         getCurrentMediaDetail = { mediaDetail },
         // allowSyntheticRow = true is deliberate here (it's the default, spelled
         // out so the policy doesn't hinge on a distant parameter): for "is the
@@ -505,13 +501,13 @@ class VideoPlayerViewModel(
      * manager first, streams write, track rebuild last) lives there,
      * jvmTest-pinned. The cross-controller fan-outs stay here, passed in as
      * the constructor lambdas below (aspect mirrors, track rebuild, the
-     * companion-lyrics fetch inside [applyMediaDetail]).
+     * companion-lyrics fetch inside [MediaDetailProjection.applyDetail]).
      */
     private val mediaContentProjector = MediaContentProjector(
         updateMedia = { update ->
             _uiState.update { it.copy(media = update(it.media)) }
         },
-        applyDetail = { detail -> applyMediaDetail(detail) },
+        applyDetail = { detail -> mediaDetailProjection.applyDetail(detail) },
         applyRefreshedDetail = { detail, attachToEngine ->
             playerSessionManager.applyRefreshedDetail(detail, attachToEngine)
         },
@@ -565,6 +561,41 @@ class VideoPlayerViewModel(
             // `launch { render.onSessionItemChanged(...) }` verbatim.
             launch { block() }
         },
+    )
+
+    /**
+     * The media-detail application cluster (the [MediaContentProjector] twin,
+     * extracted verbatim): the ordered fan-out a fresh or refreshed
+     * [com.raulshma.jellyplay.core.model.MediaDetail] runs — detail holder →
+     * chapters → media slice → episode adoption → companion lyrics → volume
+     * memory — and the subtitle-download re-sync
+     * ([MediaDetailProjection.applyRefreshedDetail]). Ordering-sensitive;
+     * the ordering lives in the projection. Its lambdas read
+     * later-declared collaborators (episodeContinuation) lazily — invoked
+     * long after construction.
+     *
+     * Explicit type: the projector's `applyDetail` wiring above reaches into
+     * this property while this constructor's onDetail/onLyrics/
+     * onDetailRefreshed lambdas reach back into the projector — an implicit
+     * type would make the inference mutually recursive (the
+     * ItemPlaybackPreferenceWriter / trackSelectionHelper annotation shape).
+     */
+    private val mediaDetailProjection: MediaDetailProjection = MediaDetailProjection(
+        scope = scope,
+        lyricsRepository = lyricsRepository,
+        volumeProfileStore = stores.volumeProfile,
+        setDetail = { detail -> mediaDetail = detail },
+        setChapters = { chapters ->
+            _uiState.update { it.copy(chapters = chapters) }
+        },
+        onDetail = { detail, artworkUrl ->
+            mediaContentProjector.onDetail(detail, artworkUrl)
+        },
+        artworkUrl = { itemId -> getImageUrl(itemId, 400) },
+        adoptSeasonOf = { detail -> episodeContinuation.adoptSeasonOf(detail) },
+        onLyrics = { lines -> mediaContentProjector.onLyrics(lines) },
+        onDetailRefreshed = { refresh -> mediaContentProjector.onDetailRefreshed(refresh) },
+        getEngine = { playerSessionManager.engine },
     )
     private val mediaSessionController = mediaSessionFactory.create(
         getEngine = { playerSessionManager.engine },
@@ -629,61 +660,30 @@ class VideoPlayerViewModel(
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
 
     /**
-     * The "Still watching?" confirm overlay's state (feature 1.3); `null` =
-     * hidden. Raised by the end-of-playback gate ([handlePlaybackEnded], the
-     * episode arm) and by the session's hours arm
-     * (`SessionEvent.StillWatchingPrompt`); answered via
-     * [continueStillWatching] / [stopStillWatching], auto-dismissed (as Stop)
-     * by [tickStillWatching]. The screen collects this at the overlay tier.
+     * The "Still watching?" confirm overlay's prompt lifecycle (feature 1.3) —
+     * the [EpisodeContinuationController] shape: the prompt StateFlow and the
+     * show/continue/stop/tick choreography live in [StillWatchingController];
+     * this VM raises the overlay (the end-of-playback gate's episode arm in
+     * [handlePlaybackEnded], the session's hours arm via
+     * `SessionEvent.StillWatchingPrompt`) and forwards the overlay's event arms
+     * one-line. Pure decisions: [StillWatchingGate] / [StillWatchingPromptState]. The dispatch lambdas
+     * read later-declared collaborators lazily — invoked long after construction.
      */
-    private val _stillWatchingPrompt = kotlinx.coroutines.flow.MutableStateFlow<StillWatchingPromptState?>(null)
-    val stillWatchingPrompt: kotlinx.coroutines.flow.StateFlow<StillWatchingPromptState?> = _stillWatchingPrompt
-
-    /** Raises the confirm overlay with the up-next countdown as its auto-dismiss budget. */
-    private fun showStillWatchingPrompt(reason: StillWatchingReason) {
-        _stillWatchingPrompt.value = StillWatchingPromptState.forReason(
-            reason = reason,
-            countdownSeconds = _uiState.value.autoplay.autoPlayCountdownSec,
-        )
-    }
+    private val stillWatching = StillWatchingController(
+        getCountdownSeconds = { _uiState.value.autoplay.autoPlayCountdownSec },
+        onUserInteraction = { autoplayController.onUserInteraction() },
+        playNextEpisode = { episodeContinuation.playNextEpisode() },
+        resumePlayback = { resumePlayback() },
+        pauseEngine = { playerSessionManager.engine?.pause() },
+        cancelAutoplay = { episodeContinuation.cancelAutoplay() },
+    )
 
     /**
-     * "Still watching?" → Continue: the counter resets and the requested arm
-     * proceeds — the episode arm advances to the next episode, the hours arm
-     * resumes the (session-paused) engine.
+     * The overlay's state surface; `null` = hidden. The screen collects this
+     * at the overlay tier (thin alias over the controller's flow).
      */
-    private fun continueStillWatching() {
-        val reason = _stillWatchingPrompt.value?.reason
-        _stillWatchingPrompt.value = null
-        autoplayController.onUserInteraction()
-        when (reason) {
-            StillWatchingReason.EPISODE_COUNT -> episodeContinuation.playNextEpisode()
-            StillWatchingReason.HOURS_IDLE, null -> resumePlayback()
-        }
-    }
-
-    /**
-     * "Still watching?" → Stop (and the overlay's expiry route): pause and
-     * cancel autoplay — no answer means stop autoplaying. Reuses the Up Next
-     * overlay's cancel funnel so the decision clock AND its uiState mirror
-     * flip together.
-     */
-    private fun stopStillWatching() {
-        _stillWatchingPrompt.value = null
-        playerSessionManager.engine?.pause()
-        episodeContinuation.cancelAutoplay()
-    }
-
-    /** The overlay's once-per-second auto-dismiss tick; expiry is a Stop. */
-    private fun tickStillWatching() {
-        val current = _stillWatchingPrompt.value ?: return
-        val next = current.tick()
-        if (next == null) {
-            stopStillWatching()
-        } else {
-            _stillWatchingPrompt.value = next
-        }
-    }
+    val stillWatchingPrompt: StateFlow<StillWatchingPromptState?>
+        get() = stillWatching.prompt
 
     /**
      * The single command funnel (the AudioPlayerUiEvent / AudioPlayerViewModel
@@ -783,9 +783,9 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.ClearRenderOverride -> clearRenderOverride()
             is VideoPlayerUiEvent.CycleDeinterlace -> cycleDeinterlace()
             is VideoPlayerUiEvent.CancelAutoplay -> episodeContinuation.cancelAutoplay()
-            is VideoPlayerUiEvent.StillWatchingContinue -> continueStillWatching()
-            is VideoPlayerUiEvent.StillWatchingStop -> stopStillWatching()
-            is VideoPlayerUiEvent.StillWatchingTick -> tickStillWatching()
+            is VideoPlayerUiEvent.StillWatchingContinue -> stillWatching.onContinue()
+            is VideoPlayerUiEvent.StillWatchingStop -> stillWatching.onStop()
+            is VideoPlayerUiEvent.StillWatchingTick -> stillWatching.onTick()
             is VideoPlayerUiEvent.SetVideoAutoplayNext -> setVideoAutoplayNext(event.enabled)
             is VideoPlayerUiEvent.SetSyncPlayRepeatMode -> setSyncPlayRepeatMode(event.mode)
             is VideoPlayerUiEvent.SetSyncPlayShuffleMode -> setSyncPlayShuffleMode(event.mode)
@@ -1106,7 +1106,7 @@ class VideoPlayerViewModel(
             autoplayController.resetForNewItem()
             // Defensive: a prompt can never survive an item switch (its own
             // Continue/Stop arms clear it first; this catches a racing load).
-            _stillWatchingPrompt.value = null
+            stillWatching.resetForItem()
             _uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = false)) }
             // Coordinator fallback-latch reset — a pure latch flip that ran
             // between the (session-owned) seek-latch and Stop-dedup resets in
@@ -1181,7 +1181,7 @@ class VideoPlayerViewModel(
     // as the progressReporter / sessionLifecycleHooks comments).
     private val sessionLoadPipeline: SessionLoadPipeline = SessionLoadPipeline(
         sessionManager = playerSessionManager,
-        mediaRepository = mediaRepository,
+        mediaExtrasReads = mediaExtrasReads,
         aggregateStore = stores.aggregateStore,
         networkOfflineStore = stores.networkOffline,
         outputs = sessionHost,
@@ -1229,7 +1229,7 @@ class VideoPlayerViewModel(
             createMediaSession = { itemId, title, subtitle ->
                 createVideoMediaSession(itemId, title, subtitle)
             },
-            applyMediaDetail = { detail -> applyMediaDetail(detail) },
+            applyMediaDetail = { detail -> mediaDetailProjection.applyDetail(detail) },
             initializeTrickplay = { itemId, source ->
                 // Trickplay selection + dispatch live in [TrickplayPreparation];
                 // a non-null result means exactly one arm initialized the
@@ -1618,7 +1618,12 @@ class VideoPlayerViewModel(
      * Equalizer, and Video Effects stay inline because their state lives
      * outside this controller (per-item repo / VM field / cinema gate).
      */
-    internal val effects = VideoEffectsController(
+    // Explicit type is load-bearing (the compiler's own workaround for
+    // "Type checking has run into a recursive problem"): the initializer's
+    // lambda reaches the later-declared `engineConfigSync` (through
+    // updateConfigWithUiState), whose initializer reads `effects.state` —
+    // without the annotation the property-type inference loops.
+    internal val effects: VideoEffectsController = VideoEffectsController(
         scope = scope,
         audioStore = stores.audio,
         audioEffectsStore = stores.audioEffects,
@@ -1702,7 +1707,7 @@ class VideoPlayerViewModel(
                         // The session's hours arm: the engine is already
                         // paused; the overlay's Continue resumes, Stop keeps
                         // it paused and cancels autoplay.
-                        showStillWatchingPrompt(event.reason)
+                        stillWatching.show(event.reason)
                 }
             }
         }
@@ -2535,49 +2540,41 @@ class VideoPlayerViewModel(
      */
     private fun cycleDeinterlace() = render.cycleDeinterlace()
 
-     private fun updateConfigWithUiState() {
-        val config = EngineConfigBuilder.build(
-            state = _uiState.value,
-            effects = effects.state.value,
-            // The former VM field died with the X1a dead cut of
-            // toggleEqualizer/setEqualizerSettings (no player-screen callers —
-            // the settings screens own the audio-effects store): the flag was
-            // only ever false at every build.
-            equalizerEnabled = false,
-            agg = cachedAggregate,
-            // the session's effective mpv config (global slice + the
-            // item/series render override + in-sheet quality pick) rides EVERY
-            // runtime build — the render sheet's writes reach the engine
-            // through this path (the engines' diff caches apply the delta).
-            engineSpecific = sessionRender.effectiveMpvConfig(cachedAggregate.engine.mpvConfig),
-            // the session-scoped deinterlace cycle.
-            deinterlace = sessionRender.deinterlace,
-        )
-        playerSessionManager.engine?.updateConfig(config)
-    }
-
     /**
-     * Backing flow for the debounced config-sync. Slider drags fire 60–120
-     * value-changed callbacks/sec; previously each launched a new coroutine
-     * and cancelled the previous (allocating a DispatchedContinuation per call
-     * and walking the job tree on each cancel). A SharedFlow + debounce emits
-     * one coroutine that only fires after the drag settles.
+     * Owns the runtime engine-config sync (the [SubtitleStyleController]
+     * shape): the [EngineConfigBuilder] invocation over narrow state slices +
+     * the live-engine dispatch — both trigger paths moved VERBATIM: the
+     * immediate rebuild (`updateConfigWithUiState` → [EngineConfigSync.markDirty])
+     * and the drag-settling debounce (the `configChangeIntent` SharedFlow +
+     * `configSyncJob` collector + the CONFIG_SYNC_DEBOUNCE_MS window →
+     * [EngineConfigSync.markDirtyDebounced]). The uiState bag never crosses
+     * (god-count ratchet unmoved); `getEngine` is read at dispatch time, so a
+     * debounce settling after an engine swap lands on the NEW engine.
      */
-    private val configChangeIntent = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    private val engineConfigSync = EngineConfigSync(
+        scope = scope,
+        getSubtitleStyle = { _uiState.value.subtitleStyle },
+        getVideoEffects = { _uiState.value.videoFx.videoEffects },
+        isDialogueBoostEnabled = { _uiState.value.dialogueBoostEnabled },
+        getDialogueBoostStrength = { _uiState.value.dialogueBoostStrength },
+        getMediaStreams = { _uiState.value.media.mediaStreams },
+        getEffectsState = { effects.state.value },
+        getAggregate = { cachedAggregate },
+        // the session's effective mpv config (global slice + the
+        // item/series render override + in-sheet quality pick) rides EVERY
+        // runtime build — the render sheet's writes reach the engine
+        // through this path (the engines' diff caches apply the delta).
+        getEngineSpecific = { sessionRender.effectiveMpvConfig(cachedAggregate.engine.mpvConfig) },
+        // the session-scoped deinterlace cycle.
+        getDeinterlace = { sessionRender.deinterlace },
+        getEngine = { playerSessionManager.engine },
     )
 
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
-    private val configSyncJob: Job = launch {
-        configChangeIntent.debounce(CONFIG_SYNC_DEBOUNCE_MS).collect {
-            updateConfigWithUiState()
-        }
-    }
+    // Explicit Unit returns: bare expression bodies would pull the
+    // later-declared engineConfigSync into an inference cycle with `effects`.
+    private fun updateConfigWithUiState(): Unit = engineConfigSync.markDirty()
 
-    private fun updateConfigWithUiStateDebounced() {
-        configChangeIntent.tryEmit(Unit)
-    }
+    private fun updateConfigWithUiStateDebounced(): Unit = engineConfigSync.markDirtyDebounced()
 
     // cancelAutoplay (the Up Next overlay's countdown dismissal) moved into
     // EpisodeContinuationController; the CancelAutoplay arm above routes to it.
@@ -2599,7 +2596,7 @@ class VideoPlayerViewModel(
                     isInSyncPlaySession = _uiState.value.isInSyncPlaySession,
                 )
             ) {
-                showStillWatchingPrompt(StillWatchingReason.EPISODE_COUNT)
+                stillWatching.show(StillWatchingReason.EPISODE_COUNT)
             } else {
                 autoplayController.recordAutoAdvance()
                 episodeContinuation.playNextEpisode()
@@ -2702,88 +2699,14 @@ class VideoPlayerViewModel(
     // the overlays expose only the intro button, and the dispatch controller's
     // skipSegment covers the tapped active segment regardless of type.)
 
-    private fun applyMediaDetail(detail: MediaDetail) {
-        mediaDetail = detail
-        // Chapters are a top-level uiState field; the media slice's write
-        // (overview, people, artwork, series id) goes through the projector.
-        _uiState.update { it.copy(chapters = detail.chapters) }
-        mediaContentProjector.onDetail(detail, artworkUrl = getImageUrl(detail.item.id, 400))
-        // The episode-slice write goes through the continuation controller's
-        // seam — the navigator is the slice's single writer (CONTEXT.md).
-        episodeContinuation.adoptSeasonOf(detail)
-        fetchCompanionLyrics(detail)
-        applyVolumeMemory(detail)
-    }
-
-    /**
-     * per-content-type volume memory for the surfaces where the app
-     * owns a volume scalar — on desktop that is the mpv engine's own volume
-     * property. Restores the bucket's remembered level at item start and arms
-     * the user-change capture (programmatic fades never fire it — see
-     * [VolumeMemoryPolicy]). Android video stays on the system
-     * `STREAM_MUSIC` model: the policy ladder returns nothing to restore and
-     * never captures there.
-     */
-    private fun applyVolumeMemory(detail: MediaDetail) {
-        if (currentPlatform != PlatformKind.DESKTOP) return
-        val engine = playerSessionManager.engine ?: return
-        val bucket = volumeBucketFor(detail.item.mediaType)
-        launch {
-            val slice = stores.volumeProfile.volumeProfile.first()
-            VolumeMemoryPolicy.restoreLevel(
-                platform = PlatformKind.DESKTOP,
-                rememberEnabled = slice.rememberVolumePerContentType,
-                storedLevel = slice.volumeFor(bucket),
-                enginePresent = playerSessionManager.engine != null,
-            )?.let { level ->
-                engine.setVolume(level, isUserChange = false)
-            }
-            engine.onUserVolumeChange =
-                if (VolumeMemoryPolicy.shouldCapture(
-                        PlatformKind.DESKTOP,
-                        slice.rememberVolumePerContentType,
-                    )
-                ) {
-                    { level -> launch { stores.volumeProfile.setVolume(bucket, level) } }
-                } else {
-                    null
-                }
-        }
-    }
-
-    private fun fetchCompanionLyrics(detail: MediaDetail) {
-        val item = detail.item
-        if (item.mediaType.isAudioType || item.mediaType.isMusicTrack) {
-            launch {
-                val artist = item.albumArtist ?: item.artistItems.firstOrNull()?.name ?: ""
-                val durationSec = (item.runTimeTicks ?: 0L) / 10_000_000L
-                val lyricsResult = lyricsRepository.getLyricsWithFallback(
-                    itemId = item.id,
-                    artistName = artist,
-                    trackName = item.name,
-                    duration = durationSec.toDouble()
-                ).getOrNull()
-                mediaContentProjector.onLyrics(lyricsResult?.lines ?: emptyList())
-            }
-        } else {
-            mediaContentProjector.onLyrics(emptyList())
-        }
-    }
+    // applyMediaDetail / applyVolumeMemory / fetchCompanionLyrics /
+    // applyMediaDetailAndSourceState (the media-detail application fan-out,
+    // ordering-sensitive) moved verbatim into MediaDetailProjection — the
+    // mediaContentProjector, sessionLoadPipeline and subtitles wirings above
+    // route to it one-line.
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
-
-    /**
-     * Re-applies a refreshed [MediaDetail] and refreshes the shared source/
-     * stream/aspect-ratio UiState fields after a subtitle download/upload adds
-     * a new stream — see [MediaDetailRefresh] for the per-field contract and
-     * [MediaContentProjector.onDetailRefreshed] for the (pinned) choreography
-     * order: session-manager re-sync first, then the streams write, then the
-     * track rebuild.
-     */
-    private fun applyMediaDetailAndSourceState(refresh: MediaDetailRefresh) {
-        mediaContentProjector.onDetailRefreshed(refresh)
-    }
 
     /**
      * "Use" action for a downloaded-subtitle row: activates that subtitle as

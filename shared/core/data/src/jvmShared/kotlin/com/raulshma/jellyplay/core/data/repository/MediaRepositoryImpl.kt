@@ -22,7 +22,6 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
@@ -30,11 +29,13 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroup
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroups
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -70,6 +71,16 @@ class MediaRepositoryImpl internal constructor(
     /** The catalogue fetch family — every read this repo serves except the
      * four SyncPlay members below. */
     private val libraryApiClient: LibraryApiClient,
+    /**
+     * The home hot-path's cache-maintenance verbs (sub-call cache drop, the
+     * dice roll's per-row drop + seed) — the narrow network-layer port beside
+     * [com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher], NOT
+     * the wide [LibraryApiClient]: cache management is not API surface, so the
+     * write/roll paths below depend on the port alone. Same underlying single
+     * (the client impl adapts to the port), so ordering and epochs are exactly
+     * what they were — see the roll protocol on [MediaRepository.rerollDiscoverRow].
+     */
+    private val homeSectionsCachePort: HomeSectionsCachePort,
     /** The SyncPlay group reads + queue push ([SyncPlayRepository]'s members). */
     private val syncPlayApiClient: SyncPlayApiClient,
     /**
@@ -140,6 +151,15 @@ class MediaRepositoryImpl internal constructor(
      * copies. A Koin single in dataJvmModule; both impls take the same one.
      */
     private val internals: MediaRepositoryInternals,
+    /**
+     * The deepened [SyncPlayRepository.createSyncPlayGroup]'s engine: the
+     * process-wide SyncPlay facade owns the create→join-MY-group choreography
+     * (bounded discovery/settle windows, duplicate-name disambiguation), so
+     * the seam's create member delegates to it instead of firing a bare `New`
+     * the caller had to recover by name. A Koin single in the same module —
+     * no DI cycle (the manager never depends on a repository).
+     */
+    private val syncPlayManager: SyncPlayManager,
 ) : MediaRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
     // same single carries the music-catalogue and user-data-write families
@@ -414,7 +434,7 @@ class MediaRepositoryImpl internal constructor(
      */
     private fun invalidateDiscoverRowCache(rowId: String) {
         discoverRollEpoch.incrementAndGet()
-        libraryApiClient.invalidateDiscoverRowCache(rowId)
+        homeSectionsCachePort.invalidateDiscoverRow(rowId)
         homeSectionsCache.clear()
     }
 
@@ -428,7 +448,7 @@ class MediaRepositoryImpl internal constructor(
     private fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return
         discoverRollEpoch.incrementAndGet()
-        libraryApiClient.seedDiscoverRowCache(row, items)
+        homeSectionsCachePort.seedDiscoverRow(row, items)
         homeSectionsCache.clear()
     }
 
@@ -457,32 +477,10 @@ class MediaRepositoryImpl internal constructor(
             libraryApiClient.getLatestMedia(parentId = parentId, limit = limit)
         }
 
-    override suspend fun getMediaItems(
-        parentId: String?,
-        filters: LibraryFilters,
-        studioIds: List<String>?,
-        startIndex: Int,
-        limit: Int,
-        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
-    ): Result<SearchResult> = libraryApiClient.getMediaItems(
-        parentId = parentId,
-        filters = filters,
-        studioIds = studioIds,
-        startIndex = startIndex,
-        limit = limit,
-        kindFilter = kindFilter,
-    )
-
     override suspend fun getMediaDetail(itemId: String, force: Boolean): Result<MediaDetail> =
         // Single-flight dedup, the force freshness lever, the epoch guard and
         // the cancellation ladder all live in [DetailCacheGroup.detail].
         detailCaches.detail(itemId, force)
-
-    override suspend fun getIntros(itemId: String): Result<List<MediaItem>> =
-        libraryApiClient.getIntros(itemId)
-
-    override suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>> =
-        libraryApiClient.getSpecialFeatures(itemId)
 
     override suspend fun search(
         query: String,
@@ -518,9 +516,6 @@ class MediaRepositoryImpl internal constructor(
     override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
         libraryApiClient.findItemByProviderId(provider, id)
 
-    override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> =
-        libraryApiClient.getSearchSuggestions(limit)
-
     override fun getMediaItemsPaged(
         parentId: String?,
         filters: LibraryFilters,
@@ -528,7 +523,7 @@ class MediaRepositoryImpl internal constructor(
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Flow<PagingData<MediaItem>> = pagedMediaPager {
         JellyfinPagingSource { startIndex, limit ->
-            getMediaItems(
+            libraryApiClient.getMediaItems(
                 parentId = parentId,
                 filters = filters,
                 studioIds = studioIds,
@@ -559,18 +554,6 @@ class MediaRepositoryImpl internal constructor(
             libraryApiClient.getStudios(parentId)
         }
 
-    // Uncached by design: the People picker is a live search-as-you-type
-    // surface, so a TTL would only serve stale keystrokes.
-    override suspend fun getPeople(searchTerm: String?, limit: Int): Result<List<PersonRef>> =
-        libraryApiClient.getPeople(searchTerm, limit)
-
-    override suspend fun getItemsByStudio(
-        studioId: String,
-        mediaTypes: List<MediaType>?,
-        startIndex: Int,
-        limit: Int,
-    ): Result<SearchResult> = libraryApiClient.getItemsByStudio(studioId, mediaTypes, startIndex, limit)
-
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
         libraryApiClient.getArtistAlbums(artistId, limit)
 
@@ -586,13 +569,6 @@ class MediaRepositoryImpl internal constructor(
             detailCaches.albumTracks(albumId, effectiveForce)
         }
 
-    override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
-        libraryApiClient.getMediaItems(
-            parentId = parentId,
-            filters = LibraryFilters(mediaTypes = listOf(MediaType.MUSIC_VIDEO)),
-            limit = limit,
-        ).map { it.items }
-
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         // Key includes the limit (DetailCacheGroup's key grammar) so a call
         // with a different limit doesn't serve a stale truncated list;
@@ -601,9 +577,6 @@ class MediaRepositoryImpl internal constructor(
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
         libraryApiClient.getInstantMix(itemId, limit)
-
-    override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
-        libraryApiClient.getItemsByPerson(personId, limit)
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
         // Cached exactly like getSimilarItems: identity-keyed,
@@ -668,23 +641,11 @@ class MediaRepositoryImpl internal constructor(
         libraryApiClient.addItemsToCollection(collectionId, itemIds)
             .onSuccess { invalidateCollectionItemsCache(collectionId) }
 
-    override suspend fun getTags(
-        parentId: String?,
-        startIndex: Int,
-        limit: Int,
-    ): Result<List<String>> = libraryApiClient.getTags(parentId, startIndex, limit)
-
-    override suspend fun getFavorites(
-        mediaTypes: List<MediaType>?,
-        limit: Int,
-        startIndex: Int,
-    ): Result<SearchResult> = libraryApiClient.getFavorites(mediaTypes, limit, startIndex)
-
     override fun getFavoritesPaged(
         mediaTypes: List<MediaType>?,
     ): Flow<PagingData<MediaItem>> = pagedMediaPager {
         JellyfinPagingSource { startIndex, limit ->
-            getFavorites(
+            libraryApiClient.getFavorites(
                 mediaTypes = mediaTypes,
                 limit = limit,
                 startIndex = startIndex,
@@ -699,11 +660,29 @@ class MediaRepositoryImpl internal constructor(
     // (detailCaches.invalidateItem per playlist edit) is unchanged — it now
     // runs in the extracted impl against the SAME single-backed group.
 
+    //  Facade split, second wave: the nine uncached browse-read members moved
+    // to [MediaUncachedReadsImpl] (same package) over the same
+    // [LibraryApiClient] — getIntros/getSpecialFeatures (MediaExtrasReads),
+    // getPeople/getItemsByPerson/getTags (MediaBrowseReads),
+    // getMediaItems/getFavorites/getSearchSuggestions (MediaCollectionReads) —
+    // every one a stateless forward this class cached nothing for (zero TtlCache
+    // involvement), so nothing shared stayed behind. getItemsByStudio retired
+    // outright: zero repo-typed callers. The two paged projections that routed
+    // through two of those forwards (getMediaItemsPaged / getFavoritesPaged)
+    // stay here and call the client directly — same named arguments, so the
+    // wire calls are unchanged.
+
     override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
         syncPlayApiClient.getSyncPlayGroups()
 
-    override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> =
-        syncPlayApiClient.createSyncPlayGroup(groupName)
+    // The deepened create: the manager owns create→join MY group (bounded
+    // discovery/settle windows, duplicate-name disambiguation — see its KDoc);
+    // this seam hands the caller the joined group's identifying slice (id +
+    // name — all any UI consumer needs).
+    override suspend fun createSyncPlayGroup(groupName: String): Result<SyncPlayGroupInfo> =
+        syncPlayManager.createGroup(groupName).map { group ->
+            SyncPlayGroupInfo(groupId = group.groupId, groupName = group.groupName)
+        }
 
     override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
         syncPlayApiClient.getSyncPlayInfo(groupId)
@@ -869,7 +848,7 @@ class MediaRepositoryImpl internal constructor(
         // The network layer's own home hot-path caches (per-folder latest +
         // per-seed similar) carry the same per-item UserData — drop them too,
         // or a home fetch within the sub-call TTL serves the pre-write rows.
-        libraryApiClient.invalidateHomeSubcallCaches()
+        homeSectionsCachePort.invalidateSubcallCaches()
         // The gap groups the per-item eviction above cannot reach (see
         // [albumTracksStale] / [collectionItemsStale]): a track's or a
         // collection member's flip carries per-item UserData into the rows
@@ -934,7 +913,7 @@ class MediaRepositoryImpl internal constructor(
         // similar) are likewise identity-keyed; they are dropped here because
         // their entries carry per-item UserData that a wholesale drop must not
         // resurrect for the sub-call TTL.
-        libraryApiClient.invalidateHomeSubcallCaches()
+        homeSectionsCachePort.invalidateSubcallCaches()
         // NOTE: the persistent home-section SWR snapshot is intentionally NOT
         // cleared here. invalidateCaches() doesn't know which (server, user)
         // it's running for — it's called both from the registry's identity action (which

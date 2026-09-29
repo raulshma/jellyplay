@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.core.data.playback
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
@@ -49,6 +51,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class AudioLibraryBrowserTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val musicCatalogue: MusicCatalogue = mockk(relaxed = true)
+    private val mediaCollectionReads: MediaCollectionReads = mockk(relaxed = true)
     private val playlistRepository: PlaylistRepository = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
@@ -63,6 +67,8 @@ class AudioLibraryBrowserTest {
     private fun browser() = AudioLibraryBrowser(
         scope = scope,
         mediaRepository = mediaRepository,
+        musicCatalogue = musicCatalogue,
+        mediaCollectionReads = mediaCollectionReads,
         playlistRepository = playlistRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
@@ -119,7 +125,7 @@ class AudioLibraryBrowserTest {
     @Test
     fun `album resolves to playable items in input order regardless of resolve latency`() {
         val ids = (1..8).map { "t$it" }
-        coEvery { mediaRepository.getAlbumTracks("album-1") } returns Result.success(ids.map(::track))
+        coEvery { musicCatalogue.getAlbumTracks("album-1", force = false) } returns Result.success(ids.map(::track))
         stubLocalResolves(ids)
         val browser = browser()
 
@@ -133,7 +139,7 @@ class AudioLibraryBrowserTest {
     @Test
     fun `null resolutions are dropped from the resolved list`() {
         val ids = listOf("t1", "t2", "t3", "t4")
-        coEvery { mediaRepository.getAlbumTracks("album-1") } returns Result.success(ids.map(::track))
+        coEvery { musicCatalogue.getAlbumTracks("album-1", force = false) } returns Result.success(ids.map(::track))
         stubLocalResolves(ids, droppedId = "t2")
         val browser = browser()
 
@@ -145,7 +151,7 @@ class AudioLibraryBrowserTest {
     @Test
     fun `concurrent resolves never exceed the 4-permit bound`() {
         val ids = (1..8).map { "t$it" }
-        coEvery { mediaRepository.getAlbumTracks("album-1") } returns Result.success(ids.map(::track))
+        coEvery { musicCatalogue.getAlbumTracks("album-1", force = false) } returns Result.success(ids.map(::track))
         stubLocalResolves(ids)
         val browser = browser()
 
@@ -161,9 +167,9 @@ class AudioLibraryBrowserTest {
 
     @Test
     fun `multiple albums flatten in traversal order`() {
-        coEvery { mediaRepository.getAlbumTracks("album-1") } returns
+        coEvery { musicCatalogue.getAlbumTracks("album-1", force = false) } returns
             Result.success(listOf(track("a1-t1"), track("a1-t2")))
-        coEvery { mediaRepository.getAlbumTracks("album-2") } returns
+        coEvery { musicCatalogue.getAlbumTracks("album-2", force = false) } returns
             Result.success(listOf(track("a2-t1")))
         stubLocalResolves(listOf("a1-t1", "a1-t2", "a2-t1"))
         val browser = browser()
@@ -178,7 +184,7 @@ class AudioLibraryBrowserTest {
         // Pins the shared artUri lookup: the repository's URL string flows
         // into MediaMetadata.artworkUri for every resolved playable.
         val ids = listOf("t1", "t2")
-        coEvery { mediaRepository.getAlbumTracks("album-1") } returns Result.success(ids.map(::track))
+        coEvery { musicCatalogue.getAlbumTracks("album-1", force = false) } returns Result.success(ids.map(::track))
         stubLocalResolves(ids)
         coEvery { playbackRepository.getImageUrl(any(), any(), any()) } returns "https://server/art/t1.jpg"
         val browser = browser()

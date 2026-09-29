@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.playback
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -42,7 +42,7 @@ import org.robolectric.annotation.Config
 class ThemeMusicPlayerTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val musicCatalogue: MusicCatalogue = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val appearanceStore: AppearanceStore = mockk()
 
@@ -51,7 +51,7 @@ class ThemeMusicPlayerTest {
     @Before
     fun setUp() {
         every { appearanceStore.appearance } returns appearance
-        coEvery { mediaRepository.getThemeSongs(any()) } returns Result.success(
+        coEvery { musicCatalogue.getThemeSongs(any()) } returns Result.success(
             listOf(MediaItem(id = "theme1", name = "Theme", mediaType = MediaType.MUSIC)),
         )
         every {
@@ -66,7 +66,7 @@ class ThemeMusicPlayerTest {
 
     private fun player() = ThemeMusicPlayer(
         context = context,
-        mediaRepository = mediaRepository,
+        musicCatalogue = musicCatalogue,
         playbackRepository = playbackRepository,
         appearanceStore = appearanceStore,
     )
@@ -80,7 +80,7 @@ class ThemeMusicPlayerTest {
         p.playThemeFor("item1")
         idle()
 
-        coVerify(exactly = 0) { mediaRepository.getThemeSongs(any()) }
+        coVerify(exactly = 0) { musicCatalogue.getThemeSongs(any()) }
         p.release()
     }
 
@@ -92,7 +92,7 @@ class ThemeMusicPlayerTest {
         p.playThemeFor("item1")
         idle()
 
-        coVerify(exactly = 1) { mediaRepository.getThemeSongs("item1") }
+        coVerify(exactly = 1) { musicCatalogue.getThemeSongs("item1") }
         verify(exactly = 1) {
             playbackRepository.getStreamUrl(itemId = "theme1", mediaSourceId = "theme1", startTimeTicks = any(), liveStreamId = any())
         }
@@ -102,7 +102,7 @@ class ThemeMusicPlayerTest {
     @Test
     fun `a failed theme lookup is swallowed without crashing`() {
         appearance.value = AppearanceSlice(backdropThemeMusicEnabled = true)
-        coEvery { mediaRepository.getThemeSongs("item1") } returns Result.failure(IllegalStateException("down"))
+        coEvery { musicCatalogue.getThemeSongs("item1") } returns Result.failure(IllegalStateException("down"))
         val p = player()
 
         p.playThemeFor("item1")
@@ -139,7 +139,7 @@ class ThemeMusicPlayerTest {
         // re-fetches (no player existed to short-circuit on).
         p.playThemeFor("item1")
         idle()
-        coVerify(exactly = 2) { mediaRepository.getThemeSongs("item1") }
+        coVerify(exactly = 2) { musicCatalogue.getThemeSongs("item1") }
         p.release()
     }
 
@@ -153,7 +153,7 @@ class ThemeMusicPlayerTest {
         p.playThemeFor("item1")
         idle()
 
-        coVerify(exactly = 2) { mediaRepository.getThemeSongs("item1") }
+        coVerify(exactly = 2) { musicCatalogue.getThemeSongs("item1") }
         p.release()
     }
 
@@ -178,6 +178,6 @@ class ThemeMusicPlayerTest {
         p.playThemeFor("item1")
         idle()
 
-        coVerify(exactly = 0) { mediaRepository.getThemeSongs(any()) }
+        coVerify(exactly = 0) { musicCatalogue.getThemeSongs(any()) }
     }
 }

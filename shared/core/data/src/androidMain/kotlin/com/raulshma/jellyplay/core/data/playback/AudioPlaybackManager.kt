@@ -60,6 +60,14 @@ import kotlin.math.pow
 class AudioPlaybackManager(
     private val context: Context,
     private val mediaRepository: MediaRepository,
+    /**
+     * Pass-through to [AudioLibraryBrowser]'s catalogue reads (artist albums /
+     * album tracks — the repository's [com.raulshma.jellyplay.core.data.repository.MusicCatalogue]
+     * family seam, the same split the browser made off the union).
+     */
+    private val musicCatalogue: com.raulshma.jellyplay.core.data.repository.MusicCatalogue,
+    /** Pass-through to [AudioLibraryBrowser]'s collection reads (the union's getMediaItems/getFavorites seam). */
+    private val mediaCollectionReads: com.raulshma.jellyplay.core.data.repository.MediaCollectionReads,
     private val playlistRepository: PlaylistRepository,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
@@ -123,6 +131,8 @@ class AudioPlaybackManager(
     private val libraryBrowser = AudioLibraryBrowser(
         scope = scope,
         mediaRepository = mediaRepository,
+        musicCatalogue = musicCatalogue,
+        mediaCollectionReads = mediaCollectionReads,
         playlistRepository = playlistRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,

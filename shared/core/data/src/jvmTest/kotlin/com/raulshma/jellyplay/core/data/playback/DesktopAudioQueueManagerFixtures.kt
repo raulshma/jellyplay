@@ -91,7 +91,6 @@ internal class FakePlaybackRepository : PlaybackRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean = true
     override suspend fun reportBookProgress(
         itemId: String,
         positionTicks: Long,

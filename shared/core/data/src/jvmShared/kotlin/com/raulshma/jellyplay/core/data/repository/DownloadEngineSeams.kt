@@ -26,10 +26,22 @@ interface DownloadEnqueueCoordinator {
     /**
      * Enqueues (or keeps) the background work for [downloadId]. Runtime
      * semantics: honour the user's wifi-only / download-schedule preferences
-     * (cold-start recovery callers bypass the gate on Android by calling the
-     * concrete [DownloadEnqueuer] directly).
+     * (the cold-start recovery path bypasses the gate via
+     * [enqueueForRecovery]).
      */
     fun enqueue(downloadId: String)
+
+    /**
+     * Enqueues (or keeps) the background work for a row the cold-start
+     * recovery pass ([DownloadRecoveryCore]) is re-kicking. Recovery
+     * semantics: the row was already in flight under the runtime gate before
+     * the process restart, so the gate must NOT be re-applied (Android's
+     * actual forwards to `DownloadEnqueuer.enqueue(downloadId,
+     * honorScheduleAndNetwork = false)`). The default body delegates to
+     * [enqueue] — platforms whose runtime enqueue is already unconstrained
+     * (desktop's in-process kick) need no override.
+     */
+    fun enqueueForRecovery(downloadId: String) = enqueue(downloadId)
 
     /**
      * Cancels the in-flight background work for [downloadId], if any. Safe to

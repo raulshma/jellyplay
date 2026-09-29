@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.hours
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 private const val PROGRAM_LOOKAHEAD_HOURS = 12L
 
@@ -278,7 +279,7 @@ class LiveTvPlayerViewModel(
                 _state.value = _state.value.copy(
                     isLoadingChannels = false,
                     isBuffering = false,
-                    errorMessage = LivePlayerMessage.Resource(Res.string.live_error_no_channels),
+                    errorMessage = UiMessage.Resource(Res.string.live_error_no_channels),
                 )
             is LivePlaybackEvent.ChannelsCommitted ->
                 _state.value = _state.value.copy(
@@ -351,7 +352,7 @@ class LiveTvPlayerViewModel(
             LivePlaybackEvent.BufferingWatchdogTimedOut ->
                 _state.value = _state.value.copy(
                     isBuffering = false,
-                    errorMessage = LivePlayerMessage.Resource(
+                    errorMessage = UiMessage.Resource(
                         Res.string.live_error_buffering_timeout
                     ),
                 )
@@ -426,7 +427,7 @@ class LiveTvPlayerViewModel(
             is RecordOutcome.Error ->
                 _screenEvents.tryEmit(
                     LivePlayerEvent.Message(
-                        LivePlayerMessage.Raw(outcome.message ?: outcome.request.action.failureFallback())
+                        UiMessage.Raw(outcome.message ?: outcome.request.action.failureFallback())
                     )
                 )
             is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
@@ -625,9 +626,9 @@ private fun RecordAction.startsTimer(): Boolean =
 
 private fun RecordAction.successMessage(): LivePlayerMessage =
     if (startsTimer()) {
-        LivePlayerMessage.Resource(Res.string.live_record_success)
+        UiMessage.Resource(Res.string.live_record_success)
     } else {
-        LivePlayerMessage.Resource(Res.string.live_record_canceled)
+        UiMessage.Resource(Res.string.live_record_canceled)
     }
 
 /** The failure fallback literals, kept byte-identical from the legacy inline arms. */

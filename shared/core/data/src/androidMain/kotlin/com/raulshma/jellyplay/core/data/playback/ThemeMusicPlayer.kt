@@ -6,7 +6,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.exoplayer.ExoPlayer
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import kotlinx.coroutines.CoroutineScope
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  */
 class ThemeMusicPlayer(
     private val context: Context,
-    private val mediaRepository: MediaRepository,
+    private val musicCatalogue: MusicCatalogue,
     private val playbackRepository: PlaybackRepository,
     private val appearanceStore: AppearanceStore,
 ) {
@@ -55,7 +55,7 @@ class ThemeMusicPlayer(
         stop()
         currentPlayerItemId = itemId
         fetchJob = scope.launch {
-            val themeSongs = mediaRepository.getThemeSongs(itemId).getOrElse { emptyList() }
+            val themeSongs = musicCatalogue.getThemeSongs(itemId).getOrElse { emptyList() }
             if (!isActive) return@launch
             val themeItem = themeSongs.firstOrNull() ?: return@launch
             val streamUrl = playbackRepository.getStreamUrl(

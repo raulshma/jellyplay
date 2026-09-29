@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_server
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 data class AddServerUiState(
     val discoveredServers: List<DiscoveredServer> = emptyList(),
@@ -108,7 +109,7 @@ class AddServerViewModel(
      */
     fun connectToServer(address: String, onResult: (Result<ServerInfo>) -> Unit) {
         if (address.isBlank()) {
-            _uiState.update { it.copy(connectError = AuthMessage.Resource(Res.string.auth_error_server_address_required)) }
+            _uiState.update { it.copy(connectError = UiMessage.Resource(Res.string.auth_error_server_address_required)) }
             return
         }
 

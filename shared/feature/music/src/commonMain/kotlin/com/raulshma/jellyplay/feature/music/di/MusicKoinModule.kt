@@ -53,6 +53,8 @@ val musicModule: Module = module {
     viewModel {
         MusicHomeViewModel(
             mediaRepository = get(),
+            musicCatalogue = get(),
+            mediaCollectionReads = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
             activeDownloads = get(),
@@ -96,6 +98,7 @@ val musicModule: Module = module {
     viewModel {
         MoodPlaylistsViewModel(
             mediaRepository = get(),
+            mediaCollectionReads = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
             moodPlaylistRepository = get(),
@@ -104,6 +107,7 @@ val musicModule: Module = module {
     viewModel {
         SmartPlaylistsViewModel(
             mediaRepository = get(),
+            mediaCollectionReads = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
             smartPlaylistRepository = get(),
@@ -131,6 +135,7 @@ val musicModule: Module = module {
     viewModel {
         AlbumDetailViewModel(
             mediaRepository = get(),
+            musicCatalogue = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
             downloads = get(),
@@ -140,6 +145,7 @@ val musicModule: Module = module {
     viewModel {
         ArtistDetailViewModel(
             mediaRepository = get(),
+            musicCatalogue = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
         )

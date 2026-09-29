@@ -3,9 +3,6 @@ package com.raulshma.jellyplay.navigation
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.data.remote.PlayEventPayload
-import com.raulshma.jellyplay.core.ui.feedback.UiText
-import com.raulshma.jellyplay.core.ui.feedback.UserMessage
-import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
@@ -26,7 +23,7 @@ import org.junit.Test
  * to live composable-inline — plus the one pure fold left on its companion
  * (the nullable wrapper [NavRequestCollector.pendingRouteDispatch] adds over
  * the shared route-dispatch table) and the message-host adaptation seams
- * ([legacySeverityOf] / the duration maps). The fold tables themselves — the
+ * (the duration maps). The fold tables themselves — the
  * tab-vs-push decision, the SyncPlay auto-open guard, the now-playing message
  * format — are the shared RemoteNavigationDispatcher's and are pinned ONCE in
  * RemoteNavigationDispatcherTest; the collector drives them here only through
@@ -303,18 +300,6 @@ class NavRequestCollectorTest {
     }
 
     // ── message-host adaptation seams ────────────────────────────────────
-
-    @Test
-    fun `legacySeverityOf projects both legacy arms onto the shared severity`() {
-        assertEquals(
-            SharedUserMessage.Severity.Error,
-            legacySeverityOf(UserMessage.Error(UiText.Raw("boom"))),
-        )
-        assertEquals(
-            SharedUserMessage.Severity.Info,
-            legacySeverityOf(UserMessage.Info(UiText.Raw("done"))),
-        )
-    }
 
     @Test
     fun `duration maps keep the shared severity policy on both surfaces`() {

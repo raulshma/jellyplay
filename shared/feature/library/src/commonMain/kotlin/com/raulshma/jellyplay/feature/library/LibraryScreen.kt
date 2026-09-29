@@ -166,6 +166,10 @@ import com.raulshma.jellyplay.feature.library.components.TagFilterSheet
 import com.raulshma.jellyplay.feature.library.components.YearRangeFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.feature.library.components.LibraryResetConfirmDialog
+import com.raulshma.jellyplay.feature.library.components.LibraryListContent
+import com.raulshma.jellyplay.feature.library.components.LibraryThumbContent
+import com.raulshma.jellyplay.feature.library.components.LibraryGridContent
+import com.raulshma.jellyplay.feature.library.components.LibraryMasonryContent
 import com.raulshma.jellyplay.feature.library.components.ThumbCard
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
@@ -482,6 +486,12 @@ internal fun LibraryScreen(
     // grid needs a larger min cell width than the poster (2:3) grid to avoid
     // rendering tiny cards. Scaled from the same adaptive baseline.
     val thumbCellSize = adaptiveInfo.gridCellSize(isTv) / browser.posterSize * (16f / 9f) * (3f / 4f)
+
+    // Stable image resolvers for the view-mode contents: one lambda identity per VM
+    // (the former branches remembered the same wrappers inline per item lambda).
+    val getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+    val getBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+    val photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } }
 
     // D-pad Left at any content left edge expands the navigation drawer. The
     // exit hook fires only when focus actually leaves this subtree leftward —
@@ -884,249 +894,52 @@ internal fun LibraryScreen(
                                                 onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                             )
                                         } else when (activeMode) {
-                                    LibraryViewMode.LIST -> {
-                                        // TvFocusablePagingColumn supplies the TV focus contract
-                                        // (initial grab, cursor memory, refresh re-grab) the plain
-                                        // LazyColumn never had — LIST mode used to open with focus
-                                        // orphaned straight to the drawer rail.
-                                        TvFocusablePagingColumn(
-                                            itemCount = pagedItems.itemCount,
-                                            key = pagedItems.safeItemKey { it.id },
-                                            state = listState,
+                                        LibraryViewMode.LIST -> LibraryListContent(
+                                            pagedItems = pagedItems,
+                                            listState = listState,
                                             contentPadding = gridPadding,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.fillMaxSize(),
                                             refreshGeneration = refreshGeneration,
-                                            contentType = { "mediaItem" },
-                                            onFocusedIndexChange = { index ->
-                                                pagedItems[index]?.let { quickActionIntake.tvFocusedItem = it }
-                                            },
-                                        ) { index, itemModifier ->
-                                            val item = pagedItems[index]
-                                            if (item != null) {
-                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
-                                                }
-                                                val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
-                                                    // Episodes show an SxxExx + series context line (bold tag);
-                                                    // other types keep the year/type label. Shared with the
-                                                    // grouped list path via libraryListSubtitle.
-                                                    item.libraryListSubtitle()
-                                                }
-                                                // Seasons fall back to the parent series poster when the
-                                                // season's own artwork 404s (shared with the grouped list).
-                                                val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
-                                                Box(modifier = itemModifier) {
-                                                    LibraryListItem(
-                                                        title = item.displayTitle(),
-                                                        subtitle = subtitle,
-                                                        imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                        fallbackUrls = fallbackUrls,
-                                                        blurHash = item.blurHashes.primary,
-                                                        onClick = memoizedClick,
-                                                        modifier = Modifier,
-                                                        sharedElementKey = "poster_${item.id}",
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    LibraryViewMode.THUMB -> {
-                                        // 16:9 landscape grid — wider cells than the poster grid
-                                        // so backdrop thumbnails aren't tiny. One card per row
-                                        // on compact widths, more on tablet/TV.
-                                        TvFocusableGrid(
-                                            itemCount = pagedItems.itemCount,
-                                            key = pagedItems.safeItemKey { it.id },
-                                            columns = GridCells.Adaptive(thumbCellSize),
-                                            state = gridState,
-                                            contentPadding = gridPadding,
-                                            horizontalArrangement = Arrangement.spacedBy(spacing),
-                                            verticalArrangement = Arrangement.spacedBy(spacing),
-                                            modifier = Modifier.fillMaxSize(),
-                                            refreshGeneration = refreshGeneration,
-                                            contentType = { "mediaItem" },
-                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { quickActionIntake.tvFocusedItem = it } },
-                                        ) { index, itemModifier ->
-                                            val item = pagedItems[index]
-                                            if (item != null) {
-                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
-                                                }
-                                                val itemProgress = item.rememberProgressFraction()
-                                                // Seasons fall back to the parent series poster when the
-                                                // season's own artwork 404s in the thumb view too.
-                                                val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
-                                                Box(modifier = itemModifier) {
-                                                    ThumbCard(
-                                                        item = item,
-                                                        imageUrl = remember(item.id, item.blurHashes.backdrop) {
-                                                            if (item.blurHashes.backdrop != null) {
-                                                                viewModel.getBackdropUrl(item.id)
-                                                            } else {
-                                                                viewModel.getImageUrl(item.id)
-                                                            }
-                                                        },
-                                                        fallbackUrls = fallbackUrls,
-                                                        onClick = memoizedClick,
-                                                        showProgress = itemProgress != null && itemProgress > 0f,
-                                                        progressPercent = itemProgress ?: 0f,
-                                                        blurHash = item.blurHashes.backdrop ?: item.blurHashes.primary,
-                                                        modifier = Modifier,
-                                                        sharedElementKey = "poster_${item.id}",
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    LibraryViewMode.GRID -> {
-                                        TvFocusableGrid(
-                                            itemCount = pagedItems.itemCount,
-                                            key = pagedItems.safeItemKey { it.id },
-                                            columns = GridCells.Adaptive(gridCellSize),
-                                            state = gridState,
-                                            contentPadding = gridPadding,
-                                            horizontalArrangement = Arrangement.spacedBy(spacing),
-                                            verticalArrangement = Arrangement.spacedBy(spacing),
-                                            modifier = Modifier.fillMaxSize(),
-                                            refreshGeneration = refreshGeneration,
-                                            contentType = { "mediaItem" },
-                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { quickActionIntake.tvFocusedItem = it } },
-                                        ) { index, itemModifier ->
-                                            val item = pagedItems[index]
-                                            if (item != null) {
-                                                val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                                                    { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
-                                                }
-                                                val itemProgress = item.rememberProgressFraction()
-                                                // Per-item collection: only photo-folder cards subscribe,
-                                                // and only the affected card recomposes on a prefetch merge.
-                                                val photoFolderChildImageUrls by if (item.mediaType == MediaType.PHOTO_FOLDER) {
-                                                    remember(item.id) { viewModel.photoFolderChildUrlsFor(item.id) }
-                                                        .collectAsStateWithLifecycle(emptyList())
-                                                } else {
-                                                    androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
-                                                }
-                                                // Resolve the episode's parent-series poster (and badge)
-                                                // the same way the home Latest row does, so episodes
-                                                // render as series posters instead of landscape scene
-                                                // grabs. See rememberEpisodeCardImage.
-                                                val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
-                                                    item = item,
-                                                    itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                    seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
-                                                )
-                                                Box(modifier = itemModifier) {
-                                                    PosterCard(
-                                                        item = item,
-                                                        imageUrl = cardImage.imageUrl,
-                                                        fallbackUrls = cardImage.fallbackUrls,
-                                                        onClick = memoizedClick,
-                                                        showProgress = itemProgress != null && itemProgress > 0f,
-                                                        progressPercent = itemProgress ?: 0f,
-                                                        blurHash = cardImage.blurHash,
-                                                        sharedElementKey = "poster_${item.id}",
-                                                        photoFolderChildImageUrls = photoFolderChildImageUrls,
-                                                        showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                                                        modifier = Modifier,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    LibraryViewMode.MASONRY -> {
-                                        // Staggered grid — posters keep their own aspect ratio and
-                                        // pack like a masonry wall. Most useful in mixed-type
-                                        // libraries; in a pure poster library it reads like the
-                                        // regular grid (posters are uniform 2:3). No staggered
-                                        // TvFocusable* analogue exists, so the TV focus contract
-                                        // (group + restorer + fallback + initial/refresh grab) is
-                                        // wired manually here, matching TvFocusableGrid's order.
-                                        // State is hoisted to the screen root so the alphabet rail
-                                        // can drive it.
-                                        val staggeredState = staggeredState
-                                        val masonryGroupRequester = remember { FocusRequester() }
-                                        val masonryFallbackRequester = remember { FocusRequester() }
-                                        var masonryFocusedIndex by rememberInt()
-                                        TvGrabInitialFocus(
-                                            focusRequester = masonryFallbackRequester,
-                                            itemCount = pagedItems.itemCount,
-                                            tag = "library_masonry_init",
-                                            refreshGeneration = refreshGeneration,
+                                            onItemClick = onItemClick,
+                                            getImageUrl = getImageUrl,
+                                            onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                         )
-                                        LaunchedEffect(refreshGeneration) {
-                                            if (refreshGeneration > 0) masonryFocusedIndex = 0
-                                        }
-                                        val masonryCurrentIndex =
-                                            masonryFocusedIndex.coerceIn(0, (pagedItems.itemCount - 1).coerceAtLeast(0))
-                                        LazyVerticalStaggeredGrid(
-                                            columns = StaggeredGridCells.Adaptive(gridCellSize),
-                                            state = staggeredState,
+                                        LibraryViewMode.THUMB -> LibraryThumbContent(
+                                            pagedItems = pagedItems,
+                                            gridState = gridState,
+                                            thumbCellSize = thumbCellSize,
                                             contentPadding = gridPadding,
-                                            verticalItemSpacing = spacing,
-                                            horizontalArrangement = Arrangement.spacedBy(spacing),
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                // Restorer wraps the group (before
-                                                // focusGroup) — same ordering contract
-                                                // as TvFocusableGrid; see its docs.
-                                                .tvFocusRestorer(masonryFallbackRequester)
-                                                .focusGroup()
-                                                .focusRequester(masonryGroupRequester),
-                                        ) {
-                                            items(
-                                                count = pagedItems.itemCount,
-                                                key = pagedItems.safeItemKey { it.id },
-                                                contentType = { "mediaItem" },
-                                            ) { index ->
-                                                val item = pagedItems[index]
-                                                if (item != null) {
-                                                    val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
-                                                        { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
-                                                    }
-                                                    val itemProgress = item.rememberProgressFraction()
-                                                    val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
-                                                        item = item,
-                                                        itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                        seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
-                                                    )
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .ifElse(
-                                                                index == masonryCurrentIndex,
-                                                                Modifier.focusRequester(masonryFallbackRequester),
-                                                            )
-                                                            .onFocusChanged {
-                                                                if (it.isFocused || it.hasFocus) {
-                                                                    masonryFocusedIndex = index
-                                                                    quickActionIntake.tvFocusedItem = item
-                                                                }
-                                                            },
-                                                    ) {
-                                                        PosterCard(
-                                                            item = item,
-                                                            imageUrl = cardImage.imageUrl,
-                                                            fallbackUrls = cardImage.fallbackUrls,
-                                                            onClick = memoizedClick,
-                                                            // Intrinsic Primary ratio of the image this card
-                                                            // actually shows — this is what makes masonry
-                                                            // stagger: square and portrait posters get
-                                                            // different card heights instead of all being
-                                                            // forced to the 2:3 grid shape.
-                                                            aspectRatio = cardImage.aspectRatio,
-                                                            showProgress = itemProgress != null && itemProgress > 0f,
-                                                            progressPercent = itemProgress ?: 0f,
-                                                            blurHash = cardImage.blurHash,
-                                                            sharedElementKey = "poster_${item.id}",
-                                                            showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
+                                            spacing = spacing,
+                                            refreshGeneration = refreshGeneration,
+                                            onItemClick = onItemClick,
+                                            getImageUrl = getImageUrl,
+                                            getBackdropUrl = getBackdropUrl,
+                                            onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
+                                        )
+                                        LibraryViewMode.GRID -> LibraryGridContent(
+                                            pagedItems = pagedItems,
+                                            gridState = gridState,
+                                            gridCellSize = gridCellSize,
+                                            contentPadding = gridPadding,
+                                            spacing = spacing,
+                                            refreshGeneration = refreshGeneration,
+                                            onItemClick = onItemClick,
+                                            getImageUrl = getImageUrl,
+                                            photoFolderChildUrlsFor = photoFolderChildUrlsFor,
+                                            onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
+                                        )
+                                        LibraryViewMode.MASONRY -> LibraryMasonryContent(
+                                            pagedItems = pagedItems,
+                                            staggeredState = staggeredState,
+                                            gridCellSize = gridCellSize,
+                                            contentPadding = gridPadding,
+                                            spacing = spacing,
+                                            refreshGeneration = refreshGeneration,
+                                            onItemClick = onItemClick,
+                                            getImageUrl = getImageUrl,
+                                            onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
+                                        )
                                     }
-                                }
-                                } // close CompositionLocalProvider
+} // close CompositionLocalProvider
                                 } // close AnimatedContent content lambda
                         }
                     }
@@ -1163,10 +976,13 @@ internal fun LibraryScreen(
                     // state); the rail simply shows no active highlight in that mode.
                     val activeLetter by remember(viewMode) {
                         derivedStateOf {
-                            val firstVisible = when (viewMode) {
-                                LibraryViewMode.LIST -> listState.firstVisibleItemIndex
-                                else -> gridState.firstVisibleItemIndex
-                            }
+                            // Reads the state delegates at the argument sites so the
+                            // derived subscription is unchanged (recomputes on scroll).
+                            val firstVisible = libraryRailFirstVisibleItemIndex(
+                                viewMode = viewMode,
+                                listFirstVisibleItemIndex = listState.firstVisibleItemIndex,
+                                gridFirstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                            )
                             jumpIndexByLetter.entries.lastOrNull { it.value <= firstVisible }?.key
                         }
                     }
@@ -1178,10 +994,10 @@ internal fun LibraryScreen(
                             onJump = { letter ->
                                 val index = jumpIndexByLetter[letter] ?: return@AlphabetJumpRail
                                 alphabetScope.launch {
-                                    when (viewMode) {
-                                        LibraryViewMode.LIST -> listState.scrollToItem(index)
-                                        LibraryViewMode.MASONRY -> staggeredState.scrollToItem(index)
-                                        else -> gridState.scrollToItem(index)
+                                    when (libraryRailScrollTarget(viewMode)) {
+                                        LibraryRailScrollTarget.LIST -> listState.scrollToItem(index)
+                                        LibraryRailScrollTarget.STAGGERED -> staggeredState.scrollToItem(index)
+                                        LibraryRailScrollTarget.GRID -> gridState.scrollToItem(index)
                                     }
                                 }
                             },

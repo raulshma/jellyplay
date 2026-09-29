@@ -18,12 +18,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
-import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
-import com.raulshma.jellyplay.core.ui.components.SeerrCardLoadingState
-import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrPrefetch
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.mouseScroll
 
 /**

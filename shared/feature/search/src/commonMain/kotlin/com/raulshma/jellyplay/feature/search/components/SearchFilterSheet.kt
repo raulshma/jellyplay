@@ -5,9 +5,9 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.formatFixed
-import com.raulshma.jellyplay.core.ui.components.MediaFilterSheet
-import com.raulshma.jellyplay.core.ui.components.MediaFilterSheetTexts
-import com.raulshma.jellyplay.core.ui.components.SearchFilterSheetSections
+import com.raulshma.jellyplay.core.ui.components.filter.MediaFilterSheet
+import com.raulshma.jellyplay.core.ui.components.filter.MediaFilterSheetTexts
+import com.raulshma.jellyplay.core.ui.components.filter.SearchFilterSheetSections
 import com.raulshma.jellyplay.feature.search.generated.resources.Res
 import com.raulshma.jellyplay.feature.search.generated.resources.search_apply_filters
 import com.raulshma.jellyplay.feature.search.generated.resources.search_clear_all

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -307,17 +308,73 @@ class SyncPlayManager(
         return apiResult
     }
 
-    suspend fun createGroup(groupName: String): Result<Unit> {
+    /**
+     * Creates a SyncPlay group and joins it — the ONE owner of the
+     * "create then join MY group" choreography, so no caller ever re-derives
+     * the new group's id.
+     *
+     * [DECLARED BEHAVIOR IMPROVEMENT] The wire `New` command returns no id,
+     * and the old flow recovered it by name-matching a refetched group list
+     * after a blind `delay(500)` — a pre-existing same-named group could be
+     * misjoined, and a slow server could surface the new group too late and
+     * strand the user unjoined. The deepened member:
+     *  1. snapshots the visible group ids BEFORE the create,
+     *  2. sends `New` and propagates its Result (the former member discarded
+     *     the wire failure and reported success regardless),
+     *  3. recovers the created group with a bounded poll of the group list,
+     *     preferring ids absent from the pre-create snapshot (duplicate names
+     *     can no longer shadow the fresh group),
+     *  4. joins it via [joinGroup] and awaits the [currentGroupFlow]
+     *     transition (bounded by [CREATE_GROUP_SETTLE_MS] — the same
+     *     reconnect-grace spirit as the reconnect watcher's bounded windows),
+     *     falling back to the minimal [SyncPlayGroup] snapshot if the info
+     *     refresh lags past the window.
+     *
+     * Any step failure (wire create, recovery, join) fails the Result — the
+     * caller learns the truth instead of assuming the join happened.
+     */
+    suspend fun createGroup(groupName: String): Result<SyncPlayGroup> {
         return try {
+            val priorGroupIds = syncPlayApiClient.getSyncPlayGroups()
+                .getOrNull().orEmpty()
+                .map { it.groupId }
+                .toSet()
             authApiClient.postCapabilities()
-            syncPlayApiClient.createSyncPlayGroup(groupName)
-            Result.success(Unit)
+            syncPlayApiClient.createSyncPlayGroup(groupName).getOrThrow()
+            val created = discoverCreatedGroup(groupName, priorGroupIds)
+                ?: return Result.failure(
+                    IllegalStateException("SyncPlay group not found after creation: $groupName"),
+                )
+            joinGroup(created.groupId).map {
+                withTimeoutOrNull(CREATE_GROUP_SETTLE_MS) {
+                    currentGroupFlow.first { group -> group?.groupId == created.groupId }
+                } ?: created
+            }
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
+
+    /**
+     * Bounded poll for the freshly created group: the server list can lag the
+     * `New` command (the blind `delay(500)` this replaced), so the poll gives
+     * slow servers [CREATE_GROUP_DISCOVERY_MS] before giving up. Name matches
+     * prefer ids absent from the pre-create snapshot so a pre-existing
+     * same-named group cannot shadow the fresh one.
+     */
+    private suspend fun discoverCreatedGroup(groupName: String, priorGroupIds: Set<String>): SyncPlayGroup? =
+        withTimeoutOrNull(CREATE_GROUP_DISCOVERY_MS) {
+            while (true) {
+                val groups = syncPlayApiClient.getSyncPlayGroups().getOrNull().orEmpty()
+                val created = groups.firstOrNull { it.groupName == groupName && it.groupId !in priorGroupIds }
+                    ?: groups.firstOrNull { it.groupName == groupName }
+                if (created != null) return@withTimeoutOrNull created
+                delay(CREATE_GROUP_DISCOVERY_POLL_MS)
+            }
+            @Suppress("UNREACHABLE_CODE") null
+        }
 
     private fun startPingReporting() {
         pingReportJob?.cancel()
@@ -600,5 +657,15 @@ class SyncPlayManager(
         private const val TAG = "SyncPlayManager"
         private const val STALE_SKEW_ALLOWANCE_MS = 1500L
         private const val PING_REPORT_INTERVAL_MS = 10_000L
+
+        /**
+         * Bounded wait for the server's group list to surface the freshly
+         * created group (slow servers), and for the joined group to land in
+         * [currentGroupFlow] after the join — [createGroup] never hangs past
+         * these windows.
+         */
+        private const val CREATE_GROUP_DISCOVERY_MS = 2_000L
+        private const val CREATE_GROUP_DISCOVERY_POLL_MS = 200L
+        private const val CREATE_GROUP_SETTLE_MS = 2_000L
     }
 }

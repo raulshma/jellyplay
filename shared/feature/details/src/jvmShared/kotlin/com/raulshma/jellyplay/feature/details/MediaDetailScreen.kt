@@ -39,15 +39,15 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
-import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
+import com.raulshma.jellyplay.core.ui.components.downloads.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
-import com.raulshma.jellyplay.core.ui.components.RefreshMetadataSheet
-import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
-import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
+import com.raulshma.jellyplay.core.ui.components.downloads.RefreshMetadataSheet
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.downloads.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
+import com.raulshma.jellyplay.core.ui.components.downloads.downloadedSeasonSlices
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
@@ -420,7 +420,7 @@ fun MediaDetailScreen(
             // Seerr card loading state for prefetch animation: one root-level
             // bundle of the callback + loading state; descendant rows read them
             // via the composition locals.
-            com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+            com.raulshma.jellyplay.core.ui.components.seerr.ProvideSeerrCardPrefetching(
                 prefetchDetail = { tmdbId, mediaType, onDone ->
                     viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType, onDone)
                 }

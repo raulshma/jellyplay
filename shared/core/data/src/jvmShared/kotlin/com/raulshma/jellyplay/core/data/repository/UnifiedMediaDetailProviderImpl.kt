@@ -1,40 +1,28 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
-import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.catalogue.sortedByPlaybackOrder
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
-import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DownloadAttachment
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.LocalSeriesAggregate
-import com.raulshma.jellyplay.core.model.LocalSubtitleOption
-import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaSource
-import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
 import com.raulshma.jellyplay.core.model.seriesIdForDetail
-import com.raulshma.jellyplay.core.model.toMediaDetail
-import com.raulshma.jellyplay.core.model.toMediaItem
-import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -53,12 +41,15 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Production adapter for [MediaDetailProvider]. Owns the remote/local source
- * decision and the source-dependent read graph: the projected [MediaDetail],
- * seasons/episodes (always via [EpisodeCatalogue] — the online/offline fork is
- * not recreated one level down), album children, local external subtitles,
- * local presentation artwork, the reactive download/sync attachment, and the
- * capability set derived once per snapshot.
+ * Production adapter for [MediaDetailProvider]. Owns the session lifecycle and
+ * the source-dependent read graph: the projected [MediaDetail], seasons/episodes
+ * (always via [EpisodeCatalogue] — the online/offline fork is not recreated one
+ * level down), album children, local external subtitles, local presentation
+ * artwork, the reactive download/sync attachment, and the capability set derived
+ * once per snapshot. The remote/local resolution ladder itself — the dispatch
+ * decision, both resolve halves and the stream-probe memo — lives on the
+ * per-session [DetailContentResolver] collaborator (same module, constructed
+ * with this class's own dependencies).
  *
  * Reactivity: a per-item [Session] combines a content resolution (re-resolved
  * on refresh or a relevant connectivity change) with reactive Room attachments
@@ -234,12 +225,23 @@ class UnifiedMediaDetailProviderImpl(
         // server's view. Without this, an already-open detail screen keeps
         // serving the stale entry for up to the cache TTL.
         @Volatile private var lastMode: OfflineMode? = null
-        // Probe cache: (file lastModified millis → streams). Re-probe only when
-        // the file changes; stable across re-resolves (refresh/expand) so opening
-        // the detail screen probes once per file version per session. Not private
-        // so the Session extension functions (publishLocal/probeStreamInfo) can
-        // touch it — Session itself is a private inner class, so this stays scoped.
-        @Volatile var probedStreamsCache: Pair<Long, List<MediaStream>>? = null
+
+        /**
+         * The resolution ladder collaborator (see [DetailContentResolver]):
+         * constructed per session so its stream-probe memo keeps the session
+         * scope — a shared provider-level instance would leak the memo across
+         * sessions. Receives this class's own dependencies unchanged.
+         */
+        private val resolver = DetailContentResolver(
+            itemId = itemId,
+            mediaRepository = mediaRepository,
+            cacheInvalidation = cacheInvalidation,
+            offlineRepository = offlineRepository,
+            downloadRepository = downloadRepository,
+            episodeCatalogue = episodeCatalogue,
+            playbackSourceResolver = playbackSourceResolver,
+            localStreamProbe = localStreamProbe,
+        )
 
         val content: MutableStateFlow<ContentResolution> = MutableStateFlow(ContentResolution.Initial)
 
@@ -514,21 +516,14 @@ class UnifiedMediaDetailProviderImpl(
 
         private suspend fun resolveFor(mode: OfflineMode, force: Boolean) {
             resolveMutex.withLock {
-                val targetGen = generation.get()
-                val current = content.value
-                if (mode == OfflineMode.ONLINE) {
-                    val alreadyRemote = current is ContentResolution.Resolved &&
-                        current.origin == DetailOrigin.REMOTE &&
-                        current.contentGen == targetGen &&
-                        !force
-                    when {
-                        force -> resolveRemote(targetGen, force = true)
-                        alreadyRemote -> Unit // keep the remote resolution through blips
-                        else -> resolveRemote(targetGen, force = false)
-                    }
-                } else {
-                    resolveLocal(targetGen, DetailOrigin.LOCAL_OFFLINE_MODE)
-                }
+                // The dispatch decision + both resolve halves live on the
+                // resolver (constructed with this session); the session keeps
+                // the mutex (so a resolution still serializes against the
+                // optimistic rewrites) and the content write. A null result is
+                // the resolver's "keep the current resolution" verdict (the
+                // already-remote-through-a-blip branch).
+                resolver.resolve(mode, force, generation.get(), content.value)
+                    ?.let { content.value = it }
             }
         }
 
@@ -558,226 +553,11 @@ class UnifiedMediaDetailProviderImpl(
     }
 
     // ------------------------------------------------------------------
-    // Resolution
+    // Resolution — moved to [DetailContentResolver] (the remote/local ladder,
+    // the dispatch decision and the probe memo). The session constructs one
+    // per session and publishes its verdict under resolveMutex (see
+    // [Session.resolveFor]).
     // ------------------------------------------------------------------
-
-    private suspend fun Session.resolveRemote(targetGen: Long, force: Boolean) {
-        // Force read: the repository drops the item's cached detail before the
-        // fetch (plan 08's freshness lever), then the per-type dispatch below
-        // drops the type-scoped caches (series catalogue, album tracks,
-        // collection items) the snapshot derivation reads right after.
-        coroutineScope {
-            // resolveUsableDownload needs only itemId — start it before the
-            // detail fetch so the Room read overlaps the network round-trip.
-            val usableDeferred = async { playbackSourceResolver.resolveUsableDownload(itemId) != null }
-            val result = mediaRepository.getMediaDetail(itemId, force = force)
-            result
-                .onSuccess { detail ->
-                    if (force) cacheInvalidation.invalidateFor(detail)
-                    val seriesDeferred = async { loadSeriesData(detail, offline = false) }
-                    val albumDeferred = async { loadAlbumTracks(detail, offline = false) }
-                    val usable = usableDeferred.await()
-                    val seriesData = seriesDeferred.await()
-                    val album = albumDeferred.await()
-                    content.value = ContentResolution.Resolved(
-                        contentGen = targetGen,
-                        origin = DetailOrigin.REMOTE,
-                        detail = detail,
-                        seasons = seriesData.seasons,
-                        episodesBySeason = seriesData.episodesBySeason,
-                        fetchedSeasonIds = seriesData.fetchedSeasonIds,
-                        sortedEpisodes = seriesData.sortedEpisodes,
-                        albumTracks = album,
-                        localSubtitles = emptyList(),
-                        assets = DetailAssets(),
-                        seriesAggregate = null,
-                        confirmedUsable = usable,
-                    )
-                }
-                .onFailure { err ->
-                    val local = offlineRepository.getOfflineDetail(itemId).first()
-                    if (local != null) {
-                        publishLocal(targetGen, DetailOrigin.LOCAL_REMOTE_FAILURE, local)
-                    } else {
-                        val accessDenied = (err as? ApiException)?.isAccessDenied == true
-                        content.value = ContentResolution.Failed(
-                            contentGen = targetGen,
-                            error = DetailLoadError(
-                                message = err.message ?: "Failed to load details",
-                                isAccessDenied = accessDenied,
-                            ),
-                        )
-                    }
-                }
-        }
-    }
-
-    private suspend fun Session.resolveLocal(targetGen: Long, origin: DetailOrigin) {
-        val local = offlineRepository.getOfflineDetail(itemId).first()
-        if (local != null) {
-            publishLocal(targetGen, origin, local)
-        } else {
-            content.value = ContentResolution.Failed(
-                contentGen = targetGen,
-                error = DetailLoadError(
-                    message = "Unavailable offline",
-                    isUnavailableOffline = true,
-                ),
-            )
-        }
-    }
-
-    /**
-     * Pure file-stat read — non-suspend on purpose (the ratchet keeps bare
-     * runCatching out of suspend bodies); `-1L` mirrors File.lastModified's
-     * own error contract for a failed stat.
-     */
-    private fun fileMtime(path: String): Long =
-        runCatching { java.io.File(path).lastModified() }.getOrDefault(-1L)
-
-    /**
-     * Probes the downloaded file's audio/video tracks, memoized per file
-     * `lastModified` so re-resolves (refresh, expand) don't re-probe an
-     * unchanged file. Returns `emptyList()` when there is no path or the probe
-     * fails — the caller then skips synthesizing a media source.
-     */
-    private suspend fun Session.probeStreamInfo(downloadPath: String?): List<MediaStream> {
-        if (downloadPath.isNullOrEmpty()) return emptyList()
-        val mtime = fileMtime(downloadPath)
-        probedStreamsCache?.let { (cachedMtime, cached) ->
-            if (cachedMtime == mtime && mtime >= 0L) return cached
-        }
-        val streams = localStreamProbe.probe(downloadPath)
-        if (mtime >= 0L) probedStreamsCache = mtime to streams
-        return streams
-    }
-
-    private suspend fun Session.publishLocal(
-        targetGen: Long,
-        origin: DetailOrigin,
-        local: OfflineMediaItem,
-    ) {
-        val detail = local.toMediaDetail()
-        // Probe the actual downloaded file for its real audio/video tracks.
-        // Server metadata is unreliable here: a transcoded download bakes a
-        // different track set than the source. Only the file is authoritative,
-        // and the probe is the same ground truth the player uses at playback.
-        val probedStreams = probeStreamInfo(local.downloadPath)
-        val detailWithStreams = if (probedStreams.isEmpty()) {
-            detail
-        } else {
-            detail.copy(mediaSources = listOf(
-                MediaSource(
-                    id = LOCAL_SOURCE_ID,
-                    name = "Local",
-                    mediaStreams = probedStreams,
-                ),
-            ))
-        }
-        val usable = playbackSourceResolver.resolveUsableDownload(itemId) != null
-        val seriesData = loadSeriesData(detail, offline = true)
-        val album = loadAlbumTracks(detail, offline = true)
-        val subtitles = loadLocalSubtitles(itemId, local.downloadPath)
-        // One-shot read of the local series' episodes: the catalogue's
-        // [MediaItem] projection drops `posterPath` and `totalSizeBytes`
-        // (storage concerns), so the aggregate header AND the per-episode
-        // artwork map are derived from the raw offline rows in a single pass.
-        val seriesEpisodes: List<OfflineMediaItem> = detail.item.seriesIdForDetail
-            ?.let { localSeriesEpisodes(it) }
-            .orEmpty()
-        val assets = DetailAssets(
-            posterPath = local.posterPath,
-            backdropPath = local.backdropPath,
-            castImages = local.cast
-                .mapNotNull { p -> p.localImagePath?.let { p.id to it } }
-                .toMap(),
-            episodeImages = seriesEpisodes
-                .mapNotNull { e -> e.posterPath?.let { e.id to it } }
-                .toMap(),
-        )
-        val aggregate = if (detail.item.mediaType == MediaType.SERIES) {
-            LocalSeriesAggregate(
-                downloadedEpisodeCount = seriesEpisodes.size,
-                totalSizeBytes = seriesEpisodes.sumOf { it.totalSizeBytes },
-                episodeSizeBytes = seriesEpisodes.associate { it.id to it.totalSizeBytes },
-            )
-        } else {
-            null
-        }
-        content.value = ContentResolution.Resolved(
-            contentGen = targetGen,
-            origin = origin,
-            detail = detailWithStreams,
-            seasons = seriesData.seasons,
-            episodesBySeason = seriesData.episodesBySeason,
-            fetchedSeasonIds = seriesData.fetchedSeasonIds,
-            sortedEpisodes = seriesData.sortedEpisodes,
-            albumTracks = album,
-            localSubtitles = subtitles,
-            assets = assets,
-            seriesAggregate = aggregate,
-            confirmedUsable = usable,
-        )
-    }
-
-    /**
-     * Loads seasons/episodes through the shared [EpisodeCatalogue] regardless of
-     * source — the anti-fork point. For an episode, loads its parent series so
-     * the seasons UI has context.
-     */
-    private suspend fun loadSeriesData(
-        detail: MediaDetail,
-        offline: Boolean,
-    ): SeriesData {
-        val item = detail.item
-        val seriesId = item.seriesIdForDetail ?: return SeriesData.EMPTY
-        val snapshot: EpisodeCatalogueSnapshot = episodeCatalogue
-            .loadSeriesEpisodes(seriesId, offline = offline)
-            .getOrNull()
-            ?: EpisodeCatalogueSnapshot.empty(seriesId)
-        return SeriesData(
-            seasons = snapshot.seasons,
-            episodesBySeason = snapshot.episodesBySeason,
-            fetchedSeasonIds = snapshot.fetchedSeasonIds,
-            sortedEpisodes = snapshot.sortedEpisodes,
-        )
-    }
-
-    private suspend fun loadAlbumTracks(detail: MediaDetail, offline: Boolean): List<MediaItem> {
-        if (detail.item.mediaType != MediaType.ALBUM) return emptyList()
-        return if (offline) {
-            offlineRepository.getChildren(detail.item.id).first().map { it.toMediaItem() }
-        } else {
-            mediaRepository.getAlbumTracks(detail.item.id).getOrDefault(emptyList())
-        }
-    }
-
-    private suspend fun loadLocalSubtitles(itemId: String, downloadPath: String?): List<LocalSubtitleOption> {
-        if (downloadPath == null) return emptyList()
-        val manifest = downloadRepository.loadLocalSubtitleManifest(downloadPath, itemId) ?: return emptyList()
-        // The persisted manifest drops the SDH flag and carries no audio inventory;
-        // expose only manifest-backed external subtitle entries.
-        return manifest.subtitles.map { entry ->
-            LocalSubtitleOption(
-                index = entry.index,
-                fileName = entry.fileName,
-                displayTitle = entry.displayTitle ?: entry.title,
-                language = entry.language,
-                isDefault = entry.isDefault,
-                isForced = entry.isForced,
-            )
-        }
-    }
-
-    /**
-     * Flattens every episode across a local series's seasons (single one-shot
-     * Room read, season/index ordered). Used to derive both the aggregate
-     * header and the per-episode artwork map from a single pass over the
-     * offline rows — the catalogue's [MediaItem] projection drops
-     * `posterPath` / `totalSizeBytes`.
-     */
-    private suspend fun localSeriesEpisodes(seriesId: String): List<OfflineMediaItem> =
-        offlineRepository.getEpisodesForSeries(seriesId)
 
     // ------------------------------------------------------------------
     // Snapshot construction
@@ -856,17 +636,6 @@ class UnifiedMediaDetailProviderImpl(
         )
     }
 
-    private data class SeriesData(
-        val seasons: List<MediaItem>,
-        val episodesBySeason: Map<String, List<MediaItem>>,
-        val fetchedSeasonIds: Set<String>,
-        val sortedEpisodes: List<MediaItem>,
-    ) {
-        companion object {
-            val EMPTY = SeriesData(emptyList(), emptyMap(), emptySet(), emptyList())
-        }
-    }
-
     private data class Attachment(
         val mode: OfflineMode,
         val localItem: OfflineMediaItem?,
@@ -874,38 +643,12 @@ class UnifiedMediaDetailProviderImpl(
         val syncState: OfflineSyncState?,
     )
 
-    private sealed interface ContentResolution {
-        val contentGen: Long
-
-        data object Initial : ContentResolution {
-            override val contentGen: Long get() = -1L
-        }
-
-        data class Resolved(
-            override val contentGen: Long,
-            val origin: DetailOrigin,
-            val detail: MediaDetail,
-            val seasons: List<MediaItem>,
-            val episodesBySeason: Map<String, List<MediaItem>>,
-            val fetchedSeasonIds: Set<String>,
-            val sortedEpisodes: List<MediaItem>,
-            val albumTracks: List<MediaItem>,
-            val localSubtitles: List<LocalSubtitleOption>,
-            val assets: DetailAssets,
-            val seriesAggregate: LocalSeriesAggregate?,
-            val confirmedUsable: Boolean,
-        ) : ContentResolution
-
-        data class Failed(
-            override val contentGen: Long,
-            val error: DetailLoadError,
-        ) : ContentResolution
-    }
+    // ContentResolution (the session's content state machine value) moved to
+    // DetailContentResolver.kt as a module-internal top-level type — produced
+    // by the resolver, held/rewritten here.
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
         const val REFRESH_TIMEOUT_MS = 15_000L
-        // Synthesized MediaSource id for the probed local file's track inventory.
-        const val LOCAL_SOURCE_ID = "local"
     }
 }

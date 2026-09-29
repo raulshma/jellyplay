@@ -56,6 +56,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Gap suite for [LiveTvPlayerViewModel] — the branches its sibling suite
@@ -231,8 +232,8 @@ class LiveTvPlayerViewModelGapsTest {
         scheduler.runCurrent()
         assertFalse(vm.state.value.isBuffering, "the stuck rebuffer spinner must lift with the error")
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
-        assertEquals(Res.string.live_error_buffering_timeout, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_buffering_timeout, (error as UiMessage.Resource).res)
     }
 
     @Test
@@ -405,7 +406,7 @@ class LiveTvPlayerViewModelGapsTest {
         vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce)
         scheduler.runCurrent()
 
-        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_success)), messages)
+        assertEquals(listOf<LivePlayerMessage>(UiMessage.Resource(Res.string.live_record_success)), messages)
         // The Record ↔ Cancel sheet follows the server: the program window is
         // re-fetched after the timer call.
         coVerify(atLeast = 2) { liveTvRepo.getLiveTvPrograms(any(), any(), any()) }
@@ -422,7 +423,7 @@ class LiveTvPlayerViewModelGapsTest {
         vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramOnce)
         scheduler.runCurrent()
 
-        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Raw("tuner busy")), messages)
+        assertEquals(listOf<LivePlayerMessage>(UiMessage.Raw("tuner busy")), messages)
     }
 
     @Test
@@ -449,7 +450,7 @@ class LiveTvPlayerViewModelGapsTest {
         vm.onEvent(LiveTvPlayerUiEvent.RecordCurrentProgramSeries)
         scheduler.runCurrent()
 
-        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_success)), messages)
+        assertEquals(listOf<LivePlayerMessage>(UiMessage.Resource(Res.string.live_record_success)), messages)
     }
 
     @Test
@@ -462,7 +463,7 @@ class LiveTvPlayerViewModelGapsTest {
         vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramTimer)
         scheduler.runCurrent()
 
-        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_canceled)), messages)
+        assertEquals(listOf<LivePlayerMessage>(UiMessage.Resource(Res.string.live_record_canceled)), messages)
     }
 
     @Test
@@ -502,7 +503,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         // Throwable.message == null must hit the adapter's fallback literal
         // (kept byte-identical from the legacy inline arm).
-        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Raw("Failed to set recording")), messages)
+        assertEquals(listOf<LivePlayerMessage>(UiMessage.Raw("Failed to set recording")), messages)
     }
 
     @Test
@@ -516,7 +517,7 @@ class LiveTvPlayerViewModelGapsTest {
         vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramTimer)
         scheduler.runCurrent()
 
-        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Raw("Failed to cancel recording")), messages)
+        assertEquals(listOf<LivePlayerMessage>(UiMessage.Raw("Failed to cancel recording")), messages)
     }
 
     @Test
@@ -543,7 +544,7 @@ class LiveTvPlayerViewModelGapsTest {
         vm.onEvent(LiveTvPlayerUiEvent.CancelCurrentProgramSeries)
         scheduler.runCurrent()
 
-        assertEquals(listOf<LivePlayerMessage>(LivePlayerMessage.Resource(Res.string.live_record_canceled)), messages)
+        assertEquals(listOf<LivePlayerMessage>(UiMessage.Resource(Res.string.live_record_canceled)), messages)
         coVerify(atLeast = 2) { liveTvRepo.getLiveTvPrograms(any(), any(), any()) }
     }
 
@@ -594,8 +595,8 @@ class LiveTvPlayerViewModelGapsTest {
 
         assertEquals(1, capturedRequests.size, "no reload may be attempted without a resolved URL")
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource)
-        assertEquals(Res.string.live_error_transcode_fallback, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource)
+        assertEquals(Res.string.live_error_transcode_fallback, (error as UiMessage.Resource).res)
         assertEquals(listOf("Channel 0"), error.args)
         assertFalse(vm.state.value.isBuffering, "the engine's held buffering must lift with the error")
         assertEquals("boom", vm.state.value.errorDetail, "the originating engine error detail surfaces")
@@ -635,7 +636,7 @@ class LiveTvPlayerViewModelGapsTest {
         scheduler.runCurrent()
 
         assertEquals("playback failed\n\nreason: ContainerNotSupported", vm.state.value.errorDetail)
-        assertEquals(LivePlayerMessage.Raw("boom"), vm.state.value.errorMessage)
+        assertEquals(UiMessage.Raw("boom"), vm.state.value.errorMessage)
         assertEquals(listOf("ContainerNotSupported"), rendered)
     }
 

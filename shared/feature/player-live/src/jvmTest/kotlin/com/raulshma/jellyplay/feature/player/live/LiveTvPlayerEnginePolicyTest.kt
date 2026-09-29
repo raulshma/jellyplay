@@ -43,6 +43,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Proves the SHARED engine-event policy core (player-contract's
@@ -197,10 +198,10 @@ class LiveTvPlayerEnginePolicyTest {
         scheduler.runCurrent()
         assertFalse(vm.state.value.isBuffering, "the stuck rebuffer spinner must lift with the error")
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
         assertEquals(
             Res.string.live_error_buffering_timeout,
-            (error as LivePlayerMessage.Resource).res,
+            (error as UiMessage.Resource).res,
         )
     }
 
@@ -222,10 +223,10 @@ class LiveTvPlayerEnginePolicyTest {
         scheduler.runCurrent()
 
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected the timeout error, was $error")
+        assertTrue(error is UiMessage.Resource, "expected the timeout error, was $error")
         assertEquals(
             Res.string.live_error_buffering_timeout,
-            (error as LivePlayerMessage.Resource).res,
+            (error as UiMessage.Resource).res,
         )
     }
 

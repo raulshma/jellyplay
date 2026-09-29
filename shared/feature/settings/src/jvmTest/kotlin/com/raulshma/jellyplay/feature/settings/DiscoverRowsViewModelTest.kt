@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -82,6 +83,7 @@ class DiscoverRowsViewModelTest {
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaBrowseReads: MediaBrowseReads
     private lateinit var editor: PreferencesEditor
 
     private val homeDiscoverySlice = MutableStateFlow(HomeDiscoverySlice())
@@ -91,11 +93,12 @@ class DiscoverRowsViewModelTest {
         Dispatchers.setMain(testDispatcher)
         homeDiscovery = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
+        mediaBrowseReads = mockk(relaxed = true)
         every { homeDiscovery.homeDiscovery } returns homeDiscoverySlice
         coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
         coEvery { mediaRepository.getGenres() } returns Result.success(emptyList())
         coEvery { mediaRepository.getStudios() } returns Result.success(emptyList())
-        coEvery { mediaRepository.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getDiscoverRowItems(any()) } returns Result.success(emptyList())
         editor = PreferencesEditor(
             scope = CoroutineScope(testDispatcher + Job()),
@@ -131,7 +134,7 @@ class DiscoverRowsViewModelTest {
     }
 
     private fun viewModel(): DiscoverRowsViewModel =
-        DiscoverRowsViewModel(homeDiscovery, editor, mediaRepository)
+        DiscoverRowsViewModel(homeDiscovery, editor, mediaRepository, mediaBrowseReads)
 
     private fun item(name: String): MediaItem =
         MediaItem(id = name.lowercase().replace(' ', '-'), name = name, mediaType = MediaType.MOVIE)

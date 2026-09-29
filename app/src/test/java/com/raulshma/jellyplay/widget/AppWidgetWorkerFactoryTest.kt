@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.content.Context
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -37,6 +38,7 @@ class AppWidgetWorkerFactoryTest {
 
     private val widgetDataStore: WidgetDataStore = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val mediaCollectionReads: MediaCollectionReads = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
     private val seerrPreferencesStore: SeerrPreferencesStore = mockk(relaxed = true)
@@ -49,6 +51,7 @@ class AppWidgetWorkerFactoryTest {
                 module {
                     single { widgetDataStore }
                     single { mediaRepository }
+                    single { mediaCollectionReads }
                     single { playbackRepository }
                     single { authRepository }
                     single { seerrPreferencesStore }

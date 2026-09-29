@@ -44,7 +44,6 @@ import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
@@ -79,15 +78,15 @@ class MainActivity : FragmentActivity() {
     // keeps its constructor injection only for the start-on-scope side
     // effects). Every ShellInfra member is a Lazy PROVIDER (mirroring
     // audioPlaybackManagerLazy below) so MainActivity.onCreate constructs
-    // none of them — JellyPlayApp resolves the bus/network pair at their
-    // composition branches and the remote-control pair inside their
-    // post-frame collection effects, keeping NetworkMonitor's
+    // none of them — JellyPlayApp resolves the shared UserMessageBus from
+    // Koin directly (its remember beside the CompositionLocal provider) and
+    // the network status flow / remote-control pair inside their
+    // composition branches and post-frame collection effects, keeping
+    // NetworkMonitor's
     // connectivity-callback registration and the remote-control objects off
     // the cold-start critical path (and out of auth/onboarding-only
     // sessions entirely). Memoizing lazies preserve the old deferred
     // field-inject timing.
-    private val userMessageBusLazy: kotlin.Lazy<UserMessageBus> =
-        lazy { KoinPlatform.getKoin()!!.get() }
     private val pinRateLimiter: PinRateLimiter by lazy { KoinPlatform.getKoin()!!.get() }
     private val securityStore: SecurityStore by lazy { KoinPlatform.getKoin()!!.get() }
     private val networkMonitor: NetworkMonitor by lazy { KoinPlatform.getKoin()!!.get() }
@@ -162,7 +161,6 @@ class MainActivity : FragmentActivity() {
         // nothing here resolves any Koin single; each `.value` fires at the
         // consumer's first real use (see ShellInfra's KDoc).
         val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
-            userMessageBusLazy = userMessageBusLazy,
             networkStatusLazy = lazy { networkMonitor.networkStatus },
             audioPlaybackManagerLazy = audioPlaybackManagerLazy,
             remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,

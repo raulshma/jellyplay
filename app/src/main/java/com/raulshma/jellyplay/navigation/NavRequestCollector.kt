@@ -7,8 +7,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.data.remote.PlayEventPayload
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
-import com.raulshma.jellyplay.core.ui.feedback.UserMessage
-import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher
@@ -21,10 +19,11 @@ import kotlinx.coroutines.flow.Flow
  * collect-then-dispatch loops JellyPlayApp's `MainContent` used to hand-copy
  * composable-inline: the pending-route (deep link / shortcut) dispatch, the
  * remote-navigation collector, the remote-control now-playing snackbar, and
- * the SyncPlay auto-open guard. Beside them live the message-bus adaptation
- * seams ([shellUserMessagePresent] / [legacySeverityOf] below) — the former
- * sixth loop, the hand-copied message collectors, now reduced to feeding the
- * shared `rememberShellUserMessages` seam. Every loop is the same shape — collect an
+ * the SyncPlay auto-open guard. Beside them lives the message-surface
+ * adapter ([shellUserMessagePresent] below) — the former sixth loop, the
+ * hand-copied message collectors, now reduced to feeding the shared
+ * `rememberShellUserMessages` seam over the ONE commonMain bus. Every loop
+ * is the same shape — collect an
  * external request, apply one small policy fork, drive the navigator or the
  * snackbar host — and the forks are the shared
  * `feature.shell.navigation.RemoteNavigationDispatcher` folds themselves (the
@@ -49,12 +48,11 @@ import kotlinx.coroutines.flow.Flow
  * severity → duration) — that is
  * [com.raulshma.jellyplay.feature.shell.UserMessageHost]'s
  * (shared/feature/shell), whose composition wiring is the shared
- * `rememberShellUserMessages` seam; the adapters at the bottom of this file
- * only fork the surface ([shellUserMessagePresent]) and project the legacy
- * bus's payload ([legacySeverityOf]). The external-player launch protocol
- * lives in `ExternalPlayerHost` (navigation/playbackhost, beside
- * `PlaybackHostRouter`) — it is STATEFUL (the pending-launch stash), so it
- * is remembered rather than constructed inline like this collector.
+ * `rememberShellUserMessages` seam; the adapter at the bottom of this file
+ * only forks the surface ([shellUserMessagePresent]). The external-player
+ * launch protocol lives in `ExternalPlayerHost` (navigation/playbackhost,
+ * beside `PlaybackHostRouter`) — it is STATEFUL (the pending-launch stash),
+ * so it is remembered rather than constructed inline like this collector.
  *
  * @param topLevelKeys the shell's registered top-level tab routes
  *   (`ALL_TOP_LEVEL_ROUTE_KEYS`) — the tab-vs-nested fork's vocabulary.
@@ -226,18 +224,6 @@ internal fun shellUserMessagePresent(
             duration = snackbarDurationFor(duration),
         )
     }
-}
-
-/**
- * The legacy (`core:ui` feedback) bus's severity projected onto the shared
- * bus's vocabulary — the adaptation
- * `com.raulshma.jellyplay.feature.shell.UserMessageHost.hostAdapted` needs
- * for a shell-owned payload type the shared module cannot name. Exhaustive:
- * a new legacy arm is a compile-time decision.
- */
-internal fun legacySeverityOf(message: UserMessage): SharedUserMessage.Severity = when (message) {
-    is UserMessage.Error -> SharedUserMessage.Severity.Error
-    is UserMessage.Info -> SharedUserMessage.Severity.Info
 }
 
 /** TV surface: the shared duration policy onto Toast constants. */

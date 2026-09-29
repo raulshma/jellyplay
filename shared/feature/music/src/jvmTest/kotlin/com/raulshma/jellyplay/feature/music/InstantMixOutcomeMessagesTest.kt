@@ -7,10 +7,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Pins the shared instant-mix outcome → message mapping that the album and
- * artist detail screens resolve identically. Types only: [MixErrorMessage.Resource]
+ * artist detail screens resolve identically. Types only: [UiMessage.Resource]
  * stays UNRESOLVED until render time (the commonMain VM seam has no Context),
  * so tests assert the carried [StringResource] identity, never a rendered string.
  */
@@ -20,21 +21,21 @@ class InstantMixOutcomeMessagesTest {
     fun empty_mapsToSharedUnavailableResource() {
         val message = MusicQueueOutcome.Empty.toMixErrorMessage()
 
-        assertSame(Res.string.music_mix_unavailable, (message as MixErrorMessage.Resource).res)
+        assertSame(Res.string.music_mix_unavailable, (message as UiMessage.Resource).res)
     }
 
     @Test
     fun failed_mapsCauseMessage() {
         val message = MusicQueueOutcome.Failed(RuntimeException("boom")).toMixErrorMessage()
 
-        assertEquals("boom", (message as MixErrorMessage.Raw).message)
+        assertEquals("boom", (message as UiMessage.Raw).text)
     }
 
     @Test
     fun failed_nullCauseMessage_mapsFallback() {
         val message = MusicQueueOutcome.Failed(RuntimeException()).toMixErrorMessage()
 
-        assertEquals("Failed to start Instant Mix", (message as MixErrorMessage.Raw).message)
+        assertEquals("Failed to start Instant Mix", (message as UiMessage.Raw).text)
     }
 
     @Test
