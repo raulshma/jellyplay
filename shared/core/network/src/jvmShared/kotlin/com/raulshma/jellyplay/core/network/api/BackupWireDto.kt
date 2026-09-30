@@ -75,35 +75,41 @@ internal fun decodeBackupManifests(body: String): List<BackupManifestDto> {
 }
 
 private fun manifestFromAliases(obj: JsonObject): BackupManifestDto {
-    val manifest = BackupManifestDto(
-        backupEngineVersion = obj.firstText("backupEngineVersion", "engineVersion", "pluginVersion"),
-        dateCreated = obj.firstText("dateCreated", "createdUtc", "createdAt", "creationTime", "created", "timestamp"),
-        options = obj.firstOptions(),
-        path = obj.firstText("path", "archiveFileName", "fileName", "file", "archivePath", "filePath", "name"),
-        serverVersion = obj.firstText("serverVersion", "jellyfinVersion", "server_version"),
+    val keys = obj.lowerKeyed()
+    return BackupManifestDto(
+        backupEngineVersion = keys.firstText("backupEngineVersion", "engineVersion", "pluginVersion"),
+        dateCreated = keys.firstText("dateCreated", "createdUtc", "createdAt", "creationTime", "created", "timestamp"),
+        options = keys.firstOptions(),
+        path = keys.firstText("path", "archiveFileName", "fileName", "file", "archivePath", "filePath", "name"),
+        serverVersion = keys.firstText("serverVersion", "jellyfinVersion", "server_version"),
     )
-    return manifest
 }
 
 /**
  * Case-insensitive key lookup: the 12.x server answers with PascalCase
  * (`DateCreated`/`Path`/`Options`) where 10.11 wrote camelCase — the alias
  * lists above are matched against a lower-cased key map so both render.
+ * The map is built once per object and threaded through the lookups (a
+ * manifest's decode runs ~10 alias probes against it).
  */
-private fun JsonObject.field(vararg names: String): JsonElement? {
-    val byLowerCase = entries.associate { (key, value) -> key.lowercase() to value }
-    return names.firstNotNullOfOrNull { name -> byLowerCase[name.lowercase()] }
-}
+private fun JsonObject.lowerKeyed(): Map<String, JsonElement> =
+    entries.associate { (key, value) -> key.lowercase() to value }
 
-private fun JsonObject.firstOptions(): BackupOptionsDto? {
+private fun Map<String, JsonElement>.field(vararg names: String): JsonElement? =
+    names.firstNotNullOfOrNull { name -> this[name.lowercase()] }
+
+private fun Map<String, JsonElement>.firstOptions(): BackupOptionsDto? {
     val block = field("options", "backupOptions", "components") ?: return null
     return when (block) {
-        is JsonObject -> BackupOptionsDto(
-            metadata = block.firstBool("metadata", "includeMetadata") ?: false,
-            trickplay = block.firstBool("trickplay", "includeTrickplay") ?: false,
-            subtitles = block.firstBool("subtitles", "includeSubtitles") ?: false,
-            database = block.firstBool("database", "includeDatabase") ?: false,
-        )
+        is JsonObject -> {
+            val blockKeys = block.lowerKeyed()
+            BackupOptionsDto(
+                metadata = blockKeys.firstBool("metadata", "includeMetadata") ?: false,
+                trickplay = blockKeys.firstBool("trickplay", "includeTrickplay") ?: false,
+                subtitles = blockKeys.firstBool("subtitles", "includeSubtitles") ?: false,
+                database = blockKeys.firstBool("database", "includeDatabase") ?: false,
+            )
+        }
         // A 12.x-style component list (`["Metadata","Database"]`) maps by name.
         is JsonArray -> {
             val names = block.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.lowercase() }.toSet()
@@ -118,12 +124,12 @@ private fun JsonObject.firstOptions(): BackupOptionsDto? {
     }
 }
 
-private fun JsonObject.firstText(vararg keys: String): String? =
+private fun Map<String, JsonElement>.firstText(vararg keys: String): String? =
     keys.firstNotNullOfOrNull { key ->
         (field(key) as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull?.takeIf(String::isNotBlank)
     }
 
-private fun JsonObject.firstBool(vararg keys: String): Boolean? =
+private fun Map<String, JsonElement>.firstBool(vararg keys: String): Boolean? =
     keys.firstNotNullOfOrNull { key ->
         (field(key) as? JsonPrimitive)?.takeIf { it !is JsonNull }?.booleanOrNull
     }

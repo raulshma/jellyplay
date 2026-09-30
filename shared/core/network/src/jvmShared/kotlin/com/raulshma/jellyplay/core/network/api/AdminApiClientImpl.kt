@@ -174,16 +174,12 @@ class AdminApiClientImpl(
     private val backupRaw = JellyfinRawRequester(engine)
 
     override suspend fun listBackups(): Result<List<ServerBackup>> = engine.withApi { api ->
-        val body = api.request(pathTemplate = "/Backup").body.decodeToString()
-        if (body.isBlank()) {
-            emptyList()
-        } else {
-            // Wire-drift diagnostic: the manifest keys have already drifted
-            // once (10.11 → 12.x); the Debug line makes the next rename a
-            // logcat read instead of another blank-card hunt.
-            NetworkLog.d(TAG_BACKUPS, "GET /Backup → ${body.take(2_000)}")
-            decodeBackupManifests(body).map { it.toServerBackup() }
-        }
+        val body = fetchBackupListBody(api) ?: return@withApi emptyList()
+        // Wire-drift diagnostic: the manifest keys have already drifted
+        // once (10.11 → 12.x); the Debug line makes the next rename a
+        // logcat read instead of another blank-card hunt.
+        NetworkLog.d(TAG_BACKUPS, "GET /Backup → ${body.take(2_000)}")
+        decodeBackupManifests(body).map { it.toServerBackup() }
     }
 
     override suspend fun createBackup(options: BackupComponentOptions): Result<ServerBackup> = engine.withApi(maxRetries = 0) { api ->
@@ -224,16 +220,19 @@ class AdminApiClientImpl(
         // the long-idle mobile connection — the client only sees a transport
         // timeout while the archive lands server-side. Poll the list for the
         // new manifest instead of surfacing that failure.
-        val failure = outcome.exceptionOrNull()!!
+        val failure = checkNotNull(outcome.exceptionOrNull())
         NetworkLog.w(TAG_BACKUPS, "POST /Backup/Create transport failure (${failure::class.simpleName}); polling for the archive")
         pollForNewBackup(api, knownPaths)?.toServerBackup() ?: throw failure
     }
 
+    /** The raw `GET /Backup` body, or null when blank (the busy / no-archives answer). */
+    private suspend fun fetchBackupListBody(api: ApiClient): String? =
+        api.request(pathTemplate = "/Backup").body.decodeToString().takeUnless(String::isBlank)
+
     /** `GET /Backup` decoded through the alias table; null when the server is too busy to answer. */
     private suspend fun listManifests(api: ApiClient): List<BackupManifestDto>? =
         runCatchingRethrowingCancellation {
-            val body = api.request(pathTemplate = "/Backup").body.decodeToString()
-            if (body.isBlank()) emptyList() else decodeBackupManifests(body)
+            fetchBackupListBody(api)?.let(::decodeBackupManifests) ?: emptyList()
         }.getOrNull()
 
     /**
@@ -245,7 +244,14 @@ class AdminApiClientImpl(
         repeat(BACKUP_CREATE_POLL_ATTEMPTS) {
             // Check before sleeping: the archive may already be listed by the
             // time the transport failure surfaces.
-            val fresh = listManifests(api) ?: return@repeat
+            val fresh = listManifests(api)
+            if (fresh == null) {
+                // Busy server (the null case): back off like a normal round —
+                // returning early here would burn the remaining rounds with
+                // no gap between the requests.
+                kotlinx.coroutines.delay(BACKUP_CREATE_POLL_INTERVAL_MS)
+                return@repeat
+            }
             val created = fresh.firstOrNull { entry -> entry.path != null && entry.path !in knownPaths }
             if (created != null) {
                 NetworkLog.d(TAG_BACKUPS, "create poll found ${created.path}")

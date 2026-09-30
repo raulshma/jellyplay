@@ -264,11 +264,7 @@ internal class PlayerWiring(
 
     internal val autoplayController = AutoPlayController()
 
-    /**
-     * True while a next-episode load is in flight and unsettled. The Up Next
-     * overlay disables its play button on this flag, so rapid re-taps can
-     * neither stack duplicate loads nor restart playback once per tap (#146).
-     */
+    /** The platform trickplay controller handle; the load-time selection lives on [trickplayPreparation] below. */
     internal val trickplayManager = platform.createTrickplayController(playbackRepository)
 
     /**

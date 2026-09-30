@@ -525,8 +525,9 @@ the ownership suite.
 `jvmTest`): the literals `getUiState =` / `updateUiState =` /
 `uiState = _uiState` appear in exactly 3 places across
 `shared/feature/player-video` commonMain+androidMain — `SettingsProjector`'s
-pair and `PlaybackProgressReporter`'s raw handle, both in
-`VideoPlayerViewModel.kt`. `PlaybackSession.kt` and the other migrated
+pair (in `PlayerWiring.kt`, where the projector was moved with the wiring
+graph) and `PlaybackProgressReporter`'s raw handle (in
+`VideoPlayerViewModel.kt`). `PlaybackSession.kt` and the other migrated
 controllers must stay free of `VideoPlayerUiState` code references (the
 ratchet test strips comments before counting, so KDoc prose is exempt —
 `EpisodeNavigator`'s doc mentions the type).

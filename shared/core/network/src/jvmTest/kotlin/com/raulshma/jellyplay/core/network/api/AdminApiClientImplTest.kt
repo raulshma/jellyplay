@@ -1,8 +1,11 @@
 package com.raulshma.jellyplay.core.network.api
 
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.model.api.DayOfWeek as SdkDayOfWeek
 import org.jellyfin.sdk.model.api.GeneralCommandType
@@ -27,22 +30,34 @@ import kotlin.test.assertTrue
  *     play → PLAY_NOW, general command → SET_VOLUME with the nil controller id
  *     and empty arguments; STOP playstate travels in the path;
  *  5. task-trigger updates map day-of-week case-insensitively and degrade an
- *     unknown trigger type to INTERVAL_TRIGGER.
+ *     unknown trigger type to INTERVAL_TRIGGER;
+ *  6. the backup create's raw-OkHttp POST leg (endpoint, method, auth scheme
+ *     and the hand-built per-component body) is pinned through an interceptor.
  */
 class AdminApiClientImplTest {
 
     private lateinit var engine: JellyfinApiEngine
     private lateinit var client: RecordingApiClient
     private lateinit var admin: AdminApiClientImpl
+    private val rawRecorder = RawRequestRecorder()
 
     @BeforeTest
     fun setup() {
         client = RecordingApiClient()
+        // The router is a relaxed mock with a permanently-null activeAddress:
+        // a REAL router + updateSession makes the engine's rebuild collector
+        // call the SDK's createApi default-args static, which NPEs on the
+        // mock Jellyfin's null options (see AuthApiClientTest's full-arity
+        // note). With the flow stuck at null the collector never fires, and
+        // requireSession falls back to the published server address — the
+        // shape requireSession is documented to produce.
+        val router = mockk<com.raulshma.jellyplay.core.network.failover.ServerAddressRouter>(relaxed = true)
+        every { router.activeAddress } returns kotlinx.coroutines.flow.MutableStateFlow(null)
         engine = JellyfinApiEngine(
             jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
-            okHttpClientLazy = LazyProvider { OkHttpClient() },
+            okHttpClientLazy = LazyProvider { OkHttpClient.Builder().addInterceptor(rawRecorder).build() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
-            addressRouter = com.raulshma.jellyplay.core.network.failover.ServerAddressRouter(),
+            addressRouter = router,
         )
         engine.updateApi(client)
         admin = AdminApiClientImpl(engine)
@@ -86,6 +101,23 @@ class AdminApiClientImplTest {
         val queryParameters: Map<String, Any?>,
         val requestBody: Any?,
     )
+
+    /** Answers the raw-OkHttp escape-hatch legs (e.g. the backup create POST) with a canned 200 and records each request. */
+    private class RawRequestRecorder : okhttp3.Interceptor {
+        val requests = mutableListOf<okhttp3.Request>()
+        var responseBody: String = "{}"
+        override fun intercept(chain: okhttp3.Interceptor.Chain): okhttp3.Response {
+            val request = chain.request()
+            requests += request
+            return okhttp3.Response.Builder()
+                .request(request)
+                .protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(responseBody.toResponseBody("application/json".toMediaType()))
+                .build()
+        }
+    }
 
     @Test
     fun `getSystemInfo is served from the TTL cache on a back-to-back read`() = runTest {
@@ -264,6 +296,52 @@ class AdminApiClientImplTest {
         assertEquals("10.11.2", backup.serverVersion)
         assertEquals(true, backup.options.database)
         assertEquals(false, backup.options.trickplay)
+    }
+
+    @Test
+    fun `createBackup posts Backup-Create with the SDK auth scheme and every component byte on the wire`() = runTest {
+        // The POST rides JellyfinRawRequester (raw OkHttp), not the recorded
+        // ApiClient — the interceptor answers it and pins the exact wire
+        // shape. The body is hand-built so a FALSE component's byte still
+        // travels (the manifest's options block is what the settings screen
+        // reads back, so a dropped `false` would silently archive MORE than
+        // asked), and the auth scheme must stay `MediaBrowser Token=…` — the
+        // legacy X-Emby-Token header 401s against Jellyfin 12.x.
+        engine.updateSession(
+            com.raulshma.jellyplay.core.model.ServerInfo(id = "server-1", name = "Test", address = "https://test.example.com"),
+            com.raulshma.jellyplay.core.model.UserInfo(
+                id = "user-1",
+                name = "test",
+                serverAddress = "https://test.example.com",
+                accessToken = "token-123",
+            ),
+        )
+        rawRecorder.responseBody = """
+            [{"path":"/backups/created.zip","serverVersion":"10.11.2",
+              "options":{"metadata":true,"trickplay":false,"subtitles":true,"database":true}}]
+        """.trimIndent()
+        client.enqueueBody("[]") // the pre-create snapshot GET
+
+        val created = admin.createBackup(
+            com.raulshma.jellyplay.core.model.BackupComponentOptions(
+                metadata = true,
+                trickplay = false,
+                subtitles = true,
+                database = true,
+            ),
+        ).getOrThrow()
+
+        assertEquals("/backups/created.zip", created.path)
+        assertEquals(true, created.options.database)
+        val post = rawRecorder.requests.single()
+        assertEquals("POST", post.method)
+        assertEquals("/Backup/Create", post.url.encodedPath)
+        assertEquals("""MediaBrowser Token="token-123"""", post.header("Authorization"))
+        assertEquals(
+            """{"metadata":true,"trickplay":false,"subtitles":true,"database":true}""",
+            okio.Buffer().also { post.body!!.writeTo(it) }.readUtf8(),
+        )
+        assertEquals(1, client.requests.size, "only the snapshot rides the recorded client — the POST must not fall back to the list poll")
     }
 
     @Test

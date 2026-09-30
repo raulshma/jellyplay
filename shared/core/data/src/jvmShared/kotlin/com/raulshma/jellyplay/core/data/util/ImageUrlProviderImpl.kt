@@ -31,15 +31,19 @@ import java.util.Collections
  * width (which embeds the performance-mode decision) so a perf-mode toggle
  * produces a distinct, correct entry rather than serving a stale width.
  *
- * Width policy: a null caller width (original-resolution requests, e.g. the
- * full-screen photo viewer) bypasses BOTH the clamp and the cache; the
- * default-width (no-arg) request rides the performance-mode clamp to
- * [PERF_MAX_WIDTH]; any OTHER explicit width is honored verbatim — the
- * infrastructural callers that migrated off the repository surface (queue
- * artwork, offline preloads, heatmap rows, media-session/cast artwork) pass
- * deliberate per-surface sizes (200/300/600/1280) and never rode the clamp,
- * so clamping only the default-width path keeps every caller's emitted URL
- * identical across the migration.
+ * Width policy (the width-taking members, [getImageUrl]/[getBackdropUrl]): a
+ * null caller width (original-resolution requests, e.g. the full-screen photo
+ * viewer) bypasses BOTH the clamp and the cache; the default-width (no-arg)
+ * request rides the performance-mode clamp to [PERF_MAX_WIDTH]; any OTHER
+ * explicit width is honored verbatim — the infrastructural callers that
+ * migrated off the repository surface (queue artwork, offline preloads,
+ * heatmap rows, media-session/cast artwork) pass deliberate per-surface sizes
+ * (200/300/600/1280) and never rode the clamp, so clamping only the
+ * default-width path keeps every caller's emitted URL identical across the
+ * migration. [getLogoUrl]/[getChapterImageUrl] take no caller width at all —
+ * one fixed rendering per item — so they always sit on the
+ * [PERF_MAX_WIDTH]/[ImageUrlProvider.DEFAULT_MAX_WIDTH] pair and the
+ * verbatim rule above never applies to them.
  * Performance mode lowers the width to [PERF_MAX_WIDTH]. Empty client URLs are
  * never cached, so a later login/server change can start producing URLs.
  */
