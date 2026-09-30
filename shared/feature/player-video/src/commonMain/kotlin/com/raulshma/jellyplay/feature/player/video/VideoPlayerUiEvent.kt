@@ -95,7 +95,11 @@ sealed interface VideoPlayerUiEvent {
      */
     data class TransportPlay(val play: Boolean) : VideoPlayerUiEvent
 
-    /** Seeks the engine to an absolute [positionMs] (user-initiated — segment-clamped). */
+    /**
+     * The transport seek funnel (the [TransportPlay] companion): SyncPlay
+     * group first, cast receiver second, local engine last — the local arm
+     * is user-initiated and segment-clamped.
+     */
     data class SeekTo(val positionMs: Long) : VideoPlayerUiEvent
 
     /** Steps the seek by the configured window ([direction] < 0 back, else forward). */

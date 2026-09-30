@@ -15,7 +15,7 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import android.util.LruCache
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -204,18 +204,18 @@ object WidgetImageLoader {
      * Canonical Continue-Watching poster rule: the CW factory's
      * onDataSetChanged preload and the broadcaster's snapshot prewarm must
      * derive the SAME (image id, url) per row — the image id and cell width
-     * come from [WidgetPosterIdentity], the repository is only the url
+     * come from [WidgetPosterIdentity], the provider is only the url
      * fetcher. Returns the entry so the factory's posterCache key and the
      * prewarmed url share one definition and can't drift.
      */
     fun continueWatchingPosterEntry(
         item: MediaItem,
-        playbackRepository: PlaybackRepository,
+        imageUrlProvider: ImageUrlProvider,
     ): ContinueWatchingPosterEntry {
         val imageId = WidgetPosterIdentity.continueWatchingPosterImageId(item)
         return ContinueWatchingPosterEntry(
             imageId,
-            playbackRepository.getImageUrl(imageId, maxWidth = WidgetPosterIdentity.CONTINUE_WATCHING_POSTER_MAX_WIDTH),
+            imageUrlProvider.getImageUrl(imageId, maxWidth = WidgetPosterIdentity.CONTINUE_WATCHING_POSTER_MAX_WIDTH),
         )
     }
 
@@ -230,9 +230,9 @@ object WidgetImageLoader {
     fun prewarmContinueWatchingPosters(
         context: Context,
         items: List<MediaItem>,
-        playbackRepository: PlaybackRepository,
+        imageUrlProvider: ImageUrlProvider,
     ) {
-        prewarmPosters(context, items.map { continueWatchingPosterEntry(it, playbackRepository).url })
+        prewarmPosters(context, items.map { continueWatchingPosterEntry(it, imageUrlProvider).url })
     }
 
     private fun applyRoundedCorners(context: Context, bitmap: Bitmap, cornerRadiusDp: Float = 10f): Bitmap {

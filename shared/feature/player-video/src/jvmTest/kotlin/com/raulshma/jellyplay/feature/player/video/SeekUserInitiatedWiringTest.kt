@@ -28,6 +28,12 @@ import java.io.File
  *     non-user-initiated, while the overlay-button arm
  *     (`VideoPlayerViewModel.skipSegment`) stays user-initiated.
  *
+ * Since the [VideoPlayerViewModel] wiring moved into [PlayerWiring] (the
+ * two-phase composition builder), three anchors live in the builder's source
+ * instead of the VM's: the SyncPlay position-sync lambda, the reporter's
+ * auto-skip routing and the aggregate-backed clamp gate. The contract is
+ * unchanged — only the file the regex scans adapted.
+ *
  * If a reformat trips a regex here, the assertion message names the contract
  * to restore — never delete an assertion to make a reformat pass.
  */
@@ -47,6 +53,10 @@ class SeekUserInitiatedWiringTest {
 
     private val vmSource: String by lazy {
         moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/VideoPlayerViewModel.kt")
+    }
+
+    private val wiringSource: String by lazy {
+        moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/PlayerWiring.kt")
     }
 
     private fun assertMatchesIn(source: String, regex: Regex, what: String) {
@@ -74,7 +84,7 @@ class SeekUserInitiatedWiringTest {
         )
         assertMatchesIn(
             vmSource,
-            Regex("""enabled = cachedAggregate\.videoPlayer\.skipSegmentsOnSeek"""),
+            Regex("""enabled = (wiring\.)?cachedAggregate\.videoPlayer\.skipSegmentsOnSeek"""),
             "the clamp must read the skip_segments_on_seek setting from the video-player store",
         )
     }
@@ -90,9 +100,11 @@ class SeekUserInitiatedWiringTest {
 
     @Test
     fun `syncplay group position sync passes userInitiated = false`() {
+        // The lambda lives on the builder's SyncPlayBridge wiring since the
+        // PlayerWiring move; it routes through the VM's seekTo funnel either way.
         assertMatchesIn(
-            vmSource,
-            Regex("""seekTo\(positionTicks / 10_000, userInitiated = false\)"""),
+            wiringSource,
+            Regex("""host\.seekTo\(positionTicks / 10_000, userInitiated = false\)"""),
             "SyncPlay's group-driven position sync is not a user seek — never clamp it",
         )
     }
@@ -128,9 +140,12 @@ class SeekUserInitiatedWiringTest {
 
     @Test
     fun `the progress reporter routes auto-skips through the notice-raising arm`() {
+        // The reporter's construction lives on the builder since the
+        // PlayerWiring move; the route still ends at the VM's autoSkipSegment
+        // arm through the Host seam.
         assertMatchesIn(
-            vmSource,
-            Regex("""onAutoSkip = \{ segment -> autoSkipSegment\(segment\) \}"""),
+            wiringSource,
+            Regex("""onAutoSkip = \{ segment -> host\.autoSkipSegment\(segment\) \}"""),
             "PlaybackProgressReporter's onAutoSkip must route to the VM's autoSkipSegment arm " +
                 "(notice + non-user seek), not the button arm",
         )

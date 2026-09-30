@@ -64,7 +64,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
             TvWatchNextWorker::class.simpleName -> TvWatchNextWorker(
                 context, workerParameters,
                 mediaRepository = koin().get(),
-                playbackRepository = koin().get(),
+                imageUrlProvider = koin().get(),
                 playbackStore = koin().get(),
                 timeSource = koin().get(),
             )

@@ -50,9 +50,13 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
+import com.raulshma.jellyplay.feature.shell.navigation.ShellAudioSource
+import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAdminGate
+import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import com.raulshma.jellyplay.shell.ShellInfra
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 internal fun MainContent(
@@ -345,32 +349,20 @@ internal fun MainContent(
             val saveableStateHolder = rememberSaveableStateHolder()
             val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
             // Hoist the audio-mini-player navigation callbacks so all three layout branches
-            // (TvContent / PhoneContent / FullScreenContent) can share identical instances
-            // instead of allocating fresh lambdas per call site. Remembered on their only
-            // captures (the identity-stable navigator + the playback manager), and the
-            // audio state is read at CLICK TIME from the manager's flows — the desktop
-            // hooks' pattern: capturing the composed `audioItemId` instead would either
-            // go stale (keyed on the navigator alone) or rebuild the shellHost graph on
-            // every song change (keyed on the item). Equivalent while resumed, which is
-            // the only time a click can land.
-            val onNowPlayingClick: () -> Unit = remember(navigator, audioPlaybackManager) {
-                {
-                    audioPlaybackManager.currentPlayingItemId.value?.let { itemId ->
-                        navigator.navigate(Route.AudioPlayer(itemId))
-                    }
-                }
+            // (TvContent / PhoneContent / FullScreenContent) share identical instances
+            // instead of allocating fresh lambdas per call site. Built through the shared
+            // rememberShellAudioClicks — the ONE construction site for the pair (its KDoc
+            // owns the remember-key discipline and the blank-art→null normalization):
+            // this shell adapts its audio core (AudioPlaybackManager) to ShellAudioSource,
+            // remembered on the manager, and the helper reads the manager's flows at
+            // CLICK time — the desktop hooks' pattern. Capturing the composed
+            // `audioItemId` instead would either go stale (keyed on the navigator
+            // alone) or rebuild the shellHost graph on every song change (keyed on
+            // the item). Equivalent while resumed, which is the only time a click can land.
+            val audioSource = remember(audioPlaybackManager) {
+                AudioPlaybackShellAudioSource(audioPlaybackManager)
             }
-            val onAmbientClick: () -> Unit = remember(navigator, audioPlaybackManager) {
-                {
-                    navigator.navigate(
-                        Route.Ambient(
-                            imageUrl = audioPlaybackManager.albumArtUrl.value,
-                            title = audioPlaybackManager.title.value,
-                            artist = audioPlaybackManager.artist.value,
-                        )
-                    )
-                }
-            }
+            val audioClicks = rememberShellAudioClicks(navigator, audioSource)
 
             // Play On (cast-to-Jellyfin-session) controller — the ONE
             // construction site for the whole Play On surface family, hoisted
@@ -407,10 +399,9 @@ internal fun MainContent(
             // captures (the discipline the factory's KDoc states) — the
             // graph rebuilds only when these identities change, the same
             // triggers the former inline remember keyed on.
-            // Lazy .value reads — admin refreshes don't rebuild the graph.
-            val isAdmin: () -> Boolean = remember(isAdminState) { { isAdminState.value } }
-            val isRefreshingAdmin: () -> Boolean =
-                remember(isRefreshingAdminState) { { isRefreshingAdminState.value } }
+            // The admin reads are the shared rememberShellAdminGate outputs —
+            // lazy .value reads, so admin refreshes don't rebuild the graph.
+            val adminGate = rememberShellAdminGate(isAdminState, isRefreshingAdminState)
             val onRefreshAdmin: () -> Unit = remember(model) { { model.refreshAdminStatus() } }
             val onCheckForUpdates: () -> Unit = remember(infra) {
                 { infra.updateCoordinatorLazy.value.manualCheckForUpdate() }
@@ -434,12 +425,12 @@ internal fun MainContent(
                 navigator = navigator,
                 homeMode = homeMode,
                 onHomeModeChange = onModeChange,
-                onNowPlayingClick = onNowPlayingClick,
-                onAmbientClick = onAmbientClick,
+                onNowPlayingClick = audioClicks.onNowPlayingClick,
+                onAmbientClick = audioClicks.onAmbientClick,
                 onLogout = onLogout,
                 onCheckForUpdates = onCheckForUpdates,
-                isAdmin = isAdmin,
-                isRefreshingAdmin = isRefreshingAdmin,
+                isAdmin = adminGate.isAdmin,
+                isRefreshingAdmin = adminGate.isRefreshingAdmin,
                 onRefreshAdmin = onRefreshAdmin,
                 playOnRedirect = playOnRedirect,
                 surpriseRequests = model.surpriseRequests,
@@ -463,8 +454,8 @@ internal fun MainContent(
                 onModeChange = onModeChange,
                 saveableStateHolder = saveableStateHolder,
                 entryDecorator = entryDecorator,
-                onNowPlayingClick = onNowPlayingClick,
-                onAmbientClick = onAmbientClick,
+                onNowPlayingClick = audioClicks.onNowPlayingClick,
+                onAmbientClick = audioClicks.onAmbientClick,
                 playOn = playOn,
                 shellHost = shellHost,
             )
@@ -559,4 +550,21 @@ internal fun MainContent(
             }
         }
     }
+}
+
+/**
+ * This shell's [ShellAudioSource] over [AudioPlaybackManager] — the manager's
+ * four StateFlow members forwarded verbatim (the desktop twin adapts
+ * DesktopAudioQueueManager the same way beside its scaffold). Remembered on
+ * the manager at the call site: a fresh-per-recomposition adapter would churn
+ * the rememberShellAudioClicks helper's remember keys (the discipline its
+ * KDoc owns).
+ */
+private class AudioPlaybackShellAudioSource(
+    private val manager: AudioPlaybackManager,
+) : ShellAudioSource {
+    override val currentPlayingItemId: StateFlow<String?> get() = manager.currentPlayingItemId
+    override val albumArtUrl: StateFlow<String> get() = manager.albumArtUrl
+    override val title: StateFlow<String> get() = manager.title
+    override val artist: StateFlow<String> get() = manager.artist
 }

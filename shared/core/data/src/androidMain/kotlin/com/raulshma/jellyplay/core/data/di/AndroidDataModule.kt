@@ -51,7 +51,7 @@ fun androidDataModule(context: Context): Module {
 
         single<ImageUrlProvider> {
             ImageUrlProviderImpl(
-                playbackRepository = get(),
+                libraryApiClient = get(),
                 appearanceStore = get(),
             )
         }

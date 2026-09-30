@@ -7,12 +7,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.awt.ComposeWindow
-import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
+import com.raulshma.jellyplay.core.data.remote.DisplayMessagePayload
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
+import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.ui.message.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
@@ -69,9 +70,9 @@ import org.koin.compose.koinInject
  *    [UserMessageBus], the DesktopMusicMessageBus relay and the
  *    remote-control receiver's DisplayMessages (the receiver is the SAME
  *    Koin single DesktopAppRoot arms through
- *    RealtimeSessionController.create — collecting its flow here does not
- *    re-arm it; see [desktopUserMessageSources] for the source order and
- *    the playEvents decision);
+ *    RealtimeSessionController.create — collecting its displayMessages flow
+ *    here does not re-arm it; see [desktopUserMessageSources] for the
+ *    source order and the playEvents decision);
  *  - the remote navigation bridge collector: [remoteNavigation] — the shared
  *    [RemoteNavigationDispatcher] ladder over this shell's seams (pushes
  *    through [guardedNavigator], tab switches writing `topLevelRoute`
@@ -105,8 +106,11 @@ import org.koin.compose.koinInject
  *   back stacks and the remote tab-switch seam write through it.
  * @param showMessage the snackbar sink shared by the update check, the
  *   dead-end guard and the remote-nav fallback messages.
- * @param focusManager the composition's Compose FocusManager — the remote
- *   MoveFocus seam's target.
+ * @param moveFocus the composition's Compose focus seam — the remote
+ *   MoveFocus target, pre-adapted from the FocusManager through
+ *   [composeFocusDirection] by [rememberDesktopShellServices] (a lambda
+ *   rather than the FocusManager itself so this holder stays free of the
+ *   Compose-UI type and JVM-constructible, as its tests rely on).
  * @param windowRef Main.kt's AWT window ref — the remote select seam's
  *   Enter-key synthesis posts through it; content null until composed.
  */
@@ -114,7 +118,7 @@ internal class DesktopShellServices(
     private val scope: CoroutineScope,
     navigation: NavigationState,
     showMessage: suspend (String) -> Unit,
-    focusManager: FocusManager,
+    moveFocus: (RemoteFocusDirection) -> Unit,
     windowRef: AtomicReference<ComposeWindow?>?,
 
     /**
@@ -138,7 +142,16 @@ internal class DesktopShellServices(
      */
     val sharedUserMessageBus: UserMessageBus,
     musicMessageBus: MusicMessageBus,
-    remoteControlReceiver: RemoteControlReceiver,
+    /**
+     * The receiver's DisplayMessage flow — the host source [userMessageSources]
+     * adds third (see [desktopUserMessageSources]). The receiver is the SAME
+     * Koin single DesktopAppRoot arms through RealtimeSessionController.create;
+     * the factory passes its `displayMessages` flow here (a plain flow, not
+     * the receiver itself, so the holder stays free of the final transport
+     * type and JVM-constructible, as its test relies on), and collecting the
+     * flow does not re-arm the receiver.
+     */
+    remoteDisplayMessages: Flow<DisplayMessagePayload>,
     private val remoteNavigationBridge: RemoteNavigationBridge,
     val audioQueueManager: DesktopAudioQueueManager,
     activePlayerRegistry: ActivePlayerController,
@@ -215,7 +228,7 @@ internal class DesktopShellServices(
     val userMessageSources: List<Flow<UserMessage>> = desktopUserMessageSources(
         sharedUserMessageBus = sharedUserMessageBus,
         musicMessageBus = musicMessageBus,
-        remoteDisplayMessages = remoteControlReceiver.displayMessages,
+        remoteDisplayMessages = remoteDisplayMessages,
     )
 
     /**
@@ -240,9 +253,7 @@ internal class DesktopShellServices(
         goBack = { guardedNavigator.goBack() },
         backStacks = { navigation.backStacks.values },
         presentMessage = showMessage,
-        moveFocus = { direction ->
-            focusManager.moveFocus(composeFocusDirection(direction))
-        },
+        moveFocus = moveFocus,
         invokeSelect = { DesktopKeySynthesizer.postEnterKey(windowRef?.get()) },
     )
 
@@ -319,6 +330,12 @@ internal fun rememberDesktopShellServices(
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val showMessage: suspend (String) -> Unit = { snackbarHostState.showSnackbar(it) }
+    // The MoveFocus adapter (FocusManager + composeFocusDirection) the holder
+    // receives as a plain lambda — remembered on the focus manager so the
+    // holder's remember key below stays as stable as the old focusManager key.
+    val moveFocus: (RemoteFocusDirection) -> Unit = remember(focusManager) {
+        { direction -> focusManager.moveFocus(composeFocusDirection(direction)) }
+    }
 
     // Koin singles (stable for the app lifetime — keyed on anyway, the same
     // discipline the scaffold's per-service remembers applied, so a rebound
@@ -330,6 +347,7 @@ internal fun rememberDesktopShellServices(
     val sharedUserMessageBus: UserMessageBus = koinInject()
     val musicMessageBus: MusicMessageBus = koinInject()
     val remoteControlReceiver: RemoteControlReceiver = koinInject()
+    val remoteDisplayMessages = remoteControlReceiver.displayMessages
     val remoteNavigationBridge: RemoteNavigationBridge = koinInject()
     val audioQueueManager: DesktopAudioQueueManager = koinInject()
     val activePlayerRegistry: ActivePlayerController = koinInject()
@@ -345,14 +363,14 @@ internal fun rememberDesktopShellServices(
         scope,
         navigation,
         snackbarHostState,
-        focusManager,
+        moveFocus,
         windowRef,
         authRepository,
         homeDiscoveryStore,
         appUpdateRepository,
         sharedUserMessageBus,
         musicMessageBus,
-        remoteControlReceiver,
+        remoteDisplayMessages,
         remoteNavigationBridge,
         audioQueueManager,
         activePlayerRegistry,
@@ -368,14 +386,14 @@ internal fun rememberDesktopShellServices(
             scope = scope,
             navigation = navigation,
             showMessage = showMessage,
-            focusManager = focusManager,
+            moveFocus = moveFocus,
             windowRef = windowRef,
             authRepository = authRepository,
             homeDiscoveryStore = homeDiscoveryStore,
             appUpdateRepository = appUpdateRepository,
             sharedUserMessageBus = sharedUserMessageBus,
             musicMessageBus = musicMessageBus,
-            remoteControlReceiver = remoteControlReceiver,
+            remoteDisplayMessages = remoteDisplayMessages,
             remoteNavigationBridge = remoteNavigationBridge,
             audioQueueManager = audioQueueManager,
             activePlayerRegistry = activePlayerRegistry,

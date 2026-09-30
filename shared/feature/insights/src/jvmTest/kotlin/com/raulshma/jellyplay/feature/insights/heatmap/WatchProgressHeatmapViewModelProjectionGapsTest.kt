@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.feature.insights.heatmap
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import io.mockk.Runs
@@ -52,7 +52,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
 
     private lateinit var watchHistoryRepository: WatchHistoryRepository
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var imageUrlProvider: ImageUrlProvider
 
     private lateinit var playbackReportingStatus: MutableStateFlow<PlaybackReportingStatus>
 
@@ -67,7 +67,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
         Dispatchers.setMain(mainDispatcher)
         watchHistoryRepository = mockk()
         mediaRepository = mockk()
-        playbackRepository = mockk()
+        imageUrlProvider = mockk()
         playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.AVAILABLE)
         every { watchHistoryRepository.playbackReportingStatus } returns playbackReportingStatus
         coEvery { watchHistoryRepository.refreshPlaybackReportingStatus() } just Runs
@@ -84,7 +84,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
             yearQueries += firstArg<Int>() to secondArg<HeatmapFilter>()
             emptyList()
         }
-        every { playbackRepository.getImageUrl(any(), any(), any()) } returns "http://img"
+        every { imageUrlProvider.getImageUrl(any(), any()) } returns "http://img"
         // Day-selection resolution: a failed detail lookup simply skips the
         // cache (the label under test lives in SelectedDayInfo itself).
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
@@ -99,7 +99,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     private fun newViewModel(): WatchProgressHeatmapViewModel = WatchProgressHeatmapViewModel(
         watchHistoryRepository = watchHistoryRepository,
         mediaRepository = mediaRepository,
-        playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
     )
 
     private fun session(itemId: String, name: String) = PlaybackReportingDetail(

@@ -187,7 +187,7 @@ fun androidAppModule(context: Context): Module = module {
         ContinueWatchingBroadcasterImpl(
             context = context,
             widgetDataStore = get(),
-            playbackRepository = get(),
+            imageUrlProvider = get(),
         )
     }
     single<LibrarySyncHook> {

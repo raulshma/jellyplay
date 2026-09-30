@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -56,6 +57,7 @@ class AudioLibraryBrowserTest {
     private val playlistRepository: PlaylistRepository = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val playbackSourceResolver: PlaybackSourceResolver = mockk(relaxed = true)
     private val adaptiveBitrateSelector: AdaptiveBitrateSelector = mockk(relaxed = true)
 
@@ -72,6 +74,7 @@ class AudioLibraryBrowserTest {
         playlistRepository = playlistRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
         playbackSourceResolver = playbackSourceResolver,
         streamingQualityProvider = { StreamingQuality.HD_720P },
         adaptiveBitrateSelector = adaptiveBitrateSelector,
@@ -186,7 +189,7 @@ class AudioLibraryBrowserTest {
         val ids = listOf("t1", "t2")
         coEvery { musicCatalogue.getAlbumTracks("album-1", force = false) } returns Result.success(ids.map(::track))
         stubLocalResolves(ids)
-        coEvery { playbackRepository.getImageUrl(any(), any(), any()) } returns "https://server/art/t1.jpg"
+        coEvery { imageUrlProvider.getImageUrl(any(), any()) } returns "https://server/art/t1.jpg"
         val browser = browser()
 
         val resolved = addItems(browser, "ALBUM_|album-1")

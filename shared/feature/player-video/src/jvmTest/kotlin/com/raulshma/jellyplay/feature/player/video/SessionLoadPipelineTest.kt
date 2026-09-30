@@ -1,13 +1,20 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -19,8 +26,10 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -37,6 +46,12 @@ import org.junit.Test
  * ~15-stage coroutine. A fake [SessionLoadOutputs] + recording [SessionLoadHooks]
  * capture the invocation order; the collaborators ([PlayerSessionManager],
  * [MediaExtrasReads], stores) are stubbed.
+ *
+ * Since the [VideoSessionHost] deletion, the three stage bodies with real
+ * logic are pipeline members, so their behavior pins moved here too (from the
+ * deleted VideoSessionHostTest): the segments fetch's offline-first
+ * precedence, the cinema gate's five vetoes, and the remembered-muted
+ * restore's mirror-then-engine order.
  *
  * Constraints pinned:
  *  - `loadMedia` runs BEFORE per-item hydration, and the hydration reads a
@@ -79,18 +94,15 @@ class SessionLoadPipelineTest {
 
     private fun recordingHooks(
         stages: MutableList<String>,
-        cinemaGate: Boolean = false,
         offlineResumeTicks: Long = 0L,
     ) = SessionLoadHooks(
         reconcileSyncPlayQueue = { _, _, _ -> stages += "reconcileSyncPlayQueue" },
-        shouldAttemptCinemaMode = { _, _, _ -> cinemaGate },
         beginCinemaMode = { _, _ -> stages += "beginCinemaMode" },
         resolveOfflineResumeTicks = { _, _ ->
             stages += "resolveOfflineResumeTicks"
             offlineResumeTicks
         },
         onSessionPrefsApplied = { stages += "onSessionPrefsApplied" },
-        restoreRememberedMuted = { stages += "restoreRememberedMuted" },
         onItemHydrated = { _, _ -> stages += "onItemHydrated" },
         createMediaSession = { _, _, _ -> stages += "createMediaSession" },
         applyMediaDetail = { stages += "applyMediaDetail" },
@@ -98,7 +110,6 @@ class SessionLoadPipelineTest {
         reportPlaybackStart = { _, _, _ -> stages += "reportPlaybackStart" },
         startPositionTracking = { stages += "startPositionTracking" },
         startProgressReporting = { stages += "startProgressReporting" },
-        fetchMediaSegments = { stages += "fetchMediaSegments" },
         fetchAdjacentEpisodes = { stages += "fetchAdjacentEpisodes" },
         loadSeriesEpisodes = { stages += "loadSeriesEpisodes" },
         onOutcome = { outcome -> stages += "onOutcome($outcome)" },
@@ -128,8 +139,11 @@ class SessionLoadPipelineTest {
             isReady = true,
         ),
         intros: List<MediaItem> = emptyList(),
+        aggregate: VideoPlayerAggregate = VideoPlayerAggregate(),
+        inSyncPlay: Boolean = false,
+        detailHolder: MediaDetail? = null,
         loadMediaBlock: CompletableDeferred<Unit>? = null,
-    ): SessionLoadPipeline {
+    ): Fixture {
         val sessionManager = mockk<PlayerSessionManager>(relaxed = true)
         every { sessionManager.sessionState } returns MutableStateFlow(sessionState)
         if (loadMediaBlock != null) {
@@ -147,22 +161,57 @@ class SessionLoadPipelineTest {
         coEvery { mediaExtrasReads.getIntros(any()) } returns Result.success(intros)
 
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
-        every { aggregateStore.aggregate } returns MutableStateFlow(VideoPlayerAggregate())
-        every { aggregateStore.aggregateRaw } returns flowOf(VideoPlayerAggregate())
+        every { aggregateStore.aggregate } returns MutableStateFlow(aggregate)
+        every { aggregateStore.aggregateRaw } returns flowOf(aggregate)
 
         val networkOfflineStore = mockk<NetworkOfflineStore>(relaxed = true)
         every { networkOfflineStore.networkOffline } returns MutableStateFlow(
             com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice()
         )
 
-        return SessionLoadPipeline(
+        val offlinePlaybackFacade = mockk<OfflinePlaybackFacade>(relaxed = true)
+        coEvery { offlinePlaybackFacade.loadSegments(any()) } returns null
+
+        val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
+        every { syncPlayManager.isInSyncPlaySession } returns inSyncPlay
+
+        val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
+        coEvery { playbackRepository.getMediaSegments(any()) } returns Result.success(emptyList())
+
+        val pipeline = SessionLoadPipeline(
             sessionManager = sessionManager,
             mediaExtrasReads = mediaExtrasReads,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
+            offlinePlaybackFacade = offlinePlaybackFacade,
+            syncPlayManager = syncPlayManager,
+            getMediaDetail = { detailHolder },
+            playbackRepository = playbackRepository,
+            setMutedMirror = { muted ->
+                stages += "mutedMirror($muted)"
+            },
+            onSegmentsFetched = { segments ->
+                stages += "onSegmentsFetched(${segments.size})"
+            },
             outputs = RecordingOutputs(stages),
             hooks = hooks,
         )
+        return Fixture(pipeline, offlinePlaybackFacade, playbackRepository, sessionManager)
+    }
+
+    /** The pipeline plus the mocks the member-behavior pins arrange per test. */
+    private class Fixture(
+        val pipeline: SessionLoadPipeline,
+        val offlinePlaybackFacade: OfflinePlaybackFacade,
+        val playbackRepository: PlaybackRepository,
+        val sessionManager: PlayerSessionManager,
+    ) {
+        operator fun component1() = pipeline
+        operator fun component2() = offlinePlaybackFacade
+        operator fun component3() = playbackRepository
+
+        /** Delegates to the pipeline's start so the existing call sites keep reading `pipeline.start(...)`. */
+        fun start(scope: CoroutineScope, request: LoadRequest) = pipeline.start(scope, request)
     }
 
     private fun request() = LoadRequest(
@@ -184,12 +233,16 @@ class SessionLoadPipelineTest {
         pipeline.start(this, request()).join()
         runCurrent()
 
+        // The segments fetch launches fire-and-forget on the caller's scope
+        // (it must survive a load-job cancellation); the spine's
+        // `coroutineScope` yield at the episode-fetch stage lets it land
+        // exactly where the former hook fired — between the tracking starts
+        // and the episode fetches.
         assertEquals(
             listOf(
                 "reconcileSyncPlayQueue",
                 "onPrefsProjected",
                 "onSessionPrefsApplied",
-                "restoreRememberedMuted",
                 "resolveOfflineResumeTicks",
                 "onPlayheadSeeded(3000000)",
                 "loadMedia",
@@ -203,7 +256,7 @@ class SessionLoadPipelineTest {
                 "reportPlaybackStart",
                 "startPositionTracking",
                 "startProgressReporting",
-                "fetchMediaSegments",
+                "onSegmentsFetched(0)",
                 "fetchAdjacentEpisodes",
                 "loadSeriesEpisodes",
                 "onOutcome(Completed)",
@@ -295,8 +348,9 @@ class SessionLoadPipelineTest {
         val intro = MediaItem(id = "intro-1", name = "Intro", mediaType = MediaType.MOVIE)
         val pipeline = pipeline(
             stages = stages,
-            hooks = recordingHooks(stages, cinemaGate = true),
+            hooks = recordingHooks(stages),
             intros = listOf(intro),
+            aggregate = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(cinemaModeEnabled = true)),
         )
 
         pipeline.start(this, request()).join()
@@ -308,6 +362,121 @@ class SessionLoadPipelineTest {
         assertEquals("onOutcome(CinemaIntro(introItemId=intro-1))", stages.last { it.startsWith("onOutcome") })
         // finally guarantee: the loading screen lifts even on the early return.
         assertTrue(stages.contains("onInitializing(false)"))
+    }
+
+    // ── shouldAttemptCinemaMode: the five vetoes (ported from the deleted
+    //    VideoSessionHostTest when the gate became a pipeline member) ────────
+
+    @Test
+    fun cinemaGate_vetoesNonFreshStartsSyncPlayExternalAndPrefOff() = runTest {
+        val armed = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(cinemaModeEnabled = true))
+        val intro = MediaItem(id = "intro-1", name = "Intro", mediaType = MediaType.MOVIE)
+        val hooks = recordingHooks(stages)
+
+        // A resume position vetoes the pre-roll.
+        pipeline(stages = stages, hooks = hooks, intros = listOf(intro), aggregate = armed).start(
+            this, request().copy(startPositionTicks = 1L),
+        ).join()
+        runCurrent()
+        assertFalse("a resume position vetoes the pre-roll", "beginCinemaMode" in stages)
+
+        // SyncPlay group pacing vetoes the pre-roll.
+        stages.clear()
+        pipeline(stages = stages, hooks = hooks, intros = listOf(intro), aggregate = armed, inSyncPlay = true)
+            .start(this, request()).join()
+        runCurrent()
+        assertFalse("SyncPlay group pacing vetoes the pre-roll", "beginCinemaMode" in stages)
+
+        // The pref off vetoes the pre-roll.
+        stages.clear()
+        pipeline(
+            stages = stages, hooks = hooks, intros = listOf(intro),
+            aggregate = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(cinemaModeEnabled = false)),
+        ).start(this, request()).join()
+        runCurrent()
+        assertFalse("the pref off vetoes the pre-roll", "beginCinemaMode" in stages)
+
+        // An external player vetoes the pre-roll.
+        stages.clear()
+        pipeline(
+            stages = stages, hooks = hooks, intros = listOf(intro),
+            aggregate = armed.copy(playback = armed.playback.copy(preferredPlayer = PlayerType.EXTERNAL)),
+        ).start(this, request()).join()
+        runCurrent()
+        assertFalse("an external player vetoes the pre-roll", "beginCinemaMode" in stages)
+    }
+
+    // ── fetchMediaSegments: offline-first precedence (ported from the deleted
+    //    VideoSessionHostTest when the fetch became a pipeline member) ───────
+
+    @Test
+    fun fetchMediaSegments_prefersTheOfflineBundle_beforeAnyServerRoundTrip() = runTest {
+        val (pipeline, offline, server) = pipeline(stages = stages, hooks = recordingHooks(stages))
+        val local = listOf(mockk<MediaSegment>(), mockk<MediaSegment>())
+        coEvery { offline.loadSegments("item-1") } returns local
+
+        pipeline.fetchMediaSegments(this, "item-1")
+        runCurrent()
+
+        // Under the test scheduler the fetch ran: the local bundle won, the
+        // server was never asked.
+        assertEquals(listOf("onSegmentsFetched(2)"), stages.filter { it.startsWith("onSegmentsFetched") })
+        coVerify(exactly = 0) { server.getMediaSegments(any()) }
+    }
+
+    @Test
+    fun fetchMediaSegments_fallsBackToTheServer_whenNoBundleShips() = runTest {
+        val (pipeline, offline, server) = pipeline(stages = stages, hooks = recordingHooks(stages))
+        val segments = listOf(mockk<MediaSegment>())
+        coEvery { offline.loadSegments("item-1") } returns null
+        coEvery { server.getMediaSegments("item-1") } returns Result.success(segments)
+
+        pipeline.fetchMediaSegments(this, "item-1")
+        runCurrent()
+
+        assertEquals(listOf("onSegmentsFetched(1)"), stages.filter { it.startsWith("onSegmentsFetched") })
+    }
+
+    // ── restoreRememberedMuted: the mirror-then-engine order (ported from the
+    //    deleted VideoSessionHostTest when the restore became a pipeline
+    //    member) ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun restoreRememberedMuted_whenArmed_mirrorsThenMutesTheEngine_inSpinePosition() = runTest {
+        val armed = VideoPlayerAggregate(
+            videoPlayer = VideoPlayerSlice(videoRememberMuted = true, videoMuted = true),
+        )
+        val fixture = pipeline(stages = stages, hooks = recordingHooks(stages), aggregate = armed)
+        val engine = mockk<MediaEngine>(relaxed = true)
+        every { fixture.sessionManager.engine } returns engine
+
+        fixture.pipeline.start(this, request()).join()
+        runCurrent()
+
+        // EXACT order: the uiState mirror write first, the engine command
+        // second, both at stage 3 — after session-pref application, before the
+        // spine completes.
+        val mirrorIndex = stages.indexOf("mutedMirror(true)")
+        assertTrue(mirrorIndex > stages.indexOf("onSessionPrefsApplied"))
+        assertTrue(mirrorIndex < stages.indexOf("onOutcome(Completed)"))
+        verify(exactly = 1) { engine.setMuted(true) }
+    }
+
+    @Test
+    fun restoreRememberedMuted_isGatedOnRememberMutedAndMuted() = runTest {
+        val pipeline = pipeline(
+            stages = stages,
+            hooks = recordingHooks(stages),
+            aggregate = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(videoRememberMuted = true)),
+        )
+
+        pipeline.start(this, request()).join()
+        runCurrent()
+
+        assertTrue(
+            "the gate holds: remember-muted without muted restores nothing",
+            stages.none { it.startsWith("mutedMirror") },
+        )
     }
 
     @Test
@@ -332,6 +501,12 @@ class SessionLoadPipelineTest {
             mediaExtrasReads = mediaExtrasReads,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
+            offlinePlaybackFacade = mockk(relaxed = true),
+            syncPlayManager = mockk(relaxed = true),
+            getMediaDetail = { null },
+            playbackRepository = mockk(relaxed = true),
+            setMutedMirror = { },
+            onSegmentsFetched = { },
             outputs = RecordingOutputs(stages),
             hooks = recordingHooks(stages),
         )

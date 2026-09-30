@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -90,6 +91,8 @@ class PlayerSessionManager(
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    /** Detail artwork URL for the external-player hand-off (the ImageUrlProvider seam). */
+    private val imageUrlProvider: ImageUrlProvider,
     private val playbackIdentity: PlaybackIdentity,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
@@ -678,7 +681,7 @@ class PlayerSessionManager(
 
         val externalSubtitles = buildExternalSubtitles(detail, source, playMethod)
 
-        val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
+        val artworkUri = imageUrlProvider.getImageUrl(detail.item.id, maxWidth = 300)
 
         val headers = mutableMapOf<String, String>()
         val serverUrl = playbackIdentity.serverUrl()

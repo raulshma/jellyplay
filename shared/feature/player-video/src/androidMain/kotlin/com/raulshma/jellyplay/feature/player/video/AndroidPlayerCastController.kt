@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -65,6 +66,8 @@ import kotlinx.coroutines.flow.StateFlow
 internal class AndroidPlayerCastController(
     private val castManager: CastManager,
     private val playbackRepository: PlaybackRepository,
+    /** Cast artwork URL (the ImageUrlProvider seam; the stream URL stays on the repository). */
+    private val imageUrlProvider: ImageUrlProvider,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
     private val getEngine: () -> MediaEngine?,
@@ -137,7 +140,7 @@ internal class AndroidPlayerCastController(
         if (url.isBlank()) return
 
         val artworkUri = try {
-            Uri.parse(playbackRepository.getImageUrl(currentItemId, maxWidth = 300))
+            Uri.parse(imageUrlProvider.getImageUrl(currentItemId, maxWidth = 300))
         } catch (_: Exception) { null }
 
         val subtitleConfigs = buildCastSubtitleConfigurations(

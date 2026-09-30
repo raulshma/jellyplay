@@ -506,12 +506,13 @@ fun VideoPlayerScreen(
             viewModel.onEvent(VideoPlayerUiEvent.TransportPlay(play = false))
         }
     }
-    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
-        { ms ->
-            if (isInSyncPlaySession) viewModel.syncPlay.seekTo(ms)
-            else if (isCastConnected) viewModel.cast.castSeekTo(ms)
-            else viewModel.onEvent(VideoPlayerUiEvent.SeekTo(ms))
-        }
+    // Seek delegates to the VM's routing funnel, same as the play/pause
+    // lambdas above: the same SyncPlay -> cast -> local order, so the seek
+    // bar, gesture commit, D-pad commit, chapter/go-to-time sheet and PiP
+    // steps all land on the ONE ladder and can never diverge. No routing
+    // captures remain, so no remember keys are needed.
+    val doSeekTo: (Long) -> Unit = remember {
+        { ms -> viewModel.onEvent(VideoPlayerUiEvent.SeekTo(ms)) }
     }
     // Skip steps route through the VM's single funnel (C3): the clamp math
     // lives in the shared player-contract's stepSeekTargetMs
@@ -551,7 +552,6 @@ fun VideoPlayerScreen(
         windowOps,
         uiState.gestures.swipeSeekMaxMs,
         isCastConnected,
-        doSeekTo,
     ) {
         GestureSeekController(
             scope = scope,
@@ -1032,7 +1032,7 @@ fun VideoPlayerScreen(
             val onPlayPause by remember(doTogglePlayPause) { mutableStateOf({ doTogglePlayPause() }) }
             val onPreviousEpisode by remember { mutableStateOf({ viewModel.onEvent(VideoPlayerUiEvent.PlayPreviousEpisode) }) }
             val onNextEpisode by remember { mutableStateOf({ viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode) }) }
-            val onSeekEnd by remember(duration, doSeekTo) {
+            val onSeekEnd by remember(duration) {
                 mutableStateOf({
                     isSeeking = false
                     if (duration > 0) doSeekTo(seekPositionMs)

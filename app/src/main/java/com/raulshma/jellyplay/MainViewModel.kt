@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
+import com.raulshma.jellyplay.feature.shell.displayMessageText
 import com.raulshma.jellyplay.navigation.ExternalPlaybackOutcome
 import com.raulshma.jellyplay.navigation.MainShellModel
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalSubtitle
@@ -129,13 +130,13 @@ class MainViewModel(
         updateCoordinator.start(scope)
         syncPlayOpenCoordinator.start(scope)
 
-        // Server-pushed display messages surface as one-shot user messages.
+        // Server-pushed display messages surface as one-shot user messages;
+        // the header+text fold is the shared displayMessageText (the desktop
+        // shell's receiver source runs the same fn — one server push reads
+        // identically on both shells).
         launch {
             remoteControlReceiver.displayMessages.collect { msg ->
-                val text = if (msg.header.isNotBlank()) "${msg.header}\n${msg.text}" else msg.text
-                if (text.isNotBlank()) {
-                    userMessageBus.info(text)
-                }
+                displayMessageText(msg)?.let { userMessageBus.info(it) }
             }
         }
 

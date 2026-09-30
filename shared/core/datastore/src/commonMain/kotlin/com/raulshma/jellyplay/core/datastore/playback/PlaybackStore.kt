@@ -8,11 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExternalPlayerApp
@@ -27,7 +23,6 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -43,18 +38,36 @@ import kotlinx.coroutines.flow.StateFlow
  * narrow interface. Mirrors the `ServerIdentityStore` / `WidgetDataStore` /
  * `PinRateLimiter` shape.
  *
- * **Cross-key invariants owned here:**
+ * **Stage B spec derivation:** every key this store owns is declared exactly
+ * once as a row in [PlaybackPreferenceSpecs] (wire name, default, reset
+ * category, read/write encoding) and the machinery below is derived from those
+ * rows — each [Keys] member rebuilds its row's typed key from the row's wire
+ * name, each [read] projection row delegates to its row encoding, the
+ * single-key setters and [restore] delegate to the rows' derived writes, and
+ * [resetKeysFor] filters the rows by reset category. The migration semantics
+ * (legacy string-key fallback, `force_direct_play` → [PlaybackMode], the
+ * passthrough-codec legacy default, the corrupt-`refresh_rate_mode` rescue)
+ * live in the rows' encodings now, next to the key they apply to.
+ *
+ * **Cross-key invariants and legacy pairings owned here (hand-written by
+ * decision — an invariant spanning two keys cannot be a row encoding):**
  *  - [setFrameRateMatching] / [setRefreshRateMode] keep `FRAME_RATE_MATCHING`
  *    (legacy bool) and `REFRESH_RATE_MODE` (enum) in sync in a single edit.
- *  - [readPlaybackMode] migrates the legacy `force_direct_play` boolean to the
- *    `PlaybackMode` enum when the typed key is absent.
- *  - [readAudioPassthroughCodecs] migrates the legacy single-boolean
- *    passthrough surface: an absent `audio_passthrough_codecs` key reads the
- *    full historical codec list (the old boolean's meaning).
+ *  - the PLAYBACK_MODE spec row's read migrates the legacy `force_direct_play`
+ *    boolean to the [PlaybackMode] enum when the typed key is absent.
+ *  - the AUDIO_PASSTHROUGH_CODECS spec row's read migrates the legacy
+ *    single-boolean passthrough surface: an absent `audio_passthrough_codecs`
+ *    key reads the full historical codec list (the old boolean's meaning).
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file; the key strings
  * match the legacy `UserPreferencesStore.Keys` names so existing data is read
  * in place — no migration file, no second delegate.
+ *
+ * **Residual (accepted):** the slice plumbing stays hand-written by the
+ * no-reflection rule — adding a preference still means one
+ * [PlaybackPreferenceSpecs] row + one [PlaybackSlice] property + one [read] /
+ * [restore] row (and its setter) + one write-through test line. See the spec
+ * KDoc.
  */
 class PlaybackStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -62,44 +75,41 @@ class PlaybackStore constructor(
 ) {
     private val scope = externalScope
 
-    private val json get() = PreferenceCodec.json
-
     /**
-     * Memoised decode of the JSON-encoded passthrough codec set, keyed on the
-     * raw string so the decode is skipped when the key has not changed on a
-     * given `dataStore.data` emission. [CachedJsonNullPolicy.NoMemoOnNull]:
-     * the null-raw value is the legacy-boolean migration (it depends on the
-     * `audio_passthrough` master key, not on this raw), so it is re-derived
-     * every read — see [readAudioPassthroughCodecs].
+     * The store's DataStore keys, each derived from its
+     * [PlaybackPreferenceSpecs] row — the member rebuilds the row's typed key
+     * from the row's single-declared wire name (`Preferences.Key` equality is
+     * name-based, so these interoperate with any hand-built key of the same
+     * name). Kept as a plain object rather than folded into the rows because
+     * it is the reflection anchor for the JVM reset-coverage guard and the
+     * key-identity reference for the hand-written cross-key invariant setters
+     * below.
      */
-    private var cachedAudioPassthroughCodecs: ParsedCache<Set<AudioPassthroughCodec>> =
-        ParsedCache(null, DEFAULT_AUDIO_PASSTHROUGH_CODECS)
-
     internal object Keys {
-        val PREFERRED_PLAYER = stringPreferencesKey("preferred_player")
-        val PREFERRED_EXTERNAL_PLAYER = stringPreferencesKey("preferred_external_player")
-        val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
-        val CELLULAR_STREAMING_QUALITY = stringPreferencesKey("cellular_streaming_quality")
-        val FORCE_DIRECT_PLAY = booleanPreferencesKey("force_direct_play")
-        val PLAYBACK_MODE = stringPreferencesKey("playback_mode")
-        val DECODER_MODE = stringPreferencesKey("decoder_mode")
-        val AUDIO_PASSTHROUGH = booleanPreferencesKey("audio_passthrough")
-        val AUDIO_PASSTHROUGH_CODECS = stringPreferencesKey("audio_passthrough_codecs")
-        val MAX_AUDIO_CHANNELS = stringPreferencesKey("max_audio_channels")
-        val DOWNMIX_BOOST_DB = floatPreferencesKey("downmix_boost_db")
-        val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
-        val REFRESH_RATE_MODE = stringPreferencesKey("refresh_rate_mode")
-        val LIVE_STREAM_OPTION = stringPreferencesKey("live_stream_option")
-        val OFFLINE_PLAYBACK_PREFERENCE = stringPreferencesKey("offline_playback_preference")
-        val KEEP_SCREEN_ON_DURING_VIDEO = booleanPreferencesKey("keep_screen_on_during_video")
-        val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey("pause_on_audio_focus_loss")
-        val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey("duck_on_transient_focus_loss")
-        val AUTO_PLAY_COUNTDOWN_SEC = intPreferencesKey("auto_play_countdown_sec")
-        val BACKGROUND_VIDEO_AUDIO_ENABLED = booleanPreferencesKey("background_video_audio_enabled")
-        val AUTO_ENTER_PIP = booleanPreferencesKey("auto_enter_pip")
-        val PGS_SUBTITLE_DIRECT_PLAY = booleanPreferencesKey("pgs_subtitle_direct_play")
-        val USER_DATA_SYNC_ENABLED = booleanPreferencesKey("user_data_sync_enabled")
-        val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey("android_tv_watch_next_enabled")
+        val PREFERRED_PLAYER = stringPreferencesKey(PlaybackPreferenceSpecs.PREFERRED_PLAYER.keyName)
+        val PREFERRED_EXTERNAL_PLAYER = stringPreferencesKey(PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.keyName)
+        val STREAMING_QUALITY = stringPreferencesKey(PlaybackPreferenceSpecs.STREAMING_QUALITY.keyName)
+        val CELLULAR_STREAMING_QUALITY = stringPreferencesKey(PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.keyName)
+        val FORCE_DIRECT_PLAY = booleanPreferencesKey(PlaybackPreferenceSpecs.FORCE_DIRECT_PLAY.keyName)
+        val PLAYBACK_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.PLAYBACK_MODE.keyName)
+        val DECODER_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.DECODER_MODE.keyName)
+        val AUDIO_PASSTHROUGH = booleanPreferencesKey(PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH.keyName)
+        val AUDIO_PASSTHROUGH_CODECS = stringPreferencesKey(PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.keyName)
+        val MAX_AUDIO_CHANNELS = stringPreferencesKey(PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.keyName)
+        val DOWNMIX_BOOST_DB = floatPreferencesKey(PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.keyName)
+        val FRAME_RATE_MATCHING = booleanPreferencesKey(PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.keyName)
+        val REFRESH_RATE_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.REFRESH_RATE_MODE.keyName)
+        val LIVE_STREAM_OPTION = stringPreferencesKey(PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.keyName)
+        val OFFLINE_PLAYBACK_PREFERENCE = stringPreferencesKey(PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.keyName)
+        val KEEP_SCREEN_ON_DURING_VIDEO = booleanPreferencesKey(PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.keyName)
+        val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey(PlaybackPreferenceSpecs.PAUSE_ON_AUDIO_FOCUS_LOSS.keyName)
+        val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey(PlaybackPreferenceSpecs.DUCK_ON_TRANSIENT_FOCUS_LOSS.keyName)
+        val AUTO_PLAY_COUNTDOWN_SEC = intPreferencesKey(PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.keyName)
+        val BACKGROUND_VIDEO_AUDIO_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.keyName)
+        val AUTO_ENTER_PIP = booleanPreferencesKey(PlaybackPreferenceSpecs.AUTO_ENTER_PIP.keyName)
+        val PGS_SUBTITLE_DIRECT_PLAY = booleanPreferencesKey(PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.keyName)
+        val USER_DATA_SYNC_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.keyName)
+        val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.keyName)
     }
 
     /**
@@ -111,170 +121,98 @@ class PlaybackStore constructor(
         dataStore.sliceStateFlow(scope, seed = PlaybackSlice(), read = ::read)
 
     /**
-     * Pure read of the media-delivery fields from a raw [Preferences] snapshot.
+     * Pure read of the media-delivery fields from a raw [Preferences] snapshot,
+     * each field delegated to its [PlaybackPreferenceSpecs] row encoding.
      * Exposed so the facade can fold these into the whole-`UserPreferences`
      * projection without duplicating the read logic.
      */
     internal fun read(prefs: Preferences): PlaybackSlice = PlaybackSlice(
-        preferredPlayer = readPreferredPlayer(prefs),
-        preferredExternalPlayer = readPreferredExternalPlayer(prefs),
-        streamingQuality = readStreamingQuality(prefs),
-        cellularStreamingQuality = readCellularStreamingQuality(prefs),
-        playbackMode = readPlaybackMode(prefs),
-        liveStreamOption = readLiveStreamOption(prefs),
-        offlinePlaybackPreference = readOfflinePlaybackPreference(prefs),
-        decoderMode = readDecoderMode(prefs),
-        audioPassthrough = PreferenceCodec.readBool(prefs, Keys.AUDIO_PASSTHROUGH, "audio_passthrough", false),
-        audioPassthroughCodecs = readAudioPassthroughCodecs(prefs),
-        maxAudioChannels = readMaxAudioChannels(prefs),
-        downmixBoostDb = PreferenceCodec.readFloat(prefs, Keys.DOWNMIX_BOOST_DB, "downmix_boost_db", DEFAULT_DOWNMIX_BOOST_DB)
-            .coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB),
-        frameRateMatching = PreferenceCodec.readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false),
-        refreshRateMode = readRefreshRateMode(prefs),
-        keepScreenOnDuringVideo = PreferenceCodec.readBool(prefs, Keys.KEEP_SCREEN_ON_DURING_VIDEO, "keep_screen_on_during_video", true),
-        pauseOnAudioFocusLoss = PreferenceCodec.readBool(prefs, Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, "pause_on_audio_focus_loss", true),
-        duckOnTransientFocusLoss = PreferenceCodec.readBool(prefs, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS, "duck_on_transient_focus_loss", false),
-        autoPlayCountdownSec = PreferenceCodec.readInt(prefs, Keys.AUTO_PLAY_COUNTDOWN_SEC, "auto_play_countdown_sec", 10),
-        backgroundVideoAudioEnabled = PreferenceCodec.readBool(prefs, Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, "background_video_audio_enabled", false),
-        autoEnterPip = PreferenceCodec.readBool(prefs, Keys.AUTO_ENTER_PIP, "auto_enter_pip", true),
-        pgsSubtitleDirectPlay = PreferenceCodec.readBool(prefs, Keys.PGS_SUBTITLE_DIRECT_PLAY, "pgs_subtitle_direct_play", false),
-        userDataSyncEnabled = PreferenceCodec.readBool(prefs, Keys.USER_DATA_SYNC_ENABLED, "user_data_sync_enabled", true),
-        androidTvWatchNextEnabled = PreferenceCodec.readBool(prefs, Keys.ANDROID_TV_WATCH_NEXT_ENABLED, "android_tv_watch_next_enabled", true),
+        preferredPlayer = PlaybackPreferenceSpecs.PREFERRED_PLAYER.readFrom(prefs),
+        preferredExternalPlayer = PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.readFrom(prefs),
+        streamingQuality = PlaybackPreferenceSpecs.STREAMING_QUALITY.readFrom(prefs),
+        cellularStreamingQuality = PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.readFrom(prefs),
+        playbackMode = PlaybackPreferenceSpecs.PLAYBACK_MODE.readFrom(prefs),
+        liveStreamOption = PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.readFrom(prefs),
+        offlinePlaybackPreference = PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.readFrom(prefs),
+        decoderMode = PlaybackPreferenceSpecs.DECODER_MODE.readFrom(prefs),
+        audioPassthrough = PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH.readFrom(prefs),
+        audioPassthroughCodecs = PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.readFrom(prefs),
+        maxAudioChannels = PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.readFrom(prefs),
+        downmixBoostDb = PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.readFrom(prefs),
+        frameRateMatching = PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.readFrom(prefs),
+        refreshRateMode = PlaybackPreferenceSpecs.REFRESH_RATE_MODE.readFrom(prefs),
+        keepScreenOnDuringVideo = PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.readFrom(prefs),
+        pauseOnAudioFocusLoss = PlaybackPreferenceSpecs.PAUSE_ON_AUDIO_FOCUS_LOSS.readFrom(prefs),
+        duckOnTransientFocusLoss = PlaybackPreferenceSpecs.DUCK_ON_TRANSIENT_FOCUS_LOSS.readFrom(prefs),
+        autoPlayCountdownSec = PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.readFrom(prefs),
+        backgroundVideoAudioEnabled = PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.readFrom(prefs),
+        autoEnterPip = PlaybackPreferenceSpecs.AUTO_ENTER_PIP.readFrom(prefs),
+        pgsSubtitleDirectPlay = PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.readFrom(prefs),
+        userDataSyncEnabled = PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.readFrom(prefs),
+        androidTvWatchNextEnabled = PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.readFrom(prefs),
     )
 
-    private fun readPreferredPlayer(prefs: Preferences): PlayerType =
-        normalizePreferredPlayer(prefs[Keys.PREFERRED_PLAYER])
-
-    private fun readPreferredExternalPlayer(prefs: Preferences): ExternalPlayerApp =
-        prefs[Keys.PREFERRED_EXTERNAL_PLAYER].toEnumOrNull() ?: ExternalPlayerApp.SYSTEM_CHOOSER
-
-    private fun readStreamingQuality(prefs: Preferences): StreamingQuality =
-        prefs[Keys.STREAMING_QUALITY].toEnumOrNull() ?: StreamingQuality.AUTO
-
-    private fun readCellularStreamingQuality(prefs: Preferences): StreamingQuality =
-        prefs[Keys.CELLULAR_STREAMING_QUALITY].toEnumOrNull() ?: StreamingQuality.AUTO
-
-    private fun readLiveStreamOption(prefs: Preferences): LiveStreamOption =
-        prefs[Keys.LIVE_STREAM_OPTION].toEnumOrNull() ?: LiveStreamOption.AUTO
-
-    private fun readOfflinePlaybackPreference(prefs: Preferences): OfflinePlaybackPreference =
-        prefs[Keys.OFFLINE_PLAYBACK_PREFERENCE].toEnumOrNull() ?: OfflinePlaybackPreference.PREFER_DOWNLOADED
-
-    private fun readDecoderMode(prefs: Preferences): DecoderMode =
-        prefs[Keys.DECODER_MODE].toEnumOrNull() ?: DecoderMode.HW_PREFERRED
-
-    private fun readMaxAudioChannels(prefs: Preferences): MaxAudioChannelsEnum =
-        prefs[Keys.MAX_AUDIO_CHANNELS].toEnumOrNull() ?: MaxAudioChannelsEnum.AUTO
-
-    /**
-     * Reads [PlaybackSlice.audioPassthroughCodecs]. **Legacy migration:** the
-     * pre-codec-set surface was the single `audio_passthrough` boolean whose
-     * "on" always bitstreamed the full historical codec list, so an ABSENT
-     * codec key (an install that has never touched the per-codec rows) reads
-     * all codecs enabled — flipping the master toggle on later keeps the
-     * pre-feature behaviour. A PRESENT key (even the empty set — the user
-     * explicitly unchecked everything) wins verbatim, mirroring
-     * [readPlaybackMode]'s absent-key-migrates rule.
-     */
-    private fun readAudioPassthroughCodecs(prefs: Preferences): Set<AudioPassthroughCodec> =
-        PreferenceCodec.cachedJson(
-            raw = prefs[Keys.AUDIO_PASSTHROUGH_CODECS],
-            cache = cachedAudioPassthroughCodecs,
-            default = DEFAULT_AUDIO_PASSTHROUGH_CODECS,
-            parse = { json.decodeFromString<Set<AudioPassthroughCodec>>(it) },
-            cacheRef = { cachedAudioPassthroughCodecs = it },
-            nullPolicy = CachedJsonNullPolicy.NoMemoOnNull,
-            onNull = { DEFAULT_AUDIO_PASSTHROUGH_CODECS },
-        )
-
-    /**
-     * Reads [PlaybackSlice.playbackMode]. Migrates the legacy boolean
-     * `force_direct_play` key when the new enum key is absent: a legacy value of
-     * `true` (the historical default) maps to [PlaybackMode.FORCE_DIRECT_PLAY]
-     * to preserve the prior behaviour of always requesting a static stream;
-     * `false` maps to [PlaybackMode.AUTO] so the server negotiates the best
-     * method.
-     */
-    private fun readPlaybackMode(prefs: Preferences): PlaybackMode {
-        prefs[Keys.PLAYBACK_MODE]?.let { raw ->
-            return raw.toEnumOrNull() ?: PlaybackMode.AUTO
-        }
-        val legacyForce = PreferenceCodec.readBool(prefs, Keys.FORCE_DIRECT_PLAY, "force_direct_play", true)
-        return if (legacyForce) PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.AUTO
-    }
-
-    private fun readRefreshRateMode(prefs: Preferences): RefreshRateMode {
-        // An absent key reads the OFF default directly — the legacy migration
-        // below only rescues a corrupt stored value, not a fresh install.
-        val stored = prefs[Keys.REFRESH_RATE_MODE] ?: return RefreshRateMode.OFF
-        return stored.toEnumOrNull() ?: run {
-            // Legacy migration: a user with the old boolean on but no mode stored
-            // is mapped to FRAME_RATE_ONLY (the old behaviour).
-            if (PreferenceCodec.readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false)) {
-                RefreshRateMode.FRAME_RATE_ONLY
-            } else {
-                RefreshRateMode.OFF
-            }
-        }
-    }
-
     // ------------------------------------------------------------------
-    // Setters — cross-key invariants live here, behind a narrow surface.
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding — enum-by-name, JSON — is the row's, not re-declared
+    // here); cross-key invariants live below, hand-written.
     // ------------------------------------------------------------------
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {
-        dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
+        dataStore.edit { PlaybackPreferenceSpecs.PREFERRED_PLAYER.writeTo(it, playerType) }
     }
 
     suspend fun setPreferredExternalPlayer(app: ExternalPlayerApp) {
-        dataStore.edit { it[Keys.PREFERRED_EXTERNAL_PLAYER] = app.name }
+        dataStore.edit { PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.writeTo(it, app) }
     }
 
     suspend fun setStreamingQuality(quality: StreamingQuality) {
-        dataStore.edit { it[Keys.STREAMING_QUALITY] = quality.name }
+        dataStore.edit { PlaybackPreferenceSpecs.STREAMING_QUALITY.writeTo(it, quality) }
     }
 
     suspend fun setCellularStreamingQuality(quality: StreamingQuality) {
-        dataStore.edit { it[Keys.CELLULAR_STREAMING_QUALITY] = quality.name }
+        dataStore.edit { PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.writeTo(it, quality) }
     }
 
     suspend fun setPlaybackMode(mode: PlaybackMode) {
-        dataStore.edit { it[Keys.PLAYBACK_MODE] = mode.name }
+        dataStore.edit { PlaybackPreferenceSpecs.PLAYBACK_MODE.writeTo(it, mode) }
     }
 
     suspend fun setLiveStreamOption(option: LiveStreamOption) {
-        dataStore.edit { it[Keys.LIVE_STREAM_OPTION] = option.name }
+        dataStore.edit { PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.writeTo(it, option) }
     }
 
     suspend fun setOfflinePlaybackPreference(preference: OfflinePlaybackPreference) {
-        dataStore.edit { it[Keys.OFFLINE_PLAYBACK_PREFERENCE] = preference.name }
+        dataStore.edit { PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.writeTo(it, preference) }
     }
 
     suspend fun setDecoderMode(mode: DecoderMode) {
-        dataStore.edit { it[Keys.DECODER_MODE] = mode.name }
+        dataStore.edit { PlaybackPreferenceSpecs.DECODER_MODE.writeTo(it, mode) }
     }
 
     suspend fun setAudioPassthrough(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH.writeTo(it, enabled) }
     }
 
     /**
      * The per-codec passthrough allow-list, stored as a JSON set of enum
      * names. Writing it (even empty) marks the surface as touched — the
-     * legacy-boolean migration in [readAudioPassthroughCodecs] stops
-     * applying.
+     * legacy-boolean migration in the AUDIO_PASSTHROUGH_CODECS row's read
+     * stops applying.
      */
     suspend fun setAudioPassthroughCodecs(codecs: Set<AudioPassthroughCodec>) {
-        dataStore.edit { it[Keys.AUDIO_PASSTHROUGH_CODECS] = json.encodeToString(codecs) }
+        dataStore.edit { PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.writeTo(it, codecs) }
     }
 
     suspend fun setMaxAudioChannels(mode: MaxAudioChannelsEnum) {
-        dataStore.edit { it[Keys.MAX_AUDIO_CHANNELS] = mode.name }
+        dataStore.edit { PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.writeTo(it, mode) }
     }
 
     /** The stereo-downmix loudness compensation in dB; clamped to 0–12. */
     suspend fun setDownmixBoostDb(db: Float) {
-        dataStore.edit { it[Keys.DOWNMIX_BOOST_DB] = db.coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB) }
+        dataStore.edit {
+            PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.writeTo(it, db.coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB))
+        }
     }
 
     /**
@@ -302,23 +240,23 @@ class PlaybackStore constructor(
     }
 
     suspend fun setKeepScreenOnDuringVideo(enabled: Boolean) {
-        dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.writeTo(it, enabled) }
     }
 
     suspend fun setPauseOnAudioFocusLoss(enabled: Boolean) {
-        dataStore.edit { it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.PAUSE_ON_AUDIO_FOCUS_LOSS.writeTo(it, enabled) }
     }
 
     suspend fun setDuckOnTransientFocusLoss(enabled: Boolean) {
-        dataStore.edit { it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.DUCK_ON_TRANSIENT_FOCUS_LOSS.writeTo(it, enabled) }
     }
 
     suspend fun setAutoPlayCountdownSec(seconds: Int) {
-        dataStore.edit { it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = seconds }
+        dataStore.edit { PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.writeTo(it, seconds) }
     }
 
     suspend fun setBackgroundVideoAudioEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.writeTo(it, enabled) }
     }
 
     /**
@@ -328,19 +266,19 @@ class PlaybackStore constructor(
      * (issue #167). The manual PiP button in the controls is unaffected.
      */
     suspend fun setAutoEnterPip(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_ENTER_PIP] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.AUTO_ENTER_PIP.writeTo(it, enabled) }
     }
 
     suspend fun setPgsSubtitleDirectPlay(enabled: Boolean) {
-        dataStore.edit { it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.writeTo(it, enabled) }
     }
 
     suspend fun setUserDataSyncEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.USER_DATA_SYNC_ENABLED] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setAndroidTvWatchNextEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = enabled }
+        dataStore.edit { PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.writeTo(it, enabled) }
     }
 
     /**
@@ -355,88 +293,56 @@ class PlaybackStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. A single store can own keys across several categories (e.g.
-     * [Keys.LIVE_STREAM_OPTION] sits in `SYNCPLAY_CASTING` while the rest are
-     * `PLAYBACK`), so each store scopes its own keys per category. The facade
-     * aggregates these lists instead of a central `when` switch.
+     * [category] — the [PlaybackPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. A single store can own
+     * keys across several categories (e.g. `LIVE_STREAM_OPTION` sits in
+     * `SYNCPLAY_CASTING` while most others are `PLAYBACK`), so each store
+     * scopes its own keys per category. The facade aggregates these lists
+     * instead of a central `when` switch.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.PLAYBACK -> listOf(
-            Keys.PREFERRED_PLAYER,
-            Keys.PREFERRED_EXTERNAL_PLAYER,
-            Keys.STREAMING_QUALITY,
-            Keys.CELLULAR_STREAMING_QUALITY,
-            Keys.FORCE_DIRECT_PLAY,
-            Keys.PLAYBACK_MODE,
-            Keys.DECODER_MODE,
-            Keys.OFFLINE_PLAYBACK_PREFERENCE,
-            Keys.AUDIO_PASSTHROUGH,
-            Keys.AUDIO_PASSTHROUGH_CODECS,
-            Keys.MAX_AUDIO_CHANNELS,
-            Keys.DOWNMIX_BOOST_DB,
-            Keys.FRAME_RATE_MATCHING,
-            Keys.REFRESH_RATE_MODE,
-            Keys.KEEP_SCREEN_ON_DURING_VIDEO,
-            Keys.PAUSE_ON_AUDIO_FOCUS_LOSS,
-            Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
-            Keys.AUTO_PLAY_COUNTDOWN_SEC,
-            Keys.BACKGROUND_VIDEO_AUDIO_ENABLED,
-            Keys.AUTO_ENTER_PIP,
-        )
-        PreferenceResetCategory.SUBTITLES_LANGUAGE -> listOf(Keys.PGS_SUBTITLE_DIRECT_PLAY)
-        PreferenceResetCategory.SYNCPLAY_CASTING -> listOf(Keys.LIVE_STREAM_OPTION)
-        PreferenceResetCategory.MISC_APP -> listOf(
-            Keys.USER_DATA_SYNC_ENABLED,
-            Keys.ANDROID_TV_WATCH_NEXT_ENABLED,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        PlaybackPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences], plus the
-     * `live_stream_option` gap key that [restorePreferences] omits.
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with, plus the `live_stream_option` key the legacy facade-level
+     * `restorePreferences` omitted).
      */
     suspend fun restore(slice: PlaybackSlice) {
-        dataStore.edit { it ->
-            it[Keys.PREFERRED_PLAYER] = slice.preferredPlayer.name
-            it[Keys.PREFERRED_EXTERNAL_PLAYER] = slice.preferredExternalPlayer.name
-            it[Keys.STREAMING_QUALITY] = slice.streamingQuality.name
-            it[Keys.CELLULAR_STREAMING_QUALITY] = slice.cellularStreamingQuality.name
-            it[Keys.PLAYBACK_MODE] = slice.playbackMode.name
-            it[Keys.LIVE_STREAM_OPTION] = slice.liveStreamOption.name
-            it[Keys.OFFLINE_PLAYBACK_PREFERENCE] = slice.offlinePlaybackPreference.name
-            it[Keys.DECODER_MODE] = slice.decoderMode.name
-            it[Keys.AUDIO_PASSTHROUGH] = slice.audioPassthrough
-            it[Keys.AUDIO_PASSTHROUGH_CODECS] = json.encodeToString(slice.audioPassthroughCodecs)
-            it[Keys.MAX_AUDIO_CHANNELS] = slice.maxAudioChannels.name
-            it[Keys.DOWNMIX_BOOST_DB] = slice.downmixBoostDb
-            it[Keys.FRAME_RATE_MATCHING] = slice.frameRateMatching
-            it[Keys.REFRESH_RATE_MODE] = slice.refreshRateMode.name
-            it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = slice.keepScreenOnDuringVideo
-            it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = slice.pauseOnAudioFocusLoss
-            it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = slice.duckOnTransientFocusLoss
-            it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = slice.autoPlayCountdownSec
-            it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = slice.backgroundVideoAudioEnabled
-            it[Keys.AUTO_ENTER_PIP] = slice.autoEnterPip
-            it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = slice.pgsSubtitleDirectPlay
-            it[Keys.USER_DATA_SYNC_ENABLED] = slice.userDataSyncEnabled
-            it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = slice.androidTvWatchNextEnabled
+        dataStore.edit { prefs ->
+            PlaybackPreferenceSpecs.PREFERRED_PLAYER.writeTo(prefs, slice.preferredPlayer)
+            PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.writeTo(prefs, slice.preferredExternalPlayer)
+            PlaybackPreferenceSpecs.STREAMING_QUALITY.writeTo(prefs, slice.streamingQuality)
+            PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.writeTo(prefs, slice.cellularStreamingQuality)
+            PlaybackPreferenceSpecs.PLAYBACK_MODE.writeTo(prefs, slice.playbackMode)
+            PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.writeTo(prefs, slice.liveStreamOption)
+            PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.writeTo(prefs, slice.offlinePlaybackPreference)
+            PlaybackPreferenceSpecs.DECODER_MODE.writeTo(prefs, slice.decoderMode)
+            PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH.writeTo(prefs, slice.audioPassthrough)
+            PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.writeTo(prefs, slice.audioPassthroughCodecs)
+            PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.writeTo(prefs, slice.maxAudioChannels)
+            PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.writeTo(prefs, slice.downmixBoostDb)
+            PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.writeTo(prefs, slice.frameRateMatching)
+            PlaybackPreferenceSpecs.REFRESH_RATE_MODE.writeTo(prefs, slice.refreshRateMode)
+            PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.writeTo(prefs, slice.keepScreenOnDuringVideo)
+            PlaybackPreferenceSpecs.PAUSE_ON_AUDIO_FOCUS_LOSS.writeTo(prefs, slice.pauseOnAudioFocusLoss)
+            PlaybackPreferenceSpecs.DUCK_ON_TRANSIENT_FOCUS_LOSS.writeTo(prefs, slice.duckOnTransientFocusLoss)
+            PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.writeTo(prefs, slice.autoPlayCountdownSec)
+            PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.writeTo(prefs, slice.backgroundVideoAudioEnabled)
+            PlaybackPreferenceSpecs.AUTO_ENTER_PIP.writeTo(prefs, slice.autoEnterPip)
+            PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.writeTo(prefs, slice.pgsSubtitleDirectPlay)
+            PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.writeTo(prefs, slice.userDataSyncEnabled)
+            PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.writeTo(prefs, slice.androidTvWatchNextEnabled)
         }
     }
 }
 
-/** The passthrough codec set the legacy single-boolean surface always bitstreamed. */
-private val DEFAULT_AUDIO_PASSTHROUGH_CODECS: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL
-
-private const val MIN_DOWNMIX_BOOST_DB = 0f
-private const val MAX_DOWNMIX_BOOST_DB = 12f
-private const val DEFAULT_DOWNMIX_BOOST_DB = 0f
-
 /**
  * The media-delivery preference slice. Plain data class (Compose-free) so the
  * datastore module stays framework-light. Defaults mirror the projection
- * defaults in [PlaybackStore.read].
+ * defaults in [PlaybackStore.read] (declared on the [PlaybackPreferenceSpecs]
+ * rows).
  */
 @Immutable
 @Serializable
@@ -469,13 +375,13 @@ data class PlaybackSlice(
 /**
  * Parse + clamp a stored `preferred_player` value against the engines the
  * running binary actually ships ([platformEngineSupport]). The single choke
- * point every preferred-engine read flows through — [PlaybackStore.read],
- * and therefore every projection fold, `PlayerSessionManager` engine
- * selection, and backup import — so a choice restored from another
- * platform's backup (ExoPlayer onto desktop, mpv onto a build without it)
- * degrades to the platform default instead of reaching an unregistered
- * factory. Non-destructive by design: the raw value stays on disk, so the
- * same backup keeps both platforms valid.
+ * point every preferred-engine read flows through — [PlaybackStore.read] (via
+ * the PREFERRED_PLAYER spec row), and therefore every projection fold,
+ * `PlayerSessionManager` engine selection, and backup import — so a choice
+ * restored from another platform's backup (ExoPlayer onto desktop, mpv onto a
+ * build without it) degrades to the platform default instead of reaching an
+ * unregistered factory. Non-destructive by design: the raw value stays on
+ * disk, so the same backup keeps both platforms valid.
  */
 internal fun normalizePreferredPlayer(raw: String?): PlayerType {
     val parsed = try {

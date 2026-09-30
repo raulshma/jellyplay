@@ -40,7 +40,7 @@ class DownloadRepositoryStatusWindowTest {
         database = mockk(relaxed = true),
         mediaRepository = mockk(relaxed = true),
         episodeCatalogue = mockk(relaxed = true),
-        playbackRepository = mockk(relaxed = true),
+        imageUrlProvider = mockk(relaxed = true),
         downloadsStore = mockk(relaxed = true),
         storagePolicy = mockk(relaxed = true),
         downloadEnqueuer = mockk(relaxed = true),

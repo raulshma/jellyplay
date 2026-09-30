@@ -63,10 +63,14 @@ import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
+import com.raulshma.jellyplay.feature.shell.navigation.ShellAudioSource
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
+import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAdminGate
+import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -282,42 +286,29 @@ internal fun DesktopNavScaffold(
     // thirteen fields; the field-by-field wiring lives there). Every factory
     // parameter is a remember key, so each value below is remembered on its
     // only captures (the discipline the factory's KDoc states): the
-    // now-playing/ambient lambdas read the desktop audio core
-    // (DesktopAudioQueueManager) at click time, and the session seams wrap
-    // the shared ShellSessionController the holder constructed — the same
-    // values, same lazy reads the old inline entryProvider captured. The
-    // graph below rebuilds only when these identities change (the guarded
-    // navigator, homeMode, a DesktopShellServices rebuild re-issuing them).
-    val onNowPlayingClick: () -> Unit = remember(guardedNavigator, audioQueueManager) {
-        {
-            audioQueueManager.currentPlayingItemId.value?.let { itemId ->
-                guardedNavigator.navigate(Route.AudioPlayer(itemId))
-            }
-        }
+    // now-playing/ambient lambdas come from the shared rememberShellAudioClicks
+    // over this shell's ShellAudioSource adapter (click-time reads of the
+    // desktop audio core — DesktopAudioQueueManager — never collected values),
+    // and the session seams wrap the shared ShellSessionController the holder
+    // constructed — the same values, same lazy reads the old inline
+    // entryProvider captured. The graph below rebuilds only when these
+    // identities change (the guarded navigator, homeMode, a
+    // DesktopShellServices rebuild re-issuing them).
+    val audioSource = remember(audioQueueManager) {
+        DesktopQueueShellAudioSource(audioQueueManager)
     }
-    val onAmbientClick: () -> Unit = remember(guardedNavigator, audioQueueManager) {
-        {
-            guardedNavigator.navigate(
-                Route.Ambient(
-                    imageUrl = audioQueueManager.albumArtUrl.value.ifEmpty { null },
-                    title = audioQueueManager.title.value,
-                    artist = audioQueueManager.artist.value,
-                ),
-            )
-        }
-    }
+    val audioClicks = rememberShellAudioClicks(guardedNavigator, audioSource)
     val onCheckForUpdates: () -> Unit = remember(services) {
         services.updateCheckController::checkForUpdate
     }
-    // The admin reads stay LAZY on purpose — "Lazy reads — admin refreshes
-    // don't rebuild the graph": the read lambdas capture the collected State
-    // (and are remembered on it), so admin refreshes re-compose entries
-    // without rebuilding the hooks or the section graph.
+    // The admin reads are the shared rememberShellAdminGate outputs — LAZY on
+    // purpose ("Lazy reads — admin refreshes don't rebuild the graph"): the
+    // read lambdas capture the collected State (the gate remembers on them),
+    // so admin refreshes re-compose entries without rebuilding the hooks or
+    // the section graph.
     val isAdminState = sessionController.isAdmin.collectAsState()
     val isRefreshingAdminState = sessionController.isRefreshingAdmin.collectAsState()
-    val isAdmin: () -> Boolean = remember(isAdminState) { { isAdminState.value } }
-    val isRefreshingAdmin: () -> Boolean =
-        remember(isRefreshingAdminState) { { isRefreshingAdminState.value } }
+    val adminGate = rememberShellAdminGate(isAdminState, isRefreshingAdminState)
     val onHomeModeChange = remember(sessionController) { sessionController::setHomeMode }
     val onLogout: (Boolean) -> Unit = remember(sessionController) { sessionController::logout }
     val onRefreshAdmin: () -> Unit = remember(sessionController) {
@@ -330,12 +321,12 @@ internal fun DesktopNavScaffold(
         navigator = guardedNavigator,
         homeMode = homeMode,
         onHomeModeChange = onHomeModeChange,
-        onNowPlayingClick = onNowPlayingClick,
-        onAmbientClick = onAmbientClick,
+        onNowPlayingClick = audioClicks.onNowPlayingClick,
+        onAmbientClick = audioClicks.onAmbientClick,
         onLogout = onLogout,
         onCheckForUpdates = onCheckForUpdates,
-        isAdmin = isAdmin,
-        isRefreshingAdmin = isRefreshingAdmin,
+        isAdmin = adminGate.isAdmin,
+        isRefreshingAdmin = adminGate.isRefreshingAdmin,
         onRefreshAdmin = onRefreshAdmin,
         // Android-only slots: no cast strategy and no shortcut-armed
         // "Surprise Me" flow on desktop; emptyFlow() is an identity-stable
@@ -438,6 +429,26 @@ internal fun DesktopNavScaffold(
         // Fullscreen routes (the video player) take the whole content area:
         // hide the rail while one is on top; Esc/back pops out of it.
         // nav3 keys are the base type; only our Route subclasses carry isFullScreen.
+        //
+        // DELIBERATE DELTA vs the Android shell's shared
+        // isFullScreenRouteActive fold (navigation/FullScreenRoutePolicy.kt),
+        // which scans the WHOLE current stack (`any { it.isFullScreen }`):
+        // this shell reads the TOP entry only. The Android scan exists
+        // because a full-screen route can sit below the top there (the
+        // subtitle tester pushed onto the player) and switching its layout
+        // branch mid-round-trip re-registers the player's NavKey in a second
+        // NavDisplay subtree against a shared SaveableStateHolder — a crash.
+        // Neither hazard exists here: this shell has ONE NavDisplay that
+        // stays composed whether the rail shows or not (the rail is a Row
+        // sibling, not a layout-branch swap around the display), so no NavKey
+        // is ever re-registered against this read flipping, and the subtitle
+        // tester is not registered on desktop (its push dead-ends in the
+        // guard — see the VideoPlayer registration comment above), so a
+        // full-screen route cannot sit below the top through real navigation.
+        // Recorded here so the next reader doesn't "fix" the mismatch in
+        // either direction: unifying on the Android scan would change nothing
+        // observable on desktop while hiding the structural difference;
+        // unifying on this top-only read would reintroduce the Android crash.
         val topRouteIsFullscreen = (backStack.lastOrNull() as? Route)?.isFullScreen == true
         if (!topRouteIsFullscreen) {
             NavigationRail(
@@ -586,4 +597,21 @@ private fun DesktopRailItem(
         icon = { Icon(icon, contentDescription = label) },
         label = { Text(label) },
     )
+}
+
+/**
+ * This shell's [ShellAudioSource] over [DesktopAudioQueueManager] — the
+ * manager's four StateFlow members forwarded verbatim (the Android twin
+ * adapts AudioPlaybackManager the same way beside MainContent). Remembered
+ * on the manager at the call site: a fresh-per-recomposition adapter would
+ * churn the rememberShellAudioClicks helper's remember keys (the discipline
+ * its KDoc owns).
+ */
+private class DesktopQueueShellAudioSource(
+    private val manager: DesktopAudioQueueManager,
+) : ShellAudioSource {
+    override val currentPlayingItemId: StateFlow<String?> get() = manager.currentPlayingItemId
+    override val albumArtUrl: StateFlow<String> get() = manager.albumArtUrl
+    override val title: StateFlow<String> get() = manager.title
+    override val artist: StateFlow<String> get() = manager.artist
 }

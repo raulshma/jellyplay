@@ -362,37 +362,56 @@ outcomes surface as `SessionEvent`s (`ShowError`, `InformUser`,
 each event into its existing sinks (error fields, message bus,
 `_closePlayer`, `_passOutEvents`); autoplay/close policy stays VM-side.
 
-**`VideoSessionHost`** (player-video commonMain) is the VM's
-session-facing prologue as ONE class: the former 16-member `sessionHost`
-object literal AND the 17-lambda `SessionLoadHooks` bundle (exposed as
-`val loadHooks`, consumed by `SessionLoadPipeline`) plus the moved hook
-bodies (`shouldAttemptCinemaMode`, `fetchMediaSegments`,
-`resolveOfflineResumeTicks`). Delegate members (trickplay, syncPlay,
-mini-player, segments, tracking starts, media detail) call real
-collaborators; the VM-domain halves (uiState mirrors, prefs projection,
-`routeToRemotePlaySession`, and `releaseInternalsVmPart` — deliberately
-still the VM's, it owns the `keepAcrossItems` rebuild) arrive as 21 narrow
-command lambdas, so the file stays free of the `VideoPlayerUiState` type
-(ratchet-listed; the ONE declared exception is the prefs-projection
-forward — the transparent `PrefsProjection` alias beside
-`SessionLoadOutputs`, documented as the ratchet's single sanctioned
-state-transformer exception in `ControllerOwnershipTest`'s KDoc: the
-projection is the pipeline's load-stage vocabulary, not state the host
-reads or owns). It is declared BEFORE `playbackSession` (whose `hooks`
-parameters take it — typed `SessionHost`/`SessionLoadHooks`) while its
-lambdas read `playbackSession` lazily — the
-established explicit-type/lazy-collaborator idiom. Pinned by
-`VideoSessionHostTest` (25 cases: the `resetForNewItem` order, the
-report-start incognito gate, restore-muted mirror-then-engine order). A
-full PlaybackStack wrap (one module owning session + pipeline + hooks
-behind a smaller interface) was evaluated and REJECTED the same day: both
-`PlaybackSession` suites already construct the session WITHOUT the VM via
-the deliberate half-interface split (KDoc at the interface), so a wrap
-either changes no test cost (pipeline injectable) or raises it (pipeline
-internally built) — `VideoSessionHost` absorbs the wiring without touching
-the interfaces. `PlaybackSession` itself keeping its 25-arg constructor
-instead of the live `LivePlaybackSession` zero-lambda shape is a deferred
-decision: real, but it rewrites both pinned session suites.
+**`PlayerWiring`** (player-video commonMain) is the player's composition
+builder — the ONE place the collaborator graph is constructed and armed. It replaced BOTH the ViewModel's ~1,400 lines of in-class
+collaborator wiring AND the deleted `VideoSessionHost` pass-through layer
+(the former 16-member object-literal home of the `SessionLoadOutputs` +
+`SessionLifecycleHooks` implementations and the `SessionLoadHooks` bundle,
+which existed only because it was BUILT before the session it wired).
+Composition is TWO-PHASE, the invariant being that cycles die by LATE
+BINDING, not reordering (reordering cannot break a cycle): phase 1
+constructs every collaborator ONCE in dependency order, with the six
+mutual-recursion construction cycles broken by five write-once `...Ref`
+slots (`mediaDetailProjectionRef`, `playbackSessionRef`,
+`episodeContinuationRef`, `playbackPreferenceWriterRef`,
+`engineConfigSyncRef`) — the former five "load-bearing" explicit-type
+annotations dissolved because no property's type inference flows through
+another's initializer anymore; phase 2 (`arm()`, called once from the
+VM's `init`) binds the slots and registers every collector the former
+init block launched, in the same order (engine-event mirrors first,
+engine-attach choreography last), so subscription timing is unchanged.
+The builder implements the session stack's VM-bound seams ITSELF
+(`SessionLoadOutputs` + `SessionLifecycleHooks` — the former host's
+delegate overrides became builder methods; the merged `SessionHost`
+interface died with it) and wires the `SessionLoadHooks` bundle at its
+construction site. The VM-facing split: the builder owns the graph and
+the uiState-write lambdas (it is the VM's construction surface, so unlike
+the migrated controllers it legitimately names the `VideoPlayerUiState`
+type — not ratchet-listed; the `PrefsProjection` alias remains the ONE
+sanctioned state-transformer exception, see `ControllerOwnershipTest`'s
+KDoc); the ViewModel keeps the constructor deps, the state holders, the
+`onEvent` funnel + its handlers and the expose-only flows, and serves the
+builder's callbacks through a `PlayerWiring.Host` seam implemented as a
+private adapter object (so the ownership ratchet's public/internal member
+count stayed at 35 through the move). The host's real behavior funs moved
+to where their halves live: `fetchMediaSegments` / `shouldAttemptCinemaMode`
+/ `restoreRememberedMuted` into `SessionLoadPipeline` (the spine owns WHEN
+those stages run), `reportPlaybackStart` into `PlaybackSession` (beside
+its stop-report twin and the canonical play-session id resolver), and the
+`restoreRememberedMuted` mirror-write + the segments-write arrive as
+narrow pipeline commands. Pinned by `PlayerWiringCompositionTest` (the
+slot-binding discipline, the `resetForNewItem` synchronous-prefix order,
+the pre-seed-before-chip order, the deletion itself) plus the moved
+behavior pins in `SessionLoadPipelineTest` and
+`PlaybackSessionReportingTest`. A full PlaybackStack wrap (one module
+owning session + pipeline + hooks behind a smaller interface) was
+evaluated and REJECTED earlier: both `PlaybackSession` suites already
+construct the session WITHOUT the VM via the deliberate half-interface
+split (KDoc at the interface) — `PlayerWiring` keeps that property (the
+interfaces are untouched; only the implementation behind them changed).
+`PlaybackSession` itself keeping its 25-arg constructor instead of the
+live `LivePlaybackSession` zero-lambda shape is a deferred decision: real,
+but it rewrites both pinned session suites.
 
 **`EngineAttachController`** (player-video commonMain, beside the other
 controllers) owns the engine-attach choreography the VM's ~100-line
@@ -407,9 +426,10 @@ the previous collectors; the job dies with the VM scope. Narrow lambdas
 plus the one uiState command (`onEngineCapabilities`); zero uiState-type
 references. Pinned by `EngineAttachControllerTest` (9 cases incl. the
 exact-order call log and old-engine-silenced-after-reattach).
-`SessionLifecycleHooks` is the VM's synchronous prologue (transport re-arm,
-new-item resets, routing gates, the VM teardown half, trickplay clear,
-SyncPlay reattach). `sessionState` / `engineFlow` are direct aliases of
+`SessionLifecycleHooks` is the VM-bound synchronous prologue (transport
+re-arm, new-item resets, routing gates, the VM teardown half, trickplay
+clear, SyncPlay reattach) — implemented by `PlayerWiring` since the
+VideoSessionHost deletion. `sessionState` / `engineFlow` are direct aliases of
 `PlayerSessionManager`'s flows — same instance, no re-publish, so dispatch
 ordering is unchanged.
 
@@ -629,9 +649,12 @@ declared, not accidental), write through `ItemPlaybackPreferenceRepository`
 where null means FORGET and issues the explicit `clear*` call (save's
 "null ⇒ preserve" convention must never silently keep the old language),
 then fire `onPreferencesChanged` — the resolver refresh the restore ladder
-and sheet toggles read. In the VM the writer sits after
-`trackSelectionHelper` with a load-bearing explicit type annotation (each
-declaration's wiring lambda reads the other). Pinned by
+and sheet toggles read. In the wiring (`PlayerWiring`) the writer sits
+after `trackSelectionHelper` and the two declarations' mutual wiring reads
+— construction cycle 5 of the six — go through a write-once
+`playbackPreferenceWriterRef` slot bound in the builder's arm phase (the
+former load-bearing explicit-type annotation dissolved with the cycle;
+the same for the other four annotated pairs). Pinned by
 `ItemPlaybackPreferenceWriterTest`.
 
 `TrackSelectionHelper.updateTracksFromEngine`'s twin restore ladders are one
@@ -884,10 +907,12 @@ virtual time — rewriting would churn pins for no gain).
 > deliberately separate (the dual-home warning below), and the deletion
 > test is a wash — complexity moves, does not concentrate. The session
 > side gained `VideoSessionHost` + `EngineAttachController` (see the
-> Playback session section). VM 3,011 → 2,865 wc-lines; ceilings lowered
-> twice (3,016 → 3,002 → 2,870 by the ratchet's lineSequence count,
-> never raised; ownership-test member ceiling 36 → 35); the
-> migrated-controllers list 20 → 19 entries; god-count unchanged at 3.
+> Playback session section; the host was later deleted outright by the
+> `PlayerWiring` two-phase composition — see that section). VM 3,011 →
+> 2,865 → 2,005 wc-lines; ceilings lowered (3,016 → 3,002 → 2,870 → 2,006
+> by the ratchet's lineSequence count, never raised; ownership-test member
+> ceiling 36 → 35, still 35 through the wiring move); the
+> migrated-controllers list 20 → 19 → 18 entries; god-count unchanged at 3.
 > The live screen joined the shared chassis the same day: it cites the
 > moved seek-step family + auto-hide gate, routes its window effects
 > through the now-public `PlayerWindowOps` seam (new
@@ -2125,7 +2150,17 @@ the client directly). The `PlaybackRepositorySurfaceTest` ratchet dropped to
 > `DownloadRepositoryImpl → DownloadDelegate → writer → repo` `Lazy` cycle
 > is DISSOLVED, no back-reference), and `AdminRepositoryImpl`'s ctor
 > narrowed from the `JellyfinApiClient` union to the family singles its
-> members actually call.
+> members actually call. **The three pure image-URL builders
+> (`getImageUrl` / `getChapterImageUrl` / `getBackdropUrl`) retired off the
+> `PlaybackRepository` interface** (25 → 22 members, surface ratchet
+> lowered): URL-only readers (audio browse/crossfade/queue managers, TV
+> Watch Next, the downloads conveyor, the insights heatmap, the video
+> player's session/cast artwork) inject the `ImageUrlProvider` module
+> instead, whose impl now builds the URLs directly through the same
+> `LibraryApiClient` the playback impl delegated to — same defaults
+> (400/1280), byte-for-byte identical strings; explicit non-default widths
+> pass through un-clamped (only the default-width UI request rides the
+> performance-mode clamp).
 
 **`LyricsRepositoryImpl`** (`shared/core/data/src/jvmShared/kotlin/.../repository/LyricsRepositoryImpl.kt`)
 owns the whole LRC/LRCLIB fetch-parse-cache chain (cache read → Jellyfin

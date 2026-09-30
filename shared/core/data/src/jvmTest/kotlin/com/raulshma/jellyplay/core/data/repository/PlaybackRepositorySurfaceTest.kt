@@ -13,11 +13,16 @@ import kotlin.test.assertTrue
  * matching the impl's override count), and pins that count so it can only
  * move DOWN.
  *
- * Baseline 25 is the count after the outbox-replay reader (`replayOutboxEntry`)
- * was retired into the narrow [com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay]
+ * Baseline 22 is the count after the three pure image-URL builders
+ * (`getImageUrl` / `getChapterImageUrl` / `getBackdropUrl`) were retired into the
+ * narrow [com.raulshma.jellyplay.core.data.util.ImageUrlProvider] module (the
+ * URL-only readers inject that instead; its impl builds the URLs through the
+ * same LibraryApiClient the playback impl delegated to, so the emitted strings
+ * are unchanged). That retirement followed the outbox-replay reader
+ * (`replayOutboxEntry`) retiring into the narrow
+ * [com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay]
  * port (its only production consumer, the drain loop, injects that instead) —
- * restoring the cap the versions/still-watching wave had pushed one over. That
- * retirement followed the session-credential readers (`getServerUrl` /
+ * which itself followed the session-credential readers (`getServerUrl` /
  * `getAccessToken`) retiring into the
  * narrow [com.raulshma.jellyplay.core.data.playback.PlaybackIdentity] module
  * (their four readers inject that instead), which itself followed the dead
@@ -36,7 +41,7 @@ import kotlin.test.assertTrue
 class PlaybackRepositorySurfaceTest {
 
     /** The maximum allowed member count of [PlaybackRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 25
+    private val maxInterfaceMembers = 22
 
     /** Members retired from the interface; their re-addition must fail this suite. */
     private val retiredMembers = listOf(
@@ -45,6 +50,9 @@ class PlaybackRepositorySurfaceTest {
         "getServerUrl",
         "getAccessToken",
         "replayOutboxEntry",
+        "getImageUrl",
+        "getChapterImageUrl",
+        "getBackdropUrl",
     )
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */

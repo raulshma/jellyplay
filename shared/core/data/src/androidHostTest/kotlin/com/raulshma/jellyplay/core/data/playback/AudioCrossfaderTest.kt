@@ -8,6 +8,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -57,6 +58,7 @@ class AudioCrossfaderTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val effectsProcessor: AudioEffectsProcessor = mockk(relaxed = true) {
         // Relaxed-mock StateFlow.value returns a bare Object, which explodes
         // when the crossfade ramp unboxes it as Boolean — stub the flows the
@@ -142,7 +144,7 @@ class AudioCrossfaderTest {
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns detailResult
         coEvery { playbackSourceResolver.resolvePlaybackSource(any(), any(), any()) } returns
             ResolvedPlaybackSource.Stream(itemId = "next", url = "http://stream", title = "Next Song", mediaSourceId = "ms1")
-        every { playbackRepository.getImageUrl(any(), any(), any()) } returns "http://img"
+        every { imageUrlProvider.getImageUrl(any(), any()) } returns "http://img"
 
         val crossfader = crossfader()
         crossfader.maybeStart()
@@ -200,7 +202,7 @@ class AudioCrossfaderTest {
         context = context,
         effectsProcessor = effectsProcessor,
         mediaRepository = mediaRepository,
-        playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
         playbackSourceResolver = playbackSourceResolver,
         repeatModeProvider = { repeatMode },
         crossfadeDurationMsProvider = { crossfadeMs },

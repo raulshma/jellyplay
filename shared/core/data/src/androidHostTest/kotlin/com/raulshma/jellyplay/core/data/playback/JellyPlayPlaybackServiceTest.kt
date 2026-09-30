@@ -79,6 +79,7 @@ class JellyPlayPlaybackServiceTest {
             playlistRepository = mockk<PlaylistRepository>(relaxed = true),
             downloadRepository = mockk<DownloadRepository>(relaxed = true),
             playbackRepository = mockk<PlaybackRepository>(relaxed = true),
+            imageUrlProvider = mockk(relaxed = true),
             playbackSourceResolver = mockk<PlaybackSourceResolver>(relaxed = true),
             streamingQualityProvider = { StreamingQuality.AUTO },
             adaptiveBitrateSelector = mockk<AdaptiveBitrateSelector>(relaxed = true),

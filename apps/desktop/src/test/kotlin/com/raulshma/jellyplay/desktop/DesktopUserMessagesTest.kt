@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.ui.message.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.shell.displayMessageText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -113,7 +114,8 @@ class DesktopUserMessagesTest {
 
         assertEquals(
             listOf<UserMessage>(
-                // The Android MainViewModel collector's exact fold: header
+                // The Android MainViewModel collector's exact fold — the shared
+                // displayMessageText (feature/shell) both shells run: header
                 // prefixed on its own line when present, bare text otherwise,
                 // severity Info (an informational server push, not an error).
                 UserMessage.Info(UiText.Raw("Server notice\nRestarting tonight")),
@@ -124,12 +126,12 @@ class DesktopUserMessagesTest {
     }
 
     @Test
-    fun `an all-blank DisplayMessage push is dropped by the text fold`() {
-        assertNull(desktopDisplayMessageText(DisplayMessagePayload(header = "", text = "", timeoutMs = null)))
-        assertNull(desktopDisplayMessageText(DisplayMessagePayload(header = "  ", text = "  ", timeoutMs = 1)))
+    fun `an all-blank DisplayMessage push is dropped by the shared text fold`() {
+        assertNull(displayMessageText(DisplayMessagePayload(header = "", text = "", timeoutMs = null)))
+        assertNull(displayMessageText(DisplayMessagePayload(header = "  ", text = "  ", timeoutMs = 1)))
         assertEquals(
             "Header\n",
-            desktopDisplayMessageText(DisplayMessagePayload(header = "Header", text = "", timeoutMs = null)),
+            displayMessageText(DisplayMessagePayload(header = "Header", text = "", timeoutMs = null)),
             // A real header with blank text still shows the header line —
             // the fold only drops the all-blank RESULT, matching Android.
         )

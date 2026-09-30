@@ -63,6 +63,12 @@ class AudioLibraryBrowser(
     private val playlistRepository: PlaylistRepository,
     private val downloadRepository: DownloadRepository,
     private val playbackRepository: PlaybackRepository,
+    /**
+     * Artwork URLs for the browse rows and the resolved items — the narrow
+     * [ImageUrlProvider] seam the image-URL builders retired off
+     * [PlaybackRepository] into.
+     */
+    private val imageUrlProvider: ImageUrlProvider,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val streamingQualityProvider: () -> StreamingQuality,
     private val adaptiveBitrateSelector: AdaptiveBitrateSelector,
@@ -328,7 +334,7 @@ class AudioLibraryBrowser(
     }
 
     /**
-     * Artwork lookup for library nodes — [PlaybackRepository.getImageUrl]
+     * Artwork lookup for library nodes — [ImageUrlProvider.getImageUrl]
      * throws on offline/unresolved ids; degrade to null exactly like the
      * per-mapper try/catch ladders this replaces (local-file playables
      * included — but NOT the server-stream playable branch, which
@@ -336,7 +342,7 @@ class AudioLibraryBrowser(
      * failing resolve there).
      */
     private fun artUri(itemId: String): Uri? = try {
-        Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
+        Uri.parse(imageUrlProvider.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
     } catch (_: Exception) {
         null
     }
@@ -486,7 +492,7 @@ class AudioLibraryBrowser(
             title = detail.item.name,
             artist = detail.item.albumArtist ?: detail.item.artistItems.firstOrNull()?.name ?: "",
             album = detail.item.album ?: "",
-            artUri = Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)),
+            artUri = Uri.parse(imageUrlProvider.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)),
             browsable = false,
             playable = true,
             mediaType = MediaMetadata.MEDIA_TYPE_MUSIC,

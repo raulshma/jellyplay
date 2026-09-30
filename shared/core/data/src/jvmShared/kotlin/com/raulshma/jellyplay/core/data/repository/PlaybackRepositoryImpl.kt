@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong
 class PlaybackRepositoryImpl(
     /** Telemetry, URL builders, PlaybackInfo, segments, subtitle delivery, trickplay. */
     private val playbackApiClient: PlaybackApiClient,
-    /** Image URLs + the played/favorite flips the outbox drain replays. */
+    /** The played/favorite flips the outbox drain replays. */
     private val libraryApiClient: LibraryApiClient,
     /** Server URL + access token for the absolute-ize URL folds. */
     private val authApiClient: AuthApiClient,
@@ -253,15 +253,6 @@ class PlaybackRepositoryImpl(
             PlaybackOutboxEventType.UNFAVORITE ->
                 libraryApiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
         }
-
-    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
-        libraryApiClient.getImageUrl(itemId, imageType, maxWidth)
-
-    override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?): String =
-        libraryApiClient.getImageUrl(itemId, imageType = "Chapter", maxWidth = maxWidth, imageIndex = imageIndex, tag = tag)
-
-    override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
-        libraryApiClient.getBackdropImageUrl(itemId, maxWidth)
 
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =
         playbackApiClient.getItemImageBytes(itemId, imageType, maxWidth)

@@ -23,7 +23,7 @@ internal fun desktopMediaSupportModule(dataDir: Path): Module = module {
         // The shared jvmShared impl — the desktop twin (DesktopImageUrlProvider)
         // was deleted once the policy lived in one class next to the interface.
         ImageUrlProviderImpl(
-            playbackRepository = get(),
+            libraryApiClient = get(),
             appearanceStore = get(),
         )
     }

@@ -17,6 +17,13 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * with "Key VideoPlayer(...) was used multiple times" on the back-pop.
  * `null` (no stack for the current tab yet) and an empty stack both read
  * `false`; non-[Route] NavKeys never count as full-screen.
+ *
+ * DELIBERATE DELTA on desktop: the desktop shell does NOT share this scan —
+ * it reads the top entry only (DesktopNavScaffold's `topRouteIsFullscreen`),
+ * because both hazards above are Android-shaped: a single always-composed
+ * NavDisplay never re-registers keys against a read flip, and the subtitle
+ * tester is not registered there. Recorded at both sites; do not unify on
+ * either behavior without re-deriving both halves.
  */
 internal fun isFullScreenRouteActive(backStack: List<NavKey>?): Boolean =
     backStack?.any { it is Route && it.isFullScreen } ?: false

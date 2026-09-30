@@ -50,6 +50,7 @@ interface VideoPlayerPlatform : SubtitleContentGateway {
      */
     fun createCastController(
         playbackRepository: PlaybackRepository,
+        imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider,
         adaptiveBitrateManager: AdaptiveBitrateManager,
         syncPlayCastStore: SyncPlayCastStore,
         getEngine: () -> MediaEngine?,

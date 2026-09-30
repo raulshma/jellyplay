@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.ui.message.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.shell.displayMessageText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
@@ -48,29 +49,17 @@ internal fun desktopMusicMessages(musicMessageBus: MusicMessageBus): Flow<UserMe
 
 /**
  * The receiver's DisplayMessage host source: server-pushed
- * [DisplayMessagePayload]s mapped onto [UserMessage.Info] over the
- * [desktopDisplayMessageText] fold — the same severity and the same
- * header+text fold the Android shell's MainViewModel collector gives these
- * pushes, so one server message reads identically on both shells.
+ * [DisplayMessagePayload]s mapped onto [UserMessage.Info] over the shared
+ * [displayMessageText] fold (:shared:feature:shell — the exact header+text
+ * fold the Android shell's MainViewModel collector gives these pushes, so
+ * one server message reads identically on both shells).
  */
 internal fun desktopDisplayMessages(
     displayMessages: Flow<DisplayMessagePayload>,
 ): Flow<UserMessage> =
     displayMessages.mapNotNull { payload ->
-        desktopDisplayMessageText(payload)?.let { UserMessage.Info(UiText.Raw(it)) }
+        displayMessageText(payload)?.let { UserMessage.Info(UiText.Raw(it)) }
     }
-
-/**
- * One DisplayMessage payload's snackbar text — the Android collector's exact
- * fold: `header\ntext` when the header is present, the bare text otherwise,
- * and NULL when the result is blank (an all-blank push surfaces nothing
- * rather than an empty snackbar).
- */
-internal fun desktopDisplayMessageText(payload: DisplayMessagePayload): String? {
-    val text =
-        if (payload.header.isNotBlank()) "${payload.header}\n${payload.text}" else payload.text
-    return text.ifBlank { null }
-}
 
 /**
  * The assembled source list the scaffold's UserMessageHost collects:

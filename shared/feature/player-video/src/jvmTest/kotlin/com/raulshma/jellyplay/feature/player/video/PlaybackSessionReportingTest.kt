@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -477,6 +478,48 @@ class PlaybackSessionReportingTest {
     }
 
     // ── Fakes ───────────────────────────────────────────────────────────────
+
+    // ── reportPlaybackStart: the server start report (moved from the deleted
+    //    VideoSessionHostTest when the fun landed on the session, beside its
+    //    stop-report twin) ────────────────────────────────────────────────────
+
+    @kotlin.test.Test
+    fun reportPlaybackStart_normalPath_reportsWithTheResolvedPlaySessionId() = runTest {
+        coEvery { playbackRepository.reportPlaybackStart(any()) } returns Result.success(Unit)
+
+        session.reportPlaybackStart("item-1", null, PlayMethod.DIRECT_PLAY)
+
+        coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(any()) }
+        val slot = io.mockk.slot<PlaybackStartInfo>()
+        coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(capture(slot)) }
+        assertEquals("item-1", slot.captured.itemId)
+        // The server-issued id wins over the locally-allocated UUID fallback.
+        assertEquals("server-1", slot.captured.sessionId)
+        assertEquals(PlayMethod.DIRECT_PLAY, slot.captured.playMethod)
+    }
+
+    @kotlin.test.Test
+    fun reportPlaybackStart_withoutAServerIssuedId_fallsBackToTheLocalUuid() = runTest {
+        coEvery { playbackRepository.reportPlaybackStart(any()) } returns Result.success(Unit)
+        sessionStateFlow.value = PlayerSessionState(currentItemId = "item-1")
+
+        session.reportPlaybackStart("item-1", null, PlayMethod.TRANSCODE)
+
+        val slot = io.mockk.slot<PlaybackStartInfo>()
+        coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(capture(slot)) }
+        assertEquals(session.playSessionId, slot.captured.sessionId)
+    }
+
+    @kotlin.test.Test
+    fun reportPlaybackStart_incognitoSkipsTheServerStartReport() = runTest {
+        // Rebuild the session with the incognito gate armed.
+        buildSession(incognito = true)
+        coEvery { playbackRepository.reportPlaybackStart(any()) } returns Result.success(Unit)
+
+        session.reportPlaybackStart("item-1", null, PlayMethod.DIRECT_PLAY)
+
+        coVerify(exactly = 0) { playbackRepository.reportPlaybackStart(any()) }
+    }
 
     private fun resolved(playMethod: PlayMethod) = ResolvedPlayback(
         mediaSourceId = "ms-1",

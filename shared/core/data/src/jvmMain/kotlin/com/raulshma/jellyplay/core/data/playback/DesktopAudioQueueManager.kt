@@ -672,7 +672,7 @@ class DesktopAudioQueueManager(
                 artist = track.artist,
                 artistId = track.artistId,
                 album = track.album ?: "",
-                albumArtUrl = playbackRepository.getImageUrl(track.itemId, maxWidth = 600),
+                albumArtUrl = imageUrlProvider.getImageUrl(track.itemId, maxWidth = 600),
             )
         },
         appendQueueItem = { track ->

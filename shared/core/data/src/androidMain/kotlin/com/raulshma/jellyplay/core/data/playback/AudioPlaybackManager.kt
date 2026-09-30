@@ -136,6 +136,7 @@ class AudioPlaybackManager(
         playlistRepository = playlistRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
         playbackSourceResolver = playbackSourceResolver,
         streamingQualityProvider = { currentPlayback.streamingQuality },
         adaptiveBitrateSelector = adaptiveBitrateSelector,
@@ -333,7 +334,7 @@ class AudioPlaybackManager(
         context = context,
         effectsProcessor = effectsProcessor,
         mediaRepository = mediaRepository,
-        playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
         playbackSourceResolver = playbackSourceResolver,
         repeatModeProvider = { state.repeatMode.value },
         crossfadeDurationMsProvider = { crossfadeDurationMs.value },
@@ -871,7 +872,7 @@ class AudioPlaybackManager(
                 artist = track.artist,
                 artistId = track.artistId,
                 album = track.album ?: "",
-                albumArtUrl = playbackRepository.getImageUrl(track.itemId, maxWidth = 600),
+                albumArtUrl = imageUrlProvider.getImageUrl(track.itemId, maxWidth = 600),
             )
         } else {
             nowPlayingTracker.publishLocalFile(

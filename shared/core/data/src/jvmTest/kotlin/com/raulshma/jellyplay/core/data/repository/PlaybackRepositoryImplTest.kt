@@ -216,15 +216,6 @@ class PlaybackRepositoryImplTest {
     }
 
     @Test
-    fun `getImageUrl delegates to apiClient`() {
-        every { apiClient.getImageUrl("item-1", "Primary", 400) } returns "https://test/img"
-
-        val url = repository.getImageUrl("item-1", "Primary", 400)
-
-        assertEquals("https://test/img", url)
-    }
-
-    @Test
     fun `getStreamUrl delegates to apiClient`() {
         every { apiClient.getStreamUrl("item-1", "source-1", 0L, liveStreamId = null) } returns "https://test/stream"
 

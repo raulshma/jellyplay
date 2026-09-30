@@ -10,9 +10,11 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.isWatchedPercentage
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -142,13 +144,14 @@ internal fun resolveResumeTicks(
  *   AFTER release(), the same cancel-after-release ordering it has always
  *   applied);
  * - [PlayerSessionManager] and [PlaybackProgressReporter] are injected as
- *   already-constructed instances. The reporter keeps being built inside the
- *   ViewModel (its ui-state handle wiring stays VM-side by design) and is
+ *   already-constructed instances. The reporter is built in the wiring
+ *   builder ([PlayerWiring], the composition module that owns the whole
+ *   collaborator graph — the former in-ViewModel constructions) and is
  *   handed over here as an object;
- * - the [SessionLoadPipeline] is CONSTRUCTED in the ViewModel — its outputs
- *   and hooks own every ui-state touch — and injected here as an object: the
- *   session owns when a load starts, never how the pipeline reaches the ui
- *   state;
+ * - the [SessionLoadPipeline] is CONSTRUCTED in the wiring builder — its
+ *   outputs and hooks own every ui-state touch — and injected here as an
+ *   object: the session owns when a load starts, never how the pipeline
+ *   reaches the ui state;
  * - the same no-ui-state rule applies to the B2–B4 additions: the
  *   media-session controller is injected as an already-constructed instance,
  *   the process-death position persistence is reached ONLY through the
@@ -986,6 +989,28 @@ internal class PlaybackSession(
     }
 
     /**
+     * The server start report, incognito-gated: incognito never reaches the
+     * server (the same invariant [reportCurrentPlaybackStopped] enforces).
+     * The play-session id resolves through [currentPlaySessionId] — the same
+     * single-value resolver this session's stop reports and persists use
+     * (the deleted [VideoSessionHost] carried a duplicate resolver on the VM
+     * for exactly this hook; the deduplication is the point of the move).
+     * Reached through the load spine's `reportPlaybackStart` hook at stage
+     * 10, directly before position/progress tracking starts.
+     */
+    internal suspend fun reportPlaybackStart(itemId: String, source: MediaSource?, playMethod: PlayMethod) {
+        if (getIncognitoModeEnabled()) return
+        playbackRepository.reportPlaybackStart(
+            PlaybackStartInfo(
+                itemId = itemId,
+                sessionId = currentPlaySessionId,
+                mediaSourceId = source?.id,
+                playMethod = playMethod,
+            )
+        )
+    }
+
+    /**
      * The persist half of the ViewModel's `seekTo`: records the seek latches
      * (feeding [getReportPositionMs]) and, when an item is loaded, snapshots
      * the seek position into the process-death store immediately (explicit
@@ -1358,20 +1383,6 @@ internal interface SessionLifecycleHooks {
      */
     fun wasInSyncPlay(): Boolean
 }
-
-/**
- * The merged ViewModel seam: ONE interface covering both halves the
- * ViewModel implements for the session stack — [SessionLoadOutputs] (the
- * load pipeline's uiState-shaped outputs) and [SessionLifecycleHooks] (the
- * initialize/release lifecycle slices). The VM used to implement the two as
- * separate object literals with identical statelessness; it now implements
- * this single host and passes the one object to both consumers
- * ([SessionLoadPipeline.outputs], [PlaybackSession.hooks]). The halves stay
- * separate interfaces so their test fakes (SessionLoadPipelineTest's
- * recording outputs, the session suites' recording hooks) keep implementing
- * just the half they exercise.
- */
-internal interface SessionHost : SessionLoadOutputs, SessionLifecycleHooks
 
 /**
  * Event surface a [PlaybackSession] exposes to the ViewModel: the VM stays

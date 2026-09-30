@@ -61,6 +61,7 @@ internal val dataDownloadsConveyorModule: Module = module {
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
             imagePreloader = get<OfflineImagePreloader>(),
             playbackRepository = get(),
+            imageUrlProvider = get(),
             playbackIdentity = get(),
             httpClient = get(),
             json = get(),
@@ -83,6 +84,7 @@ internal val dataDownloadsConveyorModule: Module = module {
         DownloadDelegate(
             writer = get<OfflineDownloadWriterCore>(),
             playbackRepository = get(),
+            imageUrlProvider = get(),
         )
     }
 
@@ -95,7 +97,7 @@ internal val dataDownloadsConveyorModule: Module = module {
             database = get(),
             mediaRepository = get<MediaRepositoryAccess>(),
             episodeCatalogue = get(),
-            playbackRepository = get(),
+            imageUrlProvider = get(),
             downloadsStore = get(),
             storagePolicy = get(),
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),

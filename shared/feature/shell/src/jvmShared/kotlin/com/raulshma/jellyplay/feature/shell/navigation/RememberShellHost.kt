@@ -33,7 +33,8 @@ import kotlinx.coroutines.flow.emptyFlow
  *    `shellEntryProvider` build (the ~25 section builders); stability
  *    contract documented on MainContent's NavRequestController — the
  *    navigator is identity-stable per composition, the click lambdas are
- *    remembered on their only captures.
+ *    the rememberShellAudioClicks outputs, the admin reads the
+ *    rememberShellAdminGate ones.
  *  - desktop: the scaffold's `remember(guardedNavigator, shellHost)`
  *    `shellEntryProvider(..., registry = services.sectionRegistry)` build
  *    (the ~20 shared sections; the graph build is also what attaches them
@@ -43,10 +44,11 @@ import kotlinx.coroutines.flow.emptyFlow
  *    holder itself rebuilds.
  *
  * [navigator] is a KEY, not a field: no hook stores it directly — the
- * now-playing/ambient click lambdas close over it at the call sites
- * (remembered on their only captures: the navigator + each shell's audio
- * core), and keying here rebuilds the hooks — refreshing those captures —
- * exactly when the navigator identity changes, and never otherwise.
+ * now-playing/ambient click lambdas close over it inside the shared
+ * rememberShellAudioClicks helper (keyed on the navigator + the shell's
+ * ShellAudioSource adapter), and keying here rebuilds the hooks —
+ * refreshing those captures — exactly when the navigator identity
+ * changes, and never otherwise.
  *
  * The admin triple arrives as read lambdas on purpose — "Lazy .value reads
  * — admin refreshes don't rebuild the graph": admin refreshes re-compose
@@ -61,14 +63,17 @@ import kotlinx.coroutines.flow.emptyFlow
  *   reference (Android remembers the model's method reference; desktop the
  *   session controller's).
  * @param onNowPlayingClick / @param onAmbientClick the music home cards'
- *   push lambdas — each shell reads its own audio core at CLICK time
- *   (flows read lazily, never captured values); remember them on their
- *   only captures (navigator + audio core).
+ *   push lambdas — built by the shared rememberShellAudioClicks over each
+ *   shell's ShellAudioSource adapter (each shell's audio core is read at
+ *   CLICK time — flows read lazily, never captured values; a blank art URL
+ *   arrives as null, the helper's declared normalization).
  * @param onLogout settingsSection's logout (revoke=true also revokes the
  *   server session).
  * @param onCheckForUpdates settingsSection's About-row update check.
  * @param isAdmin / @param isRefreshingAdmin / @param onRefreshAdmin the
- *   admin triple — read lambdas over the shell's collected admin state.
+ *   admin triple — the reads come from the shared rememberShellAdminGate
+ *   (lazy over the shell's collected admin states); the refresh arm wraps
+ *   each shell's own session owner.
  * @param playOnRedirect homeSection's Play-On redirect — Android-only
  *   today (its cast strategy lives on the Play On controller); shells
  *   without a cast strategy pass null (no redirect offered). Required —

@@ -9,7 +9,7 @@ import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -36,7 +36,8 @@ import kotlinx.coroutines.withContext
 class TvWatchNextPublisher(
     private val context: Context,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    /** Backdrop artwork URL for the row's poster (the ImageUrlProvider seam). */
+    private val imageUrlProvider: ImageUrlProvider,
     /** Clock seam (D3) for the row's last-engagement timestamp. */
     private val timeSource: TimeSource,
 ) {
@@ -192,7 +193,7 @@ class TvWatchNextPublisher(
         setPosterArtAspectRatio(TvContractCompat.PreviewProgramColumns.ASPECT_RATIO_16_9)
 
         // Use the authenticated image URL so the system can fetch the artwork.
-        val artworkUri = playbackRepository.getBackdropUrl(item.id, BACKDROP_WIDTH).toUri()
+        val artworkUri = imageUrlProvider.getBackdropUrl(item.id, BACKDROP_WIDTH).toUri()
         setPosterArtUri(artworkUri)
 
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinkGrammar.mediaLink(item.id)))

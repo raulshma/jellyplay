@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.data.util
 
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.model.lruMapOf
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import java.util.Collections
 
 /**
@@ -14,6 +14,13 @@ import java.util.Collections
  * ([com.raulshma.jellyplay.core.data.di.androidDataModule] /
  * [com.raulshma.jellyplay.core.data.di.desktopDataModule]) construct this class.
  *
+ * Since the image/chapter-image/backdrop URL builders were retired off the
+ * [com.raulshma.jellyplay.core.data.repository.PlaybackRepository] surface,
+ * this class builds the URLs directly through [LibraryApiClient] — the same
+ * client the playback repository delegated to, so the emitted strings are
+ * unchanged (imageType "Primary"/"Logo"/"Chapter" + `maxWidth`, empty string
+ * when no session).
+ *
  * Policy: image URLs are built per visible card per recomposition (poster
  * grids, CW rows, search results). Each build runs UUID parsing + string
  * assembly inside the Jellyfin SDK (imageApi.getItemImageUrl) — not a network
@@ -23,13 +30,21 @@ import java.util.Collections
  * exact historical construction on both platforms), keyed with the effective
  * width (which embeds the performance-mode decision) so a perf-mode toggle
  * produces a distinct, correct entry rather than serving a stale width.
- * Performance mode lowers the width to [PERF_MAX_WIDTH]; null caller widths
- * (original-resolution requests, e.g. the full-screen photo viewer) bypass
- * BOTH the clamp and the cache. Empty repository URLs are never cached, so a
- * later login/server change can start producing URLs.
+ *
+ * Width policy: a null caller width (original-resolution requests, e.g. the
+ * full-screen photo viewer) bypasses BOTH the clamp and the cache; the
+ * default-width (no-arg) request rides the performance-mode clamp to
+ * [PERF_MAX_WIDTH]; any OTHER explicit width is honored verbatim — the
+ * infrastructural callers that migrated off the repository surface (queue
+ * artwork, offline preloads, heatmap rows, media-session/cast artwork) pass
+ * deliberate per-surface sizes (200/300/600/1280) and never rode the clamp,
+ * so clamping only the default-width path keeps every caller's emitted URL
+ * identical across the migration.
+ * Performance mode lowers the width to [PERF_MAX_WIDTH]. Empty client URLs are
+ * never cached, so a later login/server change can start producing URLs.
  */
 class ImageUrlProviderImpl(
-    private val playbackRepository: PlaybackRepository,
+    private val libraryApiClient: LibraryApiClient,
     private val appearanceStore: AppearanceStore,
 ) : ImageUrlProvider {
 
@@ -49,16 +64,16 @@ class ImageUrlProviderImpl(
         // like the full-screen photo viewer deliberately ask for the source
         // bitmap, and capping null to a fixed perf width silently broke that contract.
         if (maxWidth == null) {
-            return playbackRepository.getImageUrl(itemId, maxWidth = null)
+            return libraryApiClient.getImageUrl(itemId, maxWidth = null)
         }
-        // Non-null caller widths are deliberately replaced by this single
-        // effective width (perf-aware): one width per item keeps the Coil cache
-        // key consolidated instead of fragmenting it across caller widths.
-        val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
-        else ImageUrlProvider.DEFAULT_MAX_WIDTH
+        // The default-width (UI card) request is the one path performance mode
+        // clamps; explicit caller widths are honored verbatim (see the class
+        // KDoc) so per-surface sizes keep emitting their exact URLs.
+        val effectiveWidth = if (maxWidth == ImageUrlProvider.DEFAULT_MAX_WIDTH && performanceMode) PERF_MAX_WIDTH
+        else maxWidth
         val key = "p_$itemId|$effectiveWidth"
         urlCache[key]?.let { return it }
-        val url = playbackRepository.getImageUrl(itemId, maxWidth = effectiveWidth)
+        val url = libraryApiClient.getImageUrl(itemId, maxWidth = effectiveWidth)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
@@ -66,7 +81,7 @@ class ImageUrlProviderImpl(
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String {
         val key = "b_$itemId|$maxWidth"
         urlCache[key]?.let { return it }
-        val url = playbackRepository.getBackdropUrl(itemId, maxWidth = maxWidth)
+        val url = libraryApiClient.getBackdropImageUrl(itemId, maxWidth = maxWidth)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
@@ -78,7 +93,7 @@ class ImageUrlProviderImpl(
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
         val key = "l_$itemId|$effectiveWidth"
         urlCache[key]?.let { return it }
-        val url = playbackRepository.getImageUrl(itemId, imageType = "Logo", maxWidth = effectiveWidth)
+        val url = libraryApiClient.getImageUrl(itemId, imageType = "Logo", maxWidth = effectiveWidth)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
@@ -90,7 +105,13 @@ class ImageUrlProviderImpl(
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
         val key = "c_$itemId|$imageIndex|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = playbackRepository.getChapterImageUrl(itemId, imageIndex, tag, maxWidth = effectiveWidth)
+        val url = libraryApiClient.getImageUrl(
+            itemId,
+            imageType = "Chapter",
+            maxWidth = effectiveWidth,
+            imageIndex = imageIndex,
+            tag = tag,
+        )
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }

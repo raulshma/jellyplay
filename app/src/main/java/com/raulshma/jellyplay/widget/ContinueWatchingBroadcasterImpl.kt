@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 
@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 class ContinueWatchingBroadcasterImpl(
     private val context: Context,
     private val widgetDataStore: WidgetDataStore,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
 ) : ContinueWatchingBroadcaster {
 
     override fun refreshContinueWatching() {
@@ -48,7 +48,7 @@ class ContinueWatchingBroadcasterImpl(
             WidgetImageLoader.prewarmContinueWatchingPosters(
                 context,
                 widgetDataStore.continueWatchingSnapshot(),
-                playbackRepository,
+                imageUrlProvider,
             )
         }.onFailure { e ->
             // The prewarm is best-effort (the factory falls back to cached

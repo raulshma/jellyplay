@@ -63,6 +63,7 @@ internal class AndroidVideoPlayerPlatform(
 
     override fun createCastController(
         playbackRepository: PlaybackRepository,
+        imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider,
         adaptiveBitrateManager: AdaptiveBitrateManager,
         syncPlayCastStore: SyncPlayCastStore,
         getEngine: () -> MediaEngine?,
@@ -71,6 +72,7 @@ internal class AndroidVideoPlayerPlatform(
     ): PlayerCastController = AndroidPlayerCastController(
         castManager = castManager,
         playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
         adaptiveBitrateManager = adaptiveBitrateManager,
         syncPlayCastStore = syncPlayCastStore,
         getEngine = getEngine,

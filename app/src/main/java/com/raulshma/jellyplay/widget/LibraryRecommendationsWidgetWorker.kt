@@ -6,7 +6,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
@@ -33,7 +33,7 @@ class LibraryRecommendationsWidgetWorker(
     private val mediaRepository: MediaRepository,
     /** The SearchResult-shaped reads (latest/favorites/random queries — off the union). */
     private val mediaCollectionReads: MediaCollectionReads,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val authRepository: AuthRepository,
 ) : RecommendationWorkerSkeleton<MediaItem, LibraryWidgetItem>(
     appContext = appContext,
@@ -129,7 +129,7 @@ class LibraryRecommendationsWidgetWorker(
     private fun MediaItem.toWidgetItem(): LibraryWidgetItem {
         val imageId = WidgetPosterIdentity.libraryRecommendationsPosterImageId(this)
         val poster = runCatching {
-            playbackRepository.getImageUrl(
+            imageUrlProvider.getImageUrl(
                 imageId,
                 maxWidth = WidgetPosterIdentity.LIBRARY_RECOMMENDATIONS_POSTER_MAX_WIDTH,
             )

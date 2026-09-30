@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
@@ -85,7 +86,8 @@ class DownloadRepositoryImpl(
      * `offline` defaults to `false`.
      */
     private val episodeCatalogue: EpisodeCatalogue,
-    private val playbackRepository: PlaybackRepository,
+    /** Series poster/backdrop URLs persisted with the offline metadata rows. */
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadsStore: DownloadsStore,
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueueCoordinator,
@@ -418,8 +420,8 @@ class DownloadRepositoryImpl(
             val snapshotDeferred = async { episodeCatalogue.loadSeriesEpisodes(seriesId) }
 
             val detail = detailDeferred.await()
-            val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
-            val backdropUrl = playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
+            val imageUrl = imageUrlProvider.getImageUrl(seriesId, maxWidth = 300)
+            val backdropUrl = imageUrlProvider.getBackdropUrl(seriesId, maxWidth = 1280)
 
             // Persist full series metadata (cast, studios, ratings, …) from the
             // fetched detail so the offline series screen is as rich as online.

@@ -297,6 +297,7 @@ internal class DesktopVideoPlayerPlatform : VideoPlayerPlatform {
 
     override fun createCastController(
         playbackRepository: PlaybackRepository,
+        imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider,
         adaptiveBitrateManager: AdaptiveBitrateManager,
         syncPlayCastStore: SyncPlayCastStore,
         getEngine: () -> MediaEngine?,
