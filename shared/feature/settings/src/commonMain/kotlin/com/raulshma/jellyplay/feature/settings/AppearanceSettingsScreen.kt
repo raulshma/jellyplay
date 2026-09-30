@@ -5,6 +5,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,8 +27,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import org.koin.compose.viewmodel.koinViewModel
@@ -33,6 +39,8 @@ import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.accentOptions
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
+import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.designsystem.theme.settingsGroupContainerColor
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
@@ -43,9 +51,11 @@ import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.ConsumeSettingsItemIndex
@@ -86,6 +96,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_wednesday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_moved_info
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_newsletter
@@ -818,36 +829,71 @@ fun AppearanceSettingsScreen(
 
             // Pointer for the moved home settings: the former Home Screen
             // Layout group (and the home display rows) now live on the
-            // dedicated Home Screen settings page.
+            // dedicated Home Screen settings page. Styled as a collapsed
+            // group card (navigates instead of expanding), so it reads as a
+            // sibling of the SettingsGroups around it.
             item {
+                val movedTvFocusState = rememberTvFocusState(focusedScale = 1.02f)
+                val movedInteractionSource = remember { MutableInteractionSource() }
+                val isLight = LocalIsLightTheme.current
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(ShapeCache.smooth16)
+                        .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
+                        .clip(ShapeCache.smooth24)
                         .background(settingsGroupContainerColor())
-                        .focusIndicator()
-                        .clickable { navActions.onNavigate(Route.HomeSettings()) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .lightModeHairlineBorder(ShapeCache.smooth24)
+                        .pressScale(
+                            interactionSource = movedInteractionSource,
+                            defaultScale = 0.98f,
+                            spec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                        )
+                        .then(movedTvFocusState.focusModifier)
+                        .tvFocusIndicator(movedTvFocusState, ShapeCache.smooth24)
+                        .clickable(
+                            interactionSource = movedInteractionSource,
+                            indication = null,
+                        ) { navActions.onNavigate(Route.HomeSettings()) }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Tabler.Outline.InfoCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(Res.string.settings_home_moved_info),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(ShapeCache.smooth12)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Tabler.Outline.InfoCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(Res.string.settings_home_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(Res.string.settings_home_moved_info),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Icon(
                         Tabler.Outline.ChevronRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             }
