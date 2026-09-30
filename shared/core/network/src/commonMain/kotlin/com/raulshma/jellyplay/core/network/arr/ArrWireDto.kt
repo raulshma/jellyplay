@@ -1,7 +1,19 @@
 package com.raulshma.jellyplay.core.network.arr
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Wire DTOs for the Radarr/Sonarr v3 clients — the consolidated *arr v3 wire
@@ -333,6 +345,50 @@ internal data class SonarrEpisodeFileResource(
  * stays at its default. `ignoreUnknownKeys` (the shared lenient JSON) drops
  * the remaining ReleaseResource fields the UI never reads.
  */
+/**
+ * Sonarr's `mappedEpisodeInfo` release field: the name reads like a display
+ * string, but real Sonarr v3/v4 servers answer with an ARRAY of per-episode
+ * mapping objects (`{ seasonNumber, episodeNumber, mappedSeasonNumber,
+ * mappedEpisodeNumber, mappedTitle, … }`), and a strict `String?` decode
+ * fails the ENTIRE release page on them. The serializer accepts both shapes —
+ * array entries render to a compact `S2E05 · Title` summary — and folds any
+ * other shape to null so one drifted field can never blank the results.
+ */
+internal object MappedEpisodeInfoSerializer : KSerializer<String?> {
+    private val delegate = String.serializer().nullable
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun serialize(encoder: Encoder, value: String?) = delegate.serialize(encoder, value)
+
+    override fun deserialize(decoder: Decoder): String? {
+        val element = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return null
+        return when (element) {
+            is JsonPrimitive -> element.contentOrNull
+            is JsonArray -> element.mapNotNull { entry ->
+                (entry as? JsonObject)?.let(::renderMappedEpisode)
+            }.takeIf(List<*>::isNotEmpty)?.joinToString(", ")
+            else -> null
+        }
+    }
+
+    /** `S<mappedSeason>E<mappedEpisode> · <mappedTitle>`, skipping missing halves. */
+    private fun renderMappedEpisode(entry: JsonObject): String? {
+        fun numbers(vararg keys: String): Int? = keys.firstNotNullOfOrNull { key ->
+            (entry[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull?.toIntOrNull()
+        }
+        fun texts(vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
+            (entry[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull?.takeIf(String::isNotBlank)
+        }
+        val season = numbers("mappedSeasonNumber", "seasonNumber")
+        val episode = numbers("mappedEpisodeNumber", "episodeNumber")
+        val title = texts("mappedTitle", "title")
+        val tag = if (season != null && season >= 0 && episode != null && episode >= 0) {
+            "S${season}E${episode}"
+        } else null
+        return listOfNotNull(tag, title).takeIf(List<*>::isNotEmpty)?.joinToString(" · ")
+    }
+}
+
 @Serializable
 internal data class ArrReleaseResource(
     /** The release's indexer guid — the grab body's required identity + the history-badge match key. */
@@ -362,6 +418,7 @@ internal data class ArrReleaseResource(
     val fullSeason: Boolean = false,
     val seasonNumber: Int? = null,
     val episodeNumbers: List<Int> = emptyList(),
+    @Serializable(with = MappedEpisodeInfoSerializer::class)
     val mappedEpisodeInfo: String? = null,
     // Radarr-only extras.
     val movieTitles: List<String> = emptyList(),

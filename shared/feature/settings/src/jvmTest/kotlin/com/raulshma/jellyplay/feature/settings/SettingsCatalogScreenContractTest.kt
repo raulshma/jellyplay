@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -383,6 +384,44 @@ class SettingsCatalogScreenContractTest {
         val advanced = RowAdmissionFlags(showAdvanced = true, parentsOn = setOf(AudioSettingsIds.NIGHT_MODE, AudioSettingsIds.EQUALIZER))
         assertTrue(SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.NIGHT_MODE_STRENGTH, advanced))
         assertTrue(SettingsScreenGroups.audio.rowAdmitted(AudioSettingsIds.EQUALIZER_PRESET, advanced))
+    }
+
+    @Test
+    fun `every playback WhenOn parent rides the screen's admission flags`() {
+        // All parent toggles on: playbackRowAdmissionFlags' parentsOn set must
+        // then cover EVERY WhenOn parentId the playback groups declare. The
+        // AUDIO_PASSTHROUGH pair dropping out of the wiring is exactly how the
+        // five per-codec passthrough rows went permanently invisible — this
+        // ratchet turns that drift into a loud test failure instead of a
+        // blank stretch of settings screen.
+        val everyParentOn = playbackRowAdmissionFlags(
+            isTv = false,
+            showAdvanced = true,
+            preferences = PlaybackPreferences(
+                dialogueBoostEnabled = true,
+                videoAutoplayNext = true,
+                audioPassthrough = true,
+            ),
+        )
+        val declaredParents = listOf(
+            SettingsScreenGroups.playbackPlayer,
+            SettingsScreenGroups.playbackAdvancedVideo,
+            SettingsScreenGroups.playbackEngine,
+            SettingsScreenGroups.playbackMediaSegments,
+            SettingsScreenGroups.playbackSyncPlay,
+            SettingsScreenGroups.playbackCasting,
+            SettingsScreenGroups.playbackDvr,
+        ).flatMap { group -> group.admissions.values.flatMap(::whenOnParents) }
+        assertTrue(declaredParents.isNotEmpty(), "the ratchet needs WhenOn declarations to guard")
+        val missing = declaredParents.filter { it !in everyParentOn.parentsOn }
+        assertEquals(emptyList(), missing, "WhenOn parents missing from playbackRowAdmissionFlags wiring")
+    }
+
+    /** Every WhenOn parent a gate tree carries, nested [RowAdmission.All]s included. */
+    private fun whenOnParents(admission: RowAdmission): List<String> = when (admission) {
+        is RowAdmission.WhenOn -> listOf(admission.parentId)
+        is RowAdmission.All -> admission.gates.flatMap { whenOnParents(it) }
+        else -> emptyList()
     }
 
     @Test

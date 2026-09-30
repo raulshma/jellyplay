@@ -161,6 +161,50 @@ class ArrReleaseSearchWireTest {
     }
 
     @Test
+    fun `sonarr mappedEpisodeInfo array shape decodes to the rendered summary`() = runTest {
+        // Real Sonarr v3/v4 servers answer mappedEpisodeInfo with an ARRAY of
+        // per-episode mapping objects — the shape the strict String? decode
+        // failed the entire release page on ("Unexpected JSON token").
+        enqueueBody(
+            """[{
+                "guid": "rls-arr",
+                "indexerId": 4,
+                "title": "Show.S02E03.720p",
+                "mappedEpisodeInfo": [
+                    {"seasonNumber": 2, "episodeNumber": 3, "mappedSeasonNumber": 2,
+                     "mappedEpisodeNumber": 5, "mappedTitle": "Echoes"},
+                    {"seasonNumber": 2, "episodeNumber": 4, "mappedSeasonNumber": 2,
+                     "mappedEpisodeNumber": 6}
+                ],
+                "someFutureField": {"ignored": true}
+            }]""",
+        )
+
+        val row = sonarr.searchReleases(conn, episodeId = 7).getOrThrow().single()
+
+        assertEquals("S2E5 · Echoes, S2E6", row.mappedEpisodeInfo)
+    }
+
+    @Test
+    fun `sonarr mappedEpisodeInfo entries with no usable fields drop out`() = runTest {
+        enqueueBody(
+            """[{
+                "guid": "rls-arr-2",
+                "indexerId": 4,
+                "title": "Show.S02E03.720p",
+                "mappedEpisodeInfo": [
+                    {"mappedSeasonNumber": -1, "mappedEpisodeNumber": -1},
+                    {"mappedSeasonNumber": 1, "mappedEpisodeNumber": 2}
+                ]
+            }]""",
+        )
+
+        val row = sonarr.searchReleases(conn, episodeId = 7).getOrThrow().single()
+
+        assertEquals("S1E2", row.mappedEpisodeInfo)
+    }
+
+    @Test
     fun `sonarr searchReleases by series and season sends both params in order`() = runTest {
         enqueueBody("[]")
 

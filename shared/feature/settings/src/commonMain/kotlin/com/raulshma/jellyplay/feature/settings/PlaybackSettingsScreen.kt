@@ -433,6 +433,28 @@ internal fun playbackAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
         }
     }
 
+/**
+ * The playback screen's admission flags — the declared row admissions both
+ * the SettingsItemList totals and the emission `if`s read. Pure (and
+ * internal) so the contract test can pin every WhenOn parent the playback
+ * search groups declare against this wiring: the AUDIO_PASSTHROUGH pair
+ * dropping out of it is exactly how the five per-codec rows went
+ * permanently invisible.
+ */
+internal fun playbackRowAdmissionFlags(
+    isTv: Boolean,
+    showAdvanced: Boolean,
+    preferences: PlaybackPreferences,
+): RowAdmissionFlags = RowAdmissionFlags(
+    isTv = isTv,
+    showAdvanced = showAdvanced,
+    parentsOn = rowParentsOn(
+        PlaybackSettingsIds.DIALOGUE_BOOST to preferences.dialogueBoostEnabled,
+        PlaybackSettingsIds.VIDEO_AUTOPLAY_NEXT to preferences.videoAutoplayNext,
+        PlaybackSettingsIds.AUDIO_PASSTHROUGH to preferences.audioPassthrough,
+    ),
+)
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PlaybackSettingsScreen(
@@ -443,17 +465,7 @@ fun PlaybackSettingsScreen(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
-    // The declared row admissions both the SettingsItemList totals and the
-    // emission `if`s below read — one gate per id, declared beside the group
-    // items (SettingsSearchItemGroup.rowAdmitted).
-    val rowFlags = RowAdmissionFlags(
-        isTv = isTv,
-        showAdvanced = showAdvanced,
-        parentsOn = rowParentsOn(
-            PlaybackSettingsIds.DIALOGUE_BOOST to preferences.dialogueBoostEnabled,
-            PlaybackSettingsIds.VIDEO_AUTOPLAY_NEXT to preferences.videoAutoplayNext,
-        ),
-    )
+    val rowFlags = playbackRowAdmissionFlags(isTv = isTv, showAdvanced = showAdvanced, preferences = preferences)
     // Picker payloads built off suspend work (the desktop audio-device
     // enumeration) launch here.
     val scope = rememberCoroutineScope()

@@ -50,6 +50,9 @@ class AdminApiClientImplTest {
 
     private class RecordingApiClient : org.jellyfin.sdk.api.client.ApiClient() {
         var nextBody: String = "{}"
+        /** Per-request bodies consumed before [nextBody] (multi-call flows). */
+        private val bodyQueue = ArrayDeque<String>()
+        fun enqueueBody(body: String) = bodyQueue.addLast(body)
         val requests = mutableListOf<RecordedRequest>()
         override val baseUrl = "https://test.example.com"
         override val accessToken = "token-123"
@@ -71,7 +74,8 @@ class AdminApiClientImplTest {
             requestBody: Any?,
         ): org.jellyfin.sdk.api.client.RawResponse {
             requests += RecordedRequest(method.name, pathTemplate, pathParameters, queryParameters, requestBody)
-            return org.jellyfin.sdk.api.client.RawResponse(nextBody.toByteArray(), 200, emptyMap())
+            val body = if (bodyQueue.isNotEmpty()) bodyQueue.removeFirst() else nextBody
+            return org.jellyfin.sdk.api.client.RawResponse(body.toByteArray(), 200, emptyMap())
         }
     }
 
@@ -263,8 +267,19 @@ class AdminApiClientImplTest {
     }
 
     @Test
-    fun `createBackup posts Backup-Create with the component options body`() = runTest {
-        client.nextBody = """{"path":"/backups/new.zip","serverVersion":"10.11.2"}"""
+    fun `createBackup recovers the archive through the list poll when the response never lands`() = runTest {
+        // The create's transport leg (raw POST with per-call long timeouts, no
+        // retries — it is not idempotent) is pinned on-device; this harness
+        // pins the RECOVERY contract against the 12.x response-delivery quirk:
+        // a transport failure must not surface while the list poll can still
+        // find the archive the server actually wrote. Round 1: snapshot
+        // (empty), the raw POST fails without a session, first poll round
+        // discovers the new manifest.
+        client.enqueueBody("[]")
+        client.enqueueBody(
+            """[{"path":"/backups/new.zip","serverVersion":"10.11.2",
+                 "options":{"metadata":true,"trickplay":false,"subtitles":true,"database":true}}]""",
+        )
 
         val created = admin.createBackup(
             com.raulshma.jellyplay.core.model.BackupComponentOptions(
@@ -275,15 +290,13 @@ class AdminApiClientImplTest {
             ),
         ).getOrThrow()
 
-        val request = client.requests.single()
-        assertEquals("POST", request.method)
-        assertEquals("/Backup/Create", request.pathTemplate)
-        val body = request.requestBody as BackupOptionsDto
-        assertEquals(true, body.metadata)
-        assertEquals(false, body.trickplay)
-        assertEquals(true, body.subtitles)
-        assertEquals(true, body.database)
         assertEquals("/backups/new.zip", created.path)
+        assertEquals(true, created.options.database)
+        assertEquals(
+            listOf("GET", "GET"),
+            client.requests.map { it.method },
+            "snapshot + first poll round — the POST itself rides the raw requester, not the recorded client",
+        )
     }
 
     @Test
