@@ -44,7 +44,7 @@ class AddServerViewModel(
     private var discoveryJob: Job? = null
 
     /**
-     * Start discovering local Jellyfin servers via SSDP.
+     * Start discovering local Jellyfin servers (UDP discovery broadcast on port 7359).
      * Automatically acquires/releases the Wi-Fi multicast lock.
      */
     fun startDiscovery() {
