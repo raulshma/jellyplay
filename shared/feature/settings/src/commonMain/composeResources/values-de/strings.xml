@@ -857,7 +857,7 @@
     <string name="settings_home_sections_visible">%1$d von %2$d Bereichen sichtbar</string>
     <string name="settings_home_title">Startbildschirm</string>
     <string name="settings_home_display">Startbildschirm-Anzeige</string>
-    <string name="settings_continue_next_up">Weitersehen &amp;amp; Next Up</string>
+    <string name="settings_continue_next_up">Weitersehen &amp; Next Up</string>
     <string name="settings_reset_home_title">Home-Einstellungen zurücksetzen?</string>
     <string name="settings_reset_home_message">Alle Startbildschirm-Einstellungen werden auf ihre Standardwerte zurückgesetzt.</string>
     <string name="settings_home_moved_info">Die Startbildschirm-Einstellungen sind umgezogen — zu finden auf der Seite „Startbildschirm“.</string>

@@ -1113,7 +1113,7 @@
     <string name="settings_home_sections_visible">%1$d of %2$d sections visible</string>
     <string name="settings_home_title">Home Screen</string>
     <string name="settings_home_display">Home Display</string>
-    <string name="settings_continue_next_up">Continue Watching &amp;amp; Next Up</string>
+    <string name="settings_continue_next_up">Continue Watching &amp; Next Up</string>
     <string name="settings_reset_home_title">Reset home settings?</string>
     <string name="settings_reset_home_message">All home screen settings will be restored to their defaults.</string>
     <string name="settings_home_moved_info">Home screen settings have moved — find them on the Home Screen page.</string>
