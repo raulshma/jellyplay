@@ -319,17 +319,26 @@ class LibraryItemsQuerySpecTest {
 
     @Test
     fun `the resume spec narrows to books only when asked`() {
-        val video = buildResumeQuerySpec(limit = 16, isBooks = false)
+        val video = buildResumeQuerySpec(limit = 16, kinds = null)
         assertEquals(16, video.limit)
         assertNull(video.includeKinds, "the video resume row sends no kind constraint")
         assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), video.fields)
         assertNull(video.parentId)
         assertNull(video.sortBy)
 
-        val books = buildResumeQuerySpec(limit = 8, isBooks = true)
+        val books = buildResumeQuerySpec(limit = 8, kinds = listOf("Book"))
         assertEquals(8, books.limit)
         assertEquals(listOf("Book"), books.includeKinds, "books narrow server-side via includeItemTypes")
         assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), books.fields)
+    }
+
+    @Test
+    fun `the classic-rows resume spec narrows to the pre-12 leaf kinds`() {
+        val spec = buildResumeQuerySpec(limit = 20, kinds = CLASSIC_RESUME_LEAF_KINDS)
+
+        assertEquals(listOf("Episode", "Movie", "MusicVideo"), spec.includeKinds)
+        assertEquals(20, spec.limit)
+        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), spec.fields)
     }
 
     @Test

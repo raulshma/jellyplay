@@ -265,7 +265,7 @@ internal fun DetailHeaderSection(
                 .fillMaxWidth()
                 .padding(horizontal = bodyContentPad),
         ) {
-            if (item.mediaType == MediaType.EPISODE && item.seriesId != null) {
+            if (showsParentSeriesContext(item.mediaType) && item.seriesId != null) {
                 val seriesNavFocusState = rememberTvFocusState(focusedScale = 1.02f)
                 FadingItem {
                     Row(
@@ -286,7 +286,10 @@ internal fun DetailHeaderSection(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        item.seasonName?.let { season ->
+                        // EPISODE reads its seasonName; a SEASON entry IS the
+                        // season — its own name is the label.
+                        val seasonLabel = if (item.mediaType == MediaType.SEASON) item.name else item.seasonName
+                        seasonLabel?.let { season ->
                             Text(
                                 text = " › ",
                                 style = MaterialTheme.typography.titleSmall,
@@ -950,7 +953,7 @@ internal fun DetailSeasonsSection(
     bodyContentPad: Dp,
 ) {
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && state.seasons.isNotEmpty()
+        val showSeasons = showsSeasonTree(item.mediaType) && state.seasons.isNotEmpty()
         if (showSeasons) {
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                 // Episode-card preferences: hideEpisodeThumbnails and skipSpecials
@@ -982,15 +985,31 @@ internal fun DetailSeasonsSection(
                         else -> null
                     }
                 }
+                // A SEASON entry carries the parent series' whole snapshot (the
+                // resolver loads it through seriesIdForDetail), but the page IS
+                // the entry season: render only its tab so the tree matches the
+                // header ("Season 5" shows Season 5's episodes, not every
+                // sibling season's).
+                val entrySeasons = if (item.mediaType == MediaType.SEASON) {
+                    state.seasons.filter { it.id == item.id }
+                } else {
+                    state.seasons
+                }
                 SeasonsSection(
                     seriesItem = item,
-                    seasons = state.seasons,
+                    seasons = entrySeasons,
                     episodes = filteredEpisodes,
                     fetchedSeasonIds = state.fetchedSeasonIds,
                     smartPlayTarget = state.smartPlayTarget,
                     getImageUrl = callbacks.artwork.getImageUrl,
                     currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
-                    currentSeasonId = if (item.mediaType == MediaType.EPISODE) item.seasonId else null,
+                    // SEASON preselects its own tab; EPISODE anchors the tab its
+                    // episode belongs to (both feed SeasonStartResolver).
+                    currentSeasonId = when (item.mediaType) {
+                        MediaType.EPISODE -> item.seasonId
+                        MediaType.SEASON -> item.id
+                        else -> null
+                    },
                     persistedSeasonId = state.persistedSeasonId,
                     onEpisodePlayClick = { episode ->
                         val sourceId = null

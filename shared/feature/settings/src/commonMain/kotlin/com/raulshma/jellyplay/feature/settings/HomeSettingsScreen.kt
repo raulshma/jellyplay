@@ -59,6 +59,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rese
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_home_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_off
@@ -91,7 +94,7 @@ internal val homeScreenGroups: List<Set<String>> = listOf(
 /**
  * The display group's `SettingsItemList(total = …)` row count, derived by
  * [rowTotalFor] from the [SettingsScreenGroups.homeDisplay] declaration
- * (eight always-rendered config rows — the declared `unhide_cw` admission is
+ * (nine always-rendered config rows — the declared `unhide_cw` admission is
  * deliberately absent, so the strict derivation excludes it) plus the
  * conditional unhide action row, which renders only while hidden
  * continue-watching items exist — a content-state condition with no
@@ -148,7 +151,7 @@ fun HomeSettingsScreen(
                 ) {
                     // Derived from the declared display group (the derivation
                     // source the row total below reads — one declaration, no
-                    // parallel id list): the eight always-rendered config rows
+                    // parallel id list): the nine always-rendered config rows
                     // in catalog order, plus the unhide row while hidden
                     // continue-watching items exist.
                     val displayItems = remember(preferences.hiddenCwItemIds) {
@@ -238,6 +241,16 @@ fun HomeSettingsScreen(
                                             onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setContinueWatchingClickBehavior(it) } },
                                         )
                                     },
+                                )
+                            }
+                            HomeSettingsIds.CLASSIC_ROWS -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.History,
+                                    title = rowTitle(HomeSettingsIds.CLASSIC_ROWS),
+                                    subtitle = if (preferences.classicRows) stringResource(Res.string.settings_classic_rows_on) else stringResource(Res.string.settings_classic_rows_off),
+                                    checked = preferences.classicRows,
+                                    highlighted = highlightSettingId == HomeSettingsIds.CLASSIC_ROWS,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setClassicRows(it) } },
                                 )
                             }
                             HomeSettingsIds.NEXT_UP_HIDDEN -> {

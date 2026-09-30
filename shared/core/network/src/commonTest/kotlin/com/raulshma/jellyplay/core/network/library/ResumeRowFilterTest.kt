@@ -122,6 +122,42 @@ class ResumeRowFilterTest {
         assertEquals(listOf("a", "b"), rows.toFilteredResumeRows(maxParentalRating = null, isBooks = false).map { it.id })
     }
 
+    // ── The classic-rows kind narrowing (#168) ────────────────────────────
+    // The belt-and-braces half: a server that ignores includeItemTypes still
+    // can't leak non-conforming rows past the fold.
+
+    @Test
+    fun `the fold's classic kind narrowing drops series and season rollups`() {
+        val rows = listOf(
+            row("episode", played = false, mediaType = MediaType.EPISODE),
+            row("movie", played = false),
+            row("series-rollup", played = false, mediaType = MediaType.SERIES),
+            row("season-rollup", played = false, mediaType = MediaType.SEASON),
+        )
+
+        assertEquals(
+            listOf("episode", "movie"),
+            rows.toFilteredResumeRows(
+                maxParentalRating = null,
+                isBooks = false,
+                allowedKinds = CLASSIC_RESUME_LEAF_KINDS.toAllowedMediaTypes(),
+            ).map { it.id },
+        )
+    }
+
+    @Test
+    fun `a null allowed-kinds set leaves the fold unconstrained`() {
+        val rows = listOf(
+            row("series-rollup", played = false, mediaType = MediaType.SERIES),
+            row("episode", played = false, mediaType = MediaType.EPISODE),
+        )
+
+        assertEquals(
+            listOf("series-rollup", "episode"),
+            rows.toFilteredResumeRows(maxParentalRating = null, isBooks = false, allowedKinds = null).map { it.id },
+        )
+    }
+
     private fun row(
         id: String,
         played: Boolean,

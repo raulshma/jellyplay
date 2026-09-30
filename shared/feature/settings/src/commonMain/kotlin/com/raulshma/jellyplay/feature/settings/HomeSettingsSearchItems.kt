@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_home
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
@@ -25,6 +26,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_clock_home_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_clock_home_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_classic_rows_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_classic_rows_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_configure_libraries_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_configure_libraries_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_continue_watching_click_subtitle
@@ -73,6 +76,7 @@ internal object HomeSettingsIds {
     const val HIDE_TOP_HEADER = "hide_top_header"
     const val SETTINGS_IN_HOME_SEARCH = "settings_in_home_search"
     const val CONTINUE_WATCHING_CLICK = "continue_watching_click"
+    const val CLASSIC_ROWS = "classic_rows"
     const val NEXT_UP_HIDDEN = "next_up_hidden"
     const val UNHIDE_CW = "unhide_cw"
     const val MERGE_CONTINUE_NEXT_UP = "merge_continue_next_up"
@@ -159,6 +163,16 @@ internal val HomeDisplayRowRecords = listOf(
         keywords = listOf("continue watching", "tap", "click", "resume", "play", "details"),
         route = Route.HomeSettings(),
         icon = Tabler.Outline.PlayerPlay,
+    )
+,
+    SettingsRowRecord(
+        id = HomeSettingsIds.CLASSIC_ROWS,
+        titleRes = Res.string.settings_classic_rows,
+        searchTitleRes = Res.string.ss_classic_rows_title,
+        searchSubtitleRes = Res.string.ss_classic_rows_subtitle,
+        keywords = listOf("classic", "legacy", "jellyfin 12", "continue watching", "episodes", "series", "seasons", "recently added", "latest", "row", "behavior"),
+        route = Route.HomeSettings(),
+        icon = Tabler.Outline.History,
     )
 ,
     SettingsRowRecord(

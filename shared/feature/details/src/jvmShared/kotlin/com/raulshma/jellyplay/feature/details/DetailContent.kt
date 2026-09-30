@@ -79,7 +79,7 @@ internal fun DetailContent(
     val scrollState = rememberDetailScrollState(listState, contentVisible)
 
     val targetBackdropId = item
-        ?.takeIf { it.mediaType == MediaType.EPISODE }?.seriesId
+        ?.takeIf { showsParentSeriesContext(it.mediaType) }?.seriesId
         ?: state.itemId
 
     val contentFocusRequester = remember { FocusRequester() }

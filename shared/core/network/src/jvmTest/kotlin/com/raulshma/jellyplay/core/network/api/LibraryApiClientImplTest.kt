@@ -13,6 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Covers the [LibraryApiClientImpl] behavior that needs a real engine: the
@@ -216,6 +217,63 @@ class LibraryApiClientImplTest {
         assertNull(api.queries.last()["isMissing"])
     }
 
+    // ── classic-rows kind narrowing (#168) ──────────────────────────────────
+
+    /** Normalizes an SDK collection query param to a comma string for assertions. */
+    private fun queryParam(map: Map<String, Any?>, name: String): String = when (val v = map[name]) {
+        is Collection<*> -> v.joinToString(",") { it.toString() }
+        null -> ""
+        else -> v.toString()
+    }
+
+    @Test
+    fun `the classic-rows narrowing rides the resume and latest wire queries`() = runTest {
+        val api = RecordingApiClient(responseBody = emptyItemsBody)
+        engine.updateApi(api)
+        client.getContinueWatching(limit = 20, includeKinds = listOf("Episode", "Movie")).getOrThrow()
+
+        // /Users/{userId}/Items/Latest answers a bare JSON array, not an envelope.
+        val latestApi = RecordingApiClient(responseBody = "[]")
+        engine.updateApi(latestApi)
+        client.getLatestMedia(parentId = LATEST_FOLDER_ID, limit = 16, includeKinds = listOf("Series")).getOrThrow()
+
+        assertTrue(
+            queryParam(api.queries[0], "includeItemTypes").contains("Episode", ignoreCase = true) &&
+                queryParam(api.queries[0], "includeItemTypes").contains("Movie", ignoreCase = true),
+            "the classic resume query must carry IncludeItemTypes",
+        )
+        assertEquals(
+            "Series",
+            queryParam(latestApi.queries[0], "includeItemTypes"),
+            "the classic latest query must pin the TV folder to Series",
+        )
+        // The Series pin bypasses the grouped latest route: GroupBy(SeriesName)
+        // over Series-only rows self-empties on 12.x and truncates on 10.x
+        // (both live-verified). Plain GetItemList honors IncludeItemTypes.
+        assertEquals(
+            "false",
+            queryParam(latestApi.queries[0], "groupItems"),
+            "the classic TV pin must drop groupItems",
+        )
+    }
+
+    @Test
+    fun `modern resume and latest queries omit IncludeItemTypes entirely`() = runTest {
+        val api = RecordingApiClient(responseBody = emptyItemsBody)
+        engine.updateApi(api)
+        client.getContinueWatching(limit = 20).getOrThrow()
+
+        val latestApi = RecordingApiClient(responseBody = "[]")
+        engine.updateApi(latestApi)
+        client.getLatestMedia(parentId = LATEST_FOLDER_ID, limit = 16).getOrThrow()
+
+        assertEquals("", queryParam(api.queries[0], "includeItemTypes"))
+        assertEquals("", queryParam(latestApi.queries[0], "includeItemTypes"))
+        // Modern rows keep the SDK default (grouped route): the server's own
+        // Series/Season/Episode container selection is the feature.
+        assertEquals("true", queryParam(latestApi.queries[0], "groupItems"))
+    }
+
     private companion object {
         /** Real UUID: the favorite paths pass it through String.toUUID(). */
         const val FAVORITE_ITEM_ID = "2a2a2a2a-1111-4222-8222-333333333333"
@@ -227,5 +285,8 @@ class LibraryApiClientImplTest {
         /** Real UUIDs: the episodes paths pass both through String.toUUID(). */
         const val EPISODE_SERIES_ID = "5d5d5d5d-1111-4555-8555-666666666666"
         const val EPISODE_SEASON_ID = "6e6e6e6e-1111-4666-8666-777777777777"
+
+        /** Real UUID: the latest-media path passes it through String.toUUID(). */
+        const val LATEST_FOLDER_ID = "7f7f7f7f-1111-4777-8777-888888888888"
     }
 }

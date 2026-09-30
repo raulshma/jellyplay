@@ -803,6 +803,9 @@
     <string name="settings_rewatching_next_up">Rever em A seguir</string>
     <string name="settings_rewatching_next_up_on">Incluir séries revistas</string>
     <string name="settings_rewatching_next_up_off">Ocultar séries que está a rever</string>
+    <string name="settings_classic_rows">Linhas clássicas do início</string>
+    <string name="settings_classic_rows_on">Continuar a ver mostra apenas episódios e filmes, e as linhas de adicionado recentemente apenas séries e filmes</string>
+    <string name="settings_classic_rows_off">Seguir o servidor: Continuar a ver pode mostrar séries inteiras ou temporadas, e as linhas de adicionado recentemente temporadas e episódios</string>
     <string name="settings_backdrop_theme_music">Música-tema de fundo</string>
     <string name="settings_backdrop_theme_music_on">Reproduzir genéricos nas páginas de detalhe</string>
     <string name="settings_backdrop_theme_music_off">Sem música-tema durante a navegação</string>
@@ -1242,6 +1245,8 @@
     <string name="ss_next_up_max_days_subtitle">Mostrar apenas episódios vistos num determinado período</string>
     <string name="ss_next_up_rewatching_title">Rever Novamente em Próximo</string>
     <string name="ss_next_up_rewatching_subtitle">Incluir séries que está a rever novamente em Próximo</string>
+    <string name="ss_classic_rows_title">Linhas clássicas do início</string>
+    <string name="ss_classic_rows_subtitle">Mostra Continuar a ver apenas com episódios e as linhas de adicionado recentemente apenas com séries e filmes, como antes do Jellyfin 12. Corrige linhas que mostram cartazes de séries inteiras ou temporadas após uma atualização do servidor.</string>
     <string name="ss_theme_music_title">Música Temática de Fundo</string>
     <string name="ss_theme_music_subtitle">Reproduzir músicas temáticas nas páginas de detalhes</string>
     <string name="ss_nav_labels_title">Mostrar Etiquetas de Navegação</string>

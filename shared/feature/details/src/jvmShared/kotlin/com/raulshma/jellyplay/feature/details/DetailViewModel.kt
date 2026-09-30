@@ -1105,7 +1105,20 @@ class DetailViewModel internal constructor(
         when (item.mediaType) {
             MediaType.SERIES -> computeSeriesSmartPlayTarget()
             MediaType.EPISODE -> computeEpisodeSmartPlayTarget(item)
+            // A SEASON entry (#168) plays within that season only: the same
+            // resolver over the entry season's slice of the series snapshot.
+            MediaType.SEASON -> computeSeasonSmartPlayTarget(item)
             else -> _uiState.update { it.copy(smartPlayTarget = null) }
+        }
+    }
+
+    private fun computeSeasonSmartPlayTarget(season: MediaItem) {
+        launch(smartPlayDispatcher) {
+            val sorted = _uiState.value.sortedEpisodes.takeIf { it.isNotEmpty() }
+            val result = sorted?.let { SmartPlayResolver.resolveSeason(season.id, it) }
+            _uiState.update {
+                it.copy(smartPlayTarget = result?.toUiTarget())
+            }
         }
     }
 

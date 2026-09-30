@@ -251,8 +251,9 @@ internal fun buildItemsByStudioQuerySpec(
  * The resume-row query (getContinueWatching / getContinueReading — and the
  * NextUp row, which rides the same limit + list-projection shape with no kind
  * narrowing): the `/UserItems/Resume` request the twins used to hand-mirror.
- * Books narrow server-side via `includeItemTypes` ("Book" — the SDK
- * getResumeItems named arg); the video row sends no kind constraint.
+ * [kinds] carries the `includeItemTypes` serial names: `["Book"]` for the
+ * Continue Reading row, the [CLASSIC_RESUME_LEAF_KINDS] narrowing for the
+ * video row under classic-rows semantics (#168), null = unconstrained.
  *
  * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (`java.time`, JVM-side)
  * and the SDK's non-null enable* defaults
@@ -261,12 +262,36 @@ internal fun buildItemsByStudioQuerySpec(
  */
 internal fun buildResumeQuerySpec(
     limit: Int,
-    isBooks: Boolean,
+    kinds: List<String>?,
 ): LibraryItemsQuerySpec = LibraryItemsQuerySpec(
-    includeKinds = if (isBooks) listOf("Book") else null,
+    includeKinds = kinds,
     limit = limit,
     fields = LIST_PROJECTION_FIELDS,
 )
+
+/**
+ * The video resume row's classic-rows narrowing (#168): the leaf item kinds
+ * the pre-12 `/Items/Resume` endpoint reported — Series/Season resume rollups
+ * (a deliberate 12.x server behavior, upstream PR jellyfin#17523) stay out.
+ * Books are excluded from the video row regardless (their own
+ * [com.raulshma.jellyplay.core.network.api.LibraryApiClient.getContinueReading]
+ * surface).
+ */
+internal val CLASSIC_RESUME_LEAF_KINDS: List<String> = listOf("Episode", "Movie", "MusicVideo")
+
+/**
+ * The classic-rows `includeItemTypes` narrowing for one library folder's
+ * `/Items/Latest` call (#168): TV folders pin to the Series rollup (what the
+ * pre-12 endpoint reported for added episodes/seasons), movie folders to
+ * Movie. Mixed and unknown collection types stay unconstrained — the server's
+ * mixed-library routing computes movies and shows separately, so pinning
+ * either single kind would silently drop half the folder's additions.
+ */
+internal fun classicLatestKinds(collectionType: String?): List<String>? = when (collectionType) {
+    "tvshows" -> listOf("Series")
+    "movies" -> listOf("Movie")
+    else -> null
+}
 
 /**
  * [MediaType]s → includeItemTypes serial names, shared by every spec'd

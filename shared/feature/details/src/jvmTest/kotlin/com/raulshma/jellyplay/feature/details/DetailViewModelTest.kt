@@ -765,6 +765,144 @@ class DetailViewModelTest {
         assertEquals("e1", target.episode.id)
     }
 
+    // ---- SEASON detail entries (#168) --------------------------------------
+    // A season opened from the home rows carries the parent series' catalogue
+    // snapshot; the smart target must scope to the entry season and the
+    // season-scope mutations must route through the parent series.
+
+    /** An episode bound to an arbitrary series/season (the [episode] helper pins s1/season1). */
+    private fun episodeIn(
+        seriesId: String,
+        seasonId: String,
+        id: String,
+        season: Int,
+        ep: Int,
+        isPlayed: Boolean = false,
+        positionTicks: Long? = null,
+    ) = MediaItem(
+        id = id,
+        name = "Episode $ep",
+        mediaType = MediaType.EPISODE,
+        seasonNumber = season,
+        episodeNumber = ep,
+        indexNumber = ep,
+        isPlayed = isPlayed,
+        playbackPositionTicks = positionTicks,
+        seriesId = seriesId,
+        seasonId = seasonId,
+    )
+
+    /** Stubs a SEASON detail entry: `seasonId` of series s1, snapshot carrying both seasons' episodes. */
+    private fun stubSeasonEntry(
+        seasonId: String,
+        entryEpisodes: List<MediaItem>,
+        otherSeasonId: String = "season1",
+        otherEpisodes: List<MediaItem> = emptyList(),
+    ): MutableStateFlow<DetailLoadState> {
+        val seasons = listOf(
+            MediaItem(id = otherSeasonId, name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1, seriesId = "s1"),
+            MediaItem(id = seasonId, name = "Season 2", mediaType = MediaType.SEASON, indexNumber = 2, seriesId = "s1"),
+        )
+        val detail = MediaDetail(
+            item = MediaItem(
+                id = seasonId,
+                name = "Season 2",
+                mediaType = MediaType.SEASON,
+                seriesId = "s1",
+                seriesName = "Show",
+            ),
+        )
+        val comparator = playbackOrderComparator()
+        return stubProvider(
+            seasonId,
+            remoteSnapshot(
+                detail = detail,
+                seasons = seasons,
+                episodesBySeason = mapOf(otherSeasonId to otherEpisodes, seasonId to entryEpisodes),
+                fetchedSeasonIds = setOf(otherSeasonId, seasonId),
+                sortedEpisodes = (otherEpisodes + entryEpisodes).sortedWith(comparator),
+            ),
+        )
+    }
+
+    @Test
+    fun smartPlay_seasonEntry_resolvesWithinThatSeason() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        // S1 has an unplayed episode; S2 has a resume candidate. The entry is
+        // S2 — S1's unplayed episode must not win the target.
+        stubSeasonEntry(
+            seasonId = "season2",
+            entryEpisodes = listOf(
+                episodeIn("s1", "season2", "s2e1", 2, 1, isPlayed = true),
+                episodeIn("s1", "season2", "s2e2", 2, 2, positionTicks = 50_000_000L),
+            ),
+            otherEpisodes = listOf(episodeIn("s1", "season1", "s1e1", 1, 1)),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("season2"))
+        advanceUntilIdle()
+
+        val target = viewModel.uiState.value.smartPlayTarget
+        assertNotNull(target)
+        assertEquals("s2e2", target!!.episode.id)
+        assertEquals("Resume S2:E2", target.label)
+    }
+
+    @Test
+    fun smartPlay_seasonEntryWithNoPlayableEpisodes_clearsTarget() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        // The entry season has only a virtual (unaired) episode — nothing the
+        // resolver may pick; the other season's playable episode must not leak
+        // into the entry season's target either.
+        stubSeasonEntry(
+            seasonId = "season2",
+            entryEpisodes = listOf(
+                episodeIn("s1", "season2", "s2e1", 2, 1).copy(
+                    isVirtual = true,
+                    missingReason = com.raulshma.jellyplay.core.model.MissingEpisodeReason.UNAIRED,
+                ),
+            ),
+            otherEpisodes = listOf(episodeIn("s1", "season1", "s1e1", 1, 1)),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("season2"))
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.smartPlayTarget)
+    }
+
+    @Test
+    fun markSeasonPlayed_onSeasonEntry_routesThroughParentSeries() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val entryEpisodes = listOf(
+            episodeIn("s1", "season2", "s2e1", 2, 1),
+            episodeIn("s1", "season2", "s2e2", 2, 2),
+        )
+        val flow = stubSeasonEntry("season2", entryEpisodes)
+        coEvery { mediaDetailProvider.applyOptimisticSeasonRewrite("s1", "season2", any()) } answers {
+            val transform = thirdArg<(List<MediaItem>) -> List<MediaItem>>()
+            val current = (flow.value as DetailLoadState.Loaded).snapshot
+            flow.value = DetailLoadState.Loaded(
+                current.copy(
+                    episodesBySeason = mapOf("season2" to transform(entryEpisodes)),
+                    sortedEpisodes = transform(entryEpisodes).sortedWith(playbackOrderComparator()),
+                    contentGeneration = current.contentGeneration + 1,
+                ),
+            )
+        }
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("season2"))
+        advanceUntilIdle()
+
+        viewModel.onEvent(DetailUiEvent.MarkSeasonPlayed("season2"))
+        advanceUntilIdle()
+
+        // The screen's series scope (seriesIdForDetail) drives the mutator, not
+        // the season id — the optimistic rewrite matches the season-entry session.
+        assertEquals(listOf(Triple("s1", "season2", true)), userDataMutator.seasonCalls)
+        assertTrue(viewModel.uiState.value.episodes["season2"]!!.all { it.isPlayed })
+    }
+
     // ---- Item-level mark played / unplayed ----------------------------------
 
     @Test

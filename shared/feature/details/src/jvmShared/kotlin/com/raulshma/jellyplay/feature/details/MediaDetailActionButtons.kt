@@ -132,19 +132,25 @@ internal fun DetailActionButtons(
         ?.let { (BookProgressPolicy.ticksToPercent(it) * 100).roundToInt().coerceIn(0, 100) }
         ?.takeIf { it > 0 }
 
-    val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
+    // SEASON rides the smart-target gate too (#168): its target is the
+    // season-scoped resume/next-up episode, and without one the click must
+    // not dispatch the season CONTAINER id to the player.
     val isSeries = item.mediaType == MediaType.SERIES
-    val target = if (isSeriesOrEpisode) state.smartPlayTarget else null
+    // Series tree semantics (resolving label, no-episodes guard, target-
+    // required play) apply to a SEASON entry as well — its snapshot IS a
+    // series catalogue.
+    val isSeriesLike = isSeries || item.mediaType == MediaType.SEASON
+    val target = if (showsSeasonTree(item.mediaType)) state.smartPlayTarget else null
     val itemProgressFraction = item.progressFraction()
     val hasProgress = itemProgressFraction != null && itemProgressFraction > 0f
     val allSeasonsFetched = state.seasons.isEmpty() || state.seasons.all { it.id in state.fetchedSeasonIds }
     val allEpisodesEmpty = remember(state.seasons, state.episodes) {
         state.seasons.isNotEmpty() && state.episodes.values.all { it.isEmpty() }
     }
-    val isResolvingSeriesTarget = isSeries &&
+    val isResolvingSeriesTarget = isSeriesLike &&
         target == null &&
         !allSeasonsFetched
-    val hasNoEpisodes = isSeries && allSeasonsFetched && (allEpisodesEmpty || state.episodes.isEmpty())
+    val hasNoEpisodes = isSeriesLike && allSeasonsFetched && (allEpisodesEmpty || state.episodes.isEmpty())
     // A series with no episodes has no valid play target — never let the primary button
     // dispatch play on the series root item. The button already dims when this is false.
     // A book is playable when its format is readable in-app OR unknown-but-unprobed
@@ -153,7 +159,7 @@ internal fun DetailActionButtons(
     val canPlayPrimary = when {
         isFolder -> false
         isBook -> isReadableBook || isFormatUnknownBook
-        else -> isAudio || !isSeries || target != null
+        else -> isAudio || !isSeriesLike || target != null
     }
     val progress = if (target != null) {
         // Smart-play resume math: the position is the resolver's
@@ -170,7 +176,7 @@ internal fun DetailActionButtons(
         target != null -> target.label
         isResolvingSeriesTarget -> stringResource(Res.string.detail_play_finding_episode)
         hasNoEpisodes -> stringResource(Res.string.detail_play_no_episodes_available)
-        isSeries -> stringResource(Res.string.detail_play_no_episodes)
+        isSeriesLike -> stringResource(Res.string.detail_play_no_episodes)
         hasProgress -> stringResource(Res.string.detail_play_resume)
         else -> stringResource(Res.string.detail_play_play)
     }

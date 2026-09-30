@@ -187,6 +187,12 @@ class HomeDiscoveryStore constructor(
         val MERGE_CONTINUE_WATCHING_NEXT_UP = booleanPreferencesKey("merge_continue_watching_next_up")
         val NEXT_UP_MAX_DAYS = intPreferencesKey("next_up_max_days")
         val NEXT_UP_REWATCHING = booleanPreferencesKey("next_up_rewatching")
+        /**
+         * Classic (pre-Jellyfin-12) home-row semantics (#168): Continue Watching
+         * narrows to leaf items, latest-media rows pin to Series/Movie. Default
+         * false — modern server behavior.
+         */
+        val CLASSIC_ROWS = booleanPreferencesKey("classic_rows")
         val NEXT_UP_EXCLUDED_SERIES_IDS = stringPreferencesKey("next_up_excluded_series_ids")
         val HIDDEN_CW_ITEM_IDS = stringPreferencesKey("hidden_cw_item_ids")
         /**
@@ -234,7 +240,7 @@ class HomeDiscoveryStore constructor(
     private val booleanLegacyKeys: List<Preferences.Key<Boolean>> = listOf(
         Keys.HOME_HERO_ENABLED, Keys.HOME_BACKDROP_ENABLED, Keys.SHOW_UNWATCHED_BADGE,
         Keys.HIDE_WATCHED_ITEMS, Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_EXTERNAL_RATINGS,
-        Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, Keys.NEXT_UP_REWATCHING,
+        Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, Keys.NEXT_UP_REWATCHING, Keys.CLASSIC_ROWS,
         Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH, Keys.HIDE_TOP_HEADER_ON_SCROLL,
     )
 
@@ -417,6 +423,7 @@ class HomeDiscoveryStore constructor(
         private val mergeCwNextUpKey = userBooleanKey(userId, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP)
         private val nextUpMaxDaysKey = userIntKey(userId, Keys.NEXT_UP_MAX_DAYS)
         private val nextUpRewatchingKey = userBooleanKey(userId, Keys.NEXT_UP_REWATCHING)
+        private val classicRowsKey = userBooleanKey(userId, Keys.CLASSIC_ROWS)
         private val nextUpExcludedSeriesIdsKey = userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)
         private val hiddenCwItemIdsKey = userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS)
         private val lastViewedSeasonBySeriesKey = userStringKey(userId, Keys.LAST_VIEWED_SEASON_BY_SERIES)
@@ -460,6 +467,7 @@ class HomeDiscoveryStore constructor(
             mergeContinueWatchingAndNextUp = readBool(prefs, mergeCwNextUpKey, false),
             nextUpMaxDays = readInt(prefs, nextUpMaxDaysKey, 0),
             nextUpRewatching = readBool(prefs, nextUpRewatchingKey, false),
+            classicRows = readBool(prefs, classicRowsKey, false),
             nextUpExcludedSeriesIds = readNextUpExcludedSeriesIds(prefs),
             hiddenCwItemIds = readHiddenCwItemIds(prefs),
             lastViewedSeasonBySeries = readLastViewedSeasonBySeries(prefs),
@@ -864,6 +872,10 @@ class HomeDiscoveryStore constructor(
         prefs[userBooleanKey(userId, Keys.NEXT_UP_REWATCHING)] = enabled
     }
 
+    suspend fun setClassicRows(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[userBooleanKey(userId, Keys.CLASSIC_ROWS)] = enabled
+    }
+
     suspend fun setNextUpExcludedSeriesIds(ids: Set<String>) = editForUser { prefs, userId ->
         prefs[userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)] = json.encodeToString(ids)
     }
@@ -998,6 +1010,7 @@ class HomeDiscoveryStore constructor(
             it[userBooleanKey(userId, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP)] = slice.mergeContinueWatchingAndNextUp
             it[userIntKey(userId, Keys.NEXT_UP_MAX_DAYS)] = slice.nextUpMaxDays
             it[userBooleanKey(userId, Keys.NEXT_UP_REWATCHING)] = slice.nextUpRewatching
+            it[userBooleanKey(userId, Keys.CLASSIC_ROWS)] = slice.classicRows
             it[userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)] = json.encodeToString(slice.nextUpExcludedSeriesIds)
             it[userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS)] = json.encodeToString(slice.hiddenCwItemIds)
             it[userBooleanKey(userId, Keys.SHOW_CLOCK_ON_HOME)] = slice.showClockOnHome
@@ -1033,6 +1046,11 @@ data class HomeDiscoverySlice(
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
+    /**
+     * Classic (pre-Jellyfin-12) home-row semantics (#168). Default `false` —
+     * modern server behavior. Projected into [HomeSectionQuery.classicRows].
+     */
+    val classicRows: Boolean = false,
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
     /**
@@ -1066,6 +1084,7 @@ fun HomeDiscoverySlice.toSectionPrefs(): HomeSectionPrefs = HomeSectionPrefs(
         libraryHomeSectionOverrides = libraryHomeSectionOverrides,
         nextUpRewatching = nextUpRewatching,
         nextUpMaxDays = nextUpMaxDays,
+        classicRows = classicRows,
         nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
         hiddenCwItemIds = hiddenCwItemIds,
         pinnedSections = pinnedHomeSections,

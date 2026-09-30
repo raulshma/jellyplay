@@ -49,15 +49,22 @@ fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
  * The resume rows' full post-fetch chain, folded once for the client twins
  * (`LibraryApiClientImpl` — which used to hand-copy
  * this tail per endpoint): parental filter → id-distinct → the #157
- * played-row rule's books-or-video half. [isBooks] selects
- * [readingResumableOnly] over [resumableOnly] exactly as the
- * getContinueReading implementations do behind their server-side Book
- * narrowing.
+ * played-row rule's books-or-video half → the optional classic-rows kind
+ * narrowing. [isBooks] selects [readingResumableOnly] over [resumableOnly]
+ * exactly as the getContinueReading implementations do behind their
+ * server-side Book narrowing. [allowedKinds] (null = no kind constraint, the
+ * default) re-applies the server-side `includeItemTypes` narrowing
+ * client-side: the belt-and-braces for servers that ignore the query param —
+ * the same rationale the books fold's KDoc records. Kinds arrive as
+ * [MediaType]s resolved through [wireItemKindToMediaType], so the fold and
+ * the wire narrowing can never drift (one canonical table pair).
  */
 internal fun List<MediaItem>.toFilteredResumeRows(
     maxParentalRating: Int?,
     isBooks: Boolean,
+    allowedKinds: Set<MediaType>? = null,
 ): List<MediaItem> {
     val filtered = filterByParentalRating(maxParentalRating).distinctBy { it.id }
-    return if (isBooks) filtered.readingResumableOnly() else filtered.resumableOnly()
+    val folded = if (isBooks) filtered.readingResumableOnly() else filtered.resumableOnly()
+    return folded.filterAllowedKinds(allowedKinds)
 }

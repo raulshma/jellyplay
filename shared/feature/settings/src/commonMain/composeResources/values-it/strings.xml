@@ -803,6 +803,9 @@
     <string name="settings_rewatching_next_up">Rivisione in Prossimo</string>
     <string name="settings_rewatching_next_up_on">Includi le serie riviste</string>
     <string name="settings_rewatching_next_up_off">Nascondi le serie che stai rivendo</string>
+    <string name="settings_classic_rows">Righe home classiche</string>
+    <string name="settings_classic_rows_on">Continua a guardare mostra solo episodi e film, e le righe degli ultimi arrivi solo serie e film</string>
+    <string name="settings_classic_rows_off">Segue il server: Continua a guardare può mostrare serie intere o stagioni, e le righe degli ultimi arrivi stagioni ed episodi</string>
     <string name="settings_backdrop_theme_music">Musica tema di sfondo</string>
     <string name="settings_backdrop_theme_music_on">Riproduci sigle nelle pagine di dettaglio</string>
     <string name="settings_backdrop_theme_music_off">Nessuna musica tema durante la navigazione</string>
@@ -1244,6 +1247,8 @@
     <string name="ss_next_up_max_days_subtitle">Mostra solo gli episodi visti entro un periodo di tempo</string>
     <string name="ss_next_up_rewatching_title">Rivisione in Prossimo</string>
     <string name="ss_next_up_rewatching_subtitle">Includi le serie che stai rivedendo in Prossimo</string>
+    <string name="ss_classic_rows_title">Righe home classiche</string>
+    <string name="ss_classic_rows_subtitle">Mostra Continua a guardare solo con episodi e le righe degli ultimi arrivi solo con serie e film, come prima di Jellyfin 12. Corregge le righe che mostrano poster di serie intere o stagioni dopo un aggiornamento del server.</string>
     <string name="ss_theme_music_title">Musica tema di sfondo</string>
     <string name="ss_theme_music_subtitle">Riproduci sigle nelle pagine dei dettagli</string>
     <string name="ss_nav_labels_title">Mostra etichette di navigazione</string>

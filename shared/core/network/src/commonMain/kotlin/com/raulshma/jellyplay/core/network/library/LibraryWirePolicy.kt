@@ -43,6 +43,58 @@ internal fun MediaType.toWireItemKind(): String? = when (this) {
 }
 
 /**
+ * The inverse of [MediaType.toWireItemKind]: wire `BaseItemKind` serial name →
+ * [MediaType], for the client-side kind folds that must agree with a
+ * server-side `includeItemTypes` narrowing (the #168 classic-rows
+ * belt-and-braces filters — an old server may ignore the narrowing, so the
+ * post-fetch fold re-applies it). Unknown serial names map to null and are
+ * DROPPED by the folds: an item the wire kind table can't name was never a
+ * kind the narrowing asked for. Lives beside [toWireItemKind] so a new kind
+ * lands in both tables or neither.
+ */
+internal fun wireItemKindToMediaType(serialName: String): MediaType? = when (serialName) {
+    "Movie" -> MediaType.MOVIE
+    "Series" -> MediaType.SERIES
+    "Season" -> MediaType.SEASON
+    "Episode" -> MediaType.EPISODE
+    "MusicAlbum" -> MediaType.ALBUM
+    "Audio" -> MediaType.AUDIO
+    "MusicArtist" -> MediaType.ARTIST
+    "MusicVideo" -> MediaType.MUSIC_VIDEO
+    "BoxSet" -> MediaType.COLLECTION
+    "Photo" -> MediaType.PHOTO
+    "PhotoAlbum" -> MediaType.PHOTO_FOLDER
+    "Book" -> MediaType.BOOK
+    "Folder" -> MediaType.FOLDER
+    "LiveTvChannel" -> MediaType.CHANNEL
+    "LiveTvProgram" -> MediaType.LIVE_TV
+    else -> null
+}
+
+/**
+ * Wire kind names → the [MediaType] set the client-side kind folds
+ * ([toFilteredResumeRows] / [toFilteredLatestRows]) filter on — the #168
+ * classic-rows belt-and-braces. Null/empty input → null (unconstrained).
+ * Deliberately not fail-fast: an unknown serial name drops from the set (and
+ * the fold drops those items) instead of throwing, because the fold is a
+ * safety net, never a query shaper — the fail-fast twin for query shaping is
+ * jvmShared's `toBaseItemKinds`.
+ */
+internal fun List<String>?.toAllowedMediaTypes(): Set<MediaType>? =
+    this
+        ?.mapNotNull { wireItemKindToMediaType(it) }
+        ?.toSet()
+        ?.takeIf { it.isNotEmpty() }
+
+/**
+ * The shared tail of the #168 classic-rows kind folds
+ * ([toFilteredResumeRows] / [toFilteredLatestRows]): null allowed-kinds =
+ * unconstrained, otherwise keep only the kinds the narrowing asked for.
+ */
+internal fun <T : MediaItem> List<T>.filterAllowedKinds(allowedKinds: Set<MediaType>?): List<T> =
+    if (allowedKinds == null) this else filter { it.mediaType in allowedKinds }
+
+/**
  * The canonical rating→age table (unknown ratings map to null = "no
  * opinion"). The parental-filter tails resolve ratings through it
  * (jvmShared: the SDK-typed `toFilteredMediaItems` mapper tail over

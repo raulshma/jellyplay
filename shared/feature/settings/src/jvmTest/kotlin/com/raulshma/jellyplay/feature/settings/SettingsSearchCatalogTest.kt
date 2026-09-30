@@ -100,8 +100,10 @@ class SettingsSearchCatalogTest {
         // (manual phone/tablet layout, issue #166): 306.
         // Added the playback player group's Android-only "Auto
         // Picture-in-Picture" toggle (issue #167): 307.
+        // Added the home display group's "Classic Row Behavior" toggle
+        // (issue #168): 308.
         // Bump this count when you deliberately add items.
-        assertEquals(307, items.size)
+        assertEquals(308, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

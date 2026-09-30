@@ -590,3 +590,43 @@ class DetailSectionAdmissionTest {
         }
     }
 }
+
+// ── showsSeasonTree (the SEASONS slot's render-side gate, #168) ──────────
+
+class ShowsSeasonTreeTest {
+
+    @Test
+    fun `series episode and season entries render the season tree`() {
+        assertTrue(showsSeasonTree(MediaType.SERIES))
+        assertTrue(showsSeasonTree(MediaType.EPISODE))
+        assertTrue(showsSeasonTree(MediaType.SEASON))
+    }
+
+    @Test
+    fun `non-tree entry types do not render the season tree`() {
+        assertFalse(showsSeasonTree(MediaType.MOVIE))
+        assertFalse(showsSeasonTree(MediaType.BOOK))
+        assertFalse(showsSeasonTree(MediaType.ALBUM))
+        assertFalse(showsSeasonTree(MediaType.FOLDER))
+        assertFalse(showsSeasonTree(MediaType.UNKNOWN))
+    }
+}
+
+// ── showsParentSeriesContext (entries rendering a parent series' context) ─
+
+class ShowsParentSeriesContextTest {
+
+    @Test
+    fun `episode and season entries render parent series context`() {
+        assertTrue(showsParentSeriesContext(MediaType.EPISODE))
+        assertTrue(showsParentSeriesContext(MediaType.SEASON))
+    }
+
+    @Test
+    fun `series owns the context and other types never consume it`() {
+        assertFalse(showsParentSeriesContext(MediaType.SERIES))
+        assertFalse(showsParentSeriesContext(MediaType.MOVIE))
+        assertFalse(showsParentSeriesContext(MediaType.BOOK))
+        assertFalse(showsParentSeriesContext(MediaType.FOLDER))
+    }
+}

@@ -91,6 +91,18 @@ internal object SmartPlayResolver {
             label = if (currentEpisode.hasResumeProgress()) LabelKind.RESUME_EPISODE else LabelKind.PLAY_EPISODE,
             startPositionTicks = currentEpisode.playbackPositionTicks ?: 0L,
         )
+
+    /**
+     * Season-level decision (#168): a Play press on a SEASON detail entry
+     * resumes/continues WITHIN that season only — the same resolution order as
+     * [resolveSeries] applied to just the entry season's episodes. [seasonId]
+     * is the detail entry's own id; episodes carry their season in
+     * [MediaItem.seasonId]. Returns null when the season has no (non-virtual)
+     * episodes in the current snapshot — the caller clears the smart target
+     * and the Play button falls back to its non-smart path.
+     */
+    fun resolveSeason(seasonId: String, sortedEpisodes: List<MediaItem>): SmartPlayResult? =
+        resolveSeries(sortedEpisodes.filter { it.seasonId == seasonId })
 }
 
 /**

@@ -51,7 +51,7 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
     /** Series smart-play "Up Next" card, ahead of SEASONS in emission order (both delayIndex 6). */
     UP_NEXT(6),
 
-    /** Season tabs + episode lists for SERIES/EPISODE. Always admitted; empty gate is render-side. */
+    /** Season tabs + episode lists for SERIES/EPISODE/SEASON. Always admitted; empty gate is render-side. */
     SEASONS(6),
 
     /** Collection members row. Always admitted; empty gate is render-side. */
@@ -230,3 +230,25 @@ internal data class DetailSectionAdmission(
         )
     }
 }
+
+/**
+ * The render-side gate of the SEASONS slot ([DetailSectionAdmission] admits
+ * the slot for every item; this predicate is the render half): which detail
+ * entry types render the season tabs + episode tree. SERIES (the tree's
+ * owner), EPISODE (the parent series' context tree), and — since #168 —
+ * SEASON (the entry season's own tree: a season arriving from the home rows
+ * must not dead-end on the bare generic page). Extracted Compose-free so the
+ * gate has a direct test surface, same convention as the admission fold.
+ */
+internal fun showsSeasonTree(mediaType: MediaType): Boolean =
+    mediaType == MediaType.SERIES || mediaType == MediaType.EPISODE || mediaType == MediaType.SEASON
+
+/**
+ * Which detail entries carry a PARENT series whose context they render — the
+ * header's series link and the detail backdrop both resolve through
+ * `MediaItem.seriesId`: EPISODE, and — since #168 — SEASON. SERIES is the
+ * context's owner, not a consumer of it. Extracted beside
+ * [showsSeasonTree] for the same direct-test-surface reason.
+ */
+internal fun showsParentSeriesContext(mediaType: MediaType): Boolean =
+    mediaType == MediaType.EPISODE || mediaType == MediaType.SEASON

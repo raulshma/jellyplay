@@ -22,6 +22,7 @@ class SmartPlayResolverTest {
         positionTicks: Long? = null,
         isVirtual: Boolean = false,
         missingReason: MissingEpisodeReason? = null,
+        seasonId: String? = null,
     ) = MediaItem(
         id = id,
         name = "Ep $id",
@@ -32,6 +33,7 @@ class SmartPlayResolverTest {
         playbackPositionTicks = positionTicks,
         isVirtual = isVirtual,
         missingReason = missingReason,
+        seasonId = seasonId,
     )
 
     // ── resolveSeries ──────────────────────────────────────────────────
@@ -193,5 +195,55 @@ class SmartPlayResolverTest {
         val result = SmartPlayResolver.resolveEpisode(ep)
 
         assertEquals(LabelKind.PLAY_EPISODE, result.label)
+    }
+
+    // ── resolveSeason (#168: season detail entry) ──────────────────────
+
+    @Test
+    fun `season resolves only within the entry season`() {
+        // The series snapshot carries every season's episodes; the season
+        // entry must consider its own slice only — S2's unwatched episode
+        // must not beat S1's resume.
+        val eps = listOf(
+            episode("s1e1", seasonId = "season-1", isPlayed = true),
+            episode("s1e2", seasonId = "season-1", positionTicks = 5_000L),
+            episode("s2e1", seasonId = "season-2"),
+        )
+        val result = SmartPlayResolver.resolveSeason("season-1", eps)!!
+
+        assertEquals("s1e2", result.episode.id)
+        assertEquals(LabelKind.RESUME_EPISODE, result.label)
+    }
+
+    @Test
+    fun `season plays its own first unplayed episode`() {
+        val eps = listOf(
+            episode("s5e1", seasonId = "season-5", isPlayed = true),
+            episode("s5e2", seasonId = "season-5"),
+            episode("s6e1", seasonId = "season-6"),
+        )
+        val result = SmartPlayResolver.resolveSeason("season-5", eps)!!
+
+        assertEquals("s5e2", result.episode.id)
+        assertEquals(LabelKind.NEXT_UP_EPISODE, result.label)
+    }
+
+    @Test
+    fun `season with no matching episodes resolves to null`() {
+        val eps = listOf(episode("s1e1", seasonId = "season-1"))
+
+        assertNull(SmartPlayResolver.resolveSeason("season-9", eps))
+        assertNull(SmartPlayResolver.resolveSeason("season-1", emptyList()))
+    }
+
+    @Test
+    fun `season skips virtual episodes in its own slice`() {
+        val eps = listOf(
+            episode("s5e1", seasonId = "season-5", isVirtual = true, missingReason = MissingEpisodeReason.UNAIRED),
+            episode("s5e2", seasonId = "season-5"),
+        )
+        val result = SmartPlayResolver.resolveSeason("season-5", eps)!!
+
+        assertEquals("s5e2", result.episode.id)
     }
 }

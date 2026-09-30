@@ -513,6 +513,8 @@ data class HomeScreenPreferences(
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
+    /** Classic (pre-Jellyfin-12) home-row semantics (#168). Default false. */
+    val classicRows: Boolean = false,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),

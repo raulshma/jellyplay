@@ -239,7 +239,12 @@ class MediaRepositoryImpl internal constructor(
                 episodeCatalogue.invalidateSeries(detail.item.id)
                 detailCaches.invalidateItem(detail.item.id)
             }
-            MediaType.EPISODE -> detail.item.seriesId?.let { invalidateSeriesCache(it) }
+            // SEASON mirrors EPISODE: the entry's season tree is the PARENT
+            // series' catalogue (DetailContentResolver.loadSeriesData resolves
+            // through seriesIdForDetail), so a forced refresh must drop that
+            // catalogue — not the season's own (nonexistent) cache — or the
+            // refresh silently serves the TTL snapshot.
+            MediaType.EPISODE, MediaType.SEASON -> detail.item.seriesId?.let { invalidateSeriesCache(it) }
             MediaType.ALBUM -> invalidateUserDataCaches(detail.item.id)
             MediaType.COLLECTION -> invalidateCollectionItemsCache(detail.item.id)
             else -> Unit // plain item: caller-scoped invalidation already ran

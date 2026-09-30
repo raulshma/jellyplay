@@ -1053,6 +1053,9 @@
     <string name="settings_rewatching_next_up">Rewatching in Next Up</string>
     <string name="settings_rewatching_next_up_on">Include rewatched series</string>
     <string name="settings_rewatching_next_up_off">Hide series you are rewatching</string>
+    <string name="settings_classic_rows">Classic Home Rows</string>
+    <string name="settings_classic_rows_on">Continue Watching shows episodes and movies only, and the Latest rows show series and movies only</string>
+    <string name="settings_classic_rows_off">Follow the server: Continue Watching can show whole series or seasons, and the Latest rows can show seasons and episodes</string>
     <string name="settings_backdrop_theme_music">Backdrop Theme Music</string>
     <string name="settings_backdrop_theme_music_on">Play theme songs on detail pages</string>
     <string name="settings_backdrop_theme_music_off">No theme music during browsing</string>
@@ -1493,6 +1496,8 @@
     <string name="ss_next_up_max_days_subtitle">Only show episodes watched within a time period</string>
     <string name="ss_next_up_rewatching_title">Rewatching in Next Up</string>
     <string name="ss_next_up_rewatching_subtitle">Include series you are rewatching in Next Up</string>
+    <string name="ss_classic_rows_title">Classic Home Rows</string>
+    <string name="ss_classic_rows_subtitle">Show Continue Watching with episodes only and the Latest rows with series and movies only, like before Jellyfin 12. Fixes rows that show whole series or season posters after a server update.</string>
     <string name="ss_theme_music_title">Backdrop Theme Music</string>
     <string name="ss_theme_music_subtitle">Play theme songs on detail pages</string>
     <string name="ss_nav_labels_title">Show Navigation Labels</string>

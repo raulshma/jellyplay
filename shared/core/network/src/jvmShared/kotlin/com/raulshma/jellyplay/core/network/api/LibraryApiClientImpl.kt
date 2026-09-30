@@ -43,6 +43,8 @@ import com.raulshma.jellyplay.core.network.library.buildResumeQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
 import com.raulshma.jellyplay.core.network.library.toChildItemImageUrls
+import com.raulshma.jellyplay.core.network.library.toAllowedMediaTypes
+import com.raulshma.jellyplay.core.network.library.toFilteredLatestRows
 import com.raulshma.jellyplay.core.network.library.toFilteredResumeRows
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
@@ -252,14 +254,36 @@ class LibraryApiClientImpl(
         perLibrary.flatten().distinctBy { it.id }.take(row.limit)
     }
 
-    override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
+    override suspend fun getLatestMedia(
+        parentId: String,
+        limit: Int,
+        includeKinds: List<String>?,
+    ): Result<List<MediaItem>> =
         engine.withApi { api ->
+            // The kind narrowing rides BOTH the server query (IncludeItemTypes)
+            // and the client-side fold (#168 belt-and-braces): a server that
+            // ignores the param still can't leak non-conforming rows.
+            //
+            // The Series pin must also drop groupItems: the grouped route
+            // (UserViewManager → GetLatestItemList → GetLatestTvShowItems)
+            // analyzes EPISODE rows through `SeriesName != null`, and Series
+            // entities carry no SeriesName — on 12.x the pin filters itself
+            // down to nothing, and on 10.x the same null SeriesName collapses
+            // every series into one group and truncates the row (both
+            // live-verified). groupItems=false routes the call through plain
+            // GetItemList, where IncludeItemTypes applies directly. Moot for
+            // the Movie pin (movies have no container promotion), so it keeps
+            // the SDK default. "Pins Series" resolves through the canonical
+            // wire kind table, like every other kind comparison here.
             val response = api.userLibraryApi.getLatestMedia(
                 parentId = parentId.toUUID(),
                 limit = limit,
+                includeItemTypes = includeKinds.toBaseItemKinds(),
+                groupItems = includeKinds.toAllowedMediaTypes()?.contains(MediaType.SERIES) != true,
                 fields = LIST_ITEM_FIELDS,
             ).content ?: emptyList()
-            response.toFilteredMediaItems(engine.currentMaxParentalRating)
+            response.map { it.toMediaItem() }
+                .toFilteredLatestRows(engine.currentMaxParentalRating, includeKinds.toAllowedMediaTypes())
         }
 
     override suspend fun getNextUp(
@@ -270,7 +294,7 @@ class LibraryApiClientImpl(
         // The limit/projection shape is the shared resume spec (NextUp rides
         // it with no kind narrowing); the cutoff CLOCK stays here (JVM-side
         // java.time).
-        val spec = buildResumeQuerySpec(limit, isBooks = false)
+        val spec = buildResumeQuerySpec(limit, kinds = null)
         // Same value LocalDateTime.now() produced, through the epoch seam —
         // [nowLocalDateTime] (toSdkLocalDateTime uses the same derivation
         // for the inbound bounds).
@@ -289,24 +313,33 @@ class LibraryApiClientImpl(
         (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
-    override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.withApi { api ->
-        val spec = buildResumeQuerySpec(limit, isBooks = false)
+    override suspend fun getContinueWatching(
+        limit: Int,
+        includeKinds: List<String>?,
+    ): Result<List<MediaItem>> = engine.withApi { api ->
+        val spec = buildResumeQuerySpec(limit, kinds = includeKinds)
         val response = api.itemsApi.getResumeItems(
             limit = spec.limit,
             fields = spec.fields.toItemFieldsList(),
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
         ).content
         // #157: the fold drops played rows the resume endpoint still reports —
-        // see resumableOnly() for the full rationale.
+        // see resumableOnly() for the full rationale. The classic-rows kind
+        // narrowing (#168) rides the same fold as belt-and-braces.
         (response?.items ?: emptyList())
             .map { it.toMediaItem() }
-            .toFilteredResumeRows(engine.currentMaxParentalRating, isBooks = false)
+            .toFilteredResumeRows(
+                engine.currentMaxParentalRating,
+                isBooks = false,
+                allowedKinds = includeKinds.toAllowedMediaTypes(),
+            )
     }
 
     override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> = engine.withApi { api ->
         // Server-side narrowing to books (spec.includeKinds); the fold's
         // books half stays as belt-and-braces (old servers may ignore
         // includeItemTypes).
-        val spec = buildResumeQuerySpec(limit, isBooks = true)
+        val spec = buildResumeQuerySpec(limit, kinds = listOf("Book"))
         val response = api.itemsApi.getResumeItems(
             limit = spec.limit,
             fields = spec.fields.toItemFieldsList(),

@@ -59,11 +59,11 @@ internal expect class DiscoverRowEpoch() {
  * explicitly.
  */
 internal interface HomeSectionSources {
-    suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>>
+    suspend fun getContinueWatching(limit: Int, includeKinds: List<String>?): Result<List<MediaItem>>
     suspend fun getContinueReading(limit: Int): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>>
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
-    suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>>
+    suspend fun getLatestMedia(parentId: String, limit: Int, includeKinds: List<String>?): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>>
     suspend fun getSearchSuggestions(limit: Int): Result<SearchResult>
     suspend fun getCollectionItems(collectionId: String, startIndex: Int, limit: Int): Result<SearchResult>
@@ -273,7 +273,10 @@ internal class HomeSectionsFetcher(
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
 
         val continueWatchingDeferred = async {
-            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) sources.getContinueWatching(limit = 20)
+            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) sources.getContinueWatching(
+                limit = 20,
+                includeKinds = resumeIncludeKinds(query.classicRows),
+            )
             else Result.success(emptyList())
         }
         val continueReadingDeferred = async {
@@ -331,7 +334,15 @@ internal class HomeSectionsFetcher(
                 val recommendationSeeds =
                     continueWatchingResult.getOrDefault(emptyList()) +
                         nextUpResult.getOrDefault(emptyList())
-                async { recommendations(limit = 20, seeds = recommendationSeeds, force = force, identity = identity) }
+                async {
+                    recommendations(
+                        limit = 20,
+                        seeds = recommendationSeeds,
+                        force = force,
+                        identity = identity,
+                        resumeIncludeKinds = resumeIncludeKinds(query.classicRows),
+                    )
+                }
             } else null
 
         // Latest-media fan-out: one /Items/Latest per non-music folder,
@@ -344,7 +355,15 @@ internal class HomeSectionsFetcher(
                 val filteredFolders = folders
                     .filter { it.collectionType != "music" }
                 latestPerFolder = Semaphore(4).mapConcurrent(filteredFolders) { folder ->
-                    folder to getLatestMediaForHome(folder.id, limit = 16, force = force, identity = identity)
+                    folder to getLatestMediaForHome(
+                        parentId = folder.id,
+                        limit = 16,
+                        // Classic rows (#168): pin the folder's latest call to the
+                        // Series/Movie rollup; modern (default) = unconstrained.
+                        includeKinds = if (query.classicRows) classicLatestKinds(folder.collectionType) else null,
+                        force = force,
+                        identity = identity,
+                    )
                 }
             }
         }
@@ -535,8 +554,32 @@ internal class HomeSectionsFetcher(
      * consults [homeLatestMediaCache] first. Only the home path uses this —
      * browse/library screens still go straight to the port for fresh data.
      */
-    private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean, identity: CacheIdentity): Result<List<MediaItem>> =
-        homeLatestMediaCache.cacheThrough(identity, "${parentId}_$limit", force = force) { sources.getLatestMedia(parentId, limit) }
+    /**
+     * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
+     * consults [homeLatestMediaCache] first. Only the home path uses this —
+     * browse/library screens still go straight to the port for fresh data.
+     * [includeKinds] rides the cache key: a classic-rows flip must not serve
+     * the other mode's rows for the sub-call TTL window.
+     */
+    private suspend fun getLatestMediaForHome(
+        parentId: String,
+        limit: Int,
+        includeKinds: List<String>?,
+        force: Boolean,
+        identity: CacheIdentity,
+    ): Result<List<MediaItem>> =
+        homeLatestMediaCache.cacheThrough(identity, "${parentId}_${limit}_${includeKinds.orEmpty()}", force = force) {
+            sources.getLatestMedia(parentId, limit, includeKinds)
+        }
+
+    /**
+     * The video resume row's `includeItemTypes` narrowing (#168): the classic-
+     * rows leaf kinds when [classicRows] is set, null (unconstrained) under
+     * modern semantics. Both home-path resume call sites (the section and the
+     * recommendations self-seed) resolve through here so they can't drift.
+     */
+    private fun resumeIncludeKinds(classicRows: Boolean): List<String>? =
+        if (classicRows) CLASSIC_RESUME_LEAF_KINDS else null
 
     /**
      * Home-path wrapper around [HomeSectionSources.getSimilarItems] that
@@ -560,6 +603,7 @@ internal class HomeSectionsFetcher(
         seeds: List<MediaItem>,
         force: Boolean,
         identity: CacheIdentity,
+        resumeIncludeKinds: List<String>?,
     ): Result<RecommendationResult> = runCatchingRethrowingCancellation {
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
@@ -567,7 +611,7 @@ internal class HomeSectionsFetcher(
         val seedItems = if (seeds.isNotEmpty()) {
             seeds.distinctBy { it.id }.take(5)
         } else {
-            val continueWatching = sources.getContinueWatching(limit = 5).getOrDefault(emptyList())
+            val continueWatching = sources.getContinueWatching(limit = 5, includeKinds = resumeIncludeKinds).getOrDefault(emptyList())
             val nextUp = sources.getNextUp(limit = 5, enableRewatching = false, maxDays = 0).getOrDefault(emptyList())
             (continueWatching + nextUp).distinctBy { it.id }.take(5)
         }

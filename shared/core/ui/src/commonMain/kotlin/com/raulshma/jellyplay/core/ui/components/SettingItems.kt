@@ -225,12 +225,16 @@ private fun SettingListItemImpl(
         },
         supportingContent = {
             if (subtitle.isNotBlank()) {
-                Text(
+                // Expandable so a long row description (#168 classic-rows
+                // explainer) is fully readable: two collapsed lines + a
+                // "Read more" toggle that only appears on real overflow. The
+                // toggle's own click target wins over the row's, so tapping
+                // it never fires the row action.
+                ExpandableText(
                     text = subtitle,
+                    collapsedMaxLines = 2,
                     style = MaterialTheme.typography.bodySmall,
                     color = supportingColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         },
@@ -386,12 +390,16 @@ private fun SettingToggleItemImpl(
         },
         supportingContent = {
             if (subtitle.isNotBlank()) {
-                Text(
+                // Expandable so a long row description (#168 classic-rows
+                // explainer) is fully readable: two collapsed lines + a
+                // "Read more" toggle that only appears on real overflow. The
+                // toggle's own click target wins over the row's, so tapping
+                // it expands instead of flipping the Switch.
+                ExpandableText(
                     text = subtitle,
+                    collapsedMaxLines = 2,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         },

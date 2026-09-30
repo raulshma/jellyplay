@@ -1063,13 +1063,13 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `home display row total is the eight declared rows plus the conditional unhide row`() {
-        // The retired oracle double-counted: items.size (9, including the
-        // unhide row) + 1 — while the screen emits 8 rows without hidden CW
-        // items and 9 with. The derivation fixes the count to the emitted
-        // rows: the eight always-declared rows plus the explicit unhide +1.
-        assertEquals(8, homeDisplayScreenRowTotal(hiddenCwItems = 0))
-        assertEquals(9, homeDisplayScreenRowTotal(hiddenCwItems = 1))
+    fun `home display row total is the nine declared rows plus the conditional unhide row`() {
+        // The retired oracle double-counted: items.size (10, including the
+        // unhide row) + 1 — while the screen emits 9 rows without hidden CW
+        // items and 10 with. The derivation fixes the count to the emitted
+        // rows: the nine always-declared rows plus the explicit unhide +1.
+        assertEquals(9, homeDisplayScreenRowTotal(hiddenCwItems = 0))
+        assertEquals(10, homeDisplayScreenRowTotal(hiddenCwItems = 1))
         assertEquals(
             SettingsScreenGroups.homeDisplay.items.size - 1,
             homeDisplayScreenRowTotal(hiddenCwItems = 0),

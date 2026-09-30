@@ -356,6 +356,7 @@ class PreferenceProjections constructor(
                 mergeContinueWatchingAndNextUp = home.mergeContinueWatchingAndNextUp,
                 nextUpMaxDays = home.nextUpMaxDays,
                 nextUpRewatching = home.nextUpRewatching,
+                classicRows = home.classicRows,
                 enabledHomeSectionTypes = home.enabledHomeSectionTypes,
                 homeSectionOrder = home.homeSectionOrder,
                 pinnedHomeSections = home.pinnedHomeSections,
