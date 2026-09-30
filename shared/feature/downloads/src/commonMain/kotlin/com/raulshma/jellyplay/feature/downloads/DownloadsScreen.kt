@@ -23,12 +23,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -42,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
-import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
@@ -70,11 +65,10 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
+import com.raulshma.jellyplay.core.ui.components.floatingNavClearanceDp
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -225,15 +219,10 @@ fun DownloadsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     // Bottom-pinned action bar must clear the app's floating navigation bar
-    // (it paints above screen content at BottomCenter). Use the canonical nav
-    // height + system nav-bar inset, and slide up in lockstep with the nav's
-    // hide animation via LocalFloatingNavOffset (returns 0f where the nav is
-    // absent — TV/expanded/full-screen).
-    val navOffsetPx = LocalFloatingNavOffset.current
-    val navBarBottomInset = WindowInsets.navigationBars
-        .asPaddingValues()
-        .calculateBottomPadding()
-    val selectionBarClearance = Dimensions.floatingNavHeight + navBarBottomInset
+    // (it paints above screen content at BottomCenter). floatingNavClearanceDp
+    // is presence-aware — where no bar is painted (TV/expanded/full-screen)
+    // only the system nav-bar inset remains — and the bar's clearFloatingNav
+    // ride-up slides it in lockstep with the nav's hide animation.
 
     val selectionMode = uiState.selectionMode
     val selectedIds = uiState.selectedIds
@@ -410,7 +399,7 @@ fun DownloadsScreen(
                         top = 8.dp,
                         // Grow bottom padding while selecting so the action bar
                         // clears the floating nav and doesn't cover the last row.
-                        bottom = if (selectionMode) selectionBarClearance + 72.dp else adaptiveInfo.bottomPadding(isTv),
+                        bottom = if (selectionMode) floatingNavClearanceDp + 72.dp else adaptiveInfo.bottomPadding(isTv),
                     ),
                     verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                 ) {
@@ -493,14 +482,10 @@ fun DownloadsScreen(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            // Sit above the floating nav (clearance) and slide up
-                            // in lockstep when the nav hides itself.
-                            .padding(bottom = selectionBarClearance)
-                            .offset {
-                                val maxOffset = Dimensions.floatingNavHeight.toPx()
-                                val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                                IntOffset(x = 0, y = yOffset.roundToInt())
-                            },
+                            // Sit above the floating nav (presence-aware
+                            // clearance) and slide up in lockstep when the nav
+                            // hides itself.
+                            .clearFloatingNav(extraBottom = 0.dp),
                     )
                 }
             }

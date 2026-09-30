@@ -14,12 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ElevatedCard
@@ -50,6 +46,8 @@ import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
+import com.raulshma.jellyplay.core.ui.components.floatingNavClearanceDp
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -96,7 +94,6 @@ fun UserManagementScreen(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
-    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val focusRequester = remember { FocusRequester() }
@@ -142,7 +139,7 @@ fun UserManagementScreen(
                             start = contentPad,
                             end = contentPad,
                             top = contentPad,
-                            bottom = contentPad + com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                            bottom = contentPad + floatingNavClearanceDp,
                         ),
                         verticalArrangement = Arrangement.spacedBy(spacing),
                     ) {
@@ -203,15 +200,10 @@ fun UserManagementScreen(
                         modifier = Modifier
                             .then(addUserFocusState.focusModifier)
                             .tvFocusIndicator(addUserFocusState, ShapeCache.smooth16)
-                            .padding(
-                                end = 16.dp,
-                                bottom = 16.dp + com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                            )
-                            .offset {
-                                val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                                val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                                androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                            },
+                            // Presence-aware nav clearance + hide-on-scroll
+                            // ride-up: collapses to margin + inset where no
+                            // floating nav is painted.
+                            .clearFloatingNav(),
                         icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                         text = { Text(stringResource(Res.string.settings_add_user)) },
                     )

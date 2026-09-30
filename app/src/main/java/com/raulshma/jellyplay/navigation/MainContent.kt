@@ -340,6 +340,14 @@ internal fun MainContent(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
                 LocalNavigationBarColor provides navBarColorState,
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNav.floatingNavOffset else ({ 0f })),
+                // The floating bottom nav paints ONLY in the compact phone branch
+                // (PhoneContent's `if (!isExpanded)` bar; TV composes TvContent,
+                // full-screen routes FullScreenContent, expanded widths a rail).
+                // Bottom-floating elements read this to skip the nav clearance
+                // wherever no bar is painted — the same fork as the offset above
+                // plus the !isTv guard.
+                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavPresent
+                    provides (!isTv && !isExpanded && !isFullScreenRoute),
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives

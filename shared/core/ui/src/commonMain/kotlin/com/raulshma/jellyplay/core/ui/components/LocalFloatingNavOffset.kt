@@ -21,3 +21,21 @@ val LocalFloatingNavOffset = compositionLocalOf<() -> Float> { { 0f } }
 val LocalFloatingNavVisibility = compositionLocalOf<MutableState<Boolean>> {
     mutableStateOf(true)
 }
+
+/**
+ * Whether the floating bottom nav bar is actually painted above this subtree:
+ * `true` only in the compact, non-full-screen phone shell (the one layout that
+ * composes `ExpressiveFloatingNavigationBar`). Every other composition — the
+ * signed-out auth host, TV, expanded/rail layouts, full-screen routes — reads
+ * the `false` default, so bottom-floating elements can skip the nav clearance
+ * instead of reserving space for a bar that never paints. A narrow desktop
+ * window composes the phone shell too, so it reads `true` — matching the bar
+ * painted there.
+ *
+ * Deliberately a *presence* flag, not a [LocalFloatingNavVisibility] read:
+ * hide-on-scroll translates the bar off-screen while it stays composed, and
+ * riders must keep their clearance through that slide (the ride-up offset in
+ * [clearFloatingNav] hands the space back). Presence flips only when the bar
+ * leaves the tree entirely.
+ */
+val LocalFloatingNavPresent = compositionLocalOf { false }
