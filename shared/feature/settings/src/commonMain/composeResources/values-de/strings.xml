@@ -804,7 +804,7 @@
     <string name="settings_rewatching_next_up_on">Erneut angesehene Serien einbeziehen</string>
     <string name="settings_rewatching_next_up_off">Serien ausblenden, die du erneut ansiehst</string>
     <string name="settings_classic_rows">Klassische Startseiten-Zeilen</string>
-    <string name="settings_classic_rows_on">Weiterschauen zeigt nur Folgen und Filme, die Zuletzt-hinzugefügt-Zeilen nur Serien und Filme</string>
+    <string name="settings_classic_rows_on">Wie Jellyfin vor Version 12: Weiterschauen listet nur begonnene Einträge, und die Zuletzt-hinzugefügt-Zeilen fassen neue Folgen unter ihrer Serie zusammen</string>
     <string name="settings_classic_rows_off">Dem Server folgen: Weiterschauen kann ganze Serien oder Staffeln zeigen, die Zuletzt-hinzugefügt-Zeilen Staffeln und Folgen</string>
     <string name="settings_backdrop_theme_music">Hintergrund-Themenmusik</string>
     <string name="settings_backdrop_theme_music_on">Titellieder auf Detailseiten abspielen</string>
@@ -1244,7 +1244,7 @@
     <string name="ss_next_up_rewatching_title">Erneut Ansehen in Als Nächstes</string>
     <string name="ss_next_up_rewatching_subtitle">Serien, die du erneut ansiehst, in Als Nächstes aufnehmen</string>
     <string name="ss_classic_rows_title">Klassische Startseiten-Zeilen</string>
-    <string name="ss_classic_rows_subtitle">Zeigt Weiterschauen nur mit Folgen und die Zuletzt-hinzugefügt-Zeilen nur mit Serien und Filmen – wie vor Jellyfin 12. Behebt Zeilen, die nach einem Server-Update ganze Serien- oder Staffel-Poster zeigen.</string>
+    <string name="ss_classic_rows_subtitle">Zeigt die Startzeilen genau wie Jellyfin vor Version 12: Weiterschauen listet nur begonnene Einträge, und die Zuletzt-hinzugefügt-Zeilen fassen neue Folgen unter ihrer Serie zusammen. Behebt Zeilen, die nach einem Server-Update ganze Serien- oder Staffel-Poster zeigen.</string>
     <string name="ss_theme_music_title">Hintergrund-Themenmusik</string>
     <string name="ss_theme_music_subtitle">Titellieder auf Detailseiten abspielen</string>
     <string name="ss_nav_labels_title">Navigationsbeschriftungen anzeigen</string>

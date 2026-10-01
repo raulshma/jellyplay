@@ -804,7 +804,7 @@
     <string name="settings_rewatching_next_up_on">Incluir series reseadas</string>
     <string name="settings_rewatching_next_up_off">Ocultar las series que estás reseando</string>
     <string name="settings_classic_rows">Filas clásicas de inicio</string>
-    <string name="settings_classic_rows_on">Continuar viendo muestra solo episodios y películas, y las filas de añadido recientemente solo series y películas</string>
+    <string name="settings_classic_rows_on">Como Jellyfin anterior a la versión 12: Continuar viendo muestra solo elementos en curso, y las filas de añadido recientemente agrupan los episodios nuevos bajo su serie</string>
     <string name="settings_classic_rows_off">Según el servidor: Continuar viendo puede mostrar series completas o temporadas, y las filas de añadido recientemente temporadas y episodios</string>
     <string name="settings_backdrop_theme_music">Música de fondo</string>
     <string name="settings_backdrop_theme_music_on">Reproducir canciones de presentación en páginas de detalle</string>
@@ -1246,7 +1246,7 @@
     <string name="ss_next_up_rewatching_title">Revisitar en A continuación</string>
     <string name="ss_next_up_rewatching_subtitle">Incluye las series que estás revisando en A continuación</string>
     <string name="ss_classic_rows_title">Filas clásicas de inicio</string>
-    <string name="ss_classic_rows_subtitle">Muestra Continuar viendo solo con episodios y las filas de añadido recientemente solo con series y películas, como antes de Jellyfin 12. Corrige las filas que muestran pósters de series completas o temporadas tras una actualización del servidor.</string>
+    <string name="ss_classic_rows_subtitle">Muestra las filas de inicio exactamente como Jellyfin antes de la versión 12: Continuar viendo muestra solo elementos en curso y las filas de añadido recientemente agrupan los episodios nuevos bajo su serie. Corrige las filas que muestran pósters de series completas o temporadas tras una actualización del servidor.</string>
     <string name="ss_theme_music_title">Música temática de fondo</string>
     <string name="ss_theme_music_subtitle">Reproduce canciones temáticas en las páginas de detalles</string>
     <string name="ss_nav_labels_title">Mostrar etiquetas de navegación</string>

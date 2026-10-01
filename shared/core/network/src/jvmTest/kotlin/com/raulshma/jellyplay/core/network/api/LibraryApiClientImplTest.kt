@@ -13,7 +13,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
  * Covers the [LibraryApiClientImpl] behavior that needs a real engine: the
@@ -70,13 +69,16 @@ class LibraryApiClientImplTest {
      * classes), with every request answered by a 200 whose body decodes to
      * the DTO under test. Defaults to the all-defaults UserItemDataDto the
      * favorite paths need; tests targeting other endpoints pass their own
-     * [responseBody].
+     * [responseBody]. [bodiesByPath] scripts per-endpoint bodies (keyed by
+     * the SDK's pathTemplate, e.g. "Items/Latest") for flows hitting more
+     * than one endpoint in a single client call.
      */
     private class RecordingApiClient(
         private val responseBody: String = """
             {"PlaybackPositionTicks":0,"PlayCount":0,"IsFavorite":false,
             "Played":false,"Key":"k","ItemId":"$FAVORITE_ITEM_ID"}
         """.trimIndent(),
+        private val bodiesByPath: Map<String, String> = emptyMap(),
     ) : org.jellyfin.sdk.api.client.ApiClient() {
         val requests = mutableListOf<String>()
 
@@ -103,7 +105,8 @@ class LibraryApiClientImplTest {
         ): org.jellyfin.sdk.api.client.RawResponse {
             requests += "${method.name} $pathTemplate"
             queries += queryParameters
-            return org.jellyfin.sdk.api.client.RawResponse(responseBody.toByteArray(), 200, emptyMap())
+            val body = bodiesByPath[pathTemplate] ?: responseBody
+            return org.jellyfin.sdk.api.client.RawResponse(body.toByteArray(), 200, emptyMap())
         }
     }
 
@@ -227,34 +230,121 @@ class LibraryApiClientImplTest {
     }
 
     @Test
-    fun `the classic-rows narrowing rides the resume and latest wire queries`() = runTest {
+    fun `the classic-rows resume keeps the pre-12 wire and the classic latest fetches the episode pool`() = runTest {
+        // Resume: the wire request is the exact pre-12 shape (no
+        // IncludeItemTypes) — the classic Series/Season rollup fold is
+        // client-side, so the request is byte-identical across modes and
+        // server generations.
         val api = RecordingApiClient(responseBody = emptyItemsBody)
         engine.updateApi(api)
-        client.getContinueWatching(limit = 20, includeKinds = listOf("Episode", "Movie")).getOrThrow()
+        client.getContinueWatching(limit = 20, classicRows = true).getOrThrow()
 
+        assertEquals(
+            "",
+            queryParam(api.queries[0], "includeItemTypes"),
+            "the classic resume query must stay the pre-12 unconstrained wire shape",
+        )
+
+        // Latest (classic TV): the raw-Episode pool — IncludeItemTypes=Episode
+        // + groupItems=false is the shape every server generation answers
+        // with plain episode rows; the pre-12 grouping then runs client-side.
+        // limit rides the wire as the 10.x-equivalent pool (16 × 5).
         // /Users/{userId}/Items/Latest answers a bare JSON array, not an envelope.
         val latestApi = RecordingApiClient(responseBody = "[]")
         engine.updateApi(latestApi)
-        client.getLatestMedia(parentId = LATEST_FOLDER_ID, limit = 16, includeKinds = listOf("Series")).getOrThrow()
+        client.getLatestMedia(parentId = LATEST_FOLDER_ID, limit = 16, classicEpisodePool = 16 * 5).getOrThrow()
 
-        assertTrue(
-            queryParam(api.queries[0], "includeItemTypes").contains("Episode", ignoreCase = true) &&
-                queryParam(api.queries[0], "includeItemTypes").contains("Movie", ignoreCase = true),
-            "the classic resume query must carry IncludeItemTypes",
-        )
         assertEquals(
-            "Series",
+            "Episode",
             queryParam(latestApi.queries[0], "includeItemTypes"),
-            "the classic latest query must pin the TV folder to Series",
+            "the classic latest pool must pin to Episode",
         )
-        // The Series pin bypasses the grouped latest route: GroupBy(SeriesName)
-        // over Series-only rows self-empties on 12.x and truncates on 10.x
-        // (both live-verified). Plain GetItemList honors IncludeItemTypes.
         assertEquals(
             "false",
             queryParam(latestApi.queries[0], "groupItems"),
-            "the classic TV pin must drop groupItems",
+            "the classic pool must bypass the server grouping route",
         )
+        assertEquals(
+            "80",
+            queryParam(latestApi.queries[0], "limit"),
+            "the classic pool fetches the pre-12 5x overfetch",
+        )
+    }
+
+    @Test
+    fun `classic latest groups the episode pool into series cards with the real series items`() = runTest {
+        // Pool of three episodes: sA twice (first + third position) and sB
+        // once. The 10.x grouping twin must produce [Grouped(sA), Single(e2)]
+        // — sA's card takes its FIRST-encounter slot — and resolve sA's card
+        // through the batched real-Series fetch, not synthesis.
+        val seriesIdA = "8a8a8a8a-1111-4888-8888-999999999999"
+        val seriesIdB = "8b8b8b8b-1111-4888-8888-999999999999"
+        val episodeJson = { id: String, seriesId: String, seriesName: String ->
+            """{"Id":"$id","Name":"ep-$id","Type":"Episode","SeriesId":"$seriesId","SeriesName":"$seriesName"}"""
+        }
+        val api = RecordingApiClient(
+            responseBody = "[]",
+            bodiesByPath = mapOf(
+                "/Items/Latest" to """
+                    [${episodeJson("aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa", seriesIdA, "Show A")},
+                     ${episodeJson("bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb", seriesIdB, "Show B")},
+                     ${episodeJson("cccccccc-1111-4111-8111-cccccccccccc", seriesIdA, "Show A")}]
+                """.trimIndent(),
+                "/Items" to """
+                    {"TotalRecordCount":1,"StartIndex":0,
+                     "Items":[{"Id":"$seriesIdA","Name":"Show A","Type":"Series","ProductionYear":2019}]}
+                """.trimIndent(),
+            ),
+        )
+        engine.updateApi(api)
+
+        val rows = client.getLatestMedia(parentId = LATEST_FOLDER_ID, limit = 16, classicEpisodePool = 16 * 5).getOrThrow()
+
+        // Two cards: the sA group (real Series item, childCount = pool size)
+        // then sB's single episode card in first-encounter order.
+        assertEquals(2, rows.size)
+        val grouped = rows[0]
+        assertEquals(seriesIdA, grouped.id)
+        assertEquals("Show A", grouped.name)
+        assertEquals(2019, grouped.year, "the real Series DTO fields ride the card")
+        assertEquals(2, grouped.childCount)
+        assertEquals("bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb", rows[1].id)
+
+        // Exactly one batched ids fetch, carrying only the grouped series id,
+        // with the list projection.
+        val itemsCalls = api.requests.withIndex().filter { it.value == "GET /Items" }
+        assertEquals(1, itemsCalls.size, "one batched series-resolution call")
+        val idsParam = queryParam(api.queries[itemsCalls[0].index], "ids")
+        assertEquals(seriesIdA, idsParam)
+    }
+
+    @Test
+    fun `classic latest degrades to a synthesized series card when the batched fetch fails`() = runTest {
+        // The Items envelope answers with garbage: the ids fetch yields no
+        // matching series, so the grouped card must fall back to the episode-
+        // derived synthesis (series id + name + childCount) instead of
+        // failing the row.
+        val seriesIdA = "8a8a8a8a-1111-4888-8888-999999999999"
+        val api = RecordingApiClient(
+            responseBody = "[]",
+            bodiesByPath = mapOf(
+                "/Items/Latest" to """
+                    [{"Id":"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa","Name":"Pilot","Type":"Episode",
+                      "SeriesId":"$seriesIdA","SeriesName":"Show A"},
+                     {"Id":"cccccccc-1111-4111-8111-cccccccccccc","Name":"Ep 2","Type":"Episode",
+                      "SeriesId":"$seriesIdA","SeriesName":"Show A"}]
+                """.trimIndent(),
+                "/Items" to """{"TotalRecordCount":0,"StartIndex":0,"Items":[]}""",
+            ),
+        )
+        engine.updateApi(api)
+
+        val rows = client.getLatestMedia(parentId = LATEST_FOLDER_ID, limit = 16, classicEpisodePool = 16 * 5).getOrThrow()
+
+        assertEquals(1, rows.size)
+        assertEquals(seriesIdA, rows[0].id)
+        assertEquals("Show A", rows[0].name)
+        assertEquals(2, rows[0].childCount)
     }
 
     @Test

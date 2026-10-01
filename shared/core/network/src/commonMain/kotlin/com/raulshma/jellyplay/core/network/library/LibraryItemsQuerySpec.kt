@@ -252,8 +252,11 @@ internal fun buildItemsByStudioQuerySpec(
  * NextUp row, which rides the same limit + list-projection shape with no kind
  * narrowing): the `/UserItems/Resume` request the twins used to hand-mirror.
  * [kinds] carries the `includeItemTypes` serial names: `["Book"]` for the
- * Continue Reading row, the [CLASSIC_RESUME_LEAF_KINDS] narrowing for the
- * video row under classic-rows semantics (#168), null = unconstrained.
+ * Continue Reading row, null for the video row — the video row sends the
+ * exact pre-12 wire shape (unconstrained) in BOTH modes; classic rows drop
+ * the 12.x Series/Season rollups in the client-side fold instead
+ * ([toFilteredResumeRows]'s `dropContainerRollups`), so the wire stays
+ * byte-identical across server generations.
  *
  * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (`java.time`, JVM-side)
  * and the SDK's non-null enable* defaults
@@ -270,28 +273,34 @@ internal fun buildResumeQuerySpec(
 )
 
 /**
- * The video resume row's classic-rows narrowing (#168): the leaf item kinds
- * the pre-12 `/Items/Resume` endpoint reported — Series/Season resume rollups
- * (a deliberate 12.x server behavior, upstream PR jellyfin#17523) stay out.
- * Books are excluded from the video row regardless (their own
- * [com.raulshma.jellyplay.core.network.api.LibraryApiClient.getContinueReading]
- * surface).
+ * The classic-rows TV-latest leaf kind (#168): the kind the pre-12
+ * `/Items/Latest` pipeline fed its Series grouping — the raw-episode pool the
+ * client-side twin ([toClassicLatestCards]) re-groups. A [MediaType] so the
+ * wire pin ([MediaType.toWireItemKind] serial) and the fold's kind filter
+ * ([toFilteredLatestRows] allowed-kinds) resolve through one name.
  */
-internal val CLASSIC_RESUME_LEAF_KINDS: List<String> = listOf("Episode", "Movie", "MusicVideo")
+internal val CLASSIC_TV_LATEST_MEDIA_TYPE: MediaType = MediaType.EPISODE
 
 /**
- * The classic-rows `includeItemTypes` narrowing for one library folder's
- * `/Items/Latest` call (#168): TV folders pin to the Series rollup (what the
- * pre-12 endpoint reported for added episodes/seasons), movie folders to
- * Movie. Mixed and unknown collection types stay unconstrained — the server's
- * mixed-library routing computes movies and shows separately, so pinning
+ * The pre-12 latest-pool overfetch multiplier: Jellyfin 10.x's
+ * `GetItemsForLatestItems` fetched `limit * 5` episodes before grouping into
+ * `limit` containers. The classic path mirrors the same pool size so the
+ * client-side grouping sees exactly the candidate set the 10.x server's
+ * grouping saw (UserViewManager.GetLatestItems over a `limit * 5` query).
+ */
+internal const val CLASSIC_LATEST_POOL_MULTIPLIER: Int = 5
+
+/**
+ * The classic-rows episode-pool size for one library folder's `/Items/Latest`
+ * call (#168): TV folders fetch a raw-Episode pool of `limit * 5` for the
+ * client-side pre-12 grouping ([toClassicLatestCards]); every other collection
+ * type stays unconstrained — movies behaved identically before and after 12.x
+ * (both generations resolve a movies folder to plain Movie rows), and the
+ * mixed-library routing computes movies and shows server-side, so pinning
  * either single kind would silently drop half the folder's additions.
  */
-internal fun classicLatestKinds(collectionType: String?): List<String>? = when (collectionType) {
-    "tvshows" -> listOf("Series")
-    "movies" -> listOf("Movie")
-    else -> null
-}
+internal fun classicLatestEpisodePool(collectionType: String?, limit: Int): Int? =
+    if (collectionType == "tvshows") limit * CLASSIC_LATEST_POOL_MULTIPLIER else null
 
 /**
  * [MediaType]s → includeItemTypes serial names, shared by every spec'd

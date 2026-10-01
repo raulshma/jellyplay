@@ -333,12 +333,17 @@ class LibraryItemsQuerySpecTest {
     }
 
     @Test
-    fun `the classic-rows resume spec narrows to the pre-12 leaf kinds`() {
-        val spec = buildResumeQuerySpec(limit = 20, kinds = CLASSIC_RESUME_LEAF_KINDS)
+    fun `the resume spec carries no classic-rows wire narrowing`() {
+        // True 1:1 (#168): the video resume row sends the exact pre-12 wire
+        // shape in BOTH modes — the spec has no classic-rows knob; classic
+        // rows drop the 12.x Series/Season rollups in the client-side fold
+        // (toFilteredResumeRows), never on the wire. Books keep their
+        // server-side narrowing.
+        val video = buildResumeQuerySpec(limit = 20, kinds = null)
 
-        assertEquals(listOf("Episode", "Movie", "MusicVideo"), spec.includeKinds)
-        assertEquals(20, spec.limit)
-        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), spec.fields)
+        assertNull(video.includeKinds)
+        assertEquals(20, video.limit)
+        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), video.fields)
     }
 
     @Test

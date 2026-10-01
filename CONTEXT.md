@@ -3005,6 +3005,26 @@ both read the ATOMIC `session` value (a user without a server is no
 identity; the separate `currentUser` flow must not be re-combined for
 this), pinned in `JellyfinApiEngineSessionTest`.
 
+**Classic rows (#168)** — the pre-Jellyfin-12 home-row semantics behind
+`HomeSectionQuery.classicRows` (default false = modern server behavior,
+unchanged): Continue Watching keeps the exact pre-12 wire request in both
+modes and drops the 12.x Series/Season resume rollups in the client-side
+fold (`ResumeRowFilter`'s `dropContainerRollups`), while the TV latest
+rows fetch a raw-Episode pool (`IncludeItemTypes=Episode` +
+`groupItems=false`, the `limit * 5` overfetch 10.x itself used —
+`classicLatestEpisodePool` + `CLASSIC_LATEST_POOL_MULTIPLIER` in
+`LibraryItemsQuerySpec.kt`, TV folders only) and re-run the 10.x grouping
+client-side (`toClassicLatestCards` in `LatestRowFilter.kt`: a series
+with >1 episode in the pool → Series card, exactly 1 → the Episode card,
+with 10.x's break-after-every-item row-limit semantics); grouped cards
+resolve against the real Series items (one batched ids query,
+degrade-not-fail via `synthesizedSeries`). The flag rides
+`HomeSectionQuery.cacheKey()` and the pool rides the latest sub-call
+cache key, so a flip re-fetches. Pinned by `LatestRowFilterTest` /
+`ResumeRowFilterTest` / `LibraryItemsQuerySpecTest` /
+`HomeSectionsFetcherTest` in commonTest and the classic arms of
+`LibraryApiClientImplTest` (jvmTest).
+
 **`JellyfinRawRequester`** (jvmShared, beside the clients, internal —
 the 2026-09-07 fold) is the ONE seam for the hand-built raw-OkHttp
 requests the plugin catalogue, newsletter/playback-reporting plugin

@@ -122,31 +122,36 @@ class ResumeRowFilterTest {
         assertEquals(listOf("a", "b"), rows.toFilteredResumeRows(maxParentalRating = null, isBooks = false).map { it.id })
     }
 
-    // ── The classic-rows kind narrowing (#168) ────────────────────────────
-    // The belt-and-braces half: a server that ignores includeItemTypes still
-    // can't leak non-conforming rows past the fold.
+    // ── The classic-rows rollup fold (#168) ───────────────────────────────
+    // The wire request is the exact pre-12 shape in both modes; the fold
+    // drops the Series/Season resume rollups a 12.x server reports. The
+    // pre-12 edge leaf kinds (home video, resumable audio) must SURVIVE —
+    // they rode the pre-12 row too.
 
     @Test
-    fun `the fold's classic kind narrowing drops series and season rollups`() {
+    fun `the classic fold drops series and season rollups and keeps the pre-12 leaf set`() {
         val rows = listOf(
             row("episode", played = false, mediaType = MediaType.EPISODE),
-            row("movie", played = false),
             row("series-rollup", played = false, mediaType = MediaType.SERIES),
             row("season-rollup", played = false, mediaType = MediaType.SEASON),
+            row("movie", played = false),
+            row("music-video", played = false, mediaType = MediaType.MUSIC_VIDEO),
+            row("home-video", played = false, mediaType = MediaType.UNKNOWN),
+            row("audio", played = false, mediaType = MediaType.AUDIO),
         )
 
         assertEquals(
-            listOf("episode", "movie"),
+            listOf("episode", "movie", "music-video", "home-video", "audio"),
             rows.toFilteredResumeRows(
                 maxParentalRating = null,
                 isBooks = false,
-                allowedKinds = CLASSIC_RESUME_LEAF_KINDS.toAllowedMediaTypes(),
+                dropContainerRollups = true,
             ).map { it.id },
         )
     }
 
     @Test
-    fun `a null allowed-kinds set leaves the fold unconstrained`() {
+    fun `without the classic fold the rollups ride the row - the modern semantics`() {
         val rows = listOf(
             row("series-rollup", played = false, mediaType = MediaType.SERIES),
             row("episode", played = false, mediaType = MediaType.EPISODE),
@@ -154,7 +159,20 @@ class ResumeRowFilterTest {
 
         assertEquals(
             listOf("series-rollup", "episode"),
-            rows.toFilteredResumeRows(maxParentalRating = null, isBooks = false, allowedKinds = null).map { it.id },
+            rows.toFilteredResumeRows(maxParentalRating = null, isBooks = false, dropContainerRollups = false).map { it.id },
+        )
+    }
+
+    @Test
+    fun `the classic fold runs after the played-row rule - a played leaf still drops`() {
+        val rows = listOf(
+            row("poisoned", played = true, mediaType = MediaType.EPISODE),
+            row("series-rollup", played = false, mediaType = MediaType.SERIES),
+        )
+
+        assertEquals(
+            emptyList(),
+            rows.toFilteredResumeRows(maxParentalRating = null, isBooks = false, dropContainerRollups = true),
         )
     }
 

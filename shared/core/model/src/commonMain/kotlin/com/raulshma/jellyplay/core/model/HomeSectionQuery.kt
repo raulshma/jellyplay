@@ -33,12 +33,16 @@ data class HomeSectionQuery(
      */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
     /**
-     * Classic (pre-Jellyfin-12) home-row semantics (#168): Continue Watching
-     * narrows to leaf items (Episode/Movie/MusicVideo — Series/Season resume
-     * rollups the 12.x server now reports stay out), and the latest-media rows
-     * pin to Series/Movie per folder instead of the mixed Season/Episode
-     * results `/Items/Latest` returns on 12.x. False (default) = modern
-     * server behavior, unchanged. Rides [cacheKey] so a flip re-fetches.
+     * Classic (pre-Jellyfin-12) home-row semantics (#168), true 1:1 with the
+     * pre-12 wire results: Continue Watching keeps the exact pre-12 request
+     * (the Series/Season resume rollups a 12.x server reports are dropped by
+     * a client-side fold), and TV latest rows re-run the 10.x grouping
+     * client-side over a raw-Episode pool — a series with several recent
+     * episodes becomes a Series card, a single one stays its Episode card,
+     * ordered by episode recency (grouping stops where 10.x's own row-limit
+     * break did — an episode arriving after the row filled never joins its
+     * group). False (default) = modern server
+     * behavior, unchanged. Rides [cacheKey] so a flip re-fetches.
      */
     val classicRows: Boolean = false,
 ) {

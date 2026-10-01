@@ -802,7 +802,7 @@
     <string name="settings_rewatching_next_up_on">다시 보는 시리즈 포함</string>
     <string name="settings_rewatching_next_up_off">다시 보는 시리즈 숨기기</string>
     <string name="settings_classic_rows">클래식 홈 행</string>
-    <string name="settings_classic_rows_on">이어 보기에는 에피소드와 영화만, 최근 항목 행에는 시리즈와 영화만 표시합니다</string>
+    <string name="settings_classic_rows_on">Jellyfin 12 이전 버전과 동일하게 작동: 이어 보기에는 시청 중인 항목만 표시되고, 최근 항목 행에서는 새 에피소드가 시리즈별로 묶여 표시됩니다</string>
     <string name="settings_classic_rows_off">서버 따름: 이어 보기에 시리즈 전체나 시즌이, 최근 항목 행에 시즌과 에피소드가 표시될 수 있습니다</string>
     <string name="settings_backdrop_theme_music">배경 테마 음악</string>
     <string name="settings_backdrop_theme_music_on">상세 페이지에서 테마곡 재생</string>
@@ -1244,7 +1244,7 @@
     <string name="ss_next_up_rewatching_title">다시 보기 항목 다음 화에 표시</string>
     <string name="ss_next_up_rewatching_subtitle">다시 보는 시리즈를 다음 화에 포함합니다</string>
     <string name="ss_classic_rows_title">클래식 홈 행</string>
-    <string name="ss_classic_rows_subtitle">Jellyfin 12 이전처럼 이어 보기에는 에피소드만, 최근 항목 행에는 시리즈와 영화만 표시합니다. 서버 업데이트 후 시리즈 전체 또는 시즌 포스터가 표시되는 문제를 해결합니다.</string>
+    <string name="ss_classic_rows_subtitle">홈 화면 행을 Jellyfin 12 이전 버전과 똑같이 표시합니다: 이어 보기에는 시청 중인 항목만 표시되고, 최근 항목 행에서는 새 에피소드를 시리즈별로 묶어 표시합니다. 서버 업데이트 후 시리즈 전체 또는 시즌 포스터가 표시되는 문제를 해결합니다.</string>
     <string name="ss_theme_music_title">배경 테마 음악</string>
     <string name="ss_theme_music_subtitle">상세 페이지에서 테마 곡을 재생합니다</string>
     <string name="ss_nav_labels_title">탐색 라벨 표시</string>

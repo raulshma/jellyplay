@@ -804,7 +804,7 @@
     <string name="settings_rewatching_next_up_on">包含重温的剧集</string>
     <string name="settings_rewatching_next_up_off">隐藏你正在重温的剧集</string>
     <string name="settings_classic_rows">经典首页行</string>
-    <string name="settings_classic_rows_on">“继续观看”仅显示单集和电影,“最新”行仅显示剧集和电影</string>
+    <string name="settings_classic_rows_on">与 Jellyfin 12 之前的版本一致：「继续观看」仅列出观看中的项目，「最新」行会将新单集按剧集分组显示</string>
     <string name="settings_classic_rows_off">跟随服务器:“继续观看”可能显示整部剧集或季,“最新”行可能显示季和单集</string>
     <string name="settings_backdrop_theme_music">背景主题音乐</string>
     <string name="settings_backdrop_theme_music_on">在详情页播放主题曲</string>
@@ -1246,7 +1246,7 @@
     <string name="ss_next_up_rewatching_title">即将播放中的重看内容</string>
     <string name="ss_next_up_rewatching_subtitle">将您正在重看的剧集包含在即将播放中</string>
     <string name="ss_classic_rows_title">经典首页行</string>
-    <string name="ss_classic_rows_subtitle">像 Jellyfin 12 之前一样,“继续观看”仅显示单集,“最新”行仅显示剧集和电影。修复服务器更新后行内出现整部剧集或季海报的问题。</string>
+    <string name="ss_classic_rows_subtitle">让主屏各行与 Jellyfin 12 之前的版本完全一致：「继续观看」仅列出观看中的项目，「最新」行会将新单集按剧集分组显示。修复服务器更新后行内出现整部剧集或季海报的问题。</string>
     <string name="ss_theme_music_title">背景主题音乐</string>
     <string name="ss_theme_music_subtitle">在详情页播放主题曲</string>
     <string name="ss_nav_labels_title">显示导航标签</string>

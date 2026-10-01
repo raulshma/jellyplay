@@ -49,22 +49,28 @@ fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
  * The resume rows' full post-fetch chain, folded once for the client twins
  * (`LibraryApiClientImpl` — which used to hand-copy
  * this tail per endpoint): parental filter → id-distinct → the #157
- * played-row rule's books-or-video half → the optional classic-rows kind
- * narrowing. [isBooks] selects [readingResumableOnly] over [resumableOnly]
+ * played-row rule's books-or-video half → the optional classic-rows rollup
+ * fold. [isBooks] selects [readingResumableOnly] over [resumableOnly]
  * exactly as the getContinueReading implementations do behind their
- * server-side Book narrowing. [allowedKinds] (null = no kind constraint, the
- * default) re-applies the server-side `includeItemTypes` narrowing
- * client-side: the belt-and-braces for servers that ignore the query param —
- * the same rationale the books fold's KDoc records. Kinds arrive as
- * [MediaType]s resolved through [wireItemKindToMediaType], so the fold and
- * the wire narrowing can never drift (one canonical table pair).
+ * server-side `Book` narrowing.
+ *
+ * [dropContainerRollups] is the classic-rows (#168) half: Jellyfin 12.x
+ * reports Series/Season containers as resumable themselves (upstream
+ * `folderIsResumableFilter`), which the pre-12 server never did — the fold
+ * drops them so the rendered row is the pre-12 leaf set (Episode, Movie,
+ * MusicVideo, and the edge leaf kinds a pre-12 server also reported: home
+ * videos, resumable audio). A no-op on ≤10.x servers (no rollups arrive) and
+ * on the video row's non-classic mode. Runs post-limit like every other
+ * fold, so heavy rollup pollution can under-fill the row — the same accepted
+ * tradeoff as the parental and played-row folds above.
  */
 internal fun List<MediaItem>.toFilteredResumeRows(
     maxParentalRating: Int?,
     isBooks: Boolean,
-    allowedKinds: Set<MediaType>? = null,
+    dropContainerRollups: Boolean = false,
 ): List<MediaItem> {
     val filtered = filterByParentalRating(maxParentalRating).distinctBy { it.id }
     val folded = if (isBooks) filtered.readingResumableOnly() else filtered.resumableOnly()
-    return folded.filterAllowedKinds(allowedKinds)
+    if (!dropContainerRollups || isBooks) return folded
+    return folded.filter { it.mediaType != MediaType.SERIES && it.mediaType != MediaType.SEASON }
 }

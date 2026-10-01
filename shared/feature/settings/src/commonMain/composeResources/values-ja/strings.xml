@@ -802,7 +802,7 @@
     <string name="settings_rewatching_next_up_on">再視聴中のシリーズを含める</string>
     <string name="settings_rewatching_next_up_off">再視聴中のシリーズを非表示</string>
     <string name="settings_classic_rows">クラシックなホーム行</string>
-    <string name="settings_classic_rows_on">「続けて視聴」にはエピソードと映画のみ、「最新」の行にはシリーズと映画のみ表示します</string>
+    <string name="settings_classic_rows_on">Jellyfin 12 未満と同じ動作：「続けて視聴」は視聴中の項目のみ表示し、「最新」の行では新しいエピソードをシリーズごとにまとめて表示します</string>
     <string name="settings_classic_rows_off">サーバーに従う:「続けて視聴」にシリーズ全体やシーズンが、「最新」の行にシーズンやエピソードが表示されることがあります</string>
     <string name="settings_backdrop_theme_music">背景テーマ曲</string>
     <string name="settings_backdrop_theme_music_on">詳細ページで主題歌を再生</string>
@@ -1244,7 +1244,7 @@
     <string name="ss_next_up_rewatching_title">「次に再生」で再視聴</string>
     <string name="ss_next_up_rewatching_subtitle">再視聴中のシリーズを「次に再生」に含めます</string>
     <string name="ss_classic_rows_title">クラシックなホーム行</string>
-    <string name="ss_classic_rows_subtitle">Jellyfin 12以前と同じく、「続けて視聴」にはエピソードのみ、「最新」の行にはシリーズと映画のみ表示します。サーバー更新後にシリーズやシーズンのポスターが表示される問題を修正します。</string>
+    <string name="ss_classic_rows_subtitle">ホームの行を Jellyfin 12 未満とまったく同じように表示します：「続けて視聴」には視聴中の項目のみ表示し、「最新」の行では新しいエピソードをシリーズごとにまとめます。サーバー更新後にシリーズやシーズンのポスターが表示される問題を修正します。</string>
     <string name="ss_theme_music_title">背景テーマミュージック</string>
     <string name="ss_theme_music_subtitle">詳細ページでテーマ曲を再生します</string>
     <string name="ss_nav_labels_title">ナビゲーションラベルを表示</string>

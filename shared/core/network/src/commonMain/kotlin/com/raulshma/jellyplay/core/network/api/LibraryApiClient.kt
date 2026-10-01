@@ -39,26 +39,28 @@ interface LibraryApiClient {
         parentId: String,
         limit: Int = 16,
         /**
-         * Server-side `IncludeItemTypes` narrowing for the `/Items/Latest`
-         * call (wire serial names, e.g. `["Series"]`). Null = unconstrained —
-         * the server decides, which on Jellyfin 12.x means a mix of Series,
-         * Season and Episode rows (#168). The home fetcher passes the classic-
-         * rows narrowing per folder; other callers stay unconstrained.
+         * Classic-rows TV semantics (#168): non-null = fetch a raw-Episode
+         * pool of this size (`IncludeItemTypes=Episode&groupItems=false` —
+         * the wire shape that behaves identically on every server
+         * generation) and re-group it client-side into the pre-12 row
+         * (`limit` cards of Series-or-Episode, Jellyfin 10.x's own grouping
+         * outcome). Null = unconstrained server default, which on Jellyfin
+         * 12.x means the smart Series/Season/Episode container mix. The home
+         * fetcher passes `limit * 5` for TV folders under classic rows;
+         * other callers stay unconstrained.
          */
-        includeKinds: List<String>? = null,
+        classicEpisodePool: Int? = null,
     ): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
     suspend fun getContinueWatching(
         limit: Int = 20,
         /**
-         * Server-side `IncludeItemTypes` narrowing for the video resume query
-         * (wire serial names, e.g. `["Episode","Movie"]`). Null = unconstrained —
-         * the server decides, which on Jellyfin 12.x means Series/Season resume
-         * rollups ride the row (#168). The client-side played-row/kind fold in
-         * [com.raulshma.jellyplay.core.network.library.resumableOnly] still
-         * applies on top.
+         * Classic-rows (#168): the wire request is the exact pre-12 shape
+         * (no `IncludeItemTypes`) in BOTH modes; true adds the client-side
+         * fold that drops the Series/Season resume rollups a 12.x server
+         * reports (a no-op on ≤10.x servers, where no rollups arrive).
          */
-        includeKinds: List<String>? = null,
+        classicRows: Boolean = false,
     ): Result<List<MediaItem>>
 
     /**

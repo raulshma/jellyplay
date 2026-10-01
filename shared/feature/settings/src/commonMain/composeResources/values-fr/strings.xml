@@ -804,7 +804,7 @@
     <string name="settings_rewatching_next_up_on">Inclure les séries re-visionnées</string>
     <string name="settings_rewatching_next_up_off">Masquer les séries que vous re-visionnez</string>
     <string name="settings_classic_rows">Rangées d'accueil classiques</string>
-    <string name="settings_classic_rows_on">Reprendre la lecture n'affiche que des épisodes et des films, et les rangées de derniers ajouts seulement des séries et des films</string>
+    <string name="settings_classic_rows_on">Comme Jellyfin avant la version 12 : Reprendre la lecture ne liste que les éléments en cours, et les rangées de derniers ajouts regroupent les nouveaux épisodes sous leur série</string>
     <string name="settings_classic_rows_off">Selon le serveur : Reprendre la lecture peut afficher des séries entières ou des saisons, et les rangées de derniers ajouts des saisons et des épisodes</string>
     <string name="settings_backdrop_theme_music">Thème musical de fond</string>
     <string name="settings_backdrop_theme_music_on">Jouer les génériques sur les pages de détail</string>
@@ -1246,7 +1246,7 @@
     <string name="ss_next_up_rewatching_title">Re-visionnage dans À suivre</string>
     <string name="ss_next_up_rewatching_subtitle">Inclure les séries que vous re-visionnez dans À suivre</string>
     <string name="ss_classic_rows_title">Rangées d'accueil classiques</string>
-    <string name="ss_classic_rows_subtitle">Affiche Reprendre la lecture avec uniquement des épisodes et les rangées de derniers ajouts avec uniquement des séries et des films, comme avant Jellyfin 12. Corrige les rangées qui affichent des affiches de séries entières ou de saisons après une mise à jour du serveur.</string>
+    <string name="ss_classic_rows_subtitle">Affiche les rangées d'accueil exactement comme Jellyfin avant la version 12 : Reprendre la lecture ne liste que les éléments en cours et les rangées de derniers ajouts regroupent les nouveaux épisodes sous leur série. Corrige les rangées qui affichent des affiches de séries entières ou de saisons après une mise à jour du serveur.</string>
     <string name="ss_theme_music_title">Musique de thème d'arrière-plan</string>
     <string name="ss_theme_music_subtitle">Lire les génériques sur les pages de détails</string>
     <string name="ss_nav_labels_title">Afficher les libellés de navigation</string>

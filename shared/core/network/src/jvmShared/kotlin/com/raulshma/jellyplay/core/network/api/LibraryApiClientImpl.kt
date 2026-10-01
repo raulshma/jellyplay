@@ -21,8 +21,11 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.library.ChildItemImageRow
+import com.raulshma.jellyplay.core.network.library.ClassicLatestCard
+import com.raulshma.jellyplay.core.network.library.CLASSIC_TV_LATEST_MEDIA_TYPE
 import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
 import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
@@ -42,10 +45,12 @@ import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildResumeQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
+import com.raulshma.jellyplay.core.network.library.synthesizedSeries
 import com.raulshma.jellyplay.core.network.library.toChildItemImageUrls
-import com.raulshma.jellyplay.core.network.library.toAllowedMediaTypes
+import com.raulshma.jellyplay.core.network.library.toClassicLatestCards
 import com.raulshma.jellyplay.core.network.library.toFilteredLatestRows
 import com.raulshma.jellyplay.core.network.library.toFilteredResumeRows
+import com.raulshma.jellyplay.core.network.library.toWireItemKind
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
@@ -55,6 +60,7 @@ import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.UpdatePlaylistDto
 import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
 import kotlinx.coroutines.sync.Semaphore
@@ -257,34 +263,83 @@ class LibraryApiClientImpl(
     override suspend fun getLatestMedia(
         parentId: String,
         limit: Int,
-        includeKinds: List<String>?,
+        classicEpisodePool: Int?,
     ): Result<List<MediaItem>> =
         engine.withApi { api ->
-            // The kind narrowing rides BOTH the server query (IncludeItemTypes)
-            // and the client-side fold (#168 belt-and-braces): a server that
-            // ignores the param still can't leak non-conforming rows.
-            //
-            // The Series pin must also drop groupItems: the grouped route
-            // (UserViewManager → GetLatestItemList → GetLatestTvShowItems)
-            // analyzes EPISODE rows through `SeriesName != null`, and Series
-            // entities carry no SeriesName — on 12.x the pin filters itself
-            // down to nothing, and on 10.x the same null SeriesName collapses
-            // every series into one group and truncates the row (both
-            // live-verified). groupItems=false routes the call through plain
-            // GetItemList, where IncludeItemTypes applies directly. Moot for
-            // the Movie pin (movies have no container promotion), so it keeps
-            // the SDK default. "Pins Series" resolves through the canonical
-            // wire kind table, like every other kind comparison here.
-            val response = api.userLibraryApi.getLatestMedia(
-                parentId = parentId.toUUID(),
-                limit = limit,
-                includeItemTypes = includeKinds.toBaseItemKinds(),
-                groupItems = includeKinds.toAllowedMediaTypes()?.contains(MediaType.SERIES) != true,
-                fields = LIST_ITEM_FIELDS,
-            ).content ?: emptyList()
-            response.map { it.toMediaItem() }
-                .toFilteredLatestRows(engine.currentMaxParentalRating, includeKinds.toAllowedMediaTypes())
+            if (classicEpisodePool == null) {
+                // Modern (default): the server decides — on 12.x the smart
+                // Series/Season/Episode container selection IS the feature.
+                // groupItems=true is the SDK/server default; passed explicitly
+                // so the two branches stay self-describing on the wire.
+                val response = api.userLibraryApi.getLatestMedia(
+                    parentId = parentId.toUUID(),
+                    limit = limit,
+                    groupItems = true,
+                    fields = LIST_ITEM_FIELDS,
+                ).content ?: emptyList()
+                response.map { it.toMediaItem() }
+                    .toFilteredLatestRows(engine.currentMaxParentalRating, allowedKinds = null)
+            } else {
+                fetchClassicLatestRow(api, parentId, limit, classicEpisodePool)
+            }
         }
+
+    /**
+     * The classic-rows TV-latest pipeline (#168), true 1:1 with the pre-12
+     * wire result: fetch the raw-Episode pool the 10.x server fed its
+     * own grouping (IncludeItemTypes=Episode + groupItems=false — the
+     * shape every server generation answers with plain episode rows),
+     * re-run the 10.x grouping client-side (toClassicLatestCards), then
+     * resolve each grouped card against the REAL Series items — one batched
+     * ids query — so grouped cards carry true Series DTO data (year,
+     * unplayed count), matching what the 10.x controller returned. The
+     * Episode-kind fold re-applies the pin for servers that ignore
+     * includeItemTypes.
+     */
+    private suspend fun fetchClassicLatestRow(
+        api: ApiClient,
+        parentId: String,
+        limit: Int,
+        classicEpisodePool: Int,
+    ): List<MediaItem> {
+        val pool = api.userLibraryApi.getLatestMedia(
+            parentId = parentId.toUUID(),
+            limit = classicEpisodePool,
+            includeItemTypes = listOfNotNull(CLASSIC_TV_LATEST_MEDIA_TYPE.toWireItemKind()).toBaseItemKinds(),
+            groupItems = false,
+            fields = LIST_ITEM_FIELDS,
+        ).content ?: emptyList()
+        val cards = pool
+            .map { it.toMediaItem() }
+            .toFilteredLatestRows(engine.currentMaxParentalRating, allowedKinds = setOf(CLASSIC_TV_LATEST_MEDIA_TYPE))
+            .toClassicLatestCards(limit)
+        val groupedSeriesIds = cards.filterIsInstance<ClassicLatestCard.Grouped>().map { it.seriesId }
+        val seriesById: Map<String, MediaItem> =
+            if (groupedSeriesIds.isEmpty()) {
+                emptyMap()
+            } else {
+                // Degrade, not fail: a lost ids query must not blank the
+                // row — grouped cards fall back to synthesis. (Cancellation
+                // rethrown, per the concurrency rule.)
+                runCatchingRethrowingCancellation {
+                    api.itemsApi.getItems(
+                        ids = groupedSeriesIds.map { it.toUUID() },
+                        fields = LIST_ITEM_FIELDS,
+                    ).content?.items.orEmpty()
+                }.getOrDefault(emptyList())
+                    .map { it.toMediaItem() }
+                    .associateBy { it.id }
+            }
+        return cards.map { card ->
+            when (card) {
+                is ClassicLatestCard.Single -> card.mostRecentEpisode
+                is ClassicLatestCard.Grouped ->
+                    seriesById[card.seriesId]
+                        ?.copy(childCount = card.episodes.size)
+                        ?: card.synthesizedSeries()
+            }
+        }
+    }
 
     override suspend fun getNextUp(
         limit: Int,
@@ -315,23 +370,26 @@ class LibraryApiClientImpl(
 
     override suspend fun getContinueWatching(
         limit: Int,
-        includeKinds: List<String>?,
+        classicRows: Boolean,
     ): Result<List<MediaItem>> = engine.withApi { api ->
-        val spec = buildResumeQuerySpec(limit, kinds = includeKinds)
+        // The wire request is the exact pre-12 shape in BOTH modes (no
+        // IncludeItemTypes — the 10.x video resume row never narrowed).
+        val spec = buildResumeQuerySpec(limit, kinds = null)
         val response = api.itemsApi.getResumeItems(
             limit = spec.limit,
             fields = spec.fields.toItemFieldsList(),
-            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
         ).content
         // #157: the fold drops played rows the resume endpoint still reports —
-        // see resumableOnly() for the full rationale. The classic-rows kind
-        // narrowing (#168) rides the same fold as belt-and-braces.
+        // see resumableOnly() for the full rationale. Classic rows (#168) add
+        // the rollup fold: a 12.x server also reports Series/Season containers
+        // as resumable themselves, which the pre-12 server never did — dropped
+        // client-side so the wire stays byte-identical across generations.
         (response?.items ?: emptyList())
             .map { it.toMediaItem() }
             .toFilteredResumeRows(
                 engine.currentMaxParentalRating,
                 isBooks = false,
-                allowedKinds = includeKinds.toAllowedMediaTypes(),
+                dropContainerRollups = classicRows,
             )
     }
 
