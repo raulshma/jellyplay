@@ -384,6 +384,10 @@ class PlayerActivity : FragmentActivity() {
     private fun redirectToLockGateIfNeeded(): Boolean {
         val koin = KoinPlatform.getKoin() ?: return false
         val lockState = koin.get<AppLockState>()
+        // An unlocked holder never redirects (the predicate below is
+        // `gateConfigured && !unlocked` for any gateConfigured), so the
+        // persisted-security read is skipped entirely while unlocked.
+        if (lockState.unlocked.value) return false
         val securityStore = koin.get<SecurityStore>()
         // The gate predicate must read the PERSISTED security slice, not the
         // `.security` StateFlow seed: on a cold process (recents-restore of a

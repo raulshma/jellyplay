@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -126,14 +127,14 @@ private fun InWindowPlayerSheet(
 
         JellyPlayBackHandler(enabled = true, onBack = dismiss)
 
-        val translationY = (sheetOffset.value + liveDrag).coerceAtLeast(0f)
-        val progress = (translationY / fullHeightPx).coerceIn(0f, 1f)
-        val scrimAlpha = (1f - progress) * MAX_SCRIM_ALPHA
-
         Box(
             Modifier
                 .fillMaxSize()
-                .background(colorScheme.scrim.copy(alpha = scrimAlpha))
+                .drawBehind {
+                    val translationY = (sheetOffset.value + liveDrag).coerceAtLeast(0f)
+                    val progress = (translationY / fullHeightPx).coerceIn(0f, 1f)
+                    drawRect(color = colorScheme.scrim.copy(alpha = (1f - progress) * MAX_SCRIM_ALPHA))
+                }
                 .pointerInput(Unit) { detectTapGestures(onTap = { dismiss() }) },
         )
 
@@ -143,7 +144,7 @@ private fun InWindowPlayerSheet(
                 .fillMaxWidth(SHEET_WIDTH_FRACTION)
                 .heightIn(max = maxHeight * SHEET_HEIGHT_FRACTION)
                 .imePadding()
-                .offset { IntOffset(0, translationY.roundToInt()) }
+                .offset { IntOffset(0, (sheetOffset.value + liveDrag).coerceAtLeast(0f).roundToInt()) }
                 .clip(SheetTopShape)
                 // surface (not surfaceContainer) so the sheet matches the app/screen
                 // background in every mode — in OLED that is pure #000, identical to

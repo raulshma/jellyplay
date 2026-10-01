@@ -108,9 +108,10 @@ internal class AudioPlayTrack(
  *    session) and the SAME-ITEM/loading fast-path guards stay in the
  *    adapters' `play()` — they read platform player state.
  *  - CROSSFADE CANCEL (Android, before the stop report) — adapter prefix.
- *  - QUEUE PRE-WARM vs NEXT-ITEM PREFETCH: Android's whole-queue
- *    `mapConcurrent` MediaItem build runs in [afterLoad] (its historical
- *    slot, right after the load); the desktop's next-item-only prefetch
+ *  - QUEUE PRE-WARM vs NEXT-ITEM PREFETCH: Android's windowed
+ *    `mapConcurrent` MediaItem build (the lookahead window around the
+ *    cursor) runs in [afterLoad] (its historical slot, right after the
+ *    load); the desktop's next-item-only prefetch
  *    runs in [afterReporting] (its historical slot, after the lyrics
  *    fetch). Both default no-op.
  *  - REPLAYGAIN APPLY POSITION: the desktop applies the incoming row's
@@ -168,7 +169,7 @@ internal class AudioPlayPath(
      * body coerces.
      */
     private val loadIntoEngine: suspend (track: AudioPlayTrack, clickedItem: AudioQueueItem, startPositionMs: Long) -> Unit,
-    /** Android's whole-queue pre-warm; no-op on desktop. */
+    /** Android's windowed queue pre-warm; no-op on desktop. */
     private val afterLoad: (track: AudioPlayTrack, clickedItem: AudioQueueItem) -> Unit = { _, _ -> },
     /** The lyric fetch (both arms' historical argument shapes differ). */
     private val fetchLyrics: (track: AudioPlayTrack, clickedItem: AudioQueueItem) -> Unit,

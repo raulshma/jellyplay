@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.round
 
 /**
  * Owns the gesture-seek / volume / brightness overlay state and the
@@ -74,10 +75,19 @@ internal class GestureSeekController(
     private var initialBrightnessOnGestureStart: Float = -1f
     private var volumeGestureAccumulator: Float = 0f
     private var overlayDismissJob: Job? = null
+    // (current, max) stream volume captured at gesture start; the controller is
+    // the sole stream writer until the next capture, so per-move
+    // readStreamVolume() calls (Binder round-trips) would only re-read our own
+    // writes.
+    private var cachedStreamVolume: Pair<Int, Int>? = null
 
-    /** Capture the pre-gesture window brightness so cancel can restore it. */
+    /**
+     * Capture the pre-gesture window brightness so cancel can restore it, plus
+     * the stream (current, max) volume for the gesture's lifetime.
+     */
     fun onStartGesture() {
         initialBrightnessOnGestureStart = readWindowBrightness()
+        cachedStreamVolume = readStreamVolume()
     }
 
     fun onSeekGesture(totalDeltaMs: Long) {
@@ -97,9 +107,18 @@ internal class GestureSeekController(
     }
 
     fun onBrightnessGesture(delta: Float) {
-        val current = readWindowBrightness()
+        // The tracked overlay (or the gesture-start capture) mirrors the last
+        // applied level — the controller is the sole writer in between, so a
+        // per-move window re-read (an IPC round-trip) is unnecessary.
+        val current = _brightnessOverlay.value.takeIf { it >= 0f }
+            ?: initialBrightnessOnGestureStart.takeIf { it >= 0f }
+            ?: readWindowBrightness()
         val target = GestureSeekMath.brightnessTarget(current, delta)
-        writeWindowBrightness(target)
+        // Each write is a window relayout; skip ones the rounded level can't
+        // show (also the bound-clamped no-ops).
+        if (round(target * 100f) != round(current * 100f)) {
+            writeWindowBrightness(target)
+        }
         _brightnessOverlay.value = target
     }
 
@@ -112,8 +131,12 @@ internal class GestureSeekController(
             _volumeOverlay.value = newVolume
             setCastVolume(newVolume)
         } else {
-            // Local volume: quantize to discrete hardware steps.
-            val (current, max) = readStreamVolume()
+            // Local volume: quantize to discrete hardware steps. (current, max)
+            // comes from the gesture-start capture — the controller is the sole
+            // writer until the next capture, so per-move Binder re-reads are
+            // skipped.
+            val (current, max) = cachedStreamVolume
+                ?: readStreamVolume().also { cachedStreamVolume = it }
             if (max <= 0) return
             val currentNorm = current.toFloat() / max.toFloat()
             val stepThreshold = 1f / max.toFloat()
@@ -127,7 +150,10 @@ internal class GestureSeekController(
             if (steps != 0) {
                 volumeGestureAccumulator = remainder
                 val newVol = (current + steps).coerceIn(0, max)
-                writeStreamVolume(newVol)
+                if (newVol != current) {
+                    cachedStreamVolume = newVol to max
+                    writeStreamVolume(newVol)
+                }
             }
         }
     }

@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,11 +62,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import org.koin.compose.viewmodel.koinViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronLeft
@@ -618,10 +621,32 @@ private fun PhotoImage(
         viewModel.getImageUrl(photo.id, maxWidth = null)
     }
     var lastTapTime by remember { mutableStateOf(0L) }
+    // The decode ladder rasterizes against this Box — the image Fits inside
+    // it, so viewport × decodeScale is the most pixels the screen can show.
+    var viewportWidthPx by remember { mutableStateOf(1080) }
+    var viewportHeightPx by remember { mutableStateOf(1920) }
+    // Per-photo, like the screen's transform reset per index: a photo switch
+    // restarts at the fitted decode.
+    var decodeScale by remember(photo.id) { mutableFloatStateOf(1f) }
+
+    // Zoom settle → re-decode: keys on the scale, so pinch frames keep
+    // cancelling the timer; the still moment fires it. ContentScale.Fit
+    // re-fits ANY decode to this Box, so swapping the decode size never
+    // moves the rendered image — the graphicsLayer below keeps the raw
+    // transform and the zoom stays continuous.
+    LaunchedEffect(photo.id, transform.scale) {
+        kotlinx.coroutines.delay(PHOTO_ZOOM_SETTLE_MS)
+        val target = photoDecodeTarget(transform.scale, decodeScale) ?: return@LaunchedEffect
+        decodeScale = target
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged {
+                viewportWidthPx = it.width.coerceAtLeast(1)
+                viewportHeightPx = it.height.coerceAtLeast(1)
+            }
             // A thin adapter: the gesture machine's decisions (zoom band, pan
             // admission, tap discrimination, swipe direction) live in
             // PhotoGesturePolicy / PhotoTransformState — this loop only
@@ -734,7 +759,16 @@ private fun PhotoImage(
                     translationY = transform.offsetY
                 },
             contentScale = ContentScale.Fit,
-            size = coil3.size.Size.ORIGINAL,
+            // Decode ladder: viewport-fit at 1×, viewport × the settled zoom
+            // after (capped at PHOTO_MAX_DECODE_SCALE) — never the original.
+            size = coil3.size.Size(
+                (viewportWidthPx * decodeScale).roundToInt().coerceAtLeast(1),
+                (viewportHeightPx * decodeScale).roundToInt().coerceAtLeast(1),
+            ),
+            // Full-screen surface: the ladder's decode passes unclamped —
+            // performance mode's concrete-size tiers (768²/256²) would
+            // regress the sharpness the ORIGINAL request was exempt from.
+            performanceModeAware = false,
             colorFilter = colorFilter,
         )
     }

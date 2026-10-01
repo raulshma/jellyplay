@@ -212,15 +212,24 @@ class MpvPlayerEngine(
      * from the Compose `onDispose` on the main thread; `BaseMPVView.destroy()`
      * runs `mpv_terminate_destroy()` which synchronously tears down the GPU
      * context, demuxer, network threads, and libass — blocking for hundreds of
-     * ms to seconds. Routing stop+destroy onto this thread keeps the main 
+     * ms to seconds. Routing stop+destroy onto this thread keeps the main
      * looper responsive on
      * player close. Created lazily so non-mpv engines pay nothing.
+     *
+     * Self-healing like [BasePlayerEngine.engineScope]: every release quits the
+     * thread, so each read must return a live generation — a Handler cached
+     * across releases would post into the quit looper, which silently discards
+     * the message and skips the destroy entirely.
      */
-    private val releaseThread: HandlerThread by lazy {
-        HandlerThread("MpvRelease", android.os.Process.THREAD_PRIORITY_BACKGROUND)
-            .also { it.start() }
-    }
-    private val releaseHandler: Handler by lazy { Handler(releaseThread.looper) }
+    private var releaseThreadGeneration: HandlerThread? = null
+
+    private val releaseThread: HandlerThread
+        get() = releaseThreadGeneration
+            ?.takeIf { it.isAlive }
+            ?: HandlerThread("MpvRelease", android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                .also { it.start() }
+                .also { releaseThreadGeneration = it }
+    private val releaseHandler: Handler get() = Handler(releaseThread.looper)
 
     private inner class PlayerMPVView(
         ctx: Context,
@@ -692,8 +701,8 @@ class MpvPlayerEngine(
         // Stop the dedicated release thread once the engine is fully
         // torn down. The last scheduled runnable has already captured `view`
         // and will run to completion, but no new work can be enqueued because
-        // mpvView is null. Lazy re-init resurrects the thread if the engine
-        // is ever re-used.
+        // mpvView is null. The self-healing accessor resurrects the thread if
+        // the engine is ever re-used.
         if (releaseThread.isAlive) {
             runCatching { releaseThread.quitSafely() }
         }

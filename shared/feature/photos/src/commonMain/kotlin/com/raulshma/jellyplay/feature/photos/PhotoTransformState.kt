@@ -38,6 +38,15 @@ internal const val PHOTO_SWIPE_THRESHOLD_PX = 150f
 /** Double-tap zoom-in target (the zoom-out arm is [PhotoTransformState.reset]). */
 internal const val PHOTO_DOUBLE_TAP_ZOOM = 2.5f
 
+/** Stillness window (ms) a zoom must hold before the decode re-targets. */
+internal const val PHOTO_ZOOM_SETTLE_MS = 300L
+
+/**
+ * Decode ceiling: a settled zoom up to 3× re-decodes the photo at viewport ×
+ * zoom; beyond it the graphicsLayer-scaled bitmap is kept (memory bounded).
+ */
+internal const val PHOTO_MAX_DECODE_SCALE = 3f
+
 /** Which page a finished swipe asks for — or that the drag was not a swipe. */
 internal enum class SwipeDecision { PREVIOUS, NEXT, NONE }
 
@@ -141,4 +150,18 @@ internal class PhotoTransformState {
     fun zoomTo(target: Float) {
         scale = target
     }
+}
+
+/**
+ * The zoom-settle → re-decode decision (the player-book pageRasterTarget
+ * ladder over the viewer's Coil decode size): once the scale has been still
+ * for [PHOTO_ZOOM_SETTLE_MS], the photo re-decodes at viewport × the settled
+ * scale capped by [PHOTO_MAX_DECODE_SCALE]. Returns the retarget decode
+ * scale, or null to KEEP the current one: a target within `0.05` of the
+ * current scale (or at/below the fitted base) is not worth a re-decode.
+ */
+internal fun photoDecodeTarget(scale: Float, currentDecodeScale: Float): Float? {
+    if (scale <= 1.01f && currentDecodeScale <= 1f) return null
+    val target = scale.coerceIn(1f, PHOTO_MAX_DECODE_SCALE)
+    return target.takeIf { abs(it - currentDecodeScale) >= 0.05f }
 }

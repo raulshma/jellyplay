@@ -43,13 +43,21 @@ private class StubPlaylist {
 }
 
 /**
+ * The manager's pre-warm lookahead ([AudioPlaybackManager]'s private
+ * PREWARM_LOOKAHEAD_ITEMS) — pinned here so the window tests assert the
+ * exact mirrored prefix the production constant produces.
+ */
+private const val PREWARM_LOOKAHEAD_ITEMS = 12
+
+/**
  * The stateful stub ExoPlayer: every playlist-mutating Player write is
  * stubbed to keep [StubPlaylist] in sync synchronously (a real ExoPlayer
  * would route writes through its internal playback thread), while
- * `setMediaItem`/`addMediaItem(s)`/`prepare`/`play`/`playWhenReady` stay
- * relaxed no-ops — the engine-write surfaces these pins assert on are the
- * queue-chassis writes (seek / removeMediaItem / moveMediaItem /
- * clearMediaItems / the setMediaItems rebuild), not the play-path loads.
+ * `prepare`/`play`/`playWhenReady` stay relaxed no-ops — the engine-write
+ * surfaces these pins assert on are the queue-chassis writes (seek /
+ * removeMediaItem / moveMediaItem / clearMediaItems / the setMediaItems
+ * rebuild) plus the pre-warm mirror writes (`setMediaItem` single-item load,
+ * `addMediaItem(s)` appends/prepends).
  */
 private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
     val player = mockk<ExoPlayer>(relaxed = true)
@@ -67,6 +75,20 @@ private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
     }
     every { player.seekTo(any<Long>()) } answers {
         playlist.lastSeekPositionMs = firstArg()
+    }
+    every { player.setMediaItem(any<MediaItem>(), any<Long>()) } answers {
+        playlist.items.clear()
+        playlist.items += firstArg<MediaItem>()
+        playlist.index = 0
+    }
+    every { player.addMediaItems(any<List<MediaItem>>()) } answers {
+        playlist.items += arg<List<MediaItem>>(0)
+    }
+    every { player.addMediaItems(any<Int>(), any<List<MediaItem>>()) } answers {
+        playlist.items.addAll(firstArg<Int>(), arg<List<MediaItem>>(1))
+    }
+    every { player.addMediaItem(any<MediaItem>()) } answers {
+        playlist.items += firstArg<MediaItem>()
     }
     every { player.removeMediaItem(any()) } answers {
         val index = firstArg<Int>()
@@ -129,7 +151,15 @@ private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
 @Config(sdk = [35])
 class AudioPlaybackManagerQueueSemanticsTest {
 
-    private class Harness {
+    private class Harness(
+        /**
+         * Non-null: `getMediaDetail` succeeds with this detail for every id,
+         * so play()'s resolve lands on the server-reporting arm and its
+         * afterLoad pre-warm actually runs (the failure default parks the
+         * resolve on the queue-only local fallback, which never pre-warms).
+         */
+        private val detail: com.raulshma.jellyplay.core.model.MediaDetail? = null,
+    ) {
         val playlist = StubPlaylist()
         val scheduler = TestCoroutineScheduler()
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
@@ -141,8 +171,12 @@ class AudioPlaybackManagerQueueSemanticsTest {
             mediaRepository = mockk(relaxed = true) {
                 // Real Result values (value classes cannot be proxied): the
                 // resolve ladder fails and buildPlayableMediaItem falls to
-                // the local-source arm stubbed below.
-                coEvery { getMediaDetail(any()) } returns Result.failure(RuntimeException("test"))
+                // the local-source arm stubbed below (unless the harness was
+                // given a success detail, which reaches the pre-warm arm).
+                val detailResult: Result<com.raulshma.jellyplay.core.model.MediaDetail> =
+                    detail?.let { Result.success(it) }
+                        ?: Result.failure(RuntimeException("test"))
+                coEvery { getMediaDetail(any()) } returns detailResult
             },
             musicCatalogue = mockk(relaxed = true),
             playlistRepository = mockk(relaxed = true),
@@ -213,7 +247,9 @@ class AudioPlaybackManagerQueueSemanticsTest {
         openHarnesses.clear()
     }
 
-    private fun newHarness(): Harness = Harness().also { openHarnesses += it }
+    private fun newHarness(
+        detail: com.raulshma.jellyplay.core.model.MediaDetail? = null,
+    ): Harness = Harness(detail).also { openHarnesses += it }
 
     private fun item(id: String) = AudioQueueItem(
         id = id,
@@ -233,7 +269,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
      * onPlayRequested hook runs play()'s synchronous prefix (whose
      * engine acquisition assigns the stub through the playerFactory seam)
      * and parks its resolve body on the test scheduler, then the queue is
-     * mirrored into the stub playlist — the shape play()'s whole-queue
+     * mirrored into the stub playlist — the shape the windowed queue
      * pre-warm leaves the real player in.
      */
     private fun Harness.seedLive(rows: List<AudioQueueItem>, index: Int) {
@@ -549,5 +585,79 @@ class AudioPlaybackManagerQueueSemanticsTest {
         h.manager.cycleRepeatMode() // 1 → 2 (one)
         h.manager.cycleRepeatMode() // 2 → 0 (none)
         assertEquals("(mode+1) % 3 wraps", 0, h.manager.repeatMode.value)
+    }
+
+    // ── windowed queue pre-warm ─────────────────────────────────────────────
+
+    /** Success detail for the play-path resolve — every id shares one shape. */
+    private fun detailFor(id: String): com.raulshma.jellyplay.core.model.MediaDetail =
+        com.raulshma.jellyplay.core.model.MediaDetail(
+            item = com.raulshma.jellyplay.core.model.MediaItem(
+                id = id,
+                name = "Track $id",
+                mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO,
+            ),
+            mediaSources = listOf(
+                com.raulshma.jellyplay.core.model.MediaSource(id = "ms-$id", name = "Source"),
+            ),
+        )
+
+    /**
+     * Plays [index] through the full async resolve/load body and drains the
+     * pre-warm mirror write (the IO build hops to the real IO dispatcher; the
+     * append lands on the Robolectric main looper). `runCurrent` — not
+     * `advanceUntilIdle`: a successful load arms the position ticker, whose
+     * recurring delay loop would spin the virtual-time idle drain forever.
+     */
+    private fun Harness.playAndAwaitPrewarm(rows: List<AudioQueueItem>, index: Int) {
+        manager.playQueue(rows, index)
+        scheduler.runCurrent()
+        awaitMain(
+            { playlist.items.size == minOf(index + 1 + PREWARM_LOOKAHEAD_ITEMS, rows.size) },
+            "the windowed pre-warm mirrors the cursor + lookahead prefix",
+        )
+    }
+
+    @Test
+    fun prewarmMirrorsOnlyTheLookaheadWindowPrefixAroundTheCursor() {
+        val h = newHarness(detailFor("row2"))
+        val rows = (0 until 60).map { item("row$it") }
+
+        h.playAndAwaitPrewarm(rows, index = 2)
+
+        // Prefix [0, cursor + 1 + lookahead): the full prefix below the
+        // cursor (the prepend reconciliation) plus the bounded lookahead
+        // ahead of it — rows past the window are never mirrored.
+        assertEquals(rows.subList(0, 15).map { it.id }, h.playlist.items.map { it.mediaId })
+        assertEquals(2, h.manager.currentIndex.value)
+    }
+
+    @Test
+    fun skipInsideTheMirroredWindowSeeksInsteadOfRebuilding() {
+        val h = newHarness(detailFor("row2"))
+        val rows = (0 until 60).map { item("row$it") }
+        h.playAndAwaitPrewarm(rows, index = 2)
+
+        h.manager.skipToNext()
+
+        assertEquals(3, h.manager.currentIndex.value)
+        assertEquals(3, h.playlist.lastSeekIndex)
+        assertEquals("the windowed mirror takes the seek, not the rebuild", 0, h.playlist.rebuilt)
+    }
+
+    @Test
+    fun playFromQueuePastTheWindowRebuildsTheWindowedPrefix() {
+        val h = newHarness(detailFor("row2"))
+        val rows = (0 until 60).map { item("row$it") }
+        h.playAndAwaitPrewarm(rows, index = 2)
+
+        h.manager.playFromQueue(20)
+        awaitMain({ h.playlist.rebuilt > 0 }, "an out-of-window jump falls through to the rebuild")
+
+        // The rebuild mirrors the same prefix-window shape around the target
+        // (rows past the lookahead ahead of it stay unmirrored).
+        assertEquals(rows.subList(0, 33).map { it.id }, h.playlist.items.map { it.mediaId })
+        assertEquals(20, h.playlist.index)
+        assertEquals(20, h.manager.currentIndex.value)
     }
 }

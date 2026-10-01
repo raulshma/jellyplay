@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,10 +63,11 @@ fun LiveSeekBar(
     modifier: Modifier = Modifier,
 ) {
     if (durationMs <= 0L) return // pure live — no seek bar
-    var sliderValue by remember(positionMs, durationMs) {
-        mutableFloatStateOf(positionMs.toFloat())
-    }
+    var sliderValue by remember { mutableFloatStateOf(positionMs.toFloat()) }
     var isDragging by remember { mutableStateOf(false) }
+    LaunchedEffect(positionMs) {
+        if (!isDragging) sliderValue = positionMs.toFloat()
+    }
     val isTv = LocalTvMode.current
 
     val activeColor = MaterialTheme.colorScheme.primary
@@ -137,7 +139,8 @@ fun LiveSeekBar(
             val trackPx = trackHeight.toPx()
             val trackY = (size.height / 2f) - (trackPx / 2f)
             val corner = CornerRadius(trackPx / 2f)
-            val progress = (sliderValue / durationMs).coerceIn(0f, 1f)
+            val drawnValue = if (isDragging) sliderValue else positionMs.toFloat()
+            val progress = (drawnValue / durationMs).coerceIn(0f, 1f)
 
             // Inactive track
             drawRoundRect(

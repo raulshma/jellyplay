@@ -244,10 +244,10 @@ internal class HomeViewModel(
     /**
      * The home search bar's entire state surface — live query, results slice,
      * active flag, recent history and the undo channel — behind one holder
-     * (see [HomeSearchStateHolder]). The query/history/undo flows are
-     * re-exposed directly (SearchViewModel style); [HomeSearchStateHolder.searchState]
-     * and [HomeSearchStateHolder.isSearchActive] are folded into
-     * [HomeUiState] by the two collectors in [init].
+     * (see [HomeSearchStateHolder]). The query/results/history/undo flows are
+     * re-exposed directly (SearchViewModel style); only
+     * [HomeSearchStateHolder.isSearchActive] is folded into [HomeUiState] by
+     * the one collector in [init].
      */
     private val searchStateHolder = HomeSearchStateHolder(scope, mediaSearchEngine)
 
@@ -256,6 +256,12 @@ internal class HomeViewModel(
      * [HomeSearchStateHolder.searchQuery] for why it is NOT part of uiState.
      */
     val searchQuery: StateFlow<String> get() = searchStateHolder.searchQuery
+
+    /**
+     * The results slice the search overlay renders — see
+     * [HomeSearchStateHolder.searchState] for why it is NOT part of uiState.
+     */
+    val searchState: StateFlow<HomeSearchState> get() = searchStateHolder.searchState
 
     /** Recent searches for the active user — see [HomeSearchStateHolder.searchHistory]. */
     val searchHistory: StateFlow<List<SearchHistoryItem>> get() = searchStateHolder.searchHistory
@@ -528,19 +534,15 @@ internal class HomeViewModel(
             }
         }
 
-        // Fold the search holder's two UI-shaped slices into HomeUiState (same
+        // Fold the search holder's one UI-shaped slice into HomeUiState (same
         // fold pattern as the Seerr/refresher collectors below) so the UI
-        // observes a single state object. The per-keystroke query stays on the
-        // holder's own flow (re-exposed as `searchQuery`), NOT in uiState —
-        // see HomeSearchStateHolder's KDoc for the recomposition contract.
-        // The search kernel itself (debounce, cancel-and-replace, parallel
+        // observes a single state object. The per-keystroke query AND the
+        // results slice stay on the holder's own flows (re-exposed as
+        // `searchQuery`/`searchState`), NOT in uiState — see
+        // HomeSearchStateHolder's KDoc for the recomposition contract. The
+        // search kernel itself (debounce, cancel-and-replace, parallel
         // Jellyfin + gated Seerr fetch, history policy) lives in the holder /
-        // MediaSearchEngine; these collectors only fold emissions.
-        launch {
-            searchStateHolder.searchState.collect { search ->
-                _uiState.update { it.copy(searchState = search) }
-            }
-        }
+        // MediaSearchEngine; this collector only folds emissions.
         launch {
             searchStateHolder.isSearchActive.collect { active ->
                 _uiState.update { it.copy(isSearchActive = active) }

@@ -21,13 +21,14 @@ import kotlinx.coroutines.launch
  * previously scattered across HomeViewModel fields and collectors; it is one
  * concern — "what the search bar shows" — and now has one owner.
  *
- * Recomposition architecture (unchanged by the move, see the HomeSearchState
- * KDoc): the per-keystroke query lives in its own [searchQuery] StateFlow
- * OUTSIDE the UI's state object, read only by a leaf, while [isSearchActive]
- * carries the rarely-flipping blank/nonblank signal to the orchestrator. The
- * VM re-exposes [searchQuery]/[searchHistory]/[undoActions] directly
- * (SearchViewModel style) and folds [searchState] + [isSearchActive] into
- * HomeUiState with two one-line collectors, so no UI call site changes.
+ * Recomposition architecture (see the HomeSearchState KDoc): the per-keystroke
+ * query and the results slice live in their own [searchQuery]/[searchState]
+ * StateFlows OUTSIDE the UI's state object, collected at the dock's search
+ * overlay, while [isSearchActive] carries the rarely-flipping blank/nonblank
+ * signal to the orchestrator. The VM re-exposes
+ * [searchQuery]/[searchState]/[searchHistory]/[undoActions] directly
+ * (SearchViewModel style) and folds [isSearchActive] into HomeUiState with a
+ * one-line collector.
  *
  * The inline-search kernel itself (debounce, cancel-and-replace, parallel
  * Jellyfin + gated Seerr fetch, result-gated history save) stays in
@@ -55,7 +56,12 @@ internal class HomeSearchStateHolder(
 
     private val _searchState = MutableStateFlow(HomeSearchState())
 
-    /** The results slice the search overlay renders (Jellyfin + Seerr + spinner). */
+    /**
+     * The results slice the search overlay renders (Jellyfin + Seerr + spinner).
+     * Like [searchQuery], kept OUT of HomeUiState: an isSearching → results
+     * emission landing in uiState re-executes the whole `MainHomeContent`
+     * body — the overlay collects this flow at its own slot instead.
+     */
     val searchState: StateFlow<HomeSearchState> = _searchState.asStateFlow()
 
     private val _isSearchActive = MutableStateFlow(false)

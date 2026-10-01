@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.photos
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -119,5 +120,27 @@ class PhotoTransformStateTest {
     fun `a tap at or past the window edge is a fresh single tap`() {
         assertFalse(PhotoGesturePolicy.isDoubleTap(nowEpochMs = 300L, lastTapEpochMs = 0L), "strictly under the window")
         assertFalse(PhotoGesturePolicy.isDoubleTap(nowEpochMs = 301L, lastTapEpochMs = 0L))
+    }
+
+    // ── zoom settle → decode ladder ────────────────────────────────────────
+
+    @Test
+    fun `decode retarget skips the base scale and the dead band`() {
+        assertNull(photoDecodeTarget(1f, 1f), "no zoom at all — nothing to re-decode")
+        assertNull(photoDecodeTarget(1.005f, 1f), "below the 1.01 threshold")
+        assertNull(photoDecodeTarget(2.02f, 2f), "within 0.05 of the current decode — not worth a re-decode")
+        assertNull(photoDecodeTarget(2.99f, 3f), "within 0.05 of the cap keeps the cap")
+    }
+
+    @Test
+    fun `decode retarget caps at the 3x decode ceiling`() {
+        assertEquals(3f, photoDecodeTarget(scale = 5f, currentDecodeScale = 1f), "past the cap holds at 3x")
+        assertEquals(2.5f, photoDecodeTarget(scale = 2.5f, currentDecodeScale = 1f))
+    }
+
+    @Test
+    fun `decode retarget falls back to the fitted base on a zoom-out`() {
+        assertEquals(1f, photoDecodeTarget(1f, 2.5f), "collapsing to fit frees the scaled decode")
+        assertEquals(1f, photoDecodeTarget(0.5f, 3f), "a sub-fit pinch still targets the base")
     }
 }

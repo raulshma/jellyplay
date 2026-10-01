@@ -131,13 +131,12 @@ data class HomeUiState(
     val hideTopHeaderOnScroll: Boolean = false,
     val continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
-    val searchState: HomeSearchState = HomeSearchState(),
     /** True while the search field holds a non-blank query. This is the only
      * search-derived signal read at the [MainHomeContent] orchestrator level:
      * it flips at most twice per search session (blank↔nonblank) instead of
      * once per keystroke, so the ~510-line body recomposes far less. The live
-     * query string is read separately in a leaf via the VM's `searchQuery`
-     * StateFlow. */
+     * query string and the results slice are read at their consumers via the
+     * VM's `searchQuery`/`searchState` StateFlows. */
     val isSearchActive: Boolean = false,
     /** Whether to include settings results in the home search bar. Driven by Appearance prefs. */
     val showSettingsInHomeSearch: Boolean = true,

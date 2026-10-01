@@ -47,7 +47,10 @@ class ContinueWatchingBroadcasterImpl(
         runCatching {
             WidgetImageLoader.prewarmContinueWatchingPosters(
                 context,
-                widgetDataStore.continueWatchingSnapshot(),
+                // Memory-only — the same StateFlow value the factory binds
+                // against; the store's *Snapshot() accessor (bounded BLOCKING
+                // disk read when cold) must stay off this Main-thread caller.
+                widgetDataStore.continueWatching.value,
                 imageUrlProvider,
             )
         }.onFailure { e ->

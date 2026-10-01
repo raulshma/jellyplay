@@ -893,11 +893,17 @@ private fun HomeDockArea(
             { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
         },
         searchResultsContent = { settingsResults ->
+            // The results slice is collected in this slot (NOT mirrored into
+            // HomeUiState, like the per-keystroke query) so each isSearching →
+            // results → clear emission recomposes only this overlay, never the
+            // MainHomeContent orchestrator. The flow is a StateFlow, so the
+            // cleared reset is the value seen on the next collection.
+            val search by viewModel.searchState.collectAsStateWithLifecycle()
             if (state.isSearchActive || searchHistory.isNotEmpty()) {
                 HomeSearchResultsOverlay(
-                    jellyfinResults = state.searchState.jellyfinResults,
-                    seerrResults = state.searchState.seerrResults,
-                    isSearching = state.searchState.isSearching,
+                    jellyfinResults = search.jellyfinResults,
+                    seerrResults = search.seerrResults,
+                    isSearching = search.isSearching,
                     getImageUrl = searchGetImageUrl,
                     onJellyfinClick = searchOnJellyfinClick,
                     onSeerrClick = searchOnSeerrClick,
