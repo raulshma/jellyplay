@@ -46,7 +46,6 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
-import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.navigation.NavigationState
@@ -58,7 +57,6 @@ import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
-import kotlin.math.roundToInt
 import androidx.tv.material3.MaterialTheme as TvMaterial3Theme
 import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 
@@ -74,7 +72,10 @@ import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
  * from locals it already holds, without any member-name shadowing. Every
  * field is a remembered/stable value or a Compose-memoized lambda, so the
  * data class compares equal across recompositions and the branches stay
- * skippable. ADR 0001 note: this carries UI wiring only — the session
+ * skippable. The per-section hook values (logout, home mode, the audio
+ * pair, …) deliberately live ONLY on [shellHost] — carrying them here too
+ * duplicated ShellHostHooks byte-identically; branches read them through
+ * the bundle. ADR 0001 note: this carries UI wiring only — the session
  * policy it participates in (onLogout → ShellSessionController) stays
  * per-shell, exactly as before.
  */
@@ -86,21 +87,16 @@ data class ShellNavParams(
     /** Pure fold (core/ui VisibleTopLevelRoutes): the active route→label map. */
     val activeTopLevelRoutes: LinkedHashMap<Route, String>,
     val navigator: Navigator,
-    /** ADR 0001: the revoke/plain sign-out fork into the session controller. */
-    val onLogout: (Boolean) -> Unit,
-    val homeMode: HomeMode,
-    val onModeChange: (HomeMode) -> Unit,
     /** Hoisted in MainContent so saveable state survives layout-branch switches. */
     val saveableStateHolder: SaveableStateHolder,
     val entryDecorator: NavEntryDecorator<NavKey>,
-    val onNowPlayingClick: () -> Unit,
-    val onAmbientClick: () -> Unit,
     /** Play On controller — MainContent's single construction site. */
     val playOn: PlayOnViewModel,
     /**
      * The shell-host hooks behind the shared section graph — built once in
      * MainContent from the activity-scoped MainViewModel, so no type below
-     * this bundle names that ViewModel.
+     * this bundle names that ViewModel. The sections' hook values are read
+     * through its groups (shellHost.audio.onNowPlayingClick, …).
      */
     val shellHost: ShellHostHooks,
 )
@@ -127,7 +123,7 @@ internal fun TvContent(
     val currentTopLevel = shellParams.currentTopLevel
     val activeTopLevelRoutes = shellParams.activeTopLevelRoutes
     val navigator = shellParams.navigator
-    val onNowPlayingClick = shellParams.onNowPlayingClick
+    val onNowPlayingClick = shellParams.shellHost.audio.onNowPlayingClick
     val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
     val nowPlayingTitle = audioTitle.takeIf { nowPlayingEnabled }
     TvMaterial3Theme(
@@ -245,8 +241,7 @@ internal fun PhoneContent(
     val activeTopLevelRoutes = shellParams.activeTopLevelRoutes
     val navigator = shellParams.navigator
     val playOn = shellParams.playOn
-    val onNowPlayingClick = shellParams.onNowPlayingClick
-    val onAmbientClick = shellParams.onAmbientClick
+    val onNowPlayingClick = shellParams.shellHost.audio.onNowPlayingClick
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
@@ -377,7 +372,12 @@ internal fun PhoneContent(
                             onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = systemNavBarBottom + 2.dp)
+                                .padding(
+                                    bottom = systemNavBarBottom + shellChromeBottomClearance(
+                                        ShellChromeElement.MiniPlayer,
+                                        isExpanded = true,
+                                    )
+                                )
                         )
                     } else {
                         AppMiniPlayerHost(
@@ -387,11 +387,20 @@ internal fun PhoneContent(
                             onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = systemNavBarBottom + 60.dp)
+                                .padding(
+                                    bottom = systemNavBarBottom + shellChromeBottomClearance(
+                                        ShellChromeElement.MiniPlayer,
+                                        isExpanded = false,
+                                    )
+                                )
                                 .offset {
-                                    val maxOffset = Dimensions.floatingNavHeight.toPx()
-                                    val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
-                                    IntOffset(x = 0, y = yOffset.roundToInt())
+                                    IntOffset(
+                                        x = 0,
+                                        y = miniPlayerNavCoupledOffsetYpx(
+                                            bottomNavHideOffsetPx = bottomNavOffsetHeightPx.floatValue,
+                                            floatingNavHeightPx = Dimensions.floatingNavHeight.toPx(),
+                                        ),
+                                    )
                                 }
                         )
                     }
@@ -421,7 +430,10 @@ internal fun PhoneContent(
                         onExpand = { navigator.navigate(Route.PlayOnCompanion) },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = systemNavBarBottom + (if (!isExpanded) 72.dp else 8.dp)),
+                            .padding(
+                                bottom = systemNavBarBottom +
+                                    shellChromeBottomClearance(ShellChromeElement.PlayOnMiniBar, isExpanded)
+                            ),
                     )
                 }
                 if (showPlayOnSheet) {
@@ -450,6 +462,11 @@ internal fun PhoneContent(
                         onDismiss = { isOverflowExpanded = false },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
+                    // The placement fold (ShellChromePlacement): the bare
+                    // numbers below are named there; the alignment fork
+                    // (top-start beside the rail vs bottom-end beside the
+                    // nav toggle) stays here — a compose-side concern.
+                    val overflowInsets = overflowMenuInsets(isExpanded = isExpanded, statusBarTop = statusBarTop)
                     com.raulshma.jellyplay.navigation.components.OverflowMenuItems(
                         onSurpriseClick = {
                             isOverflowExpanded = false
@@ -484,24 +501,30 @@ internal fun PhoneContent(
                         downloadCount = downloadCount,
                         alignToStart = isExpanded,
                         modifier = if (isExpanded) {
-                            // The scaffold body already starts beside the rail, so a small
-                            // margin keeps the pills flush to the drawer. Anchor at the top
-                            // (under the status bar) so the list flows top-down.
+                            // The scaffold body already starts beside the rail, so the
+                            // folded margin keeps the pills flush to the drawer. Anchor
+                            // at the top (under the status bar) so the list flows
+                            // top-down.
                             Modifier.align(Alignment.TopStart)
-                                .padding(start = 12.dp, top = statusBarTop + 8.dp)
+                                .padding(start = overflowInsets.start, top = overflowInsets.top)
                         } else {
                             Modifier.align(Alignment.BottomEnd)
                                 .clearFloatingNav(extraBottom = 0.dp)
-                                .padding(end = 16.dp, bottom = 4.dp)
+                                .padding(end = overflowInsets.end, bottom = overflowInsets.bottom)
                         },
                     )
                 }
                 if (!isExpanded) {
                     val navBarModifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = systemNavBarBottom + 4.dp)
+                        .padding(
+                            bottom = systemNavBarBottom +
+                                shellChromeBottomClearance(ShellChromeElement.FloatingNavBar, isExpanded = false)
+                        )
                         .padding(horizontal = 16.dp)
-                        .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
+                        .offset {
+                            IntOffset(x = 0, y = floatingNavBarOffsetYpx(bottomNavOffsetHeightPx.floatValue))
+                        }
                     ExpressiveFloatingNavigationBar(
                         routes = activeTopLevelRoutes,
                         currentTopLevel = currentTopLevel,

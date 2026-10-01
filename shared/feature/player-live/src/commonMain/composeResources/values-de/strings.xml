@@ -27,6 +27,8 @@
     <string name="live_cancel_recording">Aufnahme abbrechen</string>
     <string name="live_cancel_series">Serie abbrechen</string>
     <string name="live_record_success">Aufnahme geplant</string>
+    <string name="live_record_failed">Aufnahme konnte nicht festgelegt werden</string>
+    <string name="live_error_cancel_recording">Aufnahme konnte nicht abgebrochen werden</string>
     <string name="live_record_canceled">Aufnahme abgebrochen</string>
     <string name="live_record_no_program">Keine Programminfo verfügbar</string>
     <string name="live_play_from_start">Von Anfang an wiedergeben</string>

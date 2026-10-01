@@ -7,6 +7,7 @@ import com.composables.icons.tabler.outline.CloudDownload
 import com.composables.icons.tabler.outline.Ticket
 import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrCast
+import com.raulshma.jellyplay.core.model.seerr.SeerrReleaseDateType
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromMinutes
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -213,15 +214,25 @@ internal data class ReleaseTypePresentation(
 )
 
 /**
- * TMDB release-date type → marker mapping, verbatim from the former
- * `ReleaseTypeIcon` `when`: 3 = theatrical (ticket), 4 = digital
- * (cloud download), 5 = physical (disc) — every other type renders NO
- * marker (the release row filters to 3..5 upstream, but the table keeps
- * the null contract the old `when`'s fall-through had).
+ * The release types the detail row renders markers for — theatrical, digital
+ * and physical (the wire's 3/4/5); `ReleaseDateRow` filters upstream to these.
  */
-internal fun releaseTypePresentation(type: Int): ReleaseTypePresentation? = when (type) {
-    3 -> ReleaseTypePresentation(Tabler.Outline.Ticket, Res.string.detail_cd_release_theatrical)
-    4 -> ReleaseTypePresentation(Tabler.Outline.CloudDownload, Res.string.detail_cd_release_digital)
-    5 -> ReleaseTypePresentation(Tabler.Outline.Circle, Res.string.detail_cd_release_physical)
+internal val renderedReleaseTypes: Set<SeerrReleaseDateType> = setOf(
+    SeerrReleaseDateType.THEATRICAL,
+    SeerrReleaseDateType.DIGITAL,
+    SeerrReleaseDateType.PHYSICAL,
+)
+
+/**
+ * TMDB release-date type → marker mapping, verbatim from the former
+ * `ReleaseTypeIcon` `when`: theatrical (ticket), digital (cloud download),
+ * physical (disc) — every other type renders NO marker (the release row
+ * filters upstream to [renderedReleaseTypes], but the table keeps the null
+ * contract the old `when`'s fall-through had).
+ */
+internal fun releaseTypePresentation(type: SeerrReleaseDateType): ReleaseTypePresentation? = when (type) {
+    SeerrReleaseDateType.THEATRICAL -> ReleaseTypePresentation(Tabler.Outline.Ticket, Res.string.detail_cd_release_theatrical)
+    SeerrReleaseDateType.DIGITAL -> ReleaseTypePresentation(Tabler.Outline.CloudDownload, Res.string.detail_cd_release_digital)
+    SeerrReleaseDateType.PHYSICAL -> ReleaseTypePresentation(Tabler.Outline.Circle, Res.string.detail_cd_release_physical)
     else -> null
 }

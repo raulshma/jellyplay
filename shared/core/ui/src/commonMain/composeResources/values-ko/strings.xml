@@ -107,10 +107,6 @@
     <string name="core_ui_color_style_title">색상 스타일</string>
     <string name="core_ui_color_style_subtitle">생성된 팔레트의 시각적 분위기 정의</string>
     <string name="core_ui_dynamic_colors">동적 배경화면 색상</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave 강조 색상</string>
-    <string name="core_ui_synthwave_accent_subtitle">사용자 지정 네온 강조 색상 견본 선택</string>
-    <string name="core_ui_soothing_accent_title">부드러운 강조 색상</string>
-    <string name="core_ui_soothing_accent_subtitle">차분한 강조 색상 선택</string>
     <string name="core_ui_variant_accent_title">%1$s 강조색</string>
     <string name="core_ui_variant_accent_subtitle">이 테마 스타일의 강조색을 선택하세요</string>
 
@@ -119,7 +115,6 @@
     <string name="core_ui_play">재생</string>
     <string name="core_ui_backspace">백스페이스</string>
     <string name="core_ui_request">요청</string>
-    <string name="core_ui_watched">시청함</string>
     <string name="core_ui_downloaded">다운로드됨</string>
     <string name="core_ui_cd_loading">로드 중</string>
     <string name="core_ui_cd_error">오류</string>
@@ -183,8 +178,6 @@
     <string name="player_speed_slider_label">재생 속도 조정</string>
 
     <!-- 접근성: 비디오/음악 모드 전환 (P5 §3.2) -->
-    <string name="a11y_mode_video">비디오 모드</string>
-    <string name="a11y_mode_music">음악 모드</string>
 
     <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
     <string name="detail_delete_downloads_title">다운로드 삭제</string>
@@ -256,17 +249,11 @@
     <string name="core_ui_auth_use_screen_lock">화면 잠금 사용</string>
     <string name="core_ui_auth_unlock_screen_lock">화면 잠금으로 잠금 해제</string>
     <string name="core_ui_auth_device_credential_prompt">기기 화면 잠금으로 잠금 해제</string>
+    <string name="core_ui_auth_no_unlock_method">Unlock is unavailable: no biometrics or screen lock are usable on this device. Clear app data to reset the lock.</string>
     <string name="core_ui_read">읽기</string>
     <string name="core_show_password">비밀번호 표시</string>
     <string name="core_hide_password">비밀번호 숨기기</string>
     <!-- What's New chrome -->
-    <string name="core_ui_whatsnew_sheet_title">새로운 기능</string>
-    <string name="core_ui_whatsnew_release_title">v%1$s 새로운 기능</string>
-    <string name="core_ui_whatsnew_category_new">신규</string>
-    <string name="core_ui_whatsnew_category_improvement">개선</string>
-    <string name="core_ui_whatsnew_category_fix">수정</string>
-    <string name="core_ui_whatsnew_take_me_there">바로 이동</string>
-    <string name="core_ui_whatsnew_got_it">확인</string>
     <string name="core_ui_whatsnew_archive_empty">아직 릴리스 하이라이트가 없습니다.</string>
     <string name="core_refresh_metadata_title">메타데이터 새로 고침</string>
     <string name="core_refresh_metadata_message">서버가 “%s”의 메타데이터와 이미지를 새로 고치는 방식을 선택하세요.</string>
@@ -280,4 +267,9 @@
     <string name="core_refresh_metadata_mode_replace_images_desc">공급자에서 모든 이미지를 다시 받고 메타데이터는 유지합니다.</string>
     <string name="core_filter_has_subtitles">자막 있음</string>
     <string name="core_filter_has_trailer">예고편 있음</string>
+
+    <!-- Media-card footer meta (the shared MediaCardFooterMetaRow renderer
+         for PosterCard/WideMediaCard). -->
+    <string name="core_ui_card_percent_complete">%1$d% 완료</string>
+    <string name="core_ui_card_time_left">%1$s 남음</string>
 </resources>

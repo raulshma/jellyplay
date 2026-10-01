@@ -392,7 +392,7 @@ class ExoPlayerEngine(
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
 
-        currentNormalizationGain = request.normalizationGain
+        currentNormalizationGain = request.requestSpecific?.normalizationGain
 
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
         val assForRequest = AssSupport.hasAssSubtitles(request)
@@ -406,7 +406,6 @@ class ExoPlayerEngine(
             authToken = request.authToken,
             headers = request.headers,
             assSession = assForRequest,
-            pauseOnAudioFocusLoss = currentConfig.pauseOnAudioFocusLoss,
             drmProvider = currentConfig.drmSessionManagerProvider,
             streamCacheEligible = streamCacheEligible,
         )
@@ -597,12 +596,20 @@ class ExoPlayerEngine(
         val isNetworkStream = request.uri.startsWith("http", ignoreCase = true) ||
             request.uri.startsWith("rtmp", ignoreCase = true)
 
+        // handleAudioFocus is FORCED OFF (the video focus slice): the OS
+        // audio-focus seat belongs to core:data's PlaybackFocus module now —
+        // a second, engine-internal request would fight that seat exactly
+        // like the music migration's crossfade-secondary case. Focus prefs
+        // (pause-on-loss / duck-on-transient) ride the module's
+        // VideoFocusPolicyInput, never this builder.
+        // setHandleAudioBecomingNoisy stays true: the headphone-unplug
+        // auto-pause is focus-independent and media3-native.
         val exo = ExoPlayer.Builder(context)
             .setRenderersFactory(finalRenderersFactory)
             .setMediaSourceFactory(msf)
             .setTrackSelector(selector)
             .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttrs, currentConfig.pauseOnAudioFocusLoss)
+            .setAudioAttributes(audioAttrs, false)
             .setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
             .setHandleAudioBecomingNoisy(true)
             .setBandwidthMeter(bandwidthMeter)
@@ -807,8 +814,9 @@ class ExoPlayerEngine(
                 // Android client pins APPLICATION_M3U8 the same way. This is
                 // also what makes native HLS seeking (segment + EXTINF
                 // resolution) reliable on a transcode.
+                val callerMime = request.requestSpecific?.mimeType
                 val inferredMime = when {
-                    request.mimeType != null -> request.mimeType
+                    callerMime != null -> callerMime
                     isHlsRequest(request) -> MimeTypes.APPLICATION_M3U8
                     else -> null
                 }
@@ -947,7 +955,7 @@ class ExoPlayerEngine(
      * stream-cache rejection in [isStreamCacheEligible].
      */
     private fun isHlsRequest(request: PlaybackRequest): Boolean =
-        request.mimeType == MimeTypes.APPLICATION_M3U8 ||
+        request.requestSpecific?.mimeType == MimeTypes.APPLICATION_M3U8 ||
             request.uri.contains(".m3u8", ignoreCase = true)
 
     override fun release() {
@@ -1062,14 +1070,6 @@ class ExoPlayerEngine(
             if (oldConfig.subtitleStyle.offsetMs != newConfig.subtitleStyle.offsetMs) {
                 refreshSubtitlesForOffsetChange()
             }
-        }
-
-        if (oldConfig.pauseOnAudioFocusLoss != newConfig.pauseOnAudioFocusLoss) {
-            val audioAttrs = AudioAttributes.Builder()
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .setUsage(C.USAGE_MEDIA)
-                .build()
-            player?.setAudioAttributes(audioAttrs, newConfig.pauseOnAudioFocusLoss)
         }
     }
 

@@ -150,9 +150,10 @@ fun androidKoinModules(app: Application): List<Module> = listOf(
     // Player-live conveyor (Android platform half): the three
     // platform seams replacing the legacy :feature:player:live
     // module. The engine factory resolves the shared
-    // NetworkQualifiers.streamingHttpClient; the audio seam wraps
-    // the legacy PlayerAudioLifecycle; the transcode-reasons
-    // renderer delegates to the legacy core:ui formatter.
+    // NetworkQualifiers.streamingHttpClient; the audio seam binds
+    // Media3LivePlayerAudio, the VIDEO-family focus surface (the legacy
+    // PlayerAudioLifecycle path died with the seat move); the
+    // transcode-reasons renderer delegates to the legacy core:ui formatter.
     androidPlayerLiveModule(app),
 
 )

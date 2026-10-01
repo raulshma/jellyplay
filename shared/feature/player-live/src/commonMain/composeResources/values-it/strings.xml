@@ -27,6 +27,8 @@
     <string name="live_cancel_recording">Annulla registrazione</string>
     <string name="live_cancel_series">Annulla serie</string>
     <string name="live_record_success">Registrazione pianificata</string>
+    <string name="live_record_failed">Impostazione registrazione non riuscita</string>
+    <string name="live_error_cancel_recording">Impossibile annullare la registrazione</string>
     <string name="live_record_canceled">Registrazione annullata</string>
     <string name="live_record_no_program">Nessuna info sul programma</string>
     <string name="live_play_from_start">Riproduci dall'inizio</string>

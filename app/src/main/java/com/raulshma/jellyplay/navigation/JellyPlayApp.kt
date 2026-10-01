@@ -60,9 +60,10 @@ fun JellyPlayApp(
     // The app-wide UserMessageBus (commonMain core:ui message) — the ONE
     // bus every poster (migrated ViewModels, screens, seam adapters) posts
     // through since the legacy androidMain feedback bus was deleted.
-    val sharedUserMessageBus = remember {
-        org.koin.mp.KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.core.ui.message.UserMessageBus>()
-    }
+    // Resolved through the infra bundle (same resolution path as every
+    // other shell service; the former inline KoinPlatform.getKoin()
+    // service-locator here is gone — see ShellInfra's KDoc).
+    val sharedUserMessageBus = remember { infra.userMessageBusLazy.value }
 
     CompositionLocalProvider(
         // Resolved here (first composition) instead of MainActivity's

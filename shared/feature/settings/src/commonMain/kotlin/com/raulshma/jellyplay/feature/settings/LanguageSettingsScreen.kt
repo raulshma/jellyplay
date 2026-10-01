@@ -412,7 +412,7 @@ fun LanguageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.languageSubtitles.itemIdSet,
                 ) {
-                    com.raulshma.jellyplay.core.ui.components.SubtitleStylePreview(
+                    SubtitleStylePreview(
                         style = preferences.subtitleStyle,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )

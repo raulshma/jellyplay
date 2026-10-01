@@ -119,10 +119,6 @@
     <string name="core_ui_color_style_title">Color Style</string>
     <string name="core_ui_color_style_subtitle">Define the visual vibe of generated palettes</string>
     <string name="core_ui_dynamic_colors">Dynamic wallpaper colors</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave Accent</string>
-    <string name="core_ui_synthwave_accent_subtitle">Select custom neon accent color swatch</string>
-    <string name="core_ui_soothing_accent_title">Soothing Accent</string>
-    <string name="core_ui_soothing_accent_subtitle">Select a calming accent color</string>
     <string name="core_ui_variant_accent_title">%1$s Accent</string>
     <string name="core_ui_variant_accent_subtitle">Select the accent color for this theme style</string>
 
@@ -132,7 +128,6 @@
     <string name="core_ui_read">Read</string>
     <string name="core_ui_backspace">Backspace</string>
     <string name="core_ui_request">Request</string>
-    <string name="core_ui_watched">Watched</string>
     <string name="core_ui_downloaded">Downloaded</string>
     <string name="core_ui_cd_loading">Loading</string>
     <string name="core_ui_cd_error">Error</string>
@@ -211,8 +206,6 @@
     <string name="player_speed_slider_label">Adjust playback speed</string>
 
     <!-- Accessibility: Video/Music mode switch semantics (P5 §3.2) -->
-    <string name="a11y_mode_video">Video mode</string>
-    <string name="a11y_mode_music">Music mode</string>
 
     <!-- Shared password/secret text field toggle labels (§2.4). Used by
          PasswordTextField in core/ui and its call sites across features. -->
@@ -292,13 +285,6 @@
 
     <!-- What's New (structured release highlights). Content itself is
          English-only by design; only this chrome is localized. -->
-    <string name="core_ui_whatsnew_sheet_title">What's New</string>
-    <string name="core_ui_whatsnew_release_title">New in v%1$s</string>
-    <string name="core_ui_whatsnew_category_new">New</string>
-    <string name="core_ui_whatsnew_category_improvement">Improved</string>
-    <string name="core_ui_whatsnew_category_fix">Fixed</string>
-    <string name="core_ui_whatsnew_take_me_there">Take me there</string>
-    <string name="core_ui_whatsnew_got_it">Got it</string>
     <string name="core_ui_whatsnew_archive_empty">No release highlights yet.</string>
     <string name="core_refresh_metadata_title">Refresh metadata</string>
     <string name="core_refresh_metadata_message">Choose how the server refreshes metadata and images for “%s”.</string>
@@ -310,4 +296,10 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">Overwrites current metadata with provider data. Refreshing a series also refreshes its episodes.</string>
     <string name="core_refresh_metadata_mode_replace_images">Replace all images</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">Re-downloads every image from providers, keeping metadata.</string>
+    <string name="core_ui_auth_no_unlock_method">Unlock is unavailable: no biometrics or screen lock are usable on this device. Clear app data to reset the lock.</string>
+
+    <!-- Media-card footer meta (the shared MediaCardFooterMetaRow renderer
+         for PosterCard/WideMediaCard). -->
+    <string name="core_ui_card_percent_complete">%1$d% complete</string>
+    <string name="core_ui_card_time_left">%1$s left</string>
 </resources>

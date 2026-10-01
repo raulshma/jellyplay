@@ -19,7 +19,7 @@ class SeerrStatusDecisionsTest {
     fun `effectiveMediaStatus reads regular status for non-4k request`() {
         val request = SeerrRequestItem(
             is4k = false,
-            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE.value, status4k = SeerrMediaStatus.PENDING.value),
+            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE, status4k = SeerrMediaStatus.PENDING),
         )
 
         assertEquals(SeerrMediaStatus.AVAILABLE, request.effectiveMediaStatus())
@@ -29,7 +29,7 @@ class SeerrStatusDecisionsTest {
     fun `effectiveMediaStatus reads status4k for 4k request`() {
         val request = SeerrRequestItem(
             is4k = true,
-            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE.value, status4k = SeerrMediaStatus.PROCESSING.value),
+            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE, status4k = SeerrMediaStatus.PROCESSING),
         )
 
         assertEquals(SeerrMediaStatus.PROCESSING, request.effectiveMediaStatus())
@@ -41,7 +41,8 @@ class SeerrStatusDecisionsTest {
         // on non-4k servers, so this is a live edge, not a theoretical one.
         val request = SeerrRequestItem(
             is4k = true,
-            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE.value, status4k = 0),
+            // The wire's 0 (never-requested 4K column) folds to UNKNOWN at the seam.
+            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE, status4k = SeerrMediaStatus.UNKNOWN),
         )
 
         assertEquals(SeerrMediaStatus.UNKNOWN, request.effectiveMediaStatus())
@@ -93,7 +94,7 @@ class SeerrStatusDecisionsTest {
     /** A [SeerrMediaInfo] at [status] with [requestCount] request entries. */
     private fun buttonMedia(status: SeerrMediaStatus, requestCount: Int = 0) =
         SeerrMediaInfo(
-            status = status.value,
+            status = status,
             requests = List(requestCount) { SeerrMediaRequest() },
         )
 

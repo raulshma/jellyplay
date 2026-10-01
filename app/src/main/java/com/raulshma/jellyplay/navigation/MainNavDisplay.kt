@@ -62,13 +62,8 @@ internal fun MainNavDisplay(
 ) {
     val navigationState = shellParams.navigationState
     val navigator = shellParams.navigator
-    val onLogout = shellParams.onLogout
-    val homeMode = shellParams.homeMode
-    val onModeChange = shellParams.onModeChange
     val saveableStateHolder = shellParams.saveableStateHolder
     val entryDecorator = shellParams.entryDecorator
-    val onNowPlayingClick = shellParams.onNowPlayingClick
-    val onAmbientClick = shellParams.onAmbientClick
     val playOn = shellParams.playOn
     val shellHost = shellParams.shellHost
 

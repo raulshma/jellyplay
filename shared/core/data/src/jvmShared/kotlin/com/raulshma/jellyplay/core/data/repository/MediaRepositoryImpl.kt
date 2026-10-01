@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
@@ -71,6 +72,13 @@ class MediaRepositoryImpl internal constructor(
     /** The catalogue fetch family — every read this repo serves except the
      * four SyncPlay members below. */
     private val libraryApiClient: LibraryApiClient,
+    /**
+     * The collection family seam (the PlaylistApiClient over-the-impl
+     * pattern): the four BoxSet reads/writes route through their own
+     * narrow interface over the SAME client single the wide library seam
+     * rides — the repo never sees the playlist or write verbs.
+     */
+    private val collectionApiClient: CollectionApiClient,
     /**
      * The home hot-path's cache-maintenance verbs (sub-call cache drop, the
      * dice roll's per-row drop + seed) — the narrow network-layer port beside
@@ -627,23 +635,23 @@ class MediaRepositoryImpl internal constructor(
                 { homeSession.cacheIdentity() },
                 collectionItemsKey(collectionId, startIndex, limit),
             ) {
-                libraryApiClient.getCollectionItems(collectionId, startIndex, limit)
+                collectionApiClient.getCollectionItems(collectionId, startIndex, limit)
             }
         }
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
         // Not cached: the picker refetches on every open so a freshly-created
         // collection is immediately selectable without a cache-invalidation hop.
-        libraryApiClient.getCollections(limit)
+        collectionApiClient.getCollections(limit)
 
     override suspend fun createCollection(name: String, itemIds: List<String>): Result<String> =
         // Plan 08: collection edits self-invalidate — the detail screen used to
         // compensate with a manual invalidateCollectionItemsCache call.
-        libraryApiClient.createCollection(name, itemIds)
+        collectionApiClient.createCollection(name, itemIds)
             .onSuccess { invalidateCollectionItemsCache(it) }
 
     override suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit> =
-        libraryApiClient.addItemsToCollection(collectionId, itemIds)
+        collectionApiClient.addItemsToCollection(collectionId, itemIds)
             .onSuccess { invalidateCollectionItemsCache(collectionId) }
 
     override fun getFavoritesPaged(

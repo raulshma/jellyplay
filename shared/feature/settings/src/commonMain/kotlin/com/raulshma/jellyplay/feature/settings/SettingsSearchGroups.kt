@@ -126,12 +126,12 @@ internal object SettingsScreenGroups {
     val homeLayout = HomeLayoutSearchItems.asSearchGroup("home.layout")
 
     // ── AppearanceSettingsScreen ────────────────────────────────────────
-    val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme")
+    val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme", AppearanceThemeRowAdmissions)
     val appearanceNavigation = AppearanceNavigationSearchItems.asSearchGroup("appearance.navigation")
-    val appearanceLibrary = AppearanceLibrarySearchItems.asSearchGroup("appearance.library")
-    val appearancePerformance = AppearancePerformanceSearchItems.asSearchGroup("appearance.performance")
-    val appearanceEyeCare = AppearanceEyeCareSearchItems.asSearchGroup("appearance.eyeCare")
-    val appearanceNewsletter = AppearanceNewsletterSearchItems.asSearchGroup("appearance.newsletter")
+    val appearanceLibrary = AppearanceLibrarySearchItems.asSearchGroup("appearance.library", AppearanceLibraryRowAdmissions)
+    val appearancePerformance = AppearancePerformanceSearchItems.asSearchGroup("appearance.performance", AppearancePerformanceRowAdmissions)
+    val appearanceEyeCare = AppearanceEyeCareSearchItems.asSearchGroup("appearance.eyeCare", AppearanceEyeCareRowAdmissions)
+    val appearanceNewsletter = AppearanceNewsletterSearchItems.asSearchGroup("appearance.newsletter", AppearanceNewsletterRowAdmissions)
 
     // ── PlaybackSettingsScreen ──────────────────────────────────────────
     val playbackPlayer = PlaybackSettingsSearchItems.asSearchGroup("playback.player", PlaybackPlayerRowAdmissions)

@@ -65,4 +65,24 @@
     <string name="livetv_will_be_recorded">将录制「%1$s」。</string>
     <string name="livetv_channel">频道</string>
     <string name="livetv_live">直播</string>
+
+    <!-- Tab error fallbacks (the UiMessage folds' Resource arms) -->
+    <string name="livetv_error_load_channels">加载频道失败</string>
+    <string name="livetv_error_load_channel">加载频道失败</string>
+    <string name="livetv_error_load_programs">加载节目失败</string>
+    <string name="livetv_error_load_guide">加载节目指南失败</string>
+    <string name="livetv_error_load_recordings">加载录制失败</string>
+    <string name="livetv_error_delete_recording">删除录制失败</string>
+    <string name="livetv_error_load_schedule">加载计划失败</string>
+    <string name="livetv_error_load_series">加载剧集失败</string>
+    <string name="livetv_error_record">创建录制失败</string>
+    <string name="livetv_error_cancel_recording">取消录制失败</string>
+
+    <!-- Programs tab row titles (jellyfin-web getProgramSections) -->
+    <string name="livetv_programs_on_now">正在播出</string>
+    <string name="livetv_programs_shows">剧集</string>
+    <string name="livetv_programs_movies">电影</string>
+    <string name="livetv_programs_sports">体育</string>
+    <string name="livetv_programs_kids">少儿</string>
+    <string name="livetv_programs_news">新闻</string>
 </resources>

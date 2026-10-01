@@ -6,6 +6,7 @@ import com.composables.icons.tabler.outline.CloudDownload
 import com.composables.icons.tabler.outline.Ticket
 import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrCast
+import com.raulshma.jellyplay.core.model.seerr.SeerrReleaseDateType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRole
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_digital
@@ -298,25 +299,35 @@ class SeerrDetailUtilsTest {
     fun `releaseTypePresentation maps theatrical digital and physical`() {
         assertEquals(
             ReleaseTypePresentation(Tabler.Outline.Ticket, Res.string.detail_cd_release_theatrical),
-            releaseTypePresentation(3),
+            releaseTypePresentation(SeerrReleaseDateType.THEATRICAL),
         )
         assertEquals(
             ReleaseTypePresentation(Tabler.Outline.CloudDownload, Res.string.detail_cd_release_digital),
-            releaseTypePresentation(4),
+            releaseTypePresentation(SeerrReleaseDateType.DIGITAL),
         )
         assertEquals(
             ReleaseTypePresentation(Tabler.Outline.Circle, Res.string.detail_cd_release_physical),
-            releaseTypePresentation(5),
+            releaseTypePresentation(SeerrReleaseDateType.PHYSICAL),
         )
     }
 
     @Test
-    fun `releaseTypePresentation renders nothing outside TMDB types 3 to 5`() {
-        // The row filters to 3..5 upstream; the table keeps the old `when`'s
-        // fall-through (no marker) for everything else.
-        assertNull(releaseTypePresentation(1))
-        assertNull(releaseTypePresentation(2))
-        assertNull(releaseTypePresentation(6))
-        assertNull(releaseTypePresentation(0))
+    fun `releaseTypePresentation renders nothing outside theatrical digital physical`() {
+        // The row filters to renderedReleaseTypes upstream; the table keeps
+        // the old `when`'s fall-through (no marker) for everything else —
+        // premiere, theatrical-limited, TV and the UNKNOWN fold.
+        assertNull(releaseTypePresentation(SeerrReleaseDateType.PREMIERE))
+        assertNull(releaseTypePresentation(SeerrReleaseDateType.THEATRICAL_LIMITED))
+        assertNull(releaseTypePresentation(SeerrReleaseDateType.TV))
+        assertNull(releaseTypePresentation(SeerrReleaseDateType.UNKNOWN))
+    }
+
+    @Test
+    fun `renderedReleaseTypes is exactly the set releaseTypePresentation renders`() {
+        // Keeps the row's upstream filter and the marker table from drifting.
+        assertEquals(
+            SeerrReleaseDateType.entries.filterTo(mutableSetOf()) { releaseTypePresentation(it) != null },
+            renderedReleaseTypes,
+        )
     }
 }

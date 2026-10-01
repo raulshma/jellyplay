@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.feature.player.video.TrackSelectionPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvTrackCatalog
 
 /**
  * The side-loaded id-resolution contract across BOTH mpv hosts: the catalog's

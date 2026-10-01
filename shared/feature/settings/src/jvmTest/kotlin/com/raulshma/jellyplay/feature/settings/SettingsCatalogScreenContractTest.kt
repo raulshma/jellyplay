@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -170,11 +172,9 @@ class SettingsCatalogScreenContractTest {
      * `SettingsItemList` total from must declare EVERY id's admission — the
      * listed exceptions are the deliberately-undeclared rows (screen-local or
      * content-gated rows the screens add explicitly, each commented at its
-     * declaration). A row added to one of these groups without an admission
-     * fails here instead of silently shrinking the on-screen total. The two
-     * size-derived exceptions (storage.network, appearance.library) are
-     * pinned separately below — their screens feed the declaration size
-     * itself, so the per-id ratchet cannot apply.
+     * declaration). The one remaining size-derived exception
+     * (storage.network) is pinned separately below — its screen feeds the
+     * declaration size itself, so the per-id ratchet cannot apply.
      */
     @Test
     fun `groups the screens feed totals from declare every id's admission`() {
@@ -202,6 +202,31 @@ class SettingsCatalogScreenContractTest {
             // The unhide row rides hidden-CW content state — no admission
             // vocabulary; the screen adds the +1 explicitly.
             "home.display" to setOf(HomeSettingsIds.UNHIDE_CW),
+            // The theme group's content-gated rows: their emission depends on
+            // theme state the admission vocabulary does not carry (variant
+            // accent support, standard-vs-themed branch, active-dark + OLED
+            // allowance, the SCHEDULED theme mode, the touch/desktop-only
+            // layout fork). appearanceThemeScreenRowTotal adds them as
+            // explicit content terms; the declared rows (advanced toggle)
+            // derive through rowTotalFor. theme_scheduler is the highlight-
+            // alias row (its screen face is the theme_mode row via
+            // THEME_HIGHLIGHT_IDS) — undeclared and counted by no total, the
+            // shipped quirk shape.
+            "appearance.theme" to AppearanceThemeContentGatedIds + setOf(AppearanceThemeAliasRowId),
+            // Library & Cards renders every declared row unconditionally (its
+            // shipped always-on behavior) — declared Always per id, fully
+            // covered; the screen-local confirm-library-reset action row is
+            // the explicit +1 at the call site.
+            "appearance.library" to emptySet(),
+            // The three advanced-only groups declare their advanced base and
+            // only compose behind the advanced structural block.
+            "appearance.performance" to emptySet(),
+            "appearance.eyeCare" to emptySet(),
+            // newsletter_sections' declared row renders as the runtime-
+            // reorderable per-section rows (the enum-driven media-segment
+            // shape) — the screen's total replaces its admitted slot with the
+            // runtime count explicitly.
+            "appearance.newsletter" to emptySet(),
         )
         undeclaredExceptions.forEach { (groupId, exceptions) ->
             val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
@@ -212,21 +237,15 @@ class SettingsCatalogScreenContractTest {
             )
         }
 
-        // The two size-derived exceptions: every declared row renders
-        // unconditionally, so the screens feed the declaration size itself —
-        // storage feeds `items.size` directly (no conditional, so no
-        // admission function), and the appearance screen's wrapper adds the
-        // screen-local confirm-library-reset +1 (the same explicit term the
-        // storage cache-used info row rides). A total that IS the declaration
-        // size self-tracks a new unconditional row, so the per-id ratchet
-        // above cannot apply; pin instead that the groups stay wholly
-        // undeclared at the expected sizes — a row made CONDITIONAL in one of
-        // these groups must move it onto the admission-derived ratchet above.
+        // The one remaining size-derived exception: every declared row renders
+        // unconditionally, so the screen feeds the declaration size itself —
+        // no conditional, so no admission function. A total that IS the
+        // declaration size self-tracks a new unconditional row, so the per-id
+        // ratchet above cannot apply; pin instead that the group stays wholly
+        // undeclared at the expected size — a row made CONDITIONAL in this
+        // group must move it onto the admission-derived ratchet above.
         val sizeDerivedGroups = mapOf(
             "storage.network" to 11,
-            // 10 shipped rows + the "Show Missing Episodes" and
-            // "Prefer Logo Images" library-display toggles.
-            "appearance.library" to 12,
         )
         sizeDerivedGroups.forEach { (groupId, declaredCount) ->
             val group = requireNotNull(SettingsScreenGroups.all.firstOrNull { it.id == groupId })
@@ -497,18 +516,24 @@ class SettingsCatalogScreenContractTest {
     @Test
     fun `security rows keep the shipped count gates and the undeclared quirk`() {
         val admissions = SettingsScreenGroups.security.admissions
-        assertIs<RowAdmission.Always>(admissions[SecuritySettingsIds.PIN_LOCK])
+        val pinGateDecl = assertIs<RowAdmission.Platform>(admissions[SecuritySettingsIds.PIN_LOCK])
+        assertEquals(RowAdmissionCapability.AppLock, pinGateDecl.capability)
         val biometricGateDecl = assertIs<RowAdmission.Platform>(admissions[SecuritySettingsIds.BIOMETRIC_LOCK])
         assertEquals(RowAdmissionCapability.Biometric, biometricGateDecl.capability)
-        assertIs<RowAdmission.Advanced>(admissions[SecuritySettingsIds.AUTO_LOCK_TIMER])
+        assertIs<RowAdmission.All>(admissions[SecuritySettingsIds.AUTO_LOCK_TIMER])
         // pin_for_player_lock renders behind the pin toggle but has never been
-        // admitted into the count — its deliberately-missing declaration.
+        // admitted into the count — its deliberately-missing declaration (the
+        // screen gates its desktop hiding on the capability directly).
         assertNull(admissions[SecuritySettingsIds.PIN_FOR_PLAYER_LOCK])
         assertNull(admissions[SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE])
         assertNull(admissions[SecuritySettingsIds.REMOTE_CONTROL_ENABLED])
-        // The biometric flag is the screen's gate-aware computed value.
+        // The biometric flag is the screen's gate-aware computed value; the
+        // app-lock flag is the plain capability (desktop's lock gate is
+        // Android-only, so every PIN row drops there).
         assertTrue(SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.BIOMETRIC_LOCK, RowAdmissionFlags(supportsBiometric = true)))
         assertFalse(SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.BIOMETRIC_LOCK, RowAdmissionFlags()))
+        assertTrue(SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.PIN_LOCK, RowAdmissionFlags(supportsAppLock = true)))
+        assertFalse(SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.PIN_LOCK, RowAdmissionFlags(supportsAppLock = false)))
     }
 
     // ── 3. The fixed drifts, pinned behaviorally ────────────────────────
@@ -1085,6 +1110,13 @@ class SettingsCatalogScreenContractTest {
 
     @Test
     fun `appearance library row total is the declaration plus the reset action row`() {
+        // Every declared row renders unconditionally (its declared Always —
+        // the shipped always-on set) and the screen-local confirm-library-
+        // reset action row is the explicit +1.
+        assertEquals(
+            SettingsScreenGroups.appearanceLibrary.items.size,
+            rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()),
+        )
         assertEquals(
             SettingsScreenGroups.appearanceLibrary.items.size + 1,
             appearanceLibraryScreenRowTotal(),
@@ -1095,18 +1127,152 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
+    fun `appearance theme row total tracks the declaration and its content gates`() {
+        val standard = ThemeVariant.STANDARD
+        val themed = ThemeVariant.SYNTHWAVE // carries accent options + dark-locked
+        // Standard variant, gates off: theme_mode + theme_style, plus the
+        // standard-branch accent_color + color_style = 4.
+        assertEquals(
+            4,
+            appearanceThemeScreenRowTotal(
+                variant = standard,
+                isDarkActive = false,
+                isAndroid12 = false,
+                isTv = false,
+                showAdvanced = false,
+                themeMode = ThemeMode.SYSTEM,
+            ),
+        )
+        // The Android-12 capability adds exactly the dynamic_theming row.
+        assertEquals(
+            5,
+            appearanceThemeScreenRowTotal(
+                variant = standard,
+                isDarkActive = false,
+                isAndroid12 = true,
+                isTv = false,
+                showAdvanced = false,
+                themeMode = ThemeMode.SYSTEM,
+            ),
+        )
+        // A themed variant swaps the standard branch for the accent picker.
+        assertEquals(
+            3,
+            appearanceThemeScreenRowTotal(
+                variant = themed,
+                isDarkActive = false,
+                isAndroid12 = false,
+                isTv = false,
+                showAdvanced = false,
+                themeMode = ThemeMode.SYSTEM,
+            ),
+        )
+        // Active dark + an OLED-capable themed variant (Vivid: accent picker
+        // + OLED allowance) adds exactly the oled row.
+        assertEquals(
+            4,
+            appearanceThemeScreenRowTotal(
+                variant = ThemeVariant.VIVID,
+                isDarkActive = true,
+                isAndroid12 = false,
+                isTv = false,
+                showAdvanced = false,
+                themeMode = ThemeMode.SYSTEM,
+            ),
+        )
+        // The advanced toggle reveals the nine declared advanced rows
+        // (contrast, library_view_mode, layout_mode, theme_music, nav_labels,
+        // date_format, font_scale, color_blind_mode, hand_mode) on
+        // touch/desktop plus the two content terms the standard branch added.
+        assertEquals(
+            4 + 9,
+            appearanceThemeScreenRowTotal(
+                variant = standard,
+                isDarkActive = false,
+                isAndroid12 = false,
+                isTv = false,
+                showAdvanced = true,
+                themeMode = ThemeMode.SYSTEM,
+            ),
+        )
+        // The layout fork is touch/desktop-only: on TV exactly that row drops.
+        assertEquals(
+            4 + 8,
+            appearanceThemeScreenRowTotal(
+                variant = standard,
+                isDarkActive = false,
+                isAndroid12 = false,
+                isTv = true,
+                showAdvanced = true,
+                themeMode = ThemeMode.SYSTEM,
+            ),
+        )
+        // SCHEDULED mode reveals the start/end pair.
+        assertEquals(
+            4 + 9 + 2,
+            appearanceThemeScreenRowTotal(
+                variant = standard,
+                isDarkActive = false,
+                isAndroid12 = false,
+                isTv = false,
+                showAdvanced = true,
+                themeMode = ThemeMode.SCHEDULED,
+            ),
+        )
+        // The declared half is exactly the advanced-flag base minus the
+        // content-gated exceptions and the theme_scheduler highlight-alias —
+        // the strict ratchet keeps them in sync.
+        val declared = rowTotalFor(
+            SettingsScreenGroups.appearanceTheme,
+            RowAdmissionFlags(showAdvanced = true),
+        )
+        assertEquals(
+            SettingsScreenGroups.appearanceTheme.items.size -
+                AppearanceThemeContentGatedIds.size - 1,
+            declared,
+        )
+    }
+
+    @Test
+    fun `appearance expert group totals derive from their advanced declarations`() {
+        // The three advanced-only groups only compose behind the advanced
+        // structural block; their totals read the declared advanced base.
+        assertEquals(2, rowTotalFor(SettingsScreenGroups.appearancePerformance, RowAdmissionFlags(showAdvanced = true)))
+        assertEquals(2, rowTotalFor(SettingsScreenGroups.appearanceEyeCare, RowAdmissionFlags(showAdvanced = true)))
+        // Newsletter: the declared trio minus the sections row (which renders
+        // as the runtime-reorderable rows the screen counts explicitly).
+        val sectionCount = 4
+        assertEquals(
+            SettingsScreenGroups.appearanceNewsletter.items.size - 1 + sectionCount,
+            rowTotalFor(SettingsScreenGroups.appearanceNewsletter, RowAdmissionFlags(showAdvanced = true)) - 1 + sectionCount,
+        )
+    }
+
+    @Test
     fun `security row total keeps the shipped count gates`() {
-        // The pin row always; biometric rides the platform+gate flag; the
-        // auto-lock timer rides advanced. pin_for_player_lock renders behind
-        // the pin toggle but has never been admitted into the count — the
-        // preserved quirk this pins (the strict derivation counts it as 0:
-        // it declares no gate).
-        fun securityTotal(canShowBiometric: Boolean, showAdvanced: Boolean) =
-            rowTotalFor(SettingsScreenGroups.security, RowAdmissionFlags(showAdvanced = showAdvanced, supportsBiometric = canShowBiometric))
+        // The pin row rides the app-lock capability; biometric rides the
+        // platform+gate flag; the auto-lock timer rides both compounded with
+        // the advanced toggle. pin_for_player_lock renders behind the pin
+        // toggle but has never been admitted into the count — the preserved
+        // quirk this pins (the strict derivation counts it as 0: it declares
+        // no gate).
+        fun securityTotal(canShowBiometric: Boolean, showAdvanced: Boolean, supportsAppLock: Boolean = true) =
+            rowTotalFor(SettingsScreenGroups.security, RowAdmissionFlags(showAdvanced = showAdvanced, supportsBiometric = canShowBiometric, supportsAppLock = supportsAppLock))
         assertEquals(1, securityTotal(canShowBiometric = false, showAdvanced = false))
         assertEquals(2, securityTotal(canShowBiometric = true, showAdvanced = false))
         assertEquals(2, securityTotal(canShowBiometric = false, showAdvanced = true))
         assertEquals(3, securityTotal(canShowBiometric = true, showAdvanced = true))
+        // Desktop (supportsAppLock=false, and the biometric gate nulls there
+        // so its computed flag is false too — the JVM actuals): no lock-group
+        // row renders at all, the screen total collapses.
+        assertEquals(0, securityTotal(canShowBiometric = false, showAdvanced = false, supportsAppLock = false))
+        assertEquals(0, securityTotal(canShowBiometric = false, showAdvanced = true, supportsAppLock = false))
+        // The biometric row rides ONLY the gate-aware biometric flag (the
+        // screen's null-gate conjunct owns the no-hardware case): with the
+        // flag forced true the row is admitted even with app-lock off — a
+        // synthetic combination no binary ships (desktop nulls the gate,
+        // Android sets both flags), so the derivation follows the flag.
+        assertEquals(1, securityTotal(canShowBiometric = true, showAdvanced = true, supportsAppLock = false))
     }
 
     // ── 7. The search-result click action ───────────────────────────────

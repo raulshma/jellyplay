@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataWrite
 import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrlWithApiKey
@@ -245,13 +246,13 @@ class PlaybackRepositoryImpl(
             PlaybackOutboxEventType.BOOK_PROGRESS ->
                 playbackApiClient.reportBookProgress(entry.itemId, entry.positionTicks).isSuccess
             PlaybackOutboxEventType.PLAYED ->
-                libraryApiClient.markPlayed(entry.itemId).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.MarkPlayed(entry.itemId)).isSuccess
             PlaybackOutboxEventType.UNPLAYED ->
-                libraryApiClient.markUnplayed(entry.itemId).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.MarkUnplayed(entry.itemId)).isSuccess
             PlaybackOutboxEventType.FAVORITE ->
-                libraryApiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = true)).isSuccess
             PlaybackOutboxEventType.UNFAVORITE ->
-                libraryApiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = false)).isSuccess
         }
 
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =

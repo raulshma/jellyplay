@@ -2035,4 +2035,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Comando a executar quando a mídia termina de reproduzir</string>
     <string name="ss_hooks_idle_cmd_subtitle">Comando a executar quando o app fica inativo</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Comando a executar quando o app sai da inatividade</string>
+    <string name="core_ui_whatsnew_category_new">Novo</string>
+    <string name="core_ui_whatsnew_category_improvement">Melhorado</string>
+    <string name="core_ui_whatsnew_category_fix">Corrigido</string>
+    <string name="core_ui_whatsnew_take_me_there">Levar-me lá</string>
 </resources>

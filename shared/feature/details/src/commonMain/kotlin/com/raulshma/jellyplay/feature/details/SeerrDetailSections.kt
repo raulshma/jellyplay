@@ -48,7 +48,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
-import com.raulshma.jellyplay.core.model.seerr.SeerrReleases
+import com.raulshma.jellyplay.core.model.seerr.SeerrReleaseDateRegion
+import com.raulshma.jellyplay.core.model.seerr.SeerrReleaseDateType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrWatchProvider
@@ -83,7 +84,9 @@ import org.jetbrains.compose.resources.stringResource
  * and [MediaInformationSection] widened from `private` to `internal`
  * because their callers ([SeerrDetailBody] / [SeerrDetailContent]) stayed
  * in the screen file; the row-level helpers keep `private` (single in-file
- * consumers). No behaviour change.
+ * consumers). No behaviour change. The video CARD body is the shared
+ * [YouTubeVideoCard] (DetailSectionVocabulary) — collapsed with the media
+ * family's identical copy; only the row scaffolding stays family-local.
  */
 @Composable
 internal fun VideosSection(
@@ -92,16 +95,6 @@ internal fun VideosSection(
 ) {
     val uniqueVideos = remember(videos) {
         videos.distinctBy { it.key }.filter { !it.key.isNullOrBlank() }
-    }
-    // The bottom scrim gradient is identical across every card in the same theme
-    // state, so compute it once per row instead of allocating a Brush per card
-    // as cards scroll in/out of view (the HomeMediaRows pattern).
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val surfaceScrimBrush = remember(surfaceColor) {
-        Brush.verticalGradient(
-            colors = listOf(Color.Transparent, surfaceColor.copy(alpha = 0.85f)),
-            startY = 100f
-        )
     }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
@@ -117,65 +110,11 @@ internal fun VideosSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(horizontal = 4.dp),
         ) { video ->
-                val thumbnailUrl = youTubeThumbnailUrl(video.site, video.key)
-
-                val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
-
-                Card(
-                    modifier = Modifier
-                        .width(240.dp)
-                        .aspectRatio(16f / 9f)
-                        .then(videoCardFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
-                        .clickable {
-                            onVideoClick(video)
-                        },
-                    shape = ShapeCache.smooth8
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        if (thumbnailUrl != null) {
-                            MediaImage(
-                                url = thumbnailUrl,
-                                contentDescription = video.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Tabler.Outline.PlayerPlay, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(surfaceScrimBrush)
-                        )
-                        
-                        Text(
-                            text = video.name ?: stringResource(Res.string.detail_seerr_video),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(8.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        
-                        Icon(
-                            Tabler.Outline.PlayerPlay,
-                            contentDescription = null,
-                            modifier = Modifier.align(Alignment.Center).size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                        )
-                    }
-                }
+            YouTubeVideoCard(
+                video = video,
+                fallbackLabel = stringResource(Res.string.detail_seerr_video),
+                onClick = { onVideoClick(video) },
+            )
         }
     }
 }
@@ -414,7 +353,7 @@ internal fun MediaInformationSection(
 
             val watchProviders = movie?.watchProviders ?: tv?.watchProviders ?: emptyList()
             val regionProviders = watchProviders.find { it.iso31661 == streamingRegion }
-            val streamingProviders = regionProviders?.flatrate.orEmpty()
+            val streamingProviders = regionProviders?.streaming.orEmpty()
             if (streamingProviders.isNotEmpty()) {
                 StreamingProvidersRow(streamingProviders, streamingRegion, seerrServerUrl)
             }
@@ -425,17 +364,17 @@ internal fun MediaInformationSection(
 @Composable
 private fun ReleaseDateRow(
     releaseDate: String?,
-    releases: SeerrReleases?,
+    releases: List<SeerrReleaseDateRegion>,
     discoverRegion: String,
 ) {
     val filteredReleases = remember(releases, discoverRegion) {
-        releases?.results
-            ?.find { it.iso31661 == discoverRegion }
+        releases
+            .find { it.iso31661 == discoverRegion }
             ?.releaseDates
             .orEmpty()
-            .filter { it.type in 3..5 }
+            .filter { it.type in renderedReleaseTypes }
             .distinctBy { it.type }
-            .sortedBy { it.type }
+            .sortedBy { it.type.value }
     }
 
     Row(
@@ -478,7 +417,7 @@ private fun ReleaseDateRow(
 }
 
 @Composable
-private fun ReleaseTypeIcon(type: Int) {
+private fun ReleaseTypeIcon(type: SeerrReleaseDateType) {
     // Mapping table lives in SeerrDetailUtils (releaseTypePresentation);
     // only the Icon shell stays in composition.
     val presentation = releaseTypePresentation(type) ?: return

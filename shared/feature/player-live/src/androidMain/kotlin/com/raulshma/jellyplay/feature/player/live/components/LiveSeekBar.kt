@@ -33,9 +33,9 @@ import com.raulshma.jellyplay.core.ui.tv.input.handleDPadKeyEvents
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_badge
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_go_to_live
-import com.raulshma.jellyplay.feature.player.video.engine.LIVE_SEEK_STEP_MS
-import com.raulshma.jellyplay.feature.player.video.engine.seekBackTargetMs
-import com.raulshma.jellyplay.feature.player.video.engine.seekForwardTargetMs
+import com.raulshma.jellyplay.feature.player.video.chrome.LIVE_SEEK_STEP_MS
+import com.raulshma.jellyplay.feature.player.video.chrome.seekBackTargetMs
+import com.raulshma.jellyplay.feature.player.video.chrome.seekForwardTargetMs
 
 /**
  * Live-aware seek bar for DVR-window timeshift.

@@ -107,10 +107,6 @@
     <string name="core_ui_color_style_title">Stile colore</string>
     <string name="core_ui_color_style_subtitle">Definisci l'atmosfera visiva delle tavolozze generate</string>
     <string name="core_ui_dynamic_colors">Colori dinamici dello sfondo</string>
-    <string name="core_ui_synthwave_accent_title">Accento Synthwave</string>
-    <string name="core_ui_synthwave_accent_subtitle">Seleziona una tonalità di colore di accento neon personalizzata</string>
-    <string name="core_ui_soothing_accent_title">Accento rilassante</string>
-    <string name="core_ui_soothing_accent_subtitle">Seleziona un colore di accento rilassante</string>
     <string name="core_ui_variant_accent_title">Accento %1$s</string>
     <string name="core_ui_variant_accent_subtitle">Seleziona il colore d'accento per questo stile tema</string>
 
@@ -120,7 +116,6 @@
     <string name="core_ui_read">Leggi</string>
     <string name="core_ui_backspace">Backspace</string>
     <string name="core_ui_request">Richiedi</string>
-    <string name="core_ui_watched">Visto</string>
     <string name="core_ui_downloaded">Scaricato</string>
     <string name="core_ui_cd_loading">Caricamento</string>
     <string name="core_ui_cd_error">Errore</string>
@@ -184,8 +179,6 @@
     <string name="player_speed_slider_label">Regola la velocità di riproduzione</string>
 
     <!-- Accessibilità: interruttore modalità Video/Musica (P5 §3.2) -->
-    <string name="a11y_mode_video">Modalità video</string>
-    <string name="a11y_mode_music">Modalità musica</string>
 
     <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
     <string name="detail_delete_downloads_title">Elimina download</string>
@@ -258,16 +251,10 @@
     <string name="core_ui_auth_use_screen_lock">Usa blocco schermo</string>
     <string name="core_ui_auth_unlock_screen_lock">Sblocca con blocco schermo</string>
     <string name="core_ui_auth_device_credential_prompt">Usa il blocco schermo del dispositivo per sbloccare</string>
+    <string name="core_ui_auth_no_unlock_method">Unlock is unavailable: no biometrics or screen lock are usable on this device. Clear app data to reset the lock.</string>
     <string name="core_show_password">Mostra password</string>
     <string name="core_hide_password">Nascondi password</string>
     <!-- What's New chrome -->
-    <string name="core_ui_whatsnew_sheet_title">Novità</string>
-    <string name="core_ui_whatsnew_release_title">Novità nella v%1$s</string>
-    <string name="core_ui_whatsnew_category_new">Nuovo</string>
-    <string name="core_ui_whatsnew_category_improvement">Migliorato</string>
-    <string name="core_ui_whatsnew_category_fix">Corretto</string>
-    <string name="core_ui_whatsnew_take_me_there">Portami lì</string>
-    <string name="core_ui_whatsnew_got_it">Capito</string>
     <string name="core_ui_whatsnew_archive_empty">Ancora nessuna novità di versione.</string>
     <string name="core_refresh_metadata_title">Aggiorna metadati</string>
     <string name="core_refresh_metadata_message">Scegli come il server aggiorna metadati e immagini di “%s”.</string>
@@ -281,4 +268,9 @@
     <string name="core_refresh_metadata_mode_replace_images_desc">Riscarica tutte le immagini dal provider, lasciando i metadati.</string>
     <string name="core_filter_has_subtitles">Con sottotitoli</string>
     <string name="core_filter_has_trailer">Con trailer</string>
+
+    <!-- Media-card footer meta (the shared MediaCardFooterMetaRow renderer
+         for PosterCard/WideMediaCard). -->
+    <string name="core_ui_card_percent_complete">%1$d% completato</string>
+    <string name="core_ui_card_time_left">%1$s rimanenti</string>
 </resources>

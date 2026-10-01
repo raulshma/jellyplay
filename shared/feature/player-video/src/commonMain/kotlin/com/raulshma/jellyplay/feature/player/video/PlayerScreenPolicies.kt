@@ -95,7 +95,7 @@ internal fun isSkipSegmentButtonVisible(
 
 // The player-chrome policies shared with the live player's screen moved to
 // the shared player-contract home
-// (com.raulshma.jellyplay.feature.player.video.engine.PlayerChromePolicies)
+// (com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromePolicies)
 // so both screens cite the same ONE policy instead of byte-identical copies:
 // `controlsAutoHideTimeoutMs` (first to move), then the step-seek family
 // (`seekBackTargetMs` / `seekForwardTargetMs` / `stepSeekTargetMs`), the

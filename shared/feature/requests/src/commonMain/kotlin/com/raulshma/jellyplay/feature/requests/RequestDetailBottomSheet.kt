@@ -117,7 +117,7 @@ fun RequestDetailBottomSheet(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
+    val requestStatus = request.status
     val deleteConfirm = rememberInlineConfirm(request.id)
     val removeFromServiceConfirm = rememberInlineConfirm(request.id)
     val mediaStatus = remember(request.is4k, request.media.status, request.media.status4k) {

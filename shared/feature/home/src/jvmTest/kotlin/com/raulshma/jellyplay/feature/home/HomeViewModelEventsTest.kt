@@ -265,7 +265,6 @@ class HomeViewModelEventsTest {
         mediaRepository = mediaRepository,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
-        seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
         quickDownloadActions = quickDownloadActions,
         offlineRepository = offlineRepository,
@@ -302,6 +301,13 @@ class HomeViewModelEventsTest {
                 playbackSyncScheduler = playbackSyncScheduler,
                 offlineFirstItemResolver = offlineFirstItemResolver,
             ),
+        ),
+        homeSheetsFactory = HomeSheetsFactory(
+            episodeCatalogue = episodeCatalogue,
+            seriesDownloads = seriesDownloads,
+            downloadIntake = downloadIntake,
+            userMessageBus = userMessageBus,
+            offlineRepository = offlineRepository,
         ),
     )
 

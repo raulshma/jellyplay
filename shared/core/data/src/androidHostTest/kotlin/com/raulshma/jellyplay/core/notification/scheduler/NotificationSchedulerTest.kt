@@ -57,6 +57,35 @@ class NotificationSchedulerTest {
         val workInfos = workManager.getWorkInfosForUniqueWork(NotificationScheduler.WORK_NAME).get()
         assertEquals(1, workInfos.size)
         assertTrue(workInfos[0].tags.contains(com.raulshma.jellyplay.core.notification.worker.NewMediaCheckWorker.WORK_TAG))
+        // The only periodic carrying the exponential 5-minute backoff — pinned
+        // here so the UniqueWorkSchedules fold cannot silently drop it. WorkInfo
+        // exposes no backoff accessor and this source set does not see
+        // androidx.room (WorkDatabase's supertype), so the enqueued spec's
+        // backoffDelayDuration is read reflectively off the test helper's
+        // in-memory database.
+        val database = workManager.javaClass.getMethod("getWorkDatabase").invoke(workManager)
+        // WorkManager 2.11's Room KSP emits the accessor as the Kotlin
+        // property form `workSpecDao()` (previously `getWorkSpecDao()`) —
+        // accept both so a version bump cannot re-break the pin.
+        val dao = database.javaClass.methods
+            .first { it.name == "workSpecDao" || it.name == "getWorkSpecDao" }
+            .invoke(database)
+        val daoMethods = dao.javaClass.methods
+        // The unique work name lives in the WorkName join — the WorkSpec's
+        // primary key is the generated UUID. Resolve the id by name first
+        // (the assertion above already pinned exactly one row), then load
+        // the spec by that id.
+        val idAndStates = daoMethods
+            .first { it.name == "getWorkSpecIdAndStatesForName" }
+            .invoke(dao, NotificationScheduler.WORK_NAME) as List<*>
+        val only = idAndStates.single()!!
+        val spec = daoMethods
+            .first { it.name == "getWorkSpec" }
+            .invoke(dao, only.javaClass.getField("id").get(only))!!
+        assertEquals(
+            java.util.concurrent.TimeUnit.MINUTES.toMillis(5),
+            spec.javaClass.getField("backoffDelayDuration").getLong(spec),
+        )
     }
 
     @Test

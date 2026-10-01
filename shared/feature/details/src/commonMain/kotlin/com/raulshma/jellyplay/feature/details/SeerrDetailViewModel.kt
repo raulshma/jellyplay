@@ -149,11 +149,11 @@ class SeerrDetailViewModel constructor(
                     }
 
                     recommendationsDeferred.await()?.let { result ->
-                        _uiState.update { it.copy(recommendations = result.results) }
+                        _uiState.update { it.copy(recommendations = result) }
                     }
 
                     similarDeferred.await()?.let { result ->
-                        _uiState.update { it.copy(similar = result.results) }
+                        _uiState.update { it.copy(similar = result) }
                     }
                 }
 
@@ -181,10 +181,10 @@ class SeerrDetailViewModel constructor(
         val movie = state.movieDetails
         val tv = state.tvDetails
         val mediaInfo = movie?.mediaInfo ?: tv?.mediaInfo
-        val status = mediaInfo?.status ?: 0
         // Availability folds through core/model's SeerrStatusDecisions
-        // (partial availability counts as present), not a hand-rolled pair.
-        if (!SeerrMediaStatus.fromValue(status).isAvailable) return
+        // (partial availability counts as present), not a hand-rolled pair;
+        // the status arrives enum-interpreted from the client seam.
+        if (!(mediaInfo?.status ?: SeerrMediaStatus.UNKNOWN).isAvailable) return
 
         // Provider candidates in priority order. tmdb is the primary id Seerr tracks;
         // tvdb/imdb are fallbacks that may be present on the detail's externalIds.

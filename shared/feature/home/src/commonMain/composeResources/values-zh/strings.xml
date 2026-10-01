@@ -109,4 +109,6 @@
     <string name="next_up_hidden_restore_all_message">所有 %1$d 个隐藏的剧集将重新出现在“接下来播放”栏中。</string>
     <string name="next_up_hidden_restore_cd">将 %1$s 恢复到“接下来播放”</string>
     <string name="next_up_hidden_unknown">未知剧集</string>
+    <string name="a11y_mode_video">视频模式</string>
+    <string name="a11y_mode_music">音乐模式</string>
 </resources>

@@ -109,4 +109,6 @@
     <string name="next_up_hidden_restore_all_message">Tutte le %1$d serie nascoste ricompariranno nella riga Prossimi contenuti.</string>
     <string name="next_up_hidden_restore_cd">Ripristina %1$s in Prossimi contenuti</string>
     <string name="next_up_hidden_unknown">Serie sconosciuta</string>
+    <string name="a11y_mode_video">Modalità video</string>
+    <string name="a11y_mode_music">Modalità musica</string>
 </resources>

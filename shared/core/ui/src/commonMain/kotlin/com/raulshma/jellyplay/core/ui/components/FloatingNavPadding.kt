@@ -32,9 +32,35 @@ import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 val floatingNavClearanceDp: Dp
     @Composable get() {
         val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        if (!LocalFloatingNavPresent.current) return navBarBottomInset
-        return Dimensions.floatingNavHeight + navBarBottomInset
+        return floatingNavReservationDp(
+            navPresent = LocalFloatingNavPresent.current,
+            navHeight = Dimensions.floatingNavHeight,
+            extraBottom = 0.dp,
+            systemInset = navBarBottomInset,
+        )
     }
+
+/**
+ * The pure, presence-gated clearance arithmetic behind [floatingNavClearanceDp]
+ * and [clearFloatingNav]'s static reservation: extra margin, plus the floating
+ * bar's height ONLY when a bar is actually painted ([LocalFloatingNavPresent]),
+ * plus the system navigation-bar inset. Extracted so the fold is pin-testable
+ * off-UI (see FloatingNavPaddingTest).
+ */
+internal fun floatingNavReservationDp(
+    navPresent: Boolean,
+    navHeight: Dp,
+    extraBottom: Dp,
+    systemInset: Dp,
+): Dp = extraBottom + (if (navPresent) navHeight else 0.dp) + systemInset
+
+/**
+ * The pure ride-up half of [clearFloatingNav]'s dynamic offset: the nav's
+ * slide-down offset (positive when hidden) negated so the rider moves up,
+ * clamped to one nav-height of travel.
+ */
+internal fun navRideUpOffsetPx(navOffsetPx: Float, navHeightPx: Float): Float =
+    (-navOffsetPx).coerceAtMost(navHeightPx)
 
 /**
  * Modifier that lifts a bottom-floating element (FAB, selection bar, mini-player)
@@ -82,13 +108,19 @@ fun Modifier.clearFloatingNav(
         0.dp
     }
     val maxOffsetPx = with(LocalDensity.current) { Dimensions.floatingNavHeight.toPx() }
-    val navClearance = if (LocalFloatingNavPresent.current) Dimensions.floatingNavHeight else 0.dp
     return this
-        .padding(bottom = extraBottom + navClearance + navBarBottomInset)
+        .padding(
+            bottom = floatingNavReservationDp(
+                navPresent = LocalFloatingNavPresent.current,
+                navHeight = Dimensions.floatingNavHeight,
+                extraBottom = extraBottom,
+                systemInset = navBarBottomInset,
+            ),
+        )
         .offset {
             // navOffsetPx() is positive when the bar has slid down (hidden) —
             // negate so the element moves up, clamped to one nav-height.
-            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffsetPx)
+            val yOffset = navRideUpOffsetPx(navOffsetPx(), maxOffsetPx)
             IntOffset(x = 0, y = yOffset.toInt())
         }
 }

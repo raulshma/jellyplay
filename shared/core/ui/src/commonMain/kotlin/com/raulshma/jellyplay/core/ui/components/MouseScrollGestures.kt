@@ -98,7 +98,7 @@ fun Modifier.mouseScroll(
  * instead of dead-ending — the same child-first negotiation the built-in
  * wheel logic performs.
  */
-fun Modifier.mouseWheelToHorizontalScroll(
+private fun Modifier.mouseWheelToHorizontalScroll(
     state: ScrollableState,
 ): Modifier = pointerInput(state) {
     awaitEachGesture {

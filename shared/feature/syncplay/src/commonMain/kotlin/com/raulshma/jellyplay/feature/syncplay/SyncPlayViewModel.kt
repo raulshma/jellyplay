@@ -71,6 +71,21 @@ class SyncPlayViewModel(
     private var autoJoinGroupId: String? = null
 
     init {
+        // Seed membership from the session's live truth BEFORE the first group
+        // load: re-opening the screen while a session is already active (the
+        // manager is a process-wide single) must show the in-group UI and —
+        // critically — must not let the auto-accept-invites machinery below
+        // auto-join `result.first()` on top of the existing membership (the
+        // former guard read this VM's never-seeded mirror, always false at
+        // init). loadCurrentGroup + the event listener ride the same arms the
+        // join success path runs.
+        if (syncPlaySession.activeGroupId != null) {
+            _uiState.update { it.copy(isInGroup = true) }
+            launch {
+                loadCurrentGroup()
+                startEventListener()
+            }
+        }
         loadGroups()
     }
 
@@ -91,7 +106,11 @@ class SyncPlayViewModel(
                             joinGroup(target.groupId)
                         }
                     }
-                    if (autoJoinGroupId == null && result.isNotEmpty() && !_uiState.value.isInGroup) {
+                    if (autoJoinGroupId == null && result.isNotEmpty() && syncPlaySession.activeGroupId == null) {
+                        // The guard reads the SESSION's live membership, not a
+                        // VM mirror: a user already inside group A (joined
+                        // from the player bridge or a previous screen) can
+                        // never be auto-joined onto `result.first()` here.
                         val prefs = syncPlayCastStore.syncPlayCast.value
                         if (prefs.syncPlayAutoAcceptInvites) {
                             joinGroup(result.first().groupId)
@@ -250,10 +269,18 @@ class SyncPlayViewModel(
                     is SyncPlaySessionEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
                             // An empty GroupUpdate normally means the server ejected us.
-                            // But the server can emit a transient empty update right after
-                            // a WebSocket reconnect (before membership is re-asserted); in
-                            // that window treat it as a soft signal and re-confirm via the
-                            // live group info rather than flipping to "left".
+                            // But this arm is NOT pure mirror-masking: the session's
+                            // activeGroupId does NOT model reconnect races — the manager
+                            // keeps activeGroupId set across a WebSocket drop while its
+                            // reconnect watcher re-asserts membership, and the server can
+                            // emit a transient empty update inside that window. An empty
+                            // update there is a soft signal, not an ejection: within the
+                            // grace window below we re-confirm via the live group info
+                            // instead of flipping to "left" (outside the window, or when
+                            // the re-confirm fails, we treat it as the ejection it is —
+                            // the dedicated GroupLeft event clears the session itself,
+                            // so a real ejection without the empty update is covered
+                            // upstream too).
                             val lastReconnect = syncPlaySession.lastReconnectMs
                             val recentlyReconnected = lastReconnect > 0L &&
                                 wallNowMillis() - lastReconnect < RECONNECT_GRACE_MS
@@ -330,7 +357,16 @@ class SyncPlayViewModel(
         launch {
             syncPlayRepository.getSyncPlayGroups()
                 .onSuccess { groups -> _uiState.update { it.copy(groups = groups) } }
-                .onFailure { }
+                .onFailure {
+                    // Surfaced on the tab's error field (the loadGroups fold):
+                    // a silent background poll can hide a dead server behind a
+                    // stale list forever. The screen renders the error only
+                    // over an empty group list, so a stale-but-nonempty list
+                    // still shows with the header status flagging it.
+                    _uiState.update { state ->
+                        state.copy(error = UiMessage.of(it, Res.string.syncplay_error_load_groups))
+                    }
+                }
         }
     }
 

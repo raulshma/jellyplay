@@ -2033,4 +2033,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Befehl, der ausgeführt wird, wenn die Wiedergabe endet</string>
     <string name="ss_hooks_idle_cmd_subtitle">Befehl, der ausgeführt wird, wenn die App in den Leerlauf wechselt</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Befehl, der ausgeführt wird, wenn die App den Leerlauf verlässt</string>
+    <string name="core_ui_whatsnew_category_new">Neu</string>
+    <string name="core_ui_whatsnew_category_improvement">Verbessert</string>
+    <string name="core_ui_whatsnew_category_fix">Behoben</string>
+    <string name="core_ui_whatsnew_take_me_there">Direkt hin</string>
 </resources>

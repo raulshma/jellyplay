@@ -62,7 +62,8 @@ internal val SecuritySettingsRowRecords = listOf(
         searchSubtitleRes = Res.string.ss_pin_lock_subtitle,
         keywords = listOf("pin", "lock", "code", "password", "security"),
         route = Route.SecuritySettings(),
-        icon = Tabler.Outline.Lock
+        icon = Tabler.Outline.Lock,
+        platforms = platformsForCapability(settingsCapabilities.supportsAppLock),
     ),
     SettingsRowRecord(
         id = SecuritySettingsIds.BIOMETRIC_LOCK,
@@ -81,7 +82,8 @@ internal val SecuritySettingsRowRecords = listOf(
         searchSubtitleRes = Res.string.ss_pin_for_player_lock_subtitle,
         keywords = listOf("pin", "player", "lock", "unlock", "screen lock"),
         route = Route.SecuritySettings(),
-        icon = Tabler.Outline.Key
+        icon = Tabler.Outline.Key,
+        platforms = platformsForCapability(settingsCapabilities.supportsAppLock),
     ),
     SettingsRowRecord(
         id = SecuritySettingsIds.QUICK_CONNECT_AUTHORIZE,
@@ -118,7 +120,8 @@ internal val SecuritySettingsRowRecords = listOf(
         keywords = listOf("auto lock", "timer", "lock", "timeout", "delay", "security"),
         route = Route.SecuritySettings(),
         icon = Tabler.Outline.Clock,
-        isAdvanced = true
+        isAdvanced = true,
+        platforms = platformsForCapability(settingsCapabilities.supportsAppLock),
     ))
 
 /** The catalog projection of `SecuritySettingsRowRecords`: the search faces + the shared category. */
@@ -129,13 +132,19 @@ internal val SecuritySettingsSearchItems: List<SettingsSearchItem> = SecuritySet
  * The security group's per-id declared row admissions — the single gate both
  * `rowTotalFor` (the screen's total) and SecuritySettingsScreen's emission
  * `if`s read. Only the lock-group rows declare gates (the biometric flag is
- * the screen's gate-aware computed value); `pin_for_player_lock` — the
- * shipped count quirk — and the quick-connect / remote-control /
- * remote-display rows (counted in their own single-row groups) stay
- * undeclared, and the strict derivation counts nothing undeclared.
+ * the screen's gate-aware computed value); the PIN rows ride the app-lock
+ * capability (desktop's lock gate is Android-only — see
+ * `SettingsCapabilities.supportsAppLock`), the auto-lock timer compounding
+ * it with the advanced toggle; `pin_for_player_lock` — the shipped count
+ * quirk — and the quick-connect / remote-control / remote-display rows
+ * (counted in their own single-row groups) stay undeclared, and the strict
+ * derivation counts nothing undeclared.
  */
 internal val SecurityRowAdmissions: Map<String, RowAdmission> = mapOf(
-    SecuritySettingsIds.PIN_LOCK to RowAdmission.Always,
+    SecuritySettingsIds.PIN_LOCK to RowAdmission.Platform(RowAdmissionCapability.AppLock),
     SecuritySettingsIds.BIOMETRIC_LOCK to RowAdmission.Platform(RowAdmissionCapability.Biometric),
-    SecuritySettingsIds.AUTO_LOCK_TIMER to RowAdmission.Advanced,
+    SecuritySettingsIds.AUTO_LOCK_TIMER to RowAdmission.All(
+        RowAdmission.Platform(RowAdmissionCapability.AppLock),
+        RowAdmission.Advanced,
+    ),
 )

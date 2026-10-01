@@ -18,6 +18,7 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.toBitmap
 import com.google.common.collect.ImmutableList
+import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.shared.core.data.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -268,21 +269,11 @@ class JellyPlayNotificationProvider(
     // ── Channel ──────────────────────────────────────────────────────
 
     private fun ensureNotificationChannel() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-                val channel = android.app.NotificationChannel(
-                    CHANNEL_ID,
-                    "Now Playing",
-                    android.app.NotificationManager.IMPORTANCE_LOW,
-                ).apply {
-                    description = "Media playback controls"
-                    setShowBadge(false)
-                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-                }
-                nm.createNotificationChannel(channel)
-            }
-        }
+        // I4 fold: the declaration (id, name, importance, badge, lockscreen
+        // visibility) lives in NotificationChannelManager with the other
+        // channel families — only this provider's notification BUILDERS
+        // stayed local.
+        NotificationChannelManager(appContext).ensureNowPlayingChannel()
     }
 
     companion object {

@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
 import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
+import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
@@ -20,8 +22,10 @@ import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error_buffering_timeout
+import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error_cancel_recording
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_error_no_channels
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_record_canceled
+import com.raulshma.jellyplay.feature.player.live.generated.resources.live_record_failed
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_record_success
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
@@ -43,13 +47,13 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.hours
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import org.jetbrains.compose.resources.StringResource
 
 private const val PROGRAM_LOOKAHEAD_HOURS = 12L
 
@@ -111,6 +115,19 @@ class LiveTvPlayerViewModel(
     transcodeReasonsRenderer: TranscodeReasonsRenderer =
         TranscodeReasonsRenderer { emptyList() },
     private val pip: PipController? = null,
+    /**
+     * The cross-player exclusivity authority (the video focus slice,
+     * ADR-0004): the live stream claims [PlaybackSurfaceId.VIDEO] on the
+     * play edge (the music manager's onIsPlayingChanged pattern) and OS
+     * losses come back as pause/duck commands through the bound
+     * [com.raulshma.jellyplay.core.data.playback.focus.VideoPlaybackSurface].
+     * Live's legacy duck-on-transient behavior rides the module's injected
+     * video policy, which this VM asserts once at init (see the init block —
+     * live had no pref gate; it always ducked). jvmTest takes the vacuous
+     * NoopPlaybackFocus default.
+     */
+    private val playbackFocus: com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus =
+        com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LiveTvPlayerUiState())
@@ -174,11 +191,12 @@ class LiveTvPlayerViewModel(
     private var routeSubtitleStreamIndex: Int? = null
 
     /**
-     * Audio-focus (duck/restore) + becoming-noisy auto-pause seam. Shared
-     * legacy `PlayerAudioLifecycle` under the androidMain actual; its
-     * [LivePlayerAudio.playerVolume]-backed control re-asserts mute as
+     * Becoming-noisy auto-pause + raw player volume seam; the androidMain
+     * actual also binds the current player as the focus module's VIDEO
+     * surface target (the video focus slice — the OS-loss pause/duck
+     * commands land there). Its volume access re-asserts mute as
      * `volume = 0f` (the same surface [toggleMute] uses — live has no
-     * `setMuted`). Live has no resume-skip, so no regain hook.
+     * `setMuted`). Live has no resume-skip, so no restore hook.
      */
     private val playerAudioLifecycle: LivePlayerAudio? = audio
 
@@ -187,6 +205,19 @@ class LiveTvPlayerViewModel(
         // platform impl reads the engine + mute state lazily through this
         // owner, mirroring the legacy inline adapter's re-read contract).
         playerAudioLifecycle?.bind(this)
+
+        // Assert live's focus policy once, at start: the legacy
+        // `Media3LivePlayerAudio` registered the OS focus seat UNCONDITIONALLY
+        // at engine creation and always ducked on a transient loss (restore
+        // on regain) — live had no pref gate. The module's
+        // [com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput]
+        // receiver is one process-singleton policy holder, so the VOD
+        // wiring's pref pushes override this while VOD plays and this
+        // re-asserts on every live start (the legacy seat/duck timing:
+        // per-player-session, not per-process). NoopPlaybackFocus (desktop,
+        // bare tests) is not a VideoFocusPolicyInput — the cast no-ops.
+        (playbackFocus as? com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput)
+            ?.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = true)
 
         // The session's outcomes fold into UI state (plus the PiP wiring each
         // event carries). Subscribed before any funnel can run so no fold is
@@ -315,9 +346,11 @@ class LiveTvPlayerViewModel(
             is LivePlaybackEvent.TranscodeReasonsChanged ->
                 _state.value = _state.value.copy(transcodeReasons = event.reasons)
             LivePlaybackEvent.EngineCreated -> {
-                // Install becoming-noisy + audio-focus only once for the
-                // (reused) engine instance, mirroring the VOD player. They
-                // persist across channel switches and are torn down in [stop].
+                // Install becoming-noisy (+ the focus surface binding) only
+                // once for the (reused) engine instance, mirroring the VOD
+                // player. They persist across channel switches and are torn
+                // down in [stop]. The FOCUS CLAIM itself rides the play edge
+                // below — not the engine creation.
                 playerAudioLifecycle?.onEngineCreated()
                 // Re-arm the PiP transport with every engine creation: [stop]
                 // nulls it via PipController.reset() — the re-arm lifecycle
@@ -346,6 +379,21 @@ class LiveTvPlayerViewModel(
             is LivePlaybackEvent.PlayingChanged -> {
                 _state.value = _state.value.copy(isPlaying = event.isPlaying)
                 pip?.setPlaying(event.isPlaying)
+                // The focus claim rides this ONE edge (the music manager's
+                // onIsPlayingChanged pattern): a granted claim evicts MUSIC
+                // synchronously; a DENIED claim means another holder is
+                // Suspended under an OS loss (read-aloud during a phone
+                // call) — pause mirrors the user's own pause so nothing
+                // auto-resumes, and the resulting playing=false edge
+                // releases below. The duck path never crosses here: a
+                // ducked live claim stays Held and the stream keeps playing.
+                if (event.isPlaying) {
+                    if (playbackFocus.acquire(PlaybackSurfaceId.VIDEO) is FocusOutcome.Denied) {
+                        playbackSession.pause()
+                    }
+                } else {
+                    playbackFocus.release(PlaybackSurfaceId.VIDEO)
+                }
             }
             is LivePlaybackEvent.AtLiveEdgeChanged ->
                 _state.value = _state.value.copy(isAtLiveEdge = event.atLiveEdge)
@@ -396,15 +444,15 @@ class LiveTvPlayerViewModel(
     }
 
     /**
-     * Adds/removes [channelId] from the user's favorite channels. Persists
-     * via [UserPreferencesStore.setFavoriteChannels]; the `init` observer
+     * Adds/removes [channelId] from the user's favorite channels. The flip
+     * lives on the store ([AppRuntimeStateStore.toggleFavoriteChannel] — the
+     * same command the Channels tab's star uses, reading the current set
+     * inside the [DataStore.edit] transaction); the `init` observer
      * propagates the change into [_state].
      */
     private fun toggleFavorite(channelId: String) {
         viewModelScope.launch {
-            val current = appRuntimeStateStore.state.first().favoriteChannels
-            val updated = if (channelId in current) current - channelId else current + channelId
-            appRuntimeStateStore.setFavoriteChannels(updated)
+            appRuntimeStateStore.toggleFavoriteChannel(channelId)
         }
     }
 
@@ -427,7 +475,7 @@ class LiveTvPlayerViewModel(
             is RecordOutcome.Error ->
                 _screenEvents.tryEmit(
                     LivePlayerEvent.Message(
-                        UiMessage.Raw(outcome.message ?: outcome.request.action.failureFallback())
+                        UiMessage.of(outcome.message, outcome.request.action.failureFallbackRes())
                     )
                 )
             is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
@@ -595,8 +643,10 @@ class LiveTvPlayerViewModel(
      * cleanly if the user returns to the same channel.
      */
     fun stop() {
-        // Tear down audio-focus + becoming-noisy before releasing the engine so
-        // the listeners never dereference a torn-down player (idempotent).
+        // Abandon the focus claim + tear down becoming-noisy (+ the surface
+        // binding, via onReleased) before releasing the engine so the
+        // commands never dereference a torn-down player (idempotent).
+        playbackFocus.release(PlaybackSurfaceId.VIDEO)
         playerAudioLifecycle?.onReleased()
         // Session teardown: engine-event shell disposed before the engine
         // release, the engine released, the deferred-zap and position mirrors
@@ -631,6 +681,14 @@ private fun RecordAction.successMessage(): LivePlayerMessage =
         UiMessage.Resource(Res.string.live_record_canceled)
     }
 
-/** The failure fallback literals, kept byte-identical from the legacy inline arms. */
-private fun RecordAction.failureFallback(): String =
-    if (startsTimer()) "Failed to set recording" else "Failed to cancel recording"
+/**
+ * The failure fallback resource per action ([UiMessage.of]'s Resource arm) —
+ * the former baked English literals ("Failed to set recording" / "Failed to
+ * cancel recording"), now localized string resources.
+ */
+private fun RecordAction.failureFallbackRes(): StringResource =
+    if (startsTimer()) {
+        Res.string.live_record_failed
+    } else {
+        Res.string.live_error_cancel_recording
+    }

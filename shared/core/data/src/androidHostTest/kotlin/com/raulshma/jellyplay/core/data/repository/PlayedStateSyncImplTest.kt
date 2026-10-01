@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataWrite
+import com.raulshma.jellyplay.core.network.api.UserDataWriteOutcome
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -72,21 +74,21 @@ class PlayedStateSyncImplTest {
     @Test
     fun `flip offline applies locally and enqueues, returns success`() = runTest {
         every { offlineModeManager.isOffline } returns true
-        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException())
 
         val result = sync.flip("item-1", played = true)
 
         assertEquals(Result.success(Unit), result)
         coVerify(exactly = 1) { offlineRepository.applyPlayedState("item-1", isPlayed = true) }
         coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = true) }
-        // Offline path must NOT hit the API.
-        coVerify(exactly = 0) { apiClient.markPlayed(any()) }
+        // Offline path must NOT hit the API (no write of ANY op).
+        coVerify(exactly = 0) { apiClient.writeUserData(any()) }
     }
 
     @Test
     fun `flip online success mirrors offline store, does not enqueue`() = runTest {
         every { offlineModeManager.isOffline } returns false
-        coEvery { apiClient.markUnplayed("item-1") } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkUnplayed("item-1")) } returns
+            Result.success(UserDataWriteOutcome.Done)
 
         val result = sync.flip("item-1", played = false)
 
@@ -98,7 +100,8 @@ class PlayedStateSyncImplTest {
     @Test
     fun `flip online failure applies locally and enqueues, swallows error`() = runTest {
         every { offlineModeManager.isOffline } returns false
-        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("5xx"))
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns
+            Result.failure(RuntimeException("5xx"))
 
         val result = sync.flip("item-1", played = true)
 
@@ -120,14 +123,15 @@ class PlayedStateSyncImplTest {
         assertEquals(Result.success(true), result)
         coVerify(exactly = 1) { offlineRepository.applyFavoriteState("item-1", isFavorite = true) }
         coVerify(exactly = 1) { playbackOutboxRepository.enqueueFavoriteState("item-1", isFavorite = true) }
-        // Offline path must NOT hit the API.
-        coVerify(exactly = 0) { apiClient.toggleFavorite(any(), any()) }
+        // Offline path must NOT hit the API (no write of ANY op).
+        coVerify(exactly = 0) { apiClient.writeUserData(any()) }
     }
 
     @Test
     fun `toggleFavorite online success mirrors the resolved target into the offline store`() = runTest {
         every { offlineModeManager.isOffline } returns false
-        coEvery { apiClient.toggleFavorite("item-1", any()) } returns Result.success(true)
+        coEvery { apiClient.writeUserData(UserDataWrite.ToggleFavorite("item-1")) } returns
+            Result.success(UserDataWriteOutcome.FavoriteNow(true))
 
         val result = sync.toggleFavorite("item-1")
 
@@ -139,7 +143,8 @@ class PlayedStateSyncImplTest {
     @Test
     fun `toggleFavorite online failure applies locally and enqueues the flipped target`() = runTest {
         every { offlineModeManager.isOffline } returns false
-        coEvery { apiClient.toggleFavorite("item-1", any()) } returns Result.failure(RuntimeException("500"))
+        coEvery { apiClient.writeUserData(UserDataWrite.ToggleFavorite("item-1")) } returns
+            Result.failure(RuntimeException("500"))
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isFavorite = true)
 
         val result = sync.toggleFavorite("item-1")
@@ -192,14 +197,14 @@ class PlayedStateSyncImplTest {
         coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = true, positionTicks = 5_000_000L))
         )
-        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.success(UserDataWriteOutcome.Done)
         // The repair pushes through the intent row + delivery probe.
         coEvery { playbackOutboxRepository.isPlayedStateIntentDelivered("item-1", played = true) } returns true
 
         val result = sync.reconcileOfflineRow("item-1")
 
         assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
-        coVerify(exactly = 1) { apiClient.markPlayed("item-1") }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) }
         coVerify(exactly = 1) {
             offlineRepository.updatePlaybackProgress(
                 itemId = "item-1",
@@ -217,7 +222,7 @@ class PlayedStateSyncImplTest {
         coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = true, positionTicks = 5_000_000L))
         )
-        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("5xx"))
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.failure(RuntimeException("5xx"))
 
         val result = sync.reconcileOfflineRow("item-1")
 
@@ -239,7 +244,7 @@ class PlayedStateSyncImplTest {
         val result = sync.reconcileOfflineRow("item-1")
 
         assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
-        coVerify(exactly = 0) { apiClient.markPlayed("item-1") }
+        coVerify(exactly = 0) { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) }
     }
 
     @Test
@@ -267,13 +272,13 @@ class PlayedStateSyncImplTest {
         coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = false))
         )
-        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.success(UserDataWriteOutcome.Done)
 
         val result = sync.reconcileOfflineRow("item-1")
 
         assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
         coVerify(exactly = 0) { offlineRepository.applyPlayedState("item-1", isPlayed = false) }
-        coVerify(exactly = 1) { apiClient.markPlayed("item-1") }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) }
     }
 
     @Test
@@ -285,7 +290,7 @@ class PlayedStateSyncImplTest {
         coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
             mediaDetail(mediaItem(isPlayed = false))
         )
-        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("offline"))
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.failure(RuntimeException("offline"))
 
         val result = sync.reconcileOfflineRow("item-1")
 

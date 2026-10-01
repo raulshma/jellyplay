@@ -5,6 +5,11 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
+import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_record
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_on_now
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_shows
 import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,6 +29,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -78,7 +84,7 @@ class ProgramsViewModelTest {
 
         val rows = viewModel.uiState.value.rows
         assertEquals(1, rows.size)
-        assertEquals("On Now", rows.first().title)
+        assertSame(Res.string.livetv_programs_on_now, rows.first().titleRes)
     }
 
     @Test
@@ -161,8 +167,8 @@ class ProgramsViewModelTest {
         val rows = viewModel.uiState.value.rows
         assertEquals(2, rows.size)
         assertEquals(listOf("now-2"), rows[0].programs.map { it.id })
-        assertEquals("On Now", rows[0].title)
-        assertEquals("Shows", rows[1].title)
+        assertSame(Res.string.livetv_programs_on_now, rows[0].titleRes)
+        assertSame(Res.string.livetv_programs_shows, rows[1].titleRes)
         assertEquals(listOf("show-1"), rows[1].programs.map { it.id })
         assertFalse(viewModel.uiState.value.refreshing)
         assertFalse(viewModel.uiState.value.isLoading)
@@ -221,17 +227,20 @@ class ProgramsViewModelTest {
         viewModel.recordOnce(sampleProgram(id = "prog-1"))
         advanceUntilIdle()
 
-        assertEquals(RecordDialogState.Error("conflict"), viewModel.uiState.value.recordDialog)
+        assertEquals(RecordDialogState.Error(UiMessage.Raw("conflict")), viewModel.uiState.value.recordDialog)
     }
 
     @Test
-    fun recordOnce_failure_with_null_message_falls_back_to_Failed() = runTest(mainDispatcher) {
+    fun recordOnce_failure_with_null_message_falls_back_to_the_resource() = runTest(mainDispatcher) {
         coEvery { mediaRepository.createTimer("prog-1") } returns
             Result.failure(RuntimeException(null as String?))
         viewModel.recordOnce(sampleProgram(id = "prog-1"))
         advanceUntilIdle()
 
-        assertEquals(RecordDialogState.Error("Failed"), viewModel.uiState.value.recordDialog)
+        assertEquals(
+            RecordDialogState.Error(UiMessage.Resource(Res.string.livetv_error_record)),
+            viewModel.uiState.value.recordDialog,
+        )
     }
 
     @Test
@@ -240,7 +249,7 @@ class ProgramsViewModelTest {
         viewModel.recordSeries(sampleProgram(id = "prog-1"))
         advanceUntilIdle()
 
-        assertEquals(RecordDialogState.Error("no"), viewModel.uiState.value.recordDialog)
+        assertEquals(RecordDialogState.Error(UiMessage.Raw("no")), viewModel.uiState.value.recordDialog)
     }
 
     @Test

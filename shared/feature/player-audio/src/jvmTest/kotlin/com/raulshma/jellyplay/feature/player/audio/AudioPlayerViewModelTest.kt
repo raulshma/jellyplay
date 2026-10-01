@@ -73,6 +73,10 @@ class AudioPlayerViewModelTest {
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
         trackDownloadActions = mockk(relaxed = true)
         sleepCountdown = mockk<SleepCountdown>(relaxed = true)
+        // Real flows: the uiState projection's ONE combine needs every
+        // source emitting (a relaxed mock would block it forever).
+        every { sleepCountdown.isSleepTimerActive } returns MutableStateFlow(false)
+        every { sleepCountdown.isEndOfEpisodeMode } returns MutableStateFlow(false)
         cast = mockk(relaxed = true)
         val audioQueueFacade = mockk<com.raulshma.jellyplay.core.data.playback.AudioQueueFacade>(relaxed = true)
 

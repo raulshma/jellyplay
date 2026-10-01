@@ -23,6 +23,8 @@ import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
+import com.raulshma.jellyplay.deeplink.SharedTextTarget
+import com.raulshma.jellyplay.deeplink.parseSharedText
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.feature.shell.displayMessageText
 import com.raulshma.jellyplay.navigation.ExternalPlaybackOutcome
@@ -319,6 +321,9 @@ class MainViewModel(
 
     fun handleSharedText(sharedText: String) {
         launch {
+            // The fold is the pure parseSharedText in the deeplink package
+            // (same home as IncomingIntentRequest); this member only applies
+            // the classified outcome.
             when (val target = parseSharedText(sharedText)) {
                 SharedTextTarget.Empty -> {
                     userMessageBus.info("No searchable content found in shared text")
@@ -332,26 +337,6 @@ class MainViewModel(
                 }
             }
         }
-    }
-
-    private fun parseSharedText(text: String): SharedTextTarget {
-        val jellyfinUrlMatch = JELLYFIN_MEDIA_URL_REGEX.find(text)
-        if (jellyfinUrlMatch != null) {
-            return SharedTextTarget.MediaDetail(jellyfinUrlMatch.groupValues[1])
-        }
-        val urlMatch = ANY_URL_REGEX.find(text)
-        if (urlMatch != null) {
-            return SharedTextTarget.Search(urlMatch.value)
-        }
-        return text.takeIf { it.isNotBlank() }
-            ?.let(SharedTextTarget::Search)
-            ?: SharedTextTarget.Empty
-    }
-
-    private sealed class SharedTextTarget {
-        data object Empty : SharedTextTarget()
-        data class Search(val query: String) : SharedTextTarget()
-        data class MediaDetail(val mediaId: String) : SharedTextTarget()
     }
 
     override fun consumePendingRoute() {
@@ -503,10 +488,5 @@ class MainViewModel(
                 }
             }
         }
-    }
-
-    private companion object {
-        val JELLYFIN_MEDIA_URL_REGEX = Regex("""jellyfin://media/([a-f0-9-]+)""")
-        val ANY_URL_REGEX = Regex("""https?://[^\s]+""")
     }
 }

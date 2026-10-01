@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
+import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
@@ -14,6 +15,7 @@ import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClientImpl
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClientImpl
+import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
 import com.raulshma.jellyplay.core.network.api.PluginApiClient
 import com.raulshma.jellyplay.core.network.api.PluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
@@ -42,4 +44,8 @@ class JellyfinApiClientImpl(
     MetadataApiClient by metadataClient,
     MediaInfoApiClient by mediaInfoClient,
     PluginApiClient by pluginClient,
-    UserApiClient by userClient
+    UserApiClient by userClient,
+    // The two library family seams ride the SAME library impl single (the
+    // one-impl-many-seams idiom — LibraryApiClientImpl implements all three).
+    PlaylistApiClient by libraryClient,
+    CollectionApiClient by libraryClient

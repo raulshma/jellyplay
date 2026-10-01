@@ -2037,4 +2037,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Comando da eseguire al termine della riproduzione</string>
     <string name="ss_hooks_idle_cmd_subtitle">Comando da eseguire quando l'app diventa inattiva</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Comando da eseguire quando l'app esce dall'inattività</string>
+    <string name="core_ui_whatsnew_category_new">Nuovo</string>
+    <string name="core_ui_whatsnew_category_improvement">Migliorato</string>
+    <string name="core_ui_whatsnew_category_fix">Corretto</string>
+    <string name="core_ui_whatsnew_take_me_there">Portami lì</string>
 </resources>

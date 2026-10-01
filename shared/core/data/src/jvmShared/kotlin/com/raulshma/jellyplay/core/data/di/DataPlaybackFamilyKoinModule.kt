@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.config.ClientCertificateManager
-import com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls
+import com.raulshma.jellyplay.core.model.PlaybackTls
 import org.koin.core.module.Module
 import org.koin.dsl.module
 

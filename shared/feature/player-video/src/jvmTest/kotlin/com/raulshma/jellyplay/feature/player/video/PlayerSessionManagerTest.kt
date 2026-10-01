@@ -356,7 +356,7 @@ class PlayerSessionManagerTest {
      */
     private fun clientCertSessionManager(
         playerType: PlayerType,
-        clientTls: com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls?,
+        clientTls: com.raulshma.jellyplay.core.model.PlaybackTls?,
         engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
         loadedRequests: MutableList<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>,
     ): PlayerSessionManager {
@@ -408,7 +408,7 @@ class PlayerSessionManagerTest {
         manager.loadMedia(PlaybackSource.Online(itemId, "ms-1"), startPositionTicks = 0L)
     }
 
-    private val activeTls = com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls(
+    private val activeTls = com.raulshma.jellyplay.core.model.PlaybackTls(
         clientCertificatePath = "/certs/client.crt",
         clientKeyPath = "/certs/client.key",
         caPath = "/certs/server-ca.pem",
@@ -431,7 +431,7 @@ class PlayerSessionManagerTest {
         // decides whether a certificate-less VLC connection lives).
         assertEquals(1, messageBus.infos.count { it.contains("VLC") })
         assertEquals(1, loaded.size)
-        assertEquals(activeTls, loaded.single().tls)
+        assertEquals(activeTls, loaded.single().requestSpecific?.tls)
 
         // Second load of another item: still one notice (one-time per session
         // manager), still loading.
@@ -454,7 +454,7 @@ class PlayerSessionManagerTest {
 
         assertEquals(0, messageBus.infos.size)
         assertEquals(1, loaded.size)
-        assertEquals(null, loaded.single().tls)
+        assertEquals(null, loaded.single().requestSpecific?.tls)
     }
 
     @Test
@@ -472,7 +472,7 @@ class PlayerSessionManagerTest {
         // mpv CONSUMES the certificate (via the tls-* options) — no notice.
         assertEquals(0, messageBus.infos.size)
         assertEquals(1, loaded.size)
-        assertEquals(activeTls, loaded.single().tls)
+        assertEquals(activeTls, loaded.single().requestSpecific?.tls)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

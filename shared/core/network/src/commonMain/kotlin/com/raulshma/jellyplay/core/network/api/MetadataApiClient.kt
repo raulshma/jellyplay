@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
-import com.raulshma.jellyplay.core.model.EditorPerson
+import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.IdentifyQuery
 import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.model.ImageInfo
@@ -10,20 +10,15 @@ import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 
 interface MetadataApiClient {
-    suspend fun updateItem(
-        itemId: String, name: String, originalTitle: String?, sortName: String?,
-        overview: String?, tagline: String?, genres: List<String>, tags: List<String>,
-        studios: List<String>, communityRating: Float?, criticRating: Float?,
-        officialRating: String?, customRating: String?, productionYear: Int?,
-        premiereDate: String?, endDate: String?, runtimeTicks: Long?,
-        indexNumber: Int?, parentIndexNumber: Int?, displayOrder: String?,
-        status: String?, airDays: List<String>, airTime: String?,
-        people: List<EditorPerson>, providerIds: Map<String, String>,
-        lockData: Boolean, lockedFields: List<String>,
-        preferredMetadataLanguage: String?, preferredMetadataCountryCode: String?,
-        taglines: List<String>, productionLocations: List<String>, dateCreated: String?,
-        type: String = "Unknown",
-    ): Result<Unit>
+    /**
+     * Saves the editor's field set onto the item (`POST /Items/{itemId}`). The
+     * [EditableItemMetadata] value object travels whole — the wire-level
+     * explode into the SDK's [BaseItemDto] (SDK-enum resolution for
+     * air-days/locked-fields/kind, date parsing, name→NameGuidPair studios)
+     * happens inside the impl, so callers never thread ~30 positional
+     * primitives.
+     */
+    suspend fun updateItem(itemId: String, metadata: EditableItemMetadata): Result<Unit>
 
     suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo>
     suspend fun refreshItemMetadata(itemId: String, metadataRefreshMode: String = "Default", imageRefreshMode: String = "Default", replaceAllMetadata: Boolean = false, replaceAllImages: Boolean = false, regenerateTrickplay: Boolean = false): Result<Unit>

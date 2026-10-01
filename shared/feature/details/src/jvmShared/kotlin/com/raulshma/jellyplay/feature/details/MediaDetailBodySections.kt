@@ -1098,6 +1098,15 @@ internal fun DetailCollectionItemsSection(
 
 // ── Cast & crew (delayIndex 8) ────────────────────────────────────────────
 
+/**
+ * Media family's cast row. Deliberately NOT collapsed with the Seerr family's
+ * `CastSection` (SeerrDetailScreen) despite the same-sounding name: this one
+ * renders [PersonItem] over Jellyfin [PersonInfo] (person navigation, the
+ * "see all" split, the OfflinePersonItem branch for local origins), while
+ * Seerr renders TMDB profile avatars over `SeerrCastMember` with different
+ * geometry — a collapse would change one family's UI. The genuinely shared
+ * section vocabulary lives in commonMain (DetailSectionVocabulary.kt).
+ */
 @Composable
 internal fun DetailCastSection(
     delayIndex: Int,

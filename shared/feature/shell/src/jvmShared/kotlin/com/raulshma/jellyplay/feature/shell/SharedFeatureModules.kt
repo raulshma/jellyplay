@@ -257,7 +257,8 @@ val sharedFeatureModules: List<Module> = listOf(
     // instantiates the VM on desktop (same latent class as the
     // player-adjacent features). Android's seams: the engine factory
     // resolves the shared NetworkQualifiers.streamingHttpClient; the audio
-    // seam wraps the legacy PlayerAudioLifecycle; the transcode-reasons
-    // renderer delegates to the legacy core:ui formatter.
+    // seam binds Media3LivePlayerAudio, the VIDEO-family focus surface
+    // (the legacy PlayerAudioLifecycle path died with the seat move); the
+    // transcode-reasons renderer delegates to the legacy core:ui formatter.
     playerLiveModule,
 )

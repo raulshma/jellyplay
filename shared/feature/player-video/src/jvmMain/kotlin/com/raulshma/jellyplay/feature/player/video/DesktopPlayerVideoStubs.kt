@@ -254,10 +254,7 @@ internal object NoOpSubtitlePreviewRepository : com.raulshma.jellyplay.feature.p
 }
 
 internal object NoOpVideoPlayerAudio : VideoPlayerAudio {
-    override fun isAudioFocusActive(): Boolean = false
-    override fun registerAudioFocus() {}
-    override fun unregisterAudioFocus() {}
-    override fun registerBecomingNoisy() {}
+    override fun register() {}
     override fun release() {}
 }
 
@@ -279,7 +276,15 @@ internal fun pickedLocalFile(uri: String): File? =
  * on it — while anything else still reads 0/empty; the offline probe reports
  * unknown.
  */
-internal class DesktopVideoPlayerPlatform : VideoPlayerPlatform {
+internal class DesktopVideoPlayerPlatform(
+    // The video focus slice (ADR-0004): the desktop graph's DefaultPlaybackFocus
+    // (DesktopPlayerModule) reaches the wiring through the platform seam; no
+    // video surface is registered in the desktop executor's surface list, so
+    // the displaced-holder self-pause rides the wiring's claimState observer.
+    override val playbackFocus: com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus =
+        com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
+    override val videoFocusSurface: com.raulshma.jellyplay.core.data.playback.focus.VideoPlaybackSurface? = null,
+) : VideoPlayerPlatform {
 
     override fun isLowRamDevice(): Boolean = false
 
@@ -305,10 +310,8 @@ internal class DesktopVideoPlayerPlatform : VideoPlayerPlatform {
         getSessionState: () -> PlayerSessionState,
     ): PlayerCastController = NoOpPlayerCastController()
 
-    override fun createAudioLifecycle(
+    override fun createBecomingNoisy(
         getEngine: () -> MediaEngine?,
-        isMuted: () -> Boolean,
-        onRegain: (() -> Unit)?,
     ): VideoPlayerAudio = NoOpVideoPlayerAudio
 }
 

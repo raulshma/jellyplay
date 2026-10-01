@@ -20,7 +20,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
  * Public because the LIVE player's screen cites the same seam: its
  * androidMain window effects moved off their byte-identical
  * `WindowCompat`/`FLAG_` inline code onto these ops (the shared-policy
- * precedent — [com.raulshma.jellyplay.feature.player.video.engine.PlayerChromePolicies]
+ * precedent — [com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromePolicies]
  * — both player screens must cite ONE host-window vocabulary instead of
  * carrying parallel copies). Only the type surface is public; the actuals stay
  * module-private implementation details behind [rememberPlayerWindowOps].

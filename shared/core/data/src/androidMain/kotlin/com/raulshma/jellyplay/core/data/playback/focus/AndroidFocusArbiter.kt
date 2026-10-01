@@ -9,8 +9,11 @@ import android.os.Looper
 
 /**
  * The Android [FocusArbiter]: ONE outstanding AudioFocusRequest owned here,
- * so this module's seat can never fight PlayerAudioLifecycle's (which stays
- * engine-bound to video/live). Since the music OS-leg migration the music
+ * so this module's seat can never fight an engine-internal one (the music
+ * players ship `setAudioAttributes(..., handleAudioFocus = false)` and, since
+ * the video slice, ExoPlayerEngine forces the same flag off — video's legacy
+ * engine-bound `PlayerAudioLifecycle` request was deleted with the seat
+ * move). Since the music OS-leg migration the music
  * players carry `setAudioAttributes(..., handleAudioFocus = false)` — no
  * ExoPlayer-side request is left to race this seat. The request's audio
  * attributes come from the CALLER's [FocusAudioAttributes] (slice-2

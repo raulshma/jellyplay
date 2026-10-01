@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixError
@@ -776,25 +777,179 @@ class DetailViewModel internal constructor(
         // Smart-play targets the next episode to watch from the already-loaded
         // sorted episodes, so it runs for both origins: a LOCAL series with
         // downloaded episodes shows the same Play/Resume/Next up target (and Up
-        // Next section) as its remote counterpart. Only the remote-only
-        // subordinate work stays gated on isRemote below.
+        // Next section) as its remote counterpart. Not an enrichment — this is
+        // the core resolution the screen's primary button reads.
         maybeComputeSmartPlayTarget()
-        if (isRemote) {
-            triggerRemoteSideEffects(itemId, detail, snapshot.capabilities)
-        } else {
-            triggerLocalSideEffects(itemId, detail)
-        }
+        // Declared enrichment fan-out: the subordinate loads below the core
+        // resolution, as an ordered declaration list (see [enrichments] for
+        // the gate table and what deliberately stayed inline).
+        runEnrichments(itemId, snapshot)
         // Book extras (TOC cache + marks counts) ride their own observe job —
         // cache-first, with the local-file probe as the never-opened fallback.
-        // Runs for every media type so a book → non-book move cancels the
-        // previous book's marks collector.
+        // DELIBERATELY NOT a [DetailEnrichment] declaration: its entry must
+        // run for EVERY media type (the leading bookExtrasJob cancel is a
+        // lifecycle cancel — a book → non-book move must kill the previous
+        // book's marks collector), which no snapshot-keyed gate can express
+        // without either leaking the collector or duplicating the guard.
         loadBookExtras(itemId, detail.path, snapshot.context.download?.downloadPath)
-        // Collections are remote-only companion content (not part of the snapshot);
-        // gated on remoteDiscovery so a local origin never starts it.
-        if (isRemote && snapshot.capabilities.remoteDiscovery &&
-            detail.item.mediaType == MediaType.COLLECTION
-        ) {
-            loadCollectionItems(itemId)
+    }
+
+    /**
+     * The declared enrichment fan-out — the subordinate loads a fresh
+     * resolution triggers, reduced from the former hand-launched blocks
+     * (triggerRemoteSideEffects / triggerLocalSideEffects /
+     * resolveSonarrForSeries / loadCollectionItems) to DATA: each entry is a
+     * [DetailEnrichment] whose gate reads the resolved snapshot only
+     * (mediaType × origin × capability) and whose body is the former launch
+     * content verbatim (guards included). Evaluated in declaration order —
+     * the exact order the remote block fired them — by [runEnrichments], so
+     * "snapshot of type X with capabilities Y fires E1..En and not the
+     * others" is directly testable (DetailViewModelEnrichmentsTest).
+     *
+     * Ordering note: the former sequence ran the collection-items launch
+     * AFTER [loadBookExtras]; both are fire-and-forget, guard-checked
+     * coroutines, so the declaration list placing collectionItems last (and
+     * [loadBookExtras] after the evaluator) preserves the observable
+     * behavior.
+     *
+     * Still inline by design (see reduceLoaded): [loadBookExtras] (lifecycle
+     * cancel for every media type) and [maybeComputeSmartPlayTarget] (core
+     * resolution, not a side effect).
+     */
+    private val enrichments: List<DetailEnrichment> = listOf(
+        DetailEnrichment(
+            name = "themeMusic",
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            val themeSourceId = inputs.detail.item.seriesId ?: inputs.itemId
+            themeMusicPlayer.playThemeFor(themeSourceId)
+        },
+        DetailEnrichment(
+            name = "arrServerResolve",
+            // SERIES/EPISODE only (the canManageSeries menu lives on series
+            // detail), and only when a Sonarr-resolvable tvdb id exists.
+            gate = {
+                it.remoteDiscoveryAllowed &&
+                    (it.mediaType == MediaType.SERIES || it.mediaType == MediaType.EPISODE) &&
+                    it.detail.providerIds["tvdb"]?.toIntOrNull() != null
+            },
+        ) { inputs ->
+            val summary = remoteDiscovery.arrRepository.resolveServers()
+                .getOrDefault(ArrServiceSummary())
+            // Guard: don't write sonarr resolution onto a different item's state.
+            if (loadGuard.isCurrent(inputs.itemId)) {
+                _uiState.update { it.copy(sonarrServersResolved = summary.sonarrServers.isNotEmpty()) }
+            }
+        },
+        DetailEnrichment(
+            name = "similarItems",
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            // Fetch similar/related items concurrently and non-blocking so the core
+            // detail renders immediately. The result lands in relatedItems.
+            mediaRepository.getSimilarItems(inputs.itemId, limit = 12)
+                .onSuccess { items ->
+                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
+                    _uiState.update {
+                        it.copy(relatedItems = items.filter { related -> related.id != inputs.itemId })
+                    }
+                }
+        },
+        DetailEnrichment(
+            name = "specialFeatures",
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            // Fetch special features / extras (featurettes, deleted scenes, etc.)
+            // concurrently so the core detail renders immediately; the result lands
+            // in specialFeatures and renders as its own horizontal row.
+            mediaExtrasReads.getSpecialFeatures(inputs.itemId)
+                .onSuccess { extras ->
+                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
+                    _uiState.update { it.copy(specialFeatures = extras) }
+                }
+        },
+        DetailEnrichment(
+            name = "mediaSegments",
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            // Pre-warm the player's media-segment TTL cache and surface the two
+            // intro/credits skip affordances as a detail-side chip. The cache fill
+            // is an implicit side effect of the call; only the booleans flow into
+            // uiState so the chip can render before the player attaches.
+            playbackRepository.getMediaSegments(inputs.itemId).onSuccess { segments ->
+                if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
+                val availability = segments.toAvailability()
+                _uiState.update {
+                    it.copy(
+                        hasIntroSegment = availability.hasIntro,
+                        hasCreditSegment = availability.hasCredits,
+                    )
+                }
+            }
+        },
+        DetailEnrichment(
+            name = "seerrDiscovery",
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            // Trigger the Seerr recommendations/videos fetch from the VM. The 350ms
+            // delay is preserved for frame priority (don't contend with first-frame
+            // GPU work); seerrDataLoaded keeps it idempotent across re-entries.
+            kotlinx.coroutines.delay(350)
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            loadSeerrDataIfNeeded(inputs.detail)
+        },
+        DetailEnrichment(
+            name = "localRelatedItems",
+            // LOCAL-origin counterpart: remote discovery is server-only, so a
+            // downloaded item would otherwise render as an island. Requires at
+            // least one genre/studio to mine the on-device offline library for
+            // (the former triggerLocalSideEffects early return).
+            gate = {
+                !it.isRemote &&
+                    (it.detail.item.genres.isNotEmpty() || it.detail.item.studios.isNotEmpty())
+            },
+        ) { inputs ->
+            val related = offlineRepository.getLocalRelated(
+                currentId = inputs.itemId,
+                genres = inputs.detail.item.genres,
+                studios = inputs.detail.item.studios,
+                limit = 12,
+            )
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update {
+                it.copy(localRelatedItems = related.filter { r -> r.id != inputs.itemId })
+            }
+        },
+        DetailEnrichment(
+            name = "collectionItems",
+            // Collections are remote-only companion content (not part of the
+            // snapshot); gated on remoteDiscovery so a local origin never
+            // starts it.
+            gate = {
+                it.remoteDiscoveryAllowed && it.mediaType == MediaType.COLLECTION
+            },
+        ) { inputs ->
+            mediaRepository.getCollectionItems(inputs.itemId, limit = 100)
+                .onSuccess { result ->
+                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
+                    _uiState.update { it.copy(collectionItems = result.items) }
+                }
+        },
+    )
+
+    /**
+     * The evaluator beside [reduceLoaded]: walks the declaration list in
+     * order, launching each gated entry on the VM scope. viewModelScope's
+     * Main.immediate keeps the launch bodies in declaration order up to each
+     * body's first suspension point — the former synchronous-then-launched
+     * ordering of the remote block. [DetailLoadGuard] stays the single
+     * admission seam: every body re-checks it at its suspension-point writes.
+     */
+    private fun runEnrichments(itemId: String, snapshot: MediaDetailSnapshot) {
+        val inputs = DetailEnrichmentInputs(itemId = itemId, snapshot = snapshot)
+        for (enrichment in enrichments) {
+            if (!enrichment.gate(inputs)) continue
+            launch { enrichment.run(inputs) }
         }
     }
 
@@ -867,118 +1022,6 @@ class DetailViewModel internal constructor(
     }
 
     /**
-     * Fires the remote-only subordinate work for a freshly-resolved REMOTE
-     * snapshot. Each launch captures [itemId] and bails if navigation moved on,
-     * through the [DetailLoadGuard] identity check. All branches are additionally
-     * gated on [DetailCapabilities.remoteDiscovery] so the capability flip is
-     * the single authority for whether discovery may run.
-     */
-    private fun triggerRemoteSideEffects(
-        itemId: String,
-        detail: MediaDetail,
-        capabilities: DetailCapabilities,
-    ) {
-        if (!capabilities.remoteDiscovery) return
-        val themeSourceId = detail.item.seriesId ?: itemId
-        themeMusicPlayer.playThemeFor(themeSourceId)
-        when (detail.item.mediaType) {
-            MediaType.SERIES, MediaType.EPISODE -> resolveSonarrForSeries(detail)
-            else -> Unit
-        }
-        // Fetch similar/related items concurrently and non-blocking so the core
-        // detail renders immediately. The result lands in relatedItems.
-        launch {
-            mediaRepository.getSimilarItems(itemId, limit = 12)
-                .onSuccess { items ->
-                    if (!loadGuard.isCurrent(itemId)) return@onSuccess
-                    _uiState.update {
-                        it.copy(relatedItems = items.filter { related -> related.id != itemId })
-                    }
-                }
-        }
-        // Fetch special features / extras (featurettes, deleted scenes, etc.)
-        // concurrently so the core detail renders immediately; the result lands
-        // in specialFeatures and renders as its own horizontal row.
-        launch {
-            mediaExtrasReads.getSpecialFeatures(itemId)
-                .onSuccess { extras ->
-                    if (!loadGuard.isCurrent(itemId)) return@onSuccess
-                    _uiState.update { it.copy(specialFeatures = extras) }
-                }
-        }
-        // Pre-warm the player's media-segment TTL cache and surface the two
-        // intro/credits skip affordances as a detail-side chip. The cache fill
-        // is an implicit side effect of the call; only the booleans flow into
-        // uiState so the chip can render before the player attaches.
-        launch {
-            playbackRepository.getMediaSegments(itemId).onSuccess { segments ->
-                if (!loadGuard.isCurrent(itemId)) return@onSuccess
-                val availability = segments.toAvailability()
-                _uiState.update {
-                    it.copy(
-                        hasIntroSegment = availability.hasIntro,
-                        hasCreditSegment = availability.hasCredits,
-                    )
-                }
-            }
-        }
-        // Trigger the Seerr recommendations/videos fetch from the VM. The 350ms
-        // delay is preserved for frame priority (don't contend with first-frame
-        // GPU work); seerrDataLoaded keeps it idempotent across re-entries.
-        launch {
-            kotlinx.coroutines.delay(350)
-            if (!loadGuard.isCurrent(itemId)) return@launch
-            loadSeerrDataIfNeeded(detail)
-        }
-    }
-
-    /**
-     * LOCAL-origin counterpart to [triggerRemoteSideEffects]. Remote discovery
-     * (similar/Seerr/trailers) is server-only, so a downloaded item would
-     * otherwise render as an island. Instead we mine the on-device offline
-     * library for titles sharing a genre (then studio) and surface them in the
-     * same "More like this" row with an "On-device" label. Read-only single
-     * fetch — no helper class — over the already-indexed offline rows.
-     */
-    private fun triggerLocalSideEffects(itemId: String, detail: MediaDetail) {
-        val genres = detail.item.genres
-        val studios = detail.item.studios
-        if (genres.isEmpty() && studios.isEmpty()) return
-        launch {
-            val related = offlineRepository.getLocalRelated(
-                currentId = itemId,
-                genres = genres,
-                studios = studios,
-                limit = 12,
-            )
-            if (!loadGuard.isCurrent(itemId)) return@launch
-            _uiState.update {
-                it.copy(localRelatedItems = related.filter { r -> r.id != itemId })
-            }
-        }
-    }
-
-    /**
-     * Resolves whether any Sonarr server is reachable, once per series load, and
-     * stores the boolean in [_uiState]. Previously [canManageSeries] called
-     * `remoteDiscovery.arrRepository.resolveServers` from inside a `combine` transform, which
-     * re-issued network I/O on every identity tick and got cancelled/restarted
-     * mid-resolution. Hoisting it here makes the combine a pure derivation.
-     */
-    private fun resolveSonarrForSeries(detail: MediaDetail) {
-        val tvdbId = detail.providerIds["tvdb"]
-        if (tvdbId?.toIntOrNull() == null) return
-        val itemId = detail.item.id
-        launch {
-            val summary = remoteDiscovery.arrRepository.resolveServers()
-                .getOrDefault(com.raulshma.jellyplay.core.model.arr.ArrServiceSummary())
-            // Guard: don't write sonarr resolution onto a different item's state.
-            if (!loadGuard.isCurrent(itemId)) return@launch
-            _uiState.update { it.copy(sonarrServersResolved = summary.sonarrServers.isNotEmpty()) }
-        }
-    }
-
-    /**
      * On-demand per-season expand. The provider supplies seasons/episodes up
      * front (including [DetailUiState.fetchedSeasonIds]); a season NOT in that
      * set (e.g. the mismatched-season-key edge) is fetched here through the
@@ -996,16 +1039,6 @@ class DetailViewModel internal constructor(
             // merges it into the provider's content, and re-emits. The reducer
             // picks up the new snapshot on the next observe() emission.
             mediaDetailProvider.expandSeason(itemId, seasonId)
-        }
-    }
-
-    private fun loadCollectionItems(collectionId: String) {
-        launch {
-            mediaRepository.getCollectionItems(collectionId, limit = 100)
-                .onSuccess { result ->
-                    if (!loadGuard.isCurrent(collectionId)) return@onSuccess
-                    _uiState.update { it.copy(collectionItems = result.items) }
-                }
         }
     }
 
@@ -1467,7 +1500,7 @@ class DetailViewModel internal constructor(
                 val recsDeferred = if (loadRecs) {
                     async {
                         remoteDiscovery.seerrRepository.getRecommendations(tmdbId, mediaType)
-                            .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+                            .getOrElse { emptyList() }
                     }
                 } else {
                     null
@@ -1475,7 +1508,7 @@ class DetailViewModel internal constructor(
                 val similarDeferred = if (loadRecs) {
                     async {
                         remoteDiscovery.seerrRepository.getSimilar(tmdbId, mediaType)
-                            .getOrElse { com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse() }
+                            .getOrElse { emptyList() }
                     }
                 } else {
                     null
@@ -1492,8 +1525,8 @@ class DetailViewModel internal constructor(
                     if (loadGuard.isCurrent(generation)) {
                         _uiState.update {
                             it.copy(
-                                seerrRecommendations = recs.results.take(20),
-                                seerrSimilar = similar.results.take(20),
+                                seerrRecommendations = recs.take(20),
+                                seerrSimilar = similar.take(20),
                             )
                         }
                     }

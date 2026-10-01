@@ -15,9 +15,9 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
-            // ArrReleaseCacheMiss — the typed /release cache-miss error the
-            // release sheet's "Search again" affordance keys off.
-            implementation(project(":shared:core:network"))
+            // (the former core:network edge dropped: the /release cache-miss
+            // leak folded into the data seam's ArrReleaseCacheUnavailable —
+            // the sheet branches on the seam type, never a network exception.)
             // ExperimentalStore — the DIRECT_ARR_INTEGRATION flag gate behind
             // the combined-queue screen.
             implementation(project(":shared:core:datastore"))

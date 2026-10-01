@@ -2055,4 +2055,8 @@
     <string name="settings_live_updates">Live Updates</string>
     <string name="settings_live_updates_on">On — download progress shows on your lock screen and status area</string>
     <string name="settings_live_updates_off">Off — tap to allow live progress notifications in Android settings</string>
+    <string name="core_ui_whatsnew_category_new">New</string>
+    <string name="core_ui_whatsnew_category_improvement">Improved</string>
+    <string name="core_ui_whatsnew_category_fix">Fixed</string>
+    <string name="core_ui_whatsnew_take_me_there">Take me there</string>
 </resources>

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.CountryInfo
 import com.raulshma.jellyplay.core.model.CultureInfo
+import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ExternalIdInfo
 import com.raulshma.jellyplay.core.model.ImageInfo
@@ -55,56 +56,46 @@ class MetadataApiClientImpl(
         ?: throw IllegalArgumentException("Unknown image type: $imageType")
 
     override suspend fun updateItem(
-        itemId: String, name: String, originalTitle: String?, sortName: String?,
-        overview: String?, tagline: String?, genres: List<String>, tags: List<String>,
-        studios: List<String>, communityRating: Float?, criticRating: Float?,
-        officialRating: String?, customRating: String?, productionYear: Int?,
-        premiereDate: String?, endDate: String?, runtimeTicks: Long?,
-        indexNumber: Int?, parentIndexNumber: Int?, displayOrder: String?,
-        status: String?, airDays: List<String>, airTime: String?,
-        people: List<EditorPerson>, providerIds: Map<String, String>,
-        lockData: Boolean, lockedFields: List<String>,
-        preferredMetadataLanguage: String?, preferredMetadataCountryCode: String?,
-        taglines: List<String>, productionLocations: List<String>, dateCreated: String?,
-        type: String,
+        itemId: String,
+        metadata: EditableItemMetadata,
     ): Result<Unit> = engine.withApi { api ->
         val dto = BaseItemDto(
             id = itemIdOrRandom(itemId),
-            name = name,
-            type = baseItemKindOrMovie(type),
-            originalTitle = originalTitle,
-            forcedSortName = sortName,
-            overview = overview,
-            taglines = taglines.takeIf { it.isNotEmpty() },
-            genres = genres.takeIf { it.isNotEmpty() },
-            tags = tags.takeIf { it.isNotEmpty() },
-            studios = studios.takeIf { it.isNotEmpty() }?.map { NameGuidPair(name = it, id = java.util.UUID.randomUUID()) },
-            communityRating = communityRating,
-            criticRating = criticRating,
-            officialRating = officialRating,
-            customRating = customRating,
-            productionYear = productionYear,
-            premiereDate = parseDateTimeOrNull(premiereDate),
-            endDate = parseDateTimeOrNull(endDate),
-            runTimeTicks = runtimeTicks,
-            indexNumber = indexNumber,
-            parentIndexNumber = parentIndexNumber,
-            displayOrder = displayOrder,
-            status = status,
-            airDays = airDays.takeIf { it.isNotEmpty() }?.mapNotNull { dayName ->
+            name = metadata.name,
+            type = baseItemKindOrMovie(metadata.type),
+            originalTitle = metadata.originalTitle,
+            forcedSortName = metadata.sortName,
+            overview = metadata.overview,
+            taglines = metadata.taglines.takeIf { it.isNotEmpty() },
+            genres = metadata.genres.takeIf { it.isNotEmpty() },
+            tags = metadata.tags.takeIf { it.isNotEmpty() },
+            studios = metadata.studios.takeIf { it.isNotEmpty() }?.map { NameGuidPair(name = it, id = java.util.UUID.randomUUID()) },
+            communityRating = metadata.communityRating,
+            criticRating = metadata.criticRating,
+            officialRating = metadata.officialRating,
+            customRating = metadata.customRating,
+            productionYear = metadata.productionYear,
+            premiereDate = parseDateTimeOrNull(metadata.premiereDate),
+            endDate = parseDateTimeOrNull(metadata.endDate),
+            runTimeTicks = metadata.runtimeTicks,
+            indexNumber = metadata.indexNumber,
+            parentIndexNumber = metadata.parentIndexNumber,
+            displayOrder = metadata.displayOrder,
+            status = metadata.status,
+            airDays = metadata.airDays.takeIf { it.isNotEmpty() }?.mapNotNull { dayName ->
                 dayOfWeekOrNull(dayName)
             },
-            airTime = airTime,
-            people = people.takeIf { it.isNotEmpty() }?.map { it.toBaseItemPerson() },
-            providerIds = providerIds.takeIf { it.isNotEmpty() },
-            lockedFields = lockedFields.takeIf { it.isNotEmpty() }?.mapNotNull { fieldName ->
+            airTime = metadata.airTime,
+            people = metadata.people.takeIf { it.isNotEmpty() }?.map { it.toBaseItemPerson() },
+            providerIds = metadata.providerIds.takeIf { it.isNotEmpty() },
+            lockedFields = metadata.lockedFields.takeIf { it.isNotEmpty() }?.mapNotNull { fieldName ->
                 metadataFieldOrNull(fieldName)
             },
-            preferredMetadataLanguage = preferredMetadataLanguage,
-            preferredMetadataCountryCode = preferredMetadataCountryCode,
-            productionLocations = productionLocations.takeIf { it.isNotEmpty() },
-            dateCreated = parseDateTimeOrNull(dateCreated),
-            lockData = lockData,
+            preferredMetadataLanguage = metadata.preferredMetadataLanguage,
+            preferredMetadataCountryCode = metadata.preferredMetadataCountryCode,
+            productionLocations = metadata.productionLocations.takeIf { it.isNotEmpty() },
+            dateCreated = parseDateTimeOrNull(metadata.dateCreated),
+            lockData = metadata.lockData,
         )
         api.itemUpdateApi.updateItem(itemId = requireItemUuid(itemId), data = dto)
     }

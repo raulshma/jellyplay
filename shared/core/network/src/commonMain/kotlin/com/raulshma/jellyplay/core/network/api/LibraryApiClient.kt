@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.network.api
 
-import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -13,8 +12,6 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonRef
-import com.raulshma.jellyplay.core.model.Playlist
-import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 
@@ -219,33 +216,6 @@ interface LibraryApiClient {
      */
     suspend fun getAllEpisodes(seriesId: String, isMissing: Boolean? = false): Result<List<MediaItem>>
 
-    suspend fun getCollectionItems(
-        collectionId: String,
-        startIndex: Int = 0,
-        limit: Int = 50,
-    ): Result<SearchResult>
-
-    /**
-     * Lists the user's collections (Jellyfin BoxSet items) for the detail
-     * screen's "Add to Collection" picker. Remote-only — collections are a
-     * server-side library construct. Returns a lightweight summary per
-     * collection (id, name, item count, primary image tag).
-     */
-    suspend fun getCollections(limit: Int = 100): Result<List<CollectionSummary>>
-
-    /**
-     * Creates a new collection (BoxSet) via Jellyfin's `/Collections` endpoint,
-     * optionally seeded with [itemIds]. Returns the new collection's id.
-     * Remote-only.
-     */
-    suspend fun createCollection(name: String, itemIds: List<String> = emptyList()): Result<String>
-
-    /**
-     * Adds the given item ids to an existing collection via Jellyfin's
-     * `/Collections/{collectionId}/Items` endpoint. Remote-only.
-     */
-    suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
-
     suspend fun getTags(
         parentId: String? = null,
         startIndex: Int = 0,
@@ -259,26 +229,20 @@ interface LibraryApiClient {
     ): Result<SearchResult>
 
     suspend fun getLyrics(itemId: String): Result<LyricsResult>
-    suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>
-    suspend fun getPlaylistItems(playlistId: String, startIndex: Int = 0, limit: Int = 50): Result<List<PlaylistItem>>
-    suspend fun createPlaylist(name: String, overview: String? = null, itemIds: List<String> = emptyList(), mediaType: MediaType = MediaType.AUDIO): Result<String>
-    suspend fun updatePlaylist(playlistId: String, name: String? = null, overview: String? = null, isPublic: Boolean? = null): Result<Unit>
-    suspend fun deletePlaylist(playlistId: String): Result<Unit>
-    suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit>
-    suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit>
-    suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit>
-    suspend fun markPlayed(itemId: String): Result<Unit>
-    suspend fun markUnplayed(itemId: String): Result<Unit>
-    suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean? = null): Result<Boolean>
+
+    // The playlist ×8 and collection ×4 members left for the
+    // [PlaylistApiClient] / [CollectionApiClient] family seams (the
+    // one-impl-many-seams idiom: [LibraryApiClientImpl] implements all three;
+    // the JellyfinApiClient union carries them; consumers narrow to the seam
+    // they read).
 
     /**
-     * Sets an absolute favorite state on the server (`markFavoriteItem` when
-     * [isFavorite], `unmarkFavoriteItem` otherwise). Used by the outbox replay
-     * path so a staged flip lands deterministically regardless of the server's
-     * current state — unlike [toggleFavorite], which reads-and-flips and is
-     * unsuitable for replay.
+     * The ONE user-data write member — the parameterized fold of the four
+     * former write verbs over [UserDataWrite]; the outcome carries the
+     * post-toggle favorite state ([UserDataWriteOutcome.FavoriteNow]) so the
+     * single member serves the flip and the replay funnels alike.
      */
-    suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit>
+    suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome>
 
     fun getImageUrl(
         itemId: String,

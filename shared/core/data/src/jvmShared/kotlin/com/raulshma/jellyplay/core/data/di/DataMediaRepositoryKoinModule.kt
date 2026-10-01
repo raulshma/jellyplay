@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
 import com.raulshma.jellyplay.core.data.repository.MediaUncachedReadsImpl
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
-import com.raulshma.jellyplay.core.data.repository.NewsletterRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -117,6 +116,7 @@ internal val dataMediaRepositoryModule: Module = module {
     single {
         MediaRepositoryImpl(
             libraryApiClient = get(),
+            collectionApiClient = get(),
             homeSectionsCachePort = get(),
             syncPlayApiClient = get(),
             homeSnapshotStore = get(),
@@ -181,11 +181,18 @@ internal val dataMediaRepositoryModule: Module = module {
         )
     }
     single<LiveTvRepository> { get<LiveTvRepositoryImpl>() }
-    single { NewsletterRepositoryImpl(apiClient = get()) }
-    single<NewsletterRepository> { get<NewsletterRepositoryImpl>() }
+    // Pass-through mirror retired: NewsletterRepository extends the
+    // NewsletterApiClient family seam and the MediaInfoApiClient single
+    // implements that family — interface delegation (a two-line inline
+    // object, the LiveTvRepositoryImpl `by` shape without the class) carries
+    // the three members verbatim, so no forward impl class exists anymore.
+    single<NewsletterRepository> {
+        val apiClient = get<com.raulshma.jellyplay.core.network.api.MediaInfoApiClient>()
+        object : NewsletterRepository, com.raulshma.jellyplay.core.network.api.NewsletterApiClient by apiClient {}
+    }
     single {
         PlaylistRepositoryImpl(
-            libraryApiClient = get(),
+            playlistApiClient = get(),
             internals = get(),
         )
     }

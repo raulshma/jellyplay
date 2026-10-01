@@ -24,7 +24,7 @@ import com.raulshma.jellyplay.core.model.cacheThrough
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -94,9 +94,9 @@ public interface SeerrHomeSectionSources {
     /** Connection + preference probe, read fresh on every home fetch. */
     val seerrAvailable: Boolean
 
-    suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse>
+    suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>>
 
-    suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse>
+    suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>>
 }
 
 /**
@@ -538,7 +538,7 @@ internal class HomeSectionsFetcher(
             SeerrRowMedia.MOVIE -> seerrSources?.getDiscoverMovies(params)
             SeerrRowMedia.TV -> seerrSources?.getDiscoverTv(params)
         }?.getOrNull() ?: return null
-        val items = response.results.take(row.limit)
+        val items = response.take(row.limit)
         if (items.isEmpty()) return null
         return HomeSection(
             id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),

@@ -295,15 +295,32 @@ interface SonarrSeriesOperations {
  * the tmdb/tvdb lookups on demand; a row where no lookup can produce the
  * required id fails with an actionable message (refresh the queue).
  */
-interface ArrReleaseOperations {
 
+/**
+ * The typed failure [ArrReleaseOperations.searchReleases] reports when the
+ * owning server's ~30-minute interactive-search decision cache has no rows
+ * (server restart, TTL expiry, or the search command never ran). The
+ * data-seam fold of the network layer's wire-level cache-miss marker: the
+ * release sheet branches on THIS type and never sees a network-module
+ * exception class.
+ */
+class ArrReleaseCacheUnavailable(
+    /** The service that answered ("Radarr" / "Sonarr"), for UI copy. */
+    val serviceName: String,
+    cause: Throwable? = null,
+) : Exception(
+    "The cached release results on $serviceName expired. Search again to refresh them.",
+    cause,
+)
+
+interface ArrReleaseOperations {
     /**
      * Runs the interactive release search for [item] against its owning
      * server (`GET /release?movieId=` on Radarr, `?episodeId=` on Sonarr —
      * the queue row always carries the episode id). Fails with
-     * [com.raulshma.jellyplay.core.network.arr.ArrReleaseCacheMiss] when the
-     * server's ~30-minute decision cache has no rows (the search command must
-     * run first) — the UI offers "Search again" on that failure.
+     * [ArrReleaseCacheUnavailable] when the server's ~30-minute decision
+     * cache has no rows (the search command must run first) — the UI offers
+     * "Search again" on that failure.
      */
     suspend fun searchReleases(item: ArrQueueItem): Result<List<ArrRelease>>
 

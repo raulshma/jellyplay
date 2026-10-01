@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home.di
 
 import com.raulshma.jellyplay.feature.home.HomeStores
 import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
+import com.raulshma.jellyplay.feature.home.HomeSheetsFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
 import com.raulshma.jellyplay.feature.home.NextUpExcludedViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -49,6 +50,15 @@ val homeModule: Module = module {
             bookTocCacheRepository = get(),
         )
     }
+    single {
+        HomeSheetsFactory(
+            episodeCatalogue = get(),
+            seriesDownloads = get(),
+            downloadIntake = get(),
+            userMessageBus = get(),
+            offlineRepository = get(),
+        )
+    }
     viewModel {
         HomeViewModel(
             episodeCatalogue = get(),
@@ -57,7 +67,6 @@ val homeModule: Module = module {
             mediaRepository = get(),
             imageUrlProvider = get(),
             photoFolderPrefetcher = get(),
-            seriesDownloads = get(),
             downloadIntake = get(),
             quickDownloadActions = get(),
             offlineRepository = get(),
@@ -79,6 +88,7 @@ val homeModule: Module = module {
             settingsSearchProvider = get(),
             homeRefresherFactory = get(),
             syncStatusStateHolderFactory = get(),
+            homeSheetsFactory = get(),
         )
     }
     viewModel {

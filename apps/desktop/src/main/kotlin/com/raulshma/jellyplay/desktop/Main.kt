@@ -54,6 +54,28 @@ fun main() {
     java.io.File(paths.dataDir.toString()).mkdirs()
     java.io.File(paths.configDir.toString()).mkdirs()
 
+    // Single-instance guard (BEFORE startKoin — the second JVM must exit
+    // before it opens the same DataStore/Room files under DesktopPaths).
+    // Contended launch: message + exit 0; the OS-level file lock cannot go
+    // stale (kernel releases it when the holder dies). Activating the
+    // existing window from the second launch is out of scope — see
+    // DesktopSingleInstanceGuard's KDoc.
+    val singleInstanceLock = DesktopSingleInstanceGuard.acquire(
+        paths.configDirNio.resolve(DesktopSingleInstanceGuard.LOCK_FILE_NAME),
+    )
+    if (singleInstanceLock == null) {
+        println("[JellyPlay] Another JellyPlay instance is already running — exiting.")
+        return
+    }
+    // Pin the lock for the process lifetime: this local is never read again,
+    // and a GC'd FileLock releases when its Cleaner closes the channel — the
+    // exact multi-writer corruption the guard exists to prevent. The shutdown
+    // hook is a GC root, so it keeps the handle reachable until exit (and
+    // releases + removes the lock file on the way out).
+    java.lang.Runtime.getRuntime().addShutdownHook(
+        Thread { singleInstanceLock.close() },
+    )
+
     // Bundled libmpv (packaged builds): jpackage installs the app-resources
     // dir (fetchBundledLibmpv's windows-x64 subtree, apps/desktop/
     // build.gradle.kts) next to the jars and the Compose launcher exposes it

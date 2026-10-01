@@ -78,15 +78,44 @@ private const val SPF_FLUSH = 0x3
 private const val WAIT_POLL_MS = 100
 
 /**
+ * The voice operations the binding drives, as a seam: the real handle is the
+ * late-bound [SpVoiceObject]; tests substitute a recording fake so the
+ * SHUTDOWN ORDERING and the released-guard semantics (the use-after-free
+ * class the [SapiTtsBinding.released] flag exists for) are pinnable without
+ * a live COM apartment. The interface mirrors the ISpVoice surface the
+ * binding actually touches — nothing more.
+ */
+internal interface SapiVoiceHandle {
+    /** Speak([text], SPF flush) — an empty text with purge is the stop gesture. */
+    fun speakAsync(text: String)
+
+    /** Rate property put (−10..10). */
+    fun setRate(rate: Int)
+
+    /** WaitUntilDone([timeoutMs]) — true once the utterance queue has drained. */
+    fun waitUntilDone(timeoutMs: Int): Boolean
+
+    /** Drop the COM reference (apartment-thread only). */
+    fun release()
+}
+
+/**
  * The Windows half of [TtsBinding]: raw `ISpVoice` calls, no decisions.
  * [ensureStarted] runs on the apartment thread (the voice object must be
  * created inside its COM apartment); [host] callbacks re-post there.
+ *
+ * Test seams (both with production defaults — the machine wiring passes
+ * none): [voiceFactory] stands in for the real COM creation (a throwing
+ * factory folds to `onInit(false)`, the no-SAPI path) and [pollIntervalMs]
+ * replaces the 100 ms [WAIT_POLL_MS] slice — see SapiTtsBindingTest.
  */
-private class SapiTtsBinding(
+internal class SapiTtsBinding(
     private val apartment: ExecutorService,
+    private val voiceFactory: () -> SapiVoiceHandle = { SpVoiceObject() },
+    private val pollIntervalMs: Int = WAIT_POLL_MS,
 ) : TtsBinding {
 
-    private var voice: SpVoiceObject? = null
+    private var voice: SapiVoiceHandle? = null
 
     /**
      * Set on the apartment thread by [shutdown] before the voice is released.
@@ -103,8 +132,8 @@ private class SapiTtsBinding(
 
     override fun ensureStarted() {
         if (voice != null) return
-        val created: SpVoiceObject? = try {
-            SpVoiceObject()
+        val created: SapiVoiceHandle? = try {
+            voiceFactory()
         } catch (_: Throwable) {
             null
         }
@@ -134,14 +163,15 @@ private class SapiTtsBinding(
         waiter?.execute {
             // Poll WaitUntilDone ON the apartment thread (the raw IDispatch
             // must never leave its creating apartment); this thread only
-            // blocks on each 100ms poll's result, so a queued stop still
-            // reaches the voice between polls — its purge drains the queue
-            // and the next poll returns done. The machine's id guard makes
-            // any stale completion inert. The `released` check drops polls
-            // queued behind a shutdown instead of touching the freed voice.
+            // blocks on each [pollIntervalMs] poll's result, so a queued stop
+            // still reaches the voice between polls — its purge drains the
+            // queue and the next poll returns done. The machine's id guard
+            // makes any stale completion inert. The `released` check drops
+            // polls queued behind a shutdown instead of touching the freed
+            // voice.
             val drained = try {
                 var done = false
-                while (!done) done = submitToApartment { released || v.waitUntilDone(WAIT_POLL_MS) }.get()
+                while (!done) done = submitToApartment { released || v.waitUntilDone(pollIntervalMs) }.get()
                 true
             } catch (_: Throwable) {
                 true
@@ -186,10 +216,10 @@ private class SapiTtsBinding(
  * base class CoCreateInstances the voice there and owns the reference);
  * every call must run on that same thread.
  */
-private class SpVoiceObject : COMBindingBaseObject(Guid.CLSID(CLSID_SPVOICE), false) {
+private class SpVoiceObject : COMBindingBaseObject(Guid.CLSID(CLSID_SPVOICE), false), SapiVoiceHandle {
 
     /** Speak([text], SPF flags) — an empty text with purge is the stop gesture. */
-    fun speakAsync(text: String) {
+    override fun speakAsync(text: String) {
         oleMethod(
             OleAuto.DISPATCH_METHOD,
             null,
@@ -199,7 +229,7 @@ private class SpVoiceObject : COMBindingBaseObject(Guid.CLSID(CLSID_SPVOICE), fa
     }
 
     /** Rate property put (−10..10). */
-    fun setRate(rate: Int) {
+    override fun setRate(rate: Int) {
         oleMethod(
             OleAuto.DISPATCH_PROPERTYPUT,
             VARIANT.ByReference(),
@@ -209,7 +239,7 @@ private class SpVoiceObject : COMBindingBaseObject(Guid.CLSID(CLSID_SPVOICE), fa
     }
 
     /** WaitUntilDone([ms]) — true once the utterance queue has drained. */
-    fun waitUntilDone(timeoutMs: Int): Boolean {
+    override fun waitUntilDone(timeoutMs: Int): Boolean {
         val result = VARIANT.ByReference()
         try {
             oleMethod(

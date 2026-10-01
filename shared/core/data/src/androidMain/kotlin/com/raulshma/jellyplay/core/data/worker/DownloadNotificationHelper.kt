@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.Manifest
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -11,6 +9,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -20,6 +19,7 @@ import com.raulshma.jellyplay.core.data.receiver.DownloadActionReceiver
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
+import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 
 /**
  * Builds and manages the download notifications: the per-transfer progress
@@ -34,9 +34,9 @@ import com.raulshma.jellyplay.core.model.formatSpeed
  * single home for the derivation so the worker, the action receiver
  * ([DownloadActionReceiver]) and the summary never drift.
  *
- * The channel is deduplicated solely via [NotificationManager.getNotificationChannel]
- * — the previous process-global `channelCreated` flag was redundant
- * and is intentionally not reproduced here.
+ * Channel creation routes through [NotificationChannelManager] (I4 fold —
+ * deduplicated via `getNotificationChannel` there; the previous
+ * process-global `channelCreated` flag was redundant and is not reproduced).
  */
 internal object DownloadNotificationHelper {
 
@@ -154,8 +154,14 @@ internal object DownloadNotificationHelper {
      * The count only changes on download lifecycle transitions, but the 2 s
      * progress ticks re-invoke [refreshSummary] with the same value — the memo
      * skips the notification rebuild + re-post until the count actually changes.
+     *
+     * The memo lives in a resettable [DownloadNotificationState] holder
+     * rather than a bare object var, so tests can [DownloadNotificationState.reset]
+     * or replace it — an un-injectable private field on an `object` leaked
+     * process-global mutable state with no seam.
      */
-    private var lastSummaryCount: Int? = null
+    @VisibleForTesting
+    internal var summaryState: DownloadNotificationState = DownloadNotificationState()
 
     /**
      * Posts (or dismisses when [inFlightCount] == 0) the group summary. Called
@@ -163,10 +169,10 @@ internal object DownloadNotificationHelper {
      * transfers into a single row and clears itself when the last one ends.
      */
     fun refreshSummary(context: Context, inFlightCount: Int) {
-        if (inFlightCount == lastSummaryCount) return
+        if (inFlightCount == summaryState.lastSummaryCount) return
         if (inFlightCount <= 0) {
             NotificationManagerCompat.from(context).cancel(SUMMARY_NOTIFICATION_ID)
-            lastSummaryCount = 0
+            summaryState.lastSummaryCount = 0
             return
         }
         if (!canPostNotifications(context)) return
@@ -184,7 +190,7 @@ internal object DownloadNotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
         NotificationManagerCompat.from(context).notify(SUMMARY_NOTIFICATION_ID, notification)
-        lastSummaryCount = inFlightCount
+        summaryState.lastSummaryCount = inFlightCount
     }
 
     fun formatProgressText(
@@ -406,18 +412,10 @@ internal object DownloadNotificationHelper {
             PackageManager.PERMISSION_GRANTED
 
     private fun createNotificationChannel(context: Context) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Downloads",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Download progress notifications"
-                setShowBadge(false)
-            }
-            manager.createNotificationChannel(channel)
-        }
+        // I4 fold: the declaration (id, name, importance, badge) lives in
+        // NotificationChannelManager with the other channel families — only
+        // this helper's notification BUILDERS stayed local.
+        NotificationChannelManager(context).ensureDownloadsChannel()
     }
 
     // Every broadcast action above must resolve to a distinct PendingIntent
@@ -441,4 +439,22 @@ internal object DownloadNotificationHelper {
     // Fixed summary id — strictly greater than every possible progress and
     // paused id by construction (only the SUMMARY bit is set).
     const val SUMMARY_NOTIFICATION_ID = SUMMARY_BIT
+}
+
+/**
+ * The [DownloadNotificationHelper.summaryState] memo as an injectable holder
+ * instead of a bare `object` var — the summary-memo state used to be a
+ * process-global private field on the singleton with no test seam. Tests
+ * reset or replace [DownloadNotificationHelper.summaryState] wholesale;
+ * production keeps the single default instance, so call-site behavior is
+ * unchanged.
+ */
+internal class DownloadNotificationState {
+    /** Last count handed to [DownloadNotificationHelper.refreshSummary]. */
+    var lastSummaryCount: Int? = null
+
+    /** Forgets the memo — the next [DownloadNotificationHelper.refreshSummary] re-posts. */
+    fun reset() {
+        lastSummaryCount = null
+    }
 }

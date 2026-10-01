@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +46,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.StatusPill
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_cancel
@@ -306,22 +306,6 @@ private fun SortChip(
     )
 }
 
-/** The row's status chip shape: a 15 %-tinted pill with label-small text. */
-@Composable
-private fun StatusChip(text: String, color: Color) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.15f),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
-    }
-}
-
 // ── Release row ───────────────────────────────────────────────────────────
 
 @Composable
@@ -368,7 +352,7 @@ private fun ReleaseRow(
                         ArrReleaseHistoryStatus.FAILED ->
                             Res.string.releaseSearch_history_failed to StatusColors.error
                     }
-                    StatusChip(text = stringResource(label), color = color)
+                    StatusPill(text = stringResource(label), color = color)
                 }
             }
 
@@ -378,13 +362,13 @@ private fun ReleaseRow(
                 // Custom-format score chip (signed, score-style).
                 val score = release.customFormatScore
                 val scoreColor = if (score >= 0) StatusColors.success else StatusColors.error
-                StatusChip(text = if (score > 0) "+$score" else "$score", color = scoreColor)
+                StatusPill(text = if (score > 0) "+$score" else "$score", color = scoreColor)
                 Spacer(Modifier.width(8.dp))
                 // Approval state — the rejected chip pairs with the info
                 // toggle that expands the server's rejection reasons.
                 val rejected = release.needsOverride
                 val approvalColor = if (rejected) StatusColors.error else StatusColors.success
-                StatusChip(
+                StatusPill(
                     text = stringResource(
                         if (rejected) Res.string.releaseSearch_rejected else Res.string.releaseSearch_approved,
                     ),
@@ -392,7 +376,7 @@ private fun ReleaseRow(
                 )
                 if (release.fullSeason) {
                     Spacer(Modifier.width(8.dp))
-                    StatusChip(text = stringResource(Res.string.releaseSearch_full_season), color = StatusColors.pending)
+                    StatusPill(text = stringResource(Res.string.releaseSearch_full_season), color = StatusColors.pending)
                 }
                 Spacer(Modifier.width(8.dp))
                 if (release.seeders != null || release.leechers != null) {

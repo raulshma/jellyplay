@@ -1,18 +1,17 @@
 package com.raulshma.jellyplay.core.model.seerr
 
 import androidx.compose.runtime.Immutable
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Immutable
-@Serializable
-data class SeerrSearchResponse(
-    val page: Int = 1,
-    val totalPages: Int = 1,
-    val totalResults: Int = 0,
-    val results: List<SeerrSearchItem> = emptyList(),
-)
-
+/**
+ * One TMDB-sourced search/discover row (the read-model of the wire result
+ * item — the wire envelope and the TMDB-only fields live on core/network's
+ * internal `SeerrWireDtos`, decoded and mapped at the client seam).
+ *
+ * Recorded exemption: `mediaType` is the wire's own discriminator string
+ * ("movie"/"tv") kept verbatim because every routing consumer branches on
+ * it and the endpoint backfill stamps it (SeerrRepositoryImpl).
+ */
 @Immutable
 @Serializable
 data class SeerrSearchItem(
@@ -25,7 +24,6 @@ data class SeerrSearchItem(
     val backdropPath: String? = null,
     val voteAverage: Float? = null,
     val voteCount: Int? = null,
-    val genreIds: List<Int> = emptyList(),
     val popularity: Float? = null,
     val originalLanguage: String? = null,
     val originalTitle: String? = null,
@@ -51,7 +49,8 @@ data class SeerrMediaInfo(
     val id: Int = 0,
     val tmdbId: Int = 0,
     val tvdbId: Int? = null,
-    val status: Int = 0,
+    /** The availability status, interpreted at the client seam ([SeerrMediaStatus]; unmapped ints fold to UNKNOWN). */
+    val status: SeerrMediaStatus = SeerrMediaStatus.UNKNOWN,
     val requests: List<SeerrMediaRequest> = emptyList(),
     val createdAt: String? = null,
     val updatedAt: String? = null,
@@ -61,7 +60,8 @@ data class SeerrMediaInfo(
 @Serializable
 data class SeerrMediaRequest(
     val id: Int = 0,
-    val status: Int = 0,
+    /** The request lifecycle state, interpreted at the client seam ([SeerrRequestStatus]; unmapped ints fold to PENDING). */
+    val status: SeerrRequestStatus = SeerrRequestStatus.PENDING,
     val media: SeerrMediaInfo? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
@@ -119,7 +119,8 @@ data class SeerrMovieDetails(
     val ratings: SeerrRatings? = null,
     val keywords: List<SeerrKeyword> = emptyList(),
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
-    val releases: SeerrReleases? = null,
+    /** The release-date regions (the wire's `releases.results` envelope folded). */
+    val releases: List<SeerrReleaseDateRegion> = emptyList(),
 ) {
     val posterUrl: String? by lazy { buildPosterUrl(posterPath) }
     val backdropUrl: String? by lazy { buildBackdropUrl(backdropPath) }
@@ -162,7 +163,8 @@ data class SeerrTvDetails(
     val keywords: List<SeerrKeyword> = emptyList(),
     val relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     val watchProviders: List<SeerrWatchProviderRegion> = emptyList(),
-    val contentRatings: SeerrContentRatingsResponse? = null,
+    /** The content ratings (the wire's `contentRatings.results` envelope folded). */
+    val contentRatings: List<SeerrContentRating> = emptyList(),
 ) {
     val posterUrl: String? by lazy { buildPosterUrl(posterPath) }
     val backdropUrl: String? by lazy { buildBackdropUrl(backdropPath) }
@@ -179,12 +181,6 @@ const val SEERR_ANIME_KEYWORD_ID = 210024
 
 @Immutable
 @Serializable
-data class SeerrContentRatingsResponse(
-    val results: List<SeerrContentRating> = emptyList(),
-)
-
-@Immutable
-@Serializable
 data class SeerrContentRating(
     val iso31661: String = "",
     val rating: String = "",
@@ -192,16 +188,8 @@ data class SeerrContentRating(
 
 @Immutable
 @Serializable
-data class SeerrReleases(
-    val results: List<SeerrReleaseDateRegion> = emptyList(),
-)
-
-@Immutable
-@Serializable
 data class SeerrReleaseDateRegion(
-    @SerialName("iso_3166_1")
     val iso31661: String = "",
-    @SerialName("release_dates")
     val releaseDates: List<SeerrReleaseDate> = emptyList(),
 )
 
@@ -209,11 +197,33 @@ data class SeerrReleaseDateRegion(
 @Serializable
 data class SeerrReleaseDate(
     val certification: String = "",
-    @SerialName("release_date")
     val releaseDate: String = "",
-    val type: Int = 0,
+    /** The TMDB release-date kind, interpreted at the client seam ([SeerrReleaseDateType]; unmapped ints fold to UNKNOWN). */
+    val type: SeerrReleaseDateType = SeerrReleaseDateType.UNKNOWN,
     val note: String? = null,
 )
+
+/**
+ * The TMDB release-date `type` vocabulary (1 = premiere, 2 = theatrical
+ * limited, 3 = theatrical, 4 = digital, 5 = physical, 6 = TV), interpreted at
+ * the client seam from the raw wire int; unmapped ints fold to [UNKNOWN].
+ */
+@Immutable
+@Serializable
+enum class SeerrReleaseDateType(val value: Int) {
+    UNKNOWN(0),
+    PREMIERE(1),
+    THEATRICAL_LIMITED(2),
+    THEATRICAL(3),
+    DIGITAL(4),
+    PHYSICAL(5),
+    TV(6);
+
+    companion object {
+        fun fromValue(value: Int): SeerrReleaseDateType =
+            entries.find { it.value == value } ?: UNKNOWN
+    }
+}
 
 @Immutable
 @Serializable
@@ -225,10 +235,10 @@ data class SeerrKeyword(
 @Immutable
 @Serializable
 data class SeerrWatchProviderRegion(
-    @SerialName("iso_3166_1")
     val iso31661: String = "",
     val link: String? = null,
-    val flatrate: List<SeerrWatchProvider> = emptyList(),
+    /** The wire's `flatrate` column — the streaming-availability list. */
+    val streaming: List<SeerrWatchProvider> = emptyList(),
     val buy: List<SeerrWatchProvider> = emptyList(),
     val rent: List<SeerrWatchProvider> = emptyList(),
 )
@@ -827,7 +837,7 @@ fun SeerrTvDetails.withPendingRequest(item: SeerrSearchItem): SeerrTvDetails =
 
 private fun SeerrMediaInfo?.withPendingStatus(tmdbId: Int): SeerrMediaInfo =
     (this ?: SeerrMediaInfo(tmdbId = tmdbId))
-        .copy(status = SeerrMediaStatus.PENDING.value)
+        .copy(status = SeerrMediaStatus.PENDING)
 
 @Immutable
 @Serializable
@@ -844,25 +854,27 @@ enum class SeerrRequestStatus(val value: Int) {
     }
 }
 
+/**
+ * One page of the requests list — the read-model fold of the wire envelope
+ * (`{pageInfo:{pages,results}, results:[...]}`): the items plus the two
+ * paging totals the infinite-scroll needs, no nested page-info object.
+ */
 @Immutable
 @Serializable
-data class SeerrRequestListResponse(
-    val pageInfo: SeerrPageInfo = SeerrPageInfo(),
-    val results: List<SeerrRequestItem> = emptyList(),
-)
-
-@Immutable
-@Serializable
-data class SeerrPageInfo(
-    val pages: Int = 0,
-    val results: Int = 0,
+data class SeerrRequestPage(
+    val items: List<SeerrRequestItem> = emptyList(),
+    /** Total matching requests server-side (the wire `pageInfo.results`). */
+    val totalResults: Int = 0,
+    /** Total pages server-side (the wire `pageInfo.pages`). */
+    val totalPages: Int = 0,
 )
 
 @Immutable
 @Serializable
 data class SeerrRequestItem(
     val id: Int = 0,
-    val status: Int = 0,
+    /** The request lifecycle state, interpreted at the client seam ([SeerrRequestStatus]; unmapped ints fold to PENDING). */
+    val status: SeerrRequestStatus = SeerrRequestStatus.PENDING,
     val type: String = "",
     val createdAt: String = "",
     val updatedAt: String = "",
@@ -884,8 +896,10 @@ data class SeerrRequestMedia(
     val id: Int = 0,
     val tmdbId: Int = 0,
     val tvdbId: Int? = null,
-    val status: Int = 0,
-    val status4k: Int = 0,
+    /** Availability, interpreted at the client seam ([SeerrMediaStatus]). */
+    val status: SeerrMediaStatus = SeerrMediaStatus.UNKNOWN,
+    /** The 4K column's availability (same interpretation; often UNKNOWN on non-4K servers). */
+    val status4k: SeerrMediaStatus = SeerrMediaStatus.UNKNOWN,
     val mediaUrl: String? = null,
     val serviceUrl: String? = null,
     val downloadStatus: List<SeerrDownloadStatus> = emptyList(),

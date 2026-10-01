@@ -116,19 +116,24 @@ class SubtitleTesterViewModel(
 
     fun switchEngine(type: PlayerType) {
         _uiState.update { it.copy(isApplying = true, previewEngine = type) }
-        viewModelScope.launch {
-            releaseEngine()
-            ensureEngineLoaded()
-        }
+        relaunchEngine()
     }
 
     fun switchPreset(id: String) {
         _uiState.update { it.copy(samplePresetId = id, isApplying = true) }
-        // Rebuild the engine (release + reload) rather than calling load() on
-        // the existing instance: ExoPlayerEngine.load() starts with release(),
-        // which nulls the bound PlayerView, and the UI only re-attaches a
-        // surface when _activeEngine re-emits a new instance. Reloading in
-        // place would leave a dead PlayerView showing nothing.
+        relaunchEngine()
+    }
+
+    /**
+     * The ONE engine relaunch behind [switchEngine] / [switchPreset]:
+     * release the current instance, then rebuild + load from the (just
+     * updated) state. Rebuild rather than calling load() on the existing
+     * instance: ExoPlayerEngine.load() starts with release(), which nulls the
+     * bound PlayerView, and the UI only re-attaches a surface when
+     * [_activeEngine] re-emits a new instance — reloading in place would
+     * leave a dead PlayerView showing nothing.
+     */
+    private fun relaunchEngine() {
         viewModelScope.launch {
             releaseEngine()
             ensureEngineLoaded()

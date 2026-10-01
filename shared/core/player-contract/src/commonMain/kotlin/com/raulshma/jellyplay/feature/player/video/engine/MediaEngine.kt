@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackTls
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -43,56 +44,42 @@ data class PlaybackRequest(
     val minBufferMs: Int = 15_000,
     val maxBufferMs: Int = 50_000,
     /**
-     * Optional per-track ReplayGain value (dB) sourced from the media
-     * item's `normalizationGain` (Jellyfin). Consumed by engines that
-     * support TRACK/ALBUM loudness normalization via an in-sink
-     * `AudioProcessor` (currently [ExoPlayerEngine]). `null` means the
-     * server provided no gain; TRACK/ALBUM then behave as a no-op.
-     */
-    val normalizationGain: Float? = null,
-    /**
-     * Optional MIME type hint for the primary media item. When set, ExoPlayer
-     * uses it in preference to URI-extension inference to pick the extractor,
-     * which is essential for downloaded files whose on-disk extension does
-     * not match their actual container (e.g. an MKV stream saved as `.mp4`).
-     */
-    val mimeType: String? = null,
-    /**
      * Server-reported total runtime in milliseconds, derived from the media
-     * item's `runTimeTicks`. Used by engines as a duration fallback when the
-     * demuxer cannot resolve one for HLS/transcoded streams (where mpv's
-     * `duration` property is frequently 0 or only partially resolved). `0`
-     * when no server runtime is available (e.g. unknown-length items).
+     * item's `runTimeTicks`. UNIVERSAL (not engine-specific): both the Exo
+     * and mpv adapters use it as the duration fallback when the demuxer
+     * cannot resolve one for HLS/transcoded streams — on mpv because the
+     * `duration` property is frequently 0 or only partially resolved there.
+     * `0` when no server runtime is available (e.g. unknown-length items).
      */
     val serverDurationMs: Long = 0L,
     /**
-     * TLS client-certificate material for [uri]'s server, when the app-level
-     * mTLS certificate is active. Engines with their own networking
-     * (the mpv engines via ffmpeg) consume the literal file paths — hence the
-     * PEM normalization the import performs; OkHttp-backed engines inherit
-     * the certificate through the shared TLS layer instead and ignore this.
-     * `null` when no certificate is enabled.
+     * The sanctioned per-engine escape hatch (the same slot
+     * [EngineConfig.engineSpecific] rides). Carries the members only SOME
+     * adapters consume — the Exo-side normalization gain + MIME hint, the
+     * mpv-side TLS file paths — behind the single
+     * [com.raulshma.jellyplay.core.model.PlaybackRequestSpecific] request
+     * variant (see its KDoc for why it is one variant, not one per engine).
+     * Read it through the typed [requestSpecific] projection; engines that
+     * consume nothing ignore the slot entirely.
      */
-    val tls: PlaybackTls? = null,
-)
+    val engineSpecific: EngineSpecificConfig? = null,
+) {
+    /**
+     * Typed view of [engineSpecific]: the request-side payload the adapters
+     * unpack (Exo: gain + MIME; mpv: TLS paths), or `null` when the caller
+     * supplied none (or a config-side variant — a type error at the call
+     * site, tolerated here the way [EngineConfig.engineSpecific] is).
+     */
+    val requestSpecific: com.raulshma.jellyplay.core.model.PlaybackRequestSpecific?
+        get() = engineSpecific as? com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
+}
 
 /**
- * File-path view of the app-level client certificate for engines that do
- * their own TLS (mpv/ffmpeg). Paths are the normalized PEM pair written at
- * import; [caPath] is the optional trust-anchor override.
- */
-data class PlaybackTls(
-    val clientCertificatePath: String,
-    val clientKeyPath: String,
-    val caPath: String? = null,
-)
-
-/**
- * Pure mapping from [PlaybackTls] onto mpv's TLS options: the three
- * `tls-*` file-path options, or the reset (empty-value) writes when no
- * certificate is active — the same diff-then-write discipline
- * `http-header-fields` has (options PERSIST on the mpv context, so the
- * previous item's credentials must be cleared, never inherited). Shared by
+ * Pure mapping from [com.raulshma.jellyplay.core.model.PlaybackTls] onto
+ * mpv's TLS options: the three `tls-*` file-path options, or the reset
+ * (empty-value) writes when no certificate is active — the same diff-then-write
+ * discipline `http-header-fields` has (options PERSIST on the mpv context, so
+ * the previous item's credentials must be cleared, never inherited). Shared by
  * the Android and desktop mpv engines so the emitted option set cannot drift
  * between platforms.
  *
@@ -108,7 +95,7 @@ object MpvTlsOptions {
     private const val OPTION_CLIENT_KEY = "tls-key-file"
     private const val OPTION_CA_FILE = "tls-ca-file"
 
-    /** The option writes [PlaybackRequest.tls] translates to. */
+    /** The option writes the request's `requestSpecific.tls` translates to. */
     fun from(tls: PlaybackTls?): List<Pair<String, String>> = when (tls) {
         null -> listOf(
             OPTION_CLIENT_CERT to "",
@@ -118,7 +105,7 @@ object MpvTlsOptions {
         else -> buildList {
             add(OPTION_CLIENT_CERT to tls.clientCertificatePath)
             add(OPTION_CLIENT_KEY to tls.clientKeyPath)
-            if (tls.caPath != null) add(OPTION_CA_FILE to tls.caPath)
+            tls.caPath?.let { add(OPTION_CA_FILE to it) }
         }
     }
 }
@@ -150,7 +137,6 @@ data class EngineConfig(
     val audioEffects: AudioEffectsConfig = AudioEffectsConfig(),
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val engineSpecific: EngineSpecificConfig? = null,
-    val pauseOnAudioFocusLoss: Boolean = true,
     /**
      * Deinterlacing: mpv `deinterlace` on the mpv engines; other
      * engines no-op it. SESSION-SCOPED on the player surface (gear-menu cycle,

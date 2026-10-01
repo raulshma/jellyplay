@@ -48,9 +48,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalPullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
-import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
-import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -63,7 +61,11 @@ import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
+import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAudioSource
+import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
+import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
+import com.raulshma.jellyplay.feature.shell.navigation.ShellSettingsHooks
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAdminGate
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
@@ -283,17 +285,19 @@ internal fun DesktopNavScaffold(
     // Shell-supplied surface behind the shared section graph (ShellHostHooks),
     // built through the shared rememberShellHost factory — the ONE
     // construction site for the hooks (Android's MainContent feeds the same
-    // thirteen fields; the field-by-field wiring lives there). Every factory
-    // parameter is a remember key, so each value below is remembered on its
-    // only captures (the discipline the factory's KDoc states): the
-    // now-playing/ambient lambdas come from the shared rememberShellAudioClicks
-    // over this shell's ShellAudioSource adapter (click-time reads of the
-    // desktop audio core — DesktopAudioQueueManager — never collected values),
-    // and the session seams wrap the shared ShellSessionController the holder
-    // constructed — the same values, same lazy reads the old inline
-    // entryProvider captured. The graph below rebuilds only when these
-    // identities change (the guarded navigator, homeMode, a
-    // DesktopShellServices rebuild re-issuing them).
+    // five group bundles; the bundle-by-bundle wiring lives there). Every
+    // factory parameter is a remember key, so each bundle below may be built
+    // fresh per recomposition (the groups are data classes and compare
+    // structurally) as long as its members are remembered/stable (the
+    // discipline the factory's KDoc states): the audio bundle comes from the
+    // shared rememberShellAudioClicks over this shell's ShellAudioSource
+    // adapter (click-time reads of the desktop audio core —
+    // DesktopAudioQueueManager — never collected values), and the session
+    // bundles wrap the shared ShellSessionController the holder constructed —
+    // the same values, same lazy reads the old inline entryProvider captured.
+    // The graph below rebuilds only when these identities change (the
+    // guarded navigator, homeMode, a DesktopShellServices rebuild re-issuing
+    // them).
     val audioSource = remember(audioQueueManager) {
         DesktopQueueShellAudioSource(audioQueueManager)
     }
@@ -319,22 +323,30 @@ internal fun DesktopNavScaffold(
     }
     val shellHost = rememberShellHost(
         navigator = guardedNavigator,
-        homeMode = homeMode,
-        onHomeModeChange = onHomeModeChange,
-        onNowPlayingClick = audioClicks.onNowPlayingClick,
-        onAmbientClick = audioClicks.onAmbientClick,
-        onLogout = onLogout,
-        onCheckForUpdates = onCheckForUpdates,
-        isAdmin = adminGate.isAdmin,
-        isRefreshingAdmin = adminGate.isRefreshingAdmin,
-        onRefreshAdmin = onRefreshAdmin,
-        // Android-only slots: no cast strategy and no shortcut-armed
-        // "Surprise Me" flow on desktop; emptyFlow() is an identity-stable
-        // singleton so the factory's remember keys never churn.
-        playOnRedirect = null,
-        surpriseRequests = emptyFlow(),
-        pendingSearchQuery = pendingSearchQuery,
-        onConsumeSearchQuery = onConsumeSearchQuery,
+        home = ShellHomeHooks(
+            homeMode = homeMode,
+            onHomeModeChange = onHomeModeChange,
+            // Android-only slots: no cast strategy and no shortcut-armed
+            // "Surprise Me" flow on desktop; emptyFlow() is an
+            // identity-stable singleton so the factory's remember keys
+            // never churn.
+            playOnRedirect = null,
+            surpriseRequests = emptyFlow(),
+        ),
+        audio = audioClicks,
+        settings = ShellSettingsHooks(
+            onLogout = onLogout,
+            onCheckForUpdates = onCheckForUpdates,
+        ),
+        admin = ShellAdminHooks(
+            isAdmin = adminGate.isAdmin,
+            isRefreshingAdmin = adminGate.isRefreshingAdmin,
+            onRefreshAdmin = onRefreshAdmin,
+        ),
+        search = ShellSearchHooks(
+            pendingSearchQuery = pendingSearchQuery,
+            onConsumeSearchQuery = onConsumeSearchQuery,
+        ),
     )
 
     // Remember the entry provider graph so the ~20 shared section builders
@@ -428,28 +440,17 @@ internal fun DesktopNavScaffold(
     ) {
         // Fullscreen routes (the video player) take the whole content area:
         // hide the rail while one is on top; Esc/back pops out of it.
-        // nav3 keys are the base type; only our Route subclasses carry isFullScreen.
         //
         // DELIBERATE DELTA vs the Android shell's shared
-        // isFullScreenRouteActive fold (navigation/FullScreenRoutePolicy.kt),
-        // which scans the WHOLE current stack (`any { it.isFullScreen }`):
-        // this shell reads the TOP entry only. The Android scan exists
-        // because a full-screen route can sit below the top there (the
-        // subtitle tester pushed onto the player) and switching its layout
-        // branch mid-round-trip re-registers the player's NavKey in a second
-        // NavDisplay subtree against a shared SaveableStateHolder — a crash.
-        // Neither hazard exists here: this shell has ONE NavDisplay that
-        // stays composed whether the rail shows or not (the rail is a Row
-        // sibling, not a layout-branch swap around the display), so no NavKey
-        // is ever re-registered against this read flipping, and the subtitle
-        // tester is not registered on desktop (its push dead-ends in the
-        // guard — see the VideoPlayer registration comment above), so a
-        // full-screen route cannot sit below the top through real navigation.
-        // Recorded here so the next reader doesn't "fix" the mismatch in
-        // either direction: unifying on the Android scan would change nothing
-        // observable on desktop while hiding the structural difference;
-        // unifying on this top-only read would reintroduce the Android crash.
-        val topRouteIsFullscreen = (backStack.lastOrNull() as? Route)?.isFullScreen == true
+        // isFullScreenRouteActive fold (navigation/FullScreenRoutePolicy.kt):
+        // this shell reads the TOP entry only (desktopTopRouteIsFullscreen,
+        // pinned by DesktopLayoutPolicyTest). The Android whole-stack scan
+        // exists for hazards this shell doesn't have — one always-composed
+        // NavDisplay never re-registers NavKeys against this read flipping,
+        // and the subtitle tester is not registered here, so no full-screen
+        // route can sit below the top. Recorded so the next reader doesn't
+        // "fix" the mismatch in either direction.
+        val topRouteIsFullscreen = desktopTopRouteIsFullscreen(backStack.lastOrNull())
         if (!topRouteIsFullscreen) {
             NavigationRail(
                 // No header: branding lives in the custom title bar
@@ -510,18 +511,6 @@ internal fun DesktopNavScaffold(
             }
         }
 
-        // The shared HomeHeroController reads LocalSurpriseOnLaunch
-        // unconditionally; Android arms it from the launcher-shortcut
-        // ("Surprise Me") intent, a seam desktop has no equivalent of.
-        // Provide a never-armed controller so the read resolves — desktop's
-        // in-app "Surprise Me" path is the surpriseRequests flow parameter,
-        // which never touches this local.
-        val surpriseController = remember {
-            SurpriseLaunchController(
-                armed = MutableStateFlow(false),
-                consume = {},
-            )
-        }
         // Adaptive shell wiring (issue #166): the shared screens previously
         // rendered against LocalAdaptiveInfo's Compact DEFAULT because this
         // scaffold never provided it — desktop was permanently phone-layout
@@ -539,7 +528,6 @@ internal fun DesktopNavScaffold(
         CompositionLocalProvider(
             LocalNetworkStatus provides networkMonitor.networkStatus,
             LocalServerHealth provides serverHealth,
-            LocalSurpriseOnLaunch provides surpriseController,
             LocalPullToRefreshRegistry provides refreshRegistry,
             LocalAdaptiveInfo provides desktopAdaptiveInfo,
             LocalJellyPlayUi provides desktopUiEnvironment,

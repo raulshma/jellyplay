@@ -60,8 +60,8 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalo
 
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
-import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeoutMs
-import com.raulshma.jellyplay.feature.player.video.engine.shouldScheduleControlsAutoHide
+import com.raulshma.jellyplay.feature.player.video.chrome.controlsAutoHideTimeoutMs
+import com.raulshma.jellyplay.feature.player.video.chrome.shouldScheduleControlsAutoHide
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard

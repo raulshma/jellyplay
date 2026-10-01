@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_cancel
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_close
@@ -52,8 +54,8 @@ sealed interface RecordDialogState {
     data object Requesting : RecordDialogState
     /** The action completed successfully; [programName] names the recorded program when known. */
     data class Success(val programName: String? = null) : RecordDialogState
-    /** The action failed. */
-    data class Error(val message: String) : RecordDialogState
+    /** The action failed — a [UiMessage] (server text or the localized fallback), resolved at render. */
+    data class Error(val message: UiMessage) : RecordDialogState
 }
 
 /**
@@ -166,7 +168,7 @@ fun RecordDialog(
         is RecordDialogState.Error -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(Res.string.livetv_record_failed)) },
-            text = { Text(state.message, modifier = Modifier) },
+            text = { Text(state.message.asText(), modifier = Modifier) },
             confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.livetv_action_ok)) } },
             dismissButton = {},
         )

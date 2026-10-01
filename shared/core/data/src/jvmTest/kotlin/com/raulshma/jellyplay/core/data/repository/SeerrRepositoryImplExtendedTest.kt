@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
@@ -181,32 +180,28 @@ class SeerrRepositoryImplExtendedTest {
     // region getRecommendations / getSimilar routing + mediaType backfill
     @Test
     fun `getRecommendations movie routes to movie endpoint and backfills mediaType`() = runTest {
-        val response = SeerrSearchResponse(
-            results = listOf(
-                SeerrSearchItem(id = 10, mediaType = ""),
-                SeerrSearchItem(id = 11, mediaType = "movie"),
-            )
+        val response = listOf(
+            SeerrSearchItem(id = 10, mediaType = ""),
+            SeerrSearchItem(id = 11, mediaType = "movie"),
         )
         coEvery { seerrApiClient.getMovieRecommendations(any(), any(), 1) } returns Result.success(response)
 
         val result = repository.getRecommendations(1, MediaType.MOVIE)
 
         assertTrue(result.isSuccess)
-        assertEquals("movie", result.getOrThrow().results[0].mediaType)
-        assertEquals("movie", result.getOrThrow().results[1].mediaType)
+        assertEquals("movie", result.getOrThrow()[0].mediaType)
+        assertEquals("movie", result.getOrThrow()[1].mediaType)
     }
 
     @Test
     fun `getRecommendations tv routes to tv endpoint and backfills mediaType`() = runTest {
-        val response = SeerrSearchResponse(
-            results = listOf(SeerrSearchItem(id = 20, mediaType = ""))
-        )
+        val response = listOf(SeerrSearchItem(id = 20, mediaType = ""))
         coEvery { seerrApiClient.getTvRecommendations(any(), any(), 2) } returns Result.success(response)
 
         val result = repository.getRecommendations(2, MediaType.SERIES)
 
         assertTrue(result.isSuccess)
-        assertEquals("tv", result.getOrThrow().results[0].mediaType)
+        assertEquals("tv", result.getOrThrow()[0].mediaType)
     }
 
     @Test
@@ -220,7 +215,7 @@ class SeerrRepositoryImplExtendedTest {
     @Test
     fun `getSimilar movie routes to movie endpoint`() = runTest {
         coEvery { seerrApiClient.getMovieSimilar(any(), any(), 1) } returns
-            Result.success(SeerrSearchResponse())
+            Result.success(emptyList<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>())
 
         repository.getSimilar(1, MediaType.MOVIE)
 
@@ -230,7 +225,7 @@ class SeerrRepositoryImplExtendedTest {
     @Test
     fun `getSimilar tv routes to tv endpoint`() = runTest {
         coEvery { seerrApiClient.getTvSimilar(any(), any(), 2) } returns
-            Result.success(SeerrSearchResponse())
+            Result.success(emptyList<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>())
 
         repository.getSimilar(2, MediaType.SERIES)
 
@@ -249,34 +244,32 @@ class SeerrRepositoryImplExtendedTest {
     // region discover mediaType backfill
     @Test
     fun `getDiscoverMovies backfills movie mediaType on blank items`() = runTest {
-        val response = SeerrSearchResponse(results = listOf(SeerrSearchItem(id = 1, mediaType = "")))
+        val response = listOf(SeerrSearchItem(id = 1, mediaType = ""))
         coEvery { seerrApiClient.getDiscoverMovies(any(), any(), any(), any()) } returns Result.success(response)
 
         val result = repository.getDiscoverMovies(1, null)
 
-        assertEquals("movie", result.getOrThrow().results[0].mediaType)
+        assertEquals("movie", result.getOrThrow()[0].mediaType)
     }
 
     @Test
     fun `getDiscoverTv backfills tv mediaType on blank items`() = runTest {
-        val response = SeerrSearchResponse(results = listOf(SeerrSearchItem(id = 1, mediaType = "")))
+        val response = listOf(SeerrSearchItem(id = 1, mediaType = ""))
         coEvery { seerrApiClient.getDiscoverTv(any(), any(), any(), any()) } returns Result.success(response)
 
         val result = repository.getDiscoverTv(1, null)
 
-        assertEquals("tv", result.getOrThrow().results[0].mediaType)
+        assertEquals("tv", result.getOrThrow()[0].mediaType)
     }
 
     @Test
     fun `getDiscoverMovies preserves existing non-blank mediaType`() = runTest {
-        val response = SeerrSearchResponse(
-            results = listOf(SeerrSearchItem(id = 1, mediaType = "tv")) // unusual but tests preservation
-        )
+        val response = listOf(SeerrSearchItem(id = 1, mediaType = "tv")) // unusual but tests preservation
         coEvery { seerrApiClient.getDiscoverMovies(any(), any(), any(), any()) } returns Result.success(response)
 
         val result = repository.getDiscoverMovies(1, null)
 
-        assertEquals("tv", result.getOrThrow().results[0].mediaType)
+        assertEquals("tv", result.getOrThrow()[0].mediaType)
     }
     // endregion
 

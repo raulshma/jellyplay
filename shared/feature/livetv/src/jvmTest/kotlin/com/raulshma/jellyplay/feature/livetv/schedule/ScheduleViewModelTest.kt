@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.livetv.schedule
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DvrTimer
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -91,7 +92,7 @@ class ScheduleViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.error?.contains("nope") == true)
+        assertEquals("nope", (viewModel.uiState.value.error as UiMessage.Raw).text)
     }
 
     // ── Date grouping details (locale-independent assertions) ────────────────
@@ -179,7 +180,7 @@ class ScheduleViewModelTest {
         viewModel.cancelTimer("t1")
         advanceUntilIdle()
 
-        assertEquals("denied", viewModel.uiState.value.error)
+        assertEquals("denied", (viewModel.uiState.value.error as UiMessage.Raw).text)
         assertEquals(timer, viewModel.uiState.value.selectedTimer)
     }
 

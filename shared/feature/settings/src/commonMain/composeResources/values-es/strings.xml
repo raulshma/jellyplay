@@ -2035,4 +2035,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Comando a ejecutar cuando el contenido termina</string>
     <string name="ss_hooks_idle_cmd_subtitle">Comando a ejecutar cuando la app queda inactiva</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Comando a ejecutar cuando la app sale de la inactividad</string>
+    <string name="core_ui_whatsnew_category_new">Nuevo</string>
+    <string name="core_ui_whatsnew_category_improvement">Mejorado</string>
+    <string name="core_ui_whatsnew_category_fix">Corregido</string>
+    <string name="core_ui_whatsnew_take_me_there">Llévame</string>
 </resources>

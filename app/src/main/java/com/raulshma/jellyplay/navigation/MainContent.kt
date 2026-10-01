@@ -50,7 +50,11 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
+import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAudioSource
+import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
+import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
+import com.raulshma.jellyplay.feature.shell.navigation.ShellSettingsHooks
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAdminGate
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
@@ -398,14 +402,16 @@ internal fun MainContent(
             // The shell-host hooks (ShellHostHooks) behind the shared section
             // graph, built through the shared rememberShellHost factory —
             // the ONE construction site for the hooks (desktop's
-            // DesktopNavScaffold feeds the same thirteen fields; the
-            // field-by-field wiring lives in that factory file). The model's
+            // DesktopNavScaffold feeds the same five group bundles; the
+            // bundle-by-bundle wiring lives in that factory file). The model's
             // signals (admin gate, update check, surprise/search prefill)
             // and the Play On controller meet the shell seam HERE — this
             // call site is the value wiring. Every factory parameter is a
-            // remember key, so each value below is remembered on its only
-            // captures (the discipline the factory's KDoc states) — the
-            // graph rebuilds only when these identities change, the same
+            // remember key, so each bundle below may be built fresh per
+            // recomposition (the groups are data classes and compare
+            // structurally) as long as its members are remembered/stable
+            // (the discipline the factory's KDoc states) — the graph
+            // rebuilds only when these identities change, the same
             // triggers the former inline remember keyed on.
             // The admin reads are the shared rememberShellAdminGate outputs —
             // lazy .value reads, so admin refreshes don't rebuild the graph.
@@ -431,19 +437,26 @@ internal fun MainContent(
             val playOnRedirect = remember(playOn) { HomePlayOnRedirect(playOn::flingIfConnected) }
             val shellHost = rememberShellHost(
                 navigator = navigator,
-                homeMode = homeMode,
-                onHomeModeChange = onModeChange,
-                onNowPlayingClick = audioClicks.onNowPlayingClick,
-                onAmbientClick = audioClicks.onAmbientClick,
-                onLogout = onLogout,
-                onCheckForUpdates = onCheckForUpdates,
-                isAdmin = adminGate.isAdmin,
-                isRefreshingAdmin = adminGate.isRefreshingAdmin,
-                onRefreshAdmin = onRefreshAdmin,
-                playOnRedirect = playOnRedirect,
-                surpriseRequests = model.surpriseRequests,
-                pendingSearchQuery = model.pendingSearchQuery,
-                onConsumeSearchQuery = onConsumeSearchQuery,
+                home = ShellHomeHooks(
+                    homeMode = homeMode,
+                    onHomeModeChange = onModeChange,
+                    playOnRedirect = playOnRedirect,
+                    surpriseRequests = model.surpriseRequests,
+                ),
+                audio = audioClicks,
+                settings = ShellSettingsHooks(
+                    onLogout = onLogout,
+                    onCheckForUpdates = onCheckForUpdates,
+                ),
+                admin = ShellAdminHooks(
+                    isAdmin = adminGate.isAdmin,
+                    isRefreshingAdmin = adminGate.isRefreshingAdmin,
+                    onRefreshAdmin = onRefreshAdmin,
+                ),
+                search = ShellSearchHooks(
+                    pendingSearchQuery = model.pendingSearchQuery,
+                    onConsumeSearchQuery = onConsumeSearchQuery,
+                ),
             )
 
             // The shell-wide parameter bundle (the HomeCallbacks idiom —
@@ -451,19 +464,15 @@ internal fun MainContent(
             // identically into all three layout branches and MainNavDisplay.
             // Every field is a remembered/stable value or a Compose-memoized
             // lambda, so the @Immutable data class compares equal across
-            // recompositions and the branches stay skippable.
+            // recompositions and the branches stay skippable. The per-section
+            // hook values ride shellHost's groups — no duplicate scalars.
             val shellParams = ShellNavParams(
                 navigationState = navigationState,
                 currentTopLevel = currentTopLevel,
                 activeTopLevelRoutes = activeTopLevelRoutes,
                 navigator = navigator,
-                onLogout = onLogout,
-                homeMode = homeMode,
-                onModeChange = onModeChange,
                 saveableStateHolder = saveableStateHolder,
                 entryDecorator = entryDecorator,
-                onNowPlayingClick = audioClicks.onNowPlayingClick,
-                onAmbientClick = audioClicks.onAmbientClick,
                 playOn = playOn,
                 shellHost = shellHost,
             )

@@ -38,13 +38,8 @@ class SeerrRecommendationsWidgetWorker(
     maxItems = MAX_ITEMS,
 ) {
 
-    // Resolved once by the guard (the preferences snapshot it already read)
-    // and consumed by fetchItems — the single historical preferences read.
-    private var discoverRegion: String = "US"
-
     override suspend fun skipFetch(): Boolean {
         val seerrPrefs = seerrPreferencesStore.preferences.first()
-        discoverRegion = seerrPrefs.discoverRegion.ifBlank { "US" }
         // No Seerr server configured: leave existing cached items intact
         // so the widget keeps showing the last good snapshot.
         return seerrPrefs.serverUrl.isBlank()
@@ -52,8 +47,8 @@ class SeerrRecommendationsWidgetWorker(
 
     override suspend fun fetchItems(): List<SeerrSearchItem> {
         val config = widgetDataStore.widgetConfig.first()
-        val response = fetch(config.seerrSource, discoverRegion).getOrNull()
-        return response?.results.orEmpty()
+        val items = fetch(config.seerrSource).getOrNull()
+        return items.orEmpty().filter { it.posterPath != null }
     }
 
     override fun mapItem(raw: SeerrSearchItem): SeerrWidgetItem = raw.toWidgetItem()
@@ -68,7 +63,11 @@ class SeerrRecommendationsWidgetWorker(
         }
     }
 
-    private suspend fun fetch(source: SeerrWidgetSource, region: String) = when (source) {
+    private suspend fun fetch(
+        source: SeerrWidgetSource,
+        // Bare `Result` resolves to the androidx.work ListenableWorker.Result
+        // nested class inherited from CoroutineWorker — kotlin.Result must stay qualified.
+    ): kotlin.Result<List<SeerrSearchItem>> = when (source) {
         SeerrWidgetSource.TRENDING -> seerrRepository.getTrending(page = 1)
         SeerrWidgetSource.POPULAR_MOVIES -> seerrRepository.getDiscoverMovies(page = 1)
         SeerrWidgetSource.POPULAR_TV -> seerrRepository.getDiscoverTv(page = 1)
@@ -80,7 +79,7 @@ class SeerrRecommendationsWidgetWorker(
             page = 1,
             firstAirDateGte = todayIso(),
         )
-    }.map { it.copy(results = it.results.filter { item -> item.posterPath != null }) }
+    }
 
     private fun todayIso(): String = ISO_DATE_FORMAT.format(Date())
 

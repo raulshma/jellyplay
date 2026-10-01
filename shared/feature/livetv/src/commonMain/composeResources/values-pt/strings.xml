@@ -65,4 +65,24 @@
     <string name="livetv_will_be_recorded">"%1$s" será gravado.</string>
     <string name="livetv_channel">Canal</string>
     <string name="livetv_live">AO VIVO</string>
+
+    <!-- Tab error fallbacks (the UiMessage folds' Resource arms) -->
+    <string name="livetv_error_load_channels">Falha ao carregar os canais</string>
+    <string name="livetv_error_load_channel">Falha ao carregar o canal</string>
+    <string name="livetv_error_load_programs">Falha ao carregar os programas</string>
+    <string name="livetv_error_load_guide">Falha ao carregar o guia de programas</string>
+    <string name="livetv_error_load_recordings">Falha ao carregar as gravações</string>
+    <string name="livetv_error_delete_recording">Falha ao eliminar a gravação</string>
+    <string name="livetv_error_load_schedule">Falha ao carregar a programação</string>
+    <string name="livetv_error_load_series">Falha ao carregar as séries</string>
+    <string name="livetv_error_record">Falha ao criar a gravação</string>
+    <string name="livetv_error_cancel_recording">Falha ao cancelar a gravação</string>
+
+    <!-- Programs tab row titles (jellyfin-web getProgramSections) -->
+    <string name="livetv_programs_on_now">Agora</string>
+    <string name="livetv_programs_shows">Séries</string>
+    <string name="livetv_programs_movies">Filmes</string>
+    <string name="livetv_programs_sports">Desporto</string>
+    <string name="livetv_programs_kids">Infantil</string>
+    <string name="livetv_programs_news">Notícias</string>
 </resources>

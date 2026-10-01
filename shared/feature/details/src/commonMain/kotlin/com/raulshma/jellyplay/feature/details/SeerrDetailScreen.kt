@@ -614,7 +614,7 @@ private fun SeerrDetailContent(
                                             modifier = Modifier.weight(1f, fill = false)
                                         )
                                     
-                                        val contentRating = tvDetail?.contentRatings?.results?.find { it.iso31661 == "US" }?.rating
+                                        val contentRating = tvDetail?.contentRatings?.find { it.iso31661 == "US" }?.rating
                                         if (contentRating != null) {
                                             Spacer(Modifier.width(8.dp))
                                             Surface(
@@ -1108,6 +1108,15 @@ private fun ExternalLinksRow(
     }
 }
 
+/**
+ * Seerr family's cast row — TMDB profile avatars over [SeerrCastMember].
+ * Deliberately NOT collapsed with the media family's DetailCastSection
+ * (MediaDetailBodySections) despite the same-sounding name: that one renders
+ * [PersonItem] over Jellyfin PersonInfo with person navigation and a
+ * local-origin branch, and a different card geometry — a collapse would
+ * change one family's UI. The genuinely shared section vocabulary lives in
+ * commonMain (DetailSectionVocabulary.kt).
+ */
 @Composable
 private fun CastSection(
     cast: List<SeerrCastMember>,

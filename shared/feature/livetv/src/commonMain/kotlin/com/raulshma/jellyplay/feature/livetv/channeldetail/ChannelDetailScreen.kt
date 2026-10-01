@@ -32,6 +32,9 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.core.ui.message.UiText
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_cancel
@@ -55,6 +58,9 @@ fun ChannelDetailScreen(
 
     // One-shot record/cancel feedback (screen-forward seam): resolve the texts
     // here, post each emitted message through the app-wide UserMessageBus.
+    // The Failure arm rides the bus's LOCALIZABLE UiText overload — a UiMessage
+    // can't be resolved to a String inside the collect (asText is
+    // @Composable), and the bus's UiText carrier resolves at render.
     val bus = LocalUserMessageBus.current
     val successText = stringResource(Res.string.livetv_record_success)
     val canceledText = stringResource(Res.string.livetv_record_canceled)
@@ -63,7 +69,7 @@ fun ChannelDetailScreen(
             when (message) {
                 LiveTvUserMessage.RecordSuccess -> bus.info(successText)
                 LiveTvUserMessage.RecordCanceled -> bus.info(canceledText)
-                is LiveTvUserMessage.Raw -> bus.error(message.text)
+                is LiveTvUserMessage.Failure -> bus.error(message.message.toUiText())
             }
         }
     }
@@ -124,7 +130,7 @@ fun ChannelDetailScreen(
             }
             state.error != null && state.programs.isEmpty() && state.currentProgram == null -> {
                 ErrorScreen(
-                    message = state.error ?: stringResource(Res.string.livetv_channel_load_failed),
+                    message = state.error?.asText() ?: stringResource(Res.string.livetv_channel_load_failed),
                     onRetry = { viewModel.loadChannel(channelId, channelName) },
                 )
             }
@@ -149,4 +155,10 @@ fun ChannelDetailScreen(
             }
         }
     }
+}
+
+/** [UiMessage] → the bus's localizable [UiText] carrier (same two-variant shape). */
+private fun UiMessage.toUiText(): UiText = when (this) {
+    is UiMessage.Resource -> UiText.Resource(res, args)
+    is UiMessage.Raw -> UiText.Raw(text)
 }

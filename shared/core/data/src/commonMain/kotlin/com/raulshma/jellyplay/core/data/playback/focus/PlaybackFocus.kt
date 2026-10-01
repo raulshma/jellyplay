@@ -4,10 +4,9 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The app's in-process playback surfaces — the closed world the exclusivity
- * matrix arbitrates over. Slice 1 live pair: MUSIC and READ_ALOUD. VIDEO is
- * reserved (its OS focus still lives in PlayerAudioLifecycle; it joins with
- * the video slice, which must add a matrix row — the exhaustive `when` makes
- * forgetting a row a build error, not a runtime mixing bug).
+ * matrix arbitrates over. MUSIC and READ_ALOUD live here since slice 1;
+ * VIDEO joined with the video slice (its OS focus moved out of the deleted
+ * `PlayerAudioLifecycle` into this module — one seat, one owner).
  */
 enum class PlaybackSurfaceId { MUSIC, VIDEO, READ_ALOUD }
 
@@ -50,19 +49,25 @@ sealed interface FocusClaimState {
  * is now a pinnable decision table ([PlaybackFocusMatrix]) behind one small
  * interface; platform differences live in adapters (see docs/adr/0004).
  *
- * Slice-1 contract (TTS-over-music), plus the migration slice:
+ * Contract (TTS-over-music slice 1, through the video slice):
  *  - `acquire(READ_ALOUD)` requests OS focus (Android adapter) and, on
- *    grant, commands the MUSIC surface to pause (its `pause()` also drops
- *    playWhenReady — resume stays manual) before returning GRANTED.
- *  - `acquire(MUSIC)` — since the migration slice — requests the OS seat
- *    too, with the matrix's MUSIC attributes (`handleAudioFocus` is off on
- *    both Android music players: the module owns the whole story now), and
- *    publishes `Held(MUSIC)` (newest user action wins); the reader observes
- *    [claimState] and pauses its own speech loop.
- *  - OS focus losses on an OS-leg claimant suspend it ([Suspended]) AND
- *    command the suspended holder's surface pause — the enforcement leg: a
- *    displaced claimant pauses itself by observation, but the holder has no
- *    observer and would otherwise keep producing audio unfocused. A
+ *    grant, commands the MUSIC and VIDEO surfaces to pause (pause carries
+ *    the playWhenReady guard — resume stays manual) before returning
+ *    GRANTED.
+ *  - `acquire(MUSIC)` requests the OS seat too (with the matrix's MUSIC
+ *    attributes; `handleAudioFocus` is off on the music players — the
+ *    module owns the whole story), publishes `Held(MUSIC)` and commands the
+ *    VIDEO surface if one holds the floor (newest-wins); the reader
+ *    observes [claimState] and pauses its own speech loop.
+ *  - `acquire(VIDEO)` — since the video slice — takes the OS seat with the
+ *    MOVIE attributes row (the deleted `PlayerAudioLifecycle`'s dual
+ *    OS-leg, ExoPlayer-builtin and manual, moved in here as ONE seat),
+ *    commands MUSIC to pause, and publishes `Held(VIDEO)`.
+ *  - OS focus losses on an OS-leg claimant dispatch the claimant's
+ *    [FocusLossDirective]: Pause suspends the holder AND commands its
+ *    surface pause (the enforcement leg — a displaced claimant pauses
+ *    itself by observation, but the holder has no observer); Duck keeps the
+ *    claim Held and ducks instead, with a regain commanding the restore. A
  *    suspended claimant re-acquires on the user's next resume.
  */
 interface PlaybackFocus {
@@ -86,11 +91,12 @@ interface PlaybackFocus {
 }
 
 /**
- * Honest fallback where no focus authority is bound (desktop until
- * slice 2; test harnesses without a focus fixture). Arbitration is vacuously
- * GRANTED: on platforms where only ONE sound-maker can exist, "exclusive by
- * default" is the truthful answer — there is no second surface to pause, and
- * a deny here would break single-player sessions for no protective gain.
+ * Honest fallback where no focus authority is bound (test harnesses without
+ * a focus fixture; platforms whose Koin graph registers no
+ * [DefaultPlaybackFocus]). Arbitration is vacuously GRANTED: on platforms
+ * where only ONE sound-maker can exist, "exclusive by default" is the
+ * truthful answer — there is no second surface to pause, and a deny here
+ * would break single-player sessions for no protective gain.
  */
 object NoopPlaybackFocus : PlaybackFocus {
     override val claimState: StateFlow<FocusClaimState> =
@@ -102,23 +108,61 @@ object NoopPlaybackFocus : PlaybackFocus {
 }
 
 /**
- * A playback surface the matrix may command — in the two cases where a
- * command, not an observation, is the only enforcement there is: the VICTIM
- * pause a new claim dispatches before taking the floor, and (since the
- * migration slice) the SUSPENDED-HOLDER pause an OS loss dispatches on the
- * holder itself (a holder has no observer that would pause it on its own).
- * The music adapter exists on both platforms (`AudioPlaybackManagerSurface`
- * and the desktop twin) — two production adapters make this a real seam.
- * READ_ALOUD has deliberately none: its reader observes
- * [PlaybackFocus.claimState]. [pause]
- * MUST be a no-op when the surface is idle, and MUST leave the surface
- * unable to auto-resume (the playWhenReady guard — the module's
+ * A playback surface the matrix may command — in the cases where a command,
+ * not an observation, is the only enforcement there is: the VICTIM pause a
+ * new claim dispatches before taking the floor, the SUSPENDED-HOLDER pause
+ * an OS loss dispatches on the holder itself (a holder has no observer that
+ * would pause it on its own), and — since the video slice — the
+ * TRANSIENT-LOSS duck and its GAIN restore on a duck-policy video claim
+ * (see [FocusLossDirective.Duck]). The music adapter exists on both
+ * platforms (`AudioPlaybackManagerSurface` and the desktop twin); the video
+ * family binds a [VideoPlaybackSurface] target per screen. READ_ALOUD has
+ * deliberately none: its reader observes [PlaybackFocus.claimState].
+ *
+ * [pause] MUST be a no-op when the surface is idle, and MUST leave the
+ * surface unable to auto-resume (the playWhenReady guard — the module's
  * manual-resume decision is enforced at this command, so neither a release
- * nor an ignored OS regain can resurrect a paused surface).
+ * nor an ignored OS regain can resurrect a paused surface). [duck] and
+ * [restore] carry the same no-when-idle rule; [volume] is PROGRAMMATIC
+ * (engines with per-content-type volume memory must never capture it — the
+ * legacy duck/restore round-trip's `isUserChange = false`).
  */
 interface PlaybackSurface {
     val id: PlaybackSurfaceId
     fun pause()
+
+    /** Drop to [volume] for a transient loss. Default no-op (pause-only rows). */
+    fun duck(volume: Float) {}
+
+    /** Undo [duck]: restore the pre-duck level (re-asserting mute if muted). */
+    fun restore() {}
+}
+
+/**
+ * What the executor does when the OS takes focus from a held claim — the
+ * per-claimant loss ruling (the matrix's loss-vocabulary growth the ADR
+ * consequences record; the interface did not grow). MUSIC and READ_ALOUD
+ * stay [Pause]-only with manual resume; VIDEO is the one row the duck
+ * upgrade applies to (the user's `duckOnTransientFocusLoss` pref), keeping
+ * its legacy transient-loss semantics alive: duck, never pause, and the
+ * claim stays HELD through the duck (a regain restores; nothing else
+ * changes).
+ */
+sealed interface FocusLossDirective {
+
+    /**
+     * Suspend the holder and command its surface pause — the slice-1 ruling
+     * every non-video row keeps. Resume is manual.
+     */
+    data object Pause : FocusLossDirective
+
+    /**
+     * Keep the claim Held and duck the surface to [volume] instead. The
+     * transient-only vocabulary: a PERMANENT loss suspends + pauses a duck
+     * row too (there is no regain to restore with). [volume] is the legacy
+     * duck level (audible-but-quiet during a phone call).
+     */
+    data class Duck(val volume: Float) : FocusLossDirective
 }
 
 /**
@@ -144,9 +188,8 @@ enum class FocusContentType { SPEECH, MUSIC, MOVIE }
 
 /**
  * Platform focus authority port. Android: a fresh AudioFocusRequest owned by
- * the adapter (PlayerAudioLifecycle stays engine-bound to video/live);
- * desktop slice 2: an in-process always-arbitrating twin; tests: a scripted
- * fake. Two adapters minimum, satisfied.
+ * the adapter; desktop slice 2: an in-process always-arbitrating twin; tests:
+ * a scripted fake. Two adapters minimum, satisfied.
  */
 interface FocusArbiter {
 
@@ -169,8 +212,9 @@ interface FocusArbiter {
 /** OS focus events, attributed to the request they belong to. */
 fun interface FocusListener {
     /**
-     * [FocusEvent.Regained] is IGNORED by the module (resume is manual,
-     * pinned) — it exists so adapters can keep their OS bookkeeping honest.
+     * [FocusEvent.Regained] never RESUMES playback (resume is manual,
+     * pinned), but it is NOT a dead event: the module consumes it to restore
+     * a ducked row's volume — adapters MUST forward it, not filter it.
      */
     fun onFocusEvent(event: FocusEvent)
 }
@@ -187,45 +231,74 @@ sealed interface FocusEvent {
  * the module's front-door documentation. Flows in, directives out; it never
  * touches state or surfaces (the executor dispatches).
  *
- * Slice-1 rulings (newest-wins, ADR-0004):
- *  - READ_ALOUD claims → pause MUSIC (a no-op when music is idle; the
- *    surface's pause carries the playWhenReady guard).
- *  - MUSIC claims → no commandable victims (the reader pauses its own loop
- *    by observing the published Held state — the reader's claim is an
- *    observation, not a command target).
- *  - VIDEO claims → no slice-1 row: the executor DENIES (fail closed)
- *    instead of silently letting video overlap everything.
+ * Rulings (newest-wins, pause-not-duck by default, manual-resume; ADR-0004):
+ *  - READ_ALOUD claims → pause MUSIC and VIDEO (the reader's speech loop is
+ *    itself not commandable; the video surface is, since the video slice).
+ *  - MUSIC claims → pause VIDEO (commandable since the video slice; before
+ *    it, the row had no victims — the reader paused its own loop by
+ *    observing the published Held state, an observation that never needed a
+ *    command).
+ *  - VIDEO claims → pause MUSIC (the playWhenReady guard rides the music
+ *    surface's pause).
+ *
+ * The loss rulings below are the PREF-NEUTRAL defaults: every row suspends
+ * + pauses on an OS loss. The video slice's duck upgrade is an INJECTED
+ * input ([DefaultPlaybackFocus] carries the user's
+ * `duckOnTransientFocusLoss` pref from the video-side wiring); the matrix
+ * itself stays pure over the closed world.
  */
 internal object PlaybackFocusMatrix {
 
     /** Commandable surfaces to pause before the claim takes effect. */
     fun victimsOf(claim: PlaybackSurfaceId): List<PlaybackSurfaceId> = when (claim) {
-        PlaybackSurfaceId.READ_ALOUD -> listOf(PlaybackSurfaceId.MUSIC)
-        PlaybackSurfaceId.MUSIC -> emptyList()
-        PlaybackSurfaceId.VIDEO -> emptyList()
+        PlaybackSurfaceId.READ_ALOUD -> listOf(PlaybackSurfaceId.MUSIC, PlaybackSurfaceId.VIDEO)
+        PlaybackSurfaceId.MUSIC -> listOf(PlaybackSurfaceId.VIDEO)
+        PlaybackSurfaceId.VIDEO -> listOf(PlaybackSurfaceId.MUSIC)
     }
 
-    /** Slice-1 closed world: which claims the executor may grant at all. */
+    /** The closed world: which claims the executor may grant at all. */
     fun isGrantable(claim: PlaybackSurfaceId): Boolean = when (claim) {
         PlaybackSurfaceId.READ_ALOUD -> true
         PlaybackSurfaceId.MUSIC -> true
-        PlaybackSurfaceId.VIDEO -> false
+        PlaybackSurfaceId.VIDEO -> true
     }
 
     /**
      * OS-seat audio attributes per claimant (ADR-0004 slice-2 checklist: the
      * migration slice must not force music onto speech attributes or onto a
      * second OS request). READ_ALOUD keeps the slice-1 hardcoded pair
-     * (USAGE_MEDIA + CONTENT_TYPE_SPEECH) — zero behavior change. MUSIC and
-     * VIDEO rows existed ahead of their claims precisely so the exhaustive
-     * `when` forced a conscious decision: the migration slice claimed the
-     * MUSIC row (music's seat now carries CONTENT_TYPE_MUSIC — the OS
-     * routing/ducking policy reads it); VIDEO's row stays reserved until the
-     * video slice.
+     * (USAGE_MEDIA + CONTENT_TYPE_SPEECH) — zero behavior change. MUSIC's
+     * migration slice claimed the MUSIC row; VIDEO's row was reserved ahead
+     * of its claim and the video slice now takes it under
+     * CONTENT_TYPE_MOVIE (the OS routing/ducking policy reads the content
+     * type).
      */
     fun attributesOf(claim: PlaybackSurfaceId): FocusAudioAttributes = when (claim) {
         PlaybackSurfaceId.READ_ALOUD -> FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.SPEECH)
         PlaybackSurfaceId.MUSIC -> FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.MUSIC)
         PlaybackSurfaceId.VIDEO -> FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.MOVIE)
     }
+
+    /**
+     * The pref-neutral loss ruling: every row pauses + suspends on an OS
+     * loss (resume manual). VIDEO's duck upgrade rides the injected
+     * video-pref input, never this table — see [FocusLossDirective.Duck].
+     */
+    fun lossDirectiveOf(claim: PlaybackSurfaceId): FocusLossDirective = when (claim) {
+        PlaybackSurfaceId.READ_ALOUD -> FocusLossDirective.Pause
+        PlaybackSurfaceId.MUSIC -> FocusLossDirective.Pause
+        PlaybackSurfaceId.VIDEO -> FocusLossDirective.Pause
+    }
+
+    /**
+     * Claims whose OS audio-focus seat THIS module owns by default. READ_ALOUD
+     * since slice 1, MUSIC since its migration slice; VIDEO joins with the
+     * video slice — but its membership is pref-gated at runtime by the
+     * injected video policy (the wiring computes the gate as the focus
+     * prefs' OR — in the legacy dual-mechanism world the duck seat ran on
+     * the duck pref ALONE, so pause-off/duck-on still takes the seat; the
+     * module's executor carries the gate).
+     */
+    val DEFAULT_OS_LEG_CLAIMANTS: Set<PlaybackSurfaceId> =
+        setOf(PlaybackSurfaceId.READ_ALOUD, PlaybackSurfaceId.MUSIC, PlaybackSurfaceId.VIDEO)
 }

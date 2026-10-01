@@ -158,16 +158,16 @@ class RequestsViewModel(
                         search = s.searchQuery.takeIf { it.isNotBlank() },
                     )
                 },
-                onSuccess = { response ->
+                onSuccess = { page ->
                     _state.value = _state.value.copy(
-                        requests = response.results,
-                        totalResults = response.pageInfo.results,
-                        totalPages = response.pageInfo.pages,
+                        requests = page.items,
+                        totalResults = page.totalResults,
+                        totalPages = page.totalPages,
                         isLoading = false,
                     )
-                    enrichRequests(response.results)
+                    enrichRequests(page.items)
                     // Direct *arr download progress (no-op when flag off or unconfigured).
-                    enrichDownloadProgress(response.results)
+                    enrichDownloadProgress(page.items)
                 },
                 onFailure = {
                     _state.value = _state.value.copy(

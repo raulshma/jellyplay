@@ -6,10 +6,9 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
-import com.raulshma.jellyplay.core.model.seerr.SeerrPageInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import io.mockk.Runs
@@ -88,9 +87,10 @@ class RequestsViewModelLoadGuardTest {
         } coAnswers {
             requestCalls += 1
             Result.success(
-                SeerrRequestListResponse(
-                    pageInfo = SeerrPageInfo(pages = 1, results = 1),
-                    results = listOf(item(1, tmdbId = 42)),
+                SeerrRequestPage(
+                    totalResults = 1,
+                    totalPages = 1,
+                    items = listOf(item(1, tmdbId = 42)),
                 ),
             )
         }
@@ -121,7 +121,7 @@ class RequestsViewModelLoadGuardTest {
         } coAnswers {
             requestCalls += 1
             gate.await()
-            Result.success(SeerrRequestListResponse())
+            Result.success(SeerrRequestPage())
         }
 
         val viewModel = newViewModel()

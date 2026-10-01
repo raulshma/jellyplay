@@ -1212,10 +1212,10 @@ class DetailViewModelTest {
                 com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails(),
             )
             coEvery { seerrRepository.getRecommendations(123, MediaType.MOVIE) } returns Result.success(
-                com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse(results = listOf(recItem)),
+                listOf(recItem),
             )
             coEvery { seerrRepository.getSimilar(123, MediaType.MOVIE) } returns Result.success(
-                com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse(results = listOf(recItem)),
+                listOf(recItem),
             )
 
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))

@@ -48,7 +48,6 @@ import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.MarkdownText
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
-import com.raulshma.jellyplay.core.ui.components.whatsnew.WhatsNewEntryCard
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.WhatsNewTargets
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState

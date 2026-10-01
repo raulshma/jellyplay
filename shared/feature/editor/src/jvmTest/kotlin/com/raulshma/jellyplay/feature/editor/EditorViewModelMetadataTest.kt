@@ -161,7 +161,7 @@ class EditorViewModelMetadataTest {
         coEvery {
             editorRepository.getRemoteImages(any(), any(), any(), any(), any())
         } returns Result.success(RemoteImageResult())
-        coEvery { editorRepository.refreshItemMetadata(any(), any()) } returns Result.success(Unit)
+        coEvery { editorRepository.refreshItemMetadata(any(), any<com.raulshma.jellyplay.core.model.MetadataRefreshParams>()) } returns Result.success(Unit)
 
         viewModel = EditorViewModel(
             editorRepository,

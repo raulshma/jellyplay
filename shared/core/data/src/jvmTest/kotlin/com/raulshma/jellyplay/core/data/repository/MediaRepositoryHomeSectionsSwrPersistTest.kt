@@ -120,6 +120,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
             apiClient,
+            apiClient,
             // The home cache-maintenance port (inert here — this suite pins
             // the persisted SWR half through the real store).
             mockk(relaxed = true),

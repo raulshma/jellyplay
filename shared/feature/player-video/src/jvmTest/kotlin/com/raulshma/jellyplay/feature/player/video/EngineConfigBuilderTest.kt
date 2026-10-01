@@ -103,7 +103,6 @@ class EngineConfigBuilderTest {
     fun build_equalizerAndVolumeBoostComeFromAgg() {
         val eqSettings = EqualizerSettings(bandLevels = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
         val agg = VideoPlayerAggregate(
-            playback = PlaybackSlice(pauseOnAudioFocusLoss = false),
             audioEffects = AudioEffectsSlice(
                 equalizerSettings = eqSettings,
                 volumeBoostEnabled = true,
@@ -115,7 +114,6 @@ class EngineConfigBuilderTest {
         assertEquals(eqSettings, config.audioEffects.equalizerSettings)
         assertTrue(config.audioEffects.volumeBoostEnabled)
         assertEquals(6, config.audioEffects.volumeBoostGain)
-        assertFalse(config.pauseOnAudioFocusLoss)
     }
 
     @Test
@@ -216,13 +214,6 @@ class EngineConfigBuilderTest {
         assertTrue(config.audioEffects.equalizerEnabled)
         assertEquals(eqSettings, config.audioEffects.equalizerSettings)
         assertEquals(1500, config.audioEffects.nightModeGain)
-    }
-
-    @Test
-    fun buildFromPreferences_pauseOnAudioFocusLossPropagated() {
-        val agg = VideoPlayerAggregate(playback = PlaybackSlice(pauseOnAudioFocusLoss = false))
-        val config = EngineConfigBuilder.buildFromPreferences(agg, emptyList(), null, null)
-        assertFalse(config.pauseOnAudioFocusLoss)
     }
 
     @Test

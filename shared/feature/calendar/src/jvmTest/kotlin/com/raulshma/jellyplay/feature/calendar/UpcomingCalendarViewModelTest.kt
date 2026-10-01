@@ -30,8 +30,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeasonDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceServer
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceDetail
@@ -456,11 +455,11 @@ private class FakeSeerrRepository : SeerrRepository {
     // (The auth trio, the *arr settings pair and editRequest moved to the
     // SeerrAuthenticator / SeerrServiceDirectory / SeerrRequestLifecycle
     // family seams — no longer members this fake must implement.)
-    override suspend fun search(query: String, page: Int): Result<SeerrSearchResponse> = unused()
+    override suspend fun search(query: String, page: Int): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getTvSeasonDetails(tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> = unused()
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> = unused()
-    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> = unused()
-    override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> = unused()
+    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
+    override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> = unused()
     override suspend fun getTmdbReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>> = unused()
     override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> = unused()
@@ -484,7 +483,7 @@ private class FakeSeerrRepository : SeerrRepository {
         requestedBy: Int?,
         mediaType: String?,
         search: String?,
-    ): Result<SeerrRequestListResponse> = unused()
+    ): Result<SeerrRequestPage> = unused()
     override suspend fun getRequest(id: Int): Result<SeerrRequestItem> = unused()
     override suspend fun approveRequest(id: Int): Result<SeerrRequestItem> = unused()
     override suspend fun declineRequest(id: Int): Result<SeerrRequestItem> = unused()
@@ -499,17 +498,17 @@ private class FakeSeerrRepository : SeerrRepository {
     override fun isRecommendationsEnabled(): Flow<Boolean> = unused()
     override fun isDiscoverEnabled(): Flow<Boolean> = unused()
     override fun getPreferences(): Flow<SeerrPreferences> = unused()
-    override suspend fun getTrending(page: Int): Result<SeerrSearchResponse> = unused()
+    override suspend fun getTrending(page: Int): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getDiscoverMovies(
         page: Int,
         primaryReleaseDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> = unused()
+    ): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getDiscoverTv(
         page: Int,
         firstAirDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> = unused()
+    ): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override fun isAdmin(): Flow<Boolean> = unused()
     override val currentUser: StateFlow<SeerrCurrentUser?> get() = unused()
     override val pendingRequestCount: StateFlow<Int> get() = unused()

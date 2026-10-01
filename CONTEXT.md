@@ -81,7 +81,7 @@ are relative to the repo root.
  over the host's hot engine-source stream, `dispose`/`reArm` and the
  decision fan-out TaskBundle slot. Hosts: `PlaybackSession` (VOD) and
  `LiveTvPlayerViewModel` (live). Pinned by `EngineSessionShellTest`.
-- **`PlayerChromePolicies`** (player-contract commonMain `engine/`) are the
+- **`PlayerChromePolicies`** (player-contract commonMain `chrome/`) are the
  pure chrome-timing policies BOTH player screens cite — one home instead of
  byte-identical copies: `controlsAutoHideTimeoutMs` (the TV-doubling fold
  over each screen's preference-sourced base timeout) and
@@ -198,7 +198,7 @@ are relative to the repo root.
  deleted. Declared divergence parameter: the Unknown arm's diagnostic —
  desktop passes `mpv_error_string(code)`, Android the raw handed-over
  string. Pinned by `MpvErrorTaxonomyTest`.
-- **`MpvEventFold`** (player-contract commonMain `engine/`) is the one
+- **`MpvEventFold`** (player-contract commonMain `engine/mpv/`) is the one
  raw-mpv-event → engine-state fold both mpv engines apply: the
  `MpvPlaybackLatches` latch set (isPlaying is fileLoaded/eof-gated — the
  Android engine formerly wrote it unguarded from the pause observer; the
@@ -206,7 +206,8 @@ are relative to the repo root.
  effects — cue clears (the desktop's clear-on-`sid`-switch arm), track
  re-enumeration, the live-subtitle mirror, the END_FILE error signal.
  Pinned by `MpvEventFoldTest`.
-- **`MpvTrackCatalog` + `MpvSubtitleSideLoadPlan`** (same `engine/`, next)
+- **`MpvTrackCatalog` + `MpvSubtitleSideLoadPlan`** (same `engine/mpv/`,
+ next)
  are the shared track-republish half: the pure track-list → `MediaTrack`
  catalog both mpv engines funnel `buildTracks` through (the desktop
  formerly re-parsed bare, so offline-restore ids never resolved there) and
@@ -4351,11 +4352,14 @@ whom", the policy that used to be an OS accident spread over engine
 configs, `PlayerAudioLifecycle`, two user prefs, and per-shell code.
 Interface: `claimState` (Idle / Held / Suspended) + `acquire` / `release`.
 The matrix (`PlaybackFocusMatrix`) is pure and total over the closed
-`PlaybackSurfaceId` world; rulings: newest-wins, pause-not-duck (no duck
-vocabulary exists), manual-resume (the `playWhenReady` guard makes that
+`PlaybackSurfaceId` world; rulings: newest-wins, a per-row loss directive
+(`FocusLossDirective.Pause | Duck(volume)` — pause-only by default; VIDEO
+is the one Duck row, and only while the injected video pref asks),
+manual-resume (the `playWhenReady` guard makes that
 true at the OS level: the music surface's `pause` clears playWhenReady,
 and since the migration slice music has no media3 focus stack of its own —
-the module's seat is abandoned at release and `Regained` is ignored, so
+the module's seat is abandoned at release and `Regained` is ignored on
+pause rows, so
 nothing can resurrect it).
 `DefaultPlaybackFocus` is the commonMain executor; `FocusArbiter` (OS
 seat — `AndroidFocusArbiter`, one AudioFocusRequest per attributes
@@ -4381,9 +4385,13 @@ secondary's GAIN request focus-loss-pause the primary mid-fade), MUSIC
 claims the seat on the play edge with the MUSIC attributes row, and OS
 losses on the holder are ENFORCED (the holder has no `claimState`
 observer, so the module commands its surface pause; `Regained` stays
-ignored — resume is manual). Video is denied until its slice adds a
-matrix row (the exhaustive `when` makes it a build error, not a silent
-overlap). See docs/adr/0004-playback-focus.md.
+ignored — resume is manual). The video slice LANDED (2026-10-01): VIDEO
+claims through the same matrix (the closed world is complete —
+`isGrantable(VIDEO)=true`, the OS leg runtime-gated by the
+`VideoFocusPolicyInput` pref seam, transient loss DUCKS a held video
+claim and a regain restores, `PlayerAudioLifecycle` is DELETED, and
+ExoPlayer's `handleAudioFocus` is forced off like music's). See
+docs/adr/0004-playback-focus.md.
 
 ## Audio playback, effects & cast cores (core/data)
 
@@ -5684,3 +5692,195 @@ reach already-shipped installs through the fetch.
  response, zero extra fetches — with a view/hide full-notes toggle reusing
  the up-to-date viewer's strings. Desktop keeps its markdown-body update
  surfaces; parser and repository are shared, so cards are a drop-in there.
+
+## 2026-10-01 deepening cohort (48-candidate architecture review, fully landed)
+
+Recorded so future explorers don't re-derive or re-suggest. Every item below is
+landed and suite-green in the working tree of this date (uncommitted worktree).
+
+**Playback focus — closed world COMPLETE.** The matrix rows are now
+MUSIC · READ_ALOUD · VIDEO (`isGrantable(VIDEO)=true`); `FocusLossDirective`
+(`Pause | Duck(volume)`) carries duck vocabulary (video-only: duck on transient
+loss, restore on regain, permanent loss still suspends+pauses; duck stays
+Held). Video/live claim on the play edge through `VideoPlaybackSurface`
+(+`FocusCommandTarget`, the commandable `PlaybackControl` shape) and release on
+pause/stop; `PlayerAudioLifecycle` and `Media3LivePlayerAudio`'s legacy path
+are DELETED — becoming-noisy moved to `AndroidVideoPlayerBecomingNoisy` /
+`Media3LivePlayerAudio`. Video prefs feed the matrix via
+`VideoFocusPolicyInput(osLegEnabled, duckOnTransientLoss)`:
+`pauseOnAudioFocusLoss=false` = publish-state-only (no OS seat). ExoPlayer
+engines force `handleAudioFocus=false` (one-seat invariant);
+`EngineConfig.pauseOnAudioFocusLoss` removed. Deliberate semantic delta:
+regain after a *pause* ruling stays manual-resume (module law) where
+ExoPlayer-builtin used to auto-resume. See ADR-0004 addendum.
+
+**Engine seam.** `PlaybackRequest` carries the universal set +
+`engineSpecific: EngineSpecificConfig?`; the per-engine scalars
+(normalizationGain, mimeType, tls) ride `core.model.PlaybackRequestSpecific`
+(ONE request-side variant — a load may target either engine family, so
+Exo-side and mpv-side payload coexist); `PlaybackTls` lives in core:model;
+`serverDurationMs` stays universal (Exo AND both mpv engines read it). The
+mpv render family (shader pack/tone mapping/quality) remains mpv-typed
+DELIBERATELY — no Exo/libVLC counterpart exists and the render-profiles
+feature just shipped; future engines add their own `engineSpecific` variant +
+capability gate (KDoc-recorded direction). player-contract packages name the
+tiers: `…engine.mpv` (8 shared mpv policy files + tests),
+`…feature.player.video.chrome` (PlayerChromePolicies); SegmentCalculator moved
+into player-video beside its consumers; the contract tier keeps the canonical
+`…feature.player.video.engine` package (recorded zero-import-churn decision).
+`MediaEngineContractLawTest` (fake) + `ExoPlayerEngineContractLawTest`
+(Robolectric, real adapter) pin release idempotence, reset choreography,
+bufferedRanges normalization, capability stability, requestSpecific
+projection. The migration-deleted `VideoPlayerViewModelTest` +
+`VideoPlayerResetEquivalenceTest` are REINSTATED in player-video jvmTest.
+
+**Player composition.** `PlayerWiring` takes 27 params (was 43) via five
+verified single-consumer bundles (PlayerSubtitleSources/OfflineSources/
+SessionStackSources/ItemContentSources/StateHandles); the 13-member Host stays
+(protects the VM ownership ceiling). `SleepTimerArming` (core:data playback)
+is the one arming/end-of-episode/disarm machine behind BOTH
+SleepTimerController (video) and AudioSleepTimerController (music); the AB
+repeat controllers are deliberately NOT unified (clamp-vs-reject,
+hysteresis-vs-one-shot — different UX contracts, only `pos>=b → seek(a)`
+shared).
+
+**Data seams.** Seerr has a real DTO↔model seam: internal `SeerrWireDtos`
+(core.network) decode wire shapes; core.model read-models return
+`List<SeerrSearchItem>`, `SeerrRequestPage`, typed
+`SeerrMediaStatus`/`SeerrRequestStatus`; envelopes are gone from the
+read-models (`mediaType` kept, exemption KDoc'd; `SeerrDiscoverParams` keeps
+`genreIds` — a genuine discover-query dimension the wire path builder folds,
+not a wire mirror; `TmdbImageUrls` stays in core.model —
+features must never import core.network). Pass-through mirrors retired:
+`LiveTvRepository : LiveTvApiClient` (+deleteRecording routing),
+`NewsletterRepository : NewsletterApiClient` (impl deleted, DI binds a
+delegation object), `MetadataEditorRepository : MetadataApiClient` (+3 routing
+members); surface ratchets repinned (LiveTv 15→1, Newsletter 3→0).
+`PlaylistApiClient`/`CollectionApiClient` are family seams over the one
+`LibraryApiClientImpl`; the four user-data writes are folded into
+`writeUserData(UserDataWrite)` (sealed MarkPlayed/MarkUnplayed/ToggleFavorite/
+SetFavorite, single caller family); `MetadataApiClient.updateItem` takes
+`EditableItemMetadata` whole. Leaks folded: parental-rating ladder →
+core:model `ParentalRatings`; arr cache-miss → `ArrReleaseCacheUnavailable` on
+the repository seam (arrqueue no longer imports core.network); remote-play
+auth header → `PlaybackIdentity.authorizationHeader`. Hand-mapper endpoints
+pinned by `LibraryApiHandMappersTest` (+SDK-drift guards).
+
+**Settings.** Rows own their whole declaration: `*SearchItems` lists are pure
+projections, admissions derive via `admissionsByAdvancedFlag()`, and the last
+hand-kept exception (appearanceItems) is gone — AppearanceSettingsScreen is
+decomposed into 5 group composables + named summaries, joined the strict
+per-id admission ratchet, and derives totals via `rowTotalFor`
+(`appearanceThemeScreenRowTotal` declares the content gates; `theme_scheduler`
+is a documented highlight-alias row). Tier-B derivation exists for the
+videoPlayerStore slice (`VideoPlayerPreferenceSpecs`, 40 rows incl. legacy
+migrations; migration path KDoc'd for the remaining ~18 stores).
+`ImportPreviewViewModel` takes the snapshot seam (4 deps, was 24 stores).
+
+**Shell.** `ShellNavParams` no longer duplicates hook fields (layout reads
+`shellHost`; 13→8 fields, five dead locals deleted). `ShellHostHooks` is five
+grouped values (home/audio/settings/admin/search data classes — remember-key
+discipline is per-group structural equality); `RememberShellHost` takes 6
+params. `LocalSurpriseOnLaunch` defaults inert (desktop dummy deleted) and the
+shell-locals contract is checkable (`DesktopShellCompositionLocalsTest`).
+MainActivity's lock gate is `LockGateHost` (beside PinGateController); the
+phone chrome-clearance math is `ShellChromePlacement` (+truth-table test);
+desktop's fullscreen read is `desktopTopRouteIsFullscreen` in
+`DesktopLayoutPolicy` (+test). `parseSharedText`/`SharedTextTarget` live in
+app `deeplink/` with a plain-JVM test; `UserMessageBus` reaches JellyPlayApp
+through `ShellInfra.userMessageBusLazy`.
+
+**Media features.** `AudioStateProjection` is the one combine-tree producing
+the audio uiState (the 12 hand-synced collectors and the three effects mirror
+getters are gone). Live TV errors are `UiMessage` everywhere (baked literals
+and plain-English row titles deleted; programs titles are resources; the
+player-live legacy literals folded too), and all five tab screens ride
+`LiveTvTabScaffold` over the core:ui rungs (ChannelsScreen's missing loading
+rung fixed). SyncPlay membership derives from `syncPlaySession.activeGroupId`
+(seed on init, live-truth auto-accept guard; the reconnect grace window is
+KEPT — it covers real WS-drop races, not the old mirror). `AppRuntimeStateStore
+.toggleFavoriteChannel` is the one flip command. Recordings badge is
+presence-only (dead -1-dot vocabulary deleted). SyncPlay `refreshGroups`
+failures surface as UiMessage.
+
+**Cross-feature UI.** core/ui owns `SelectionActionBar` (downloads chrome as
+canonical), `StatusPill` + `DotLabel` (six hand copies collapsed; decision
+tables stay feature-local), and `SnackbarQueue`/`SnackbarQueueEffect` (FIFO +
+pop-after-show, plural resolver injected — details' ordering edge is pinned).
+Requests/ArrQueue ride the Screen* family (TV focus dead end fixed);
+arrqueue dialog decisions are `PendingConfirmation<ArrQueueAction>` machines
+with gap tests; AddServer's local-network permission choreography is a
+tested VM machine (`onLocalNetworkAccessSynced` + `localNetworkRationale`).
+
+**core/ui & designsystem.** components/ is concern-split
+(cards/sheets/locals/formatting/auth/selection/filter + the moved-in
+downloads-seerr stay); ModeSwitch→home, StaggeredSection→admin,
+SubtitleStylePreview pair + WhatsNewEntryCard→settings (strings moved),
+SubtitleColorMap split back to core/ui (onboarding consumes it);
+TransparentTopBar deleted, two dead exports made internal/private. Motion is
+ONE home: `LocalMotionFlags` + `motionSchemeFor()` in designsystem (theme
+derives from the locals; `LocalPerformanceMode.kt` is an alias file).
+Transcode reasons localize on BOTH platforms via commonMain
+`TranscodeReasonCatalog` (desktop's raw-token echo gone); 8 dead string keys
+deleted ×9 locales. `ComponentStyles`/`ShapeDefaults` deleted (folded/dead);
+`Dimensions.floatingNavHeight` stays (7 consumers). Floating-nav clearance is
+pure `floatingNavReservationDp`/`navRideUpOffsetPx` (+test); the stale
+desktop-composes-phone-shell comment is fixed.
+
+**Reader.** ReaderSheets.kt is one-file-per-sheet (+`ReaderSheetState` with
+pure `changedAxes` commit-diffs); one `CommitSlider` serves all three
+former copies (`committedInRange`/`committedBrightnessPct`/
+`pagedSliderSeekTarget` pinned). `ReaderPrefsSnapshot.controlsTimeoutMs`
+(session-scoped knob, default 4s) + `controlsAutoHideTimeoutMs(isTv)` reuse
+the player's shared fold (player-book now depends on player-contract for it).
+`SapiTtsBinding` is pinned via the `SapiVoiceHandle` seam (fake apartment
+executor: exactly-once completion, poll-after-shutdown short-circuit, post-
+release no-ops).
+
+**core:data platform machinery.** `DownloadIntakeBody` (jvmShared) is the one
+routing body over `noSourceError`; `OfflineModeDerivation` +
+`OfflineModeManagerBody` make allowAuto a visible parameter (desktop =
+2-line ctor, allowAuto=false); `UniqueWorkSchedules` is the one WorkManager
+enqueue ladder (five shells are names+cadences; per-job constraint/backoff
+choices preserved exactly); `NotificationChannelManager` owns all four
+families' static channel creation (downloads/drain/now-playing route through
+ensure*Channel); `CastUpdateCastStatePairingTest` pins the
+updateCastState↔CastStateFanout strategy pairing (the full cast-seam
+consolidation stays deferred until a desktop cast story exists — one
+platform = hypothetical seam); `DownloadNotificationHelper`'s summary memo
+is an injectable holder.
+
+**Shells/desktop/build.** apps/desktop/build.gradle.kts is 237 lines (was
+797): `jellyplay.desktop.packaging` convention plugin owns
+FetchBundledLibmpv/WriteDesktopBuildInfo + the version grammar/macOS shift;
+GeneratePackagingIconsTask deleted (committed icons + PackagingIconAssetsTest
+are the gate); conveyor history moved to docs/kmp-migration-plan.md.
+`DesktopSingleInstanceGuard` (FileChannel.lock in the config dir, contended
+launch exits before startKoin) guards against multi-writer JVMs; desktop has
+no OS protocol registration in v1 (see ADR-0005). CI shared lanes are DERIVED
+from settings.gradle.kts includes (36 modules; `SharedModuleCiLaneGuardTest`
+ratchets the derivation) — the ONE declared exception is the androidHostTest
+lane, which hand-lists four `:shared:*:testAndroidHostTest` tasks because
+which modules own an androidHostTest source set is not derivable from
+settings.gradle.kts (the workflow comment records this); the release
+baseline-profile gate is a loud WARNING until profiles are first committed.
+`.gitignore` now ignores tools/ heavy content specifically (tracked scripts
+no longer shadowed).
+
+**Recorded late (review pass, same tree):** `tools/font/subset_subfont.py`
+(+ README) is the font-subsetting tool; `tools/e2e/books-probe/`
+(`make-fixtures.py` + `probe-books-api.sh`) is the books-API E2E probe and
+fixture maker; `SeerrRecommendationsWidgetWorker` moved the poster filter
+into `fetchItems()` and qualified the bare `Result` return (androidx.work's
+nested `Result` shadows kotlin.Result) — its dead `discoverRegion` plumbing
+was removed in review (the repository discover seam takes no region).
+
+**Known deferred (recorded, do not re-suggest as new findings):** mpv render
+family typing (A2 Tier 2), cast seam consolidation (I5), AB-repeat unification
+(A6b), cast/Seerr detail-section collapse beyond VideosSection (different data
+models), downloads/seerr core/ui component groups (verified multi-consumer —
+feature relocation would invert the core→feature edge), AudioPlaybackManager
+commonMain promotion (rewrite-scale), baseline profiles payload (needs one GMD
+generate run + commit, then restore the hard gate), settings security rows
+(supportsAppLock capability — landed by a parallel session; contract test
+counts updated).

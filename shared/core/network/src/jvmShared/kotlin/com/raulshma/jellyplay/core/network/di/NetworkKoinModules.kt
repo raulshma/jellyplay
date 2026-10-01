@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.LrcLibApi
@@ -16,10 +16,12 @@ import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
+import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.api.DeviceProfileProvider
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.LazyProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
@@ -133,6 +135,12 @@ val networkJvmModule: Module = module {
     // datastore-layer session stores).
     single { LibraryApiClientImpl(get(), get(), get(), SeerrHomeSectionSourcesImpl(get(), get(), get())) }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
+    // The two library family seams over the same impl single (the
+    // one-impl-many-seams idiom): single-family consumers (PlaylistRepositoryImpl,
+    // MediaRepositoryImpl's collection reads) inject the seam, never the wide
+    // library surface.
+    single<PlaylistApiClient> { get<LibraryApiClientImpl>() }
+    single<CollectionApiClient> { get<LibraryApiClientImpl>() }
     // The home cache-maintenance verbs ride their own port (beside the fetcher
     // that owns the caches): the data layer's write/roll paths drop/seed the
     // home hot-path sub-call caches through this seam instead of the wide
@@ -252,12 +260,12 @@ private class SeerrHomeSectionSourcesImpl(
             }
         }
 
-    override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> =
+    override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>> =
         withSession { url, creds ->
             client.getDiscoverMovies(url, creds, params = params).map { it.backfillMediaType("movie") }
         }
 
-    override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> =
+    override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>> =
         withSession { url, creds ->
             client.getDiscoverTv(url, creds, params = params).map { it.backfillMediaType("tv") }
         }
@@ -280,12 +288,10 @@ private class SeerrHomeSectionSourcesImpl(
 }
 
 /** Ports `SeerrRepositoryImpl.backfillMediaType` (kept private there): blank mediaTypes become [mediaType]. */
-private fun SeerrSearchResponse.backfillMediaType(mediaType: String): SeerrSearchResponse =
-    copy(
-        results = results.map { item ->
-            if (item.mediaType.isBlank()) item.copy(mediaType = mediaType) else item
-        },
-    )
+private fun List<SeerrSearchItem>.backfillMediaType(mediaType: String): List<SeerrSearchItem> =
+    map { item ->
+        if (item.mediaType.isBlank()) item.copy(mediaType = mediaType) else item
+    }
 
 // Hoisted so the pattern compiles once at class load rather than on each
 // OkHttp client construction (low impact since the provider is a singleton,

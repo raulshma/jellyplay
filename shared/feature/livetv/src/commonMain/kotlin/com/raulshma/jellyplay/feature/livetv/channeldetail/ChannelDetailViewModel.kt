@@ -1,19 +1,25 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
-import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.livetv.components.RecordAction
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_cancel_recording
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_channel
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_programs
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_failed
 import com.raulshma.jellyplay.feature.livetv.isAiringAt
 import com.raulshma.jellyplay.feature.livetv.nowInstant
 import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
 import kotlin.time.Instant
+import org.jetbrains.compose.resources.StringResource
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,7 +74,9 @@ class ChannelDetailViewModel(
                     }
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(isLoading = false, error = UserErrorMessages.resolve(e, "Failed to load channel")) }
+                    _uiState.update {
+                        it.copy(isLoading = false, error = UiMessage.of(e, Res.string.livetv_error_load_channel))
+                    }
                 },
             )
             if (meta.isFailure) return@launch
@@ -127,18 +135,19 @@ class ChannelDetailViewModel(
             }
             .onFailure { e ->
                 if (isInitialLoad) {
-                    _uiState.update { it.copy(isLoading = false, error = UserErrorMessages.resolve(e, "Failed to load programs")) }
+                    _uiState.update {
+                        it.copy(isLoading = false, error = UiMessage.of(e, Res.string.livetv_error_load_programs))
+                    }
                 }
             }
     }
 
     // ── Recording actions ──
     // The shared [RecordActions] choreography, adapted to this tab's feedback
-    // surface: one-shot messages on [messageChannel] (success/canceled, Raw
-    // failure with the legacy fallback literals) and a re-fetch of today's
-    // program window after every successful action so the timer-state on each
-    // [LiveTvProgram] (and the Record ↔ Cancel button on the hero) follows the
-    // server.
+    // surface: one-shot messages on [messageChannel] (success/canceled, the
+    // UiMessage failure fold) and a re-fetch of today's program window after
+    // every successful action so the timer-state on each [LiveTvProgram] (and
+    // the Record ↔ Cancel button on the hero) follows the server.
 
     private val recordActions = RecordActions(mediaRepository, scope) { outcome ->
         when (outcome) {
@@ -147,7 +156,9 @@ class ChannelDetailViewModel(
                 launch { refreshPrograms(_uiState.value.channelId) }
             }
             is RecordOutcome.Error ->
-                messageChannel.trySend(LiveTvUserMessage.Raw(outcome.message ?: outcome.request.action.failureFallback()))
+                messageChannel.trySend(
+                    LiveTvUserMessage.Failure(UiMessage.of(outcome.message, outcome.request.action.failureFallbackRes())),
+                )
             is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
         }
     }
@@ -193,10 +204,14 @@ private fun RecordAction.successMessage(): LiveTvUserMessage =
         LiveTvUserMessage.RecordCanceled
     }
 
-/** The failure fallback literals, kept byte-identical from the legacy bus call sites. */
-private fun RecordAction.failureFallback(): String =
+/**
+ * The failure fallback resource per action ([UiMessage.of]'s Resource arm) —
+ * the former baked English literals ("Failed to set recording" / "Failed to
+ * cancel recording"), now localized string resources.
+ */
+private fun RecordAction.failureFallbackRes(): StringResource =
     if (this == RecordAction.RECORD_ONCE || this == RecordAction.RECORD_SERIES) {
-        "Failed to set recording"
+        Res.string.livetv_record_failed
     } else {
-        "Failed to cancel recording"
+        Res.string.livetv_error_cancel_recording
     }

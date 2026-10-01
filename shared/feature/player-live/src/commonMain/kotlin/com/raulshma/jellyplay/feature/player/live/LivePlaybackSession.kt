@@ -28,7 +28,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineSessionShell
 import com.raulshma.jellyplay.feature.player.video.engine.FallbackPolicy
 import com.raulshma.jellyplay.feature.player.video.engine.WatchdogScope
-import com.raulshma.jellyplay.feature.player.video.engine.mirrorPlaying
+import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow

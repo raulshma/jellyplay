@@ -116,7 +116,7 @@ class LibraryApiClientImpl(
      * layer). Default null = this wiring fetches no Seerr rows (unit fakes).
      */
     private val seerrHomeSectionSources: SeerrHomeSectionSources? = null,
-) : LibraryApiClient, HomeSectionSources, HomeSectionsCachePort {
+) : LibraryApiClient, PlaylistApiClient, CollectionApiClient, HomeSectionSources, HomeSectionsCachePort {
 
     /**
      * Parent ids of libraries already known to return nothing from both the
@@ -960,62 +960,74 @@ class LibraryApiClientImpl(
         Unit
     }
 
-    override suspend fun markPlayed(itemId: String): Result<Unit> = engine.withApi { api ->
-        val userId = engine.requireUserId()
-        api.playStateApi.markPlayedItem(
-            userId = userId.toUUID(),
-            itemId = itemId.toUUID(),
-        )
-    }
-
-    override suspend fun markUnplayed(itemId: String): Result<Unit> = engine.withApi { api ->
-        val userId = engine.requireUserId()
-        api.playStateApi.markUnplayedItem(
-            userId = userId.toUUID(),
-            itemId = itemId.toUUID(),
-        )
-    }
-
-    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResultWithRetry {
-        val userId = engine.requireUserId()
-        val uuid = itemId.toUUID()
-        favoriteFlags.toggle(
-            cacheKey = uuid.toString(),
-            currentIsFavorite = currentIsFavorite,
-            fetchCurrent = {
-                engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-            },
-            markOnServer = {
-                engine.requireApi().userLibraryApi.markFavoriteItem(
-                    userId = userId.toUUID(),
-                    itemId = uuid,
-                )
-            },
-            unmarkOnServer = {
-                engine.requireApi().userLibraryApi.unmarkFavoriteItem(
-                    userId = userId.toUUID(),
-                    itemId = uuid,
-                )
-            },
-        )
-    }
-
-    override suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit> = engine.withApi { api ->
-        val userId = engine.requireUserId()
-        val uuid = itemId.toUUID()
-        if (isFavorite) {
-            api.userLibraryApi.markFavoriteItem(
+    /**
+     * The ONE user-data write funnel (the four former per-verb members
+     * folded): each op keeps its exact former transport — mark/unmark ride
+     * [JellyfinApiEngine.withApi], the toggle rides the retry chassis +
+     * [FavoriteFlagCache] read-flip cache. The [UserDataWriteOutcome] carries
+     * the post-toggle favorite state; state writes answer [UserDataWriteOutcome.Done].
+     */
+    override suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome> = when (write) {
+        is UserDataWrite.MarkPlayed -> engine.withApi { api ->
+            val userId = engine.requireUserId()
+            api.playStateApi.markPlayedItem(
                 userId = userId.toUUID(),
-                itemId = uuid,
+                itemId = write.itemId.toUUID(),
             )
-        } else {
-            api.userLibraryApi.unmarkFavoriteItem(
-                userId = userId.toUUID(),
-                itemId = uuid,
-            )
+            UserDataWriteOutcome.Done
         }
-        favoriteFlags.put(uuid.toString(), isFavorite)
-        Unit
+
+        is UserDataWrite.MarkUnplayed -> engine.withApi { api ->
+            val userId = engine.requireUserId()
+            api.playStateApi.markUnplayedItem(
+                userId = userId.toUUID(),
+                itemId = write.itemId.toUUID(),
+            )
+            UserDataWriteOutcome.Done
+        }
+
+        is UserDataWrite.ToggleFavorite -> engine.apiResultWithRetry {
+            val userId = engine.requireUserId()
+            val uuid = write.itemId.toUUID()
+            val toggled = favoriteFlags.toggle(
+                cacheKey = uuid.toString(),
+                currentIsFavorite = write.currentIsFavorite,
+                fetchCurrent = {
+                    engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+                },
+                markOnServer = {
+                    engine.requireApi().userLibraryApi.markFavoriteItem(
+                        userId = userId.toUUID(),
+                        itemId = uuid,
+                    )
+                },
+                unmarkOnServer = {
+                    engine.requireApi().userLibraryApi.unmarkFavoriteItem(
+                        userId = userId.toUUID(),
+                        itemId = uuid,
+                    )
+                },
+            )
+            UserDataWriteOutcome.FavoriteNow(toggled)
+        }
+
+        is UserDataWrite.SetFavorite -> engine.withApi { api ->
+            val userId = engine.requireUserId()
+            val uuid = write.itemId.toUUID()
+            if (write.isFavorite) {
+                api.userLibraryApi.markFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            } else {
+                api.userLibraryApi.unmarkFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            }
+            favoriteFlags.put(uuid.toString(), write.isFavorite)
+            UserDataWriteOutcome.Done
+        }
     }
 
     /**

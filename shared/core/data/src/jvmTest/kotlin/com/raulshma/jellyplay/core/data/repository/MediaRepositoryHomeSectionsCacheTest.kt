@@ -111,6 +111,7 @@ class MediaRepositoryHomeSectionsCacheTest {
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
             apiClient,
+            apiClient,
             // The home cache-maintenance port (the write/roll paths' verbs —
             // verified directly in the reroll pins below).
             homeSectionsCachePort,

@@ -40,6 +40,16 @@ internal data class SettingsCapabilities(
     /** Touch gestures exist (double-tap seek, gesture indicator). */
     val supportsTouchGestures: Boolean,
     /**
+     * The app-lock enforcement stack exists — Android-backed: the lock
+     * gate (`AppLockState` / `PinGateController` / `AuthChallengeScreen`)
+     * is Android-only, and desktop merely persists PIN state through the
+     * shared `SecurityStore` without ever challenging, so its PIN rows
+     * would promise enforcement that does not exist. Hides the PIN rows
+     * (PIN_LOCK, PIN_FOR_PLAYER_LOCK, AUTO_LOCK_TIMER) on desktop; pinned
+     * in `DesktopPlatformActualsTest`.
+     */
+    val supportsAppLock: Boolean,
+    /**
      * Desktop: `rememberBiometricGate() != null` (always false there —
      * pinned in `DesktopPlatformActualsTest`). Android: the platform has
      * biometric APIs; a device without hardware hides the row at runtime

@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -148,24 +147,24 @@ class HomeSectionsFetcherTest {
 
         var available: Boolean = true
         val calls = mutableListOf<String>()
-        val movieResults = ArrayDeque<Result<SeerrSearchResponse>>()
-        val tvResults = ArrayDeque<Result<SeerrSearchResponse>>()
+        val movieResults = ArrayDeque<Result<List<SeerrSearchItem>>>()
+        val tvResults = ArrayDeque<Result<List<SeerrSearchItem>>>()
         val movieParams = mutableListOf<SeerrDiscoverParams?>()
         val tvParams = mutableListOf<SeerrDiscoverParams?>()
 
         override val seerrAvailable: Boolean
             get() = available
 
-        override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> {
+        override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>> {
             calls += "seerr-movies"
             movieParams += params
-            return movieResults.removeFirstOrNull() ?: Result.success(SeerrSearchResponse())
+            return movieResults.removeFirstOrNull() ?: Result.success(emptyList())
         }
 
-        override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> {
+        override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>> {
             calls += "seerr-tv"
             tvParams += params
-            return tvResults.removeFirstOrNull() ?: Result.success(SeerrSearchResponse())
+            return tvResults.removeFirstOrNull() ?: Result.success(emptyList())
         }
     }
 
@@ -744,7 +743,7 @@ class HomeSectionsFetcherTest {
     )
 
     private fun seerrResponse(vararg ids: Int, mediaType: String = "movie") = Result.success(
-        SeerrSearchResponse(results = ids.map { SeerrSearchItem(id = it, mediaType = mediaType, title = "s$it") }),
+        ids.map { SeerrSearchItem(id = it, mediaType = mediaType, title = "s$it") },
     )
 
     private fun seerrSections(result: HomeSectionsResult) =
@@ -804,7 +803,7 @@ class HomeSectionsFetcherTest {
     fun `an empty seerr response drops the row`() = runTest {
         val fake = FakeHomeSectionSources()
         val seerr = FakeSeerrHomeSectionSources()
-        seerr.movieResults += Result.success(SeerrSearchResponse()) // empty results
+        seerr.movieResults += Result.success(emptyList()) // empty results
         val f = fetcher(fake, seerr = seerr)
 
         val fetched = f.fetch(

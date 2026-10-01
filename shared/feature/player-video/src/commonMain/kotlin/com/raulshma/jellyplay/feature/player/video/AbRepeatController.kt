@@ -36,6 +36,15 @@ import kotlinx.coroutines.launch
  * controller's own copy — after an episode switch the loop monitor could seek
  * the *next* episode back to the *previous* episode's A point, and one tap on
  * the toggle resurrected the stale points.
+ *
+ * Not shared with core:data's `AudioQueuePolicy.cycleAbLoop` (reviewed): the
+ * two AB-repeat vocabularies diverge at every decision point — inversions
+ * CLAMP here vs. are unwritable there (markAbLoopEnd rejects `B <= A`);
+ * an enabled toggle with wipe vs. a cycle with no enable; a continuous
+ * hysteresis loop (armed re-arm below B) vs. a stateless one-shot crossing
+ * that CLEARS B and publishes the triggering position; UI badge events vs.
+ * verbatim flow assignment. The only common core is `if (pos >= b) seek(a)`.
+ * Extracting it would couple two deliberately different UX contracts.
  */
 internal class AbRepeatController(
     private val scope: CoroutineScope,

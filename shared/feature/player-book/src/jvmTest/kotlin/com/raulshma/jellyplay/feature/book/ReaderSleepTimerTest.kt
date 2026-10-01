@@ -142,4 +142,31 @@ class ReaderSleepTimerTest {
         assertEquals("0:01", formatSleepCountdown(500L))
         assertEquals("0:00", formatSleepCountdown(0L))
     }
+
+    @Test
+    fun `preset chips select only the armed running preset`() {
+        // Idle: nothing selected.
+        assertFalse(ReaderSleepTimerState().isPresetSelected(5))
+        // EndOfChapter arm selects no timed chip.
+        assertFalse(
+            ReaderSleepTimerState(running = true, option = ReaderSleepOption.EndOfChapter)
+                .isPresetSelected(5),
+        )
+        // A different armed preset is not this chip's selection.
+        assertFalse(
+            ReaderSleepTimerState(running = true, option = ReaderSleepOption.Timed(15))
+                .isPresetSelected(5),
+        )
+        assertTrue(
+            ReaderSleepTimerState(running = true, option = ReaderSleepOption.Timed(5))
+                .isPresetSelected(5),
+        )
+    }
+
+    @Test
+    fun `reader presets are the reader-scaled five to sixty minutes`() {
+        // The sheet renders one chip per entry, in order — the reader-scaled
+        // set (the audio player's run 15..90).
+        assertEquals(listOf(5, 15, 30, 60), SLEEP_TIMER_PRESET_MINUTES)
+    }
 }

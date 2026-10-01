@@ -10,8 +10,20 @@ build/
 local.properties
 *-release.jks
 app/src/main/assets/aboutlibraries.json
-/tools/
 .kotlin/
 
-# E2E tooling runtime state (Jellyfin docker volumes, generated media)
+# Dev tooling under tools/: the scripts themselves are TRACKED (subsetting,
+# e2e pass scripts, perf baseline). Only the heavy/derived assets stay
+# ignored. The old blanket /tools/ also ignored the tracked scripts —
+# `git add tools/<new-script>` silently no-op'd and new tooling went
+# untracked without anyone noticing.
+#  - tools/mpv/: FetchBundledLibmpvTask's fetched binaries (libmpv ~115 MB,
+#    lua51) + the appResources packaging copies it mirrors there.
+#  - tools/font/*.ttf: original (pre-subset) font inputs dropped beside
+#    subset_subfont.py — multi-MB, re-obtainable (sha256 in its README).
+#  - tools/e2e state dirs: Jellyfin docker volumes, books-probe fixture
+#    state (per-run images, databases, logs).
+tools/mpv/
+tools/font/*.ttf
 tools/e2e/.state/
+tools/e2e/books-probe/.state*/

@@ -34,11 +34,12 @@ package com.raulshma.jellyplay.core.model.seerr
  * The media status a request should be judged by: a 4K request reads the
  * media's `status4k` column, every other request the regular `status` — the
  * verbatim body of the two former inline `effectiveMediaStatus` locals
- * (Jellyseerr's own request list applies the same split). Unmapped ints fold
- * to [SeerrMediaStatus.UNKNOWN] via [SeerrMediaStatus.fromValue].
+ * (Jellyseerr's own request list applies the same split). Both columns are
+ * enum-typed since the client seam started interpreting the wire ints
+ * (unmapped ints folded to [SeerrMediaStatus.UNKNOWN] there).
  */
 fun SeerrRequestItem.effectiveMediaStatus(): SeerrMediaStatus =
-    SeerrMediaStatus.fromValue(if (is4k) media.status4k else media.status)
+    if (is4k) media.status4k else media.status
 
 /**
  * The media exists in the library, at least in part — [SeerrMediaStatus.AVAILABLE]
@@ -125,7 +126,7 @@ sealed interface SeerrRequestButtonState {
  * [SeerrRequestButtonState.NotRequested] via [SeerrMediaStatus.UNKNOWN].
  */
 fun seerrRequestButtonState(mediaInfo: SeerrMediaInfo?): SeerrRequestButtonState {
-    val mediaStatus = SeerrMediaStatus.fromValue(mediaInfo?.status ?: 0)
+    val mediaStatus = mediaInfo?.status ?: SeerrMediaStatus.UNKNOWN
     return when {
         mediaStatus.isAvailable -> SeerrRequestButtonState.Available
         mediaStatus.isProcessing -> SeerrRequestButtonState.Requested.Processing

@@ -113,18 +113,22 @@ fun AddServerScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var contentVisible by remember { mutableStateOf(false) }
 
-    // Android 17+: local network access is required for SSDP discovery. Track
-    // the grant state so we can (a) gate auto-discovery on it and (b) show a
-    // rationale banner + re-request affordance when denied. On non-enforcing
-    // platforms this short-circuits to granted and the banner never appears.
+    // Android 17+: local network access is required for SSDP discovery. The
+    // composition side only bridges the platform seam's state into the
+    // ViewModel ([AddServerViewModel.onLocalNetworkAccessSynced]); the
+    // choreography decisions — the rationale-banner predicate and the
+    // discovery auto-start — live in the ViewModel (pinned by
+    // AddServerViewModelPermissionSyncTest). The launcher in
+    // [rememberLocalNetworkAccess] stays the grant surface: "Allow access"
+    // flips its state-backed flag, the keys below re-fire, and the sync
+    // starts the post-grant scan.
     val localNetwork = rememberLocalNetworkAccess()
 
-    // Auto-start discovery when screen appears, but only if local network
-    // access is already available; otherwise the scan silently finds nothing.
-    // The rationale banner's "Allow access" button starts discovery after grant.
-    LaunchedEffect(localNetwork.isGranted) {
-        contentVisible = true
-        if (localNetwork.isGranted) viewModel.startDiscovery()
+    // Content entrance runs once per screen instance (pure presentation).
+    LaunchedEffect(Unit) { contentVisible = true }
+
+    LaunchedEffect(localNetwork.enforced, localNetwork.isGranted) {
+        viewModel.onLocalNetworkAccessSynced(localNetwork.enforced, localNetwork.isGranted)
     }
 
     JellyPlayScreenScaffold(
@@ -180,11 +184,14 @@ fun AddServerScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Local network permission rationale (Android 17+). Shown when
-            // discovery can't work yet; grants kick off discovery via the launcher.
+            // Local network permission rationale (Android 17+), driven by the
+            // ViewModel's folded predicate (uiState.localNetworkRationale).
+            // Shown when discovery can't work yet; the "Allow access" button
+            // launches the system prompt and the grant flips the seam's state,
+            // re-firing the sync that starts discovery.
             item {
                 AnimatedVisibility(
-                    visible = contentVisible && localNetwork.enforced && !localNetwork.isGranted,
+                    visible = contentVisible && uiState.localNetworkRationale,
                     enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
                         initialOffsetY = { it / 20 },
                         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),

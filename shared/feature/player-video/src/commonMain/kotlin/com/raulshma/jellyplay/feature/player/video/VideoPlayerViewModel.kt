@@ -44,11 +44,9 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
-import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
-import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
-import com.raulshma.jellyplay.feature.player.video.engine.mirrorPlaying
-import com.raulshma.jellyplay.feature.player.video.engine.stepSeekTargetMs
+import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
+import com.raulshma.jellyplay.feature.player.video.chrome.stepSeekTargetMs
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
@@ -136,7 +134,7 @@ class VideoPlayerViewModel(
      * Aggregate platform seam: replaces the former
      * `android.content.Context` slot — carries the low-RAM gate, subtitle
      * content-URI IO, the offline-media probe and the factory methods for the
-     * androidMain trickplay/cast-controller/audio-lifecycle collaborators.
+     * androidMain trickplay/cast-controller/becoming-noisy/focus collaborators.
      */
     private val platform: VideoPlayerPlatform,
     private val mediaRepository: MediaRepository,
@@ -414,45 +412,45 @@ class VideoPlayerViewModel(
         scope = scope,
         platform = platform,
         mediaRepository = mediaRepository,
-        mediaExtrasReads = mediaExtrasReads,
-        lyricsRepository = lyricsRepository,
         playbackRepository = playbackRepository,
-        playbackIdentity = playbackIdentity,
-        subtitleProviderRepository = subtitleProviderRepository,
-        streamingSubtitleStore = streamingSubtitleStore,
         imageUrlProvider = imageUrlProvider,
-        downloadRepository = downloadRepository,
-        offlineRepository = offlineRepository,
         offlinePlaybackFacade = offlinePlaybackFacade,
         playbackSourceResolver = playbackSourceResolver,
-        episodeCatalogue = episodeCatalogue,
         itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
         stores = stores,
-        mediaSessionFactory = mediaSessionFactory,
         castManager = castManager,
         syncPlayManager = syncPlayManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
         networkMonitor = networkMonitor,
         activePlayerController = activePlayerController,
-        playerLifecycleManager = playerLifecycleManager,
         pipController = pipController,
         videoMiniPlayerState = videoMiniPlayerState,
         sleepCountdown = sleepCountdown,
         userMessageBus = userMessageBus,
-        playerEngineFactory = playerEngineFactory,
-        fontProvider = fontProvider,
         savedStateHandle = savedStateHandle,
-        subtitlePreviewRepository = subtitlePreviewRepository,
         userDataMutator = userDataMutator,
-        offlineModeManager = offlineModeManager,
         nowPlayingReporter = nowPlayingReporter,
-        uiState = _uiState,
-        positionMs = _currentPositionMs,
-        durationMs = _durationMs,
-        videoStats = _videoStats,
-        resumeReminder = _resumeReminder,
-        closePlayer = _closePlayer,
-        passOutEvents = _passOutEvents,
+        // The construction bundles (the PlayerStores pattern at the wiring
+        // boundary): each groups the pass-throughs that feed ONE internally-
+        // built module cluster — see the bundle KDocs on PlayerWiring.
+        subtitleSources = PlayerSubtitleSources(
+            subtitleProviderRepository = subtitleProviderRepository, streamingSubtitleStore = streamingSubtitleStore,
+            subtitlePreviewRepository = subtitlePreviewRepository, fontProvider = fontProvider,
+        ),
+        offlineSources = PlayerOfflineSources(
+            downloadRepository = downloadRepository, offlineRepository = offlineRepository, offlineModeManager = offlineModeManager,
+        ),
+        sessionStack = PlayerSessionStackSources(
+            playbackIdentity = playbackIdentity, playerLifecycleManager = playerLifecycleManager,
+            playerEngineFactory = playerEngineFactory, mediaSessionFactory = mediaSessionFactory,
+        ),
+        itemContent = PlayerItemContentSources(
+            mediaExtrasReads = mediaExtrasReads, episodeCatalogue = episodeCatalogue, lyricsRepository = lyricsRepository,
+        ),
+        handles = PlayerStateHandles(
+            uiState = _uiState, positionMs = _currentPositionMs, durationMs = _durationMs, videoStats = _videoStats,
+            resumeReminder = _resumeReminder, closePlayer = _closePlayer, passOutEvents = _passOutEvents,
+        ),
         host = object : PlayerWiring.Host {
             override fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
                 this@VideoPlayerViewModel.initialize(itemId, mediaSourceId, startPositionTicks)

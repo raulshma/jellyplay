@@ -139,6 +139,11 @@ class DesktopPlatformActualsTest {
         assertFalse(caps.supportsAudioCache, "no desktop audio cache to clear")
         assertFalse(caps.supportsScreenOrientation)
         assertFalse(caps.supportsTouchGestures)
+        assertFalse(
+            caps.supportsAppLock,
+            "the lock gate (AppLockState/PinGateController/AuthChallengeScreen) is Android-only — " +
+                "desktop persists PIN state but never challenges, so the PIN rows stay hidden",
+        )
         assertFalse(caps.supportsBiometric, "rememberBiometricGate returns null (DesktopBiometricGate)")
         assertFalse(caps.supportsSystemNotificationSettings)
         assertFalse(caps.supportsLogSharing)

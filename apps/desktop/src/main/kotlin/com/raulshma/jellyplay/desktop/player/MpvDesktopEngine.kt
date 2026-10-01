@@ -35,17 +35,17 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineStateChassis
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
-import com.raulshma.jellyplay.feature.player.video.engine.MpvFoldApplier
-import com.raulshma.jellyplay.feature.player.video.engine.MpvPlaybackEvent
-import com.raulshma.jellyplay.feature.player.video.engine.MpvPropertySurface
-import com.raulshma.jellyplay.feature.player.video.engine.MpvStatsProjection
-import com.raulshma.jellyplay.feature.player.video.engine.MpvStatsReads
-import com.raulshma.jellyplay.feature.player.video.engine.MpvSubtitleSideLoadPlan
-import com.raulshma.jellyplay.feature.player.video.engine.MpvSubtitleStyleApplier
-import com.raulshma.jellyplay.feature.player.video.engine.MpvSubtitleStylePhase
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvFoldApplier
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPlaybackEvent
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleSideLoadPlan
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStyleApplier
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePhase
 import com.raulshma.jellyplay.feature.player.video.engine.MpvTlsOptions
-import com.raulshma.jellyplay.feature.player.video.engine.MpvTrackCatalog
-import com.raulshma.jellyplay.feature.player.video.engine.MpvUserSubtitleKeys
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvTrackCatalog
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackVolumePolicy
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
@@ -656,7 +656,7 @@ open class MpvDesktopEngine(
         // mTLS: the tls-* file-path options persist the same way —
         // write the reset trio when no certificate is active so the previous
         // item's certificate/key is never presented to this item's server.
-        MpvTlsOptions.from(request.tls).forEach { (option, value) ->
+        MpvTlsOptions.from(request.requestSpecific?.tls).forEach { (option, value) ->
             MpvLib.mpv.mpv_set_option_string(context, option, value)
         }
         request.preferredAudioLanguage?.let {

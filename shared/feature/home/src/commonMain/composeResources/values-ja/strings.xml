@@ -109,4 +109,6 @@
     <string name="next_up_hidden_restore_all_message">非表示の %1$d 件のシリーズが「次のエピソード」行に再び表示されます。</string>
     <string name="next_up_hidden_restore_cd">%1$sを「次のエピソード」に戻す</string>
     <string name="next_up_hidden_unknown">不明なシリーズ</string>
+    <string name="a11y_mode_video">動画モード</string>
+    <string name="a11y_mode_music">音楽モード</string>
 </resources>

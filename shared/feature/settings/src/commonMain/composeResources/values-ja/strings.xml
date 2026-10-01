@@ -2033,4 +2033,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">メディアの再生終了時に実行するコマンド</string>
     <string name="ss_hooks_idle_cmd_subtitle">アプリがアイドル状態になったときに実行するコマンド</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">アプリがアイドル状態を終了したときに実行するコマンド</string>
+    <string name="core_ui_whatsnew_category_new">新規</string>
+    <string name="core_ui_whatsnew_category_improvement">改善</string>
+    <string name="core_ui_whatsnew_category_fix">修正</string>
+    <string name="core_ui_whatsnew_take_me_there">そこへ移動</string>
 </resources>

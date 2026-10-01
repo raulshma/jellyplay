@@ -425,26 +425,11 @@ internal fun DesktopNativeDialogHarnessHost() {
     val seerrRepository: SeerrRepository = org.koin.compose.koinInject()
     val editor: PreferencesEditor = org.koin.compose.koinInject()
     val recentsStore: SettingsRecentsStore = org.koin.compose.koinInject()
-    val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore = org.koin.compose.koinInject()
-    val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore = org.koin.compose.koinInject()
-    val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore = org.koin.compose.koinInject()
-    val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore = org.koin.compose.koinInject()
-    val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore = org.koin.compose.koinInject()
-    val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore = org.koin.compose.koinInject()
-    val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore = org.koin.compose.koinInject()
-    val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore = org.koin.compose.koinInject()
-    val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore = org.koin.compose.koinInject()
-    val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore = org.koin.compose.koinInject()
-    val navigationStore: com.raulshma.jellyplay.core.datastore.navigation.NavigationStore = org.koin.compose.koinInject()
-    val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore = org.koin.compose.koinInject()
-    val notificationStore: com.raulshma.jellyplay.core.datastore.notification.NotificationStore = org.koin.compose.koinInject()
-    val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore = org.koin.compose.koinInject()
-    val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore = org.koin.compose.koinInject()
-    val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore = org.koin.compose.koinInject()
-    val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore = org.koin.compose.koinInject()
-    val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore = org.koin.compose.koinInject()
-    val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore = org.koin.compose.koinInject()
-    val pinRateLimiter: com.raulshma.jellyplay.core.datastore.security.PinRateLimiter = org.koin.compose.koinInject()
+    // The import preview's live diff snapshot rides the shared snapshot seam
+    // (the PreferenceStores bundle + runtime + PIN lockout, enumerated inside
+    // core:datastore) — the same single the settings module's viewModel
+    // definition injects.
+    val snapshotReader: com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader = org.koin.compose.koinInject()
     val serverAdminActions: com.raulshma.jellyplay.feature.settings.ServerAdminActions = org.koin.compose.koinInject()
     LaunchedEffect(Unit) {
         DesktopNativeDialogHarness.runIfRequested(
@@ -462,26 +447,7 @@ internal fun DesktopNativeDialogHarnessHost() {
                 importPreviewViewModel = ImportPreviewViewModel(
                     settingsBackupIo = settingsBackupIo,
                     userPreferencesStore = preferencesStore,
-                    playbackStore = playbackStore,
-                    appearanceStore = appearanceStore,
-                    videoPlayerStore = videoPlayerStore,
-                    downloadsStore = downloadsStore,
-                    engineStore = engineStore,
-                    homeDiscoveryStore = homeDiscoveryStore,
-                    audioStore = audioStore,
-                    audioEffectsStore = audioEffectsStore,
-                    audioCacheStore = audioCacheStore,
-                    libraryStore = libraryStore,
-                    navigationStore = navigationStore,
-                    networkOfflineStore = networkOfflineStore,
-                    notificationStore = notificationStore,
-                    screensaverStore = screensaverStore,
-                    securityStore = securityStore,
-                    subtitleLanguageStore = subtitleLanguageStore,
-                    syncPlayCastStore = syncPlayCastStore,
-                    experimentalStore = experimentalStore,
-                    appRuntimeStateStore = appRuntimeStateStore,
-                    pinRateLimiter = pinRateLimiter,
+                    snapshotReader = snapshotReader,
                 ),
             ),
         )

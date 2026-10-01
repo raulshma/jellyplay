@@ -30,6 +30,15 @@ data class ReaderPrefsSnapshot(
     val directionPinned: Boolean = false,
     /** Per-book paged layout (manga double-page mode); SINGLE when unset. */
     val layout: ReadingLayout = ReadingLayout.SINGLE,
+    /**
+     * The chrome auto-hide base timeout (ms), the reader's one controls-
+     * timing knob — constant for now: no ReaderStore axis (or write path)
+     * exists yet, so it carries the [DEFAULT_READER_CONTROLS_TIMEOUT_MS]
+     * default and has no settings-sheet row (a store axis + row + setter
+     * ride a later change; the fold that consumes it is
+     * [controlsAutoHideTimeoutMs]).
+     */
+    val controlsTimeoutMs: Long = DEFAULT_READER_CONTROLS_TIMEOUT_MS,
 ) {
     /** Per-book override axis ?: the global one — the single render truth. */
     val effective: EffectiveAppearance
@@ -38,6 +47,9 @@ data class ReaderPrefsSnapshot(
     /** The "use for this book only" switch state the settings sheet renders. */
     val perBookActive: Boolean get() = perBook != null
 }
+
+/** The reader chrome auto-hide default — the long-standing hardcoded 4 s, now the knob's default. */
+internal const val DEFAULT_READER_CONTROLS_TIMEOUT_MS = 4_000L
 
 /**
  * The reader preference choreography module: every knob write — global or
@@ -85,7 +97,9 @@ class ReaderPreferences(
     init {
         scope.launch {
             store.reader.collect { slice ->
-                if (inFlight.value == 0) _snapshot.value = snapshotFrom(slice)
+                if (inFlight.value == 0) {
+                    _snapshot.value = snapshotFrom(slice)
+                }
             }
         }
     }
@@ -249,26 +263,34 @@ class ReaderPreferences(
      * emit whole copy-on-change bundles ([ReaderTypographyState] /
      * [ReaderBehaviorState]) — the write surface stays the individual
      * setters, and THIS method is the single place that decides which axes
-     * changed. The diff reads the live snapshot (write-through synchronous),
-     * never a recomposition-captured stale slice; only changed axes write,
-     * so an unchanged axis never fires a persist.
+     * changed. The diff itself is the pure [ReaderTypographyState.changedAxes]
+     * (ReaderSheetState.kt, pinned without Compose); this executes it —
+     * reading the live snapshot (write-through synchronous), never a
+     * recomposition-captured stale slice, so only changed axes write and an
+     * unchanged axis never fires a persist.
      */
     internal fun applyTypography(next: ReaderTypographyState) {
-        val current = snapshot.value.global
-        if (next.fontFamily != current.fontFamily) setFontFamily(next.fontFamily)
-        if (next.lineHeightPct != current.lineHeightPct) setLineHeightPct(next.lineHeightPct)
-        if (next.marginPct != current.marginPct) setMarginPct(next.marginPct)
-        if (next.justify != current.justify) setJustify(next.justify)
-        if (next.scrollMode != current.scrollMode) setScrollMode(next.scrollMode)
+        next.changedAxes(snapshot.value.typographyState()).forEach { axis ->
+            when (axis) {
+                ReaderTypographyAxis.FONT_FAMILY -> setFontFamily(next.fontFamily)
+                ReaderTypographyAxis.LINE_HEIGHT_PCT -> setLineHeightPct(next.lineHeightPct)
+                ReaderTypographyAxis.MARGIN_PCT -> setMarginPct(next.marginPct)
+                ReaderTypographyAxis.JUSTIFY -> setJustify(next.justify)
+                ReaderTypographyAxis.SCROLL_MODE -> setScrollMode(next.scrollMode)
+            }
+        }
     }
 
     /** The behavior twin of [applyTypography] (see its KDoc). */
     internal fun applyBehavior(next: ReaderBehaviorState) {
-        val current = snapshot.value.global
-        if (next.volumeKeyPaging != current.volumeKeyPaging) setVolumeKeyPaging(next.volumeKeyPaging)
-        if (next.animatedPageTurns != current.animatedPageTurns) setAnimatedPageTurns(next.animatedPageTurns)
-        if (next.readingSpeedWpm != current.readingSpeedWpm) setReadingSpeedWpm(next.readingSpeedWpm)
-        if (next.tocRailVisible != current.tocRailVisible) setTocRailVisible(next.tocRailVisible)
+        next.changedAxes(snapshot.value.behaviorState()).forEach { axis ->
+            when (axis) {
+                ReaderBehaviorAxis.VOLUME_KEY_PAGING -> setVolumeKeyPaging(next.volumeKeyPaging)
+                ReaderBehaviorAxis.ANIMATED_PAGE_TURNS -> setAnimatedPageTurns(next.animatedPageTurns)
+                ReaderBehaviorAxis.READING_SPEED_WPM -> setReadingSpeedWpm(next.readingSpeedWpm)
+                ReaderBehaviorAxis.TOC_RAIL_VISIBLE -> setTocRailVisible(next.tocRailVisible)
+            }
+        }
     }
 
     fun setAutoScrollSpeedPxPerSec(pxPerSec: Int) {

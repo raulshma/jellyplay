@@ -22,6 +22,10 @@ kotlin {
             implementation(project(":shared:core:data"))
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
+            // The shared player-chrome policies (controlsAutoHideTimeoutMs —
+            // the TV doubling the reader's auto-hide timeout also folds
+            // through; one implementation for every auto-hiding surface).
+            implementation(project(":shared:core:player-contract"))
             // NetworkQualifiers.streamingHttpClient — the reader-cache fetcher
             // rides the same streaming client the players use.
             implementation(project(":shared:core:network"))

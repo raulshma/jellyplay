@@ -12,6 +12,10 @@ gradlePlugin {
             id = "jellyplay.kmp.library.compose"
             implementationClass = "jellyplay.buildlogic.KmpLibraryComposePlugin"
         }
+        register("desktopPackaging") {
+            id = "jellyplay.desktop.packaging"
+            implementationClass = "jellyplay.buildlogic.DesktopPackagingPlugin"
+        }
     }
 }
 

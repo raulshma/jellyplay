@@ -1,13 +1,6 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import java.time.Duration
 
 /**
@@ -31,37 +24,21 @@ class PlaybackSyncSchedulerImpl(
     private val context: Context,
 ) : PlaybackSyncScheduler {
     override fun enqueuePeriodic() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .build()
-
-        val request = PeriodicWorkRequestBuilder<PlaybackSyncWorker>(SYNC_INTERVAL, SYNC_FLEX)
-            .setConstraints(constraints)
-            .addTag(PlaybackSyncWorker.WORK_TAG)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            PlaybackSyncWorker.UNIQUE_PERIODIC_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
+        UniqueWorkSchedules.uniquePeriodic<PlaybackSyncWorker>(
+            context = context,
+            uniqueName = PlaybackSyncWorker.UNIQUE_PERIODIC_NAME,
+            tag = PlaybackSyncWorker.WORK_TAG,
+            interval = SYNC_INTERVAL,
+            flexInterval = SYNC_FLEX,
+            batteryNotLow = true,
         )
     }
 
     override fun enqueueNow() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val request = OneTimeWorkRequestBuilder<PlaybackSyncWorker>()
-            .setConstraints(constraints)
-            .addTag(PlaybackSyncWorker.WORK_TAG)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            PlaybackSyncWorker.UNIQUE_NOW_NAME,
-            ExistingWorkPolicy.KEEP,
-            request,
+        UniqueWorkSchedules.uniqueOnce<PlaybackSyncWorker>(
+            context = context,
+            uniqueName = PlaybackSyncWorker.UNIQUE_NOW_NAME,
+            tag = PlaybackSyncWorker.WORK_TAG,
         )
     }
 

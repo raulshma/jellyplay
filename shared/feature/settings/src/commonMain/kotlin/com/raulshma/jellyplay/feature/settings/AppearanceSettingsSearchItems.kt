@@ -663,3 +663,70 @@ internal val AppearanceNewsletterRowRecords = listOf(
 /** The catalog projection of `AppearanceNewsletterRowRecords`: the search faces + the shared category. */
 internal val AppearanceNewsletterSearchItems: List<SettingsSearchItem> = AppearanceNewsletterRowRecords.toSearchItems(CoreUiRes.string.ss_cat_appearance)
 
+// ── Declared row admissions (the gates the screen totals AND emissions read) ──
+
+/**
+ * The theme group's declared admissions: every record rides its own
+ * [SettingsRowRecord.isAdvanced] base ([admissionsByAdvancedFlag]) EXCEPT the
+ * ids in [AppearanceThemeContentGatedIds] (content-gated screen rows) and
+ * [AppearanceSettingsIds.THEME_SCHEDULER] (the highlight-alias row — see
+ * below). Both stay undeclared, so the strict [rowTotalFor] counts neither —
+ * the shipped count semantics (the hand-built `appearanceItems` list never
+ * contained either). The contract test's strict per-id ratchet pins this
+ * exception set; the screen's
+ * [com.raulshma.jellyplay.feature.settings.appearanceThemeScreenRowTotal]
+ * adds the content-gated rows back as explicit content terms (the
+ * home.display unhide-row precedent).
+ */
+internal val AppearanceThemeContentGatedIds: Set<String> = setOf(
+    AppearanceSettingsIds.STYLE_ACCENT,
+    AppearanceSettingsIds.ACCENT_COLOR,
+    AppearanceSettingsIds.COLOR_STYLE,
+    AppearanceSettingsIds.DYNAMIC_THEMING,
+    AppearanceSettingsIds.OLED_MODE,
+    AppearanceSettingsIds.LAYOUT_MODE,
+    AppearanceSettingsIds.SCHEDULED_START,
+    AppearanceSettingsIds.SCHEDULED_END,
+)
+
+/**
+ * `theme_scheduler`'s screen face is the theme_mode row itself — a search
+ * deep-link to it highlights through [THEME_HIGHLIGHT_IDS] — so it declares
+ * no admission and is counted by no total (the shipped count never contained
+ * it; the security group's `pin_for_player_lock` quirk shape).
+ */
+internal val AppearanceThemeAliasRowId: String = AppearanceSettingsIds.THEME_SCHEDULER
+
+/** The theme group's declared admissions — see [AppearanceThemeContentGatedIds]. */
+internal val AppearanceThemeRowAdmissions: Map<String, RowAdmission> =
+    AppearanceThemeRowRecords
+        .filter { it.id !in AppearanceThemeContentGatedIds && it.id != AppearanceThemeAliasRowId }
+        .admissionsByAdvancedFlag()
+
+/**
+ * The "Library & Cards" group's admissions: every declared row renders
+ * unconditionally (the shipped always-on behavior — the records declare most
+ * of them advanced, yet the group predates and outlives the advanced gate,
+ * the language high-contrast shipped quirk), so each id states
+ * [RowAdmission.Always] explicitly instead of riding its advanced base.
+ */
+internal val AppearanceLibraryRowAdmissions: Map<String, RowAdmission> =
+    AppearanceLibraryRowRecords.associate { it.id to RowAdmission.Always }
+
+/** The advanced-gated performance group: both rows ride the advanced toggle (the group only composes behind it). */
+internal val AppearancePerformanceRowAdmissions: Map<String, RowAdmission> =
+    AppearancePerformanceRowRecords.admissionsByAdvancedFlag()
+
+/** The advanced-gated eye-care group: both rows ride the advanced toggle (the group only composes behind it). */
+internal val AppearanceEyeCareRowAdmissions: Map<String, RowAdmission> =
+    AppearanceEyeCareRowRecords.admissionsByAdvancedFlag()
+
+/**
+ * The advanced-gated newsletter group: the three declared rows ride the
+ * advanced toggle. `newsletter_sections`'s declared row renders as the
+ * runtime-reorderable per-section rows (the media-segment enum-driven shape),
+ * which the screen's total accounts for explicitly.
+ */
+internal val AppearanceNewsletterRowAdmissions: Map<String, RowAdmission> =
+    AppearanceNewsletterRowRecords.admissionsByAdvancedFlag()
+

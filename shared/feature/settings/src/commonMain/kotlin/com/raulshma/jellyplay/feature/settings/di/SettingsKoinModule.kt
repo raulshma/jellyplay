@@ -158,26 +158,11 @@ val settingsModule: Module = module {
         ImportPreviewViewModel(
             settingsBackupIo = get(),
             userPreferencesStore = get(),
-            playbackStore = get(),
-            appearanceStore = get(),
-            videoPlayerStore = get(),
-            downloadsStore = get(),
-            engineStore = get(),
-            homeDiscoveryStore = get(),
-            audioStore = get(),
-            audioEffectsStore = get(),
-            audioCacheStore = get(),
-            libraryStore = get(),
-            navigationStore = get(),
-            networkOfflineStore = get(),
-            notificationStore = get(),
-            screensaverStore = get(),
-            securityStore = get(),
-            subtitleLanguageStore = get(),
-            syncPlayCastStore = get(),
-            experimentalStore = get(),
-            appRuntimeStateStore = get(),
-            pinRateLimiter = get(),
+            // The live diff snapshot rides the factory-reset review's seam —
+            // the snapshot reader over the PreferenceStores bundle — instead
+            // of enumerating the stores here, so a new slice extends the
+            // bundle, not this definition.
+            snapshotReader = get(),
         )
     }
     // ──: storage / privacy / server / security / integrations / about ──

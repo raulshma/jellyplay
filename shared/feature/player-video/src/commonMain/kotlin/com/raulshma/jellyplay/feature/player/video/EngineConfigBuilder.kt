@@ -26,8 +26,10 @@ import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
  * Notes:
  *  - `equalizerEnabled` is passed explicitly because it lives on the ViewModel
  *    (it is not part of [VideoPlayerUiState]).
- *  - `equalizerSettings`, `volumeBoost*` and `pauseOnAudioFocusLoss` are read
+ *  - `equalizerSettings` and `volumeBoost*` are read
  *    from the cached [VideoPlayerAggregate] snapshot, preserving the prior behaviour.
+ *    (`pauseOnAudioFocusLoss` left the config with the video focus slice — the OS
+ *    audio-focus seat moved into core:data's PlaybackFocus module.)
  *
  * Use [buildFromPreferences] on the *initial-load* / engine-swap paths where the
  * config is being constructed before any UI state exists (e.g. from
@@ -116,7 +118,6 @@ internal object EngineConfigBuilder {
             audioEffectsSlice = agg.audioEffects,
         ),
         engineSpecific = engineSpecific,
-        pauseOnAudioFocusLoss = agg.playback.pauseOnAudioFocusLoss,
         // the session-scoped deinterlace override + the per-item HDR
         // gate ride every runtime build (the UI-state path has the streams).
         deinterlace = deinterlace,
@@ -173,7 +174,6 @@ internal object EngineConfigBuilder {
                 audioEffectsSlice = agg.audioEffects,
             ),
             engineSpecific = engineSpecific,
-            pauseOnAudioFocusLoss = agg.playback.pauseOnAudioFocusLoss,
             deinterlace = com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
             hdrSource = isHdr,
         )

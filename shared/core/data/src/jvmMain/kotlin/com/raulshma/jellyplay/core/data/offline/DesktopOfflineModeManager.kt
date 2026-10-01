@@ -2,82 +2,29 @@ package com.raulshma.jellyplay.core.data.offline
 
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
-import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.OfflineMode
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 
 /**
- * Desktop implementation of the [OfflineModeManager] seam: offline mode
- * never auto-engages (auto-derive off the network seam stays deliberately
- * unwired on desktop — post-17C the [DesktopNetworkMonitor] probe feeds
- * the collector below as a re-derive trigger only, never a value), so the
- * only path to [OfflineMode.OFFLINE_MANUAL] is the manual toggle. The
- * collector mirrors the Android derivation verbatim minus the
- * ProcessLifecycleOwner foreground check, which has no desktop equivalent —
- * `checkNetworkAndAutoDetect` is therefore a plain re-derivation over the
- * store snapshot.
+ * Desktop actual of the [OfflineModeManager] seam: a bare constructor over
+ * the shared jvmShared body ([OfflineModeManagerBody] — the I2 fold of the
+ * former line-for-line twins) with `allowAuto = false` — offline mode never
+ * auto-engages on desktop. The manual toggle is the only path to
+ * [OfflineMode.OFFLINE_MANUAL]; post-17C the [DesktopNetworkMonitor] probe
+ * feeds the collector as a re-derive trigger only, never a value, and the
+ * auto-offline arms the Android ladder carries are — visibly now, via the
+ * policy parameter — desktop-dropped. `checkNetworkAndAutoDetect`'s
+ * reachability probe is correspondingly never consulted (the body skips it
+ * when `allowAuto` is false): the real probe flipping the reported network
+ * status must not flip the mode either.
+ *
+ * The dropped ProcessLifecycleOwner foreground check has no desktop
+ * equivalent; nothing else remains platform-specific here.
  */
 class DesktopOfflineModeManager(
-    private val networkMonitor: NetworkMonitor,
-    private val networkOfflineStore: NetworkOfflineStore,
-) : OfflineModeManager {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    private val _offlineMode = MutableStateFlow(OfflineMode.ONLINE)
-    override val offlineMode: StateFlow<OfflineMode> = _offlineMode.asStateFlow()
-
-    // The going-online busy flag, built over this manager's own mode flow so
-    // its clears ride the same emissions this class derives.
-    private val goingOnlineFlag = GoingOnlineFlag(scope, _offlineMode)
-    override val goingOnline: StateFlow<Boolean> = goingOnlineFlag.goingOnline
-
-    override val isOffline: Boolean get() = _offlineMode.value != OfflineMode.ONLINE
-
-    override val networkStatus: StateFlow<NetworkStatus> = networkMonitor.networkStatus
-
-    init {
-        scope.launch {
-            combine(
-                networkOfflineStore.networkOffline.map { it.manualOfflineEnabled },
-                networkOfflineStore.networkOffline.map { it.autoOfflineEnabled },
-                networkMonitor.networkStatus,
-            ) { manualOffline, _, _ -> manualOffline }
-                .collect { manualOffline ->
-                    if (manualOffline) {
-                        _offlineMode.value = OfflineMode.OFFLINE_MANUAL
-                    } else if (_offlineMode.value == OfflineMode.OFFLINE_MANUAL) {
-                        _offlineMode.value = OfflineMode.ONLINE
-                    }
-                }
-        }
-    }
-
-    override fun toggleManualOffline() {
-        val currentManual = networkOfflineStore.networkOffline.value.manualOfflineEnabled
-        // The snapshot (not a mode guess) decides the arm — see
-        // GoingOnlineFlag.armIfGoingOnline.
-        goingOnlineFlag.armIfGoingOnline(currentManual)
-        scope.launch {
-            networkOfflineStore.setManualOffline(!currentManual)
-        }
-    }
-
-    override fun checkNetworkAndAutoDetect() {
-        // Desktop never auto-engages offline mode: the manual flag is the
-        // only input — the real probe flipping the reported
-        // network status must not flip the mode either.
-        if (networkOfflineStore.networkOffline.value.manualOfflineEnabled) {
-            _offlineMode.value = OfflineMode.OFFLINE_MANUAL
-        } else if (_offlineMode.value == OfflineMode.OFFLINE_MANUAL) {
-            _offlineMode.value = OfflineMode.ONLINE
-        }
-    }
-}
+    networkMonitor: NetworkMonitor,
+    networkOfflineStore: NetworkOfflineStore,
+) : OfflineModeManagerBody(
+    networkMonitor = networkMonitor,
+    networkOfflineStore = networkOfflineStore,
+    allowAuto = false,
+    probeReachable = { false }, // never invoked while allowAuto = false
+)

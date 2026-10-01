@@ -14,11 +14,10 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
-import com.raulshma.jellyplay.core.model.seerr.SeerrPageInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
@@ -103,7 +102,7 @@ class RequestsViewModelTest {
         coEvery { seerrRepository.getRequestCount() } returns Result.success(SeerrRequestCount(pending = 1))
         coEvery { seerrRepository.getMovieDetails(any()) } returns Result.success(SeerrMovieDetails())
         coEvery { seerrRepository.getTvDetails(any()) } returns Result.success(SeerrTvDetails())
-        stubRequests { Result.success(SeerrRequestListResponse()) }
+        stubRequests { Result.success(SeerrRequestPage()) }
     }
 
     @AfterTest
@@ -112,7 +111,7 @@ class RequestsViewModelTest {
     }
 
     /** Routes every getRequests call into [requestCalls] and answers [response]. */
-    private fun stubRequests(response: () -> Result<SeerrRequestListResponse>) {
+    private fun stubRequests(response: () -> Result<SeerrRequestPage>) {
         coEvery {
             seerrRepository.getRequests(any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
@@ -137,9 +136,10 @@ class RequestsViewModelTest {
     )
 
     private fun page(items: List<SeerrRequestItem>, pages: Int = 1) =
-        SeerrRequestListResponse(
-            pageInfo = SeerrPageInfo(pages = pages, results = items.size),
-            results = items,
+        SeerrRequestPage(
+            items = items,
+            totalResults = items.size,
+            totalPages = pages,
         )
 
     private fun item(id: Int, tmdbId: Int = id, type: String = "movie") =

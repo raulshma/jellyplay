@@ -37,18 +37,21 @@ interface ShellAudioSource {
 }
 
 /**
- * The music home cards' push lambdas as one value — a dumb pair (the
- * ShellHostHooks constructor-arg idiom), returned as a holder because the
- * hooks take the two callbacks as separate fields.
+ * The music home cards' push lambdas as one value — the audio bundle of
+ * [ShellHostHooks] (ShellHostHooks.audio), the cohesive group the music
+ * home consumes. A data class so it plugs straight into the
+ * [rememberShellHost] factory's structural remember-key contract; its
+ * construction (via this file's helper) is remembered, so the identity is
+ * stable per composition anyway.
  */
-class ShellAudioClicks(
+data class ShellAudioClicks(
     val onNowPlayingClick: () -> Unit,
     val onAmbientClick: () -> Unit,
 )
 
 /**
- * The ONE construction site for the shell hooks' now-playing/ambient click
- * lambdas ([ShellHostHooks.onNowPlayingClick] / [ShellHostHooks.onAmbientClick])
+ * The ONE construction site for the shell hooks' audio bundle
+ * ([ShellAudioClicks] — ShellHostHooks.audio)
  * — the remember-key discipline both shells used to hand-copy beside the
  * [rememberShellHost] factory now lives HERE, so a third shell gets the pair
  * for one adapter plus one call.

@@ -24,6 +24,13 @@ class SettingsSearchCatalogPlatformFilterTest {
         "android_tv_watch_next",
         "tv_zoom_mode",
         "biometric_lock",
+        // The PIN rows: desktop persists PIN state through the shared
+        // SecurityStore but the lock gate (AppLockState/PinGateController/
+        // AuthChallengeScreen) is Android-only — the rows would promise
+        // enforcement that does not exist there.
+        "pin_lock",
+        "pin_for_player_lock",
+        "auto_lock_timer",
         "system_notification_settings",
         "app_language",
         "audio_caching_enabled",

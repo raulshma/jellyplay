@@ -29,7 +29,6 @@ class ExoPlayerReusePolicyTest {
         authToken = "token",
         headers = mapOf("Authorization" to "MediaBrowser token"),
         assSession = false,
-        pauseOnAudioFocusLoss = true,
         drmProvider = null,
         streamCacheEligible = true,
     )
@@ -84,7 +83,6 @@ class ExoPlayerReusePolicyTest {
             delta { copy(authToken = null) },
             delta { copy(headers = headers + ("X-Extra" to "v")) },
             delta { copy(assSession = true) },
-            delta { copy(pauseOnAudioFocusLoss = false) },
             delta { copy(streamCacheEligible = false) },
         )
         deltas.forEach { newInputs ->

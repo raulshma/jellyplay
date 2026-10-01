@@ -10,7 +10,10 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.window.FrameWindowScope
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.ui.player.TranscodeReasonCatalog
+import com.raulshma.jellyplay.core.ui.player.normalizeReasonToken
 import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
+import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import java.io.File
 import java.text.DateFormat
@@ -301,9 +304,22 @@ actual class PlatformTranscodeReason(
 @Composable
 internal actual fun rememberFormattedTranscodeReasons(
     rawReasons: List<String>,
-): List<PlatformTranscodeReason> =
-    // Desktop raw-token echo — the same fallback text Android's formatter
-    // produces for tokens it has no string table entry for.
-    remember(rawReasons) {
-        rawReasons.map { PlatformTranscodeReason(raw = it, explanation = it, hint = null) }
+): List<PlatformTranscodeReason> {
+    // Resolve through the commonMain TranscodeReasonCatalog (compose resources),
+    // so desktop localizes exactly like Android instead of echoing raw tokens.
+    // Unknown tokens keep the raw server text, same as Android's fallback.
+    val rows = remember(rawReasons) {
+        rawReasons
+            .filter { it.isNotBlank() }
+            .distinctBy { it.normalizeReasonToken() }
+            .map { raw -> raw to TranscodeReasonCatalog.lookup(raw) }
     }
+    return rows.map { (raw, strings) ->
+        PlatformTranscodeReason(
+            raw = raw,
+            explanation = strings?.let { stringResource(it.explanation) }
+                ?: stringResource(TranscodeReasonCatalog.unknownTemplate, raw),
+            hint = strings?.hint?.let { stringResource(it) },
+        )
+    }
+}

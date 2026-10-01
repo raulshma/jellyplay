@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
+import com.raulshma.jellyplay.core.ui.components.DotLabel
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberInlineConfirm
@@ -76,7 +77,7 @@ fun RequestListItem(
     onLongClick: () -> Unit = {},
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
+    val requestStatus = request.status
     var pendingApproval by remember(request.id) { mutableStateOf<SeerrRequestStatus?>(null) }
     val deleteConfirm = rememberInlineConfirm(request.id)
 
@@ -172,17 +173,10 @@ fun RequestListItem(
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(statusColor),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
+                    DotLabel(
                         text = statusLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = statusColor,
+                        dotColor = statusColor,
+                        labelColor = statusColor,
                         fontWeight = FontWeight.Medium,
                     )
                     Spacer(Modifier.width(8.dp))

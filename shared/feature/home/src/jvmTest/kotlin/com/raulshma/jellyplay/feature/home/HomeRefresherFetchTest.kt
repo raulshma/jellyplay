@@ -25,7 +25,6 @@ import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -322,7 +321,7 @@ class HomeRefresherFetchTest {
         )
         val trending = listOf(seerrItem(1, "Trending Movie"))
         coEvery { seerrRepository.getTrending(any()) } returns
-            Result.success(SeerrSearchResponse(results = trending))
+            Result.success(trending)
         val refresher = buildRefresher(seerrPreferences = prefs)
 
         refresher.request(RefreshTrigger.DiscoverEnabled)

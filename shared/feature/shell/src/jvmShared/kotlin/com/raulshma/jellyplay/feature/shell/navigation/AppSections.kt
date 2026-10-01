@@ -54,10 +54,10 @@ fun EntryProviderScope<NavKey>.appSections(
 ) {
     homeSection(
         navigator = navigator,
-        homeMode = host.homeMode,
-        onModeChange = host.onHomeModeChange,
-        playOnStrategy = host.playOnRedirect,
-        surpriseRequests = host.surpriseRequests,
+        homeMode = host.home.homeMode,
+        onModeChange = host.home.onHomeModeChange,
+        playOnStrategy = host.home.playOnRedirect,
+        surpriseRequests = host.home.surpriseRequests,
         musicContent = {
             // Build the facade once per navigator/host lifetime so the music
             // subtree sees a single stable MusicNavActions instance (treated
@@ -73,8 +73,8 @@ fun EntryProviderScope<NavKey>.appSections(
                     onTracksClick = { navigator.navigate(Route.Tracks) },
                     onGenresClick = { navigator.navigate(Route.Genres) },
                     onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                    onNowPlayingClick = host.onNowPlayingClick,
-                    onAmbientClick = host.onAmbientClick,
+                    onNowPlayingClick = host.audio.onNowPlayingClick,
+                    onAmbientClick = host.audio.onAmbientClick,
                 )
             }
             MusicHomeScreen(navActions = navActions)
@@ -86,8 +86,8 @@ fun EntryProviderScope<NavKey>.appSections(
     photosSection(navigator)
     searchSection(
         navigator = navigator,
-        pendingSearchQuery = host.pendingSearchQuery,
-        onConsumeSearchQuery = host.onConsumeSearchQuery,
+        pendingSearchQuery = host.search.pendingSearchQuery,
+        onConsumeSearchQuery = host.search.onConsumeSearchQuery,
     )
     liveTvSection(navigator)
     detailsSection(navigator)
@@ -98,15 +98,15 @@ fun EntryProviderScope<NavKey>.appSections(
     authSection(navigator) { navigator.goBack() }
     settingsSection(
         navigator = navigator,
-        onLogout = host.onLogout,
+        onLogout = host.settings.onLogout,
         onSetupWizard = { navigator.navigate(Route.Onboarding) },
-        onCheckForUpdates = host.onCheckForUpdates,
+        onCheckForUpdates = host.settings.onCheckForUpdates,
     )
     adminSection(
         navigator = navigator,
-        isAdmin = host.isAdmin,
-        isRefreshingAdmin = host.isRefreshingAdmin,
-        onRefreshAdmin = host.onRefreshAdmin,
+        isAdmin = host.admin.isAdmin,
+        isRefreshingAdmin = host.admin.isRefreshingAdmin,
+        onRefreshAdmin = host.admin.onRefreshAdmin,
     )
     musicSection(navigator)
     syncPlaySection(navigator)

@@ -39,7 +39,7 @@ class MetadataAdminActionsTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         messages.reset()
-        coEvery { editorRepository.refreshItemMetadata(any(), any()) } returns Result.success(Unit)
+        coEvery { editorRepository.refreshItemMetadata(any(), any<com.raulshma.jellyplay.core.model.MetadataRefreshParams>()) } returns Result.success(Unit)
     }
 
     private fun actions(
@@ -94,7 +94,7 @@ class MetadataAdminActionsTest {
         val detail = MediaDetail(
             item = MediaItem(id = "m1", name = "My Series", mediaType = MediaType.SERIES),
         )
-        coEvery { editorRepository.refreshItemMetadata(any(), any()) } returns
+        coEvery { editorRepository.refreshItemMetadata(any(), any<com.raulshma.jellyplay.core.model.MetadataRefreshParams>()) } returns
             Result.failure(IllegalStateException("boom"))
 
         actions(this, MutableStateFlow(DetailSession(itemId = "m1", detail = detail)))
@@ -109,7 +109,7 @@ class MetadataAdminActionsTest {
         actions(this).refreshScreenItem(MetadataRefreshOption.DEFAULT)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { editorRepository.refreshItemMetadata(any(), any()) }
+        coVerify(exactly = 0) { editorRepository.refreshItemMetadata(any(), any<com.raulshma.jellyplay.core.model.MetadataRefreshParams>()) }
     }
 
     @Test

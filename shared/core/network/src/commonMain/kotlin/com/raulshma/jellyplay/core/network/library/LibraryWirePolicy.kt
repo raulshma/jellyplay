@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.parentalRatingAge
 
 /**
  * The wire-level library policy tables that are canonical here in commonMain
@@ -95,41 +96,16 @@ internal fun <T : MediaItem> List<T>.filterAllowedKinds(allowedKinds: Set<MediaT
     if (allowedKinds == null) this else filter { it.mediaType in allowedKinds }
 
 /**
- * The canonical rating→age table (unknown ratings map to null = "no
- * opinion"). The parental-filter tails resolve ratings through it
- * (jvmShared: the SDK-typed `toFilteredMediaItems` mapper tail over
- * [filterByParentalRating]).
+ * The rating→age table moved to core/model
+ * ([com.raulshma.jellyplay.core.model.parentalRatingAge] — its consumers are
+ * settings UIs that must not see this module); the parental filter below
+ * resolves through the model table so the wire filter and the picker
+ * vocabulary can never drift.
  */
-/**
- * Public (not the module-internal default of this file's other tables) so the
- * module-external consumers — the TV dream's local rating cap and the settings
- * screensaver rating picker — resolve ages from this same canonical table
- * instead of a value-twin copy.
- */
-public fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
-    "G", "TV-Y", "TV-G" -> 0
-    "PG", "TV-Y7", "TV-PG" -> 7
-    "PG-13", "TV-14" -> 13
-    "R", "TV-MA" -> 17
-    "NC-17" -> 18
-    else -> null
-}
-
-/**
- * The MPAA rating ladder the local rating-cap pickers offer (the settings
- * screensaver's max-parental-rating rows), ordered strictest-last. Public
- * beside [parentalRatingAge] for the same reason: the row vocabulary and the
- * age resolution live together, so a new rating lands in both or neither.
- */
-public val PARENTAL_RATING_PICKER_LADDER: List<String> =
-    listOf("G", "PG", "PG-13", "R", "NC-17")
-
-/**
- * The client-side parental-rating filter, verbatim semantics: no max rating →
+/** The client-side parental-rating filter, verbatim semantics: no max rating →
  * unfiltered; an unrated/unknown-rating item passes (`!= false` keeps it).
  */
-/** Public twin seam of [parentalRatingAge] — see that KDoc for why. */
-public fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {
+internal fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {
     val max = maxParentalRating ?: return this
     return mapNotNull { item ->
         if (item.officialRating?.let { rating ->

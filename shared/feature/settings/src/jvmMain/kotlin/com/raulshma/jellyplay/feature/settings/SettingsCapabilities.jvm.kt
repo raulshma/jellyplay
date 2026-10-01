@@ -24,6 +24,7 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsAudioCache = false,
     supportsScreenOrientation = false,
     supportsTouchGestures = false,
+    supportsAppLock = false,
     supportsBiometric = false,
     supportsSystemNotificationSettings = false,
     supportsLogSharing = false,

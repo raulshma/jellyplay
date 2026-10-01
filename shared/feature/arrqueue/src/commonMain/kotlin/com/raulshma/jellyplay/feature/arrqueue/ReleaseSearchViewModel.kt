@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.ArrReleaseOperations
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrReleaseHistoryStatus
-import com.raulshma.jellyplay.core.network.arr.ArrReleaseCacheMiss
+import com.raulshma.jellyplay.core.data.repository.ArrReleaseCacheUnavailable
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.releaseSearch_grab_sent
@@ -148,7 +148,7 @@ class ReleaseSearchViewModel(
                             apply(
                                 ReleaseSearchEvent.SearchFailed(
                                     message = e.message,
-                                    cacheMiss = e is ArrReleaseCacheMiss,
+                                    cacheMiss = e is ArrReleaseCacheUnavailable,
                                 ),
                             )
                         }

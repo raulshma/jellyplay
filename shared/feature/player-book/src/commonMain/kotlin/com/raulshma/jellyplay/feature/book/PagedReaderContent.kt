@@ -47,6 +47,7 @@ import com.composables.icons.tabler.outline.PhotoOff
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.datastore.reader.ReadingLayout
 import com.raulshma.jellyplay.core.model.BookFormat
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -57,7 +58,15 @@ import kotlinx.coroutines.launch
  * SINGLE, a spread in DOUBLE — and keeps the NATIVE direction-aware tap zones
  * ([readerInput]); [ReflowableReaderContent] is the deliberate counterpart
  * (keyboard-only input + JS taps). Both share the chrome (ReaderChrome.kt)
- * and the sheets (ReaderSheets.kt / ReaderSelection.kt).
+ * and the sheets (one file per sheet — PagedSettingsSheet.kt, PdfOutlineSheet.kt,
+ * BookmarksSheet.kt — plus ReaderSelection.kt).
+ *
+ * Scope note (honest test surface): this file is a presentation-only render
+ * shell — state collection, the pager wiring and callback dispatch. Its
+ * DECISIONS are pinned elsewhere (SpreadSlots, PagedPagerCoordinator,
+ * PageZoomState, the reader input fold, the auto-hide timeout selection);
+ * the compose tree itself has no UI-test lane in this module and is accepted
+ * as presentation-only.
  */
 @Composable
 internal fun PagedReaderContent(
@@ -102,8 +111,16 @@ internal fun PagedReaderContent(
 
     // Auto-hide the chrome like player controls; suppress while a sheet
     // holds the screen (the settings sheet included — ReaderSheetStack owns
-    // every sheet now).
-    AutoHideControlsEffect(state.showControls, sheets.open, onTimeout = viewModel::toggleControls)
+    // every sheet now). The timeout is the pref knob folded through the
+    // shared TV doubling (the video player's pref-driven, TV-aware policy —
+    // see ReaderPrefsSnapshot.controlsAutoHideTimeoutMs).
+    val isTv = LocalTvMode.current
+    AutoHideControlsEffect(
+        state.showControls,
+        prefs.controlsAutoHideTimeoutMs(isTv),
+        sheets.open,
+        onTimeout = viewModel::toggleControls,
+    )
 
     Box(
         modifier = Modifier

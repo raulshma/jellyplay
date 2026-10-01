@@ -23,8 +23,11 @@ package com.raulshma.jellyplay.feature.player.video.engine
  *    unchanged; only the redundant property writes disappear (Android's
  *    per-slice discipline).
  *
- * Deliberately not covered: `pauseOnAudioFocusLoss` and
- * `drmSessionManagerProvider` — no engine's `onConfigChanged` consumes them.
+ * Deliberately not covered: `drmSessionManagerProvider` — no engine's
+ * `onConfigChanged` consumes it. (`pauseOnAudioFocusLoss` left the config
+ * with the video focus slice: the OS audio-focus seat moved into core:data's
+ * PlaybackFocus module, and ExoPlayer's built-in `handleAudioFocus` is
+ * forced off — one seat, one owner.)
  */
 data class EngineConfigDelta(
     /** `audioDelayMs` moved — the mpv `audio-delay` write. */

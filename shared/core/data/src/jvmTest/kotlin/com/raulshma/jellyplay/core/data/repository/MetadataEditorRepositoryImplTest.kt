@@ -40,26 +40,23 @@ class MetadataEditorRepositoryImplTest {
     }
 
     @Test
-    fun `updateItem forwards the full field set to the client`() = runTest {
-        coEvery { metadataApiClient.updateItem(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
-            Result.success(Unit)
-
-        val result = repository.updateItem(
-            itemId = "m1",
-            metadata = EditableItemMetadata(
-                name = "Name",
-                overview = "O",
-                genres = listOf("G"),
-                communityRating = 8f,
-                officialRating = "PG",
-                productionYear = 2020,
-            ),
+    fun `updateItem reaches the client through the inherited member`() = runTest {
+        // The forward retired: MetadataEditorRepository extends MetadataApiClient
+        // and the impl delegates — the metadata value object travels whole.
+        val metadata = EditableItemMetadata(
+            name = "Name",
+            overview = "O",
+            genres = listOf("G"),
+            communityRating = 8f,
+            officialRating = "PG",
+            productionYear = 2020,
         )
+        coEvery { metadataApiClient.updateItem("m1", metadata) } returns Result.success(Unit)
+
+        val result = repository.updateItem(itemId = "m1", metadata = metadata)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) {
-            metadataApiClient.updateItem("m1", "Name", null, null, "O", null, listOf("G"), emptyList(), emptyList(), 8f, null, "PG", null, 2020, null, null, null, null, null, null, null, emptyList(), null, emptyList(), emptyMap(), false, emptyList(), null, null, emptyList(), emptyList(), null, "Unknown")
-        }
+        coVerify(exactly = 1) { metadataApiClient.updateItem("m1", metadata) }
     }
 
     @Test

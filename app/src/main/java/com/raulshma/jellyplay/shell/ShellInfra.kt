@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -37,6 +38,14 @@ import kotlinx.coroutines.flow.StateFlow
  * composition (the splash gate reads the session coordinator's restore flag),
  * exactly where the deleted threading parameters resolved.
  *
+ * [userMessageBusLazy] rides the bundle too: the app-wide bus the shell
+ * publishes through [com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus]
+ * used to be resolved INLINE in JellyPlayApp via
+ * `KoinPlatform.getKoin()!!.get<...>()` — a second, composition-side service
+ * locator beside the bundle's single-resolution-path contract. It now
+ * resolves like every other member (MainActivity owns the Koin lookup, the
+ * composition reads the provider).
+ *
  * @param keyDispatcher the activity's key-event synthesis seam:
  *   feeds one Android keycode through the activity's key dispatch (down +
  *   up) and reports whether anything consumed it. The remote navigation
@@ -54,5 +63,6 @@ class ShellInfra(
     val updateCoordinatorLazy: Lazy<UpdateCoordinator>,
     val syncPlayOpenCoordinatorLazy: Lazy<SyncPlayOpenCoordinator>,
     val whatsNewCoordinatorLazy: Lazy<WhatsNewCoordinator>,
+    val userMessageBusLazy: Lazy<UserMessageBus>,
     val keyDispatcher: (Int) -> Boolean,
 )

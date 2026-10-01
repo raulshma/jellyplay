@@ -74,7 +74,6 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
-import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft

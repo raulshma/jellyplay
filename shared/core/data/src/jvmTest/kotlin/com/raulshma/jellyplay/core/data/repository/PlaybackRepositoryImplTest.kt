@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataWrite
+import com.raulshma.jellyplay.core.network.api.UserDataWriteOutcome
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
@@ -868,8 +870,8 @@ class PlaybackRepositoryImplTest {
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED, itemId = "a"))
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.UNPLAYED, itemId = "b"))
 
-        coVerify(exactly = 1) { apiClient.markPlayed("a") }
-        coVerify(exactly = 1) { apiClient.markUnplayed("b") }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkPlayed("a")) }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkUnplayed("b")) }
     }
 
     @Test
@@ -877,20 +879,20 @@ class PlaybackRepositoryImplTest {
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.FAVORITE, itemId = "a"))
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.UNFAVORITE, itemId = "b"))
 
-        coVerify(exactly = 1) { apiClient.setFavorite("a", isFavorite = true) }
-        coVerify(exactly = 1) { apiClient.setFavorite("b", isFavorite = false) }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.SetFavorite("a", isFavorite = true)) }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.SetFavorite("b", isFavorite = false)) }
     }
 
     @Test
     fun `replayOutboxEntry returns true on server success`() = runTest {
-        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.success(UserDataWriteOutcome.Done)
 
         assertTrue(repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED)))
     }
 
     @Test
     fun `replayOutboxEntry returns false on server failure`() = runTest {
-        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("500"))
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.failure<UserDataWriteOutcome>(RuntimeException("500"))
 
         assertEquals(false, repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED)))
         // No re-enqueue — the drain loop owns retry/dead-letter.

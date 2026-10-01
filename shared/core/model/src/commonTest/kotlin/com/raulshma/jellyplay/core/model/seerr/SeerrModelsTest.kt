@@ -188,12 +188,12 @@ item.backdropUrl,
         val item = SeerrSearchItem(id = 42, mediaType = "movie")
         val details = SeerrMovieDetails(
             id = 42,
-            mediaInfo = SeerrMediaInfo(tmdbId = 42, status = SeerrMediaStatus.UNKNOWN.value),
+            mediaInfo = SeerrMediaInfo(tmdbId = 42, status = SeerrMediaStatus.UNKNOWN),
         )
 
         val flipped = details.withPendingRequest(item)
 
-        assertEquals(SeerrMediaStatus.PENDING.value, flipped.mediaInfo?.status)
+        assertEquals(SeerrMediaStatus.PENDING, flipped.mediaInfo?.status)
         // The existing mediaInfo is preserved (same tmdb id), not replaced.
         assertEquals(42, flipped.mediaInfo?.tmdbId)
     }
@@ -207,7 +207,7 @@ item.backdropUrl,
 
         val flipped = details.withPendingRequest(item)
 
-        assertEquals(SeerrMediaStatus.PENDING.value, flipped.mediaInfo?.status)
+        assertEquals(SeerrMediaStatus.PENDING, flipped.mediaInfo?.status)
         assertEquals(42, flipped.mediaInfo?.tmdbId)
     }
 
@@ -218,7 +218,7 @@ item.backdropUrl,
 
         val flipped = details.withPendingRequest(item)
 
-        assertEquals(SeerrMediaStatus.PENDING.value, flipped.mediaInfo?.status)
+        assertEquals(SeerrMediaStatus.PENDING, flipped.mediaInfo?.status)
         assertEquals(7, flipped.mediaInfo?.tmdbId)
     }
 
@@ -227,7 +227,7 @@ item.backdropUrl,
         val item = SeerrSearchItem(id = 999, mediaType = "movie")
         val details = SeerrMovieDetails(
             id = 42,
-            mediaInfo = SeerrMediaInfo(tmdbId = 42, status = SeerrMediaStatus.AVAILABLE.value),
+            mediaInfo = SeerrMediaInfo(tmdbId = 42, status = SeerrMediaStatus.AVAILABLE),
         )
 
         assertEquals(details, details.withPendingRequest(item))

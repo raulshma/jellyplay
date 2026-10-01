@@ -4,15 +4,20 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_delete_recording
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_recordings
 
 @Immutable
 data class RecordingsUiState(
     val recordings: List<LiveTvRecording> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null,
+    /** The load/delete failure — resolved to text at render ([UiMessage.asText]). */
+    val error: UiMessage? = null,
     val isDeleting: Boolean = false,
 )
 
@@ -53,7 +58,9 @@ class RecordingsViewModel(
                     // The legacy ladder settled unconditionally with
                     // getOrDefault(emptyList()) — a failure still clears the
                     // previous list, it does not preserve it.
-                    _uiState.update { s -> s.copy(recordings = emptyList(), error = e.message, isLoading = false) }
+                    _uiState.update {
+                        s -> s.copy(recordings = emptyList(), error = UiMessage.of(e, Res.string.livetv_error_load_recordings), isLoading = false)
+                    }
                 },
             )
         }
@@ -93,7 +100,7 @@ class RecordingsViewModel(
                 load()
             } else {
                 _uiState.update {
-                    it.copy(isDeleting = false, error = result.exceptionOrNull()?.message)
+                    it.copy(isDeleting = false, error = UiMessage.of(result, Res.string.livetv_error_delete_recording))
                 }
             }
         }

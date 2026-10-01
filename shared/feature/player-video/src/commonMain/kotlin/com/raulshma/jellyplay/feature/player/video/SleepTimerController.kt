@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.SleepTimerArming
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.feature.player.video.state.SleepTimerState
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +51,20 @@ internal class SleepTimerController(
     val state: StateFlow<SleepTimerState> = _state.asStateFlow()
 
     /**
+     * The shared core:data arming machine (the [SleepTimerArming] fold of the
+     * store writes + countdown dispatch both player hosts hand-copied): this
+     * class keeps only the video-specific residue — pre-fade capture, the
+     * mute-gated fade lambda and the [SleepTimerState] slice.
+     */
+    private val arming = SleepTimerArming(
+        sleepCountdown = sleepCountdown,
+        audioStore = audioStore,
+        scope = scope,
+        // Fresh engine read per expiry — the VM swaps engines on retry.
+        onExpirePause = { getEngine()?.pause() },
+    )
+
+    /**
      * Countdown display, sourced directly from [SleepCountdown]. Kept OUT
      * of any wide state bag (and out of [state]) so a 5 s tick — or the 100 ms
      * fade-out burst — re-invalidates only the leaf composables that render
@@ -71,10 +86,6 @@ internal class SleepTimerController(
      * the picker can re-offer it.
      */
     fun startSleepTimer(durationMs: Long) {
-        scope.launch {
-            audioStore.setSleepTimerDurationMs(durationMs)
-            audioStore.setSleepTimerEndOfEpisode(false)
-        }
         // Capture the pre-fade volume before the fade ramp lowers it. Skip
         // capture while muted (the fade also skips writes when muted, so there
         // is nothing to restore). Mirrors preDuckVolume in the audio-focus path.
@@ -84,14 +95,12 @@ internal class SleepTimerController(
         } else {
             null
         }
-        sleepCountdown.setOnTimerExpired { getEngine()?.pause() }
-        sleepCountdown.setOnExpiring { progress ->
+        arming.armTimed(durationMs, fade = { progress ->
             // Skip volume writes while user-muted; let mute state win. The
             // fade is PROGRAMMATIC: engines with per-content-type
             // volume memory must not capture it as a user level.
             if (!isMuted()) getEngine()?.setVolume(progress, isUserChange = false)
-        }
-        sleepCountdown.startSleepTimer(durationMs)
+        })
         _state.update {
             it.copy(
                 sleepTimerActive = true,
@@ -107,17 +116,12 @@ internal class SleepTimerController(
      * ([triggerSleepTimerEndOfEpisode]).
      */
     fun startSleepTimerEndOfEpisode() {
-        scope.launch {
-            audioStore.setSleepTimerEndOfEpisode(true)
-        }
         // End-of-episode timer has no fade, so there is no pre-fade level to
         // restore on cancel. Clear any value captured by a prior timed timer
         // so cancelSleepTimer leaves the current volume untouched instead of
         // restoring a stale captured level.
         preSleepVolume = null
-        sleepCountdown.setOnTimerExpired { getEngine()?.pause() }
-        sleepCountdown.setOnExpiring(null)
-        sleepCountdown.startEndOfEpisodeTimer()
+        arming.armEndOfEpisode()
         _state.update {
             it.copy(
                 sleepTimerActive = true,
@@ -133,7 +137,7 @@ internal class SleepTimerController(
      * end-of-episode timer with no fade), the current volume is left untouched.
      */
     fun cancelSleepTimer() {
-        sleepCountdown.cancelSleepTimer()
+        arming.disarm()
         val engine = getEngine()
         if (engine != null && !isMuted()) {
             // Restore is programmatic too — cancel must not look like the user
@@ -155,7 +159,7 @@ internal class SleepTimerController(
      * reached). Delegates the mode + active guard to [SleepCountdown].
      */
     fun triggerSleepTimerEndOfEpisode() {
-        sleepCountdown.triggerEndOfEpisode()
+        arming.triggerEndOfEpisode()
     }
 
     /**
@@ -172,6 +176,6 @@ internal class SleepTimerController(
 
     /** Tear down callbacks so a released engine is never touched by a stray tick. */
     fun onRelease() {
-        sleepCountdown.setOnExpiring(null)
+        arming.release()
     }
 }

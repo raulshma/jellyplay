@@ -7,11 +7,10 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGat
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
-import com.raulshma.jellyplay.core.model.seerr.SeerrPageInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import io.mockk.Runs
@@ -96,7 +95,7 @@ class RequestsViewModelQueryGapsTest {
         coEvery { seerrRepository.getTvDetails(any()) } returns Result.success(
             com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails(),
         )
-        stubRequests { Result.success(SeerrRequestListResponse()) }
+        stubRequests { Result.success(SeerrRequestPage()) }
     }
 
     @AfterTest
@@ -104,7 +103,7 @@ class RequestsViewModelQueryGapsTest {
         Dispatchers.resetMain()
     }
 
-    private fun stubRequests(response: () -> Result<SeerrRequestListResponse>) {
+    private fun stubRequests(response: () -> Result<SeerrRequestPage>) {
         coEvery {
             seerrRepository.getRequests(any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
@@ -123,9 +122,10 @@ class RequestsViewModelQueryGapsTest {
     )
 
     private fun page(items: List<SeerrRequestItem>, pages: Int = 1) =
-        SeerrRequestListResponse(
-            pageInfo = SeerrPageInfo(pages = pages, results = items.size),
-            results = items,
+        SeerrRequestPage(
+            items = items,
+            totalResults = items.size,
+            totalPages = pages,
         )
 
     private fun item(id: Int, tmdbId: Int = id, type: String = "movie") =

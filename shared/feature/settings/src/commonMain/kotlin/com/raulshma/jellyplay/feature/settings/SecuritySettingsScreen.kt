@@ -156,7 +156,9 @@ val biometricGate = rememberBiometricGate()
     // emission `if`s below read — one gate per id, declared beside the group
     // items (SettingsScreenGroups.security.rowAdmitted). pin_for_player_lock
     // stays hand-gated: it carries NO declared admission (the shipped count
-    // quirk — it renders behind the pin toggle but is never counted).
+    // quirk — it renders behind the pin toggle but is never counted), so its
+    // desktop hiding rides the app-lock capability directly, same flag its
+    // sibling rows declare.
     val securityRowFlags = RowAdmissionFlags(showAdvanced = showAdvanced, supportsBiometric = canShowBiometric)
     val pinMustBe4Digits = stringResource(Res.string.settings_pin_must_be_4_digits)
     val pinsDoNotMatch = stringResource(Res.string.settings_pins_do_not_match)
@@ -197,21 +199,23 @@ val biometricGate = rememberBiometricGate()
                     // ignoring the runtime gate — preserved verbatim in the
                     // declaration).
                     SettingsItemList(total = rowTotalFor(SettingsScreenGroups.security, securityRowFlags)) {
-                    SettingToggleItem(
-                        icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
-                        title = rowTitle(SecuritySettingsIds.PIN_LOCK),
-                        subtitle = if (preferences.pinLockEnabled) stringResource(Res.string.settings_pin_locked) else stringResource(Res.string.settings_no_pin_set),
-                        checked = preferences.pinLockEnabled,
-                        highlighted = highlightSettingId == SecuritySettingsIds.PIN_LOCK,
-                        onCheckedChange = { enabled ->
-                            if (enabled) activeDialog = SecuritySettingsDialog.PinDialog
-                            else activeDialog = SecuritySettingsDialog.PinDisableAuth
-                        },
-                        onClick = {
-                            if (preferences.pinLockEnabled) activeDialog = SecuritySettingsDialog.PinDisableAuth
-                            else activeDialog = SecuritySettingsDialog.PinDialog
-                        },
-                    )
+                    if (SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.PIN_LOCK, securityRowFlags)) {
+                        SettingToggleItem(
+                            icon = if (preferences.pinLockEnabled) Tabler.Outline.Lock else Tabler.Outline.LockOpen,
+                            title = rowTitle(SecuritySettingsIds.PIN_LOCK),
+                            subtitle = if (preferences.pinLockEnabled) stringResource(Res.string.settings_pin_locked) else stringResource(Res.string.settings_no_pin_set),
+                            checked = preferences.pinLockEnabled,
+                            highlighted = highlightSettingId == SecuritySettingsIds.PIN_LOCK,
+                            onCheckedChange = { enabled ->
+                                if (enabled) activeDialog = SecuritySettingsDialog.PinDialog
+                                else activeDialog = SecuritySettingsDialog.PinDisableAuth
+                            },
+                            onClick = {
+                                if (preferences.pinLockEnabled) activeDialog = SecuritySettingsDialog.PinDisableAuth
+                                else activeDialog = SecuritySettingsDialog.PinDialog
+                            },
+                        )
+                    }
                     if (SettingsScreenGroups.security.rowAdmitted(SecuritySettingsIds.BIOMETRIC_LOCK, securityRowFlags) && biometricGate != null) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Fingerprint,
@@ -234,7 +238,11 @@ val biometricGate = rememberBiometricGate()
                             },
                         )
                     }
-                    if (preferences.pinLockEnabled) {
+                    // The undeclared-count-quirk row: hidden where the
+                    // app-lock stack does not enforce (same capability its
+                    // sibling rows declare, checked directly because the
+                    // quirk keeps no admission to read).
+                    if (preferences.pinLockEnabled && settingsCapabilities.supportsAppLock) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Key,
                             title = rowTitle(SecuritySettingsIds.PIN_FOR_PLAYER_LOCK),

@@ -9,11 +9,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -35,20 +31,28 @@ import kotlinx.serialization.Serializable
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
  * keys, setters (including the bounds coercions below), read projection, legacy
- * migration, and reset-key list end-to-end. Mirrors the `PlaybackStore` /
- * `AppearanceStore` / `ServerIdentityStore` shape.
+ * migration, and reset-key list end-to-end.
  *
- * **Headline migration — the segment-behaviour legacy fallback:**
- * [readSegmentBehaviors] reads the JSON `Map<MediaSegmentType, SegmentBehavior>`
- * blob (merging over [SegmentBehavior.DEFAULT_BEHAVIORS]); when that blob is
- * absent it falls back from the four legacy booleans (`skip_intro_enabled`,
- * `skip_outro_enabled`, `auto_skip_intro`, `auto_skip_outro`) into INTRO/OUTRO
- * SegmentBehaviors, so a pre-blob install keeps its prior intro/outro behaviour.
+ * **Stage B spec derivation** (the [PlaybackStore] precedent): every key this
+ * store owns is declared exactly once as a row in [VideoPlayerPreferenceSpecs]
+ * (wire name, default, reset category, read/write encoding) and the machinery
+ * below is derived from those rows — each [Keys] member rebuilds its row's
+ * typed key from the row's wire name, each [read] projection row delegates to
+ * its row encoding, the single-key setters and [restore] delegate to the rows'
+ * derived writes, and [resetKeysFor] filters the rows by reset category. The
+ * migration semantics (the `video_gestures_enabled` → [GestureMode] fallback,
+ * the segment-behaviour four-boolean fallback, the legacy string-key reads)
+ * live in the rows' encodings now, next to the key they apply to.
  *
- * **Cross-key invariants owned here:**
+ * **Cross-key invariants owned here (hand-written by decision — an invariant
+ * or a bounds policy spanning more than a row encoding cannot be derived):**
  *  - [setVideoPassOutProtectionHours] coerces the value to `coerceAtLeast(0)`.
  *  - [setVideoSkipBackOnResumeMs] coerces the value to `coerceAtLeast(0L)`.
- *  - [setSegmentBehaviors] re-encodes the whole map as a single JSON edit.
+ *  - [setStillWatchingEpisodeThreshold] coerces the value to `coerceAtLeast(0)`.
+ *  - [setSegmentBehaviors] / [setSegmentBehavior] write the whole (or
+ *    read-modify-written) behaviour map as a single JSON edit.
+ *  - [restore] clears the superseded legacy `video_gestures_enabled` boolean
+ *    beside the [VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE] row.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file; key strings match
  * the legacy `UserPreferencesStore.Keys` names so existing data is read in place
@@ -60,55 +64,59 @@ class VideoPlayerStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [VideoPlayerPreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key
+     * of the same name). Kept as a plain object rather than folded into the
+     * rows because it is the reflection anchor for the JVM reset-coverage
+     * guard and the key-identity reference for the hand-written invariant
+     * setters below.
+     */
     internal object Keys {
-        val VIDEO_SEEK_DURATION_MS = longPreferencesKey("video_seek_duration_ms")
-        val VIDEO_CONTROLS_TIMEOUT_MS = longPreferencesKey("video_controls_timeout_ms")
-        val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey("video_default_orientation")
-        val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey("video_default_aspect_ratio")
-        val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
-        val VIDEO_GESTURE_MODE = stringPreferencesKey("video_gesture_mode")
-        val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey("video_pass_out_protection_hours")
-        val VIDEO_SKIP_BACK_ON_RESUME_MS = longPreferencesKey("video_skip_back_on_resume_ms")
-        val VIDEO_HOLD_SPEED_ENABLED = booleanPreferencesKey("video_hold_speed_enabled")
-        val VIDEO_HOLD_SPEED_MULTIPLIER = floatPreferencesKey("video_hold_speed_multiplier")
-        val VIDEO_DEFAULT_SPEED = floatPreferencesKey("video_default_speed")
-        val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
-        val STILL_WATCHING_MODE = stringPreferencesKey("still_watching_mode")
-        val STILL_WATCHING_EPISODE_THRESHOLD = intPreferencesKey("still_watching_episode_threshold")
-        val TRAILER_AUTOPLAY = booleanPreferencesKey("trailer_autoplay")
-        val CINEMA_MODE_ENABLED = booleanPreferencesKey("cinema_mode_enabled")
-        val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey("video_swipe_seek_max_ms")
-        val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
-        val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey("video_brightness_level")
-        val VIDEO_AUTO_SKIP_INTRO = booleanPreferencesKey("video_auto_skip_intro")
-        val VIDEO_AUTO_SKIP_OUTRO = booleanPreferencesKey("video_auto_skip_outro")
-        val VIDEO_REMEMBER_MUTED = booleanPreferencesKey("video_remember_muted")
-        val VIDEO_MUTED = booleanPreferencesKey("video_muted")
-        val VIDEO_GESTURE_INDICATOR_SIDE = stringPreferencesKey("video_gesture_indicator_side")
-        val TRICKPLAY_ENABLED = booleanPreferencesKey("trickplay_enabled")
-        val TRICKPLAY_ON_SEEK_GESTURE = booleanPreferencesKey("trickplay_on_seek_gesture")
-        val VIDEO_EPISODE_BROWSER_ENABLED = booleanPreferencesKey("video_episode_browser_enabled")
-        val VIDEO_SHOW_PLAYBACK_METADATA = booleanPreferencesKey("video_show_playback_metadata")
-        val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
-        // The direct-play video byte-cache cap (VideoStreamCache's LRU bound),
-        // added in a later change — never string-typed in the legacy store,
-        // so the read below uses plain `prefs[key] ?: default`.
-        val VIDEO_CACHE_SIZE_MB = intPreferencesKey("video_cache_size_mb")
-        val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")
-        val SHOW_TIME_REMAINING = booleanPreferencesKey("show_time_remaining")
-        val TV_ZOOM_MODE_PERCENT = floatPreferencesKey("tv_zoom_mode_percent")
-        val INCOGNITO_MODE_ENABLED = booleanPreferencesKey("incognito_mode_enabled")
+        val VIDEO_SEEK_DURATION_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.keyName)
+        val VIDEO_CONTROLS_TIMEOUT_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.keyName)
+        val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.keyName)
+        val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.keyName)
+        val VIDEO_GESTURES_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_GESTURES_ENABLED.keyName)
+        val VIDEO_GESTURE_MODE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.keyName)
+        val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_PASS_OUT_PROTECTION_HOURS.keyName)
+        val VIDEO_SKIP_BACK_ON_RESUME_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SKIP_BACK_ON_RESUME_MS.keyName)
+        val VIDEO_HOLD_SPEED_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_ENABLED.keyName)
+        val VIDEO_HOLD_SPEED_MULTIPLIER = floatPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_MULTIPLIER.keyName)
+        val VIDEO_DEFAULT_SPEED = floatPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_SPEED.keyName)
+        val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_NEXT.keyName)
+        val STILL_WATCHING_MODE = stringPreferencesKey(VideoPlayerPreferenceSpecs.STILL_WATCHING_MODE.keyName)
+        val STILL_WATCHING_EPISODE_THRESHOLD = intPreferencesKey(VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.keyName)
+        val TRAILER_AUTOPLAY = booleanPreferencesKey(VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.keyName)
+        val CINEMA_MODE_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.keyName)
+        val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.keyName)
+        val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.keyName)
+        val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.keyName)
+        val VIDEO_AUTO_SKIP_INTRO = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_INTRO.keyName)
+        val VIDEO_AUTO_SKIP_OUTRO = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_OUTRO.keyName)
+        val VIDEO_REMEMBER_MUTED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_MUTED.keyName)
+        val VIDEO_MUTED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_MUTED.keyName)
+        val VIDEO_GESTURE_INDICATOR_SIDE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_INDICATOR_SIDE.keyName)
+        val TRICKPLAY_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.keyName)
+        val TRICKPLAY_ON_SEEK_GESTURE = booleanPreferencesKey(VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.keyName)
+        val VIDEO_EPISODE_BROWSER_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.keyName)
+        val VIDEO_SHOW_PLAYBACK_METADATA = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.keyName)
+        val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.keyName)
+        val VIDEO_CACHE_SIZE_MB = intPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CACHE_SIZE_MB.keyName)
+        val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey(VideoPlayerPreferenceSpecs.SHOW_CLOCK_IN_PLAYER.keyName)
+        val SHOW_TIME_REMAINING = booleanPreferencesKey(VideoPlayerPreferenceSpecs.SHOW_TIME_REMAINING.keyName)
+        val TV_ZOOM_MODE_PERCENT = floatPreferencesKey(VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.keyName)
+        val INCOGNITO_MODE_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.keyName)
 
-        val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
-        val SKIP_INTRO_ENABLED = stringPreferencesKey("skip_intro_enabled")
-        val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
-        val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
-        val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
-        val SKIP_SEGMENTS_ON_SEEK = booleanPreferencesKey("skip_segments_on_seek")
+        val SEGMENT_BEHAVIORS = stringPreferencesKey(VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.keyName)
+        val SKIP_INTRO_ENABLED = stringPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_INTRO_ENABLED.keyName)
+        val SKIP_OUTRO_ENABLED = stringPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_OUTRO_ENABLED.keyName)
+        val AUTO_SKIP_INTRO = stringPreferencesKey(VideoPlayerPreferenceSpecs.AUTO_SKIP_INTRO.keyName)
+        val AUTO_SKIP_OUTRO = stringPreferencesKey(VideoPlayerPreferenceSpecs.AUTO_SKIP_OUTRO.keyName)
+        val SKIP_SEGMENTS_ON_SEEK = booleanPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.keyName)
     }
-
-    private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> =
-        ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
 
     /**
      * The in-player video preference slice, derived directly from the raw
@@ -119,198 +127,99 @@ class VideoPlayerStore constructor(
         dataStore.sliceStateFlow(scope, seed = VideoPlayerSlice(), read = ::read)
 
     /**
-     * Pure read of the in-player video fields from a raw [Preferences] snapshot.
-     * Exposed so the facade can fold these into the whole-`UserPreferences`
+     * Pure read of the in-player video fields from a raw [Preferences] snapshot,
+     * each field delegated to its [VideoPlayerPreferenceSpecs] row encoding
+     * (including the segment-behaviour legacy migration — the row's derived
+     * read). Exposed so the facade can fold these into the whole-`UserPreferences`
      * projection without duplicating the read logic.
      */
     internal fun read(prefs: Preferences): VideoPlayerSlice = VideoPlayerSlice(
-        videoSeekDurationMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_SEEK_DURATION_MS, "video_seek_duration_ms", 10_000L),
-        videoControlsTimeoutMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_CONTROLS_TIMEOUT_MS, "video_controls_timeout_ms", 5_000L),
-        videoDefaultOrientation = readOrientation(prefs),
-        videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
-        videoGestureMode = readGestureMode(prefs),
-        videoPassOutProtectionHours = PreferenceCodec.readInt(prefs, Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, "video_pass_out_protection_hours", 0),
-        videoSkipBackOnResumeMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS, "video_skip_back_on_resume_ms", 0L),
-        videoHoldSpeedEnabled = PreferenceCodec.readBool(prefs, Keys.VIDEO_HOLD_SPEED_ENABLED, "video_hold_speed_enabled", true),
-        videoHoldSpeedMultiplier = PreferenceCodec.readFloat(prefs, Keys.VIDEO_HOLD_SPEED_MULTIPLIER, "video_hold_speed_multiplier", 2.0f),
-        videoDefaultSpeed = PreferenceCodec.readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
-        videoAutoplayNext = PreferenceCodec.readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", true),
-        stillWatchingMode = readStillWatchingMode(prefs),
-        stillWatchingEpisodeThreshold = PreferenceCodec.readInt(prefs, Keys.STILL_WATCHING_EPISODE_THRESHOLD, "still_watching_episode_threshold", 0),
-        trailerAutoplay = PreferenceCodec.readBool(prefs, Keys.TRAILER_AUTOPLAY, "trailer_autoplay", true),
-        cinemaModeEnabled = PreferenceCodec.readBool(prefs, Keys.CINEMA_MODE_ENABLED, "cinema_mode_enabled", false),
-        videoSwipeSeekMaxMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
-        videoRememberBrightness = PreferenceCodec.readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", true),
-        videoBrightnessLevel = PreferenceCodec.readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
-        videoAutoSkipIntro = PreferenceCodec.readBool(prefs, Keys.VIDEO_AUTO_SKIP_INTRO, "video_auto_skip_intro", false),
-        videoAutoSkipOutro = PreferenceCodec.readBool(prefs, Keys.VIDEO_AUTO_SKIP_OUTRO, "video_auto_skip_outro", false),
-        videoRememberMuted = PreferenceCodec.readBool(prefs, Keys.VIDEO_REMEMBER_MUTED, "video_remember_muted", true),
-        videoMuted = PreferenceCodec.readBool(prefs, Keys.VIDEO_MUTED, "video_muted", false),
-        videoGestureIndicatorSide = readGestureIndicatorSide(prefs),
-        trickplayEnabled = PreferenceCodec.readBool(prefs, Keys.TRICKPLAY_ENABLED, "trickplay_enabled", true),
-        trickplayOnSeekGesture = PreferenceCodec.readBool(prefs, Keys.TRICKPLAY_ON_SEEK_GESTURE, "trickplay_on_seek_gesture", true),
-        videoEpisodeBrowserEnabled = PreferenceCodec.readBool(prefs, Keys.VIDEO_EPISODE_BROWSER_ENABLED, "video_episode_browser_enabled", true),
-        videoShowPlaybackMetadata = PreferenceCodec.readBool(prefs, Keys.VIDEO_SHOW_PLAYBACK_METADATA, "video_show_playback_metadata", true),
-        videoPreloadBufferSize = readPreloadBufferSize(prefs),
-        videoCacheSizeMb = prefs[Keys.VIDEO_CACHE_SIZE_MB] ?: 1024,
-        showClockInPlayer = PreferenceCodec.readBool(prefs, Keys.SHOW_CLOCK_IN_PLAYER, "show_clock_in_player", false),
-        showTimeRemaining = PreferenceCodec.readBool(prefs, Keys.SHOW_TIME_REMAINING, "show_time_remaining", false),
-        tvZoomModePercent = PreferenceCodec.readFloat(prefs, Keys.TV_ZOOM_MODE_PERCENT, "tv_zoom_mode_percent", 0f),
-        incognitoModeEnabled = PreferenceCodec.readBool(prefs, Keys.INCOGNITO_MODE_ENABLED, "incognito_mode_enabled", false),
-        segmentBehaviors = readSegmentBehaviorsCached(prefs),
-        skipSegmentsOnSeek = PreferenceCodec.readBool(prefs, Keys.SKIP_SEGMENTS_ON_SEEK, "skip_segments_on_seek", false),
+        videoSeekDurationMs = VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.readFrom(prefs),
+        videoControlsTimeoutMs = VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.readFrom(prefs),
+        videoDefaultOrientation = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.readFrom(prefs),
+        videoDefaultAspectRatio = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.readFrom(prefs),
+        videoGestureMode = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.readFrom(prefs),
+        videoPassOutProtectionHours = VideoPlayerPreferenceSpecs.VIDEO_PASS_OUT_PROTECTION_HOURS.readFrom(prefs),
+        videoSkipBackOnResumeMs = VideoPlayerPreferenceSpecs.VIDEO_SKIP_BACK_ON_RESUME_MS.readFrom(prefs),
+        videoHoldSpeedEnabled = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_ENABLED.readFrom(prefs),
+        videoHoldSpeedMultiplier = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_MULTIPLIER.readFrom(prefs),
+        videoDefaultSpeed = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_SPEED.readFrom(prefs),
+        videoAutoplayNext = VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_NEXT.readFrom(prefs),
+        stillWatchingMode = VideoPlayerPreferenceSpecs.STILL_WATCHING_MODE.readFrom(prefs),
+        stillWatchingEpisodeThreshold = VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.readFrom(prefs),
+        trailerAutoplay = VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.readFrom(prefs),
+        cinemaModeEnabled = VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.readFrom(prefs),
+        videoSwipeSeekMaxMs = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.readFrom(prefs),
+        videoRememberBrightness = VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.readFrom(prefs),
+        videoBrightnessLevel = VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.readFrom(prefs),
+        videoAutoSkipIntro = VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_INTRO.readFrom(prefs),
+        videoAutoSkipOutro = VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_OUTRO.readFrom(prefs),
+        videoRememberMuted = VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_MUTED.readFrom(prefs),
+        videoMuted = VideoPlayerPreferenceSpecs.VIDEO_MUTED.readFrom(prefs),
+        videoGestureIndicatorSide = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_INDICATOR_SIDE.readFrom(prefs),
+        trickplayEnabled = VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.readFrom(prefs),
+        trickplayOnSeekGesture = VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.readFrom(prefs),
+        videoEpisodeBrowserEnabled = VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.readFrom(prefs),
+        videoShowPlaybackMetadata = VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.readFrom(prefs),
+        videoPreloadBufferSize = VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.readFrom(prefs),
+        videoCacheSizeMb = VideoPlayerPreferenceSpecs.VIDEO_CACHE_SIZE_MB.readFrom(prefs),
+        showClockInPlayer = VideoPlayerPreferenceSpecs.SHOW_CLOCK_IN_PLAYER.readFrom(prefs),
+        showTimeRemaining = VideoPlayerPreferenceSpecs.SHOW_TIME_REMAINING.readFrom(prefs),
+        tvZoomModePercent = VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.readFrom(prefs),
+        incognitoModeEnabled = VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.readFrom(prefs),
+        segmentBehaviors = VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.readFrom(prefs),
+        skipSegmentsOnSeek = VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.readFrom(prefs),
     )
 
-    /**
-     * Memoised segment-behaviour read over the `segment_behaviors` JSON blob.
-     *
-     * [CachedJsonNullPolicy.NoMemoOnNull] — this store's pre-promotion policy,
-     * preserved verbatim: only the JSON-blob decode is memoised. When the blob
-     * is absent the legacy-boolean fallback must still run on EVERY emission
-     * (its result depends on the four SKIP_* / AUTO_* keys, not on the raw
-     * string), so a null raw never short-circuits against the cache — that
-     * would freeze the legacy migration out entirely.
-     *
-     * The [PreferenceCodec.cachedJson] `parse`/`onNull` closures both route
-     * through [readSegmentBehaviors], whose null-raw leg IS the legacy
-     * fallback (and whose decode leg owns its own corrupt-blob tolerance, so
-     * the helper's fallback `default` is only a belt-and-braces guard).
-     */
-    private fun readSegmentBehaviorsCached(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> =
-        PreferenceCodec.cachedJson(
-            raw = prefs[Keys.SEGMENT_BEHAVIORS],
-            cache = cachedSegmentBehaviors,
-            default = SegmentBehavior.DEFAULT_BEHAVIORS,
-            parse = { readSegmentBehaviors(prefs) },
-            onNull = { readSegmentBehaviors(prefs) },
-            cacheRef = { cachedSegmentBehaviors = it },
-            nullPolicy = CachedJsonNullPolicy.NoMemoOnNull,
-        )
-
-    private fun readOrientation(prefs: Preferences): OrientationMode =
-        prefs[Keys.VIDEO_DEFAULT_ORIENTATION].toEnumOrNull() ?: OrientationMode.SENSOR_LANDSCAPE
-
-    private fun readGestureIndicatorSide(prefs: Preferences): GestureIndicatorSide =
-        prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE].toEnumOrNull() ?: GestureIndicatorSide.OPPOSITE
-
-    /**
-     * Reads the gesture mode, falling back to the legacy
-     * `video_gestures_enabled` boolean when the enum key is absent: an
-     * explicit legacy `false` (gestures disabled) migrates to
-     * [GestureMode.NONE]; anything else — legacy `true` or a fresh install —
-     * lands on [GestureMode.ALL]. The legacy key is never written again
-     * (except factory reset), so the first mode change retires it.
-     */
-    private fun readGestureMode(prefs: Preferences): GestureMode {
-        prefs[Keys.VIDEO_GESTURE_MODE]?.toEnumOrNull<GestureMode>()?.let { return it }
-        return if (PreferenceCodec.readBool(prefs, Keys.VIDEO_GESTURES_ENABLED, "video_gestures_enabled", true)) {
-            GestureMode.ALL
-        } else {
-            GestureMode.NONE
-        }
-    }
-
-    private fun readPreloadBufferSize(prefs: Preferences): PreloadBufferSize =
-        prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE].toEnumOrNull() ?: PreloadBufferSize.MEDIUM
-
-    private fun readStillWatchingMode(prefs: Preferences): StillWatchingMode =
-        prefs[Keys.STILL_WATCHING_MODE].toEnumOrNull() ?: StillWatchingMode.OFF
-
-    /**
-     * Reads the per-`MediaSegmentType` skip behaviour map. When the JSON
-     * `segment_behaviors` blob is present it is decoded and merged over
-     * [SegmentBehavior.DEFAULT_BEHAVIORS] (stored values win). When the blob is
-     * absent this falls back from the four legacy booleans
-     * (`skip_intro_enabled`, `skip_outro_enabled`, `auto_skip_intro`,
-     * `auto_skip_outro`) into INTRO/OUTRO SegmentBehaviors, merged over the
-     * defaults — so a pre-blob install keeps its prior intro/outro behaviour.
-     * When neither is present the defaults are returned unchanged.
-     */
-    private fun readSegmentBehaviors(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> {
-        val raw = prefs[Keys.SEGMENT_BEHAVIORS]
-        if (raw != null) {
-            return try {
-                val stored = PreferenceCodec.json.decodeFromString<Map<String, String>>(raw)
-                val parsed = stored.mapNotNull { (typeStr, behaviorStr) ->
-                    val type = typeStr.toEnumOrNull<MediaSegmentType>() ?: return@mapNotNull null
-                    val behavior = behaviorStr.toEnumOrNull<SegmentBehavior>() ?: return@mapNotNull null
-                    type to behavior
-                }.toMap()
-                // Merge: defaults fill in any types not explicitly saved, stored values override
-                SegmentBehavior.DEFAULT_BEHAVIORS + parsed
-            } catch (_: Exception) { SegmentBehavior.DEFAULT_BEHAVIORS }
-        }
-
-        val hasLegacyKeys = prefs.contains(Keys.SKIP_INTRO_ENABLED) ||
-            prefs.contains(Keys.SKIP_OUTRO_ENABLED) ||
-            prefs.contains(Keys.AUTO_SKIP_INTRO) ||
-            prefs.contains(Keys.AUTO_SKIP_OUTRO)
-        if (!hasLegacyKeys) return SegmentBehavior.DEFAULT_BEHAVIORS
-
-        val migrated = mutableMapOf<MediaSegmentType, SegmentBehavior>()
-        val skipIntro = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true
-        val skipOutro = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true
-        val autoIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false
-        val autoOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false
-        migrated[MediaSegmentType.INTRO] = when {
-            autoIntro -> SegmentBehavior.AUTO_SKIP
-            skipIntro -> SegmentBehavior.SHOW_BUTTON
-            else -> SegmentBehavior.IGNORE
-        }
-        migrated[MediaSegmentType.OUTRO] = when {
-            autoOutro -> SegmentBehavior.AUTO_SKIP
-            skipOutro -> SegmentBehavior.SHOW_BUTTON
-            else -> SegmentBehavior.IGNORE
-        }
-        return SegmentBehavior.DEFAULT_BEHAVIORS + migrated
-    }
-
     // ------------------------------------------------------------------
-    // Setters — bounds coercions and the whole-map JSON edit live here.
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding — enum-by-name, JSON — is the row's, not re-declared
+    // here); bounds coercions and the whole-map JSON edits live below,
+    // hand-written.
     // ------------------------------------------------------------------
 
     suspend fun setVideoSeekDurationMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_SEEK_DURATION_MS] = ms }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.writeTo(it, ms) }
     }
 
     suspend fun setVideoControlsTimeoutMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = ms }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.writeTo(it, ms) }
     }
 
     suspend fun setVideoDefaultOrientation(mode: OrientationMode) {
-        dataStore.edit { it[Keys.VIDEO_DEFAULT_ORIENTATION] = mode.name }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.writeTo(it, mode) }
     }
 
     suspend fun setVideoGestureMode(mode: GestureMode) {
-        dataStore.edit { it[Keys.VIDEO_GESTURE_MODE] = mode.name }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.writeTo(it, mode) }
     }
 
     suspend fun setVideoPassOutProtectionHours(hours: Int) {
-        dataStore.edit { it[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = hours.coerceAtLeast(0) }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_PASS_OUT_PROTECTION_HOURS.writeTo(it, hours.coerceAtLeast(0)) }
     }
 
     suspend fun setVideoSkipBackOnResumeMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = ms.coerceAtLeast(0L) }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SKIP_BACK_ON_RESUME_MS.writeTo(it, ms.coerceAtLeast(0L)) }
     }
 
     suspend fun setVideoHoldSpeedEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_ENABLED] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setVideoHoldSpeedMultiplier(multiplier: Float) {
-        dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = multiplier }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_MULTIPLIER.writeTo(it, multiplier) }
     }
 
     suspend fun setVideoDefaultSpeed(speed: Float) {
-        dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_SPEED.writeTo(it, speed) }
     }
 
     suspend fun setVideoDefaultAspectRatio(ratio: String) {
-        dataStore.edit { it[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = ratio }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.writeTo(it, ratio) }
     }
 
     suspend fun setVideoAutoplayNext(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_NEXT.writeTo(it, enabled) }
     }
 
     /**
@@ -319,7 +228,7 @@ class VideoPlayerStore constructor(
      * arms are on.
      */
     suspend fun setStillWatchingMode(mode: StillWatchingMode) {
-        dataStore.edit { it[Keys.STILL_WATCHING_MODE] = mode.name }
+        dataStore.edit { VideoPlayerPreferenceSpecs.STILL_WATCHING_MODE.writeTo(it, mode) }
     }
 
     /**
@@ -327,88 +236,88 @@ class VideoPlayerStore constructor(
      * the confirm prompt. `0` = off; the picker presets are 2/3/5/8.
      */
     suspend fun setStillWatchingEpisodeThreshold(episodes: Int) {
-        dataStore.edit { it[Keys.STILL_WATCHING_EPISODE_THRESHOLD] = episodes.coerceAtLeast(0) }
+        dataStore.edit { VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.writeTo(it, episodes.coerceAtLeast(0)) }
     }
 
     suspend fun setTrailerAutoplay(enabled: Boolean) {
-        dataStore.edit { it[Keys.TRAILER_AUTOPLAY] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.writeTo(it, enabled) }
     }
 
     suspend fun setCinemaModeEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.CINEMA_MODE_ENABLED] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.writeTo(it, ms) }
     }
 
     suspend fun setVideoRememberBrightness(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_REMEMBER_BRIGHTNESS] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.writeTo(it, enabled) }
     }
 
     suspend fun setVideoBrightnessLevel(level: Float) {
-        dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.writeTo(it, level) }
     }
 
     suspend fun setVideoAutoSkipIntro(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_AUTO_SKIP_INTRO] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_INTRO.writeTo(it, enabled) }
     }
 
     suspend fun setVideoAutoSkipOutro(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_AUTO_SKIP_OUTRO] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_OUTRO.writeTo(it, enabled) }
     }
 
     suspend fun setVideoRememberMuted(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_REMEMBER_MUTED] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_MUTED.writeTo(it, enabled) }
     }
 
     suspend fun setVideoMuted(muted: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_MUTED] = muted }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_MUTED.writeTo(it, muted) }
     }
 
     suspend fun setVideoGestureIndicatorSide(side: GestureIndicatorSide) {
-        dataStore.edit { it[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = side.name }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_GESTURE_INDICATOR_SIDE.writeTo(it, side) }
     }
 
     suspend fun setTrickplayEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.TRICKPLAY_ENABLED] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setTrickplayOnSeekGesture(enabled: Boolean) {
-        dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.writeTo(it, enabled) }
     }
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setVideoShowPlaybackMetadata(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.writeTo(it, enabled) }
     }
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
-        dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.writeTo(it, size) }
     }
 
     /** Sibling of [com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore.setAudioCacheSizeMb]. */
     suspend fun setVideoCacheSizeMb(sizeMb: Int) {
-        dataStore.edit { it[Keys.VIDEO_CACHE_SIZE_MB] = sizeMb }
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_CACHE_SIZE_MB.writeTo(it, sizeMb) }
     }
 
     suspend fun setShowClockInPlayer(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_CLOCK_IN_PLAYER] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.SHOW_CLOCK_IN_PLAYER.writeTo(it, enabled) }
     }
 
     suspend fun setShowTimeRemaining(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_TIME_REMAINING] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.SHOW_TIME_REMAINING.writeTo(it, enabled) }
     }
 
     suspend fun setTvZoomModePercent(percent: Float) {
-        dataStore.edit { it[Keys.TV_ZOOM_MODE_PERCENT] = percent }
+        dataStore.edit { VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.writeTo(it, percent) }
     }
 
     suspend fun setIncognitoModeEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.INCOGNITO_MODE_ENABLED] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.writeTo(it, enabled) }
     }
 
     /**
@@ -418,30 +327,25 @@ class VideoPlayerStore constructor(
      * affected — the gate rides the ViewModel's `seekTo(userInitiated)`.
      */
     suspend fun setSkipSegmentsOnSeek(enabled: Boolean) {
-        dataStore.edit { it[Keys.SKIP_SEGMENTS_ON_SEEK] = enabled }
+        dataStore.edit { VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.writeTo(it, enabled) }
     }
 
     suspend fun setSegmentBehaviors(behaviors: Map<MediaSegmentType, SegmentBehavior>) {
-        dataStore.edit { prefs ->
-            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.json.encodeToString(
-                behaviors.mapKeys { it.key.name }.mapValues { it.value.name },
-            )
-        }
+        dataStore.edit { VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.writeTo(it, behaviors) }
     }
 
     /**
      * Updates a single segment type's behaviour, read-modify-writing the stored
      * map (merged over the defaults + legacy fallback) so callers don't have to
-     * reconstruct the whole map. Preserves the 100-entry behaviour of the other
-     * per-item maps is N/A here (segment types are a bounded enum set).
+     * reconstruct the whole map. Segment types are a bounded enum set, so the
+     * hand-written read-modify-write stays (a whole-map encoding cannot express
+     * the merge-then-update step).
      */
     suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
         dataStore.edit { prefs ->
-            val current = readSegmentBehaviors(prefs).toMutableMap()
+            val current = VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.readFrom(prefs).toMutableMap()
             current[type] = behavior
-            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.json.encodeToString(
-                current.mapKeys { it.key.name }.mapValues { it.value.name },
-            )
+            VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.writeTo(prefs, current)
         }
     }
 
@@ -457,105 +361,61 @@ class VideoPlayerStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. Every in-player key owned here descends under
-     * `PreferenceResetCategory.PLAYBACK`, matching the facade's
-     * `resetCategoryKeys`.
+     * [category] — the [VideoPlayerPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. Every in-player key
+     * owned here descends under `PreferenceResetCategory.PLAYBACK`, matching
+     * the facade's `resetCategoryKeys`.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.PLAYBACK -> listOf(
-            Keys.VIDEO_SEEK_DURATION_MS,
-            Keys.VIDEO_CONTROLS_TIMEOUT_MS,
-            Keys.VIDEO_DEFAULT_ORIENTATION,
-            Keys.VIDEO_DEFAULT_ASPECT_RATIO,
-            Keys.VIDEO_GESTURES_ENABLED,
-            Keys.VIDEO_GESTURE_MODE,
-            Keys.VIDEO_PASS_OUT_PROTECTION_HOURS,
-            Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
-            Keys.VIDEO_HOLD_SPEED_ENABLED,
-            Keys.VIDEO_HOLD_SPEED_MULTIPLIER,
-            Keys.VIDEO_DEFAULT_SPEED,
-            Keys.VIDEO_AUTOPLAY_NEXT,
-            Keys.STILL_WATCHING_MODE,
-            Keys.STILL_WATCHING_EPISODE_THRESHOLD,
-            Keys.TRAILER_AUTOPLAY,
-            Keys.CINEMA_MODE_ENABLED,
-            Keys.VIDEO_SWIPE_SEEK_MAX_MS,
-            Keys.VIDEO_REMEMBER_BRIGHTNESS,
-            Keys.VIDEO_BRIGHTNESS_LEVEL,
-            Keys.VIDEO_AUTO_SKIP_INTRO,
-            Keys.VIDEO_AUTO_SKIP_OUTRO,
-            Keys.VIDEO_REMEMBER_MUTED,
-            Keys.VIDEO_MUTED,
-            Keys.VIDEO_GESTURE_INDICATOR_SIDE,
-            Keys.TRICKPLAY_ENABLED,
-            Keys.TRICKPLAY_ON_SEEK_GESTURE,
-            Keys.VIDEO_EPISODE_BROWSER_ENABLED,
-            Keys.VIDEO_SHOW_PLAYBACK_METADATA,
-            Keys.VIDEO_PRELOAD_BUFFER_SIZE,
-            Keys.VIDEO_CACHE_SIZE_MB,
-            Keys.SHOW_CLOCK_IN_PLAYER,
-            Keys.SHOW_TIME_REMAINING,
-            Keys.TV_ZOOM_MODE_PERCENT,
-            Keys.INCOGNITO_MODE_ENABLED,
-            Keys.SEGMENT_BEHAVIORS,
-            Keys.SKIP_INTRO_ENABLED,
-            Keys.SKIP_OUTRO_ENABLED,
-            Keys.AUTO_SKIP_INTRO,
-            Keys.AUTO_SKIP_OUTRO,
-            Keys.SKIP_SEGMENTS_ON_SEEK,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        VideoPlayerPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences] (segment
-     * behaviours re-encoded via the enum-keyed map with defaults).
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with), plus the one hand-written line below — clearing the superseded
+     * legacy gestures boolean.
      */
     suspend fun restore(slice: VideoPlayerSlice) {
         dataStore.edit { prefs ->
-            prefs[Keys.VIDEO_SEEK_DURATION_MS] = slice.videoSeekDurationMs
-            prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = slice.videoControlsTimeoutMs
-            prefs[Keys.VIDEO_DEFAULT_ORIENTATION] = slice.videoDefaultOrientation.name
-            prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = slice.videoDefaultAspectRatio
-            prefs[Keys.VIDEO_GESTURE_MODE] = slice.videoGestureMode.name
+            VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.writeTo(prefs, slice.videoSeekDurationMs)
+            VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.writeTo(prefs, slice.videoControlsTimeoutMs)
+            VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.writeTo(prefs, slice.videoDefaultOrientation)
+            VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.writeTo(prefs, slice.videoDefaultAspectRatio)
+            VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.writeTo(prefs, slice.videoGestureMode)
             // The legacy boolean is superseded by the mode key; clear it so a
-            // restored snapshot cannot disagree with what [readGestureMode]
-            // would fall back to if the mode key were ever lost.
+            // restored snapshot cannot disagree with what the VIDEO_GESTURE_MODE
+            // row's read would fall back to if the mode key were ever lost.
             prefs.remove(Keys.VIDEO_GESTURES_ENABLED)
-            prefs[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = slice.videoPassOutProtectionHours
-            prefs[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = slice.videoSkipBackOnResumeMs
-            prefs[Keys.VIDEO_HOLD_SPEED_ENABLED] = slice.videoHoldSpeedEnabled
-            prefs[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = slice.videoHoldSpeedMultiplier
-            prefs[Keys.VIDEO_DEFAULT_SPEED] = slice.videoDefaultSpeed
-            prefs[Keys.VIDEO_AUTOPLAY_NEXT] = slice.videoAutoplayNext
-            prefs[Keys.STILL_WATCHING_MODE] = slice.stillWatchingMode.name
-            prefs[Keys.STILL_WATCHING_EPISODE_THRESHOLD] = slice.stillWatchingEpisodeThreshold
-            prefs[Keys.TRAILER_AUTOPLAY] = slice.trailerAutoplay
-            prefs[Keys.CINEMA_MODE_ENABLED] = slice.cinemaModeEnabled
-            prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = slice.videoSwipeSeekMaxMs
-            prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS] = slice.videoRememberBrightness
-            prefs[Keys.VIDEO_BRIGHTNESS_LEVEL] = slice.videoBrightnessLevel
-            prefs[Keys.VIDEO_AUTO_SKIP_INTRO] = slice.videoAutoSkipIntro
-            prefs[Keys.VIDEO_AUTO_SKIP_OUTRO] = slice.videoAutoSkipOutro
-            prefs[Keys.VIDEO_REMEMBER_MUTED] = slice.videoRememberMuted
-            prefs[Keys.VIDEO_MUTED] = slice.videoMuted
-            prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = slice.videoGestureIndicatorSide.name
-            prefs[Keys.TRICKPLAY_ENABLED] = slice.trickplayEnabled
-            prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE] = slice.trickplayOnSeekGesture
-            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<Map<MediaSegmentType, SegmentBehavior>>(),
-                slice.segmentBehaviors,
-            )
-            prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = slice.videoEpisodeBrowserEnabled
-            prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = slice.videoShowPlaybackMetadata
-            prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = slice.videoPreloadBufferSize.name
-            prefs[Keys.VIDEO_CACHE_SIZE_MB] = slice.videoCacheSizeMb
-            prefs[Keys.SHOW_CLOCK_IN_PLAYER] = slice.showClockInPlayer
-            prefs[Keys.SHOW_TIME_REMAINING] = slice.showTimeRemaining
-            prefs[Keys.TV_ZOOM_MODE_PERCENT] = slice.tvZoomModePercent
-            prefs[Keys.INCOGNITO_MODE_ENABLED] = slice.incognitoModeEnabled
-            prefs[Keys.SKIP_SEGMENTS_ON_SEEK] = slice.skipSegmentsOnSeek
+            VideoPlayerPreferenceSpecs.VIDEO_PASS_OUT_PROTECTION_HOURS.writeTo(prefs, slice.videoPassOutProtectionHours)
+            VideoPlayerPreferenceSpecs.VIDEO_SKIP_BACK_ON_RESUME_MS.writeTo(prefs, slice.videoSkipBackOnResumeMs)
+            VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_ENABLED.writeTo(prefs, slice.videoHoldSpeedEnabled)
+            VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_MULTIPLIER.writeTo(prefs, slice.videoHoldSpeedMultiplier)
+            VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_SPEED.writeTo(prefs, slice.videoDefaultSpeed)
+            VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_NEXT.writeTo(prefs, slice.videoAutoplayNext)
+            VideoPlayerPreferenceSpecs.STILL_WATCHING_MODE.writeTo(prefs, slice.stillWatchingMode)
+            VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.writeTo(prefs, slice.stillWatchingEpisodeThreshold)
+            VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.writeTo(prefs, slice.trailerAutoplay)
+            VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.writeTo(prefs, slice.cinemaModeEnabled)
+            VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.writeTo(prefs, slice.videoSwipeSeekMaxMs)
+            VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.writeTo(prefs, slice.videoRememberBrightness)
+            VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.writeTo(prefs, slice.videoBrightnessLevel)
+            VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_INTRO.writeTo(prefs, slice.videoAutoSkipIntro)
+            VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_OUTRO.writeTo(prefs, slice.videoAutoSkipOutro)
+            VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_MUTED.writeTo(prefs, slice.videoRememberMuted)
+            VideoPlayerPreferenceSpecs.VIDEO_MUTED.writeTo(prefs, slice.videoMuted)
+            VideoPlayerPreferenceSpecs.VIDEO_GESTURE_INDICATOR_SIDE.writeTo(prefs, slice.videoGestureIndicatorSide)
+            VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.writeTo(prefs, slice.trickplayEnabled)
+            VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.writeTo(prefs, slice.trickplayOnSeekGesture)
+            VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.writeTo(prefs, slice.segmentBehaviors)
+            VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.writeTo(prefs, slice.videoEpisodeBrowserEnabled)
+            VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.writeTo(prefs, slice.videoShowPlaybackMetadata)
+            VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.writeTo(prefs, slice.videoPreloadBufferSize)
+            VideoPlayerPreferenceSpecs.VIDEO_CACHE_SIZE_MB.writeTo(prefs, slice.videoCacheSizeMb)
+            VideoPlayerPreferenceSpecs.SHOW_CLOCK_IN_PLAYER.writeTo(prefs, slice.showClockInPlayer)
+            VideoPlayerPreferenceSpecs.SHOW_TIME_REMAINING.writeTo(prefs, slice.showTimeRemaining)
+            VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.writeTo(prefs, slice.tvZoomModePercent)
+            VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.writeTo(prefs, slice.incognitoModeEnabled)
+            VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.writeTo(prefs, slice.skipSegmentsOnSeek)
         }
     }
 }
@@ -563,7 +423,8 @@ class VideoPlayerStore constructor(
 /**
  * The in-player video preference slice. Plain data class (Compose-free) so the
  * datastore module stays framework-light. Defaults mirror the projection
- * defaults in [VideoPlayerStore.read].
+ * defaults in [VideoPlayerStore.read] (declared on the
+ * [VideoPlayerPreferenceSpecs] rows).
  */
 @Immutable
 @Serializable

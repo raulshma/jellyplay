@@ -26,8 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.annotation.StringRes
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,7 +38,19 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Fingerprint
 import com.composables.icons.tabler.outline.Lock
 import com.composables.icons.tabler.outline.LockAccess
-import com.raulshma.jellyplay.shared.core.ui.R
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.core_retry
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_biometric_prompt
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_device_credential_prompt
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_no_unlock_method
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_subtitle
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_title
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_unlock_screen_lock
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_use_biometric
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_use_pin
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_auth_use_screen_lock
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -51,8 +61,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun AuthChallengeScreen(
-    title: String = stringResource(R.string.core_ui_auth_title),
-    subtitle: String = stringResource(R.string.core_ui_auth_subtitle),
+    title: String = stringResource(Res.string.core_ui_auth_title),
+    subtitle: String = stringResource(Res.string.core_ui_auth_subtitle),
     pinHash: String?,
     biometricEnabled: Boolean = false,
     onPinEntered: (String) -> Unit,
@@ -121,7 +131,7 @@ fun AuthChallengeScreen(
         DeviceCredentialPromptLauncher(
             activity = activity,
             title = title,
-            description = stringResource(R.string.core_ui_auth_device_credential_prompt),
+            description = stringResource(Res.string.core_ui_auth_device_credential_prompt),
             trigger = deviceCredentialTrigger,
             onSuccess = {
                 deviceCredentialActive = false
@@ -156,7 +166,7 @@ fun AuthChallengeScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = stringResource(R.string.core_ui_auth_biometric_prompt),
+                    text = stringResource(Res.string.core_ui_auth_biometric_prompt),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -190,11 +200,11 @@ fun AuthChallengeScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.padding(horizontal = 4.dp))
-                        Text(stringResource(R.string.core_retry))
+                        Text(stringResource(Res.string.core_retry))
                     }
                     if (canUseDeviceCredential) {
                         ScreenLockButton(
-                            labelRes = R.string.core_ui_auth_use_screen_lock,
+                            labelRes = Res.string.core_ui_auth_use_screen_lock,
                             onClick = launchDeviceCredential,
                         )
                     }
@@ -216,7 +226,7 @@ fun AuthChallengeScreen(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.padding(horizontal = 4.dp))
-                            Text(stringResource(R.string.core_ui_auth_use_pin))
+                            Text(stringResource(Res.string.core_ui_auth_use_pin))
                         }
                     }
                 }
@@ -250,13 +260,13 @@ fun AuthChallengeScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.padding(horizontal = 4.dp))
-                        Text(stringResource(R.string.core_ui_auth_use_biometric))
+                        Text(stringResource(Res.string.core_ui_auth_use_biometric))
                     }
                 }
                 if (canUseDeviceCredential) {
                     Spacer(Modifier.height(16.dp))
                     ScreenLockButton(
-                        labelRes = R.string.core_ui_auth_use_screen_lock,
+                        labelRes = Res.string.core_ui_auth_use_screen_lock,
                         onClick = launchDeviceCredential,
                     )
                 }
@@ -298,7 +308,7 @@ fun AuthChallengeScreen(
                 }
                 Spacer(Modifier.height(32.dp))
                 ScreenLockButton(
-                    labelRes = R.string.core_ui_auth_unlock_screen_lock,
+                    labelRes = Res.string.core_ui_auth_unlock_screen_lock,
                     onClick = launchDeviceCredential,
                 )
             } else {
@@ -323,7 +333,7 @@ fun AuthChallengeScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = stringResource(R.string.core_ui_auth_no_unlock_method),
+                    text = stringResource(Res.string.core_ui_auth_no_unlock_method),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -425,7 +435,7 @@ private fun DeviceCredentialPromptLauncher(
  */
 @Composable
 private fun ScreenLockButton(
-    @StringRes labelRes: Int,
+    labelRes: StringResource,
     onClick: () -> Unit,
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.05f)

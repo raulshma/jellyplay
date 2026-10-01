@@ -109,4 +109,6 @@
     <string name="next_up_hidden_restore_all_message">Alle %1$d ausgeblendeten Serien erscheinen wieder in der „Als Nächstes“-Reihe.</string>
     <string name="next_up_hidden_restore_cd">%1$s in „Als Nächstes“ wiederherstellen</string>
     <string name="next_up_hidden_unknown">Unbekannte Serie</string>
+    <string name="a11y_mode_video">Videomodus</string>
+    <string name="a11y_mode_music">Musikmodus</string>
 </resources>

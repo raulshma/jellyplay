@@ -10,10 +10,10 @@ import kotlin.test.assertTrue
 /**
  * Pins the pref-diff choreography the aggregate collector delegates to
  * [PlayerPrefsFanout] (the SettingsProjector's side-effecting half): which
- * seed fires on which diff, that the two engine-config rebuild triggers stay
- * distinct, that the autoplay flip respects the applied mirror, and that the
- * duck registration tracks the focus state — with plain recording fakes, no
- * ViewModel involved.
+ * seed fires on which diff, that the engine-config rebuild trigger stays
+ * guarded, that the autoplay flip respects the applied mirror, and that the
+ * video focus-policy push tracks the two focus prefs — with plain recording
+ * fakes, no ViewModel involved.
  */
 class PlayerPrefsFanoutTest {
 
@@ -22,9 +22,11 @@ class PlayerPrefsFanoutTest {
         var projectResult: Boolean = false,
         var itemId: String? = "item-1",
         var autoplayMirror: Boolean = true,
-        var focusActive: Boolean = false,
     ) {
         val log = mutableListOf<String>()
+
+        /** The (osLeg, duck) pairs the fanout pushed, in order. */
+        val focusPolicies = mutableListOf<Pair<Boolean, Boolean>>()
 
         val fanout = PlayerPrefsFanout(
             projectPrefs = { agg ->
@@ -41,9 +43,7 @@ class PlayerPrefsFanoutTest {
                 autoplayMirror = enabled
             },
             rebuildEngineConfigIfRunning = { log += "rebuildConfig" },
-            isAudioFocusActive = { focusActive },
-            registerAudioFocus = { log += "registerFocus" },
-            unregisterAudioFocus = { log += "unregisterFocus" },
+            applyVideoFocusPolicy = { osLeg, duck -> focusPolicies += osLeg to duck },
         )
     }
 
@@ -63,7 +63,7 @@ class PlayerPrefsFanoutTest {
         assertFalse(fakes.log.contains("rebuildConfig"))
     }
 
-    // ─── Volume-boost / equalizer / focus-pref rebuild trigger (B) ──────────
+    // ─── Volume-boost / equalizer rebuild trigger (B) ───────────────────────
 
     @Test
     fun `volume boost flip rebuilds the engine config once`() {
@@ -84,22 +84,27 @@ class PlayerPrefsFanoutTest {
     }
 
     @Test
-    fun `pause on audio focus loss flip rebuilds the engine config`() {
-        val fakes = RecordingFanout(projectResult = false)
-        val old = VideoPlayerAggregate()
-        // Default is `true` (PlaybackStore) — flip OFF so the diff is real.
-        val new = old.copy(playback = old.playback.copy(pauseOnAudioFocusLoss = false))
-        fakes.fanout.onAggregateChanged(old, new)
-        assertTrue(fakes.log.contains("rebuildConfig"))
-    }
-
-    @Test
     fun `unrelated aggregate emission fires no rebuild`() {
         val fakes = RecordingFanout(projectResult = false)
         val old = VideoPlayerAggregate()
         val new = old.copy(videoPlayer = old.videoPlayer.copy(showClockInPlayer = true))
         fakes.fanout.onAggregateChanged(old, new)
         assertFalse(fakes.log.contains("rebuildConfig"))
+    }
+
+    @Test
+    fun `focus pref flip does not rebuild the engine config`() {
+        // The video focus slice: no engine consumes pauseOnAudioFocusLoss
+        // anymore (ExoPlayer's built-in handleAudioFocus is forced off; the
+        // OS seat belongs to the PlaybackFocus module). The pref rides the
+        // policy push instead.
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        // Default is `true` (PlaybackStore) — flip OFF so the diff is real.
+        val new = old.copy(playback = old.playback.copy(pauseOnAudioFocusLoss = false))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertFalse(fakes.log.contains("rebuildConfig"))
+        assertEquals(listOf(false to false), fakes.focusPolicies)
     }
 
     // ─── Controller seeds fire only on relevant diffs ───────────────────────
@@ -178,30 +183,50 @@ class PlayerPrefsFanoutTest {
         assertFalse(fakes.log.any { it.startsWith("applyAutoplayNext") })
     }
 
-    // ─── Duck-on-transient-focus-loss registration ──────────────────────────
+    // ─── Video focus-policy push ─────────────────────────────────────────────
 
     @Test
-    fun `duck pref on with inactive focus registers audio focus`() {
-        val fakes = RecordingFanout(focusActive = false)
-        val new = VideoPlayerAggregate(playback = VideoPlayerAggregate().playback.copy(duckOnTransientFocusLoss = true))
-        fakes.fanout.onAggregateChanged(VideoPlayerAggregate(), new)
-        assertEquals(listOf("registerFocus"), fakes.log.filter { it.endsWith("Focus") })
+    fun `focus prefs ride every emission into the policy push`() {
+        // The push is unconditional (the module-side setter is idempotent) —
+        // unlike the seeds, it is NOT diff-guarded.
+        val fakes = RecordingFanout()
+        val old = VideoPlayerAggregate()
+        val new = old.copy(videoPlayer = old.videoPlayer.copy(showClockInPlayer = true))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertEquals(listOf(true to false), fakes.focusPolicies, "defaults: pause-on-loss on, duck off")
     }
 
     @Test
-    fun `duck pref off with active focus unregisters audio focus`() {
-        val fakes = RecordingFanout(focusActive = true)
-        val old = VideoPlayerAggregate(playback = VideoPlayerAggregate().playback.copy(duckOnTransientFocusLoss = true))
-        fakes.fanout.onAggregateChanged(old, VideoPlayerAggregate())
-        assertEquals(listOf("unregisterFocus"), fakes.log.filter { it.endsWith("Focus") })
+    fun `duck pref on keeps the OS seat even with pause off`() {
+        // The legacy duck seat was registered on the duck pref ALONE (git
+        // HEAD's `if (duckOnTransientFocusLoss) registerAudioFocus()`), so a
+        // pause-off/duck-on user still ducked through phone calls. The seat
+        // gate is the prefs' OR; the loss DIRECTIVE stays the duck pref
+        // (Duck + regain-restore).
+        val fakes = RecordingFanout()
+        val new = VideoPlayerAggregate(playback = VideoPlayerAggregate().playback.copy(pauseOnAudioFocusLoss = false, duckOnTransientFocusLoss = true))
+        fakes.fanout.onAggregateChanged(VideoPlayerAggregate(), new)
+        assertEquals(listOf(true to true), fakes.focusPolicies)
     }
 
     @Test
-    fun `duck pref on with focus already active does nothing`() {
-        val fakes = RecordingFanout(focusActive = true)
-        val new = VideoPlayerAggregate(playback = VideoPlayerAggregate().playback.copy(duckOnTransientFocusLoss = true))
+    fun `both prefs on pushes the duck policy`() {
+        // The legacy dual-seat race (ExoPlayer-builtin + manual lifecycle)
+        // collapsed onto one module-owned seat with the duck pref winning —
+        // the more specific intent.
+        val fakes = RecordingFanout()
+        val new = VideoPlayerAggregate(playback = VideoPlayerAggregate().playback.copy(pauseOnAudioFocusLoss = true, duckOnTransientFocusLoss = true))
         fakes.fanout.onAggregateChanged(VideoPlayerAggregate(), new)
-        assertFalse(fakes.log.any { it.endsWith("Focus") })
+        assertEquals(listOf(true to true), fakes.focusPolicies)
+    }
+
+    @Test
+    fun `policy push tracks a pref transition across emissions`() {
+        val fakes = RecordingFanout()
+        val duckOn = VideoPlayerAggregate(playback = VideoPlayerAggregate().playback.copy(duckOnTransientFocusLoss = true))
+        fakes.fanout.onAggregateChanged(VideoPlayerAggregate(), duckOn)
+        fakes.fanout.onAggregateChanged(duckOn, VideoPlayerAggregate())
+        assertEquals(listOf(true to true, true to false), fakes.focusPolicies)
     }
 
     // ─── Choreography order ─────────────────────────────────────────────────

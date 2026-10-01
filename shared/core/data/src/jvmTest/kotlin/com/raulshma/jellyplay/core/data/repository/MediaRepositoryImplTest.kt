@@ -101,6 +101,7 @@ class MediaRepositoryImplTest {
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
             apiClient,
+            apiClient,
             // The home cache-maintenance port (inert here — this suite pins
             // the detail-cache / staleness choreography).
             mockk(relaxed = true),

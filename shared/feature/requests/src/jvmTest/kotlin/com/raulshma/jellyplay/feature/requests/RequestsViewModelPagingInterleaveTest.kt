@@ -6,10 +6,9 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGat
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
-import com.raulshma.jellyplay.core.model.seerr.SeerrPageInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import io.mockk.Runs
@@ -84,9 +83,10 @@ class RequestsViewModelPagingInterleaveTest {
             // Item ids encode the page (skip / pageSize + 1) so each landing
             // payload is identifiable.
             Result.success(
-                SeerrRequestListResponse(
-                    pageInfo = SeerrPageInfo(pages = 3, results = 1),
-                    results = listOf(item(skip / 10 + 1)),
+                SeerrRequestPage(
+                    totalResults = 1,
+                    totalPages = 3,
+                    items = listOf(item(skip / 10 + 1)),
                 ),
             )
         }

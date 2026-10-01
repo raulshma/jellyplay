@@ -111,4 +111,6 @@
     <string name="next_up_hidden_restore_all_message">All %1$d hidden series will reappear in the Next Up row.</string>
     <string name="next_up_hidden_restore_cd">Restore %1$s to Next Up</string>
     <string name="next_up_hidden_unknown">Unknown series</string>
+    <string name="a11y_mode_video">Video mode</string>
+    <string name="a11y_mode_music">Music mode</string>
 </resources>

@@ -168,7 +168,11 @@ private fun LiveTvTabBar(
                 text = {
                     BadgedBox(
                         badge = {
-                            if (count > 0) Badge { Text("$count") }
+                            if (count > 0) {
+                                // Recordings is presence-only (see [LiveTvBadges]):
+                                // a Badge with no text renders the plain dot.
+                                Badge { if (tab.showsCount) Text("$count") }
+                            }
                         },
                     ) {
                         Text(
@@ -199,4 +203,10 @@ private enum class LiveTvTab(val titleRes: StringResource) {
         SERIES -> b.series
         else -> 0
     }
+
+    /**
+     * Whether [badgeCount] is a real count (rendered as a pill) — the
+     * Recordings fetch is presence-capped, so its badge is the plain dot.
+     */
+    val showsCount: Boolean get() = this != RECORDINGS
 }

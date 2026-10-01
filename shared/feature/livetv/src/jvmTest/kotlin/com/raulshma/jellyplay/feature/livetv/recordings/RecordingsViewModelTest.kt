@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.livetv.recordings
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -71,7 +72,7 @@ class RecordingsViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.error?.contains("boom") == true)
+        assertEquals("boom", (viewModel.uiState.value.error as UiMessage.Raw).text)
     }
 
     // ── Delete confirmation flow ─────────────────────────────────────────────
@@ -128,7 +129,7 @@ class RecordingsViewModelTest {
         viewModel.deleteRecording()
         advanceUntilIdle()
 
-        assertEquals("locked", viewModel.uiState.value.error)
+        assertEquals("locked", (viewModel.uiState.value.error as UiMessage.Raw).text)
         assertFalse(viewModel.uiState.value.isDeleting)
         assertEquals(rec, viewModel.deleteConfirmation.item)
     }

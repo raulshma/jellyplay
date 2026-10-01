@@ -13,7 +13,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.network.library.filterByParentalRating
+import com.raulshma.jellyplay.core.model.parentalRatingAge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
@@ -53,7 +53,16 @@ class DreamImageProvider(
 
         result.getOrNull()?.items.orEmpty()
             .filter { it.id.isNotBlank() }
-            .filterByParentalRating(maxParentalRating)
+            // The dream's local cap (canonical rating age; null = no cap): the
+            // same rule core:network's internal `filterByParentalRating` wire
+            // helper applies — unrated/unknown-rating items pass (`!= false`
+            // keeps them), resolved through the public core:model age table.
+            .filter { item ->
+                maxParentalRating == null ||
+                    item.officialRating?.let { rating ->
+                        parentalRatingAge(rating)?.let { age -> age <= maxParentalRating }
+                    } != false
+            }
             .mapNotNull { item ->
                 val category = when (item.mediaType) {
                     MediaType.MOVIE -> DreamImageCategory.MOVIES

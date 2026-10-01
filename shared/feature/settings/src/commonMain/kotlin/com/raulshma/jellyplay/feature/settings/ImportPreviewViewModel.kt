@@ -5,42 +5,28 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.datastore.BackupParser
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
-import com.raulshma.jellyplay.core.datastore.audio.AudioStore
-import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
-import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
-import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
-import com.raulshma.jellyplay.core.datastore.library.LibraryStore
-import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
-import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
-import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
-import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
-import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
-import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
-import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
-import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.security.hasSecuritySensitive
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
 import com.raulshma.jellyplay.core.datastore.settings.buildPreferenceSliceSnapshotFromBackup
-import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
-import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.StringResource
 
 /**
  * Full-screen import preview. Mirrors `FactoryResetViewModel`'s one-shot
  * snapshot approach but compares **live** vs **incoming backup** (not vs
  * factory). Supports per-category and import-all, plus the synthetic
- * `AppRuntimeState` extras card ("everything" per user request).
+ * extras card ("everything" per user request).
+ *
+ * The live diff snapshot rides the SAME seam the factory-reset review uses —
+ * [PreferenceSnapshotReader.snapshotOnce] (the [PreferenceStores] bundle's
+ * 18 domain slices + runtime + PIN lockout, enumerated once inside
+ * core:datastore) — instead of hand-enumerating the stores here, so a new
+ * preference slice extends the reader, not this constructor (the
+ * FactoryResetViewModel seam twin).
  *
  * The backup file is loaded from the `uri` passed via navigation. Only the v2
  * per-slice shape (and forward-compatible future versions) import; the parser
@@ -56,26 +42,7 @@ import org.jetbrains.compose.resources.StringResource
 class ImportPreviewViewModel(
     private val settingsBackupIo: SettingsBackupIo,
     private val userPreferencesStore: UserPreferencesStore,
-    private val playbackStore: PlaybackStore,
-    private val appearanceStore: AppearanceStore,
-    private val videoPlayerStore: VideoPlayerStore,
-    private val downloadsStore: DownloadsStore,
-    private val engineStore: PlayerEngineStore,
-    private val homeDiscoveryStore: HomeDiscoveryStore,
-    private val audioStore: AudioStore,
-    private val audioEffectsStore: AudioEffectsStore,
-    private val audioCacheStore: AudioCacheStore,
-    private val libraryStore: LibraryStore,
-    private val navigationStore: NavigationStore,
-    private val networkOfflineStore: NetworkOfflineStore,
-    private val notificationStore: NotificationStore,
-    private val screensaverStore: ScreensaverStore,
-    private val securityStore: SecurityStore,
-    private val subtitleLanguageStore: SubtitleLanguageStore,
-    private val syncPlayCastStore: SyncPlayCastStore,
-    private val experimentalStore: ExperimentalStore,
-    private val appRuntimeStateStore: AppRuntimeStateStore,
-    private val pinRateLimiter: PinRateLimiter,
+    private val snapshotReader: PreferenceSnapshotReader,
     private val diffLabelResolver: suspend (List<StringResource>) -> (StringResource) -> String = ::resolveDiffLabels,
 ) : JellyPlayViewModel() {
 
@@ -142,8 +109,7 @@ class ImportPreviewViewModel(
         launch {
             try {
                 labels = diffLabelResolver(PreferenceCategoryViews.flatMap { it.labelResources })
-                currentPrefs = buildCurrentSnapshot()
-                currentExtras = appRuntimeStateStore.state.first()
+                refreshCurrentSnapshot()
             } catch (e: Exception) {
                 error = UserErrorMessages.resolve(e, "Failed to load current settings")
                 isLoading = false
@@ -165,10 +131,9 @@ class ImportPreviewViewModel(
                 isLoading = true
                 error = null
                 // Ensure current snapshot is ready (init may still be running).
-                // `buildCurrentSnapshot` is idempotent — re-reading the stores is cheap.
+                // The snapshot read is idempotent — re-reading the stores is cheap.
                 labels = diffLabelResolver(PreferenceCategoryViews.flatMap { it.labelResources })
-                currentPrefs = buildCurrentSnapshot()
-                currentExtras = appRuntimeStateStore.state.first()
+                refreshCurrentSnapshot()
                 loadIncoming(uriString)
             } catch (e: Exception) {
                 // Allow retry with same uri after failure.
@@ -181,31 +146,15 @@ class ImportPreviewViewModel(
         }
     }
 
-    private suspend fun buildCurrentSnapshot(): PreferenceDiffSnapshot =
-        diffSnapshot(
-            PreferenceSliceSnapshot(
-                playback = playbackStore.playback.first(),
-                videoPlayer = videoPlayerStore.videoPlayer.first(),
-                engine = engineStore.playerEngine.first(),
-                subtitle = subtitleLanguageStore.subtitle.first(),
-                audio = audioStore.audio.first(),
-                audioEffects = audioEffectsStore.audioEffects.first(),
-                audioCache = audioCacheStore.audioCache.first(),
-                appearance = appearanceStore.appearance.first(),
-                homeDiscovery = homeDiscoveryStore.homeDiscovery.first(),
-                library = libraryStore.library.first(),
-                navigation = navigationStore.navigation.first(),
-                downloads = downloadsStore.downloads.first(),
-                networkOffline = networkOfflineStore.networkOffline.first(),
-                notification = notificationStore.notification.first(),
-                syncPlayCast = syncPlayCastStore.syncPlayCast.first(),
-                screensaver = screensaverStore.screensaver.first(),
-                security = securityStore.security.first(),
-                experimental = experimentalStore.experimental.first(),
-                runtime = appRuntimeStateStore.state.first(),
-                pinLockout = pinRateLimiter.getPinLockoutState(),
-            ),
-        )
+    /**
+     * Re-reads the live slices (and the extras card) off the snapshot seam —
+     * the ONE enumeration of the stores this ViewModel performs.
+     */
+    private suspend fun refreshCurrentSnapshot() {
+        val snapshot = snapshotReader.snapshotOnce()
+        currentPrefs = diffSnapshot(snapshot)
+        currentExtras = snapshot.runtime
+    }
 
     private suspend fun loadIncoming(uriString: String) {
         // The payload read lives INSIDE the SettingsBackupIo actual (the
@@ -255,8 +204,7 @@ class ImportPreviewViewModel(
                 )
                 importEvent = ImportEvent.CategoryImported
                 // Refresh current snapshot so diff updates without leaving screen.
-                currentPrefs = buildCurrentSnapshot()
-                currentExtras = appRuntimeStateStore.state.first()
+                refreshCurrentSnapshot()
                 onDone()
             } catch (e: Exception) {
                 importEvent = ImportEvent.Failed(UserErrorMessages.resolve(e, "Unknown error"))
@@ -271,7 +219,7 @@ class ImportPreviewViewModel(
                 val backup = rawBackup ?: return@launch
                 userPreferencesStore.restoreExtras(backup)
                 importEvent = ImportEvent.ExtrasImported
-                currentExtras = appRuntimeStateStore.state.first()
+                currentExtras = snapshotReader.snapshotOnce().runtime
                 onDone()
             } catch (e: Exception) {
                 importEvent = ImportEvent.Failed(UserErrorMessages.resolve(e, "Unknown error"))

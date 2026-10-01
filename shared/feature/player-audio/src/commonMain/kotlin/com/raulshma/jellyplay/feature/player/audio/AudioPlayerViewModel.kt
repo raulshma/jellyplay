@@ -124,18 +124,6 @@ class AudioPlayerViewModel(
      */
     val currentPositionState: LongState get() = currentPositionHolder.asState()
 
-    /** Mirrors [AudioEffectsState.dialogueBoostStrength] for callers that read it directly. */
-    val dialogueBoostStrength: EffectStrength
-        get() = effects.state.value.dialogueBoostStrength
-
-    /** Mirrors [AudioEffectsState.nightModeStrength] for callers that read it directly. */
-    val nightModeStrength: EffectStrength
-        get() = effects.state.value.nightModeStrength
-
-    /** Mirrors [AudioEffectsState.bassBoostStrength] for callers that read it directly. */
-    val bassBoostStrength: EffectStrength
-        get() = effects.state.value.bassBoostStrength
-
     val hasKaraokeLyrics: Boolean
         get() = _uiState.value.lyrics.hasKaraokeLyrics
 
@@ -200,6 +188,21 @@ class AudioPlayerViewModel(
     private val _currentDownloadItem = stateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
     val currentDownloadItem: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?> = _currentDownloadItem.flow
 
+    /**
+     * The flow-driven half of [AudioPlayerUiState] — ONE projection
+     * ([AudioStateProjection]) over the engine/queue/sleep/prefs flows,
+     * collected into the state with a single write per emission (the former
+     * ~12 hand-synced field-by-field collectors are gone; the field mapping
+     * lives once in [AudioProjectionState.appliedTo]).
+     */
+    private val projection = AudioStateProjection(
+        engine = engine,
+        queueManager = queueManager,
+        sleepCountdown = sleepCountdown,
+        audioStore = audioStore,
+        scope = scope,
+    )
+
     init {
         launch {
             queueManager.currentPlayingItemId.collect { itemId ->
@@ -221,66 +224,11 @@ class AudioPlayerViewModel(
         }
 
         launch {
-            engine.title.collect { value ->
-                _uiState.update { it.copy(title = value) }
-            }
-        }
-        launch {
-            engine.playbackError.collect { value ->
-                _uiState.update { it.copy(playbackError = value) }
-            }
-        }
-        launch {
-            engine.isLoadingItem.collect { value ->
-                _uiState.update { it.copy(isLoading = value) }
-            }
-        }
-        // Group the track-metadata fields that change together on every track
-        // transition into a single combine so a transition produces one
-        // 95-field uiState copy (rather than 5 separate copies + update
-        // attempts). StateFlow conflation means downstream sees the final
-        // state either way; this just removes the per-field allocation churn.
-        launch {
-            combine(
-                engine.artist,
-                engine.artistId,
-                engine.album,
-                engine.albumArtUrl,
-            ) { artist, artistId, album, albumArtUrl ->
-                _uiState.update {
-                    it.copy(
-                        artist = artist,
-                        artistId = artistId,
-                        album = album,
-                        albumArtUrl = albumArtUrl,
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                engine.isPlaying,
-                engine.duration,
-                engine.speed,
-            ) { playing, dur, spd ->
-                _uiState.update { it.copy(isPlaying = playing, duration = dur, speed = spd) }
-            }.collect {}
+            projection.state.collect { p -> _uiState.update(p::appliedTo) }
         }
         // Position is high-frequency; keep it in its own state holder (not in uiState).
         launch {
             engine.currentPosition.collect { currentPosition = it }
-        }
-        launch {
-            combine(
-                queueManager.shuffleMode,
-                queueManager.repeatMode,
-                queueManager.queue,
-                queueManager.currentIndex,
-            ) { shuf, rep, q, idx ->
-                _uiState.update {
-                    it.copy(queue = QueueState(queue = q, currentIndex = idx, shuffleMode = shuf, repeatMode = rep))
-                }
-            }.collect {}
         }
         launch {
             queueManager.currentPlayingItemId.collect { itemId ->
@@ -300,52 +248,6 @@ class AudioPlayerViewModel(
                 } else {
                     _uiState.update { it.copy(isFavorite = false) }
                 }
-            }
-        }
-        launch {
-            combine(
-                engine.lyrics,
-                engine.currentLyricIndex,
-                engine.lyricsSource,
-                engine.isFetchingLyrics,
-            ) { ly, idx, src, fetching ->
-                _uiState.update {
-                    it.copy(
-                        lyrics = it.lyrics.copy(
-                            lyrics = ly,
-                            currentLyricIndex = idx,
-                            lyricsSource = src,
-                            isFetchingLyrics = fetching,
-                        ),
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            engine.lyricsOffsetMs.collect { value ->
-                _uiState.update { it.copy(lyrics = it.lyrics.copy(lyricsOffsetMs = value)) }
-            }
-        }
-        // The effects-slice mirror collectors died with the uiState effects
-        // field — [AudioEffectsController] mirrors the manager flows into its
-        // own state slice now (see its init). Only the crossfade field (a
-        // uiState resident, not an effects-slice field) keeps its collector.
-        launch {
-            engine.crossfadeDurationMs.collect { cross ->
-                _uiState.update { it.copy(crossfadeDurationMs = cross) }
-            }
-        }
-        launch {
-            combine(
-                sleepCountdown.isSleepTimerActive,
-                sleepCountdown.isEndOfEpisodeMode,
-            ) { active, endOfEpisode ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(active = active, endOfEpisode = endOfEpisode)) }
-            }.collect {}
-        }
-        launch {
-            audioStore.audio.map { it.sleepTimerDurationMs }.collect { durationMs ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(lastUsedDurationMs = durationMs)) }
             }
         }
     }

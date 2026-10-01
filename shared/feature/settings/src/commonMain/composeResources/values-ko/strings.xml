@@ -2033,4 +2033,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">미디어 재생이 끝날 때 실행할 명령</string>
     <string name="ss_hooks_idle_cmd_subtitle">앱이 유휴 상태가 될 때 실행할 명령</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">앱이 유휴 상태를 벗어날 때 실행할 명령</string>
+    <string name="core_ui_whatsnew_category_new">신규</string>
+    <string name="core_ui_whatsnew_category_improvement">개선</string>
+    <string name="core_ui_whatsnew_category_fix">수정</string>
+    <string name="core_ui_whatsnew_take_me_there">바로 이동</string>
 </resources>

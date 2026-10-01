@@ -92,16 +92,39 @@ class SyncPlayViewModelTest {
         syncPlayCastStore = syncPlayCastStore,
     )
 
-    /** Joins `groupId` end-to-end (manager success + group info) so the event-listener path is live. */
+    /**
+     * Stubs `groupId` end-to-end (manager success + group info) so the
+     * event-listener path is live. The session's activeGroupId flips INSIDE
+     * the joinGroup answer — the real manager sets it as part of the join, so
+     * a VM constructed before the join sees the not-in-group truth (the
+     * init-seed + auto-accept guard read it).
+     */
     private fun joinActive(
         groupId: String = "g1",
         groupName: String = "Party",
         isPlaying: Boolean = false,
     ) {
-        every { syncPlaySession.activeGroupId } returns groupId
-        coEvery { syncPlaySession.joinGroup(groupId) } returns Result.success(Unit)
+        coEvery { syncPlaySession.joinGroup(groupId) } answers {
+            every { syncPlaySession.activeGroupId } returns groupId
+            Result.success(Unit)
+        }
         coEvery { mediaRepository.getSyncPlayInfo(groupId) } returns Result.success(
             SyncPlayGroupInfo(groupId = groupId, groupName = groupName, isPlaying = isPlaying),
+        )
+    }
+
+    /**
+     * Pre-seeds the session as ALREADY in `groupId` (the create flow's shape:
+     * the deepened repository call joined server-side without the VM ever
+     * calling session.joinGroup — and the re-open screen test's shape).
+     */
+    private fun seedActiveGroup(
+        groupId: String,
+        groupName: String = "Party",
+    ) {
+        every { syncPlaySession.activeGroupId } returns groupId
+        coEvery { mediaRepository.getSyncPlayInfo(groupId) } returns Result.success(
+            SyncPlayGroupInfo(groupId = groupId, groupName = groupName),
         )
     }
 
@@ -182,6 +205,26 @@ class SyncPlayViewModelTest {
         assertTrue(viewModel.uiState.value.isInGroup)
         assertEquals("g1", viewModel.uiState.value.currentGroup?.groupId)
         coVerify(exactly = 1) { syncPlaySession.joinGroup("g1") }
+    }
+
+    @Test
+    fun reopen_while_already_in_a_group_shows_in_group_and_never_auto_joins() = runTest(mainDispatcher) {
+        // The session is live (joined elsewhere — the player bridge or a
+        // previous screen); the screen re-opens on top of it.
+        seedActiveGroup("g1", groupName = "Party")
+        castPrefs.value = SyncPlayCastSlice(syncPlayAutoAcceptInvites = true)
+        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group("g1"), group("g2")))
+
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        // The seeded truth wins: in-group UI with the live group loaded, and
+        // the auto-accept machinery (whose stale-mirror guard used to read
+        // always-false here) never fires a second join.
+        assertTrue(viewModel.uiState.value.isInGroup)
+        assertEquals("g1", viewModel.uiState.value.currentGroup?.groupId)
+        assertEquals("Party", viewModel.uiState.value.currentGroup?.groupName)
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
     }
 
     @Test
@@ -348,7 +391,7 @@ class SyncPlayViewModelTest {
 
     @Test
     fun createGroup_success_applies_membership_state_on_the_deepened_call() = runTest(mainDispatcher) {
-        joinActive("g9", groupName = "Party")
+        seedActiveGroup("g9", groupName = "Party")
         coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
             Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
         val viewModel = newViewModel()
@@ -367,7 +410,7 @@ class SyncPlayViewModelTest {
 
     @Test
     fun createGroup_success_needs_no_artificial_wait_before_the_state_lands() = runTest(mainDispatcher) {
-        joinActive("g9", groupName = "Party")
+        seedActiveGroup("g9", groupName = "Party")
         coEvery { mediaRepository.createSyncPlayGroup("Party") } returns
             Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
         val viewModel = newViewModel()
@@ -573,7 +616,7 @@ class SyncPlayViewModelTest {
     // ── misc state ────────────────────────────────────────────────────────
 
     @Test
-    fun refreshGroups_updates_list_and_failure_is_silent() = runTest(mainDispatcher) {
+    fun refreshGroups_updates_list_and_surfaces_failure_as_error() = runTest(mainDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -585,9 +628,10 @@ class SyncPlayViewModelTest {
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.failure(RuntimeException("offline"))
         viewModel.refreshGroups()
         advanceUntilIdle()
-        // Silent by design (background poll): list kept, no error surfaced.
+        // The poll's failure lands on the tab's error field (the loadGroups
+        // fold); the stale list is kept.
         assertEquals(listOf("g1"), viewModel.uiState.value.groups.map { it.groupId })
-        assertNull(viewModel.uiState.value.error)
+        assertEquals("offline", (viewModel.uiState.value.error as UiMessage.Raw).text)
     }
 
     @Test

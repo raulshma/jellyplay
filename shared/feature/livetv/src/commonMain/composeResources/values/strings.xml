@@ -68,4 +68,24 @@
     <string name="livetv_will_be_recorded">"%1$s" will be recorded.</string>
     <string name="livetv_channel">Channel</string>
     <string name="livetv_live">LIVE</string>
+
+    <!-- Tab error fallbacks (the UiMessage folds' Resource arms) -->
+    <string name="livetv_error_load_channels">Failed to load channels</string>
+    <string name="livetv_error_load_channel">Failed to load channel</string>
+    <string name="livetv_error_load_programs">Failed to load programs</string>
+    <string name="livetv_error_load_guide">Failed to load program guide</string>
+    <string name="livetv_error_load_recordings">Failed to load recordings</string>
+    <string name="livetv_error_delete_recording">Failed to delete recording</string>
+    <string name="livetv_error_load_schedule">Failed to load schedule</string>
+    <string name="livetv_error_load_series">Failed to load series</string>
+    <string name="livetv_error_record">Failed to create recording</string>
+    <string name="livetv_error_cancel_recording">Failed to cancel recording</string>
+
+    <!-- Programs tab row titles (jellyfin-web getProgramSections) -->
+    <string name="livetv_programs_on_now">On Now</string>
+    <string name="livetv_programs_shows">Shows</string>
+    <string name="livetv_programs_movies">Movies</string>
+    <string name="livetv_programs_sports">Sports</string>
+    <string name="livetv_programs_kids">Kids</string>
+    <string name="livetv_programs_news">News</string>
 </resources>

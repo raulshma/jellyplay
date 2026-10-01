@@ -50,6 +50,7 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.model.currentPlatform
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationColor
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationStyle
@@ -75,11 +76,19 @@ import kotlin.math.roundToInt
  * touches text selection needs), so it keeps keyboard-only input
  * ([readerKeys]) and maps the JS-reported tap events through the same
  * direction-aware logic. Both renderers share the chrome (ReaderChrome.kt)
- * and the sheets (ReaderSheets.kt / ReaderSelection.kt). This file also owns
+ * and the sheets (one file per sheet beside the state file
+ * ReaderSheetState.kt, plus ReaderSelection.kt). This file also owns
  * the reflowable-only support cast: the desktop chrome placement rule
  * ([epubChromeOverlaysContent]), the host binding ([ReflowableHostBinding]),
  * the desktop boot/error chrome, and the annotation paint-spec mapping
  * ([toEpubSpec]).
+ *
+ * Scope note (honest test surface): the compose trees here (overlay and
+ * desktop layouts, bars, veils) are presentation-only shells — the module
+ * pins their DECISIONS (the session/controllers, the chrome placement rule,
+ * the tick rails, the auto-hide timeout selection), not the rendering; no
+ * Compose UI-test lane exists for this file and it is accepted as
+ * presentation-only.
  */
 
 /** The note dialog's target: a fresh selection or one existing annotation. */
@@ -403,9 +412,13 @@ internal fun ReflowableReaderContent(
 
     // Auto-hide the chrome like player controls; suppress while a sheet
     // holds the screen (the holder's fold includes the settings sheet and
-    // the note dialog).
+    // the note dialog). The timeout is the pref knob folded through the
+    // shared TV doubling (the video player's pref-driven, TV-aware policy —
+    // see ReaderPrefsSnapshot.controlsAutoHideTimeoutMs).
+    val isTv = LocalTvMode.current
     AutoHideControlsEffect(
         state.showControls,
+        prefs.controlsAutoHideTimeoutMs(isTv),
         sheets.open,
         onTimeout = viewModel::toggleControls,
     )

@@ -37,6 +37,8 @@ import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
@@ -85,6 +87,9 @@ import kotlin.test.assertTrue
  * Stores are mockk'd (final DataStore-backed classes) with REAL
  * [MutableStateFlow] + default-slice stubs so the init-block snapshot
  * collectors read real values (relaxed child-mock flows would hang `.first()`).
+ * The live snapshot rides the production seam: a REAL [PreferenceSnapshotReader]
+ * over a [PreferenceStores] bundle of those store mocks — the same enumeration
+ * the factory-reset review runs.
  * Main-dispatcher rule inlined (StandardTestDispatcher + setMain/resetMain —
  * ServerManagementViewModelTest pattern).
  *
@@ -223,31 +228,38 @@ class ImportPreviewViewModelTest {
         coEvery { settingsBackupIo.readImportPayload(uri) } returns json
     }
 
-    private fun viewModel(): ImportPreviewViewModel = ImportPreviewViewModel(
-        settingsBackupIo = settingsBackupIo,
-        userPreferencesStore = userPreferencesStore,
-        playbackStore = playbackStore,
-        appearanceStore = appearanceStore,
-        videoPlayerStore = videoPlayerStore,
-        downloadsStore = downloadsStore,
-        engineStore = engineStore,
-        homeDiscoveryStore = homeDiscoveryStore,
-        audioStore = audioStore,
-        audioEffectsStore = audioEffectsStore,
-        audioCacheStore = audioCacheStore,
-        libraryStore = libraryStore,
-        navigationStore = navigationStore,
-        networkOfflineStore = networkOfflineStore,
-        notificationStore = notificationStore,
-        screensaverStore = screensaverStore,
-        securityStore = securityStore,
-        subtitleLanguageStore = subtitleLanguageStore,
-        syncPlayCastStore = syncPlayCastStore,
-        experimentalStore = experimentalStore,
-        appRuntimeStateStore = appRuntimeStateStore,
-        pinRateLimiter = pinRateLimiter,
-        diffLabelResolver = { _ -> { res -> res.toString() } },
-    )
+    private fun viewModel(): ImportPreviewViewModel {
+        // The production snapshot seam over the mocked store bundle — the
+        // reader enumerates the slices exactly as FactoryResetViewModel's
+        // review does (volumeProfile is never read by snapshotOnce).
+        val stores = PreferenceStores(
+            playback = playbackStore,
+            videoPlayer = videoPlayerStore,
+            engine = engineStore,
+            subtitle = subtitleLanguageStore,
+            audio = audioStore,
+            audioEffects = audioEffectsStore,
+            audioCache = audioCacheStore,
+            appearance = appearanceStore,
+            homeDiscovery = homeDiscoveryStore,
+            library = libraryStore,
+            navigation = navigationStore,
+            downloads = downloadsStore,
+            networkOffline = networkOfflineStore,
+            notification = notificationStore,
+            syncPlayCast = syncPlayCastStore,
+            security = securityStore,
+            experimental = experimentalStore,
+            screensaver = screensaverStore,
+            volumeProfile = mockk(relaxed = true),
+        )
+        return ImportPreviewViewModel(
+            settingsBackupIo = settingsBackupIo,
+            userPreferencesStore = userPreferencesStore,
+            snapshotReader = PreferenceSnapshotReader(stores, appRuntimeStateStore, pinRateLimiter),
+            diffLabelResolver = { _ -> { res -> res.toString() } },
+        )
+    }
 
     private suspend fun TestScope.loadedWith(json: String, uri: String = "backup:v2"): ImportPreviewViewModel {
         stubImport(uri, json)

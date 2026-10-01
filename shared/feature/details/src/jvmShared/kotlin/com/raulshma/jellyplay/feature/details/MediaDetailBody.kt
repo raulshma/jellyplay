@@ -541,24 +541,13 @@ private fun VideosSection(
     // data, so compute it once here rather than rebuilding a BorderStroke + gradient
     // per video per recomposition. includeAurora = false keeps the historical
     // no-border look under Aurora (only the Seerr detail cards glow there).
+    // (Family-local decision: the Seerr row renders the shared card borderless.)
     val themeVariant = LocalThemeVariant.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val outlineColor = MaterialTheme.colorScheme.outline
     val videoCardBorder = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
         themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
-    }
-    // Same hoist for the per-card bottom scrim: identical for every video,
-    // so build it once instead of per card per recomposition.
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val videoScrimBrush = remember(surfaceColor) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                surfaceColor.copy(alpha = 0.85f)
-            ),
-            startY = 100f
-        )
     }
     Column {
         FadingItem {
@@ -581,68 +570,17 @@ private fun VideosSection(
             contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) { _, video, focusModifier ->
-                val thumbnailUrl = remember(video.site, video.key) {
-                    youTubeThumbnailUrl(video.site, video.key)
-                }
-
-                val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
-
-                Card(
-                    modifier = focusModifier
-                        .width(240.dp)
-                        .aspectRatio(16f / 9f)
-                        .then(videoCardFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
-                        .clickable {
-                            onVideoClick(video)
-                        },
-                    shape = ShapeCache.smooth8,
-                    border = videoCardBorder,
-                ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            if (thumbnailUrl != null) {
-                                MediaImage(
-                                    url = thumbnailUrl,
-                                    contentDescription = video.name,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Tabler.Outline.PlayerPlay, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(videoScrimBrush)
-                            )
-
-                            Text(
-                                text = video.name ?: "Video",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(8.dp),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            Icon(
-                                Tabler.Outline.PlayerPlay,
-                                contentDescription = null,
-                                modifier = Modifier.align(Alignment.Center).size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
+            // The card body is the shared [YouTubeVideoCard] (commonMain
+            // DetailSectionVocabulary) — collapsed with the Seerr family's
+            // identical copy; only the row scaffolding + this border decision
+            // stay family-local.
+            YouTubeVideoCard(
+                video = video,
+                fallbackLabel = "Video",
+                onClick = { onVideoClick(video) },
+                modifier = focusModifier,
+                border = videoCardBorder,
+            )
         }
     }
 }

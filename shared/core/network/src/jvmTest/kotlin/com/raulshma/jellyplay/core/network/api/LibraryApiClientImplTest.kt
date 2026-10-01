@@ -108,18 +108,18 @@ class LibraryApiClientImplTest {
     }
 
     @Test
-    fun `setFavorite seeds the favorite cache toggleFavorite reads`() = runTest {
+    fun `SetFavorite seeds the favorite cache ToggleFavorite reads`() = runTest {
         // Both favorite paths must share one cache key: seeding via
-        // setFavorite(true) then toggling with currentIsFavorite = null has
+        // SetFavorite(true) then toggling with currentIsFavorite = null has
         // to read the seeded flag (unmark → false) instead of re-fetching —
         // a cache miss would fetch userData.isFavorite = false and mark → true.
         val api = RecordingApiClient()
         engine.updateApi(api)
 
-        client.setFavorite(favoriteItemId, true).getOrThrow()
-        val toggled = client.toggleFavorite(favoriteItemId, null).getOrThrow()
+        client.writeUserData(UserDataWrite.SetFavorite(favoriteItemId, isFavorite = true)).getOrThrow()
+        val toggled = client.writeUserData(UserDataWrite.ToggleFavorite(favoriteItemId)).getOrThrow()
 
-        assertFalse(toggled)
+        assertFalse((toggled as UserDataWriteOutcome.FavoriteNow).isFavorite)
         // Seed-POST then the toggle's unmark-DELETE — and crucially no GET:
         // a cache miss would first re-fetch the item (GET) and then mark
         // (POST) with toggled = true.

@@ -16,7 +16,6 @@ import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
-import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_discover_reroll_failed
@@ -71,7 +70,6 @@ internal class HomeViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
-    private val seriesDownloads: SeriesEpisodeDownloads,
     private val downloadIntake: DownloadIntake,
     private val quickDownloadActions: QuickDownloadActions,
     private val offlineRepository: OfflineRepository,
@@ -111,6 +109,15 @@ internal class HomeViewModel(
      */
     private val homeRefresherFactory: HomeRefresherFactory,
     private val syncStatusStateHolderFactory: HomeSyncStatusFactory,
+    /**
+     * The two series sheets' construction seam (see [HomeSheetsFactory]): the
+     * holders' pure-DI collaborators land there instead of widening this
+     * constructor — [SeriesEpisodeDownloads] was the first param this move
+     * retired; the shared beans ([episodeCatalogue], [downloadIntake],
+     * [userMessageBus], [offlineRepository]) stay because this VM's body
+     * consumes them too.
+     */
+    private val homeSheetsFactory: HomeSheetsFactory,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(HomeUiState())
@@ -306,8 +313,12 @@ internal class HomeViewModel(
      * documented and pinned there). [state][SeriesDeleteStateHolder.state] is
      * folded into [HomeUiState.seriesDelete] by the init collector; [onEvent]
      * routes the sheet's events straight to the holder's methods.
+     *
+     * Both series-sheet holders are constructed through [homeSheetsFactory]
+     * (the [HomeRefresherFactory] pattern — see its KDoc).
      */
-    private val seriesDeleteStateHolder = SeriesDeleteStateHolder(scope, offlineRepository)
+    private val sheets = homeSheetsFactory.create(scope)
+    private val seriesDeleteStateHolder get() = sheets.seriesDelete
 
     /**
      * The series download sheet opened from a series card's quick-action
@@ -317,13 +328,7 @@ internal class HomeViewModel(
      * [HomeUiState.seriesDownload] by the init collector; [onEvent] routes
      * the sheet's callbacks straight to the holder's methods.
      */
-    private val seriesDownloadStateHolder = SeriesDownloadStateHolder(
-        scope = scope,
-        episodeCatalogue = episodeCatalogue,
-        seriesDownloads = seriesDownloads,
-        downloadIntake = downloadIntake,
-        userMessageBus = userMessageBus,
-    )
+    private val seriesDownloadStateHolder get() = sheets.seriesDownload
 
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).

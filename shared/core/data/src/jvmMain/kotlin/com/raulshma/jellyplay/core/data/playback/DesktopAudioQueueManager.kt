@@ -13,7 +13,8 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
-import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
+import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import java.awt.EventQueue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -556,7 +557,9 @@ class DesktopAudioQueueManager(
                         title = item.name,
                         startPositionMs = startPositionMs,
                         serverDurationMs = item.durationMs,
-                        normalizationGain = item.normalizationGain,
+                        engineSpecific = PlaybackRequestSpecific(
+                            normalizationGain = item.normalizationGain,
+                        ),
                     ),
                 )
                 schedulePrefetchForNext()
@@ -708,7 +711,9 @@ class DesktopAudioQueueManager(
                         title = clickedItem.name,
                         startPositionMs = startPositionMs,
                         serverDurationMs = clickedItem.durationMs,
-                        normalizationGain = clickedItem.normalizationGain,
+                        engineSpecific = PlaybackRequestSpecific(
+                            normalizationGain = clickedItem.normalizationGain,
+                        ),
                     ),
                 )
             }

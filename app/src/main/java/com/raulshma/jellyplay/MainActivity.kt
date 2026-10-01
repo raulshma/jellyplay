@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
@@ -17,14 +16,11 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
@@ -34,7 +30,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
-import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.cast.withCastDiskReadsPermitted
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
@@ -43,7 +38,6 @@ import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
-import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
@@ -54,9 +48,9 @@ import com.raulshma.jellyplay.deeplink.IncomingIntentRequest
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
+import com.raulshma.jellyplay.shell.LockGateHost
 import com.raulshma.jellyplay.shell.PinGateController
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
@@ -78,8 +72,8 @@ class MainActivity : FragmentActivity() {
     // keeps its constructor injection only for the start-on-scope side
     // effects). Every ShellInfra member is a Lazy PROVIDER (mirroring
     // audioPlaybackManagerLazy below) so MainActivity.onCreate constructs
-    // none of them — JellyPlayApp resolves the shared UserMessageBus from
-    // Koin directly (its remember beside the CompositionLocal provider) and
+    // none of them — JellyPlayApp resolves the shared UserMessageBus through
+    // the bundle at its first composition and
     // the network status flow / remote-control pair inside their
     // composition branches and post-frame collection effects, keeping
     // NetworkMonitor's
@@ -155,11 +149,12 @@ class MainActivity : FragmentActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         // Bundled once here (before the splash gate below reads the session
         // coordinator's restore flag) so the shell host's cross-cutting
-        // services — the five infrastructure providers plus the three shell
-        // coordinators — travel to JellyPlayApp → MainContent as ONE value
-        // with ONE Koin resolution site. All eight are lazy providers —
-        // nothing here resolves any Koin single; each `.value` fires at the
-        // consumer's first real use (see ShellInfra's KDoc).
+        // services — the infrastructure providers plus the three shell
+        // coordinators and the shared message bus — travel to JellyPlayApp →
+        // MainContent as ONE value with ONE Koin resolution site. All nine
+        // lazy providers — nothing here resolves any Koin single; each
+        // `.value` fires at the consumer's first real use (see ShellInfra's
+        // KDoc).
         val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
             networkStatusLazy = lazy { networkMonitor.networkStatus },
             audioPlaybackManagerLazy = audioPlaybackManagerLazy,
@@ -169,6 +164,7 @@ class MainActivity : FragmentActivity() {
             updateCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             syncPlayOpenCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             whatsNewCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            userMessageBusLazy = lazy { KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.core.ui.message.UserMessageBus>() },
             // Remote navigation ladder: synthesized D-pad/select/menu
             // key events go through the activity's own dispatch (down + up),
             // so Compose's existing key/focus handling interprets them —
@@ -282,9 +278,6 @@ class MainActivity : FragmentActivity() {
             // collected here so the gate below recomposes exactly like the
             // former compose-local isPinUnlocked state did.
             val pinUnlocked by appLockState.unlocked.collectAsStateWithLifecycle()
-                var pinError by rememberSaveable { mutableStateOf<String?>(null) }
-                var pinVerifying by rememberSaveable { mutableStateOf(false) }
-            val context = androidx.compose.ui.platform.LocalContext.current
 
             // Hidden Cast media-route button, composed only once the onCreate
             // cast-init coroutine (kicked off just before setContent)
@@ -356,74 +349,21 @@ class MainActivity : FragmentActivity() {
                 isTv = isTv(),
             ) {
                 if (showLockScreen) {
-                    // Surface the rate-limit lockout to the user when present.
-                    val context = LocalContext.current
-                    val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
-                        pinRateLimiter.getPinLockoutState()
-                    }
-                    // Live clock for the lockout display. The former
-                    // `remember { System.currentTimeMillis() }` computed "now"
-                    // ONCE per composition, so a lockout that expired while
-                    // the gate stayed up kept `enabled` false (keypad dead)
-                    // and the countdown message stale until the pref itself
-                    // changed. The tick is 1s-granular, restarts whenever the
-                    // limiter state changes (the remember key above), and
-                    // self-terminates the moment no lockout holds — an
-                    // unlocked gate never ticks.
-                    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
-                    LaunchedEffect(lockoutState) {
-                        while (PinGateController.lockoutRemainingMs(lockoutState, nowMs) > 0L) {
-                            delay(1_000L)
-                            nowMs = System.currentTimeMillis()
-                        }
-                    }
-                    // Pure display decision (pinned beside PinGateController's
-                    // other folds): the composition only supplies the live
-                    // clock; the keypad revives when this hits zero.
-                    val lockoutRemainingMs = PinGateController.lockoutRemainingMs(lockoutState, nowMs)
-                    val lockoutActive = lockoutRemainingMs > 0L
-                    AuthChallengeScreen(
-                        title = if (preferences.biometricLockEnabled && preferences.pinHash == null) stringResource(R.string.auth_title_biometric) else stringResource(R.string.auth_title_pin),
-                        subtitle = stringResource(R.string.auth_subtitle),
+                    // The gate's composition — lockout clock loop, error
+                    // fork, title fork, verify spinner — lives in its own
+                    // host composable beside PinGateController
+                    // (shell/LockGateHost.kt), the overlay-host pattern; this
+                    // fork keeps only the theme + gate decision. The lock
+                    // decisions themselves were already extracted
+                    // (PinGateController + its pure folds, pinned by their
+                    // suite).
+                    LockGateHost(
                         pinHash = preferences.pinHash,
-                        biometricEnabled = preferences.biometricLockEnabled,
-                        enabled = !lockoutActive && !pinVerifying,
-                        verifying = pinVerifying,
-                        onPinEntered = { pin ->
-                            // Both paths fold through the controller — it owns
-                            // the click-time lockout re-check and the
-                            // failure/success accounting.
-                            if (pin.isEmpty()) {
-                                // The empty-PIN shortcut shows no spinner (the old
-                                // inline path unlocked synchronously);
-                                // lifecycleScope's Main.immediate dispatch runs it
-                                // in this frame.
-                                lifecycleScope.launch {
-                                    pinGateController.submit(pin, onUnlocked = { pinError = null })
-                                }
-                            } else if (preferences.pinHash != null && !pinVerifying) {
-                                pinVerifying = true
-                                lifecycleScope.launch {
-                                    when (val outcome = pinGateController.submit(pin, onUnlocked = { pinError = null })) {
-                                        PinGateController.PinSubmitOutcome.Unlocked -> Unit
-                                        PinGateController.PinSubmitOutcome.Incorrect ->
-                                            pinError = context.getString(R.string.pin_incorrect)
-                                        is PinGateController.PinSubmitOutcome.LockedOut ->
-                                            pinError = PinGateController
-                                                .lockoutMessage(outcome.remainingMs)
-                                                .resolve(context)
-                                    }
-                                    pinVerifying = false
-                                }
-                            }
-                        },
-                        onErrorClear = { pinError = null },
-                        errorMessage = if (lockoutActive) {
-                            PinGateController.lockoutMessage(lockoutRemainingMs)
-                                .resolve(context)
-                        } else {
-                            pinError
-                        },
+                        biometricLockEnabled = preferences.biometricLockEnabled,
+                        pinLockoutUntilEpochMs = preferences.pinLockoutUntilEpochMs,
+                        pinRateLimiter = pinRateLimiter,
+                        pinGateController = pinGateController,
+                        submitScope = lifecycleScope,
                     )
                 } else {
                     JellyPlayApp(
@@ -503,17 +443,4 @@ class MainActivity : FragmentActivity() {
     private companion object {
         const val TAG = "MainActivity"
     }
-}
-
-/**
- * String-side twin of [PinGateController.lockoutMessage] — resolves the pure
- * fold's buckets against the app resources (same `pin_lockout_*` strings the
- * former in-activity formatter produced).
- */
-private fun PinGateController.LockoutMessage.resolve(context: Context): String = when (this) {
-    is PinGateController.LockoutMessage.Now -> context.getString(R.string.pin_lockout_now)
-    is PinGateController.LockoutMessage.Seconds -> context.getString(R.string.pin_lockout_seconds, seconds)
-    is PinGateController.LockoutMessage.Minutes -> context.getString(R.string.pin_lockout_minutes, minutes)
-    is PinGateController.LockoutMessage.Hours -> context.getString(R.string.pin_lockout_hours, hours)
-    is PinGateController.LockoutMessage.HoursMinutes -> context.getString(R.string.pin_lockout_hours_minutes, hours, minutes)
 }

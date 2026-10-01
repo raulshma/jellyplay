@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataWrite
+import com.raulshma.jellyplay.core.network.api.UserDataWriteOutcome
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -75,7 +77,9 @@ class PlayedStateSyncImpl(
             if (played) maybeAutoDeleteAfterWatch(itemId)
             return Result.success(Unit)
         }
-        val result = if (played) apiClient.markPlayed(itemId) else apiClient.markUnplayed(itemId)
+        val result = apiClient.writeUserData(
+            if (played) UserDataWrite.MarkPlayed(itemId) else UserDataWrite.MarkUnplayed(itemId),
+        )
         if (result.isSuccess) {
             // Mirror the server-side cascade into the offline store so
             // downloaded items in this hierarchy stay consistent. Best-effort:
@@ -105,7 +109,7 @@ class PlayedStateSyncImpl(
             // the download yet — wait for a confirmed played flip.
             return Result.success(Unit)
         }
-        return result
+        return Result.success(Unit)
     }
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
@@ -116,22 +120,27 @@ class PlayedStateSyncImpl(
             return Result.success(applyFavoriteLocallyAndEnqueue(itemId))
         }
         // Online: the server reads + flips atomically (currentIsFavorite = null
-        // lets it resolve). The returned Boolean is the authoritative new state.
-        val result = apiClient.toggleFavorite(itemId, currentIsFavorite = null)
+        // lets it resolve). The outcome is the authoritative new state.
+        val result = apiClient.writeUserData(UserDataWrite.ToggleFavorite(itemId))
         if (result.isSuccess) {
-            val target = result.getOrNull() ?: return result
+            // ToggleFavorite always answers FavoriteNow on success (the impl's
+            // contract); the fallback arm only survives a contract break and
+            // recovers exactly like the failure branch below.
+            val favoriteNow = result.getOrNull() as? UserDataWriteOutcome.FavoriteNow
+                ?: return Result.success(applyFavoriteLocallyAndEnqueue(itemId))
+            val target = favoriteNow.isFavorite
             // Mirror into the offline store so downloaded items stay consistent;
             // best-effort like the played mirror above.
             runCatchingRethrowingCancellation { offlineRepository.applyFavoriteState(itemId, target) }
             // Same synthetic announcement as the played flip: confirmed write
             // on the user-data-change flow, socket-independent.
             mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+            return Result.success(target)
         } else {
             // Online but the call failed — don't lose the user's intent: apply
             // locally and enqueue for retry, resolving target from local state.
             return Result.success(applyFavoriteLocallyAndEnqueue(itemId))
         }
-        return result
     }
 
     /**

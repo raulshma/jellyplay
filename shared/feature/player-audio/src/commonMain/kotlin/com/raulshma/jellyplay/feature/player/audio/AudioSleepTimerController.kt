@@ -2,17 +2,18 @@ package com.raulshma.jellyplay.feature.player.audio
 
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.SleepTimerArming
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 /**
  * Owns the audio player's sleep-timer workflow — the two start modes (timed
- * countdown and end-of-episode), the store writes for the last-used duration /
- * end-of-episode flag, the expiry callback, and the synchronous
+ * countdown and end-of-episode), the expiry callback, and the synchronous
  * [SleepTimerState] slice updates — extracted from [AudioPlayerViewModel]
  * (four hand-rolled functions, with the explicit-pause rationale comment
- * hand-copied at both start sites).
+ * hand-copied at both start sites). The store writes + countdown dispatch
+ * (the choreography both player hosts hand-copied) moved to core:data's
+ * [SleepTimerArming]; the host-side residue stays here.
  *
  * This is audio's OWN controller, not a reuse of player-video's
  * `SleepTimerController`: player-audio does not depend on player-video (and
@@ -44,16 +45,24 @@ internal class AudioSleepTimerController(
 ) {
 
     /**
+     * The shared core:data arming machine (the [SleepTimerArming] fold of the
+     * store writes + countdown dispatch both player hosts hand-copied); this
+     * controller keeps the slice updates and the explicit-pause callback.
+     * No fade on any audio arm (`fade = null`) — audio has no volume ramp.
+     */
+    private val arming = SleepTimerArming(
+        sleepCountdown = sleepCountdown,
+        audioStore = audioStore,
+        scope = scope,
+        onExpirePause = { engine.pause() },
+    )
+
+    /**
      * Start a countdown for [durationMs]; persists it as the last-used duration
      * so the picker can re-offer it.
      */
     fun startSleepTimer(durationMs: Long) {
-        scope.launch {
-            audioStore.setSleepTimerDurationMs(durationMs)
-            audioStore.setSleepTimerEndOfEpisode(false)
-        }
-        armExpiryPause()
-        sleepCountdown.startSleepTimer(durationMs)
+        arming.armTimed(durationMs, fade = null)
         updateState { it.copy(active = true, endOfEpisode = false, lastUsedDurationMs = durationMs) }
     }
 
@@ -64,26 +73,12 @@ internal class AudioSleepTimerController(
      * mode + active guard lives on [SleepCountdown].
      */
     fun startSleepTimerEndOfEpisode() {
-        scope.launch {
-            audioStore.setSleepTimerEndOfEpisode(true)
-        }
-        armExpiryPause()
-        sleepCountdown.startEndOfEpisodeTimer()
+        arming.armEndOfEpisode()
         updateState { it.copy(active = true, endOfEpisode = true) }
     }
 
     fun cancelSleepTimer() {
-        sleepCountdown.cancelSleepTimer()
+        arming.disarm()
         updateState { it.copy(active = false, endOfEpisode = false) }
-    }
-
-    /**
-     * The ONE home for the expiry callback — explicit pause rather than
-     * togglePlayPause(): if the user paused manually after arming the timer,
-     * the toggle would otherwise RESUME playback, the opposite of the timer's
-     * intent. Both start modes arm the same callback.
-     */
-    private fun armExpiryPause() {
-        sleepCountdown.setOnTimerExpired { engine.pause() }
     }
 }

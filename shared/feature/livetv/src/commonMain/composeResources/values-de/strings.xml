@@ -65,4 +65,24 @@
     <string name="livetv_will_be_recorded">"%1$s" wird aufgenommen.</string>
     <string name="livetv_channel">Kanal</string>
     <string name="livetv_live">LIVE</string>
+
+    <!-- Tab error fallbacks (the UiMessage folds' Resource arms) -->
+    <string name="livetv_error_load_channels">Sender konnten nicht geladen werden</string>
+    <string name="livetv_error_load_channel">Sender konnte nicht geladen werden</string>
+    <string name="livetv_error_load_programs">Sendungen konnten nicht geladen werden</string>
+    <string name="livetv_error_load_guide">Programmübersicht konnte nicht geladen werden</string>
+    <string name="livetv_error_load_recordings">Aufnahmen konnten nicht geladen werden</string>
+    <string name="livetv_error_delete_recording">Aufnahme konnte nicht gelöscht werden</string>
+    <string name="livetv_error_load_schedule">Zeitplan konnte nicht geladen werden</string>
+    <string name="livetv_error_load_series">Serien konnten nicht geladen werden</string>
+    <string name="livetv_error_record">Aufnahme konnte nicht erstellt werden</string>
+    <string name="livetv_error_cancel_recording">Aufnahme konnte nicht abgebrochen werden</string>
+
+    <!-- Programs tab row titles (jellyfin-web getProgramSections) -->
+    <string name="livetv_programs_on_now">Jetzt läuft</string>
+    <string name="livetv_programs_shows">Serien</string>
+    <string name="livetv_programs_movies">Filme</string>
+    <string name="livetv_programs_sports">Sport</string>
+    <string name="livetv_programs_kids">Kinder</string>
+    <string name="livetv_programs_news">Nachrichten</string>
 </resources>

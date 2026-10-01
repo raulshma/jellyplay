@@ -7,6 +7,11 @@ import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
+import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
+import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -25,7 +30,7 @@ import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
-import com.raulshma.jellyplay.feature.player.video.engine.mirrorPlaying
+import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
@@ -125,53 +130,64 @@ import org.jetbrains.compose.resources.getString
 internal class PlayerWiring(
     /** The ViewModel's scope (viewModelScope) — every collector and launch uses it. */
     private val scope: CoroutineScope,
-    // ── ViewModel constructor collaborators (passed through verbatim) ───────
+    // ── ViewModel constructor collaborators ──────────────────────────────────
+    //
+    //    The collaborators the wiring body touches directly stay explicit;
+    //    the groups that existed only to construct ONE internally-built
+    //    module cluster are bundled at the call site ([PlayerStores]'s
+    //    construction-bundle pattern — the composition surface stays flat
+    //    without re-widening this constructor per collaborator):
+    //    [PlayerSubtitleSources] (the subtitle/track content sources),
+    //    [PlayerOfflineSources] (the offline/download availability trio),
+    //    [PlayerSessionStackSources] (what the session stack is built from)
+    //    and [PlayerItemContentSources] (the item-attached content reads),
+    //    plus [PlayerStateHandles] (the ViewModel's state holders the wiring
+    //    lambdas write through).
     private val platform: VideoPlayerPlatform,
     private val mediaRepository: MediaRepository,
-    private val mediaExtrasReads: com.raulshma.jellyplay.core.data.repository.MediaExtrasReads,
-    private val lyricsRepository: LyricsRepository,
     private val playbackRepository: PlaybackRepository,
-    private val playbackIdentity: com.raulshma.jellyplay.core.data.playback.PlaybackIdentity,
-    private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
-    private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     private val imageUrlProvider: ImageUrlProvider,
-    private val downloadRepository: DownloadRepository,
-    private val offlineRepository: OfflineRepository,
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
-    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val stores: PlayerStores,
-    private val mediaSessionFactory: VideoMediaSessionFactory,
     private val castManager: CastManager,
     private val syncPlayManager: SyncPlayManager,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val networkMonitor: NetworkMonitor,
     private val activePlayerController: ActivePlayerController,
-    private val playerLifecycleManager: PlayerLifecycleManager,
     private val pipController: PipController,
     private val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepCountdown: SleepCountdown,
     private val userMessageBus: PlayerVideoMessageBus,
-    private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
-    private val fontProvider: FontProvider,
     private val savedStateHandle: SavedStateHandle,
-    private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
-    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
     private val nowPlayingReporter: com.raulshma.jellyplay.core.data.playback.NowPlayingReporter,
-    // ── The ViewModel's state holders (written by the wiring lambdas) ────────
-    /** The residual ui state bag — the wiring's narrow writes go through it. */
-    private val uiState: StateFlowHandle<VideoPlayerUiState>,
-    private val positionMs: MutableStateFlow<Long>,
-    private val durationMs: MutableStateFlow<Long>,
-    private val videoStats: MutableStateFlow<EngineVideoStats>,
-    private val resumeReminder: MutableSharedFlow<Long>,
-    private val closePlayer: Channel<Unit>,
-    private val passOutEvents: Channel<String>,
+    // ── The construction bundles ─────────────────────────────────────────────
+    private val subtitleSources: PlayerSubtitleSources,
+    private val offlineSources: PlayerOfflineSources,
+    private val sessionStack: PlayerSessionStackSources,
+    private val itemContent: PlayerItemContentSources,
+    private val handles: PlayerStateHandles,
     /** The ViewModel funnel seam — stored in phase 1, invoked from [arm] onward. */
     private val host: Host,
 ) : SessionLoadOutputs, SessionLifecycleHooks {
+
+    // ── The state-holder bundle, unpacked ────────────────────────────────────
+    //
+    //    One-line aliases restoring the historical member names, so every
+    //    wiring lambda below reads exactly as it did when the holders were
+    //    constructor parameters (the composition-test order pins and the
+    //    phase-1 bodies are untouched by the bundling).
+
+    /** The residual ui state bag — the wiring's narrow writes go through it. */
+    private val uiState: StateFlowHandle<VideoPlayerUiState> get() = handles.uiState
+    private val positionMs: MutableStateFlow<Long> get() = handles.positionMs
+    private val durationMs: MutableStateFlow<Long> get() = handles.durationMs
+    private val videoStats: MutableStateFlow<EngineVideoStats> get() = handles.videoStats
+    private val resumeReminder: MutableSharedFlow<Long> get() = handles.resumeReminder
+    private val closePlayer: Channel<Unit> get() = handles.closePlayer
+    private val passOutEvents: Channel<String> get() = handles.passOutEvents
 
     /**
      * The ViewModel-owned behaviors the wiring calls back into: the transport
@@ -230,18 +246,18 @@ internal class PlayerWiring(
         scope = scope,
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository, imageUrlProvider = imageUrlProvider,
-        playbackIdentity = playbackIdentity,
-        downloadRepository = downloadRepository,
-        offlineRepository = offlineRepository,
+        playbackIdentity = sessionStack.playbackIdentity,
+        downloadRepository = offlineSources.downloadRepository,
+        offlineRepository = offlineSources.offlineRepository,
         aggregateStore = stores.aggregateStore,
-        playerLifecycleManager = playerLifecycleManager,
+        playerLifecycleManager = sessionStack.playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
-        playerEngineFactory = playerEngineFactory,
+        playerEngineFactory = sessionStack.playerEngineFactory,
         pipController = pipController,
         playbackSourceResolver = playbackSourceResolver,
-        streamingSubtitleStore = streamingSubtitleStore,
+        streamingSubtitleStore = subtitleSources.streamingSubtitleStore,
         offlineMediaProbe = platform.offlineMediaProbe,
-        offlineModeManager = offlineModeManager,
+        offlineModeManager = offlineSources.offlineModeManager,
         userMessageBus = userMessageBus,
         // Preferred-version memory: item scope wins over series scope, the
         // same precedence the ItemPlaybackPreferenceResolver applies to the
@@ -285,8 +301,8 @@ internal class PlayerWiring(
         contentGateway = platform,
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
-        subtitleProviderRepository = subtitleProviderRepository,
-        streamingSubtitleStore = streamingSubtitleStore,
+        subtitleProviderRepository = subtitleSources.subtitleProviderRepository,
+        streamingSubtitleStore = subtitleSources.streamingSubtitleStore,
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
@@ -304,7 +320,7 @@ internal class PlayerWiring(
         isSubtitleTrackAttached = { hint ->
             trackSelectionHelper.findSubtitleOptionFor(hint, allowSyntheticRow = true) != null
         },
-        isOffline = { offlineModeManager.isOffline },
+        isOffline = { offlineSources.offlineModeManager.isOffline },
     )
 
     internal val sleepTimer = SleepTimerController(
@@ -423,7 +439,7 @@ internal class PlayerWiring(
      */
     private val mediaDetailProjection = MediaDetailProjection(
         scope = scope,
-        lyricsRepository = lyricsRepository,
+        lyricsRepository = itemContent.lyricsRepository,
         volumeProfileStore = stores.volumeProfile,
         setDetail = { detail -> mediaDetail = detail },
         setChapters = { chapters ->
@@ -439,34 +455,34 @@ internal class PlayerWiring(
         getEngine = { playerSessionManager.engine },
     )
 
-    internal val mediaSessionController = mediaSessionFactory.create(
+    internal val mediaSessionController = sessionStack.mediaSessionFactory.create(
         getEngine = { playerSessionManager.engine },
         getImageUrl = { itemId, maxWidth -> imageUrlProvider.getImageUrl(itemId = itemId, maxWidth = maxWidth) },
     )
 
     /**
-     * Owns audio-focus (duck/restore) + becoming-noisy auto-pause. Shared with
-     * the live TV VM to eliminate the prior copy-paste. [control] reads the
-     * current engine on every callback so engine swaps (retry/fallback) and
-     * teardown stay correct. [onRegain] applies the `videoSkipBackOnResumeMs`
-     * resume-skip the VOD path needs (live has no equivalent) — the same
-     * resume-skip math [Host.applyResumeSkip] routes onto the VM's shared
-     * funnel, but WITHOUT its is-playing guard; that divergence is
-     * deliberate (see the VM's resumePlayback).
+     * The becoming-noisy auto-pause owner (headphone unplug → pause; the
+     * focus half of the former audio-lifecycle moved into the PlaybackFocus
+     * module at the video slice). Registered in [arm], released in
+     * [performRelease]. [getEngine] is re-read on every broadcast so engine
+     * swaps (retry/fallback) and teardown stay correct.
      */
-    private val playerAudioLifecycle = platform.createAudioLifecycle(
+    private val becomingNoisy = platform.createBecomingNoisy(
         getEngine = { playerSessionManager.engine },
-        isMuted = { uiState.value.isMuted },
-        onRegain = {
-            // No is-playing guard (deliberate divergence from resumePlayback,
-            // which keeps one): focus REGAIN follows a transient loss
-            // (duck/pause), where the skip is always wanted regardless of the
-            // engine's current play flag. A NULL engine is a no-op (the old
-            // body issued a degenerate seekTo(0) through the full dispatcher
-            // — no local playback exists to skip back).
-            playerSessionManager.engine?.let { host.applyResumeSkip(it) }
-        },
     )
+
+    // ── Cross-player exclusivity (the video focus slice, ADR-0004) ──────────
+    // Both ride the platform aggregate seam (the VM's ctor line-ceiling
+    // ratchet is why they are not VM ctor params): the module-owned
+    // exclusivity authority — VIDEO claims ride the play edge (the music
+    // manager's `onIsPlayingChanged` pattern), OS losses come back as surface
+    // commands — and the VIDEO-family commandable surface singleton (null on
+    // desktop, where the focus binding registers only the music surface and
+    // the displaced-holder self-pause rides the claimState observer in
+    // [arm]). The interface defaults are the vacuous NoopPlaybackFocus / null
+    // pair headless harnesses get.
+    private val playbackFocus: PlaybackFocus = platform.playbackFocus
+    private val videoFocusSurface = platform.videoFocusSurface
 
     /**
      * The PiP-facing surface (the [SubtitlePreviewController] shape): the
@@ -647,7 +663,7 @@ internal class PlayerWiring(
      */
     private val sessionLoadPipeline = SessionLoadPipeline(
         sessionManager = playerSessionManager,
-        mediaExtrasReads = mediaExtrasReads,
+        mediaExtrasReads = itemContent.mediaExtrasReads,
         aggregateStore = stores.aggregateStore,
         networkOfflineStore = stores.networkOffline,
         offlinePlaybackFacade = offlinePlaybackFacade,
@@ -756,7 +772,7 @@ internal class PlayerWiring(
         scope = scope,
         sessionState = playerSessionManager.sessionState,
         sessionEvents = playbackSession.events,
-        episodeCatalogue = episodeCatalogue,
+        episodeCatalogue = itemContent.episodeCatalogue,
         getDetail = { mediaDetail },
         getSeriesId = { mediaDetail?.item?.seriesId ?: uiState.value.media.seriesId },
         updateEpisodes = { update ->
@@ -899,8 +915,8 @@ internal class PlayerWiring(
      */
     internal val subtitlePreview = SubtitlePreviewController(
         scope = scope,
-        loadCues = { source, headers -> subtitlePreviewRepository.loadCues(source, headers) },
-        clearCuesCache = { subtitlePreviewRepository.clearCache() },
+        loadCues = { source, headers -> subtitleSources.subtitlePreviewRepository.loadCues(source, headers) },
+        clearCuesCache = { subtitleSources.subtitlePreviewRepository.clearCache() },
         getExternalSubtitles = { playerSessionManager.currentExternalSubtitles },
         getPlaybackHeaders = { playerSessionManager.currentPlaybackHeaders },
         getSelectedSubtitleTrack = {
@@ -941,7 +957,7 @@ internal class PlayerWiring(
         saveDialogueBoost = { strength -> playbackPreferenceWriter.setDialogueBoostStrength(strength) },
         syncEngineConfig = { engineConfigSyncRef.markDirty() },
         syncEngineConfigDebounced = { engineConfigSyncRef.markDirtyDebounced() },
-        fontProvider = fontProvider,
+        fontProvider = subtitleSources.fontProvider,
         getEngine = { playerSessionManager.engine },
     )
 
@@ -1006,12 +1022,12 @@ internal class PlayerWiring(
 
     /**
      * The aggregate-prefs collector's side-effecting half (P4): the seeds,
-     * the two engine-config rebuild triggers, the autoplay flip and the duck
-     * registration — extracted beside [settingsProjector] (whose `project`
-     * stays the pure-projection half). Declared after every collaborator its
-     * wiring reads; the lambdas run only from the arm-phase collector, long
-     * after construction. The rebuild trigger reads [engineConfigSyncRef]
-     * (cycle 6).
+     * the engine-config rebuild triggers, the autoplay flip and the video
+     * focus-policy push — extracted beside [settingsProjector] (whose
+     * `project` stays the pure-projection half). Declared after every
+     * collaborator its wiring reads; the lambdas run only from the arm-phase
+     * collector, long after construction. The rebuild trigger reads
+     * [engineConfigSyncRef] (cycle 6).
      */
     private val prefsFanout = PlayerPrefsFanout(
         projectPrefs = settingsProjector::project,
@@ -1025,9 +1041,10 @@ internal class PlayerWiring(
             autoplayController.setEnabled(enabled)
         },
         rebuildEngineConfigIfRunning = { playerSessionManager.engine?.let { engineConfigSyncRef.markDirty() } },
-        isAudioFocusActive = { playerAudioLifecycle.isAudioFocusActive() },
-        registerAudioFocus = { playerAudioLifecycle.registerAudioFocus() },
-        unregisterAudioFocus = { playerAudioLifecycle.unregisterAudioFocus() },
+        applyVideoFocusPolicy = { osLegEnabled, duckOnTransientLoss ->
+            (playbackFocus as? VideoFocusPolicyInput)
+                ?.onVideoFocusPolicy(osLegEnabled, duckOnTransientLoss)
+        },
     )
 
     /**
@@ -1197,8 +1214,40 @@ internal class PlayerWiring(
                 }
         }
 
-        // Headphone unplug auto-pause (delegated to the shared audio-lifecycle owner).
-        playerAudioLifecycle.registerBecomingNoisy()
+        // Headphone unplug auto-pause (the becoming-noisy half of the former
+        // audio-lifecycle owner; the focus half is module-owned now).
+        becomingNoisy.register()
+
+        // The video focus slice: bind the current engine as the module's
+        // commandable VIDEO surface target, with the resume-skip riding the
+        // restore hook exactly where the legacy focus-regain hook did (no
+        // is-playing guard — a REGAIN follows a transient loss, where the
+        // skip is always wanted; a NULL engine is a no-op). [getEngine]
+        // re-reads per command, so engine swaps mid-duck are observed.
+        videoFocusSurface?.bind(
+            target = { playerSessionManager.engine?.let { engine -> MediaEngineFocusTarget(engine, { uiState.value.isMuted }) } },
+            onRestore = { playerSessionManager.engine?.let { host.applyResumeSkip(it) } },
+        )
+
+        // Displaced-holder self-pause (the reader's observation pattern):
+        // skip ONLY while the floor is HELD by us — every other state falls
+        // through and pauses an engine that is somehow still playing. That
+        // includes our OWN Suspended(VIDEO) claims: a user pause (engine
+        // idle, the pause is a no-op) and a permanent-loss ruling (redundant
+        // with suspendHolder's command, harmless as a belt).
+        // Load-bearing on desktop — the desktop focus
+        // binding registers only the music surface, so a MUSIC eviction of a
+        // held VIDEO claim arrives as no command; on Android the surface
+        // command path already paused and this is an idempotent belt. The
+        // duck row never lands here (the claim stays Held while ducked).
+        scope.launch {
+            playbackFocus.claimState.collect { state ->
+                if (state is FocusClaimState.Held && state.holder == PlaybackSurfaceId.VIDEO) return@collect
+                if (playerSessionManager.engine?.isPlaying?.value == true) {
+                    playerSessionManager.engine?.pause()
+                }
+            }
+        }
 
         scope.launch {
             // Upstream is the session's DIRECT alias of the manager's flow —
@@ -1299,6 +1348,14 @@ internal class PlayerWiring(
                 },
                 { isPlaying -> syncPlay.onIsPlayingChanged(isPlaying) },
                 { isPlaying -> pipController.setPlaying(isPlaying) },
+                // The focus claim rides this ONE edge — every play path
+                // (user play, autoplay, next-episode, mini-player reclaim)
+                // crosses the coordinator mirror, so no per-entry-point
+                // claim sites can drift (the music manager's
+                // onIsPlayingChanged pattern). Newest user action wins:
+                // this publishes Held(VIDEO), and MUSIC — a commandable
+                // victim since the video slice — pauses on the command.
+                ::onVideoPlayEdge,
             )
             scope.launch {
                 coordinator.isBuffering.collect { buffering ->
@@ -1316,6 +1373,26 @@ internal class PlayerWiring(
                 // intake itself).
                 coordinator.userInteractions.collect { autoplayController.onUserInteraction() }
             }
+        }
+    }
+
+    /**
+     * The VIDEO claim edge (the video focus slice, ADR-0004). A granted
+     * claim evicts the other surfaces synchronously before returning; a
+     * DENIED claim means another holder is Suspended under an OS loss
+     * (e.g. read-aloud during a phone call) — the newest user action does
+     * not outrank an OS suspension, so the engine pauses (mirroring the
+     * user's own pause: playWhenReady drops, nothing auto-resumes, and the
+     * resulting isPlaying=false edge releases below). The duck path never
+     * crosses here: a ducked claim stays Held and the engine keeps playing.
+     */
+    private fun onVideoPlayEdge(isPlaying: Boolean) {
+        if (isPlaying) {
+            if (playbackFocus.acquire(PlaybackSurfaceId.VIDEO) is FocusOutcome.Denied) {
+                playerSessionManager.engine?.pause()
+            }
+        } else {
+            playbackFocus.release(PlaybackSurfaceId.VIDEO)
         }
     }
 
@@ -1466,8 +1543,11 @@ internal class PlayerWiring(
         // no policy observes a released engine mid-teardown (the decisions
         // executor is additionally idempotent after release).
         playbackSession.engineEventCoordinator.dispose()
-        // Tear down audio-focus + becoming-noisy (idempotent; safe if never registered).
-        playerAudioLifecycle.release()
+        // Abandon the focus claim + unbind the surface target, and stop the
+        // becoming-noisy receiver (all idempotent; safe if never registered).
+        playbackFocus.release(PlaybackSurfaceId.VIDEO)
+        videoFocusSurface?.unbind()
+        becomingNoisy.release()
         sleepTimer.onRelease()
         // Full teardown (B3): the session owns the tail — snapshot of the
         // stop-report inputs, the releaseInternals split (session half, then
@@ -1490,3 +1570,52 @@ internal class PlayerWiring(
         }
     }
 }
+
+/**
+ * Construction-time bundles for [PlayerWiring] (the [PlayerStores] pattern:
+ * a flat bundle widens here and at the DI/call site, never the builder's
+ * constructor). Each groups the collaborators that existed only to construct
+ * ONE internally-built module cluster — the builder body shows each member
+ * flowing to its single consumer under its original receiving name.
+ */
+
+/** The subtitle/track content sources (subtitle search, side-load store, cue preview, user fonts). */
+internal data class PlayerSubtitleSources(
+    val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
+    val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
+    val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
+    val fontProvider: FontProvider,
+)
+
+/** The offline/download availability trio the session stack and subtitle gate read. */
+internal data class PlayerOfflineSources(
+    val downloadRepository: DownloadRepository,
+    val offlineRepository: OfflineRepository,
+    val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
+)
+
+/** What the session stack is built from: identity, lifecycle, and the two engine/media-session factories. */
+internal data class PlayerSessionStackSources(
+    val playbackIdentity: com.raulshma.jellyplay.core.data.playback.PlaybackIdentity,
+    val playerLifecycleManager: PlayerLifecycleManager,
+    val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
+    val mediaSessionFactory: VideoMediaSessionFactory,
+)
+
+/** The item-attached content reads the player's modules consume: cinema intros, episodes, companion lyrics. */
+internal data class PlayerItemContentSources(
+    val mediaExtrasReads: com.raulshma.jellyplay.core.data.repository.MediaExtrasReads,
+    val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
+    val lyricsRepository: LyricsRepository,
+)
+
+/** The ViewModel state holders the wiring lambdas write through (see [PlayerWiring]'s unpacked aliases). */
+internal data class PlayerStateHandles(
+    val uiState: StateFlowHandle<VideoPlayerUiState>,
+    val positionMs: MutableStateFlow<Long>,
+    val durationMs: MutableStateFlow<Long>,
+    val videoStats: MutableStateFlow<EngineVideoStats>,
+    val resumeReminder: MutableSharedFlow<Long>,
+    val closePlayer: Channel<Unit>,
+    val passOutEvents: Channel<String>,
+)

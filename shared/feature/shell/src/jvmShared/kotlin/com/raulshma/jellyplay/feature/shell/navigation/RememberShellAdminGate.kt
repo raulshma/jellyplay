@@ -5,8 +5,8 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 
 /**
- * The admin hooks' lazy reads ([ShellHostHooks.isAdmin] /
- * [ShellHostHooks.isRefreshingAdmin]) as one value — ONE construction site
+ * The admin hooks' lazy reads ([ShellAdminHooks.isAdmin] /
+ * [ShellAdminHooks.isRefreshingAdmin]) as one value — ONE construction site
  * for the `remember(state) { { state.value } }` pair both shells used to
  * hand-copy beside the [rememberShellHost] factory. The refresh arm stays
  * per shell (each wraps its own session owner); only the reads are shared.

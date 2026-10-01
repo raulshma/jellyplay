@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus
+import com.raulshma.jellyplay.core.network.arr.ArrReleaseCacheMiss
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
@@ -443,7 +444,15 @@ class ArrRepositoryImpl(
                     sonarrApiClient.searchReleases(server, episodeId = episodeId)
                 }
             }
-            tagged.map { rows -> rows.map { it.tagged(server.id, server.kind) } }
+            tagged
+                .map { rows -> rows.map { it.tagged(server.id, server.kind) } }
+                // The wire-level cache-miss marker folds into the seam's typed
+                // failure here — the feature branches on
+                // [ArrReleaseCacheUnavailable] and never imports the network type.
+                .recoverCatching { e ->
+                    val miss = e as? ArrReleaseCacheMiss ?: throw e
+                    throw ArrReleaseCacheUnavailable(miss.serviceName, miss)
+                }
         }
 
     override suspend fun grabRelease(item: ArrQueueItem, release: ArrRelease, override: Boolean): Result<Unit> =

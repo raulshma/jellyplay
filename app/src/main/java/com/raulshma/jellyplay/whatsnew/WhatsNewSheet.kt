@@ -26,7 +26,7 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.WhatsNewRelease
 import com.raulshma.jellyplay.core.ui.components.MarkdownText
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.components.whatsnew.WhatsNewEntryCard
+import com.raulshma.jellyplay.feature.settings.WhatsNewEntryCard
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 /**

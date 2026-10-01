@@ -6,7 +6,9 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
-import com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle
+import com.raulshma.jellyplay.core.data.playback.BecomingNoisyPauseReceiver
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.VideoPlaybackSurface
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
@@ -27,6 +29,11 @@ import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 internal class AndroidVideoPlayerPlatform(
     private val context: Context,
     private val castManager: CastManager,
+    // The video focus slice (ADR-0004): resolved by the Koin module from the
+    // androidCoreData focus bindings (the module-owned executor + the VIDEO
+    // surface singleton it commands).
+    override val playbackFocus: PlaybackFocus,
+    override val videoFocusSurface: VideoPlaybackSurface?,
 ) : VideoPlayerPlatform {
 
     override fun isLowRamDevice(): Boolean {
@@ -80,15 +87,11 @@ internal class AndroidVideoPlayerPlatform(
         getSessionState = getSessionState,
     )
 
-    override fun createAudioLifecycle(
+    override fun createBecomingNoisy(
         getEngine: () -> MediaEngine?,
-        isMuted: () -> Boolean,
-        onRegain: (() -> Unit)?,
-    ): VideoPlayerAudio = AndroidVideoPlayerAudio(
+    ): VideoPlayerAudio = AndroidVideoPlayerBecomingNoisy(
         context = context,
         getEngine = getEngine,
-        isMuted = isMuted,
-        onRegain = onRegain,
     )
 }
 
@@ -114,43 +117,24 @@ private class AndroidOfflineMediaProbe : OfflineMediaProbe {
 }
 
 /**
- * Android actual of the [VideoPlayerAudio] seam: wraps the legacy
- * [PlayerAudioLifecycle] with the exact PlaybackControl adapter the
- * ViewModel used to build inline (engine members re-read on every callback —
- * LivePlayerAudio precedent, player-live conveyor).
+ * Android actual of the [VideoPlayerAudio] seam: the ACTION_AUDIO_BECOMING_NOISY
+ * receiver half of the deleted `PlayerAudioLifecycle` — the focus machinery
+ * moved into core:data's PlaybackFocus module (video slice), the receiver
+ * stayed behind because it is the only headphone-unplug path for the
+ * non-media3 engines (ExoPlayer's built-in
+ * `setHandleAudioBecomingNoisy(true)` keeps running alongside it, exactly
+ * the dual coverage the shared lifecycle had). The broadcast chassis lives
+ * in core:data's [BecomingNoisyPauseReceiver] (one home, shared with the
+ * live player); this adapter only supplies the engine pause target.
  */
-internal class AndroidVideoPlayerAudio(
+internal class AndroidVideoPlayerBecomingNoisy(
     context: Context,
-    private val getEngine: () -> MediaEngine?,
-    private val isMuted: () -> Boolean,
-    onRegain: (() -> Unit)?,
+    getEngine: () -> MediaEngine?,
 ) : VideoPlayerAudio {
 
-    private val delegate = PlayerAudioLifecycle(
-        context = context,
-        control = {
-            getEngine()?.let { engine ->
-                PlayerAudioLifecycle.PlaybackControl(
-                    isPlaying = { engine.isPlaying.value },
-                    volume = { engine.volume },
-                    pause = { engine.pause() },
-                    play = { engine.play() },
-                    setVolume = { volume, isUserChange -> engine.setVolume(volume, isUserChange) },
-                    setMuted = { engine.setMuted(it) },
-                )
-            }
-        },
-        isMuted = isMuted,
-        onRegain = onRegain,
-    )
+    private val receiver = BecomingNoisyPauseReceiver(context) { getEngine()?.pause() }
 
-    override fun isAudioFocusActive(): Boolean = delegate.isAudioFocusActive()
+    override fun register() = receiver.register()
 
-    override fun registerAudioFocus() = delegate.registerAudioFocus()
-
-    override fun unregisterAudioFocus() = delegate.unregisterAudioFocus()
-
-    override fun registerBecomingNoisy() = delegate.registerBecomingNoisy()
-
-    override fun release() = delegate.release()
+    override fun release() = receiver.release()
 }

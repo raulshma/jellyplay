@@ -106,8 +106,8 @@ import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
-import com.raulshma.jellyplay.core.network.library.PARENTAL_RATING_PICKER_LADDER
-import com.raulshma.jellyplay.core.network.library.parentalRatingAge
+import com.raulshma.jellyplay.core.model.PARENTAL_RATING_PICKER_LADDER
+import com.raulshma.jellyplay.core.model.parentalRatingAge
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding

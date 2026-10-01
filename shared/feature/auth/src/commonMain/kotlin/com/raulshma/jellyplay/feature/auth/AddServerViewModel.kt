@@ -22,6 +22,14 @@ data class AddServerUiState(
     val connectError: AuthMessage? = null,
     val manualAddress: String = "",
     /**
+     * The Android 17+ local-network rationale banner flag: the platform
+     * enforces the permission AND the grant is absent. Folded here by
+     * [AddServerViewModel.onLocalNetworkAccessSynced] from the screen's
+     * composition-side platform seam (`rememberLocalNetworkAccess()`); a
+     * non-enforcing platform (desktop) can never set it.
+     */
+    val localNetworkRationale: Boolean = false,
+    /**
      * Non-null when the last connect attempt failed on TLS trust AND the
      * address is https: the canonical `scheme://host[:port]` the user would
      * grant self-signed-certificate trust for. The screen renders the
@@ -42,6 +50,28 @@ class AddServerViewModel(
     val uiState = _uiState.flow
 
     private var discoveryJob: Job? = null
+
+    /**
+     * The screen's local-network permission sync — the composition-side
+     * platform seam (`rememberLocalNetworkAccess()`) reports its current
+     * state on screen entry and on every grant change, and this method owns
+     * the two choreography decisions that used to live inline in the
+     * screen's `LaunchedEffect(localNetwork.isGranted)`:
+     *
+     * 1. The rationale-banner predicate (`enforced && !granted`) folds into
+     *    [AddServerUiState.localNetworkRationale] — the screen renders the
+     *    banner from state instead of re-deriving the permission algebra in
+     *    composition.
+     * 2. Discovery auto-start: a granted report (initial or post-grant
+     *    transition) starts a scan — the [startDiscovery] isDiscovering
+     *    guard dedupes. A denied report never starts one: a scan without
+     *    the permission silently finds nothing, which is exactly the trap
+     *    the banner replaces.
+     */
+    fun onLocalNetworkAccessSynced(enforced: Boolean, granted: Boolean) {
+        _uiState.update { it.copy(localNetworkRationale = enforced && !granted) }
+        if (granted) startDiscovery()
+    }
 
     /**
      * Start discovering local Jellyfin servers (UDP discovery broadcast on port 7359).

@@ -10,7 +10,7 @@ interface SeerrRepository {
 
     suspend fun testConnection(): Result<SeerrStatusResponse>
 
-    suspend fun search(query: String, page: Int = 1): Result<SeerrSearchResponse>
+    suspend fun search(query: String, page: Int = 1): Result<List<SeerrSearchItem>>
 
     suspend fun getMovieDetails(tmdbId: Int): Result<SeerrMovieDetails>
 
@@ -20,9 +20,9 @@ interface SeerrRepository {
 
     suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings>
 
-    suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse>
+    suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<List<SeerrSearchItem>>
 
-    suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse>
+    suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<List<SeerrSearchItem>>
 
     /**
      * Related videos (trailers) fetched straight from TMDB — the fallback used
@@ -76,19 +76,19 @@ interface SeerrRepository {
 
     // ── Discover endpoints ──
 
-    suspend fun getTrending(page: Int = 1): Result<SeerrSearchResponse>
+    suspend fun getTrending(page: Int = 1): Result<List<SeerrSearchItem>>
 
     suspend fun getDiscoverMovies(
         page: Int = 1,
         primaryReleaseDateGte: String? = null,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams? = null,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getDiscoverTv(
         page: Int = 1,
         firstAirDateGte: String? = null,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams? = null,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getRequests(
         take: Int = 10,
@@ -99,7 +99,7 @@ interface SeerrRepository {
         requestedBy: Int? = null,
         mediaType: String? = null,
         search: String? = null,
-    ): Result<SeerrRequestListResponse>
+    ): Result<SeerrRequestPage>
 
     suspend fun getRequest(id: Int): Result<SeerrRequestItem>
 

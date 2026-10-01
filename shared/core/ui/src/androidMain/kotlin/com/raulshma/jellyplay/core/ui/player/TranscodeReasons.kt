@@ -4,48 +4,6 @@ import android.content.Context
 import androidx.annotation.StringRes
 import com.raulshma.jellyplay.shared.core.ui.R
 
-/**
- * The server-reported reasons a source is being transcoded, read from the
- * live session's `TranscodingInfo.TranscodeReasons` (the SDK's PlaybackInfo
- * response does not expose reason tokens). One app enum entry per SDK
- * `TranscodeReason` token, plus a catch-all for anything the server adds
- * faster than this map.
- *
- * Raw tokens arrive in either the SDK's SCREAMING_SNAKE enum spelling
- * (`VIDEO_CODEC_NOT_SUPPORTED` — what the session fetch stores) or the wire
- * PascalCase spelling (`VideoCodecNotSupported`);
- * [TranscodeReasonsFormatter] normalizes both.
- */
-enum class TranscodeReasonKind {
-    CONTAINER_NOT_SUPPORTED,
-    VIDEO_CODEC_NOT_SUPPORTED,
-    AUDIO_CODEC_NOT_SUPPORTED,
-    VIDEO_BITRATE_NOT_SUPPORTED,
-    AUDIO_BITRATE_NOT_SUPPORTED,
-    CONTAINER_BITRATE_EXCEEDS_LIMIT,
-    VIDEO_BIT_DEPTH_NOT_SUPPORTED,
-    AUDIO_BIT_DEPTH_NOT_SUPPORTED,
-    AUDIO_CHANNELS_NOT_SUPPORTED,
-    AUDIO_PROFILE_NOT_SUPPORTED,
-    AUDIO_SAMPLE_RATE_NOT_SUPPORTED,
-    AUDIO_IS_EXTERNAL,
-    SECONDARY_AUDIO_NOT_SUPPORTED,
-    INTERLACED_VIDEO_NOT_SUPPORTED,
-    ANAMORPHIC_VIDEO_NOT_SUPPORTED,
-    REF_FRAMES_NOT_SUPPORTED,
-    VIDEO_CODEC_TAG_NOT_SUPPORTED,
-    VIDEO_FRAMERATE_NOT_SUPPORTED,
-    VIDEO_LEVEL_NOT_SUPPORTED,
-    VIDEO_PROFILE_NOT_SUPPORTED,
-    VIDEO_RANGE_TYPE_NOT_SUPPORTED,
-    VIDEO_RESOLUTION_NOT_SUPPORTED,
-    SUBTITLE_CODEC_NOT_SUPPORTED,
-    STREAM_COUNT_EXCEEDS_LIMIT,
-    DIRECT_PLAY_ERROR,
-    UNKNOWN_VIDEO_STREAM_INFO,
-    UNKNOWN_AUDIO_STREAM_INFO,
-}
-
 /** One reason resolved to localized text: the plain-language explanation of
  *  why the server transcoded, plus an optional actionable remedy hint. */
 data class FormattedTranscodeReason(
@@ -63,6 +21,14 @@ data class FormattedTranscodeReason(
 }
 
 /**
+ * Android resolution for the shared transcode-reason table:
+ * [TranscodeReasonKind] and token normalization live in commonMain's
+ * `TranscodeReasonCatalog.kt` (the ONE token→key table, which the desktop
+ * seam reads via compose-resources so both platforms localize). This
+ * androidMain formatter mirrors that table with `R.string` ids because its
+ * callers resolve synchronously through a `Context`, which compose-resources
+ * cannot serve off the main thread.
+ *
  * Maps raw server transcode-reason tokens to localized explanations and
  * remedy hints, shared by the video stats overlay, the playback error
  * dialog, and the Live TV fallback banner (hence core/ui — the only player
@@ -74,9 +40,6 @@ object TranscodeReasonsFormatter {
 
     private val byNormalizedKey: Map<String, TranscodeReasonKind> =
         TranscodeReasonKind.entries.associateBy { it.name.normalizeReasonToken() }
-
-    private fun String.normalizeReasonToken(): String =
-        filter { it.isLetterOrDigit() }.lowercase()
 
     /** Localized strings per kind — one table instead of parallel switches. */
     private data class ReasonStrings(

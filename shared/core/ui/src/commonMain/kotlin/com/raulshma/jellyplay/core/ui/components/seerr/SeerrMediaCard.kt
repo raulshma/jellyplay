@@ -70,7 +70,7 @@ fun SeerrMediaCard(
     // table) — the card used to hand-roll isAvailable and merge PROCESSING
     // into isPending, rendering an in-flight download under the pending glyph.
     val mediaStatus = remember(item.mediaInfo?.status) {
-        item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) } ?: SeerrMediaStatus.UNKNOWN
+        item.mediaInfo?.status ?: SeerrMediaStatus.UNKNOWN
     }
     val isAvailable = remember(mediaStatus) { mediaStatus.isAvailable }
     val isProcessing = remember(mediaStatus) { mediaStatus.isProcessing }

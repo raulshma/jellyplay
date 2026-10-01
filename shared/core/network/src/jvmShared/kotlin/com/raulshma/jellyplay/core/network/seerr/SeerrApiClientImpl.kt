@@ -22,6 +22,9 @@ import java.net.UnknownHostException
 class SeerrApiClientImpl(
     okHttpClient: OkHttpClient,
 ) : SeerrApiClient {
+    // Read members decode the package-internal wire DTOs (SeerrWireDtos.kt)
+    // through the lenient Json and map to the core/model read models at the
+    // seam — the envelopes fold and the status ints interpret there.
 
     private val json = lenientJson
 
@@ -172,7 +175,7 @@ class SeerrApiClientImpl(
 
     override suspend fun search(
         baseUrl: String, credentials: SeerrCredentials, query: String, page: Int,
-    ): Result<SeerrSearchResponse> {
+    ): Result<List<SeerrSearchItem>> {
         // Build the HttpUrl directly rather than constructing a throwaway
         // Request merely to borrow its url. Same final URL, less garbage.
         val url = buildUrl(baseUrl, "/search").toHttpUrl().newBuilder()
@@ -180,14 +183,14 @@ class SeerrApiClientImpl(
             .addQueryParameter("page", page.toString())
             .build()
         val request = Request.Builder().url(url).withAuth(credentials).get().build()
-        return parseRequest(request)
+        return parseRequest<WireSeerrSearchResponse>(request).map { it.toModels() }
     }
 
     override suspend fun getMovieDetails(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrMovieDetails> =
-        getAndParse(baseUrl, credentials, "/movie/$tmdbId")
+        getAndParse<WireSeerrMovieDetails>(baseUrl, credentials, "/movie/$tmdbId").map { it.toModel() }
 
     override suspend fun getTvDetails(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrTvDetails> =
-        getAndParse(baseUrl, credentials, "/tv/$tmdbId")
+        getAndParse<WireSeerrTvDetails>(baseUrl, credentials, "/tv/$tmdbId").map { it.toModel() }
 
     override suspend fun getTvSeasonDetails(baseUrl: String, credentials: SeerrCredentials, tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> =
         getAndParse(baseUrl, credentials, "/tv/$tvId/season/$seasonNumber")
@@ -201,26 +204,27 @@ class SeerrApiClientImpl(
     override suspend fun getMovieRatingsCombined(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int): Result<SeerrRatings> =
         getAndParse(baseUrl, credentials, "/movie/$tmdbId/ratingscombined")
 
-    override suspend fun getMovieRecommendations(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
-        getAndParse(baseUrl, credentials, "/movie/$tmdbId/recommendations?page=$page")
+    override suspend fun getMovieRecommendations(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<List<SeerrSearchItem>> =
+        getAndParse<WireSeerrSearchResponse>(baseUrl, credentials, "/movie/$tmdbId/recommendations?page=$page").map { it.toModels() }
 
-    override suspend fun getMovieSimilar(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
-        getAndParse(baseUrl, credentials, "/movie/$tmdbId/similar?page=$page")
+    override suspend fun getMovieSimilar(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<List<SeerrSearchItem>> =
+        getAndParse<WireSeerrSearchResponse>(baseUrl, credentials, "/movie/$tmdbId/similar?page=$page").map { it.toModels() }
 
-    override suspend fun getTvRecommendations(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
-        getAndParse(baseUrl, credentials, "/tv/$tmdbId/recommendations?page=$page")
+    override suspend fun getTvRecommendations(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<List<SeerrSearchItem>> =
+        getAndParse<WireSeerrSearchResponse>(baseUrl, credentials, "/tv/$tmdbId/recommendations?page=$page").map { it.toModels() }
 
-    override suspend fun getTvSimilar(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<SeerrSearchResponse> =
-        getAndParse(baseUrl, credentials, "/tv/$tmdbId/similar?page=$page")
+    override suspend fun getTvSimilar(baseUrl: String, credentials: SeerrCredentials, tmdbId: Int, page: Int): Result<List<SeerrSearchItem>> =
+        getAndParse<WireSeerrSearchResponse>(baseUrl, credentials, "/tv/$tmdbId/similar?page=$page").map { it.toModels() }
 
     override suspend fun requestMedia(
         baseUrl: String, credentials: SeerrCredentials, mediaType: String, mediaId: Int,
         tvdbId: Int?, seasons: List<Int>?, serverId: Int?, profileId: Int?,
         rootFolder: String?, tags: List<Int>?,
-    ): Result<SeerrMediaRequest> = postAndParse(baseUrl, credentials, "/request",
+    ): Result<SeerrMediaRequest> = postAndParse<WireSeerrMediaRequest, SeerrRequestPayload>(baseUrl, credentials, "/request",
         SeerrRequestPayload(mediaType = mediaType, mediaId = mediaId, tvdbId = tvdbId,
             seasons = seasons, serverId = serverId, profileId = profileId,
             rootFolder = rootFolder, tags = tags))
+        .map { it.toModel() }
 
     override suspend fun getRadarrSettings(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrRadarrSettings>> =
         getAndParse(baseUrl, credentials, "/settings/radarr")
@@ -255,20 +259,20 @@ class SeerrApiClientImpl(
                 getAndParse<SeerrSonarrServiceDetail>(baseUrl, credentials, "/service/sonarr/$id")
         }.map { it }
 
-    override suspend fun getTrending(baseUrl: String, credentials: SeerrCredentials, page: Int): Result<SeerrSearchResponse> =
-        getAndParse(baseUrl, credentials, "/discover/trending?page=$page")
+    override suspend fun getTrending(baseUrl: String, credentials: SeerrCredentials, page: Int): Result<List<SeerrSearchItem>> =
+        getAndParse<WireSeerrSearchResponse>(baseUrl, credentials, "/discover/trending?page=$page").map { it.toModels() }
 
     override suspend fun getDiscoverMovies(
         baseUrl: String, credentials: SeerrCredentials, page: Int, primaryReleaseDateGte: String?,
         params: SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> =
-        getAndParse(baseUrl, credentials, seerrDiscoverMoviesPath(page, primaryReleaseDateGte, params))
+    ): Result<List<SeerrSearchItem>> =
+        getAndParse<WireSeerrSearchResponse>(baseUrl, credentials, seerrDiscoverMoviesPath(page, primaryReleaseDateGte, params)).map { it.toModels() }
 
     override suspend fun getDiscoverTv(
         baseUrl: String, credentials: SeerrCredentials, page: Int, firstAirDateGte: String?,
         params: SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> =
-        getAndParse(baseUrl, credentials, seerrDiscoverTvPath(page, firstAirDateGte, params))
+    ): Result<List<SeerrSearchItem>> =
+        getAndParse<WireSeerrSearchResponse>(baseUrl, credentials, seerrDiscoverTvPath(page, firstAirDateGte, params)).map { it.toModels() }
 
     override suspend fun getRequests(
         baseUrl: String,
@@ -281,7 +285,7 @@ class SeerrApiClientImpl(
         requestedBy: Int?,
         mediaType: String?,
         search: String?,
-    ): Result<SeerrRequestListResponse> {
+    ): Result<SeerrRequestPage> {
         val path = buildString {
             append("/request?take=$take&skip=$skip&filter=$filter&sort=$sort&sortDirection=$sortDirection")
             requestedBy?.let { append("&requestedBy=$it") }
@@ -296,7 +300,7 @@ class SeerrApiClientImpl(
             .withAuth(credentials)
             .get()
             .build()
-        return parseRequest(request)
+        return parseRequest<WireSeerrRequestListResponse>(request).map { it.toModel() }
     }
 
     override suspend fun getRequest(
@@ -309,17 +313,17 @@ class SeerrApiClientImpl(
             .withAuth(credentials)
             .get()
             .build()
-        return parseRequest(request)
+        return parseRequest<WireSeerrRequestItem>(request).map { it.toModel() }
     }
 
     override suspend fun approveRequest(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRequestItem> =
-        postAndParse(baseUrl, credentials, "/request/$id/approve")
+        postAndParse<WireSeerrRequestItem>(baseUrl, credentials, "/request/$id/approve").map { it.toModel() }
 
     override suspend fun declineRequest(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRequestItem> =
-        postAndParse(baseUrl, credentials, "/request/$id/decline")
+        postAndParse<WireSeerrRequestItem>(baseUrl, credentials, "/request/$id/decline").map { it.toModel() }
 
     override suspend fun retryRequest(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRequestItem> =
-        postAndParse(baseUrl, credentials, "/request/$id/retry")
+        postAndParse<WireSeerrRequestItem>(baseUrl, credentials, "/request/$id/retry").map { it.toModel() }
 
     override suspend fun deleteRequest(
         baseUrl: String,
@@ -359,10 +363,11 @@ class SeerrApiClientImpl(
     override suspend fun editRequest(
         baseUrl: String, credentials: SeerrCredentials, id: Int, mediaType: String,
         mediaId: Int, serverId: Int?, profileId: Int?, rootFolder: String?, tags: List<Int>?, seasons: List<Int>?,
-    ): Result<SeerrRequestItem> = putAndParse(baseUrl, credentials, "/request/$id",
+    ): Result<SeerrRequestItem> = putAndParse<WireSeerrRequestItem, SeerrEditRequestPayload>(baseUrl, credentials, "/request/$id",
         SeerrEditRequestPayload(mediaType = mediaType, mediaId = mediaId,
             serverId = serverId, profileId = profileId, rootFolder = rootFolder,
             tags = tags, seasons = seasons))
+        .map { it.toModel() }
 
     override suspend fun getRequestCount(baseUrl: String, credentials: SeerrCredentials): Result<SeerrRequestCount> =
         getAndParse(baseUrl, credentials, "/request/count")

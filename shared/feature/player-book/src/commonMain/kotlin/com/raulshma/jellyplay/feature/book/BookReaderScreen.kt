@@ -47,8 +47,10 @@ import org.koin.compose.viewmodel.koinViewModel
  * direction-aware navigation and debounced progress reporting (the VM owns
  * the writes; the screen only feeds events). The renderers live in
  * ReaderContent.kt, the chrome in ReaderChrome.kt, input in ReaderInput.kt
- * and the sheets in ReaderSheets.kt / ReaderSelection.kt — this file is the
- * state router plus the boot/error veils.
+ * and the sheets one file per sheet (…Sheet.kt / ReaderSelection.kt) — this
+ * file is the state router plus the boot/error veils: a presentation-only
+ * shell (the module pins its decisions, not its compose tree — no UI-test
+ * lane here).
  */
 @Composable
 fun BookReaderScreen(

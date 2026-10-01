@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import com.raulshma.jellyplay.core.model.preferredMediaSource
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.model.toMediaDetail
@@ -30,7 +31,6 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
-import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
 import com.raulshma.jellyplay.core.ui.components.episodePlayerSubtitle
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import org.jetbrains.compose.resources.getString
@@ -687,7 +687,7 @@ class PlayerSessionManager(
         val serverUrl = playbackIdentity.serverUrl()
         val token = playbackIdentity.accessToken()
         if (!token.isNullOrBlank()) {
-            headers += JellyfinAuthorizationHeader.tokenOnlyHeader(token)
+            headers += playbackIdentity.authorizationHeader(token)
         }
 
         // When the language rule engine resolves languages for this
@@ -733,14 +733,18 @@ class PlayerSessionManager(
             playMethod = playMethod,
             minBufferMs = agg.videoPlayer.videoPreloadBufferSize.minBufferMs,
             maxBufferMs = agg.videoPlayer.videoPreloadBufferSize.maxBufferMs,
-            normalizationGain = detail.item.normalizationGain,
-            mimeType = mimeType,
             serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
-            // Hand the engines that do their own TLS (mpv) the
-            // app-level client-certificate paths. Null when no certificate
-            // is enabled — OkHttp-backed engines (ExoPlayer) inherit it via
-            // the shared TLS layer instead.
-            tls = playbackIdentity.clientTls(),
+            // The per-engine request payload (core:model's
+            // PlaybackRequestSpecific behind the contract's engineSpecific
+            // slot): Exo unpacks the ReplayGain + MIME hint; the mpv engines
+            // unpack the app-level client-certificate paths (null when no
+            // certificate is enabled — OkHttp-backed engines inherit it via
+            // the shared TLS layer instead).
+            engineSpecific = PlaybackRequestSpecific(
+                normalizationGain = detail.item.normalizationGain,
+                mimeType = mimeType,
+                tls = playbackIdentity.clientTls(),
+            ),
         )
 
         maybeNotifyVlcClientCertificateUnsupported(playerType)

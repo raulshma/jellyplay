@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /**
  * Pins [PlaybackFocusMatrix] (the who-pauses-whom table) and
  * [DefaultPlaybackFocus] (the phase machine + synchronous dispatch) at the
- [PlaybackFocus] interface. These rows ARE the cross-player exclusivity
+ * [PlaybackFocus] interface. These rows ARE the cross-player exclusivity
  * policy — the thing that used to be smeared across engine configs, a
  * lifecycle module, prefs plumbing and per-shell code.
  */
@@ -26,32 +26,60 @@ class PlaybackFocusTest {
         override fun abandon() {
             abandons++
         }
-        fun loseTransient() = requests.last().second.onFocusEvent(FocusEvent.LostTransient)
-        fun losePermanent() = requests.last().second.onFocusEvent(FocusEvent.LostPermanent)
-        fun regain() = requests.last().second.onFocusEvent(FocusEvent.Regained)
+        // No-op without an outstanding request (the pref-gated os-leg-off
+        // case fires these against an empty seat list).
+        fun loseTransient() = requests.lastOrNull()?.second?.onFocusEvent(FocusEvent.LostTransient)
+        fun losePermanent() = requests.lastOrNull()?.second?.onFocusEvent(FocusEvent.LostPermanent)
+        fun regain() = requests.lastOrNull()?.second?.onFocusEvent(FocusEvent.Regained)
     }
 
     private class FakeSurface(override val id: PlaybackSurfaceId) : PlaybackSurface {
         var pauses = 0
+        var duckVolume: Float? = null
+        var restores = 0
         override fun pause() {
             pauses++
         }
+        override fun duck(volume: Float) {
+            duckVolume = volume
+        }
+        override fun restore() {
+            restores++
+        }
     }
 
-    private fun focus(arbiter: FakeArbiter, music: FakeSurface): DefaultPlaybackFocus =
-        DefaultPlaybackFocus(arbiter = arbiter, surfaces = listOf(music))
+    private fun focus(
+        arbiter: FakeArbiter,
+        vararg surfaces: PlaybackSurface,
+        osLegClaimants: Set<PlaybackSurfaceId> = PlaybackFocusMatrix.DEFAULT_OS_LEG_CLAIMANTS,
+    ): DefaultPlaybackFocus = DefaultPlaybackFocus(
+        arbiter = arbiter,
+        surfaces = surfaces.toList(),
+        osLegClaimants = osLegClaimants,
+    )
 
     // ------------------------------------------------------------------
     // Matrix rows
     // ------------------------------------------------------------------
 
     @Test
-    fun `matrix rows pin slice one`() {
-        assertEquals(listOf(PlaybackSurfaceId.MUSIC), PlaybackFocusMatrix.victimsOf(PlaybackSurfaceId.READ_ALOUD))
-        assertTrue(PlaybackFocusMatrix.victimsOf(PlaybackSurfaceId.MUSIC).isEmpty())
+    fun `matrix rows pin the closed world`() {
+        assertEquals(
+            listOf(PlaybackSurfaceId.MUSIC, PlaybackSurfaceId.VIDEO),
+            PlaybackFocusMatrix.victimsOf(PlaybackSurfaceId.READ_ALOUD),
+        )
+        assertEquals(listOf(PlaybackSurfaceId.VIDEO), PlaybackFocusMatrix.victimsOf(PlaybackSurfaceId.MUSIC))
+        assertEquals(listOf(PlaybackSurfaceId.MUSIC), PlaybackFocusMatrix.victimsOf(PlaybackSurfaceId.VIDEO))
         assertTrue(PlaybackFocusMatrix.isGrantable(PlaybackSurfaceId.READ_ALOUD))
         assertTrue(PlaybackFocusMatrix.isGrantable(PlaybackSurfaceId.MUSIC))
-        assertTrue(!PlaybackFocusMatrix.isGrantable(PlaybackSurfaceId.VIDEO), "slice-1 closed world denies video")
+        assertTrue(PlaybackFocusMatrix.isGrantable(PlaybackSurfaceId.VIDEO), "the video slice opened the closed world")
+    }
+
+    @Test
+    fun `matrix loss rulings are pause-only by default`() {
+        assertEquals(FocusLossDirective.Pause, PlaybackFocusMatrix.lossDirectiveOf(PlaybackSurfaceId.READ_ALOUD))
+        assertEquals(FocusLossDirective.Pause, PlaybackFocusMatrix.lossDirectiveOf(PlaybackSurfaceId.MUSIC))
+        assertEquals(FocusLossDirective.Pause, PlaybackFocusMatrix.lossDirectiveOf(PlaybackSurfaceId.VIDEO))
     }
 
     @Test
@@ -63,9 +91,6 @@ class PlaybackFocusTest {
             FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.SPEECH),
             PlaybackFocusMatrix.attributesOf(PlaybackSurfaceId.READ_ALOUD),
         )
-        // The rows the migration slice will claim under: music must land on
-        // MUSIC attributes (never speech — OS ducking policy reads the
-        // content type), video on MOVIE.
         assertEquals(
             FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.MUSIC),
             PlaybackFocusMatrix.attributesOf(PlaybackSurfaceId.MUSIC),
@@ -338,11 +363,215 @@ class PlaybackFocusTest {
         assertEquals(2, arbiter.requests.size, "the user's resume is the way back — it re-requests the OS seat")
     }
 
+    // ------------------------------------------------------------------
+    // Video slice: VIDEO joins the closed world
+    // ------------------------------------------------------------------
+
     @Test
-    fun `video claims are denied by the slice-one closed world`() {
+    fun `video claim takes the os seat with the movie attributes and pauses music`() {
         val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+
+        val outcome = focus.acquire(PlaybackSurfaceId.VIDEO)
+
+        assertEquals(FocusOutcome.Granted, outcome)
+        assertEquals(1, music.pauses, "the victim pause is synchronous with the claim")
+        assertEquals(1, arbiter.requests.size, "video's OS leg lives in the module now (PlayerAudioLifecycle deleted)")
+        assertEquals(
+            FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.MOVIE),
+            arbiter.requests.single().first,
+            "the seat carries the MOVIE attributes row, never speech or music",
+        )
+        val held = assertIs<FocusClaimState.Held>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.VIDEO, held.holder)
+    }
+
+    @Test
+    fun `refused os focus denies the video claim`() {
+        val arbiter = FakeArbiter(granted = false)
         val focus = focus(arbiter, FakeSurface(PlaybackSurfaceId.MUSIC))
         assertEquals(FocusOutcome.Denied, focus.acquire(PlaybackSurfaceId.VIDEO))
         assertEquals(FocusClaimState.Idle, focus.claimState.value)
+    }
+
+    @Test
+    fun `music claim during video evicts video and commands its pause`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, music, video)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+        assertEquals(0, video.pauses, "sanity: video's own claim only commanded MUSIC")
+
+        val outcome = focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        assertEquals(FocusOutcome.Granted, outcome)
+        val held = assertIs<FocusClaimState.Held>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.MUSIC, held.holder)
+        assertEquals(1, video.pauses, "newest-wins: the music claim commands the video surface pause")
+        assertEquals(2, arbiter.requests.size, "one seat request per claim: VIDEO then MUSIC")
+    }
+
+    @Test
+    fun `video claim evicts read-aloud and music together`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, music, video)
+        focus.acquire(PlaybackSurfaceId.READ_ALOUD)
+
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+
+        assertEquals(2, music.pauses, "read-aloud's claim paused music once, video's claim pauses it again")
+        val held = assertIs<FocusClaimState.Held>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.VIDEO, held.holder)
+    }
+
+    @Test
+    fun `video os leg is pref-gated off by the policy input - state publishes, no seat`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+
+        // pauseOnAudioFocusLoss = false: video claims publish state only.
+        focus.onVideoFocusPolicy(osLegEnabled = false, duckOnTransientLoss = false)
+        val outcome = focus.acquire(PlaybackSurfaceId.VIDEO)
+
+        assertEquals(FocusOutcome.Granted, outcome)
+        assertEquals(0, arbiter.requests.size, "no focus request at all — the legacy pref-off semantics")
+        assertEquals(1, music.pauses, "the in-process victim pause still runs")
+        val held = assertIs<FocusClaimState.Held>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.VIDEO, held.holder)
+    }
+
+    @Test
+    fun `video policy input toggles the os leg at runtime`() {
+        val arbiter = FakeArbiter()
+        val focus = focus(arbiter, FakeSurface(PlaybackSurfaceId.VIDEO))
+        focus.onVideoFocusPolicy(osLegEnabled = false, duckOnTransientLoss = false)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+        focus.release(PlaybackSurfaceId.VIDEO)
+
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = false)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+
+        assertEquals(1, arbiter.requests.size, "re-enabling the pref puts the seat back under the next claim")
+    }
+
+    @Test
+    fun `video os leg off means loss events cannot suspend the holder`() {
+        val arbiter = FakeArbiter()
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, video)
+        focus.onVideoFocusPolicy(osLegEnabled = false, duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+        // No seat was requested, so the only way events could arrive is a
+        // stale listener — the inOsLeg guard drops them.
+        arbiter.loseTransient()
+        arbiter.losePermanent()
+
+        assertIs<FocusClaimState.Held>(focus.claimState.value)
+        assertEquals(0, video.pauses, "no OS leg, no enforcement leg — the claim publishes state only")
+    }
+
+    // ------------------------------------------------------------------
+    // Video slice: the duck directive (transient-loss vocabulary)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `duck policy on - transient loss ducks the video surface and keeps the claim held`() {
+        val arbiter = FakeArbiter()
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, video)
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+
+        arbiter.loseTransient()
+
+        assertEquals(0.2f, video.duckVolume, "the legacy duck level (audible-but-quiet during a call)")
+        assertEquals(0, video.pauses, "duck, never pause — the legacy transient semantics")
+        val held = assertIs<FocusClaimState.Held>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.VIDEO, held.holder, "the claim stays HELD through a duck (no suspension)")
+    }
+
+    @Test
+    fun `duck policy on - regain restores the volume`() {
+        val arbiter = FakeArbiter()
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, video)
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+        arbiter.loseTransient()
+
+        arbiter.regain()
+
+        assertEquals(1, video.restores, "the legacy duck/restore round-trip: the regain commands the restore")
+    }
+
+    @Test
+    fun `duck policy on - permanent loss still suspends and pauses`() {
+        val arbiter = FakeArbiter()
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, video)
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+
+        arbiter.losePermanent()
+
+        assertEquals(1, video.pauses, "duck is transient-only vocabulary — a permanent loss suspends")
+        val suspended = assertIs<FocusClaimState.Suspended>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.VIDEO, suspended.holder)
+        assertEquals(FocusLossReason.Permanent, suspended.reason)
+        assertEquals(null, video.duckVolume, "no duck precedes the pause")
+    }
+
+    @Test
+    fun `duck policy off - transient loss takes the default pause-and-suspend path`() {
+        val arbiter = FakeArbiter()
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, video)
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = false)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+
+        arbiter.loseTransient()
+
+        assertEquals(1, video.pauses)
+        val suspended = assertIs<FocusClaimState.Suspended>(focus.claimState.value)
+        assertEquals(FocusLossReason.Transient, suspended.reason)
+        assertEquals(null, video.duckVolume)
+    }
+
+    @Test
+    fun `duck policy stays video-scoped - music and read-aloud never duck`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        arbiter.loseTransient()
+
+        assertEquals(null, music.duckVolume, "the duck pref is a VIDEO input — music keeps its pause ruling")
+        assertEquals(1, music.pauses)
+    }
+
+    @Test
+    fun `music eviction of a ducked video claim commands the pause`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val video = FakeSurface(PlaybackSurfaceId.VIDEO)
+        val focus = focus(arbiter, music, video)
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.VIDEO)
+        arbiter.loseTransient()
+        assertEquals(0.2f, video.duckVolume)
+
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        assertEquals(1, video.pauses, "the incoming claim's victim pause ends the ducked playback")
+        assertIs<FocusClaimState.Held>(focus.claimState.value).let {
+            assertEquals(PlaybackSurfaceId.MUSIC, it.holder)
+        }
     }
 }

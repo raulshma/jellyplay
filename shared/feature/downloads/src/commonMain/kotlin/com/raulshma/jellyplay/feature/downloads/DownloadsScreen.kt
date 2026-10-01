@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.SelectionActionBar
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.episodeContextLine
@@ -465,19 +466,55 @@ fun DownloadsScreen(
                     }
                 }
 
-                // Selection-mode bottom action bar.
+                // Selection-mode bottom action bar. The shared core/ui shell
+                // (smooth12 / surfaceContainerHigh / shadow 8) with the
+                // downloads-specific cluster slotted in: pause / resume /
+                // cancel lead (each gated on its own per-list predicate, the
+                // slot contract explicitly allows ignoring the folded boolean)
+                // and the destructive bulk delete trails.
                 if (selectionMode) {
                     SelectionActionBar(
+                        countLabel = stringResource(Res.string.downloads_selected_count, selectedIds.size),
                         selectedCount = selectedIds.size,
-                        hasPauseable = hasPauseable,
-                        hasResumable = hasResumable,
-                        hasCancellable = hasCancellable,
+                        selectAllLabel = stringResource(Res.string.downloads_action_select_all),
+                        clearLabel = stringResource(Res.string.downloads_action_clear_selection),
                         onSelectAll = { viewModel.selectAll() },
                         onClear = { viewModel.clearSelection() },
-                        onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
-                        onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
-                        onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
-                        onBulkDelete = { viewModel.pendingBulkDelete.show(Unit) },
+                        leadingActions = { _ ->
+                            CompactIconButton(
+                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
+                                enabled = hasPauseable,
+                            ) {
+                                Icon(Tabler.Outline.PlayerPause, contentDescription = stringResource(Res.string.downloads_action_pause), modifier = Modifier.size(20.dp))
+                            }
+                            CompactIconButton(
+                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
+                                enabled = hasResumable,
+                            ) {
+                                Icon(Tabler.Outline.PlayerPlay, contentDescription = stringResource(Res.string.downloads_action_resume), modifier = Modifier.size(20.dp))
+                            }
+                            CompactIconButton(
+                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
+                                enabled = hasCancellable,
+                            ) {
+                                Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(Res.string.downloads_action_cancel), modifier = Modifier.size(20.dp))
+                            }
+                        },
+                        actions = { actionsEnabled ->
+                            FilledTonalButton(
+                                onClick = { viewModel.pendingBulkDelete.show(Unit) },
+                                enabled = actionsEnabled,
+                                shape = ShapeCache.smooth12,
+                                contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                ),
+                            ) {
+                                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(Res.string.downloads_delete))
+                            }
+                        },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
@@ -935,77 +972,6 @@ private fun DownloadsStorageUsedText(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
         )
-    }
-}
-
-@Composable
-private fun SelectionActionBar(
-    selectedCount: Int,
-    hasPauseable: Boolean,
-    hasResumable: Boolean,
-    hasCancellable: Boolean,
-    onSelectAll: () -> Unit,
-    onClear: () -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onCancel: () -> Unit,
-    onBulkDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = ShapeCache.smooth12,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 8.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            // Controls get their intrinsic width first; the count text takes
-            // whatever remains and ellipsizes. Without this the row would
-            // squeeze the text column to ~0 width and render letters stacked
-            // vertically on narrow screens.
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                stringResource(Res.string.downloads_selected_count, selectedCount),
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            // Compact icon-only actions keep the bar to one line on phones.
-            CompactIconButton(onClick = onPause, enabled = hasPauseable) {
-                Icon(Tabler.Outline.PlayerPause, contentDescription = stringResource(Res.string.downloads_action_pause), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onResume, enabled = hasResumable) {
-                Icon(Tabler.Outline.PlayerPlay, contentDescription = stringResource(Res.string.downloads_action_resume), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onCancel, enabled = hasCancellable) {
-                Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(Res.string.downloads_action_cancel), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onSelectAll, enabled = true) {
-                Icon(Tabler.Outline.Check, contentDescription = stringResource(Res.string.downloads_action_select_all), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onClear, enabled = true) {
-                Icon(Tabler.Outline.X, contentDescription = stringResource(Res.string.downloads_action_clear_selection), modifier = Modifier.size(20.dp))
-            }
-            FilledTonalButton(
-                onClick = onBulkDelete,
-                enabled = selectedCount > 0,
-                shape = ShapeCache.smooth12,
-                contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error,
-                ),
-            ) {
-                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.downloads_delete))
-            }
-        }
     }
 }
 

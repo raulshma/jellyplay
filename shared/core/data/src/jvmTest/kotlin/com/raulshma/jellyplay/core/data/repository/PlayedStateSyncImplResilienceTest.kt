@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataWrite
+import com.raulshma.jellyplay.core.network.api.UserDataWriteOutcome
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -86,7 +88,7 @@ class PlayedStateSyncImplResilienceTest {
 
     @Test
     fun `a confirmed online played flip survives a failing offline mirror`() = runTest {
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { offlineRepository.applyPlayedState(ITEM_ID, true) } throws
             RuntimeException("disk I/O error")
 
@@ -107,7 +109,7 @@ class PlayedStateSyncImplResilienceTest {
         every { downloadsStore.downloads } returns mockk {
             coEvery { collect(any()) } answers { throw RuntimeException("datastore read failed") }
         }
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
 
         val result = sync.flip(ITEM_ID, played = true)
 
@@ -120,7 +122,7 @@ class PlayedStateSyncImplResilienceTest {
     fun `auto-delete survives a failing download lookup`() = runTest {
         every { downloadsStore.downloads } returns
             MutableStateFlow(DownloadsSlice(autoDeleteAfterWatch = true))
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM_ID) } throws
             RuntimeException("room read failed")
 
@@ -142,7 +144,7 @@ class PlayedStateSyncImplResilienceTest {
             offlineItem(isPlayed = false, playbackPositionTicks = 30_000_000L)
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
             Result.success(detail(isPlayed = true, playbackPositionTicks = 5_000_000L))
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns false
 
         val outcome = sync.reconcileOfflineRow(ITEM_ID)
@@ -164,7 +166,7 @@ class PlayedStateSyncImplResilienceTest {
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
             Result.success(detail(isPlayed = false))
         coEvery { outboxRepository.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns
             Result.failure(java.io.IOException("HTTP 503"))
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } throws
             RuntimeException("room read failed")

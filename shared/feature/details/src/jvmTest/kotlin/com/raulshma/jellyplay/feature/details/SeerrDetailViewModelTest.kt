@@ -17,7 +17,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrRtRating
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeasonDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrTmdbRating
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
@@ -96,7 +95,7 @@ class SeerrDetailViewModelTest {
         )
     }
 
-    private fun emptySearchResponse() = SeerrSearchResponse(results = emptyList(), page = 1, totalPages = 1, totalResults = 0)
+    private fun emptySearchResponse() = emptyList<SeerrSearchItem>()
 
     // ── loadDetails: movie happy path ───────────────────────────────────
 
@@ -190,7 +189,7 @@ class SeerrDetailViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { seerrRepository.getTvDetails(any()) } returns Result.success(SeerrTvDetails(id = 456, name = "TV"))
         coEvery { seerrRepository.getRecommendations(456, MediaType.SERIES) } returns Result.success(
-            SeerrSearchResponse(results = listOf(SeerrSearchItem(id = 789, name = "Rec"))),
+            listOf(SeerrSearchItem(id = 789, name = "Rec")),
         )
 
         viewModel.loadDetails(456, "TV")
@@ -209,10 +208,10 @@ class SeerrDetailViewModelTest {
         val sim = SeerrSearchItem(id = 2, title = "Sim")
         coEvery { seerrRepository.getMovieDetails(any()) } returns Result.success(SeerrMovieDetails(id = 123))
         coEvery { seerrRepository.getRecommendations(123, MediaType.MOVIE) } returns Result.success(
-            SeerrSearchResponse(results = listOf(rec)),
+            listOf(rec),
         )
         coEvery { seerrRepository.getSimilar(123, MediaType.MOVIE) } returns Result.success(
-            SeerrSearchResponse(results = listOf(sim)),
+            listOf(sim),
         )
 
         viewModel.loadDetails(123, "movie")
@@ -241,7 +240,7 @@ class SeerrDetailViewModelTest {
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             SeerrMovieDetails(
                 id = 123,
-                mediaInfo = SeerrMediaInfo(tmdbId = 123, status = SeerrMediaStatus.AVAILABLE.value),
+                mediaInfo = SeerrMediaInfo(tmdbId = 123, status = SeerrMediaStatus.AVAILABLE),
             ),
         )
         coEvery { mediaRepository.findItemByProviderId("tmdb", "123") } returns Result.success("jellyfin-1")
@@ -258,7 +257,7 @@ class SeerrDetailViewModelTest {
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
             SeerrMovieDetails(
                 id = 123,
-                mediaInfo = SeerrMediaInfo(tmdbId = 123, status = SeerrMediaStatus.PENDING.value),
+                mediaInfo = SeerrMediaInfo(tmdbId = 123, status = SeerrMediaStatus.PENDING),
             ),
         )
 
@@ -275,7 +274,7 @@ class SeerrDetailViewModelTest {
         coEvery { seerrRepository.getTvDetails(123) } returns Result.success(
             SeerrTvDetails(
                 id = 123,
-                mediaInfo = SeerrMediaInfo(tmdbId = 123, status = SeerrMediaStatus.PARTIALLY_AVAILABLE.value),
+                mediaInfo = SeerrMediaInfo(tmdbId = 123, status = SeerrMediaStatus.PARTIALLY_AVAILABLE),
                 externalIds = SeerrExternalIds(tvdbId = 999),
             ),
         )
@@ -444,7 +443,7 @@ class SeerrDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SeerrMediaStatus.PENDING.value,
+            SeerrMediaStatus.PENDING,
             viewModel.uiState.value.tvDetails?.mediaInfo?.status,
         )
         assertTrue(viewModel.seerrSnapshot.value.requestResult?.success == true)

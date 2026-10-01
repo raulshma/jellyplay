@@ -109,4 +109,6 @@
     <string name="next_up_hidden_restore_all_message">Les %1$d séries masquées réapparaîtront dans la rangée À suivre.</string>
     <string name="next_up_hidden_restore_cd">Restaurer %1$s dans À suivre</string>
     <string name="next_up_hidden_unknown">Série inconnue</string>
+    <string name="a11y_mode_video">Mode vidéo</string>
+    <string name="a11y_mode_music">Mode musique</string>
 </resources>

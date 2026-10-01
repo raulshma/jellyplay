@@ -7,10 +7,10 @@ import androidx.compose.runtime.Composable
  * transcoding" rows the stats overlay and playback-error dialog render. The
  * androidMain actual is a typealias to the legacy core:ui
  * `FormattedTranscodeReason` (localized by [rememberFormattedTranscodeReasons]'s
- * android actual through TranscodeReasonsFormatter); the jvmMain actual is a
- * same-shape local class whose formatter echoes the raw server token — the
- * same fallback text Android shows for unknown tokens — until the legacy
- * formatter's string tables migrate to shared core:ui.
+ * android actual through TranscodeReasonsFormatter's R.string table); the
+ * jvmMain actual is a same-shape local class localized through core:ui's
+ * commonMain `TranscodeReasonCatalog` via compose resources — both platforms
+ * render localized explanations.
  */
 expect class PlatformTranscodeReason {
     val raw: String
@@ -24,9 +24,9 @@ expect class PlatformTranscodeReason {
 
 /**
  * Localize the session's raw transcode-reason tokens once per distinct list
- * (and per context, so a locale change re-formats). Android keeps the
- * TranscodeReasonsFormatter path verbatim; desktop maps each token to a raw
- * echo row.
+ * (and per context/locale, so a locale change re-formats). Android keeps the
+ * TranscodeReasonsFormatter path verbatim; desktop resolves the shared
+ * commonMain catalog through compose resources.
  */
 @Composable
 internal expect fun rememberFormattedTranscodeReasons(rawReasons: List<String>): List<PlatformTranscodeReason>

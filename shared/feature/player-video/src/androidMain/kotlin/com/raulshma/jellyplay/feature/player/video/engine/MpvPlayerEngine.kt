@@ -41,6 +41,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvEventFold
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvFoldApplier
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPlaybackEvent
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleSideLoadPlan
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStyleApplier
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePhase
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvTrackCatalog
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -1390,7 +1401,7 @@ class MpvPlayerEngine(
         // trio when no certificate is active (same discipline as
         // http-header-fields below) so the previous item's credentials are
         // never inherited.
-        MpvTlsOptions.from(request.tls).forEach { (option, value) ->
+        MpvTlsOptions.from(request.requestSpecific?.tls).forEach { (option, value) ->
             try {
                 view.mpv.setOptionString(option, value)
                 view.mpv.setPropertyString(option, value)

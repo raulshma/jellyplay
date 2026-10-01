@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -109,7 +108,7 @@ internal class HomeDiscoverSources(
         // — launching on the VM scope let them escape cancellation and run to
         // completion abandoned.
         val newSections = coroutineScope {
-            val deferredResults = mutableListOf<Pair<DiscoverSectionType, Deferred<Result<SeerrSearchResponse>>>>()
+            val deferredResults = mutableListOf<Pair<DiscoverSectionType, Deferred<Result<List<SeerrSearchItem>>>>>()
 
             if (prefs.discoverTrending) {
                 deferredResults.add(DiscoverSectionType.TRENDING to async { seerrRepository.getTrending() })
@@ -129,8 +128,8 @@ internal class HomeDiscoverSources(
 
             val sections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()
             for ((type, deferred) in deferredResults) {
-                deferred.await().onSuccess { response ->
-                    sections[type] = response.results
+                deferred.await().onSuccess { items ->
+                    sections[type] = items
                 }
             }
             sections

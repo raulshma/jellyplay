@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
@@ -20,10 +21,11 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
  * storage and supply their codec at the knob site via [PreferenceSpec.custom]
  * (Stage A) or as a [PreferenceEncoding] row (Stage B); the Stage B plain
  * rows ([PreferenceSpec.plainBoolean] / [PreferenceSpec.plainInt] /
- * [PreferenceSpec.plainFloat]) declare BOOLEAN / INT / FLOAT storage so their
- * typed slot — and its legacy string-key fallback — can be rebuilt too.
+ * [PreferenceSpec.plainFloat] / [PreferenceSpec.plainLong]) declare BOOLEAN /
+ * INT / FLOAT / LONG storage so their typed slot — and its legacy string-key
+ * fallback — can be rebuilt too.
  */
-internal enum class PreferenceStorage { BOOLEAN, STRING, INT, FLOAT }
+internal enum class PreferenceStorage { BOOLEAN, STRING, INT, FLOAT, LONG }
 
 /**
  * The settings-search platform rule of a preference's catalog entry, as plain
@@ -139,6 +141,7 @@ class PreferenceSpec<T> internal constructor(
         PreferenceStorage.STRING -> stringPreferencesKey(keyName)
         PreferenceStorage.INT -> intPreferencesKey(keyName)
         PreferenceStorage.FLOAT -> floatPreferencesKey(keyName)
+        PreferenceStorage.LONG -> longPreferencesKey(keyName)
     } as Preferences.Key<T>
 
     /**
@@ -153,6 +156,7 @@ class PreferenceSpec<T> internal constructor(
             PreferenceStorage.STRING -> prefs[stringPreferencesKey(keyName)]
             PreferenceStorage.INT -> prefs[intPreferencesKey(keyName)]
             PreferenceStorage.FLOAT -> prefs[floatPreferencesKey(keyName)]
+            PreferenceStorage.LONG -> prefs[longPreferencesKey(keyName)]
         }
         @Suppress("UNCHECKED_CAST")
         return (stored ?: default) as T
@@ -263,6 +267,30 @@ class PreferenceSpec<T> internal constructor(
                 storage = PreferenceStorage.INT,
                 encoding = PlainCodec(
                     readSlot = { prefs -> PreferenceCodec.readInt(prefs, key, keyName, default) },
+                    writeSlot = { prefs, value -> prefs[key] = value },
+                ),
+                keyName = keyName,
+                default = default,
+                resetCategory = resetCategory,
+                search = null,
+            )
+        }
+
+        /**
+         * Typed long slot read through the shared legacy-string fallback
+         * ([PreferenceCodec.readLong]); the wire name IS [keyName] — see
+         * [plainBoolean]. The derived write is the plain typed slot write.
+         */
+        internal fun plainLong(
+            keyName: String,
+            default: Long,
+            resetCategory: PreferenceResetCategory? = null,
+        ): PreferenceSpec<Long> {
+            val key = longPreferencesKey(keyName)
+            return PreferenceSpec(
+                storage = PreferenceStorage.LONG,
+                encoding = PlainCodec(
+                    readSlot = { prefs -> PreferenceCodec.readLong(prefs, key, keyName, default) },
                     writeSlot = { prefs, value -> prefs[key] = value },
                 ),
                 keyName = keyName,

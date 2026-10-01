@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,12 +56,17 @@ class ChannelsViewModelTest {
 
         // AppRuntimeStateStore is a final DataStore-backed class, so the fake
         // is a mock whose `state` reads our MutableStateFlow and whose
-        // setFavoriteChannels writes it back — mimicking the real round-trip.
+        // toggleFavoriteChannel flips it — mimicking the real round-trip
+        // (the flip command reads inside the edit and returns the new set).
         runtimeState = MutableStateFlow(AppRuntimeState())
         appRuntimeStateStore = mockk()
         every { appRuntimeStateStore.state } returns runtimeState
-        coEvery { appRuntimeStateStore.setFavoriteChannels(any()) } coAnswers {
-            runtimeState.value = runtimeState.value.copy(favoriteChannels = firstArg())
+        coEvery { appRuntimeStateStore.toggleFavoriteChannel(any()) } coAnswers {
+            val current = runtimeState.value.favoriteChannels
+            val updated = if (firstArg<String>() in current) current - firstArg<String>()
+            else current + firstArg<String>()
+            runtimeState.value = runtimeState.value.copy(favoriteChannels = updated)
+            updated
         }
 
         // VideoMiniPlayerState's itemId is only mutable through the playback
@@ -137,7 +143,7 @@ class ChannelsViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("guide offline", state.error)
+        assertEquals("guide offline", (state.error as UiMessage.Raw).text)
         assertFalse(state.isLoading)
         assertTrue(state.channels.isEmpty())
     }
@@ -152,7 +158,7 @@ class ChannelsViewModelTest {
         viewModel.toggleFavorite("chan-c")
         advanceUntilIdle()
 
-        coVerify { appRuntimeStateStore.setFavoriteChannels(setOf("chan-c")) }
+        coVerify { appRuntimeStateStore.toggleFavoriteChannel("chan-c") }
         assertEquals(setOf("chan-c"), runtimeState.value.favoriteChannels)
         assertEquals(
             listOf("chan-c", "chan-a", "chan-b", "chan-d"),
@@ -173,7 +179,7 @@ class ChannelsViewModelTest {
         viewModel.toggleFavorite("chan-d")
         advanceUntilIdle()
 
-        coVerify { appRuntimeStateStore.setFavoriteChannels(emptySet()) }
+        coVerify { appRuntimeStateStore.toggleFavoriteChannel("chan-d") }
         assertEquals(emptySet(), runtimeState.value.favoriteChannels)
         // The VM only re-sorts while favorites remain non-empty — with none
         // left it keeps the current ordering (it never remembers the server

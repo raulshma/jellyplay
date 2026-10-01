@@ -49,7 +49,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicato
 import com.raulshma.jellyplay.core.ui.components.MarkdownText
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.components.whatsnew.WhatsNewEntryCard
+import com.raulshma.jellyplay.feature.settings.WhatsNewEntryCard
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
